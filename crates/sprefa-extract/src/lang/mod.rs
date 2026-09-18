@@ -22,6 +22,7 @@ pub mod go_modules;
 pub mod go_type_edges;
 pub mod kotlin;
 pub mod kotlin_modules;
+pub mod kotlin_receivers;
 pub mod kotlin_rehome;
 pub mod kotlin_rename;
 pub mod kotlin_type_edges;

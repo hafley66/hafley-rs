@@ -1973,10 +1973,12 @@ impl RatchetCounts {
 }
 
 /// Pin one ratchet's origin histogram in tests/RATCHET.tsv: `true` a floor,
-/// `wrong_target` a ceiling; `RATCHET_BUMP=1` moves each one way only.
+/// `wrong_target` and `unresolved` ceilings; `RATCHET_BUMP=1` moves each one way only.
 fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize)>) {
     static TSV_LOCK: Mutex<()> = Mutex::new(());
-    let _guard = TSV_LOCK.lock().expect("RATCHET.tsv lock");
+    // A floor assertion panics while holding the guard; the next caller
+    // takes the poisoned lock rather than inheriting the failure.
+    let _guard = TSV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/RATCHET.tsv");
     let parse = |text: &str| {
         text.lines()
@@ -1997,6 +1999,7 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
                 Some(i) => {
                     rows[i].2 = rows[i].2.max(*t);
                     rows[i].3 = rows[i].3.min(*w);
+                    rows[i].4 = rows[i].4.min(*u);
                 }
                 None => rows.push((lang.to_string(), origin.clone(), *t, *w, *u)),
             }
@@ -2009,22 +2012,51 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
         std::fs::write(&path, out).expect("write RATCHET.tsv");
     } else {
         let rows = parse(&std::fs::read_to_string(&path).unwrap_or_default());
-        for (origin, (t, w, _u)) in by_origin {
-            let Some(row) = rows.iter().find(|r| r.0 == lang && r.1 == *origin) else {
-                panic!("unpinned histogram row ({lang}, {origin}): run once with RATCHET_BUMP=1");
-            };
+        for origin in by_origin.keys() {
             assert!(
-                *t >= row.2,
-                "{lang}/{origin}: true {t} below the pinned floor {}",
-                row.2
+                rows.iter().any(|r| r.0 == lang && r.1 == *origin),
+                "unpinned histogram row ({lang}, {origin}): run once with RATCHET_BUMP=1"
+            );
+        }
+        // The pinned rows drive the walk: an origin the run no longer emits
+        // counts as zero, so dropping a leg cannot dodge its floor.
+        for (_, origin, floor, w_ceiling, u_ceiling) in rows.iter().filter(|r| r.0 == lang) {
+            let (t, w, u) = by_origin.get(origin).copied().unwrap_or_default();
+            assert!(
+                t >= *floor,
+                "{lang}/{origin}: true {t} below the pinned floor {floor}"
             );
             assert!(
-                *w <= row.3,
-                "{lang}/{origin}: wrong_target {w} above the pinned ceiling {}",
-                row.3
+                w <= *w_ceiling,
+                "{lang}/{origin}: wrong_target {w} above the pinned ceiling {w_ceiling}"
+            );
+            assert!(
+                u <= *u_ceiling,
+                "{lang}/{origin}: unresolved {u} above the pinned ceiling {u_ceiling}"
             );
         }
     }
+}
+
+/// A run that emits no `same_file` rows at all still owes the pinned floor:
+/// the walk is over RATCHET.tsv, so the absent origin reads as zero.
+#[test]
+fn ratchet_pin_charges_an_origin_the_run_dropped() {
+    let mut by_origin: BTreeMap<String, (usize, usize, usize)> = BTreeMap::new();
+    by_origin.insert("scip".to_string(), (3, 0, 0));
+    let outcome = std::panic::catch_unwind(|| pin_ratchet_tsv("rust", &by_origin));
+    let text = match outcome {
+        Ok(()) => panic!("a missing origin passed the floor"),
+        Err(payload) => payload
+            .downcast_ref::<String>()
+            .cloned()
+            .or_else(|| payload.downcast_ref::<&str>().map(|s| s.to_string()))
+            .unwrap_or_default(),
+    };
+    assert!(
+        text.contains("rust/same_file: true 0 below the pinned floor 2"),
+        "unexpected panic text: {text}"
+    );
 }
 
 /// A short diagnostic label for a blob in divergence listings, never compared

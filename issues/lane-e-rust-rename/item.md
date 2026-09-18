@@ -17,6 +17,6 @@ lane: extract-rename
 Plan section "Lane E". rust_rename.rs:1035 #[path] layout; field and enum-variant seats; serde rename text_spellings at types.rs:2982; a `use` inside a fn body scopes the name. Brief unwritten; write TASKS/lane-e-rust-rename.BRIEF.md first.
 
 ## Acceptance Criteria
-- [ ] brief written with receipts per seat
+- [x] brief written with receipts per seat
 - [ ] tests/5_rename_rust.rs gains one case per seat
 - [ ] scip_verify agrees

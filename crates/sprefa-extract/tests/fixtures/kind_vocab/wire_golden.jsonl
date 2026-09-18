@@ -6756,6 +6756,8 @@
 {"record":"node","family":"call","span":{"start":506,"end":557},"kind":"function","name":"makeCar"}
 {"record":"node","family":"call","span":{"start":559,"end":575},"kind":"function","name":"plainFn"}
 {"record":"site","family":"call","span":{"start":550,"end":553},"callee":"Car","callee_path":null}
+{"record":"method_owner","family":"call","owner":{"start":372,"end":386},"self_type":"Car","trait":null}
+{"record":"method_owner","family":"call","owner":{"start":424,"end":446},"self_type":"Car","trait":null}
 {"record":"node","family":"df","span":{"start":518,"end":522},"kind":"param","name":"name"}
 {"record":"node","family":"df","span":{"start":550,"end":555},"kind":"new","name":"Car"}
 {"record":"node","family":"df","span":{"start":543,"end":555},"kind":"ret","name":null}
@@ -7257,6 +7259,8 @@
 {"record":"site","family":"call","span":{"start":1257,"end":1258},"callee":"plus","callee_path":null}
 {"record":"site","family":"call","span":{"start":1281,"end":1287},"callee":"map","callee_path":null}
 {"record":"site","family":"call","span":{"start":1293,"end":1294},"callee":"plus","callee_path":null}
+{"record":"method_owner","family":"call","owner":{"start":786,"end":818},"self_type":"Repo","trait":null}
+{"record":"method_owner","family":"call","owner":{"start":824,"end":916},"self_type":"Repo","trait":null}
 {"record":"node","family":"df","span":{"start":834,"end":836},"kind":"param","name":"id"}
 {"record":"node","family":"df","span":{"start":868,"end":873},"kind":"let_bind","name":"found"}
 {"record":"node","family":"df","span":{"start":876,"end":881},"kind":"var_read","name":"store"}
@@ -7914,6 +7918,7 @@
 {"record":"edge","family":"cst","kind":"child","from":{"start":49,"end":51},"to":{"start":49,"end":51}}
 {"record":"node","family":"type","span":{"start":17,"end":53},"kind":"class","name":"Peer"}
 {"record":"site","family":"call","span":{"start":45,"end":49},"callee":"Util","callee_path":null}
+{"record":"method_owner","family":"call","owner":{"start":34,"end":51},"self_type":"Peer","trait":null}
 {"record":"node","family":"cst","span":{"start":0,"end":46},"kind":"source_file","name":null}
 {"record":"node","family":"cst","span":{"start":0,"end":15},"kind":"package_header","name":null}
 {"record":"node","family":"cst","span":{"start":8,"end":15},"kind":"identifier","name":null}

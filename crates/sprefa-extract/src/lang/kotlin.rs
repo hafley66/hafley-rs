@@ -39,8 +39,8 @@ use std::collections::BTreeSet;
 use super::astgrep::{AstGrepParser, CstProjector};
 use crate::family::{
     CallEdgeKind, CallF, CallKind, CallSite, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
-    DfParam, DocFact, DocTag, ProjectEdge, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
-    TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
+    DfParam, DocFact, DocTag, ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier,
+    SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::seams::{
@@ -49,7 +49,7 @@ use crate::seams::{
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
-use crate::types::PathIndex;
+use crate::types::{PathIndex, UnresolvedReason};
 
 use super::kotlin_modules::KtModuleIndex;
 
@@ -597,12 +597,14 @@ fn is_noise_kotlin(name: &str) -> bool {
 fn project_call(
     root: tree_sitter::Node,
     src: &[u8],
+    blob: ContentId,
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
     kt_walk_call_defs(root, src, strings, sink, None, false);
     kt_walk_call_sites(root, src, strings, sink);
     kt_module_specifiers(root, src, strings, sink);
+    super::kotlin_receivers::collect_receivers(root, src, blob, strings, sink);
 }
 
 // ── module specifiers (CallFAux.specifiers) ─────────────────────────────────
@@ -765,7 +767,7 @@ fn kt_walk_call_defs(
 /// The def span covers the whole callable `[child.start, body.end)` for
 /// span-containment resolution. Port of v5's `end` computation (the
 /// function_body end, or the decl end for a bodyless fun).
-fn def_span(child: tree_sitter::Node) -> Span {
+pub(crate) fn def_span(child: tree_sitter::Node) -> Span {
     let start = child.start_byte();
     let end = kt_first_child(child, "function_body")
         .unwrap_or(child)
@@ -1665,7 +1667,9 @@ impl Source for KotlinSource {
                         let span = trace::family_span("kotlin", "call");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<CallF>::default();
-                        project_call(root, src_bytes, &mut strings, &mut bundle);
+                        let blob = crate::dispatch::extracting_blob(content)
+                            .unwrap_or_else(|| crate::types::content_id_of(content));
+                        project_call(root, src_bytes, blob, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
                     }
@@ -1742,39 +1746,72 @@ impl Resolve<CallF> for KotlinSource {
         let paths = cx.indexes.paths.get();
         let own_path = own.as_ref().zip(paths).and_then(|(b, p)| p.get(b));
         let modules = cx.indexes.kt_modules.get();
+        let plan = own
+            .as_ref()
+            .and_then(super::kotlin_receivers::kt_bind_plan_of);
         let mut edges = Vec::new();
         for site in &call.aux.sites {
             let Some(caller) = covering_def(call, site.span) else {
                 continue;
             };
             let callee = output.strings.lookup(site.callee);
-            if KotlinSource::shadowed(output, callee, site.span) {
+            // The receiver leg ahead of the module plane: a Named(T)
+            // receiver answers ONLY through the corpus (T, m) owner table,
+            // and a miss is definitive (a std or external type) - no leg
+            // may guess for it.
+            let dst = match call
+                .aux
+                .receivers
+                .iter()
+                .find(|r| r.call_site == site.span)
+                .map(|r| &r.outcome)
+            {
+                Some(ReceiverOutcome::Named(t)) => {
+                    let ty = output.strings.lookup(*t);
+                    KotlinSource::receiver_target(
+                        def_index, paths, modules, own_path, ty, callee,
+                    )
+                    .map(|(blob, span)| (blob, span, ResolutionOrigin::Receiver))
+                }
+                Some(ReceiverOutcome::Inferred) => plan
+                    .as_ref()
+                    .and_then(|p| p.recv_field_of(site.span))
+                    .and_then(|(base, member)| {
+                        KotlinSource::field_type_of(def_index, &base, &member)
+                    })
+                    .and_then(|ty| {
+                        KotlinSource::receiver_target(
+                            def_index, paths, modules, own_path, &ty, callee,
+                        )
+                        .map(|(blob, span)| (blob, span, ResolutionOrigin::Receiver))
+                    }),
+                // Ambiguous and Shadowed receivers are definitive misses this
+                // lane does not lift; the drop channel says inferred.
+                Some(_) => None,
+                None => {
+                    let dst = KotlinSource::module_target(
+                        modules,
+                        own_path,
+                        def_index,
+                        paths,
+                        callee,
+                        FamilyTag::Call,
+                    );
+                    match dst {
+                        Some(x) => Some(x),
+                        None => KotlinSource::call_name_match(output, def_index, callee)
+                            .map(|(blob, span)| {
+                                (blob, span, ResolutionOrigin::CorpusUnique)
+                            }),
+                    }
+                }
+            };
+            let Some((dst_blob, dst_span, origin)) = dst else {
                 continue;
-            }
-            let dst = KotlinSource::module_target(
-                modules,
-                own_path,
-                def_index,
-                paths,
-                callee,
-                FamilyTag::Call,
-            );
-            let (dst_blob, dst_span, origin) = match dst {
-                Some(x) => x,
-                None => match KotlinSource::call_name_match(output, def_index, callee) {
-                    Some((blob, span)) => (blob, span, ResolutionOrigin::CorpusUnique),
-                    None => continue,
-                },
             };
             edges.push(
-                ProjectEdge::new(
-                    caller,
-                    dst_blob,
-                    dst_span,
-                    CallEdgeKind::NameResolve,
-                    origin,
-                )
-                .with_call_site(site.span),
+                ProjectEdge::new(caller, dst_blob, dst_span, CallEdgeKind::NameResolve, origin)
+                    .with_call_site(site.span),
             );
         }
         edges
@@ -1812,34 +1849,85 @@ impl KotlinSource {
         None
     }
 
-    /// `callee` is bound by a param or `val`/`var` of the innermost enclosing
-    /// callable, so no name-match leg may answer for the site: the local
-    /// binding is what the name means there.
-    fn shadowed(output: &ExtractOutput, callee: &str, site_span: Span) -> bool {
-        let Some(call) = &output.call else {
-            return false;
-        };
-        let strings = &output.strings;
-        let Some(scope) = call
-            .nodes
+}
+
+impl KotlinSource {
+    /// The corpus member `callee` owned by `ty`: every Call def site named
+    /// `callee` whose blob's receiver plan owns that span by `ty`. The file
+    /// the module plane binds the type to (import or own package) narrows
+    /// the hit set; two surviving owners stay unresolved, never a coin flip.
+    fn receiver_target(
+        index: &DefIndex,
+        paths: Option<&PathIndex>,
+        modules: Option<&KtModuleIndex>,
+        own_path: Option<&str>,
+        ty: &str,
+        callee: &str,
+    ) -> Option<(ContentId, Span)> {
+        let owned: Vec<&DefSite> = corpus_defs(index, callee)
             .iter()
-            .filter(|n| n.span.start <= site_span.start && site_span.end() <= n.span.end())
-            .min_by_key(|n| (n.span.end() - n.span.start, n.span.start))
-        else {
-            return false;
-        };
-        if let Some(df) = &output.df {
-            if df.nodes.iter().any(|n| {
-                matches!(n.kind, DfNodeKind::Param | DfNodeKind::LetBind)
-                    && n.span.start >= scope.span.start
-                    && n.span.end() <= scope.span.end()
-                    && n.name.is_some_and(|id| strings.lookup(id) == callee)
-            }) {
-                return true;
+            .filter(|site| site.family == FamilyTag::Call)
+            .filter(|site| {
+                super::kotlin_receivers::kt_bind_plan_of(&site.blob)
+                    .is_some_and(|plan| plan.owner_of(site.span) == Some(ty))
+            })
+            .collect();
+        let mut hits: Vec<(ContentId, Span)> = owned
+            .iter()
+            .map(|site| (site.blob.clone(), site.span))
+            .collect();
+        if let Some(file) =
+            modules.zip(own_path).and_then(|(m, path)| module_type_file(m, path, ty))
+        {
+            let narrowed: Vec<(ContentId, Span)> = hits
+                .iter()
+                .filter(|(blob, _)| paths.and_then(|p| p.get(blob)) == Some(file.as_str()))
+                .cloned()
+                .collect();
+            if !narrowed.is_empty() {
+                hits = narrowed;
             }
         }
-        false
+        match hits.as_slice() {
+            [(blob, span)] => Some((blob.clone(), *span)),
+            _ => None,
+        }
     }
+
+    /// The written type of member `member` on `owner`, unique across the
+    /// plans of the corpus files declaring `owner`; two written types is a
+    /// redeclaration this lane does not settle.
+    fn field_type_of(index: &DefIndex, owner: &str, member: &str) -> Option<String> {
+        let mut tys: Vec<String> = Vec::new();
+        for site in corpus_defs(index, owner) {
+            let Some(plan) = super::kotlin_receivers::kt_bind_plan_of(&site.blob) else {
+                continue;
+            };
+            if let Some(ty) = plan.field_type_of(owner, member) {
+                if !tys.iter().any(|known| known == ty) {
+                    tys.push(ty.to_string());
+                }
+            }
+        }
+        match tys.as_slice() {
+            [only] => Some(only.clone()),
+            _ => None,
+        }
+    }
+}
+
+/// The file a bare type name binds to: the import leg, else the referring
+/// file's own package.
+fn module_type_file(modules: &KtModuleIndex, own_path: &str, ty: &str) -> Option<String> {
+    modules
+        .import_target(own_path, ty)
+        .map(|(file, _)| file)
+        .or_else(|| {
+            modules
+                .package_of(own_path)
+                .and_then(|pkg| modules.package_scope(pkg, ty))
+                .map(str::to_string)
+        })
 }
 
 impl KotlinSource {
@@ -1978,4 +2066,73 @@ impl Resolve<TypeF> for KotlinSource {
         }
         edges
     }
+}
+
+/// The kotlin call arm's non-edge channel: one row per dropped site. A
+/// receiver the plane saw but could not type, and a scope-bound plain call,
+/// drop `inferred`; a corpus-typed receiver's miss keeps the def counts.
+pub fn call_drops(
+    output: &ExtractOutput,
+    cx: &ProjectCx,
+    edges: &[ProjectEdge<CallF>],
+) -> Vec<crate::project::ResolveDrop> {
+    let (Some(call), Some(def_index)) = (&output.call, cx.indexes.def_index.get()) else {
+        return Vec::new();
+    };
+    let bound: BTreeSet<(u32, u32)> = edges
+        .iter()
+        .filter_map(|edge| edge.call_site.map(|span| (span.start, span.end())))
+        .collect();
+    call.aux
+        .sites
+        .iter()
+        .filter(|site| !bound.contains(&(site.span.start, site.span.end())))
+        .map(|site| {
+            let callee = output.strings.lookup(site.callee);
+            let outcome = call
+                .aux
+                .receivers
+                .iter()
+                .find(|r| r.call_site == site.span)
+                .map(|r| &r.outcome);
+            let reason = match outcome {
+                Some(ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed) => {
+                    UnresolvedReason::Inferred
+                }
+                Some(ReceiverOutcome::Named(t)) => {
+                    let ty = output.strings.lookup(*t);
+                    if type_is_corpus(def_index, ty) {
+                        if corpus_defs(def_index, callee).is_empty() {
+                            UnresolvedReason::NoCorpusDef
+                        } else {
+                            UnresolvedReason::Ambiguous
+                        }
+                    } else {
+                        UnresolvedReason::Inferred
+                    }
+                }
+                Some(ReceiverOutcome::Ambiguous) | None => {
+                    if corpus_defs(def_index, callee).is_empty() {
+                        UnresolvedReason::NoCorpusDef
+                    } else {
+                        UnresolvedReason::Ambiguous
+                    }
+                }
+            };
+            crate::project::ResolveDrop {
+                span: site.span,
+                reason,
+                detail: callee.to_string(),
+            }
+        })
+        .collect()
+}
+
+/// Whether `ty` names a corpus member owner (any blob's receiver plan says
+/// it owns members), the kotlin twin of rust's `is_impl_known`.
+fn type_is_corpus(index: &DefIndex, ty: &str) -> bool {
+    corpus_defs(index, ty).iter().any(|site| {
+        super::kotlin_receivers::kt_bind_plan_of(&site.blob)
+            .is_some_and(|plan| plan.owns_type(ty))
+    })
 }
