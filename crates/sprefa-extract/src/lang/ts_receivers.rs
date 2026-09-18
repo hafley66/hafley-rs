@@ -188,6 +188,11 @@ fn receiver_of(
             ts::Expression::Identifier(id) => Some(TypeBinding::Decl(id.name.to_string())),
             _ => None,
         },
+        // `this` inside a class names the class as the receiver; a field read
+        // `this.f` hops through the field's declared type at the resolve leg.
+        ts::Expression::ThisExpression(_) => {
+            this_type.map(|name| TypeBinding::Decl(name.clone()))
+        }
         _ => None,
     }
 }
@@ -196,9 +201,27 @@ struct ReceiverWalker {
     facts: TsFileTypes,
     scope: TypeScope,
     this_stack: Vec<String>,
+    /// The current callable's type-parameter constraints, `P extends Proj`
+    /// keyed by the parameter's name. A `p: P` param binds `Proj` so a member
+    /// call on it resolves through the constraint.
+    type_param_constraint: HashMap<String, String>,
 }
 
 impl ReceiverWalker {
+    fn load_type_params(&mut self, tp: Option<&ts::TSTypeParameterDeclaration>) {
+        self.type_param_constraint.clear();
+        if let Some(tp) = tp {
+            for param in &tp.params {
+                if let Some(constraint) = &param.constraint {
+                    if let Some(proj) = named_ref_of(&constraint) {
+                        self.type_param_constraint
+                            .insert(param.name.name.to_string(), proj);
+                    }
+                }
+            }
+        }
+    }
+
     fn seed_params(&mut self, params: &ts::FormalParameters) {
         for item in &params.items {
             let ts::BindingPattern::BindingIdentifier(id) = &item.pattern else {
@@ -212,6 +235,17 @@ impl ReceiverWalker {
                 ty => named_ref_of(ty)
                     .map(TypeBinding::Decl)
                     .unwrap_or(TypeBinding::Inferred),
+            };
+            // A type-parameter-typed param binds its constraint: `<P extends
+            // Proj>` makes `p: P` a `Proj` receiver for member lookup.
+            let binding = match &binding {
+                TypeBinding::Decl(name) => self
+                    .type_param_constraint
+                    .get(name)
+                    .cloned()
+                    .map(TypeBinding::Decl)
+                    .unwrap_or_else(|| binding.clone()),
+                other => other.clone(),
             };
             scope_insert(&mut self.scope, id.name.to_string(), binding);
         }
@@ -275,6 +309,7 @@ impl Default for ReceiverWalker {
             facts: TsFileTypes::default(),
             scope: vec![HashMap::new()],
             this_stack: Vec::new(),
+            type_param_constraint: HashMap::new(),
         }
     }
 }
@@ -383,6 +418,7 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         self.scope.push(HashMap::new());
+        self.load_type_params(func.type_parameters.as_deref());
         self.seed_params(&func.params);
         if let Some(name) = func
             .return_type
@@ -402,6 +438,7 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 
     fn visit_arrow_function_expression(&mut self, arrow: &ts::ArrowFunctionExpression<'a>) {
         self.scope.push(HashMap::new());
+        self.load_type_params(arrow.type_parameters.as_deref());
         self.seed_params(&arrow.params);
         if let Some(name) = arrow
             .return_type
