@@ -115,10 +115,13 @@ EXACT MODE: --family scip ROOT
 
 TELEMETRY
   Diagnostics use the shared hafley-observe convention and stay on stderr so
-  stdout remains JSONL facts. Warnings and errors are enabled by default.
-  RUST_LOG selects targets and levels, for example
-  RUST_LOG=sprefa_extract=info. HAFLEY_LOG_FORMAT selects human (also text) or
-  json output. Invalid RUST_LOG falls back to the default warning filter.
+  stdout remains JSONL facts. The default is sprefa_extract=info: one line per
+  file carrying its phase timings, plus every warning and error. A span that
+  opens and never prints its `close time.busy=` names a run that hung.
+  RUST_LOG selects targets and levels: sprefa_extract=debug adds the parse,
+  cache and per-family spans, sprefa_extract=warn restores the old quiet.
+  HAFLEY_LOG_FORMAT selects human (also text) or json output. Invalid RUST_LOG
+  falls back to sprefa_extract=info.
 
 FAST MODE: --family diet_scip PATH...
   This binary's own parsers (tree-sitter, oxc, syn) plus name matching across
