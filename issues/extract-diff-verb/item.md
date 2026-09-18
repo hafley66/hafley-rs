@@ -2,10 +2,11 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: feature
-status: open
+status: done
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
+closed: 2026-09-18
 ---
 
 # extract diff: fact delta between two commits, in-crate
