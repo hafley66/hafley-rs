@@ -1755,9 +1755,6 @@ impl Resolve<CallF> for KotlinSource {
                 continue;
             };
             let callee = output.strings.lookup(site.callee);
-            if KotlinSource::shadowed(output, callee, site.span) {
-                continue;
-            }
             // The receiver leg ahead of the module plane: a Named(T)
             // receiver answers ONLY through the corpus (T, m) owner table,
             // and a miss is definitive (a std or external type) - no leg
@@ -1852,34 +1849,6 @@ impl KotlinSource {
         None
     }
 
-    /// `callee` is bound by a param or `val`/`var` of the innermost enclosing
-    /// callable, so no name-match leg may answer for the site: the local
-    /// binding is what the name means there.
-    fn shadowed(output: &ExtractOutput, callee: &str, site_span: Span) -> bool {
-        let Some(call) = &output.call else {
-            return false;
-        };
-        let strings = &output.strings;
-        let Some(scope) = call
-            .nodes
-            .iter()
-            .filter(|n| n.span.start <= site_span.start && site_span.end() <= n.span.end())
-            .min_by_key(|n| (n.span.end() - n.span.start, n.span.start))
-        else {
-            return false;
-        };
-        if let Some(df) = &output.df {
-            if df.nodes.iter().any(|n| {
-                matches!(n.kind, DfNodeKind::Param | DfNodeKind::LetBind)
-                    && n.span.start >= scope.span.start
-                    && n.span.end() <= scope.span.end()
-                    && n.name.is_some_and(|id| strings.lookup(id) == callee)
-            }) {
-                return true;
-            }
-        }
-        false
-    }
 }
 
 impl KotlinSource {
