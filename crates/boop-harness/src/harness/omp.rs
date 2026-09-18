@@ -793,6 +793,33 @@ fn project_line(
         Ok(value) => value,
         Err(_) => return Ok(()),
     };
+    // `/clear` in omp drops the conversation in place: the session and its
+    // transcript file stay and a `reset_boundary` entry marks where the context
+    // was dropped. The turns before it are still in the file and still read as
+    // history, so the boundary is carried as a session attribute — which is what
+    // a reader that means "this conversation" consults — rather than as a turn
+    // no role describes. An older boundary never overwrites a newer one: a
+    // re-walk of the file from the top replays every one of them.
+    if value.get("type").and_then(Value::as_str) == Some("reset_boundary") {
+        let ts = value
+            .get("timestamp")
+            .and_then(Value::as_str)
+            .and_then(boop_store::session::parse_iso_ms)
+            .unwrap_or(0);
+        let held = store
+            .session_attr(&session.session_id, boop_store::RESET_ATTR_KEY)?
+            .and_then(|value| value.parse::<u64>().ok())
+            .unwrap_or(0);
+        if ts > held {
+            store.set_session_attr(
+                &session.session_id,
+                boop_store::RESET_ATTR_KEY,
+                &ts.to_string(),
+                ts,
+            )?;
+        }
+        return Ok(());
+    }
     if value.get("type").and_then(Value::as_str) != Some("message") {
         return Ok(());
     }

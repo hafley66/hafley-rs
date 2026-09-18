@@ -81,6 +81,12 @@ pub struct PaneSessionRow {
 
 /// The attribute key a session's mood is stored under.
 pub const MOOD_ATTR_KEY: &str = "mood";
+/// The attribute key a session's last conversation reset is stored under, as the
+/// millisecond stamp of the newest boundary the harness wrote. A harness can
+/// drop a conversation in place — omp's `/clear` keeps the session and its
+/// transcript file — so the boundary is the only record that the turns before it
+/// belong to a conversation the reader has already left.
+pub const RESET_ATTR_KEY: &str = "reset_ts";
 /// The mood every session falls back to, and the template used when the store
 /// holds no row for it.
 pub const DEFAULT_MOOD: &str = "plain";
