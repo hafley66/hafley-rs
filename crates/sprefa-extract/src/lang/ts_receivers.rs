@@ -8,7 +8,7 @@
 //! alike. Union, primitive, and literal-inferred receivers never bind.
 //! @comment-ok: module header, the seam list every lang file opens with
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use oxc_allocator::Allocator;
@@ -75,6 +75,8 @@ pub enum TypeBinding {
     Field(String, String),
     Inferred,
     Ambiguous,
+    /// A plain call to a scope-bound local: every name-match leg declines.
+    Shadowed,
 }
 
 type TypeScope = Vec<HashMap<String, TypeBinding>>;
@@ -205,6 +207,9 @@ struct ReceiverWalker {
     /// keyed by the parameter's name. A `p: P` param binds `Proj` so a member
     /// call on it resolves through the constraint.
     type_param_constraint: HashMap<String, String>,
+    /// Plain-local names per callable frame, typed or not: params and
+    /// const/let binding identifiers. Feeds the plain-call shadow check only.
+    locals: Vec<HashSet<String>>,
 }
 
 impl ReceiverWalker {
@@ -227,6 +232,9 @@ impl ReceiverWalker {
             let ts::BindingPattern::BindingIdentifier(id) = &item.pattern else {
                 continue;
             };
+            if let Some(frame) = self.locals.last_mut() {
+                frame.insert(id.name.to_string());
+            }
             let Some(ann) = &item.type_annotation else {
                 continue;
             };
@@ -310,6 +318,7 @@ impl Default for ReceiverWalker {
             scope: vec![HashMap::new()],
             this_stack: Vec::new(),
             type_param_constraint: HashMap::new(),
+            locals: vec![HashSet::new()],
         }
     }
 }
@@ -418,6 +427,7 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         self.scope.push(HashMap::new());
+        self.locals.push(HashSet::new());
         self.load_type_params(func.type_parameters.as_deref());
         self.seed_params(&func.params);
         if let Some(name) = func
@@ -434,10 +444,12 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         }
         oxc_ast_visit::walk::walk_function(self, func, flags);
         self.scope.pop();
+        self.locals.pop();
     }
 
     fn visit_arrow_function_expression(&mut self, arrow: &ts::ArrowFunctionExpression<'a>) {
         self.scope.push(HashMap::new());
+        self.locals.push(HashSet::new());
         self.load_type_params(arrow.type_parameters.as_deref());
         self.seed_params(&arrow.params);
         if let Some(name) = arrow
@@ -449,6 +461,7 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         }
         oxc_ast_visit::walk::walk_arrow_function_expression(self, arrow);
         self.scope.pop();
+        self.locals.pop();
     }
 
     fn visit_variable_declarator(&mut self, declarator: &ts::VariableDeclarator<'a>) {
@@ -493,6 +506,13 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
             }
         }
         oxc_ast_visit::walk::walk_variable_declarator(self, declarator);
+        // The binding owns its name only after its initializer: inside the
+        // init, the name still denotes the outer binding.
+        if let ts::BindingPattern::BindingIdentifier(id) = &declarator.id {
+            if let Some(frame) = self.locals.last_mut() {
+                frame.insert(id.name.to_string());
+            }
+        }
     }
 
     fn visit_call_expression(&mut self, call: &ts::CallExpression<'a>) {
@@ -527,6 +547,21 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
                 self.facts
                     .rows
                     .push((member.span.start, member.span.end, outcome));
+            }
+        } else if let ts::Expression::Identifier(id) = &call.callee {
+            // A plain call to a scope-bound local names the local, never a
+            // corpus fn; the Shadowed row makes every name-match leg decline.
+            if self
+                .locals
+                .iter()
+                .rev()
+                .any(|frame| frame.contains(id.name.as_str()))
+            {
+                self.facts.rows.push((
+                    call.callee.span().start,
+                    call.callee.span().end,
+                    TypeBinding::Shadowed,
+                ));
             }
         }
         oxc_ast_visit::walk::walk_call_expression(self, call);

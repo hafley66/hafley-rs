@@ -12,12 +12,11 @@ use std::process::Command;
 
 const DIR: &str = "tests/fixtures/ts_binding_legs";
 
-fn resolve() -> String {
+fn resolve_files(names: &[&str]) -> String {
     let root = env!("CARGO_MANIFEST_DIR");
     let out = Command::new(env!("CARGO_BIN_EXE_extract"))
         .arg("--resolve")
-        .arg(format!("{root}/{DIR}/lib.ts"))
-        .arg(format!("{root}/{DIR}/use.ts"))
+        .args(names.iter().map(|name| format!("{root}/{DIR}/{name}")))
         .output()
         .expect("extract binary runs");
     assert!(
@@ -26,6 +25,10 @@ fn resolve() -> String {
         String::from_utf8_lossy(&out.stderr)
     );
     String::from_utf8(out.stdout).expect("utf8 wire")
+}
+
+fn resolve() -> String {
+    resolve_files(&["lib.ts", "use.ts"])
 }
 
 /// `(caller_name, callee_name, callee_path, origin)` per resolved edge.
@@ -87,4 +90,92 @@ fn the_ctor_return_leg_fires_cross_file() {
     let edges = resolved_edges();
     let edge = bind(&edges, "crossFileCtor", "bar").expect("crossFileCtor -> bar");
     assert_eq!(edge.3, "receiver", "cross-file ctor leg must bind through the receiver");
+}
+
+const SHADOW: [&str; 2] = ["free.ts", "shadow.ts"];
+
+/// One resolve run over the shadow universe: `(caller, callee, callee_path,
+/// origin)` edges plus `(detail, reason)` unresolved call rows.
+fn shadow_run() -> (Vec<(String, String, String, String)>, Vec<(String, String)>) {
+    let (mut edges, mut drops) = (Vec::new(), Vec::new());
+    for line in resolve_files(&SHADOW).lines() {
+        let Ok(row) = serde_json::from_str::<serde_json::Value>(line) else {
+            continue;
+        };
+        match row["record"].as_str() {
+            Some("resolved_edge") => edges.push((
+                row["caller_name"].as_str().unwrap_or("").to_string(),
+                row["callee_name"].as_str().unwrap_or("").to_string(),
+                row["callee_path"].as_str().unwrap_or("").to_string(),
+                row["resolution_origin"].as_str().unwrap_or("").to_string(),
+            )),
+            Some("unresolved") if row["family"] == "call" => drops.push((
+                row["detail"].as_str().unwrap_or("").to_string(),
+                row["reason"].as_str().unwrap_or("").to_string(),
+            )),
+            _ => {}
+        }
+    }
+    (edges, drops)
+}
+
+fn names_free_project(edges: &[(String, String, String, String)]) -> bool {
+    edges
+        .iter()
+        .any(|(_, _, path, _)| path.ends_with("free.ts"))
+}
+
+/// C.6: the param `project` owns the name inside `run`, so the plain call
+/// names the local, never the corpus-unique free fn in free.ts; the drop row
+/// records the policy as `inferred`.
+#[test]
+fn a_param_shadow_kills_the_name_match() {
+    let (edges, drops) = shadow_run();
+    assert!(!names_free_project(&edges), "{edges:?}");
+    assert!(
+        drops
+            .iter()
+            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+        "{drops:?}"
+    );
+}
+
+/// A `const` binding owns its name for the rest of its callable.
+#[test]
+fn a_const_binding_shadow_kills_the_name_match() {
+    let (edges, drops) = shadow_run();
+    assert!(
+        !edges
+            .iter()
+            .any(|(caller, callee, path, _)| caller == "constCase"
+                && callee == "project"
+                && path.ends_with("free.ts")),
+        "{edges:?}"
+    );
+    assert!(
+        drops
+            .iter()
+            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+        "{drops:?}"
+    );
+}
+
+/// A closure param owns the name inside the arrow body only.
+#[test]
+fn an_arrow_param_shadow_kills_the_name_match() {
+    let (edges, drops) = shadow_run();
+    assert!(
+        !edges
+            .iter()
+            .any(|(caller, callee, path, _)| caller == "closureCase"
+                && callee == "project"
+                && path.ends_with("free.ts")),
+        "{edges:?}"
+    );
+    assert!(
+        drops
+            .iter()
+            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+        "{drops:?}"
+    );
 }
