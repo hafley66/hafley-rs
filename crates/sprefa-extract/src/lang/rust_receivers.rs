@@ -263,6 +263,40 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
         });
         syn::visit::visit_expr_method_call(self, call);
     }
+
+    /// A closure scopes its own params: a closure param named X shadows X
+    /// inside the body, and the enclosing def's scope resumes on the way out.
+    fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
+        self.scopes.push(Default::default());
+        for input in &closure.inputs {
+            if let syn::Pat::Ident(pat) = input {
+                self.insert(pat.ident.to_string(), TypeBinding::Unknown);
+            }
+        }
+        syn::visit::visit_expr_closure(self, closure);
+        self.scopes.pop();
+    }
+
+    /// A plain `X()` whose X is scope-bound names the local, never a corpus
+    /// fn: the Shadowed row makes every name-match leg decline the site.
+    fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+        let syn::Expr::Path(path) = call.func.as_ref() else {
+            syn::visit::visit_expr_call(self, call);
+            return;
+        };
+        if path.path.segments.len() == 1 {
+            let ident = path.path.segments[0].ident.to_string();
+            if ident != "self" && self.lookup(&ident).is_some() {
+                let span = syn_span(self.line_starts, path.span());
+                self.out.push(ReceiverBinding {
+                    call_site: span,
+                    outcome: ReceiverOutcome::Shadowed,
+                });
+            }
+        }
+        syn::visit::visit_expr_call(self, call);
+    }
+
 }
 
 impl<'a> ReceiverWalk<'a> {
@@ -376,16 +410,22 @@ impl<'a> ReceiverWalk<'a> {
                 syn::Expr::Paren(p) => current = &p.expr,
                 syn::Expr::Group(g) => current = &g.expr,
                 syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Deref(_)) => current = &u.expr,
-                syn::Expr::Path(p) if p.path.segments.len() == 1 => {
-                    let ident = p.path.segments[0].ident.to_string();
-                    if ident == "self" {
+                syn::Expr::Path(p) => {
+                    let segments = &p.path.segments;
+                    if segments.len() == 1 && segments[0].ident == "self" {
                         return match self.impl_stack.last() {
                             Some(ty) => ReceiverOutcome::Named(self.strings.intern(ty)),
                             None => ReceiverOutcome::Inferred,
                         };
                     }
-                    let bound = self
-                        .lookup(&ident)
+                    let Some(last_seg) = segments.last() else {
+                        return ReceiverOutcome::Inferred;
+                    };
+                    // A scope binding of the LAST segment wins; else an
+                    // uppercase last segment names the type itself.
+                    let last = last_seg.ident.to_string();
+                    let binding = self.lookup(&last);
+                    let bound = binding
                         .and_then(|b| match b {
                             TypeBinding::Named(ty) => Some(ty.clone()),
                             _ => None,
@@ -393,6 +433,11 @@ impl<'a> ReceiverWalk<'a> {
                         .and_then(|ty| self.resolve_self(&ty));
                     return match bound {
                         Some(ty) => ReceiverOutcome::Named(self.strings.intern(&ty)),
+                        None if binding.is_none()
+                            && last.chars().next().is_some_and(char::is_uppercase) =>
+                        {
+                            ReceiverOutcome::Named(self.strings.intern(&last))
+                        }
                         None => ReceiverOutcome::Inferred,
                     };
                 }

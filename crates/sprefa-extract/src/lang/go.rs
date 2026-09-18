@@ -3693,7 +3693,7 @@ fn go_shadowing_receiver_target(
             .get(&(site.span.start, site.span.end()))
             .and_then(|(top, var)| bound_types.get(top)?.get(var))?
             .clone(),
-        ReceiverOutcome::Ambiguous => return None,
+        ReceiverOutcome::Ambiguous | ReceiverOutcome::Shadowed => return None,
     };
     go_receiver_target(def_index, paths, module, own, imports, &type_name, callee)
 }
@@ -4263,7 +4263,7 @@ impl Resolve<CallF> for GoSource {
                         None => None,
                     }
                 }
-                Some(ReceiverOutcome::Ambiguous) => None,
+                Some(ReceiverOutcome::Ambiguous | ReceiverOutcome::Shadowed) => None,
                 None => match site.callee_path.map(|id| output.strings.lookup(id)) {
                     // A local shadowing the package name wins; the directory
                     // leg is exported-only, corpus-wide name match last.
@@ -4822,7 +4822,9 @@ pub fn call_drops(
                 .find(|r| r.call_site == site.span)
                 .map(|r| &r.outcome);
             let reason = match receiver {
-                Some(ReceiverOutcome::Inferred) => UnresolvedReason::Inferred,
+                Some(ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed) => {
+                    UnresolvedReason::Inferred
+                }
                 Some(ReceiverOutcome::Ambiguous) => UnresolvedReason::Ambiguous,
                 _ if is_go_builtin_call(callee) => UnresolvedReason::Builtin,
                 _ => return None,
