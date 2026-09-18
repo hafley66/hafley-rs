@@ -16,6 +16,23 @@ The shape is not new: extract -> fact store -> query programs is the CodeQL
 architecture; cst+df+call as merged graph planes is Joern's Code Property
 Graph. Steal from both literatures freely.
 
+## Division of labor with dl8 (user-set 2026-09-18)
+
+`~/projects/sprefa` is dl8: DL7 compiled to Rust, `_6_eval` stratified
+semi-naive, `sqlite_ivm`. It is the parent; this crate is its EDB producer.
+
+| layer | owner | job |
+| --- | --- | --- |
+| EDB | this crate, phase 1 (`extract watch` retract/assert receipts, blob-keyed) | facts: `call_site`, `def`, `import`, `receiver_binding`, module indexes |
+| rules | dl8 `.dl7` programs | `resolved_edge(site, def, origin) :- leg(...)`, one rule per `ResolutionOrigin` variant, stratified in the order the Rust arms try them |
+| maintenance | dl8 `_6_eval` + `sqlite_ivm` | a blob delta re-derives only dependent edges |
+| oracle | scip slow lane here, graded by a dl8 rule | `RATCHET.tsv` is a query result |
+
+`Resolve<CallF>` in this crate is the hand-compiled fast path; the DL7 rule
+set is its spec. Do not build a watcher, a daemon, a delta resolver, or a
+persistent index in this crate: that is dl8's layer. The `extract watch`
+verb emits deltas and stops there.
+
 ## Analysis family map (program vs facet vs rabbit hole)
 
 PROGRAMS over already-emitted facts (zero new extraction — do NOT add
