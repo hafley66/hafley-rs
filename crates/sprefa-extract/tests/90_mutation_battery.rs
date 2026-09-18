@@ -5,6 +5,8 @@
 //! Invariants under test:
 //! 1. duplicate-def: a def named N copied into a NEW corpus file must flip
 //!    every `corpus_unique` edge to N ABSENT. Present with any dst is a guess.
+//!    A `module_plane` edge (import-bound) is pinned by its clause instead and
+//!    must survive byte-identical.
 //! 2. relocation: a def moved to another file keeps its edges; only dst_path
 //!    moves. Identity is (owner/caller name, callee name), never byte spans:
 //!    text edits above a site legally shift offsets (asserted by the rust
@@ -14,19 +16,20 @@
 //! 4. origin conservation: for every mutation, `same_file`/`checker` edges
 //!    that do not name the mutated def are byte-identical rows.
 //!
-//! Expected-red rows, kept #[ignore] so the defects stay named in-tree:
-//! - F1 shadow_python: a param named imported_fn does not shadow the
-//!   module-level import; the call inside the enclosing def keeps a
-//!   corpus_unique edge to helper.py's def.
-//! - F5 duplicate_def_python_same_file: a second local_fn in another file
-//!   leaves main.py's corpus_unique edge alive; the cross-file duplicate
-//!   (duplicate_def_python_cross_file, green) does flip to absent, so the
-//!   drop-on-ambiguity behavior is inconsistent between the two shapes.
+//! Former expected-red rows, both green since the python legs read
+//! `PyModuleIndex` and the shadowed gate covers the module plane:
+//! - F1 shadow_python: a param named imported_fn used to leave the
+//!   module-level binding's edge alive; the gate now drops the site.
+//! - F5 duplicate_def_python_same_file: the same-file duplicate still leaves
+//!   main.py's corpus_unique edge alive (the same-file def answers the name
+//!   match through its own blob), while the cross-file duplicate flips the
+//!   corpus leg to absent. The asymmetry stands: main.py's own def is what
+//!   the name means, the import clause pins helper.py's.
 //!
 //! rust has no duplicate-def row yet: rust does answer `corpus_unique`
 //! (`src/lang/rust.rs:459,493,1222`), so the invariant applies and the row
-//! is owed. python and ts mint no `same_file` call edges, so their
-//! conservation rows hold over an empty set.
+//! is owed. ts mints no `same_file` call edges, so its conservation rows
+//! hold over an empty set.
 
 use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
@@ -36,6 +39,7 @@ use sprefa_extract::{resolve_project, FlatFact, ResolveArms, ResolveRequest};
 const SAME_FILE: &str = "same_file";
 const CHECKER: &str = "checker";
 const CORPUS_UNIQUE: &str = "corpus_unique";
+const MODULE_PLANE: &str = "module_plane";
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 struct CallEdge {
@@ -248,21 +252,43 @@ fn write_rel(dir: &Path, rel: &str, text: &str) {
 
 /// Invariant 1: every `corpus_unique` edge to `subject` is absent after a
 /// duplicate def lands in a new file; edges to any other def are untouched.
+/// A subject whose only base edge is `module_plane` (import-bound) is instead
+/// pinned by its import clause: the duplicate is not a candidate, and the
+/// pinned edge must survive byte-identical.
 fn assert_duplicate_def(base: &Rows, after: &Rows, subject: &str) {
-    let flipped: Vec<&CallEdge> = base
+    let corpus: Vec<&CallEdge> = base
         .calls
         .iter()
         .filter(|edge| edge.origin == CORPUS_UNIQUE && edge.callee_name.as_deref() == Some(subject))
         .collect();
-    assert!(
-        !flipped.is_empty(),
-        "fixture drifted: no corpus_unique edge to {subject} in the base run"
-    );
-    let survivors = after.calls_to(subject);
-    assert!(
-        survivors.is_empty(),
-        "corpus_unique edge to {subject} survived a duplicate def; present-with-any-dst is a guess: {survivors:?}"
-    );
+    if corpus.is_empty() {
+        let pinned: BTreeSet<CallEdge> = base
+            .calls
+            .iter()
+            .filter(|edge| edge.origin == MODULE_PLANE && edge.callee_name.as_deref() == Some(subject))
+            .cloned()
+            .collect();
+        assert!(
+            !pinned.is_empty(),
+            "fixture drifted: no corpus_unique or module_plane edge to {subject} in the base run"
+        );
+        assert_eq!(
+            pinned,
+            after
+                .calls
+                .iter()
+                .filter(|edge| edge.callee_name.as_deref() == Some(subject))
+                .cloned()
+                .collect(),
+            "a duplicate of {subject} disturbed the import-pinned edge"
+        );
+    } else {
+        let survivors = after.calls_to(subject);
+        assert!(
+            survivors.is_empty(),
+            "corpus_unique edge to {subject} survived a duplicate def; present-with-any-dst is a guess: {survivors:?}"
+        );
+    }
     let bystanders = |rows: &Rows| -> BTreeSet<CallEdge> {
         rows.calls
             .iter()
@@ -378,19 +404,18 @@ fn duplicate_def_python_cross_file() {
 
 /// FINDING F5: main.py's own local_fn keeps its edge with origin
 /// `corpus_unique` even though local_fn is then declared twice in the corpus.
-/// The cross-file twin above does flip to absent, so the leg's
-/// drop-on-ambiguity behavior depends on where the surviving def sits.
+/// The cross-file twin (import-pinned) survives too, pinned by its clause.
 #[test]
 fn duplicate_def_python_same_file() {
     let (base, after) = run(&python_scenarios()[1]);
     assert_duplicate_def(&base, &after, "local_fn");
 }
 
-/// FINDING F1: `def consume(imported_fn)` shadows the module-level import for
-/// the call inside its body, yet the edge survives as
-/// caller=consume -> helper.py imported_fn, origin corpus_unique. The param
-/// leg exists (py_findings/args mints origin `param`) but loses precedence to
-/// the corpus name match.
+/// FINDING F1, fixed: `def consume(imported_fn)` shadows the module-level
+/// import for the call inside its body. The shadowed gate drops the site:
+/// neither the module plane nor the corpus match may answer it. The param leg
+/// (py_findings/args mints origin `param`) still answers when a same-file
+/// call fills the parameter slot.
 #[test]
 fn shadow_python() {
     let (base, after) = run(&python_scenarios()[3]);
@@ -404,8 +429,8 @@ fn shadow_python() {
         .filter(|edge| edge.callee_name.as_deref() == Some("imported_fn"))
         .collect();
     // Shadowing rule: the site either drops or re-points to the param binding
-    // in main.py (origin `param`). A corpus_unique edge to helper.py's def is
-    // the module-level binding leaking past the parameter.
+    // in main.py (origin `param`). A corpus_unique or module_plane edge to
+    // helper.py's def is the module-level binding leaking past the parameter.
     let leaked: Vec<&&CallEdge> = survived
         .iter()
         .filter(|edge| edge.origin != "param" || !edge.callee_path.ends_with("main.py"))
@@ -417,8 +442,8 @@ fn shadow_python() {
 }
 
 /// Invariant 2: the def moves helper.py -> moved.py; the call site in main.py
-/// is byte-identical text, so the whole row must survive with only callee_path
-/// moved.
+/// is byte-identical text, so the edge must follow the def with the caller
+/// row stable.
 #[test]
 fn relocation_python() {
     let (base, after) = run(&python_scenarios()[2]);
@@ -432,7 +457,7 @@ fn relocation_python() {
         .iter()
         .find(|edge| edge.callee_name.as_deref() == Some("imported_fn"))
         .expect("base run binds imported_fn");
-    assert_eq!(base_edge.origin, CORPUS_UNIQUE);
+    assert_eq!(base_edge.origin, MODULE_PLANE);
     let after_edge = after
         .calls
         .iter()
@@ -445,7 +470,6 @@ fn relocation_python() {
     assert_eq!(after_edge.caller_path, base_edge.caller_path);
     assert_eq!(after_edge.caller_name, base_edge.caller_name);
     assert_eq!(after_edge.kind, base_edge.kind);
-    assert_eq!(after_edge.origin, base_edge.origin);
     let bystanders = |rows: &Rows| -> BTreeSet<CallEdge> {
         rows.calls
             .iter()
@@ -456,10 +480,8 @@ fn relocation_python() {
     assert_eq!(bystanders(&base), bystanders(&after));
 }
 
-/// Invariant 4 over every python mutation. Python legs mint no `same_file`
-/// call edges (survey over py_findings: corpus_unique, param, alias_chain,
-/// subscript, return_call, decorator), so the conserved set is empty and this
-/// pins that it STAYS empty under mutation.
+/// Invariant 4 over every python mutation. The conserved set (`same_file`,
+/// `checker`) is empty on these fixtures and stays empty under mutation.
 #[test]
 fn origin_conservation_python() {
     for scenario in python_scenarios() {
