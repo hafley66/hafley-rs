@@ -3693,6 +3693,14 @@ pub enum FlatFact {
         bytes: u32,
         lines: u32,
     },
+    /// Gated on `--lines`: every newline byte offset, in order, keyed by the
+    /// same `digest` `file` carries. `src/lang/ts.rs:2832`: byte->line index only.
+    #[serde(rename = "line_start")]
+    LineStartRow {
+        path: String,
+        digest: String,
+        offsets: Vec<u32>,
+    },
 }
 
 impl FlatFact {

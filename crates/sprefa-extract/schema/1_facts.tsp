@@ -79,6 +79,7 @@ model FileEdge { ...ExportRow; record: "file_edge"; src_path: string; dst_path: 
 model FileUnresolved { ...ExportRow; record: "file_unresolved"; src_path: string; module: string; reason: string; }
 model PackageEdge { ...ExportRow; record: "package_edge"; src_manifest: string; dst_manifest: string; kind: string; }
 model File { ...ExportRow; record: "file"; path: string; digest: string; bytes: uint32; lines: uint32; }
+model LineStart { ...ExportRow; record: "line_start"; path: string; digest: string; offsets: uint32[]; }
 model SizeSkip { ...ExportRow; record: "size_skip"; path: string; bytes: uint64; limit: uint64; reason: string; }
 model Capture { ...ExportRow; record: "capture"; query: string; capture: string; text: string; start: uint32; end: uint32; match_start: uint32; match_end: uint32; }
 

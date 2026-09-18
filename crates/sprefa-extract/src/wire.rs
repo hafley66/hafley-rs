@@ -577,7 +577,9 @@ pub fn file_fact(path: &str, content: &[u8]) -> FlatFact {
 }
 
 /// The `file_fact` construction for a caller that already hashed `content`.
-pub(crate) fn file_fact_with_content_id(
+/// `pub`, not `pub(crate)`: the CLI's `--lines` gate hashes once and hands the
+/// same `content_id` here and to `line_start_fact_with_content_id` below.
+pub fn file_fact_with_content_id(
     path: &str,
     content: &[u8],
     content_id: &crate::shape::ContentId,
@@ -589,6 +591,25 @@ pub(crate) fn file_fact_with_content_id(
         digest: content_id.to_string(),
         bytes: content.len() as u32,
         lines: (newlines + usize::from(unterminated)) as u32,
+    }
+}
+
+/// `--lines` sibling of `file_fact_with_content_id`: every newline byte
+/// offset in `content`, in order, one pass, no separate count-then-collect.
+pub fn line_start_fact_with_content_id(
+    path: &str,
+    content: &[u8],
+    content_id: &crate::shape::ContentId,
+) -> FlatFact {
+    let offsets: Vec<u32> = content
+        .iter()
+        .enumerate()
+        .filter_map(|(offset, byte)| (*byte == b'\n').then_some(offset as u32))
+        .collect();
+    FlatFact::LineStartRow {
+        path: path.to_string(),
+        digest: content_id.to_string(),
+        offsets,
     }
 }
 

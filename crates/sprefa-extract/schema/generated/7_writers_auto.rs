@@ -661,6 +661,14 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct LineStart {
+        pub path: String,
+        pub digest: String,
+        pub offsets: Vec<u32>,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct SizeSkip {
         pub path: String,
         pub bytes: u64,
@@ -1002,6 +1010,9 @@ pub enum Fact {
     #[serde(rename = "file")]
     File(models::File),
 
+    #[serde(rename = "line_start")]
+    LineStart(models::LineStart),
+
     #[serde(rename = "size_skip")]
     SizeSkip(models::SizeSkip),
 
@@ -1154,6 +1165,8 @@ impl Fact {
 
             Self::File(row) => row.insert(conn, source),
 
+            Self::LineStart(row) => row.insert(conn, source),
+
             Self::SizeSkip(row) => row.insert(conn, source),
 
             Self::Capture(row) => row.insert(conn, source),
@@ -1204,7 +1217,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 61;
+pub const TABLE_COUNT: usize = 62;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1329,6 +1342,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut package_edge: Vec<(usize, &models::PackageEdge)> = Vec::new();
 
     let mut file: Vec<(usize, &models::File)> = Vec::new();
+
+    let mut line_start: Vec<(usize, &models::LineStart)> = Vec::new();
 
     let mut size_skip: Vec<(usize, &models::SizeSkip)> = Vec::new();
 
@@ -1456,6 +1471,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::File(value) => file.push((index, value)),
 
+            Fact::LineStart(value) => line_start.push((index, value)),
+
             Fact::SizeSkip(value) => size_skip.push((index, value)),
 
             Fact::Capture(value) => capture.push((index, value)),
@@ -1581,6 +1598,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let package_edge_capacity = if package_edge.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"package_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
     let file_capacity = if file.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let line_start_capacity = if line_start.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
     let size_skip_capacity = if size_skip.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"size_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2048,6 +2067,17 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in file.chunks(file_capacity) {
         let sql = multi_row_sql("INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in line_start.chunks(line_start_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3508,6 +3538,32 @@ impl models::File {
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::LineStart {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        let offsets_json = serde_json::to_string(&self.offsets)?;
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "line_start")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.digest.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, &offsets_json)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

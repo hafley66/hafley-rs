@@ -505,6 +505,16 @@ CREATE TABLE IF NOT EXISTS "file" (
     "lines" INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "line_start" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "digest" TEXT NOT NULL,
+    "offsets" TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "size_skip" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

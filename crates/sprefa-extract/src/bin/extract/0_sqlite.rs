@@ -1,5 +1,6 @@
 //! SQLite export only. DDL, columns and wire paths come from TypeSpec.
 //! A private staging database is published after commit, with no overwrite.
+use std::collections::HashMap;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -38,6 +39,54 @@ fn shell_quote(value: &str) -> String {
     format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
+/// Every `<x>__start`/`<x>__end` pair on a table with `_content_id`, joined
+/// to `line_start` by digest. No `col` column: only offsets are stored.
+fn span_lines_view_sql(connection: &Connection) -> Result<String> {
+    let mut tables: Vec<String> = connection
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table'")?
+        .query_map([], |row| row.get::<_, String>(0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    tables.sort();
+    let mut arms = Vec::new();
+    for table in &tables {
+        if table == "line_start" {
+            continue;
+        }
+        let columns: Vec<String> = connection
+            .prepare(&format!("PRAGMA table_info(\"{table}\")"))?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        if !columns.iter().any(|column| column == "_content_id") {
+            continue;
+        }
+        for start_column in columns.iter().filter(|column| column.ends_with("__start")) {
+            let prefix = &start_column[..start_column.len() - "__start".len()];
+            let end_column = format!("{prefix}__end");
+            if !columns.contains(&end_column) {
+                continue;
+            }
+            arms.push(format!(
+                "SELECT '{table}' AS _table, '{prefix}' AS _span, t.\"_row\" AS _row, \
+                 t.\"_content_id\" AS _content_id, t.\"{start_column}\" AS start, \
+                 t.\"{end_column}\" AS end FROM \"{table}\" AS t"
+            ));
+        }
+    }
+    if arms.is_empty() {
+        arms.push(
+            "SELECT NULL AS _table, NULL AS _span, NULL AS _row, NULL AS _content_id, \
+             NULL AS start, NULL AS end WHERE 0"
+                .to_string(),
+        );
+    }
+    Ok(format!(
+        "CREATE VIEW \"span_lines\" AS SELECT s._table, s._span, s._row, s._content_id, \
+         s.start, s.end, 1 + (SELECT count(*) FROM line_start AS ls, json_each(ls.offsets) AS je \
+         WHERE ls.digest = s._content_id AND je.value < s.start) AS line FROM ({}) AS s;",
+        arms.join(" UNION ALL ")
+    ))
+}
+
 impl Database {
     pub fn create(path: &Path) -> Result<Self> {
         if path.as_os_str().is_empty() || path == Path::new(":memory:") {
@@ -64,6 +113,7 @@ impl Database {
             "PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; BEGIN IMMEDIATE;",
         )?;
         connection.execute_batch(DDL)?;
+        connection.execute_batch(&span_lines_view_sql(&connection)?)?;
         let max_batch_rows = writers::max_batch_rows(&connection)?;
         Ok(Self {
             connection,
@@ -164,6 +214,7 @@ impl Database {
         writeln!(out, "Tables: sqlite3 {path} '.tables'")?;
         writeln!(out, "Schema: sqlite3 {path} '.schema'")?;
         writeln!(out, "Query:  sqlite3 -header -column {path} 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'")?;
+        writeln!(out, "Lines:  sqlite3 -header -column {path} 'SELECT _table, _row, start, line FROM span_lines LIMIT 20;' (needs --lines for non-empty line_start)")?;
         Ok(())
     }
 }

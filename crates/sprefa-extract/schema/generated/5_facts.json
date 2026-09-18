@@ -4209,6 +4209,84 @@
     ]
   },
   {
+    "record": "line_start",
+    "table": "line_start",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "line_start"
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "digest",
+        "path": [
+          "digest"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "offsets",
+        "path": [
+          "offsets"
+        ],
+        "kind": "json",
+        "optional": false,
+        "nullable": false,
+        "json_type": {
+          "kind": "array",
+          "items": [
+            {
+              "kind": "uint32"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
     "record": "size_skip",
     "table": "size_skip",
     "columns": [

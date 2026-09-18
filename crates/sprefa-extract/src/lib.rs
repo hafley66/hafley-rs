@@ -139,6 +139,7 @@ pub use types::{
     SymbolId, SymbolInterner, SymbolRef, SymbolSeat,
 };
 pub use wire::{
-    file_fact, flatten, flatten_cfg, flatten_cfg_each, flatten_each, flatten_flow, flatten_jsonl,
-    flatten_scip, scip_file_edges, size_skip_fact, FlatFact, SpanOut, DEFAULT_MAX_BYTES, SCHEMA,
+    file_fact, file_fact_with_content_id, flatten, flatten_cfg, flatten_cfg_each, flatten_each,
+    flatten_flow, flatten_jsonl, flatten_scip, line_start_fact_with_content_id, scip_file_edges,
+    size_skip_fact, FlatFact, SpanOut, DEFAULT_MAX_BYTES, SCHEMA,
 };
