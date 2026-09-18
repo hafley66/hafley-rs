@@ -5,7 +5,7 @@ type: bug
 status: open
 priority: normal
 epic: extract-parity-move-rename
-labels: [extract]
+labels: [extract, artifact-cli, phase-refinement-1, intent-correctness, component-move]
 ---
 
 # move --commit applies every move then exits 2

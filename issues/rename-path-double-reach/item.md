@@ -6,7 +6,7 @@ status: open
 priority: normal
 epic: extract-parity-move-rename
 related: ['@move-commit-exits-two']
-labels: [extract]
+labels: [extract, artifact-cli, phase-refinement-1, intent-correctness, component-rename, needs-chris]
 ---
 
 # rename exits 6 with no plan when #[path] double-reaches a symbol
