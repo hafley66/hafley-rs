@@ -79,3 +79,33 @@ fn spelled_unit_struct_receiver_binds() {
         "{rows:?}"
     );
 }
+#[test]
+fn field_typed_receiver_binds() {
+    // C.5 field leg: `b.inner.run()` where `struct Box { inner: Widget }`.
+    let rows = edges(&["legs.rs", "proj.rs"]);
+    assert!(
+        has_origin(&rows, "field_leg", "run", "proj", "receiver"),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn constructor_return_receiver_binds() {
+    // C.5 constructor-return leg: `let w = Widget::new(); w.run()`.
+    let rows = edges(&["legs.rs", "proj.rs"]);
+    assert!(
+        has_origin(&rows, "ctor_leg", "run", "proj", "receiver"),
+        "{rows:?}"
+    );
+}
+
+#[test]
+fn trait_bound_generic_receiver_binds() {
+    // C.5 trait-bound generic leg: `fn f<P: Proj>(p: P) { p.go() }` binds to
+    // the trait's own fn def in proj.rs.
+    let rows = edges(&["legs.rs", "proj.rs"]);
+    assert!(
+        has_origin(&rows, "trait_bound_leg", "go", "proj", "receiver"),
+        "{rows:?}"
+    );
+}
