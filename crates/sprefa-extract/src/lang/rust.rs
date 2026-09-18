@@ -1098,6 +1098,11 @@ impl Resolve<CallF> for RustSource {
                         ReceiverOutcome::Named(_) | ReceiverOutcome::Shadowed
                     )
             });
+            // Phase 1 saw the receiver but could not name its type: a member
+            // call on an untyped receiver, so the name-match legs never run.
+            let recv_inferred = call.aux.receivers.iter().any(|r| {
+                r.call_site == site.span && matches!(r.outcome, ReceiverOutcome::Inferred)
+            });
             // The associated leg: `T::f()` / `a::T::f()` names T's impl block;
             // `Self::f()` names the enclosing impl's self type via the file's
             // own method-owner rows.
@@ -1160,6 +1165,8 @@ impl Resolve<CallF> for RustSource {
             } else if recv_known {
                 // A KNOWN receiver type with no corpus impl target is
                 // definitive (std, an external crate, trait dispatch).
+                None
+            } else if recv_inferred {
                 None
             } else {
                 match (qualifier, own_path, paths) {
@@ -1378,12 +1385,19 @@ pub fn call_drops(
         .iter()
         .filter_map(|edge| edge.call_site.map(|span| (span.start, span.end())))
         .collect();
+    // An unbound member site is a receiver-policy drop when the plane cannot
+    // answer for the receiver; corpus-impl-known types keep the def counts.
     let inferred: BTreeSet<(u32, u32)> = call
         .aux
         .receivers
         .iter()
-        .filter(|r| {
-            matches!(r.outcome, ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed)
+        .filter(|r| match &r.outcome {
+            ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed => true,
+            // Two conflicting declarations traced: the def counts below tell
+            // the story.
+            ReceiverOutcome::Named(ty) => !modules
+                .is_some_and(|m| m.is_impl_known(output.strings.lookup(*ty))),
+            ReceiverOutcome::Ambiguous => false,
         })
         .map(|r| (r.call_site.start, r.call_site.end()))
         .collect();

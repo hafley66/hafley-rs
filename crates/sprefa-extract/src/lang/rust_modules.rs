@@ -507,6 +507,9 @@ pub struct RustModuleIndex {
     trait_impl_fns: HashMap<(String, String), Vec<(ContentId, Span)>>,
     /// self type -> trait names an `impl Trait for T` block names.
     type_traits: HashMap<String, Vec<String>>,
+    /// Every self type some corpus impl block names, inherent or trait: the
+    /// types the receiver plane can answer for.
+    impl_types: std::collections::HashSet<String>,
 }
 
 /// One (file, fn) site a trait declares or defaults. The blob rides along so
@@ -609,6 +612,7 @@ impl RustModuleIndex {
                 continue;
             };
             for entry in &facts.impls {
+                index.impl_types.insert(entry.self_type.clone());
                 for (name, span) in &entry.methods {
                     index
                         .impl_methods
@@ -753,6 +757,12 @@ impl RustModuleIndex {
     /// Whether `name` is a trait the corpus declares.
     pub(crate) fn is_trait(&self, name: &str) -> bool {
         self.trait_fns.contains_key(name)
+    }
+
+    /// Whether the corpus declares an impl block for `name`, or `name` is a
+    /// declared trait: a `Named` receiver outside this set is std/external.
+    pub(crate) fn is_impl_known(&self, name: &str) -> bool {
+        self.impl_types.contains(name) || self.trait_fns.contains_key(name)
     }
 
     /// Which of `candidates` (distinct blobs declaring one trait name) the
