@@ -2,11 +2,12 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: feature
-status: in-progress
+status: done
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
 lane: extract-rename
+closed: 2026-09-18
 ---
 
 # Lane E: rust rename seats (#[path], field/variant, serde spellings, fn-body use)
