@@ -119,8 +119,13 @@ pub fn align_rows(source: &[String], rows: &[LogicalLine]) -> Vec<(usize, usize)
 /// turn on screen showed at least one line, and it cannot show more than it
 /// has — so a caller can never read 0 out of it.
 pub fn rows_of(screen: &[LogicalLine], turn: &VisibleTurn, viewport: Viewport) -> TurnRow {
-    let total = lines_of(&turn.said);
-    let source: Vec<String> = turn.said.split('\n').map(str::to_owned).collect();
+    let said = if turn.role == "user" {
+        boop_turnvis::boop_content(&turn.said)
+    } else {
+        &turn.said
+    };
+    let total = lines_of(said);
+    let source: Vec<String> = said.split('\n').map(str::to_owned).collect();
     // The aligner only sees the rows the viewport holds, so every row it can
     // match is inside the viewport by construction.
     let visible: Vec<&LogicalLine> = screen

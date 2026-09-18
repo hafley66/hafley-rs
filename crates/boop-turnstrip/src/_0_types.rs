@@ -278,6 +278,18 @@ pub struct Square {
 pub struct RecentStrip {
     pub squares: Vec<Square>,
     pub rows: f64,
+    #[serde(default)]
+    pub gap: Option<ToolGap>,
+}
+
+/// A visible tool-only interval between conversational turns.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolGap {
+    pub before_id: Option<String>,
+    pub after_id: Option<String>,
+    pub start_row: i64,
+    pub end_row: i64,
 }
 
 /// The strip in [`Mode::Relative`]: the window's turns, each at the row it
@@ -295,6 +307,8 @@ pub struct RelativeStrip {
     pub band: usize,
     /// The window's height in rows: what a relative square's `y` is measured in.
     pub rows: f64,
+    #[serde(default)]
+    pub gap: Option<ToolGap>,
 }
 
 /// The strip, in whichever mode was asked for. Tagged on the wire (`"mode"`),

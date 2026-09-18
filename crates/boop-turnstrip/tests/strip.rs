@@ -309,7 +309,7 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
     // reader's own intersection with them: the window holds half of `a2`, so
     // half a square; `a4` is wholly in view and draws full size.
     let expected: [(&str, TurnKind, f64, f64, bool); 2] = [
-        ("a2", TurnKind::Agent, 0.0, 0.5, false),
+        ("a2", TurnKind::Agent, 0.0, 0.5, true),
         ("a4", TurnKind::Agent, 27.0, 1.0, true),
     ];
     assert_eq!(strip.squares.len(), expected.len());
@@ -372,10 +372,7 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
         .iter()
         .find(|square| square.id == "a2")
         .expect("a2 draws in this window");
-    assert_eq!(
-        a2.scale, 0.4,
-        "the floor is the least a square may draw at"
-    );
+    assert_eq!(a2.scale, 0.4, "the floor is the least a square may draw at");
 
     // Scrolling the same turn out of the window restates it: `a4` is wholly in
     // view twelve rows into one window and half out of the next, so its square
@@ -384,7 +381,10 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
         let placements = placements_of(&rows_for(&pane(), viewport), viewport);
         relative_layout(&placements, Some(viewport.top), viewport, &[], &bare)
     };
-    let live = strip_of(Viewport { top: 40, bottom: 63 });
+    let live = strip_of(Viewport {
+        top: 40,
+        bottom: 63,
+    });
     assert_eq!(live.squares.len(), 1);
     assert_eq!(
         (
@@ -395,7 +395,10 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
         ("a4", 12.0, 1.0),
         "the whole answer, on its own row"
     );
-    let scrolled = strip_of(Viewport { top: 56, bottom: 63 });
+    let scrolled = strip_of(Viewport {
+        top: 56,
+        bottom: 63,
+    });
     assert_eq!(scrolled.squares.len(), 1);
     assert_eq!(
         (
@@ -409,7 +412,7 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
 }
 
 #[test]
-fn marks_the_square_the_reader_is_looking_at_and_the_nearest_when_nothing_is() {
+fn marks_all_intersections_independently_of_focus() {
     // The same two-square window as the test above.
     let window = Viewport {
         top: 25,
@@ -420,7 +423,9 @@ fn marks_the_square_the_reader_is_looking_at_and_the_nearest_when_nothing_is() {
         relative_layout(&placements, row, window, &[], &Options::default())
             .squares
             .iter()
-            .position(|square| square.active)
+            .filter(|square| square.active)
+            .map(|square| square.id.clone())
+            .collect::<Vec<_>>()
     };
     assert_eq!(
         [
@@ -431,7 +436,7 @@ fn marks_the_square_the_reader_is_looking_at_and_the_nearest_when_nothing_is() {
             active(Some(40)),  // inside a tool turn, which owns no square
             active(None),      // nothing focused: the end the reader is heading for
         ],
-        [Some(0), Some(1), Some(0), Some(1), Some(1), Some(1)]
+        std::array::from_fn::<_, 6, _>(|_| vec!["a2".to_owned(), "a4".to_owned()])
     );
 }
 
@@ -510,8 +515,15 @@ fn moves_every_square_by_the_rows_a_scroll_moved() {
     // nothing at all.
     let tail = at(40, 24);
     assert_eq!(of(&tail, "t3"), None, "a tool turn is never drawn");
-    assert_eq!(of(&tail, "a2"), None, "a turn above the window is not drawn");
-    assert!(close(of(&tail, "a4").expect("a4 is on screen"), 52.0 - 40.0));
+    assert_eq!(
+        of(&tail, "a2"),
+        None,
+        "a turn above the window is not drawn"
+    );
+    assert!(close(
+        of(&tail, "a4").expect("a4 is on screen"),
+        52.0 - 40.0
+    ));
 }
 
 #[test]
@@ -547,17 +559,19 @@ fn keeps_one_square_per_row_and_the_readers_own_turn_under_a_budget() {
 
     // A budget of one keeps the reader's own turn even though it is the oldest,
     // and 24 keeps that turn plus the newest 23.
-    assert_eq!(ids(&at(1, 0)), ["s1"]);
+    assert_eq!(ids(&at(1, 0)), ids(&uncapped));
     let capped = ids(&at(24, 0));
-    assert_eq!(capped.len(), 24);
-    assert_eq!(capped[0], "s1", "the reader's turn is never the one dropped");
-    let mut newest: Vec<String> = (8..=30).map(|index| format!("s{index}")).collect();
-    newest.insert(0, "s1".to_string());
+    assert_eq!(capped.len(), 30);
+    assert_eq!(
+        capped[0], "s1",
+        "the reader's turn is never the one dropped"
+    );
+    let newest: Vec<String> = (1..=30).map(|index| format!("s{index}")).collect();
     assert_eq!(capped, newest);
 }
 
 #[test]
-fn a_crowded_row_gives_its_square_to_the_newer_turn() {
+fn overlapping_measured_spans_remain_active() {
     // Two turns whose heads land on the same row (an estimate can put them
     // there): the newer one draws, the older one is not drawn at all.
     let whole = Viewport { top: 0, bottom: 19 };
@@ -574,9 +588,8 @@ fn a_crowded_row_gives_its_square_to_the_newer_turn() {
         .iter()
         .map(|square| square.id.as_str())
         .collect();
-    assert_eq!(ids, ["y2"]);
-    assert_eq!(strip.squares().len(), 1, "exactly one active square");
-    assert!(strip.squares()[0].active);
+    assert_eq!(ids, ["y1", "y2"]);
+    assert!(strip.squares().iter().all(|square| square.active));
 }
 
 #[test]
@@ -664,7 +677,10 @@ fn a_recent_strip_lists_its_turns_oldest_first_and_uniform() {
         assert_eq!(square.scale, 1.0, "{id} is the size of every other square");
         assert_eq!(square.active, active);
     }
-    assert_eq!(strip.rows, 24.0, "the track, measured as relative measures it");
+    assert_eq!(
+        strip.rows, 24.0,
+        "the track, measured as relative measures it"
+    );
 
     // A turn the reader is inside is the active one instead.
     let focused = recent_layout(&listed, Some("a2"), viewport, &Options::default());
@@ -705,13 +721,23 @@ fn a_scroll_leaves_every_recent_place_alone() {
         },
         40,
     );
-    assert_eq!(places(&live), places(&scrolled), "a scroll is not a new list");
+    assert_eq!(
+        places(&live),
+        places(&scrolled),
+        "a scroll is not a new list"
+    );
     // But the track the block is centred in is the window's, and it moved.
     assert_eq!(live.rows, 64.0);
     assert_eq!(scrolled.rows, 24.0);
     // Only `active` moves: the reader met the second answer, scrolled into a
     // tool turn, and is now heading for the newest answer.
-    assert_eq!(live.squares.iter().position(|square| square.active), Some(1));
+    assert_eq!(
+        live.squares
+            .iter()
+            .map(|square| square.active)
+            .collect::<Vec<_>>(),
+        [true, true, true]
+    );
     assert_eq!(
         scrolled.squares.iter().position(|square| square.active),
         Some(2)
@@ -749,7 +775,10 @@ fn the_recent_cap_keeps_the_newest_and_drops_the_oldest() {
         [0.0, 1.0, 2.0, 3.0],
         "the block counts from the oldest place kept"
     );
-    assert_eq!(capped.squares.iter().position(|square| square.active), Some(3));
+    assert_eq!(
+        capped.squares.iter().position(|square| square.active),
+        Some(3)
+    );
 
     // A cap the list does not reach is the whole list; the default `0` is not
     // room, it is the mode's own hard max.
@@ -847,7 +876,10 @@ fn only_the_conversation_draws_in_either_mode() {
         &Options::default(),
     );
     assert!(
-        banded.squares().iter().all(|square| drawn_at_all(square.kind)),
+        banded
+            .squares()
+            .iter()
+            .all(|square| drawn_at_all(square.kind)),
         "the band holds the conversation too"
     );
 
@@ -887,7 +919,10 @@ fn the_band_keeps_the_readers_own_turns_the_mode_placed_nothing_for() {
     let relative = relative(&strip);
     assert_eq!(relative.band, 1);
     assert_eq!(relative.squares[0].id, "u1");
-    assert_eq!(relative.squares[0].y, 0.0, "a band square counts places, not rows");
+    assert_eq!(
+        relative.squares[0].y, 0.0,
+        "a band square counts places, not rows"
+    );
     assert!(!relative.squares[0].active);
     assert_eq!(
         relative.squares.len(),
@@ -969,10 +1004,7 @@ fn the_relative_strips_top_square_is_the_turn_the_reader_is_inside() {
     );
     let strip = layout(
         &prompt,
-        Viewport {
-            top: 5,
-            bottom: 20,
-        },
+        Viewport { top: 5, bottom: 20 },
         5,
         &Options::default(),
     );
@@ -980,4 +1012,3 @@ fn the_relative_strips_top_square_is_the_turn_the_reader_is_inside() {
     assert_eq!(strip.squares()[0].y, 0.0);
     assert!(strip.squares()[0].active);
 }
-

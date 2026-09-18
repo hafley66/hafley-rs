@@ -90,15 +90,6 @@ pub fn drawn_at_all(kind: TurnKind) -> bool {
     matches!(kind, TurnKind::User | TurnKind::Agent)
 }
 
-/// The rows a placement occupies, in buffer rows: what the matcher saw of it
-/// for a measured turn, its estimate otherwise.
-fn extent(placement: &Placement) -> (f64, f64) {
-    match placement.visible {
-        Some((start, end)) => (start, end),
-        None => (placement.start, placement.start + placement.rows - 1.0),
-    }
-}
-
 /// Where a turn's square sits, in window rows, or `None` when the turn is not
 /// in the window at all.
 ///
@@ -145,7 +136,7 @@ fn window_row(placement: &Placement, top: f64, bottom: f64) -> Option<f64> {
 /// the reader can see, which is the one thing the size is about.
 pub fn relative_layout(
     placements: &[Placement],
-    focus_row: Option<i64>,
+    _focus_row: Option<i64>,
     viewport: Viewport,
     pins: &[String],
     options: &Options,
@@ -166,101 +157,22 @@ pub fn relative_layout(
             band: head.len(),
             squares: head,
             rows,
+            gap: None,
         };
     }
 
-    let focused = focus_row.map(|row| row as f64 - top);
-    let focus_owner = focus_row.and_then(|row| {
-        let row = row as f64;
-        // Newest first: when two turns' spans meet on the reader's row, the
-        // newer one owns it, which is the one the reader is heading into.
-        placements.iter().rposition(|placement| {
-            let (start, end) = extent(placement);
-            drawn_at_all(placement.kind)
-                && start.is_finite()
-                && row >= start
-                && row <= end
-        })
-    });
-
-    // Newest first, one pass: a square survives when it clears the gap of the
-    // newest square already kept.
-    let mut kept: Vec<(usize, f64)> = Vec::new();
-    for &(index, row) in candidates.iter().rev() {
-        let clashes = kept
-            .last()
-            .is_some_and(|&(_, newest)| row > newest - options.min_gap);
-        if !clashes {
-            kept.push((index, row));
-        }
-    }
-
-    // The reader's own turn is never the one the gap drops: it is the square the
-    // strip exists to place. Whatever sat within a gap of it goes instead.
-    if let Some(owner) = focus_owner {
-        if let Some(&entry) = candidates.iter().find(|&&(index, _)| index == owner) {
-            if !kept.iter().any(|&(index, _)| index == owner) {
-                kept.retain(|&(_, row)| (row - entry.1).abs() >= options.min_gap);
-                kept.push(entry);
-            }
-        }
-    }
-
-    if options.max_squares > 0 && kept.len() > options.max_squares {
-        let mut ordered = kept.clone();
-        ordered.sort_by(|left, right| right.1.total_cmp(&left.1));
-        let mut trimmed: Vec<(usize, f64)> = Vec::with_capacity(options.max_squares);
-        if let Some(&entry) = kept.iter().find(|&&(index, _)| Some(index) == focus_owner) {
-            trimmed.push(entry);
-        }
-        for entry in ordered {
-            if trimmed.len() >= options.max_squares {
-                break;
-            }
-            if trimmed.iter().any(|&(index, _)| index == entry.0) {
-                continue;
-            }
-            trimmed.push(entry);
-        }
-        kept = trimmed;
-    }
-
-    kept.sort_by(|left, right| left.1.total_cmp(&right.1));
-
-    // Exactly one square is the one being read: the turn the reader's row is in,
-    // or — when that turn is not in the window — the square nearest that row.
-    let active = match kept.is_empty() {
-        true => None,
-        false => {
-            let by_focus = kept
-                .iter()
-                .position(|&(index, _)| Some(index) == focus_owner)
-                .or_else(|| {
-                    focused.map(|row| {
-                        let mut best = 0;
-                        for (position, &(_, other)) in kept.iter().enumerate() {
-                            if (other - row).abs() < (kept[best].1 - row).abs() {
-                                best = position;
-                            }
-                        }
-                        best
-                    })
-                });
-            Some(by_focus.unwrap_or(kept.len() - 1))
-        }
-    };
-
-    let mut squares: Vec<Square> = kept
+    // Physical intersections remain represented even when the spacing or
+    // recent-history budget would otherwise discard them.
+    let mut squares: Vec<Square> = candidates
         .iter()
-        .enumerate()
-        .map(|(position, &(index, row))| {
+        .map(|&(index, row)| {
             let placement = &placements[index];
             Square {
                 id: placement.id.clone(),
                 kind: placement.kind,
                 y: row,
                 scale: clamp(placement.seen, options.scale_min, 1.0),
-                active: Some(position) == active,
+                active: true,
             }
         })
         .collect();
@@ -272,6 +184,7 @@ pub fn relative_layout(
         squares: head,
         band,
         rows,
+        gap: None,
     }
 }
 
@@ -335,6 +248,7 @@ pub fn recent_layout(
         .collect();
     RecentStrip {
         squares,
+        gap: None,
         // The same track measurement relative mode reports, so a caller centres
         // both blocks in one space.
         rows: (viewport.bottom as f64 - viewport.top as f64 + 1.0).max(1.0),
@@ -374,7 +288,8 @@ pub fn layout_pinned(
     let estimates = measure(&samples, viewport);
     let window = window_of(rows);
     let placements = place_window(&window, &samples, &estimates, viewport);
-    match options.mode {
+    let gap = crate::_3a_gap::visible_gap(rows, viewport);
+    let mut result = match options.mode {
         Mode::Relative => Layout::Relative(relative_layout(
             &placements,
             Some(focus_row),
@@ -389,7 +304,36 @@ pub fn layout_pinned(
                 .iter()
                 .rposition(|row| row.start <= focus_row && focus_row <= row.end)
                 .map(|index| rows[index].id.as_str());
-            Layout::Recent(recent_layout(listed, focus, viewport, options))
+            let recent = recent_layout(listed, focus, viewport, options);
+            let retained: Vec<_> = listed
+                .iter()
+                .filter(|turn| {
+                    recent.squares.iter().any(|square| square.id == turn.id)
+                        || rows.iter().any(|row| {
+                            row.id == turn.id
+                                && row.start <= viewport.bottom
+                                && row.end >= viewport.top
+                        })
+                })
+                .cloned()
+                .collect();
+            let expanded = Options {
+                max_squares: retained.len(),
+                ..options.clone()
+            };
+            Layout::Recent(recent_layout(&retained, focus, viewport, &expanded))
+        }
+    };
+    match &mut result {
+        Layout::Relative(strip) => strip.gap = gap,
+        Layout::Recent(strip) => {
+            for square in &mut strip.squares {
+                square.active = rows.iter().any(|row| {
+                    row.id == square.id && row.start <= viewport.bottom && row.end >= viewport.top
+                });
+            }
+            strip.gap = gap;
         }
     }
+    result
 }

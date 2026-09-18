@@ -51,11 +51,12 @@ mod _0_types;
 mod _1_measure;
 mod _2_place;
 mod _3_layout;
+mod _3a_gap;
 
 pub use _0_types::{
     clamp, kind_of, lines_of, Estimates, Layout, ListedTurn, Mode, Options, Placement, RecentStrip,
-    RelativeStrip, Square, TurnKind, TurnRow, TurnSample, Viewport, WindowTurn, DEFAULT_RECENT_MAX,
-    KINDS, STRIP_DEFAULTS, ZEROED,
+    RelativeStrip, Square, ToolGap, TurnKind, TurnRow, TurnSample, Viewport, WindowTurn,
+    DEFAULT_RECENT_MAX, KINDS, STRIP_DEFAULTS, ZEROED,
 };
 pub use _1_measure::{align_rows, estimate_rows, measure, rows_of, samples_from};
 pub use _2_place::{place_window, window_of};
@@ -118,6 +119,19 @@ mod tests {
         assert_eq!(lines_of("one\ntwo"), 2);
         // A trailing newline is an empty last line, as `split("\n")` counts it.
         assert_eq!(lines_of("one\n"), 2);
+    }
+
+    #[test]
+    fn displayed_line_counts_exclude_only_boop_envelopes() {
+        let screen = grid(&[(0, "actual user content".into()), (1, "second line".into())]);
+        let mut turn = visible_turn("s1:1", "user", (0, 1), 3);
+        turn.said = "[boop m1 from coordinator]\nactual user content\nsecond line".into();
+        let measured = rows_of(&screen, &turn, Viewport { top: 0, bottom: 1 });
+        assert_eq!((measured.total, measured.lines), (2, 2));
+        assert_eq!(turn.said.lines().count(), 3);
+        turn.said = "[ordinary brackets]\nactual user content\nsecond line".into();
+        let measured = rows_of(&screen, &turn, Viewport { top: 0, bottom: 1 });
+        assert_eq!((measured.total, measured.lines), (3, 2));
     }
 
     #[test]
