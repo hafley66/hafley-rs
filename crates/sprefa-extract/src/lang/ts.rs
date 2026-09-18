@@ -4382,6 +4382,20 @@ pub fn call_drops(
                     detail: callee.to_string(),
                 });
             }
+            // A member spelling with no traced receiver and no import binding
+            // is an untyped-receiver site the name match declined (lane D).
+            let member_untyped = written.is_some_and(|w| w.contains('.'))
+                && !written
+                    .and_then(|w| w.rsplit_once('.'))
+                    .and_then(|(receiver, _)| modules.import(path, receiver))
+                    .is_some();
+            if member_untyped {
+                return Some(crate::project::ResolveDrop {
+                    span: site.span,
+                    reason: UnresolvedReason::Inferred,
+                    detail: written.unwrap_or(callee).to_string(),
+                });
+            }
             module_target(modules, path, callee, written)
                 .err()
                 .map(|()| crate::project::ResolveDrop {
@@ -4928,6 +4942,12 @@ impl Resolve<CallF> for TsSource {
             let member = site
                 .callee_path
                 .is_some_and(|path| output.strings.lookup(path).contains('.'));
+            let imported_receiver = written
+                .and_then(|w| w.rsplit_once('.'))
+                .and_then(|(receiver, _)| {
+                    modules.and_then(|(modules, path)| modules.import(path, receiver))
+                })
+                .is_some();
             let name_match = || {
                 Self::ts_call_name_match(
                     output,
@@ -4961,6 +4981,9 @@ impl Resolve<CallF> for TsSource {
                 (None, None) if receiver.is_some() => {
                     recv_t.map(|(blob, span)| (blob, span, ResolutionOrigin::Receiver))
                 }
+                // A member spelling with no traced receiver and no import
+                // binding is untyped: the name match answers free calls only.
+                (None, None) if member && !imported_receiver => None,
                 (None, None) => name_match(),
             };
             let own_kind = match (&import_t, &seat_t) {
