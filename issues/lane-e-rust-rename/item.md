@@ -18,5 +18,5 @@ Plan section "Lane E". rust_rename.rs:1035 #[path] layout; field and enum-varian
 
 ## Acceptance Criteria
 - [x] brief written with receipts per seat
-- [ ] tests/5_rename_rust.rs gains one case per seat
-- [ ] scip_verify agrees
+- [x] tests/5_rename_rust.rs gains one case per seat
+- [x] scip_verify agrees
