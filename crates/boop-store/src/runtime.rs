@@ -16,7 +16,7 @@ use serde::Serialize;
 use crate::bus::{Message, Route};
 use crate::harness_id::HarnessId;
 use crate::ident::Store;
-use crate::proc::{ProcReader, SysinfoSnapshot, tree_sum_of};
+use crate::proc::{tree_sum_of, ProcReader, SysinfoSnapshot};
 use crate::tmux::{LiveSessions, Multiplexer};
 
 /// A typed reason why one part of a lane runtime could not be resolved.
@@ -217,8 +217,18 @@ pub fn runtime_snapshot(input: RuntimeSnapshotInput<'_>) -> Result<Vec<AgentRunt
     let folded_messages = crate::bus::fold(input.messages);
     let (mailboxes, completions) = mailbox_projection(&folded_messages);
     let live_sessions = input.multiplexer.live_sessions(input.tmux_socket);
+    // One server-wide pane pid batch for the whole snapshot: per-lane
+    // `pane_pid` probes would spawn one tmux client each.
+    let pane_pids = input.multiplexer.pane_pids(input.tmux_socket);
     let batch = input.store.runtime_batch(input.routes)?;
-    runtime_snapshot_with_batch(input, &batch, &mailboxes, &completions, &live_sessions)
+    runtime_snapshot_with_batch(
+        input,
+        &batch,
+        &mailboxes,
+        &completions,
+        &live_sessions,
+        &pane_pids,
+    )
 }
 
 fn runtime_snapshot_with_batch(
@@ -227,6 +237,7 @@ fn runtime_snapshot_with_batch(
     mailboxes: &BTreeMap<String, MailboxCounts>,
     completions: &BTreeMap<String, CompletionRecord>,
     live_sessions: &Option<LiveSessions>,
+    pane_pids: &Option<BTreeMap<String, u32>>,
 ) -> Result<Vec<AgentRuntimeRow>> {
     let mut lanes = batch.lanes.clone();
     lanes.extend(input.routes.keys().cloned());
@@ -249,6 +260,7 @@ fn runtime_snapshot_with_batch(
                 input.multiplexer,
                 input.tmux_socket,
                 input.processes,
+                pane_pids,
             ))
         })
         .collect()
@@ -259,10 +271,17 @@ fn runtime_snapshot_query_count(input: RuntimeSnapshotInput<'_>) -> Result<(usiz
     let folded_messages = crate::bus::fold(input.messages);
     let (mailboxes, completions) = mailbox_projection(&folded_messages);
     let live_sessions = input.multiplexer.live_sessions(input.tmux_socket);
+    let pane_pids = input.multiplexer.pane_pids(input.tmux_socket);
     let batch = input.store.runtime_batch(input.routes)?;
     let query_count = batch.query_count;
-    let rows =
-        runtime_snapshot_with_batch(input, &batch, &mailboxes, &completions, &live_sessions)?;
+    let rows = runtime_snapshot_with_batch(
+        input,
+        &batch,
+        &mailboxes,
+        &completions,
+        &live_sessions,
+        &pane_pids,
+    )?;
     Ok((rows.len(), query_count))
 }
 
@@ -291,6 +310,7 @@ fn runtime_row(
     multiplexer: &dyn Multiplexer,
     tmux_socket: Option<&str>,
     processes: &dyn ProcReader,
+    pane_pids: &Option<BTreeMap<String, u32>>,
 ) -> AgentRuntimeRow {
     let route = runtime.route.clone();
     let tmux_target = route.as_ref().and_then(|route| route.tmux.clone());
@@ -302,14 +322,20 @@ fn runtime_row(
         .and_then(|process| process.cwd)
         .map(|path| path.to_string_lossy().into_owned());
     // Liveness law: a lane is live when a fresh process tree under the pane
-    // pid its tmux target answers with right now. The pane pid is read fresh
-    // from the multiplexer, never from the stale `agent_live` record; a pane
-    // that answers but whose tree is gone is residue, hence Dead. The stored
-    // pid probe is the fallback for routes the multiplexer cannot resolve.
-    let process = match tmux_target
-        .as_deref()
-        .and_then(|target| multiplexer.pane_pid(tmux_socket, target))
-    {
+    // pid its tmux target answers with right now. The pane pid comes first
+    // from the one batch captured for the snapshot; a target the batch cannot
+    // answer falls back to the per-target multiplexer probe, and a batch from
+    // an unreachable tmux server (None) falls back too. The pane pid is read
+    // fresh, never from the stale `agent_live` record; a pane that answers
+    // but whose tree is gone is residue, hence Dead. The stored pid probe is
+    // the fallback for routes the multiplexer cannot resolve.
+    let pane_pid = tmux_target.as_deref().and_then(|target| {
+        pane_pids
+            .as_ref()
+            .and_then(|pids| pids.get(target).copied())
+            .or_else(|| multiplexer.pane_pid(tmux_socket, target))
+    });
+    let process = match pane_pid {
         Some(pane_pid) if tree_sum_of(processes, pane_pid).is_some() => ProcessLiveness::Live,
         Some(_) => ProcessLiveness::Dead,
         None => process_liveness(processes, pid),
@@ -317,17 +343,17 @@ fn runtime_row(
     // A pane id never appears in the session listing, so a pane target that
     // answers a direct probe reads Live even though `live_sessions` lacks it.
     let mut tmux = tmux_liveness(live_sessions, tmux_target.as_deref());
-    if let Some(target) = tmux_target.as_deref().filter(|target| target.starts_with('%')) {
+    if let Some(target) = tmux_target
+        .as_deref()
+        .filter(|target| target.starts_with('%'))
+    {
         if matches!(tmux, TmuxLiveness::Unmanaged | TmuxLiveness::Dead)
             && multiplexer.target_alive(tmux_socket, target)
         {
             tmux = TmuxLiveness::Live;
         }
     }
-    let liveness = RuntimeLiveness {
-        tmux,
-        process,
-    };
+    let liveness = RuntimeLiveness { tmux, process };
     let cwd = route.as_ref().and_then(|route| route.cwd.clone());
     AgentRuntimeRow {
         lane: runtime.lane,
@@ -1424,6 +1450,126 @@ mod tests {
         let _ = std::fs::remove_file(path);
     }
 
+    /// Three routed lanes resolve their pane pids from the one batch the
+    /// snapshot captured: zero per-target probes fire, and the one tmux
+    /// observation count still holds.
+    #[test]
+    fn snapshot_resolves_many_lanes_from_one_pane_pid_batch() {
+        let (path, store) = fresh_store("pane-pid-batch");
+        for (lane, session, pid, pane) in [
+            ("lane-1", "generated-1", 101, "%1"),
+            ("lane-2", "generated-2", 102, "%2"),
+            ("lane-3", "generated-3", 103, "%3"),
+        ] {
+            store
+                .attach_trace(lane, &format!("trace-{lane}"), "lane-create", 10)
+                .unwrap();
+            store
+                .attach_trace(session, &format!("trace-{lane}"), "supervisor", 11)
+                .unwrap();
+            add_session(&store, session, 20);
+            store
+                .record_status(session, 30, "live", Some(pid), Some(pane))
+                .unwrap();
+        }
+        let mut routes = BTreeMap::new();
+        for (lane, session, target) in [
+            ("lane-1", "generated-1", "batch-tmux-1:0"),
+            ("lane-2", "generated-2", "batch-tmux-2:0"),
+            ("lane-3", "generated-3", "batch-tmux-3"),
+        ] {
+            let mut route = route(Some(session));
+            route.tmux = Some(target.into());
+            routes.insert(lane.into(), route);
+        }
+        let mux = FakeMux::available(&["batch-tmux-1", "batch-tmux-2", "batch-tmux-3"])
+            .with_pane_pid("batch-tmux-1:0", 101)
+            .with_pane_pid("batch-tmux-2:0", 102)
+            .with_pane_pid("batch-tmux-3", 103);
+        let processes = FakeProcesses::with(102, "/observed/batch");
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        assert_eq!(mux.observations.load(Ordering::SeqCst), 1);
+        assert_eq!(mux.pid_probes.load(Ordering::SeqCst), 0);
+        assert_eq!(rows.len(), 3);
+        let live = rows.iter().find(|row| row.lane == "lane-2").unwrap();
+        assert_eq!(live.liveness.process, ProcessLiveness::Live);
+        assert_eq!(
+            live.worktree.process_cwd.as_deref(),
+            Some("/observed/batch")
+        );
+        let residue = rows.iter().find(|row| row.lane == "lane-1").unwrap();
+        assert_eq!(residue.liveness.process, ProcessLiveness::Dead);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// A target the batch cannot answer falls back to the per-target probe,
+    /// and the stored pid probe picks the liveness answer up from there.
+    #[test]
+    fn a_target_missing_from_the_batch_falls_back_to_the_per_target_probe() {
+        let (path, store) = fresh_store("pane-pid-fallback");
+        store
+            .attach_trace("lane-fb", "trace-lane-fb", "lane-create", 10)
+            .unwrap();
+        store
+            .attach_trace("generated-fb", "trace-lane-fb", "supervisor", 11)
+            .unwrap();
+        add_session(&store, "generated-fb", 20);
+        store
+            .record_status(
+                "generated-fb",
+                30,
+                "live",
+                Some(std::process::id() as i64),
+                Some("%1"),
+            )
+            .unwrap();
+        let mut routes = BTreeMap::new();
+        let mut fallback = route(Some("generated-fb"));
+        fallback.tmux = Some("fallback-tmux".into());
+        routes.insert("lane-fb".into(), fallback);
+        let mux = FakeMux::available(&["fallback-tmux"]);
+        let processes = FakeProcesses::with(std::process::id(), "/observed/fallback");
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        assert_eq!(mux.pid_probes.load(Ordering::SeqCst), 1);
+        assert_eq!(rows[0].liveness.tmux, TmuxLiveness::Live);
+        assert_eq!(rows[0].liveness.process, ProcessLiveness::Live);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// An unreachable tmux server answers `None` for the batch; every lane
+    /// falls back to the per-target probe, which also fails, and the stored
+    /// pid probe decides. No lane inherits liveness from the outage.
+    #[test]
+    fn an_unreachable_batch_falls_back_per_target() {
+        let (path, store) = fresh_store("pane-pid-outage");
+        store
+            .attach_trace("lane-out", "trace-lane-out", "lane-create", 10)
+            .unwrap();
+        store
+            .attach_trace("generated-out", "trace-lane-out", "supervisor", 11)
+            .unwrap();
+        add_session(&store, "generated-out", 20);
+        store
+            .record_status("generated-out", 30, "live", Some(999), Some("%9"))
+            .unwrap();
+        let mut routes = BTreeMap::new();
+        let mut route = route(Some("generated-out"));
+        route.tmux = Some("outage-tmux".into());
+        routes.insert("lane-out".into(), route);
+        let mux = FakeMux::inaccessible();
+        let processes = FakeProcesses {
+            live: HashMap::new(),
+        };
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        assert_eq!(mux.pid_probes.load(Ordering::SeqCst), 1);
+        assert_eq!(rows[0].liveness.tmux, TmuxLiveness::Inaccessible);
+        assert_eq!(rows[0].liveness.process, ProcessLiveness::Dead);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
     #[test]
     fn snapshot_uses_fixed_durable_query_count_for_many_lanes() {
         let (path, store) = fresh_store("batch-query-count");
@@ -1623,7 +1769,10 @@ mod tests {
                 .unwrap();
         }
         let mut routes = BTreeMap::new();
-        for (lane, session) in [("lane-alive", "generated-alive"), ("lane-gone", "generated-gone")] {
+        for (lane, session) in [
+            ("lane-alive", "generated-alive"),
+            ("lane-gone", "generated-gone"),
+        ] {
             let mut pane_less = route(Some(session));
             pane_less.tmux = None;
             routes.insert(lane.into(), pane_less);

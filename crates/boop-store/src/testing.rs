@@ -130,6 +130,9 @@ pub struct FakeMux {
     panes: BTreeMap<String, String>,
     pane_pids: BTreeMap<String, u32>,
     pub observations: AtomicUsize,
+    /// Every per-target `pane_pid` request, so seam tests can prove a batch
+    /// answer spared the per-lane probes.
+    pub pid_probes: AtomicUsize,
 }
 
 impl FakeMux {
@@ -139,6 +142,7 @@ impl FakeMux {
             panes: BTreeMap::new(),
             pane_pids: BTreeMap::new(),
             observations: AtomicUsize::new(0),
+            pid_probes: AtomicUsize::new(0),
         }
     }
 
@@ -158,6 +162,7 @@ impl FakeMux {
             panes: BTreeMap::new(),
             pane_pids: BTreeMap::new(),
             observations: AtomicUsize::new(0),
+            pid_probes: AtomicUsize::new(0),
         }
     }
 }
@@ -185,11 +190,26 @@ impl Multiplexer for FakeMux {
     /// Resolves the target the way tmux does: an exact pane id lookup first,
     /// then a session or `session:window.pane` target resolved to its pane.
     fn pane_pid(&self, _: Option<&str>, target: &str) -> Option<u32> {
+        self.pid_probes.fetch_add(1, Ordering::SeqCst);
         if let Some(pid) = self.pane_pids.get(target) {
             return Some(*pid);
         }
         let pane = self.pane_id(None, target)?;
         self.pane_pids.get(&pane).copied()
+    }
+
+    /// The registered pane pids as one batch, keyed by pane id and by the
+    /// pane's session name (the `session:window.pane` form falls back through
+    /// `pane_pid`, which resolves it from the pane registry).
+    fn pane_pids(&self, _: Option<&str>) -> Option<BTreeMap<String, u32>> {
+        self.sessions.as_ref()?;
+        let mut map = self.pane_pids.clone();
+        for (pane, session) in &self.panes {
+            if let Some(pid) = self.pane_pids.get(pane) {
+                map.entry(session.clone()).or_insert(*pid);
+            }
+        }
+        Some(map)
     }
 
     fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {

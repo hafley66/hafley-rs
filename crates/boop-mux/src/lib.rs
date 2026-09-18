@@ -85,6 +85,15 @@ pub trait Multiplexer {
     fn pane_id(&self, socket: Option<&str>, target: &str) -> Option<String>;
     /// The pid of the shell in the first pane of `target`.
     fn pane_pid(&self, socket: Option<&str>, target: &str) -> Option<u32>;
+    /// Every pane's shell pid from one server-wide snapshot, keyed so an
+    /// existing target string resolves without a tmux spawn: by pane id
+    /// (`%N`), by `session:window.pane` target form, and by bare session name
+    /// (first pane of the session wins, the same resolution `pane_pid` does).
+    /// `None` means tmux itself is unreachable; callers fall back to the
+    /// per-target `pane_pid` probe.
+    fn pane_pids(&self, _socket: Option<&str>) -> Option<std::collections::BTreeMap<String, u32>> {
+        None
+    }
     /// One-shot `tmux list-sessions`. `None` means tmux itself is unreachable,
     /// which is NOT the same as "no sessions".
     fn live_sessions(&self, socket: Option<&str>) -> Option<LiveSessions>;
@@ -221,6 +230,23 @@ impl Multiplexer for Tmux {
             .lines()
             .next()
             .and_then(|line| line.trim().parse().ok())
+    }
+
+    fn pane_pids(&self, socket: Option<&str>) -> Option<std::collections::BTreeMap<String, u32>> {
+        let panes = self.list_panes(socket)?;
+        let mut map = std::collections::BTreeMap::new();
+        let mut first_pane_sessions = std::collections::BTreeSet::new();
+        for pane in panes {
+            let Some(pid) = pane.pid else {
+                continue;
+            };
+            map.insert(pane.id, pid);
+            map.insert(pane.target, pid);
+            if first_pane_sessions.insert(pane.session.clone()) {
+                map.insert(pane.session, pid);
+            }
+        }
+        Some(map)
     }
 
     fn live_sessions(&self, socket: Option<&str>) -> Option<LiveSessions> {

@@ -2515,10 +2515,25 @@ pub(crate) fn run_lane_list(
     let stale_ms = boop::supervise::stale_limit().map(|limit| limit.as_millis() as u64);
     let newest = newest_lane_activity(&bus::read_messages(&dir)?);
     // One capture for the whole list: every lane state and parent hop reads the
-    // same process snapshot, the pane-truth answer `beep ps` prints.
+    // same process snapshot, the pane-truth answer `beep ps` prints. The pane
+    // pid batch is captured beside it, one tmux call for all lanes instead of
+    // two spawns per lane, and the mailbox rows are read one pass for every
+    // DEAD token instead of one pass per dead lane.
     let snapshot = proc::SysinfoSnapshot::capture()?;
+    let pane_pids = tmux::mux().pane_pids(None);
+    let trail_root = boop::trail::lanes_root().ok();
+    let mail_rows: Vec<bus::Message> = trail_root
+        .as_ref()
+        .map(|_| {
+            bus::read_boxes(&dir)
+                .unwrap_or_default()
+                .iter()
+                .flat_map(|path| bus::parse_box(path))
+                .collect()
+        })
+        .unwrap_or_default();
     for (name, route) in &routes {
-        let state = lane_state(&dir, name, &live, route, &routes, &snapshot);
+        let state = lane_state_with_pids(&dir, name, &live, route, &routes, &snapshot, &pane_pids);
         if let Some(want) = state_filter {
             if state != want {
                 continue;
@@ -2536,9 +2551,13 @@ pub(crate) fn run_lane_list(
             }
         }
         if state == "dead" {
-            suffix.push_str(&format!(" DEAD={}", dead_reason_token(&dir, name)));
+            let token = match trail_root.as_ref() {
+                Some(root) => dead_reason_token_from_rows(&mail_rows, root, name),
+                None => boop::trail::DeadReason::NoTrail.token(),
+            };
+            suffix.push_str(&format!(" DEAD={token}"));
         }
-        if let Some(gone) = gone_parent(&dir, &routes, &live, route, &snapshot) {
+        if let Some(gone) = gone_parent(&dir, &routes, &live, route, &snapshot, &pane_pids) {
             suffix.push_str(&format!(" PARENT-GONE={gone}"));
         }
         line(&format!(
@@ -2681,10 +2700,13 @@ pub(crate) fn gone_parent<'a>(
     live: &Option<tmux::LiveSessions>,
     route: &'a Route,
     reader: &dyn proc::ProcReader,
+    pane_pids: &Option<std::collections::BTreeMap<String, u32>>,
 ) -> Option<&'a str> {
     let parent = route.parent.as_deref()?;
     match routes.get(parent) {
-        Some(parent_route) if lane_state(dir, parent, live, parent_route, routes, reader) != "dead" =>
+        Some(parent_route)
+            if lane_state_with_pids(dir, parent, live, parent_route, routes, reader, pane_pids)
+                != "dead" =>
         {
             None
         }
@@ -2692,13 +2714,40 @@ pub(crate) fn gone_parent<'a>(
     }
 }
 
-/// Why a dead lane is dead, as one token. A missing home directory is itself an
-/// answer: nothing could have been written, so the row says `no-trail`.
-pub(crate) fn dead_reason_token(mail_dir: &std::path::Path, lane: &str) -> String {
-    let Ok(root) = boop::trail::lanes_root() else {
-        return boop::trail::DeadReason::NoTrail.token();
+/// Why a dead lane is dead, as one token, over mailbox rows read once for the
+/// whole list. `trail::dead_reason` re-reads every mailbox per call, and a
+/// lane list of dead lanes pays that per row; `run_lane_list` reads the boxes
+/// one pass and runs this same decision per lane. Mirrors `trail::dead_reason`.
+pub(crate) fn dead_reason_token_from_rows(
+    rows: &[bus::Message],
+    root: &std::path::Path,
+    lane: &str,
+) -> String {
+    use boop::trail::{DeadReason, PARENT_DIED};
+    let reported = rows
+        .iter()
+        .rev()
+        .find(|row| row.kind == "result" && row.from == lane)
+        .and_then(|row| row.rc.map(|rc| (rc, row.detail.clone())));
+    let reason = match reported {
+        Some((rc, detail)) => {
+            let parent = detail
+                .as_deref()
+                .and_then(|d| d.strip_prefix(PARENT_DIED))
+                .and_then(|d| d.strip_prefix(": "))
+                .map(str::to_owned);
+            match parent {
+                Some(parent) => DeadReason::ParentDied { parent },
+                None => DeadReason::Reported { rc, detail },
+            }
+        }
+        None => match boop::trail::reparented_to(rows, lane) {
+            Some(parent) => DeadReason::Reparented { parent },
+            None if boop::trail::lane_dir_in(root, lane).exists() => DeadReason::DiedBeforeResult,
+            None => DeadReason::NoTrail,
+        },
     };
-    boop::trail::dead_reason(mail_dir, &root, lane).token()
+    reason.token()
 }
 
 /// `live`/`idle`/`dead`/`?`. `idle` reads the supervisor's residency file; a
@@ -2721,7 +2770,22 @@ pub(crate) fn lane_state(
     routes: &BTreeMap<String, Route>,
     reader: &dyn proc::ProcReader,
 ) -> &'static str {
-    lane_state_hop(dir, name, live, route, routes, true, reader)
+    let pane_pids = tmux::mux().pane_pids(None);
+    lane_state_with_pids(dir, name, live, route, routes, reader, &pane_pids)
+}
+
+/// `lane_state` over a pane pid batch captured once for the whole command, so
+/// a lane list costs one tmux call instead of two spawns per lane.
+pub(crate) fn lane_state_with_pids(
+    dir: &Path,
+    name: &str,
+    live: &Option<tmux::LiveSessions>,
+    route: &Route,
+    routes: &BTreeMap<String, Route>,
+    reader: &dyn proc::ProcReader,
+    pane_pids: &Option<std::collections::BTreeMap<String, u32>>,
+) -> &'static str {
+    lane_state_hop(dir, name, live, route, routes, true, reader, pane_pids)
 }
 
 /// The shared body of `lane_state`. A pane-less coordinator/native route has
@@ -2737,6 +2801,7 @@ fn lane_state_hop(
     routes: &BTreeMap<String, Route>,
     allow_parent_hop: bool,
     reader: &dyn proc::ProcReader,
+    pane_pids: &Option<std::collections::BTreeMap<String, u32>>,
 ) -> &'static str {
     if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
         if !allow_parent_hop {
@@ -2750,19 +2815,36 @@ fn lane_state_hop(
             // native stays live until an explicit done.
             return "live";
         };
-        return lane_state_hop(dir, parent_name, live, parent_route, routes, false, reader);
+        return lane_state_hop(
+            dir,
+            parent_name,
+            live,
+            parent_route,
+            routes,
+            false,
+            reader,
+            pane_pids,
+        );
     }
     let tmux_alive = match live {
         None => return "?",
-        Some(_) => route
-            .tmux
-            .as_deref()
-            .is_some_and(|target| {
-                tmux::mux().target_alive(None, target)
-                    && tmux::mux()
-                        .pane_pid(None, target)
-                        .is_some_and(|pane_pid| proc::tree_sum_of(reader, pane_pid).is_some())
-            }),
+        Some(_) => route.tmux.as_deref().is_some_and(|target| {
+            // A hit in the batch proves the pane answered the one server-wide
+            // listing. A miss with a `Some` batch is a pane the per-target
+            // probe would also miss: the probe runs against the same server
+            // the batch listed, so it can only answer None. Answering from
+            // the batch keeps one tmux call per command. A None batch (tmux
+            // down) falls back to the probe, degraded-mode parity.
+            let pane_pid = match pane_pids
+                .as_ref()
+                .and_then(|pids| pids.get(target).copied())
+            {
+                Some(pid) => Some(pid),
+                None if pane_pids.is_some() => None,
+                None => tmux::mux().pane_pid(None, target),
+            };
+            pane_pid.is_some_and(|pane_pid| proc::tree_sum_of(reader, pane_pid).is_some())
+        }),
     };
     if !tmux_alive {
         return "dead";
@@ -3341,7 +3423,14 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
     let Ok(snapshot) = proc::SysinfoSnapshot::capture() else {
         return RouteLiveness::Unknown;
     };
-    match lane_state(dir, lane, &tmux::mux().live_sessions(None), route, &routes, &snapshot) {
+    match lane_state(
+        dir,
+        lane,
+        &tmux::mux().live_sessions(None),
+        route,
+        &routes,
+        &snapshot,
+    ) {
         "live" | "idle" => RouteLiveness::Live,
         "dead" => RouteLiveness::Dead,
         _ => RouteLiveness::Unknown,
@@ -4397,7 +4486,10 @@ mod tests {
             "dead"
         );
         let child = native(None);
-        assert_eq!(lane_state(&dir, "child", &live, &child, &routes, &snapshot), "?");
+        assert_eq!(
+            lane_state(&dir, "child", &live, &child, &routes, &snapshot),
+            "?"
+        );
 
         drop(live_session);
         let _ = std::fs::remove_dir_all(&dir);
@@ -4739,14 +4831,7 @@ mod tests {
             "the tmux target must answer for the residue fixture to bite"
         );
         assert_eq!(
-            lane_state(
-                &dir,
-                "mine",
-                &live,
-                &route,
-                &routes,
-                &DeadEverywhereReader
-            ),
+            lane_state(&dir, "mine", &live, &route, &routes, &DeadEverywhereReader),
             "dead"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -4769,14 +4854,7 @@ mod tests {
         let routes = BTreeMap::new();
 
         assert_eq!(
-            lane_state(
-                &dir,
-                "mine",
-                &live,
-                &route,
-                &routes,
-                &DeadEverywhereReader
-            ),
+            lane_state(&dir, "mine", &live, &route, &routes, &DeadEverywhereReader),
             "dead"
         );
         let _ = std::fs::remove_dir_all(&dir);
@@ -4808,14 +4886,80 @@ mod tests {
             };
             let pane_pid = tmux::mux().pane_pid(None, target);
             let state = lane_state(&dir, name, &live, route, &routes, &snapshot);
-            let ps_alive =
-                pane_pid.is_some_and(|pid| proc::tree_sum_of(&snapshot, pid).is_some());
+            let ps_alive = pane_pid.is_some_and(|pid| proc::tree_sum_of(&snapshot, pid).is_some());
             assert_eq!(
                 state == "live",
                 ps_alive,
                 "lane {name} (target {target}): state {state} disagrees with ps tree {ps_alive:?}"
             );
         }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Three pane routes answer from one pane pid batch: each session name
+    /// resolves in the map, the live lane reads `live`, the gone target reads
+    /// `dead`, and no per-lane resolution is needed beyond the batch.
+    #[test]
+    fn lane_state_resolves_three_lanes_from_one_pane_pid_batch() {
+        let dir = temp_mail_dir();
+        let mut sessions = Vec::new();
+        for suffix in ["one", "two", "gone"] {
+            let name = unique_name(&format!("boop-batch-pids-{suffix}"));
+            if suffix != "gone" {
+                sessions.push(LiveTmuxSession::new(&name));
+            }
+            write_route(&dir, &format!("lane-{suffix}"), tmux_route(&name)).unwrap();
+        }
+        let routes = read_routes(&dir).unwrap();
+        let live = tmux::mux().live_sessions(None);
+        let snapshot = SysinfoSnapshot::capture().unwrap();
+        let pane_pids = tmux::mux().pane_pids(None);
+        let pane_pids = pane_pids.expect("the fixture server must answer one batch");
+        let batch = Some(pane_pids.clone());
+
+        for suffix in ["one", "two"] {
+            let target = routes[&format!("lane-{suffix}")].tmux.as_deref().unwrap();
+            assert!(
+                pane_pids.contains_key(target),
+                "the batch must key lane-{suffix} by its target {target}"
+            );
+        }
+        assert_eq!(
+            lane_state_with_pids(
+                &dir,
+                "lane-one",
+                &live,
+                &routes["lane-one"],
+                &routes,
+                &snapshot,
+                &batch
+            ),
+            "live"
+        );
+        assert_eq!(
+            lane_state_with_pids(
+                &dir,
+                "lane-two",
+                &live,
+                &routes["lane-two"],
+                &routes,
+                &snapshot,
+                &batch
+            ),
+            "live"
+        );
+        assert_eq!(
+            lane_state_with_pids(
+                &dir,
+                "lane-gone",
+                &live,
+                &routes["lane-gone"],
+                &routes,
+                &snapshot,
+                &batch
+            ),
+            "dead"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 
