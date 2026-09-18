@@ -1377,7 +1377,11 @@ pub fn call_drops(
         .aux
         .receivers
         .iter()
-        .filter(|r| matches!(r.outcome, ReceiverOutcome::Inferred))
+        .filter(|r| {
+            matches!(r.outcome, ReceiverOutcome::Inferred)
+                || matches!(&r.outcome, ReceiverOutcome::Named(id)
+                    if output.strings.lookup(*id) == super::rust_receivers::SHADOW_SENTINEL)
+        })
         .map(|r| (r.call_site.start, r.call_site.end()))
         .collect();
     call.aux

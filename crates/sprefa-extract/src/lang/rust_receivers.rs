@@ -19,6 +19,12 @@ use super::rust::{def_span, syn_span};
 
 use syn::spanned::Spanned as _;
 
+/// A reserved receiver outcome type marking a PLAIN call to a scope-bound
+/// name (`fn run(f: impl Fn()) { f() }`): the name is a local, never the
+/// corpus fn, so the name-match legs must not answer it. `receiver_outcome`
+/// never produces this spelling; only the shadow walk does.
+pub(crate) const SHADOW_SENTINEL: &str = "\u{0}shadow\u{0}";
+
 fn spanned<T: syn::spanned::Spanned>(t: &T) -> &T {
     t
 }
@@ -263,6 +269,43 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
         });
         syn::visit::visit_expr_method_call(self, call);
     }
+
+    /// A closure bounds its own params' shadowing to the closure body: a
+    /// closure param named X blocks a call to X inside the body, then the
+    /// enclosing def's scope resumes on the way out.
+    fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
+        self.scopes.push(Default::default());
+        for input in &closure.inputs {
+            if let syn::Pat::Ident(pat) = input {
+                self.insert(pat.ident.to_string(), TypeBinding::Unknown);
+            }
+        }
+        syn::visit::visit_expr_closure(self, closure);
+        self.scopes.pop();
+    }
+
+    /// A plain `X()` whose X is scope-bound names the local, not a corpus fn:
+    /// mark the site so the name-match legs decline it. The span matches the
+    /// call projector's `func.span()` site, so resolve keys on the same range.
+    fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+        let syn::Expr::Path(path) = call.func.as_ref() else {
+            syn::visit::visit_expr_call(self, call);
+            return;
+        };
+        if path.path.segments.len() == 1 {
+            let ident = path.path.segments[0].ident.to_string();
+            if ident != "self" && self.lookup(&ident).is_some() {
+                let span = syn_span(self.line_starts, path.span());
+                self.out.push(ReceiverBinding {
+                    call_site: span,
+                    outcome: ReceiverOutcome::Named(
+                        self.strings.intern(SHADOW_SENTINEL),
+                    ),
+                });
+            }
+        }
+        syn::visit::visit_expr_call(self, call);
+    }
 }
 
 impl<'a> ReceiverWalk<'a> {
@@ -376,16 +419,27 @@ impl<'a> ReceiverWalk<'a> {
                 syn::Expr::Paren(p) => current = &p.expr,
                 syn::Expr::Group(g) => current = &g.expr,
                 syn::Expr::Unary(u) if matches!(u.op, syn::UnOp::Deref(_)) => current = &u.expr,
-                syn::Expr::Path(p) if p.path.segments.len() == 1 => {
-                    let ident = p.path.segments[0].ident.to_string();
-                    if ident == "self" {
+                syn::Expr::Path(p) => {
+                    let segments: Vec<String> = p
+                        .path
+                        .segments
+                        .iter()
+                        .map(|segment| segment.ident.to_string())
+                        .collect();
+                    // `self` / a scope-bound ident: the binding's type wins.
+                    if segments.len() == 1 && segments[0] == "self" {
                         return match self.impl_stack.last() {
                             Some(ty) => ReceiverOutcome::Named(self.strings.intern(ty)),
                             None => ReceiverOutcome::Inferred,
                         };
                     }
+                    // A spelled type used as a receiver (`CstProjector.m()`,
+                    // `a::B.m()`, `Self::Assoc.m()`): a scope binding of the
+                    // LAST segment wins; else an uppercase last segment names
+                    // the type itself.
+                    let last = &segments[segments.len() - 1];
                     let bound = self
-                        .lookup(&ident)
+                        .lookup(last)
                         .and_then(|b| match b {
                             TypeBinding::Named(ty) => Some(ty.clone()),
                             _ => None,
@@ -393,6 +447,9 @@ impl<'a> ReceiverWalk<'a> {
                         .and_then(|ty| self.resolve_self(&ty));
                     return match bound {
                         Some(ty) => ReceiverOutcome::Named(self.strings.intern(&ty)),
+                        None if last.chars().next().is_some_and(char::is_uppercase) => {
+                            ReceiverOutcome::Named(self.strings.intern(last))
+                        }
                         None => ReceiverOutcome::Inferred,
                     };
                 }
