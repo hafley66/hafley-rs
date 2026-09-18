@@ -43,3 +43,9 @@ This blocks hand-use of every verb, not just `graph`. It is the single largest u
 ## Implementation Notes
 
 Ships before `extract-graph-verb`. The graph verb's output is unreadable without it.
+
+## Comments
+
+### 2026-09-18T22:35:43Z · @claude-513
+
+Receipt from the 2026-09-18 ryi rename. rename exited 6 citing 'src/bin/extract.rs byte 1905' and 'tests/0_sqlite.rs byte 56'. Resolving those with head -c | wc -l gave src/bin/extract.rs:40 and tests/0_sqlite.rs:4, two extra shell steps before the diagnostic could be read. See @rename-path-double-reach.
