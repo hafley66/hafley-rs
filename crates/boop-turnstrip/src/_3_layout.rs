@@ -30,9 +30,12 @@
 //! needs no band, because the list of the newest turns already holds the
 //! reader's own prompts.
 //!
-//! Only the conversation draws, in either mode: [`drawn_at_all`] is the one
+//! Only the conversation draws in either mode: [`drawn_at_all`] is the one
 //! place that decides, and tool calls, tool results and the turns the CLI wrote
-//! on the user's behalf are not part of it.
+//! on the user's behalf are not part of it. Relative mode draws one more thing
+//! beside the conversation: the tools, as tiny squares, through their own
+//! predicate [`drawn_as_tool`]. A recent strip does not, because the recency
+//! list is the conversation's and the gap marker already covers tool focus.
 //!
 //! `layout` is the whole pipeline in one call — rows to samples, samples to
 //! `kappa`/`gamma`, placements, strip — and it is the entry point a server,
@@ -90,6 +93,38 @@ pub fn drawn_at_all(kind: TurnKind) -> bool {
     matches!(kind, TurnKind::User | TurnKind::Agent)
 }
 
+/// Whether a turn draws as a tiny tool square in relative mode, beside but not
+/// through [`drawn_at_all`]. The conversation predicate stays what it is: it
+/// is the one gate for the band, the recency list and the budget, and a tool
+/// never enters any of those. A tool is still something the reader wants to see
+/// fly past on the strip, so the relative pass admits it by this predicate next
+/// to the conversation's. The two differ on purpose: [`drawn_at_all`] answers
+/// "is this the conversation", which owns the spacing and the budget, while
+/// this one answers "is this a tool to mark", which owns only a tiny square.
+/// Recent mode never asks it, because the recency list is the conversation's
+/// and the gap marker already covers tool focus.
+pub fn drawn_as_tool(kind: TurnKind) -> bool {
+    matches!(kind, TurnKind::Tool)
+}
+
+/// A tool square's fixed size. Tools are markers, not turns: nothing sizes one
+/// from its own intersection with the window, because a tool call is not a turn
+/// the reader reads, and one square at this scale is what a dense run of tools
+/// needs to not crowd the conversation.
+const TOOL_SCALE: f64 = 0.35;
+
+/// The most tool squares one layout draws, newest first, the oldest dropped
+/// silently: the same drop-from-front cutoff as [`DEFAULT_RECENT_MAX`]. A run
+/// of tools in one turn can outlast the window, and tools may never crowd the
+/// conversation, so a hard budget keeps the newest on the strip.
+const TOOL_BUDGET: usize = 16;
+
+/// Least distance between two kept tool squares, in window rows. Fixed, not
+/// `options.min_gap`: the conversation's own gap is the reader's spacing, and a
+/// dense run of tools must compress against this smaller bar instead of washing
+/// the track.
+const TOOL_GAP: f64 = 2.0;
+
 /// Where a turn's square sits, in window rows, or `None` when the turn is not
 /// in the window at all.
 ///
@@ -134,6 +169,13 @@ fn window_row(placement: &Placement, top: f64, bottom: f64) -> Option<f64> {
 /// sliver keeps the floor so it stays findable. Nothing here sizes a square
 /// against its neighbours: how long a turn is says nothing about how much of it
 /// the reader can see, which is the one thing the size is about.
+///
+/// Beside the conversation, the same window's tools draw as tiny squares, each
+/// on its own first visible row. Tools are not conversation: they never enter
+/// the spacing or budget passes above (a conversation square keeps its
+/// `min_gap` eviction untouched, and a tool never evicts anything), they hold
+/// their own [`TOOL_BUDGET`] with their own [`TOOL_GAP`] spacing, and they draw
+/// at the fixed [`TOOL_SCALE`], never `active`, never in the band.
 pub fn relative_layout(
     placements: &[Placement],
     _focus_row: Option<i64>,
@@ -151,19 +193,10 @@ pub fn relative_layout(
         .collect();
     candidates.sort_by(|left, right| left.1.total_cmp(&right.1));
     let rows = bottom - top + 1.0;
-    if candidates.is_empty() {
-        let head = band(pins, &[], options);
-        return RelativeStrip {
-            band: head.len(),
-            squares: head,
-            rows,
-            gap: None,
-        };
-    }
 
     // Physical intersections remain represented even when the spacing or
     // recent-history budget would otherwise discard them.
-    let mut squares: Vec<Square> = candidates
+    let mut window: Vec<Square> = candidates
         .iter()
         .map(|&(index, row)| {
             let placement = &placements[index];
@@ -176,16 +209,83 @@ pub fn relative_layout(
             }
         })
         .collect();
-    let drawn: Vec<String> = squares.iter().map(|square| square.id.clone()).collect();
+    // Tools draw beside the conversation, on their own rows, through their own
+    // predicate, spacing and budget. A tool is never `active` and never enters
+    // the band, so `drawn` below is only ever the conversation's own ids.
+    window.extend(tool_squares(placements, viewport));
+    // Both the conversation's and the tools' squares are in window rows, so
+    // they interleave in the one row-sorted list.
+    window.sort_by(|left, right| left.y.total_cmp(&right.y));
+    let drawn: Vec<String> = window
+        .iter()
+        .filter(|square| drawn_at_all(square.kind))
+        .map(|square| square.id.clone())
+        .collect();
     let mut head = band(pins, &drawn, options);
     let band = head.len();
-    head.append(&mut squares);
+    head.append(&mut window);
     RelativeStrip {
         squares: head,
         band,
         rows,
         gap: None,
     }
+}
+
+/// The tool squares a relative strip draws: the window's visible tools, newest
+/// first, each only if it clears [`TOOL_GAP`] of the newest tool already kept
+/// and at most [`TOOL_BUDGET`] of them in all, the oldest dropped silently.
+///
+/// Tools are admitted by [`drawn_as_tool`], never by [`drawn_at_all`], so none
+/// of them enters the conversation's spacing or budget passes: a conversation
+/// square keeps its `min_gap` eviction untouched, and a tool never evicts
+/// anything: it only ever decides not to draw itself. A dense run of tools
+/// compresses against the fixed [`TOOL_GAP`] (not `options.min_gap`, which is
+/// the conversation's own spacing) so it does not wash the track, and it stops
+/// at [`TOOL_BUDGET`], the newest surviving, because many tools fly in one turn
+/// and the strip is the conversation's first.
+///
+/// Every tool draws at [`TOOL_SCALE`], fixed: a tool call is a marker, not a
+/// turn the reader reads, so nothing sizes it from its intersection with the
+/// window. `placements` is oldest first, so the newest is the highest index;
+/// walking from the back puts the newest first, which is the end a dense run
+/// keeps.
+fn tool_squares(placements: &[Placement], viewport: Viewport) -> Vec<Square> {
+    let top = viewport.top as f64;
+    let bottom = viewport.bottom as f64;
+    let mut kept: Vec<(usize, f64)> = placements
+        .iter()
+        .enumerate()
+        .filter(|(_, placement)| drawn_as_tool(placement.kind))
+        .filter_map(|(index, placement)| window_row(placement, top, bottom).map(|row| (index, row)))
+        .collect();
+    // Newest first: the highest placement index, which is where the reader is.
+    kept.sort_by(|left, right| right.0.cmp(&left.0));
+    let mut squares: Vec<Square> = Vec::new();
+    for (index, row) in kept {
+        if let Some(newest) = squares.first() {
+            // A tool draws only if it clears the newest tool already kept, so a
+            // dense run compresses instead of washing the track.
+            if (newest.y - row).abs() < TOOL_GAP {
+                continue;
+            }
+        }
+        if squares.len() >= TOOL_BUDGET {
+            continue;
+        }
+        let placement = &placements[index];
+        squares.push(Square {
+            id: placement.id.clone(),
+            kind: TurnKind::Tool,
+            y: row,
+            scale: TOOL_SCALE,
+            active: false,
+        });
+    }
+    // Back to window-row order, so the interleave in `relative_layout` is
+    // correct after all tools share the one sort.
+    squares.sort_by(|left, right| left.y.total_cmp(&right.y));
+    squares
 }
 
 /// The strip in [`Mode::Recent`]: the newest turns of the session, one square

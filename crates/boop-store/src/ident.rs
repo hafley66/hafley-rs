@@ -3763,7 +3763,10 @@ fn project_line(
                     .unwrap_or("");
                 let input = block.get("input");
                 walk.turn += 1;
-                let inserted = store.add_turn(&sid, walk.turn, ts, "tool", "", cwd)?;
+                // The name goes into the row's `said`, one line, so a reader sizing
+                // the turn from its newline count keeps a tool at one estimated row, the
+                // same as the empty string did. The tool facts still carry the args.
+                let inserted = store.add_turn(&sid, walk.turn, ts, "tool", name, cwd)?;
                 walk.record(inserted);
                 first_turn.get_or_insert(walk.turn);
                 emit_tool_fact(store, &sid, walk.turn, ts, name, input)?;
@@ -6209,6 +6212,7 @@ mod tests {
         assert_eq!(rows[0]["role"], "user");
         assert_eq!(rows[0]["said"], "hello");
         assert_eq!(rows[2]["role"], "tool");
+        assert_eq!(rows[2]["said"], "Bash");
 
         drop(store);
         let _ = std::fs::remove_file(&db_path);

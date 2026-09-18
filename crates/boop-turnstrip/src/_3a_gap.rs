@@ -81,13 +81,24 @@ mod tests {
                     ..Default::default()
                 },
             );
+            // A recent strip lists only the conversation, so the tool draws no
+            // square; a relative strip draws the tool as a tiny square beside it.
+            let expected: &[(&str, bool)] = match mode {
+                Mode::Recent => &[("a", true), ("b", true), ("c", true)],
+                Mode::Relative => &[
+                    ("a", true),
+                    ("tool", false),
+                    ("b", true),
+                    ("c", true),
+                ],
+            };
             assert_eq!(
                 layout
                     .squares()
                     .iter()
                     .map(|square| (square.id.as_str(), square.active))
                     .collect::<Vec<_>>(),
-                [("a", true), ("b", true), ("c", true)]
+                expected
             );
             let gap = match layout {
                 Layout::Recent(strip) => strip.gap,
