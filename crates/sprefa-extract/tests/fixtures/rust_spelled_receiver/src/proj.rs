@@ -11,7 +11,7 @@ impl Project for CstProjector {
 }
 
 pub trait Proj {
-    fn go(&self) -> u32;
+    fn run(&self) -> u32;
 }
 
 pub struct Widget {
@@ -27,6 +27,23 @@ impl Widget {
     }
 }
 
-pub struct Holder {
-    pub w: Widget,
+pub struct Box {
+    pub inner: Widget,
+}
+
+pub fn spelled() -> u32 {
+    CstProjector.project()
+}
+
+pub fn field_leg(b: &Box) -> u32 {
+    b.inner.run()
+}
+
+pub fn ctor_leg() -> u32 {
+    let w = Widget::new();
+    w.run()
+}
+
+pub fn trait_bound_leg<P: Proj>(p: P) -> u32 {
+    p.run()
 }

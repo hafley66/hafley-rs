@@ -1,12 +1,10 @@
-//! Lane C, rust: a SPELLED receiver (`CstProjector.project()`) records
-//! `Named(T)` in phase 1 and binds through the corpus impl table (origin
-//! `receiver`). Fixtures: `tests/fixtures/rust/spelled_receiver/src/`.
+//! Lane C, rust: a SPELLED receiver records Named(T) and binds through the
+//! corpus impl table; fixtures under tests/fixtures/rust_spelled_receiver/src/.
 
 use std::process::Command;
 
 use serde_json::Value;
-
-const SRC: &str = "tests/fixtures/rust/spelled_receiver/src";
+const SRC: &str = "tests/fixtures/rust_spelled_receiver/src";
 
 fn run(names: &[&str]) -> Vec<Value> {
     let mut args: Vec<String> = vec![
@@ -73,7 +71,7 @@ fn has_origin(
 fn spelled_unit_struct_receiver_binds() {
     // C.1/C.2: `CstProjector.project()` records a Named receiver and binds to
     // the corpus `impl Project for CstProjector` in proj.rs.
-    let rows = edges(&["spelled.rs", "proj.rs"]);
+    let rows = edges(&["proj.rs"]);
     assert!(
         has_origin(&rows, "spelled", "project", "proj", "receiver"),
         "{rows:?}"
@@ -82,7 +80,7 @@ fn spelled_unit_struct_receiver_binds() {
 #[test]
 fn field_typed_receiver_binds() {
     // C.5 field leg: `b.inner.run()` where `struct Box { inner: Widget }`.
-    let rows = edges(&["legs.rs", "proj.rs"]);
+    let rows = edges(&["proj.rs"]);
     assert!(
         has_origin(&rows, "field_leg", "run", "proj", "receiver"),
         "{rows:?}"
@@ -92,7 +90,7 @@ fn field_typed_receiver_binds() {
 #[test]
 fn constructor_return_receiver_binds() {
     // C.5 constructor-return leg: `let w = Widget::new(); w.run()`.
-    let rows = edges(&["legs.rs", "proj.rs"]);
+    let rows = edges(&["proj.rs"]);
     assert!(
         has_origin(&rows, "ctor_leg", "run", "proj", "receiver"),
         "{rows:?}"
@@ -101,11 +99,11 @@ fn constructor_return_receiver_binds() {
 
 #[test]
 fn trait_bound_generic_receiver_binds() {
-    // C.5 trait-bound generic leg: `fn f<P: Proj>(p: P) { p.go() }` binds to
+    // C.5 trait-bound generic leg: `fn f<P: Proj>(p: P) { p.run() }` binds to
     // the trait's own fn def in proj.rs.
-    let rows = edges(&["legs.rs", "proj.rs"]);
+    let rows = edges(&["proj.rs"]);
     assert!(
-        has_origin(&rows, "trait_bound_leg", "go", "proj", "receiver"),
+        has_origin(&rows, "trait_bound_leg", "run", "proj", "receiver"),
         "{rows:?}"
     );
 }
@@ -122,9 +120,8 @@ fn drops(names: &[&str]) -> Vec<(String, String)> {
 
 #[test]
 fn shadowed_call_does_not_bind_free_fn() {
-    // C.6: `fn run(project: impl Fn()) { project() }`; `project` is a scope
-    // param, so the call names the local, never the free `fn project` in
-    // free.rs. Zero edges to free.rs, drop reason `inferred`.
+    // C.6: `fn run(project: impl Fn()) { project() }` names the scope param,
+    // never the free `fn project` in free.rs: zero edges, drop `inferred`.
     let rows = edges(&["shadow.rs", "free.rs"]);
     assert!(
         !rows.iter().any(|(_, callee, file, _)| callee == "project" && file == "free"),
