@@ -1922,26 +1922,47 @@ fn call_facts(
     let Some(call) = input.output.call.as_ref() else {
         return Vec::new();
     };
-    edges
-        .iter()
-        .filter_map(|edge| {
-            let target = targets.input(&edge.dst_blob)?;
-            trail.push(edge);
-            Some(FlatFact::ResolvedEdge {
-                fact: None,
-                caller_path: input.path.clone(),
-                caller_name: caller_name(call, &input.output, edge.src),
-                callee_path: target.path.clone(),
-                callee_name: callee_name(targets, target, edge.dst_span),
-                caller_site_start: edge.call_site.map_or(0, |span| span.start),
-                caller_site_end: edge.call_site.map_or(0, |span| span.end()),
-                callee_start: edge.dst_span.start,
-                callee_end: edge.dst_span.end(),
-                kind: edge.kind.as_str().to_string(),
-                resolution_origin: edge.origin.as_str().to_string(),
-            })
-        })
-        .collect()
+    let mut seen: std::collections::BTreeSet<(String, u32, u32, String, u32, u32)> =
+        std::collections::BTreeSet::new();
+    let mut facts = Vec::new();
+    for edge in edges {
+        let Some(target) = targets.input(&edge.dst_blob) else {
+            continue;
+        };
+        let caller_path = input.path.clone();
+        let callee_path = target.path.clone();
+        let caller_site_start = edge.call_site.map_or(0, |span| span.start);
+        let caller_site_end = edge.call_site.map_or(0, |span| span.end());
+        let callee_start = edge.dst_span.start;
+        let callee_end = edge.dst_span.end();
+        // A site inside a closure or spliced macro resolves more than once;
+        // one (site, target) pair emits one row, keeping the first.
+        if !seen.insert((
+            caller_path.clone(),
+            caller_site_start,
+            caller_site_end,
+            callee_path.clone(),
+            callee_start,
+            callee_end,
+        )) {
+            continue;
+        }
+        trail.push(edge);
+        facts.push(FlatFact::ResolvedEdge {
+            fact: None,
+            caller_path,
+            caller_name: caller_name(call, &input.output, edge.src),
+            callee_path,
+            callee_name: callee_name(targets, target, edge.dst_span),
+            caller_site_start,
+            caller_site_end,
+            callee_start,
+            callee_end,
+            kind: edge.kind.as_str().to_string(),
+            resolution_origin: edge.origin.as_str().to_string(),
+        });
+    }
+    facts
 }
 
 /// Every import binding one input writes. A file belongs to at most one
