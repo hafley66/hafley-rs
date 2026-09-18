@@ -12,6 +12,7 @@ use boop_acp::channel::{Delivery, LaneChannel, ToolCallFact, TurnEvent, TOOL_STA
 use boop_store::bus;
 
 use crate::headwatch::{commit_body, is_git_write, CommitStatus, HeadMove, HeadWatch};
+use crate::resource_guard::{GuardAction, ResourceGuard};
 
 /// How often the inbox is re-read while a turn runs.
 const POLL: Duration = Duration::from_millis(700);
@@ -877,6 +878,164 @@ struct TraceRecorder {
     store: Option<boop_store::Store>,
 }
 
+/// One sampled process-tree guard for this supervisor's own descendants. The
+/// supervisor process is the exact root, so a pause implementation can target
+/// harness children without touching the tmux server or another lane.
+struct ResourceWatch {
+    guard: Option<ResourceGuard>,
+    snapshot: Option<boop_store::proc::SysinfoSnapshot>,
+    last_sample_ms: Option<u64>,
+}
+
+impl ResourceWatch {
+    fn new(lane: &str) -> Self {
+        let config = match crate::config::loaded() {
+            Ok(config) => config.resource_guard.clone(),
+            Err(error) => {
+                warn!(lane, error = %error, "resource guard config unavailable");
+                return Self {
+                    guard: None,
+                    snapshot: None,
+                    last_sample_ms: None,
+                };
+            }
+        };
+        if config.rss_ceiling_bytes.is_none() || config.poll_interval_ms == 0 {
+            return Self {
+                guard: None,
+                snapshot: None,
+                last_sample_ms: None,
+            };
+        }
+        let snapshot = match boop_store::proc::SysinfoSnapshot::capture() {
+            Ok(snapshot) => snapshot,
+            Err(error) => {
+                warn!(lane, error = %error, "resource guard process snapshot unavailable");
+                return Self {
+                    guard: None,
+                    snapshot: None,
+                    last_sample_ms: None,
+                };
+            }
+        };
+        let guard = ResourceGuard::new(config, &snapshot, std::process::id());
+        if guard.is_none() {
+            warn!(lane, pid = std::process::id(), "resource guard root process unavailable");
+        }
+        Self {
+            guard,
+            snapshot: Some(snapshot),
+            last_sample_ms: None,
+        }
+    }
+
+    fn poll(
+        &mut self,
+        lane: &LaneRun,
+        channel: &mut dyn LaneChannel,
+        events: &mut TraceRecorder,
+    ) -> Result<()> {
+        let Some(guard) = self.guard.as_mut() else {
+            return Ok(());
+        };
+        let Some(snapshot) = self.snapshot.as_mut() else {
+            return Ok(());
+        };
+        let started = Instant::now();
+        let started_ms = boop_acp::channel::now_ms();
+        if !guard.due(self.last_sample_ms, started_ms) {
+            return Ok(());
+        }
+        snapshot.refresh();
+        let sampled_ms = boop_acp::channel::now_ms();
+        self.last_sample_ms = Some(sampled_ms);
+        let observation = guard.observe(snapshot, sampled_ms);
+        let elapsed_ms = started.elapsed().as_millis() as u64;
+        let detail = match &observation.sample {
+            Some(sample) => format!(
+                "elapsed_ms={elapsed_ms} root_pid={} root_start_secs={} rss_bytes={} descendants={} cpu_percent={:.2} status={:?} consecutive_over_limit={} action={:?}",
+                sample.identity.pid,
+                sample.identity.start_time_secs,
+                sample.rss_bytes,
+                sample.descendant_count,
+                sample.cpu_percent,
+                observation.status,
+                observation.consecutive_over_limit,
+                observation.action,
+            ),
+            None => format!(
+                "elapsed_ms={elapsed_ms} root_pid={} status={:?} consecutive_over_limit={} action={:?}",
+                guard.identity().pid,
+                observation.status,
+                observation.consecutive_over_limit,
+                observation.action,
+            ),
+        };
+        events.record(
+            "resource-poll",
+            TraceRecorder::session(channel),
+            None,
+            Some(sampled_ms),
+            None,
+            Some("sampled"),
+            None,
+            None,
+            &detail,
+        );
+        match observation.action {
+            GuardAction::None => {}
+            GuardAction::Interrupt => match channel.interrupt() {
+                Ok(()) => {
+                    info!(lane = lane.lane, "resource ceiling triggered channel interrupt");
+                    events.record(
+                        "resource-interrupt",
+                        TraceRecorder::session(channel),
+                        None,
+                        Some(boop_acp::channel::now_ms()),
+                        None,
+                        Some("requested"),
+                        None,
+                        None,
+                        "RSS ceiling exceeded; channel interrupt requested",
+                    );
+                }
+                Err(error) => {
+                    warn!(lane = lane.lane, error = %error, "resource ceiling interrupt failed");
+                    events.record(
+                        "resource-interrupt",
+                        TraceRecorder::session(channel),
+                        None,
+                        Some(boop_acp::channel::now_ms()),
+                        None,
+                        Some("failed"),
+                        None,
+                        None,
+                        &format!("RSS ceiling interrupt failed: {error}"),
+                    );
+                }
+            },
+            GuardAction::Pause => {
+                warn!(
+                    lane = lane.lane,
+                    "resource guard pause requested; no process-tree pause action is installed"
+                );
+                events.record(
+                    "resource-pause",
+                    TraceRecorder::session(channel),
+                    None,
+                    Some(boop_acp::channel::now_ms()),
+                    None,
+                    Some("unsupported"),
+                    None,
+                    None,
+                    "RSS remained over limit after channel interrupt; pause action unsupported",
+                );
+            }
+        }
+        Ok(())
+    }
+}
+
 impl TraceRecorder {
     fn new(lane: &str) -> Self {
         let store = boop_store::Store::default_path()
@@ -1151,6 +1310,7 @@ fn supervise(
         .and_then(|store| store.lane_reported_head(&lane.lane).ok().flatten());
     let mut head_watch = HeadWatch::new(&lane.cwd, reported, commit_quiet());
     let mut disk_watch = DiskWatch::new();
+    let mut resource_watch = ResourceWatch::new(&lane.lane);
     // `conversation_id` may already exist for a freshly opened channel. Codex
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
@@ -1291,6 +1451,7 @@ fn supervise(
                 },
             }
             turn_tools.extend(channel.drain_tool_calls());
+            resource_watch.poll(lane, channel, events)?;
             if turn_tools.iter().any(is_git_write) {
                 head_watch.nudge();
             }
@@ -1694,6 +1855,7 @@ fn supervise(
                     );
                     return Ok(ended);
                 }
+                resource_watch.poll(lane, channel, events)?;
                 // A parked lane runs no tool, so HEAD cannot have moved on its
                 // own; an out-of-band commit still lands here on the poll.
                 if let Some(mv) = head_watch.tick(&lane.cwd, Instant::now()) {

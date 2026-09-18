@@ -1,6 +1,6 @@
 ---
 created: 2026-08-15
-updated: 2026-08-15
+updated: 2026-09-13
 type: task
 status: done
 priority: high
@@ -46,3 +46,9 @@ The existing bare-string `dict_session` key can have already-collided rows, so
 recovering those historical collisions remains a storage migration deferral.
 Public edges require both endpoints in the filtered session set; dangling
 provider parent edges remain durable but are omitted from JSON.
+
+## Comments
+
+### 2026-09-13T18:09:31Z · @codex
+
+Deferred follow-up from the session-state diagram review: investigate how to make dict_session typed. Document the identities/namespaces currently interned there, intended relational keys and foreign-key constraints, and options for distinguishing lane names, harness conversation IDs, and other session identities. User requested recording this question only; no schema change authorized in this task.

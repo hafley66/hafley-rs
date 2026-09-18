@@ -68,18 +68,28 @@ pub struct TreeSum {
 /// The root process plus every descendant, summed over the tree. `None` when
 /// the root pid is gone. RSS and CPU are tree-wide; start time is the root's.
 pub fn tree_sum_of(reader: &dyn ProcReader, pid: u32) -> Option<TreeSum> {
+    tree_sum_and_count_of(reader, pid).map(|(sum, _)| sum)
+}
+
+/// The same tree walk as [`tree_sum_of`], retaining the descendant count so a
+/// poller can trace the count without traversing the same process graph twice.
+pub fn tree_sum_and_count_of(reader: &dyn ProcReader, pid: u32) -> Option<(TreeSum, usize)> {
     let mut acc = reader.process(pid)?;
-    for child in reader.descendants(pid) {
-        if let Some(process) = reader.process(child) {
+    let descendants = reader.descendants(pid);
+    for child in &descendants {
+        if let Some(process) = reader.process(*child) {
             acc.rss_bytes += process.rss_bytes;
             acc.cpu_percent += process.cpu_percent;
         }
     }
-    Some(TreeSum {
-        rss_bytes: acc.rss_bytes,
-        cpu_percent: acc.cpu_percent,
-        start_time_secs: acc.start_time_secs,
-    })
+    Some((
+        TreeSum {
+            rss_bytes: acc.rss_bytes,
+            cpu_percent: acc.cpu_percent,
+            start_time_secs: acc.start_time_secs,
+        },
+        descendants.len(),
+    ))
 }
 
 /// The real uptime: now minus a start time, never the epoch instant itself.
@@ -102,9 +112,16 @@ pub struct SysinfoSnapshot {
 
 impl SysinfoSnapshot {
     pub fn capture() -> Result<Self> {
-        let mut system = System::new_all();
-        system.refresh_processes(ProcessesToUpdate::All, true);
-        Ok(SysinfoSnapshot { system })
+        let system = System::new_all();
+        let mut snapshot = SysinfoSnapshot { system };
+        snapshot.refresh();
+        Ok(snapshot)
+    }
+
+    /// Refresh the existing process table in place. Long-lived pollers keep
+    /// one allocation and reuse it for every root in a sampling tick.
+    pub fn refresh(&mut self) {
+        self.system.refresh_processes(ProcessesToUpdate::All, true);
     }
 
     /// Descendant-tree sums for one pid, `None` if the pid is gone.

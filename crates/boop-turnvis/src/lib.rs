@@ -4,6 +4,10 @@
 use serde::{Deserialize, Serialize};
 
 mod _1_snapshot;
+#[path = "0_candidates.rs"]
+mod candidates;
+#[path = "1_claude_summary.rs"]
+mod claude_summary;
 pub use _1_snapshot::{
     logical_lines, locate_snapshot_turns, visible_squares, TurnSquare, PREVIEW_CHARS,
 };
@@ -109,7 +113,9 @@ pub fn normalize_turn_line(line: &str) -> String {
         if MARKDOWN_DELETE.contains(&c) {
             continue;
         }
-        if BORDER_GLYPHS.contains(&c) {
+        // Every border glyph except `|` is non-ASCII. Avoid walking the
+        // Unicode border table for each ordinary prose character.
+        if c == '|' || (!c.is_ascii() && BORDER_GLYPHS.contains(&c)) {
             pending_space = true;
             continue;
         }
@@ -404,8 +410,11 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         })
         .collect();
 
+    let candidates = candidates::candidates(&screen, &sources);
     let mut matches: Vec<TurnMatch> = sources
         .iter()
+        .zip(candidates)
+        .filter_map(|(source, candidate)| candidate.then_some(source))
         .filter_map(|source| monotonic_turn_match(&screen, source))
         .collect();
     matches.sort_by(|left, right| {
@@ -467,6 +476,7 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         });
     }
     grow_anchors(&mut visible, &screen, &sources);
+    claude_summary::anchor(lines, turns, &mut visible);
     visible.sort_by(|a, b| {
         a.buffer_start
             .cmp(&b.buffer_start)

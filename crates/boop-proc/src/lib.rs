@@ -8,6 +8,7 @@ pub mod headwatch;
 pub mod inbox;
 pub mod lane;
 pub mod mailwait;
+pub mod resource_guard;
 pub mod supervise;
 
 pub use lane::{Effort, LaneIdentity, ModelSpec};

@@ -267,6 +267,19 @@ pub struct Square {
     pub active: bool,
 }
 
+/// A viewport occupied by tool output between conversation turns. It is a
+/// marker rather than a square: the reader is inside tool work between
+/// conversation rows, so the client can show a line without inventing a tool
+/// square or selecting a nearest conversation.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolGap {
+    pub before_id: Option<String>,
+    pub after_id: Option<String>,
+    pub start_row: i64,
+    pub end_row: i64,
+}
+
 /// The strip in [`Mode::Recent`]: the newest turns of the session, one square
 /// each, uniform, oldest first. `y` counts places in the block — no row, no
 /// span — so the caller centres the block on its own track and a scroll moves
@@ -278,6 +291,9 @@ pub struct Square {
 pub struct RecentStrip {
     pub squares: Vec<Square>,
     pub rows: f64,
+    /// A tool-only focus marker between the neighbouring conversation turns.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gap: Option<ToolGap>,
 }
 
 /// The strip in [`Mode::Relative`]: the window's turns, each at the row it
@@ -295,6 +311,9 @@ pub struct RelativeStrip {
     pub band: usize,
     /// The window's height in rows: what a relative square's `y` is measured in.
     pub rows: f64,
+    /// A tool-only viewport marker; visible conversation squares remain active.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub gap: Option<ToolGap>,
 }
 
 /// The strip, in whichever mode was asked for. Tagged on the wire (`"mode"`),

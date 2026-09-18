@@ -8,7 +8,7 @@
 //!     -> VisibleTurn[]            boop-turnvis, the matcher: spans + ids
 //!     -> TurnRow[]                rows_of: rows and lines in the viewport
 //!     -> Estimates + Placement[]  measure, place_window
-//!     -> Layout                   strip_layout: y, scale, the active square
+//!     -> Layout                   strip_layout: y, scale, active squares
 //! ```
 //!
 //! Nothing here touches IO or a UI. `boop-turnvis` maps the pane's rows to the
@@ -54,7 +54,7 @@ mod _3_layout;
 
 pub use _0_types::{
     clamp, kind_of, lines_of, Estimates, Layout, ListedTurn, Mode, Options, Placement, RecentStrip,
-    RelativeStrip, Square, TurnKind, TurnRow, TurnSample, Viewport, WindowTurn, DEFAULT_RECENT_MAX,
+    RelativeStrip, Square, ToolGap, TurnKind, TurnRow, TurnSample, Viewport, WindowTurn, DEFAULT_RECENT_MAX,
     KINDS, STRIP_DEFAULTS, ZEROED,
 };
 pub use _1_measure::{align_rows, estimate_rows, measure, rows_of, samples_from};

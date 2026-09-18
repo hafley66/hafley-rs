@@ -36,7 +36,7 @@ pub mod ident {
 
 pub use boop_acp::channel;
 pub use boop_harness::{door, harness, identity, live, registry, worktree};
-pub use boop_proc::{config, inbox, lane, mailwait, supervise};
+pub use boop_proc::{config, inbox, lane, mailwait, resource_guard, supervise};
 pub mod debug;
 /// The lane screen: snapshot plus navigator squares, for an overlay renderer.
 pub mod screen;

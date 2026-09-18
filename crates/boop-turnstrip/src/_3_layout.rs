@@ -39,8 +39,8 @@
 //! a CLI or a wasm binding uses.
 
 use crate::_0_types::{
-    clamp, Layout, ListedTurn, Mode, Options, Placement, RecentStrip, RelativeStrip, Square,
-    TurnKind, TurnRow, Viewport, DEFAULT_RECENT_MAX,
+    clamp, Layout, ListedTurn, Mode, Options, Placement, RecentStrip, RelativeStrip,
+    Square, ToolGap, TurnKind, TurnRow, Viewport, DEFAULT_RECENT_MAX,
 };
 use crate::_1_measure::{measure, samples_from};
 use crate::_2_place::{place_window, window_of};
@@ -120,6 +120,21 @@ fn window_row(placement: &Placement, top: f64, bottom: f64) -> Option<f64> {
     Some(start.max(top) - top)
 }
 
+/// The conversation placement that owns the reader's focus. Tool spans may
+/// overlap a conversation at an inclusive boundary; the conversation remains
+/// authoritative when retaining the reader's square under a crowded budget.
+fn conversation_owner(placements: &[Placement], focus_row: Option<i64>) -> Option<usize> {
+    let row = focus_row? as f64;
+    placements.iter().rposition(|placement| {
+        let (start, end) = extent(placement);
+        drawn_at_all(placement.kind)
+            && start.is_finite()
+            && end.is_finite()
+            && row >= start
+            && row <= end
+    })
+}
+
 /// The strip in [`Mode::Relative`]: the window's turns, each at the row it
 /// starts on, plus the band.
 ///
@@ -136,7 +151,10 @@ fn window_row(placement: &Placement, top: f64, bottom: f64) -> Option<f64> {
 ///     window as the only bound, and the window holds one square per row). The
 ///     reader's own turn is kept either way, even when it is the oldest.
 ///
-/// A square's size is the reader's own intersection with its turn: the
+/// Every retained conversation square is active because it intersects the
+/// physical viewport. Tool focus can add a gap marker without removing those
+/// visible conversation squares. A square's size is the reader's own
+/// intersection with its turn: the
 /// placement's `seen` — the fraction of the turn inside the viewport — floored
 /// at `options.scale_min` and capped at the plain square. A turn wholly in view
 /// draws full size, a turn scrolled halfway out draws half a square, and a
@@ -166,22 +184,12 @@ pub fn relative_layout(
             band: head.len(),
             squares: head,
             rows,
+            gap: tool_gap(placements, focus_row, viewport),
         };
     }
 
-    let focused = focus_row.map(|row| row as f64 - top);
-    let focus_owner = focus_row.and_then(|row| {
-        let row = row as f64;
-        // Newest first: when two turns' spans meet on the reader's row, the
-        // newer one owns it, which is the one the reader is heading into.
-        placements.iter().rposition(|placement| {
-            let (start, end) = extent(placement);
-            drawn_at_all(placement.kind)
-                && start.is_finite()
-                && row >= start
-                && row <= end
-        })
-    });
+    let focus_owner = conversation_owner(placements, focus_row);
+    let gap = tool_gap(placements, focus_row, viewport);
 
     // Newest first, one pass: a square survives when it clears the gap of the
     // newest square already kept.
@@ -195,8 +203,9 @@ pub fn relative_layout(
         }
     }
 
-    // The reader's own turn is never the one the gap drops: it is the square the
-    // strip exists to place. Whatever sat within a gap of it goes instead.
+    // The reader's own turn is never the one the gap drops: it is a conversation
+    // placement the strip exists to place. Whatever sat within a gap of it goes
+    // instead.
     if let Some(owner) = focus_owner {
         if let Some(&entry) = candidates.iter().find(|&&(index, _)| index == owner) {
             if !kept.iter().any(|&(index, _)| index == owner) {
@@ -227,40 +236,19 @@ pub fn relative_layout(
 
     kept.sort_by(|left, right| left.1.total_cmp(&right.1));
 
-    // Exactly one square is the one being read: the turn the reader's row is in,
-    // or — when that turn is not in the window — the square nearest that row.
-    let active = match kept.is_empty() {
-        true => None,
-        false => {
-            let by_focus = kept
-                .iter()
-                .position(|&(index, _)| Some(index) == focus_owner)
-                .or_else(|| {
-                    focused.map(|row| {
-                        let mut best = 0;
-                        for (position, &(_, other)) in kept.iter().enumerate() {
-                            if (other - row).abs() < (kept[best].1 - row).abs() {
-                                best = position;
-                            }
-                        }
-                        best
-                    })
-                });
-            Some(by_focus.unwrap_or(kept.len() - 1))
-        }
-    };
-
     let mut squares: Vec<Square> = kept
         .iter()
-        .enumerate()
-        .map(|(position, &(index, row))| {
+        .map(|&(index, row)| {
             let placement = &placements[index];
             Square {
                 id: placement.id.clone(),
                 kind: placement.kind,
                 y: row,
                 scale: clamp(placement.seen, options.scale_min, 1.0),
-                active: Some(position) == active,
+                // Relative mode marks every retained conversation placement
+                // that intersects the physical viewport. Focus ownership
+                // still governs budget retention.
+                active: true,
             }
         })
         .collect();
@@ -272,7 +260,64 @@ pub fn relative_layout(
         squares: head,
         band,
         rows,
+        gap,
     }
+}
+
+/// Visible tool-only rows contribute a separator regardless of which kind of
+/// turn owns the viewport's first row. Conversation overlap is subtracted from
+/// each tool span; focus only chooses between multiple remaining intervals.
+fn tool_gap(
+    placements: &[Placement],
+    focus_row: Option<i64>,
+    viewport: Viewport,
+) -> Option<ToolGap> {
+    let top = viewport.top as f64;
+    let bottom = viewport.bottom as f64;
+    let mut conversations: Vec<_> = placements.iter()
+        .filter(|placement| drawn_at_all(placement.kind))
+        .filter_map(|placement| placement.visible).collect();
+    conversations.sort_by(|left, right| left.0.total_cmp(&right.0));
+    let mut intervals = Vec::new();
+    for (index, placement) in placements.iter().enumerate() {
+        if placement.kind != TurnKind::Tool { continue; }
+        let Some((start, end)) = placement.visible else { continue; };
+        let mut start = start.max(top);
+        let end = end.min(bottom);
+        for &(cover_start, cover_end) in &conversations {
+            if cover_end < start || cover_start > end { continue; }
+            if cover_start > start {
+                intervals.push((index, start, (cover_start - 1.0).min(end)));
+            }
+            start = start.max(cover_end + 1.0);
+            if start > end { break; }
+        }
+        if start <= end { intervals.push((index, start, end)); }
+    }
+    let focus = focus_row.unwrap_or(viewport.top) as f64;
+    let &(focus_index, start, end) = intervals.iter()
+        .find(|(_, start, end)| *start <= focus && focus <= *end)
+        .or_else(|| intervals.first())?;
+    let before_index = placements[..focus_index]
+        .iter()
+        .rev()
+        .find(|placement| drawn_at_all(placement.kind))
+        .map(|placement| placement.id.clone());
+    let after_position = placements[focus_index + 1..]
+        .iter()
+        .find(|placement| drawn_at_all(placement.kind))
+        .map(|placement| placement.id.clone())
+        .and_then(|id| placements.iter().position(|placement| placement.id == id));
+    let after = after_position.map(|position| placements[position].id.clone());
+    if before_index.is_none() && after.is_none() {
+        return None;
+    }
+    Some(ToolGap {
+        before_id: before_index,
+        after_id: after,
+        start_row: (start.max(top) - top) as i64,
+        end_row: (end.min(bottom) - top) as i64,
+    })
 }
 
 /// The strip in [`Mode::Recent`]: the newest turns of the session, one square
@@ -284,8 +329,9 @@ pub fn relative_layout(
 /// [`drawn_at_all`] admits are listed, so a chatty tool takes no place.
 ///
 /// `focus` is the id of the turn the reader's top row is inside, when there is
-/// one. If it names no square — a tool turn, or a row past the end — the newest
-/// square is active instead: the end the reader is heading for.
+/// one. A known conversation id is active. A tool id or an unknown id leaves
+/// every square inactive. A direct call with no focus keeps the historical
+/// newest anchor.
 ///
 /// `max_squares` caps the count by dropping from the FRONT, so the oldest places
 /// fall off silently, with no marker to say how many did. A caller that leaves
@@ -313,14 +359,12 @@ pub fn recent_layout(
     if turns.len() > cap {
         turns.drain(..turns.len() - cap);
     }
-    let active = match turns.is_empty() {
-        true => None,
-        false => Some(
-            turns
-                .iter()
-                .position(|turn| Some(turn.id.as_str()) == focus)
-                .unwrap_or(turns.len() - 1),
-        ),
+    let active = match (turns.is_empty(), focus) {
+        (true, _) => None,
+        (false, None) => Some(turns.len() - 1),
+        (false, Some(focus)) => turns
+            .iter()
+            .position(|turn| turn.id.as_str() == focus),
     };
     let squares: Vec<Square> = turns
         .iter()
@@ -338,6 +382,7 @@ pub fn recent_layout(
         // The same track measurement relative mode reports, so a caller centres
         // both blocks in one space.
         rows: (viewport.bottom as f64 - viewport.top as f64 + 1.0).max(1.0),
+        gap: None,
     }
 }
 
@@ -388,8 +433,26 @@ pub fn layout_pinned(
             let focus = rows
                 .iter()
                 .rposition(|row| row.start <= focus_row && focus_row <= row.end)
-                .map(|index| rows[index].id.as_str());
-            Layout::Recent(recent_layout(listed, focus, viewport, options))
+                .map(|index| rows[index].id.as_str())
+                .or(Some(""));
+            let mut recent = recent_layout(listed, focus, viewport, options);
+            // Recent mode keeps a centered recency block, while active state
+            // still answers the viewport question. A listed turn outside the
+            // measured placements remains visible in the block but is not
+            // active; every conversation placement intersecting this viewport
+            // is active at once.
+            let visible_conversations: Vec<&str> = placements
+                .iter()
+                .filter(|placement| drawn_at_all(placement.kind))
+                .filter_map(|placement| placement.visible.map(|_| placement.id.as_str()))
+                .collect();
+            for square in &mut recent.squares {
+                square.active = visible_conversations
+                    .iter()
+                    .any(|id| *id == square.id.as_str());
+            }
+            recent.gap = tool_gap(&placements, Some(focus_row), viewport);
+            Layout::Recent(recent)
         }
     }
 }

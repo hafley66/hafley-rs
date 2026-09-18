@@ -21,6 +21,41 @@ pub struct Config {
     pub post_pr: bool,
     /// The `gh pr create --base` branch. `None` reads as `main`.
     pub pr_base: Option<String>,
+    /// Opt-in sampled process-tree resource guard. A missing RSS ceiling keeps
+    /// the guard inactive, even when the other fields are present.
+    pub resource_guard: ResourceGuardConfig,
+}
+
+/// Sampled per-lane resource policy. RSS is a process-tree observation, so a
+/// configured ceiling permits overshoot between polls and cannot replace an
+/// OS allocation limit. Enforcement is performed by the supervisor through
+/// the channel's existing interrupt seam.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(default, rename_all = "kebab-case")]
+pub struct ResourceGuardConfig {
+    /// Poll cadence. `0` disables polling; the default is seven hundred ms,
+    /// matching the supervisor's existing turn event cadence.
+    pub poll_interval_ms: u64,
+    /// Tree RSS ceiling in bytes. `None` disables the guard.
+    pub rss_ceiling_bytes: Option<u64>,
+    /// Consecutive over-limit samples required before interrupting a turn.
+    pub over_limit_polls: u32,
+    /// Grace after the interrupt before an optional pause action is requested.
+    pub cancel_grace_ms: u64,
+    /// Leave the post-cancel pause action disabled unless explicitly enabled.
+    pub pause_after_cancel: bool,
+}
+
+impl Default for ResourceGuardConfig {
+    fn default() -> Self {
+        Self {
+            poll_interval_ms: 700,
+            rss_ceiling_bytes: None,
+            over_limit_polls: 2,
+            cancel_grace_ms: 2_000,
+            pause_after_cancel: false,
+        }
+    }
 }
 
 /// One named preset. `harness`, `model` and `effort` are separate fields: a
@@ -223,6 +258,7 @@ mod tests {
                 opencode_banned: BTreeMap::from([("gemini".into(), "gemini".into())]),
                 post_pr: false,
                 pr_base: None,
+                resource_guard: ResourceGuardConfig::default(),
             }
         );
     }
@@ -482,5 +518,28 @@ mod tests {
         let parsed: Config = serde_json::from_str(&rendered).unwrap();
         assert_eq!(parsed, Config::default());
         assert!(rendered.contains("\"model-presets\": {}"), "{rendered}");
+    }
+
+    #[test]
+    fn resource_guard_config_parses_as_an_opt_in_tree_policy() {
+        let config: Config = serde_json::from_str(
+            r#"{ "resource-guard": {
+                "poll-interval-ms": 250,
+                "rss-ceiling-bytes": 1048576,
+                "over-limit-polls": 3,
+                "cancel-grace-ms": 1500,
+                "pause-after-cancel": true } }"#,
+        )
+        .unwrap();
+        assert_eq!(
+            config.resource_guard,
+            ResourceGuardConfig {
+                poll_interval_ms: 250,
+                rss_ceiling_bytes: Some(1_048_576),
+                over_limit_polls: 3,
+                cancel_grace_ms: 1_500,
+                pause_after_cancel: true,
+            }
+        );
     }
 }

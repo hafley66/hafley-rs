@@ -309,7 +309,7 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
     // reader's own intersection with them: the window holds half of `a2`, so
     // half a square; `a4` is wholly in view and draws full size.
     let expected: [(&str, TurnKind, f64, f64, bool); 2] = [
-        ("a2", TurnKind::Agent, 0.0, 0.5, false),
+        ("a2", TurnKind::Agent, 0.0, 0.5, true),
         ("a4", TurnKind::Agent, 27.0, 1.0, true),
     ];
     assert_eq!(strip.squares.len(), expected.len());
@@ -320,6 +320,15 @@ fn lays_the_strip_out_in_the_windows_own_rows() {
         assert!(close(square.y, y), "{id} y {}", square.y);
         assert!(close(square.scale, scale), "{id} scale {}", square.scale);
     }
+    assert_eq!(
+        strip.gap,
+        Some(boop_turnstrip::ToolGap {
+            before_id: Some("a2".to_string()),
+            after_id: Some("a4".to_string()),
+            start_row: 8,
+            end_row: 25,
+        })
+    );
 }
 
 #[test]
@@ -409,8 +418,9 @@ fn scales_a_square_by_the_part_of_its_turn_the_reader_can_see() {
 }
 
 #[test]
-fn marks_the_square_the_reader_is_looking_at_and_the_nearest_when_nothing_is() {
-    // The same two-square window as the test above.
+fn marks_every_conversation_square_located_in_the_viewport() {
+    // The same two-square window as the test above. Both conversation spans
+    // intersect it, so both are active regardless of the focus row.
     let window = Viewport {
         top: 25,
         bottom: 58,
@@ -420,19 +430,17 @@ fn marks_the_square_the_reader_is_looking_at_and_the_nearest_when_nothing_is() {
         relative_layout(&placements, row, window, &[], &Options::default())
             .squares
             .iter()
-            .position(|square| square.active)
+            .filter(|square| square.active)
+            .map(|square| square.id.clone())
+            .collect::<Vec<_>>()
     };
-    assert_eq!(
-        [
-            active(Some(30)),  // inside `a2`, whose head is above the window
-            active(Some(56)),  // inside `a4`
-            active(Some(0)),   // above every square: the nearest is the first
-            active(Some(999)), // below every square: the nearest is the last
-            active(Some(40)),  // inside a tool turn, which owns no square
-            active(None),      // nothing focused: the end the reader is heading for
-        ],
-        [Some(0), Some(1), Some(0), Some(1), Some(1), Some(1)]
-    );
+    let expected = ["a2".to_string(), "a4".to_string()];
+    assert_eq!(active(Some(30)), expected);
+    assert_eq!(active(Some(56)), expected);
+    assert_eq!(active(Some(0)), expected);
+    assert_eq!(active(Some(999)), expected);
+    assert_eq!(active(Some(40)), expected);
+    assert_eq!(active(None), expected);
 }
 
 #[test]
@@ -607,6 +615,226 @@ fn fits_a_turn_the_matcher_dropped_into_the_gap_its_neighbours_left() {
     }
 }
 
+#[test]
+fn tool_focus_has_a_gap_while_visible_conversations_remain_active() {
+    let viewport = Viewport { top: 0, bottom: 32 };
+    let rows = rows_for(&all(), viewport);
+    let placements = placements_of(&rows, viewport);
+    let relative_at = |focus| relative_layout(&placements, Some(focus), viewport, &[], &Options::default());
+
+    let tool = relative_at(16);
+    assert_eq!(tool.squares.iter().map(|square| square.id.as_str()).collect::<Vec<_>>(), ["x1", "x3"]);
+    assert_eq!(
+        tool.squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["x1", "x3"]
+    );
+    assert_eq!(
+        tool.gap,
+        Some(boop_turnstrip::ToolGap {
+            before_id: Some("x1".to_string()),
+            after_id: Some("x3".to_string()),
+            start_row: 12,
+            end_row: 20,
+        })
+    );
+
+    let conversation = relative_at(24);
+    assert_eq!(
+        conversation
+            .squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["x1", "x3"]
+    );
+    assert_eq!(conversation.gap, tool.gap);
+
+    let trailing_specs = [
+        spec("x1", "assistant", (0, 4), 2, &[0, 2]),
+        spec("x2", "tool", (7, 12), 2, &[7, 10]),
+    ];
+    let trailing_rows = rows_for(&trailing_specs, Viewport { top: 0, bottom: 15 });
+    let trailing = layout(
+        &trailing_rows,
+        Viewport { top: 0, bottom: 15 },
+        9,
+        &Options::default(),
+    );
+    let trailing = relative(&trailing);
+    assert_eq!(
+        trailing
+            .squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["x1"]
+    );
+    assert_eq!(
+        trailing.gap.as_ref().map(|gap| (&gap.before_id, &gap.after_id)),
+        Some((&Some("x1".to_string()), &None))
+    );
+
+    let listed = listed_of(&all());
+    let recent_tool = layout_pinned(
+        &rows,
+        &[],
+        &listed,
+        viewport,
+        16,
+        &Options { mode: Mode::Recent, ..Options::default() },
+    );
+    let recent_tool = recent(&recent_tool);
+    assert_eq!(recent_tool.squares.iter().filter(|square| square.active).map(|square| square.id.as_str()).collect::<Vec<_>>(), ["x1", "x3"]);
+    assert!(recent_tool.gap.is_some());
+}
+
+#[test]
+fn all_visible_conversations_are_active_around_a_tool_gap() {
+    let placements = vec![
+        Placement {
+            id: "a".to_string(),
+            kind: TurnKind::Agent,
+            start: 0.0,
+            rows: 6.0,
+            total: 6,
+            seen: 1.0,
+            measured: true,
+            visible: Some((0.0, 5.0)),
+        },
+        Placement {
+            id: "tool".to_string(),
+            kind: TurnKind::Tool,
+            start: 7.0,
+            rows: 4.0,
+            total: 4,
+            seen: 1.0,
+            measured: true,
+            visible: Some((7.0, 10.0)),
+        },
+        Placement {
+            id: "b".to_string(),
+            kind: TurnKind::Agent,
+            start: 12.0,
+            rows: 6.0,
+            total: 6,
+            seen: 1.0,
+            measured: true,
+            visible: Some((12.0, 17.0)),
+        },
+        Placement {
+            id: "c".to_string(),
+            kind: TurnKind::Agent,
+            start: 20.0,
+            rows: 6.0,
+            total: 6,
+            seen: 1.0,
+            measured: true,
+            visible: Some((20.0, 25.0)),
+        },
+        Placement {
+            id: "offscreen".to_string(),
+            kind: TurnKind::Agent,
+            start: 30.0,
+            rows: 6.0,
+            total: 6,
+            seen: 1.0,
+            measured: false,
+            visible: None,
+        },
+    ];
+    let strip = relative_layout(
+        &placements,
+        Some(8),
+        Viewport { top: 0, bottom: 25 },
+        &[],
+        &Options::default(),
+    );
+    assert_eq!(
+        strip.squares.iter().map(|square| square.id.as_str()).collect::<Vec<_>>(),
+        ["a", "b", "c"]
+    );
+    assert_eq!(
+        strip
+            .squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["a", "b", "c"]
+    );
+    assert_eq!(
+        strip.gap,
+        Some(boop_turnstrip::ToolGap {
+            before_id: Some("a".to_string()),
+            after_id: Some("b".to_string()),
+            start_row: 7,
+            end_row: 10,
+        })
+    );
+}
+
+#[test]
+fn conversation_overlap_only_excludes_covered_rows_from_the_tool_gap() {
+    let placements = vec![
+        Placement {
+            id: "x1".to_string(),
+            kind: TurnKind::Agent,
+            start: 10.0,
+            rows: 11.0,
+            total: 11,
+            seen: 1.0,
+            measured: true,
+            visible: Some((10.0, 20.0)),
+        },
+        Placement {
+            id: "x2".to_string(),
+            kind: TurnKind::Tool,
+            start: 15.0,
+            rows: 11.0,
+            total: 11,
+            seen: 1.0,
+            measured: true,
+            visible: Some((15.0, 25.0)),
+        },
+        Placement {
+            id: "x3".to_string(),
+            kind: TurnKind::Agent,
+            start: 26.0,
+            rows: 5.0,
+            total: 5,
+            seen: 1.0,
+            measured: true,
+            visible: Some((26.0, 30.0)),
+        },
+    ];
+    let strip = relative_layout(
+        &placements,
+        Some(18),
+        Viewport { top: 0, bottom: 30 },
+        &[],
+        &Options::default(),
+    );
+    assert_eq!(strip.gap, Some(boop_turnstrip::ToolGap {
+        before_id: Some("x1".into()), after_id: Some("x3".into()),
+        start_row: 21, end_row: 25,
+    }));
+    assert_eq!(
+        strip
+            .squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["x1", "x3"]
+    );
+}
+
 /// The strip in relative mode, which is what most of these tests ask for.
 fn relative(strip: &Layout) -> &RelativeStrip {
     match strip {
@@ -709,12 +937,67 @@ fn a_scroll_leaves_every_recent_place_alone() {
     // But the track the block is centred in is the window's, and it moved.
     assert_eq!(live.rows, 64.0);
     assert_eq!(scrolled.rows, 24.0);
-    // Only `active` moves: the reader met the second answer, scrolled into a
-    // tool turn, and is now heading for the newest answer.
-    assert_eq!(live.squares.iter().position(|square| square.active), Some(1));
+    // The recency block stays fixed, while every visible conversation square
+    // remains active. The tool-only focus contributes no square of its own.
     assert_eq!(
-        scrolled.squares.iter().position(|square| square.active),
-        Some(2)
+        live.squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["u1", "a2", "a4"]
+    );
+    assert_eq!(
+        scrolled
+            .squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["a4"]
+    );
+}
+
+#[test]
+fn recent_mode_keeps_all_visible_conversations_active_around_tools() {
+    let specs = [
+        spec("a", "assistant", (0, 5), 3, &[0, 2, 4]),
+        spec("tool", "tool", (7, 10), 2, &[7, 9]),
+        spec("b", "assistant", (12, 17), 3, &[12, 14, 16]),
+        spec("c", "assistant", (20, 25), 3, &[20, 22, 24]),
+    ];
+    let viewport = Viewport { top: 0, bottom: 25 };
+    let rows = rows_for(&specs, viewport);
+    let listed = listed_of(&specs);
+    let layout = layout_pinned(
+        &rows,
+        &[],
+        &listed,
+        viewport,
+        0,
+        &Options {
+            mode: Mode::Recent,
+            ..Options::default()
+        },
+    );
+    let strip = recent(&layout);
+    assert_eq!(
+        strip
+            .squares
+            .iter()
+            .filter(|square| square.active)
+            .map(|square| square.id.as_str())
+            .collect::<Vec<_>>(),
+        ["a", "b", "c"]
+    );
+    assert_eq!(
+        strip.gap,
+        Some(boop_turnstrip::ToolGap {
+            before_id: Some("a".to_string()),
+            after_id: Some("b".to_string()),
+            start_row: 7,
+            end_row: 10,
+        })
     );
 }
 
@@ -980,4 +1263,3 @@ fn the_relative_strips_top_square_is_the_turn_the_reader_is_inside() {
     assert_eq!(strip.squares()[0].y, 0.0);
     assert!(strip.squares()[0].active);
 }
-
