@@ -149,13 +149,14 @@ fn an_ambiguous_same_package_name_binds_nothing() {
     );
 }
 
-/// The corpus name-match stays the last leg: `spin` is a member of object
-/// Gadget (not a top-level decl the plane indexes) and still reaches it.
+/// Lane K1: `spin` is reached as `Gadget.spin()` - a member call whose
+/// receiver the receiver plane names - so it binds through the (T, m) owner
+/// table at origin `receiver`, never through the corpus name-match.
 #[test]
-fn the_corpus_name_match_stays_the_last_leg() {
+fn the_member_call_binds_through_the_receiver_plane() {
     let calls = calls();
     assert!(
-        has_call(&calls, "main", "spin", "Gadget.kt", "corpus_unique"),
+        has_call(&calls, "main", "spin", "Gadget.kt", "receiver"),
         "{calls:?}"
     );
 }
