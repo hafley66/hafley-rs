@@ -7,8 +7,9 @@ use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
 
 use crate::harness::{
-    jsonl_files, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions,
-    LanePolicy, MailPolicy, NativeChildEvent, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+    jsonl_files, shell_quote, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested,
+    KnownSessions, LanePolicy, MailPolicy, NativeChildEvent, ReadChunk, SessionRef, SpawnSpec,
+    VariantSupport,
 };
 use anyhow::Context;
 use boop_store::event::AgentEvent;
@@ -178,6 +179,27 @@ impl Harness for Codex {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn interactive_fork_arguments(
+        &self,
+        prompt: &str,
+        model: Option<&str>,
+        effort: Option<&str>,
+        _variant: Option<&str>,
+    ) -> String {
+        let mut command = String::from(" --");
+        if let Some(model) = model {
+            command.push_str(&format!(" --model {}", shell_quote(model)));
+        }
+        if let Some(effort) = effort {
+            command.push_str(&format!(
+                " -c {}",
+                shell_quote(&format!("model_reasoning_effort={effort}"))
+            ));
+        }
+        command.push_str(&format!(" {}", shell_quote(prompt)));
+        command
     }
 
     fn tui_composer(&self) -> crate::harness::TuiComposer {

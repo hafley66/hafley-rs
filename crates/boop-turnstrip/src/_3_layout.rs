@@ -9,26 +9,38 @@
 //!     an estimate is a guess at where a turn *would* be, and a square drawn
 //!     from one points at text that is not its own, which is exactly what this
 //!     mode must not do. The turn the reader's top row is inside is always one
-//!     of the squares, whatever the gap or the cap says.
-//!   - [`Mode::Map`]: the strip is the rolling window of turns, every one of
-//!     them placed in estimated buffer rows, so a heavy tool turn takes more of
-//!     the map than a one-line prompt and a turn above the window still draws.
-//!     A scroll moves the block that marks the reader's rows and leaves the
-//!     squares alone.
+//!     of the squares, whatever the gap or the cap says. A square is also as
+//!     big as the part of its turn the reader can see: the placement's own
+//!     intersection with the window, floored at `options.scale_min`, so a turn
+//!     scrolled halfway out is half a square, a turn wholly in view is full
+//!     size, and a sliver keeps the floor. The scroll is the animation —
+//!     re-projecting after a scroll changes a square's size and its row, never
+//!     the turn it names.
+//!   - [`Mode::Recent`]: the strip is the newest turns of the session, one
+//!     square each, uniform, oldest first, read from the store rather than from
+//!     the window — a turn the window lost is a member like any other. `y`
+//!     counts places in the block, no row and no span, so the caller centres the
+//!     block on its own track and a scroll moves nothing at all.
 //!
-//! Both modes keep the reader's own turns on the strip even when they place
+//! Relative mode keeps the reader's own turns on the strip even when it places
 //! none of them: the *band*, a short run of pinned squares at the head of the
 //! layout. Those are the turns a reader navigates by — the prompts they wrote —
 //! so losing them to a scroll is worse than drawing them off-position. They are
-//! not positions and carry no row: `y` counts places in the band.
+//! not positions and carry no row: `y` counts places in the band. A recent strip
+//! needs no band, because the list of the newest turns already holds the
+//! reader's own prompts.
+//!
+//! Only the conversation draws, in either mode: [`drawn_at_all`] is the one
+//! place that decides, and tool calls, tool results and the turns the CLI wrote
+//! on the user's behalf are not part of it.
 //!
 //! `layout` is the whole pipeline in one call — rows to samples, samples to
 //! `kappa`/`gamma`, placements, strip — and it is the entry point a server,
 //! a CLI or a wasm binding uses.
 
 use crate::_0_types::{
-    clamp, Block, Layout, MapStrip, Mode, Options, Placement, RelativeStrip, Square, TurnKind,
-    TurnRow, Viewport,
+    clamp, Layout, ListedTurn, Mode, Options, Placement, RecentStrip, RelativeStrip, Square,
+    TurnKind, TurnRow, Viewport, DEFAULT_RECENT_MAX,
 };
 use crate::_1_measure::{measure, samples_from};
 use crate::_2_place::{place_window, window_of};
@@ -40,6 +52,9 @@ use crate::_2_place::{place_window, window_of};
 /// `pins` arrives oldest first — the caller read the session's turns and kept
 /// the ones the matcher did not find on screen — so the tail is the newest,
 /// which is the end a reader wants kept when the band is too short.
+///
+/// They draw uniform, at `1.0`: a pin is an id and nothing else, so the turn has
+/// no rows here and the band has no intersection with the window to size by.
 fn band(pins: &[String], drawn: &[String], options: &Options) -> Vec<Square> {
     if options.user_keep == 0 {
         return Vec::new();
@@ -63,20 +78,16 @@ fn band(pins: &[String], drawn: &[String], options: &Options) -> Vec<Square> {
         .collect()
 }
 
-/// A turn the strip draws at all. The tool filter lives here so a hidden turn
-/// costs no square anywhere: not a place in the band, not a slot in the
-/// spacing pass, not a row of the map.
-fn drawn_at_all(kind: TurnKind, options: &Options) -> bool {
-    options.show_tools || kind != TurnKind::Tool
-}
-
-/// The rows a placement occupies, in buffer rows: what the matcher saw of it
-/// for a measured turn, its estimate otherwise.
-fn extent(placement: &Placement) -> (f64, f64) {
-    match placement.visible {
-        Some((start, end)) => (start, end),
-        None => (placement.start, placement.start + placement.rows - 1.0),
-    }
+/// Whether a turn draws at all. The conversation is the reader's own prompts and
+/// the agent's answers; a tool call, a tool result and everything the CLI wrote
+/// on the user's behalf (`meta`) are not, and never draw in either mode.
+///
+/// The filter lives in one place so a hidden turn costs no square anywhere: not
+/// a place in the band, not a slot in the spacing pass, not a step of the recent
+/// block. A caller building a recency list from its own store filters with this
+/// same predicate, so the policy is written down once.
+pub fn drawn_at_all(kind: TurnKind) -> bool {
+    matches!(kind, TurnKind::User | TurnKind::Agent)
 }
 
 /// Where a turn's square sits, in window rows, or `None` when the turn is not
@@ -100,25 +111,6 @@ fn window_row(placement: &Placement, top: f64, bottom: f64) -> Option<f64> {
     Some(start.max(top) - top)
 }
 
-/// The window's median turn, the reference size: it keeps the plain square
-/// while bigger turns grow and smaller ones shrink, both clamped.
-fn reference_of(placements: &[Placement], kept: &[(usize, f64)]) -> f64 {
-    let mut totals: Vec<f64> = kept
-        .iter()
-        .map(|&(index, _)| placements[index].total as f64)
-        .collect();
-    totals.sort_by(f64::total_cmp);
-    if totals.is_empty() {
-        return 1.0;
-    }
-    let middle = totals.len() >> 1;
-    if totals.len() % 2 == 1 {
-        totals[middle]
-    } else {
-        (totals[middle - 1] + totals[middle]) / 2.0
-    }
-}
-
 /// The strip in [`Mode::Relative`]: the window's turns, each at the row it
 /// starts on, plus the band.
 ///
@@ -134,9 +126,17 @@ fn reference_of(placements: &[Placement], kept: &[(usize, f64)]) -> f64 {
 ///   - **budget**: `options.max_squares` caps the count outright (`0` leaves the
 ///     window as the only bound, and the window holds one square per row). The
 ///     reader's own turn is kept either way, even when it is the oldest.
+///
+/// A square's size is the reader's own intersection with its turn: the
+/// placement's `seen` — the fraction of the turn inside the viewport — floored
+/// at `options.scale_min` and capped at the plain square. A turn wholly in view
+/// draws full size, a turn scrolled halfway out draws half a square, and a
+/// sliver keeps the floor so it stays findable. Nothing here sizes a square
+/// against its neighbours: how long a turn is says nothing about how much of it
+/// the reader can see, which is the one thing the size is about.
 pub fn relative_layout(
     placements: &[Placement],
-    focus_row: Option<i64>,
+    _focus_row: Option<i64>,
     viewport: Viewport,
     pins: &[String],
     options: &Options,
@@ -146,7 +146,7 @@ pub fn relative_layout(
     let mut candidates: Vec<(usize, f64)> = placements
         .iter()
         .enumerate()
-        .filter(|(_, placement)| drawn_at_all(placement.kind, options))
+        .filter(|(_, placement)| drawn_at_all(placement.kind))
         .filter_map(|(index, placement)| window_row(placement, top, bottom).map(|row| (index, row)))
         .collect();
     candidates.sort_by(|left, right| left.1.total_cmp(&right.1));
@@ -157,106 +157,22 @@ pub fn relative_layout(
             band: head.len(),
             squares: head,
             rows,
+            gap: None,
         };
     }
 
-    let focused = focus_row.map(|row| row as f64 - top);
-    let focus_owner = focus_row.and_then(|row| {
-        let row = row as f64;
-        // Newest first: when two turns' spans meet on the reader's row, the
-        // newer one owns it, which is the one the reader is heading into.
-        placements.iter().rposition(|placement| {
-            let (start, end) = extent(placement);
-            drawn_at_all(placement.kind, options)
-                && start.is_finite()
-                && row >= start
-                && row <= end
-        })
-    });
-
-    // Newest first, one pass: a square survives when it clears the gap of the
-    // newest square already kept.
-    let mut kept: Vec<(usize, f64)> = Vec::new();
-    for &(index, row) in candidates.iter().rev() {
-        let clashes = kept
-            .last()
-            .is_some_and(|&(_, newest)| row > newest - options.min_gap);
-        if !clashes {
-            kept.push((index, row));
-        }
-    }
-
-    // The reader's own turn is never the one the gap drops: it is the square the
-    // strip exists to place. Whatever sat within a gap of it goes instead.
-    if let Some(owner) = focus_owner {
-        if let Some(&entry) = candidates.iter().find(|&&(index, _)| index == owner) {
-            if !kept.iter().any(|&(index, _)| index == owner) {
-                kept.retain(|&(_, row)| (row - entry.1).abs() >= options.min_gap);
-                kept.push(entry);
-            }
-        }
-    }
-
-    if options.max_squares > 0 && kept.len() > options.max_squares {
-        let mut ordered = kept.clone();
-        ordered.sort_by(|left, right| right.1.total_cmp(&left.1));
-        let mut trimmed: Vec<(usize, f64)> = Vec::with_capacity(options.max_squares);
-        if let Some(&entry) = kept.iter().find(|&&(index, _)| Some(index) == focus_owner) {
-            trimmed.push(entry);
-        }
-        for entry in ordered {
-            if trimmed.len() >= options.max_squares {
-                break;
-            }
-            if trimmed.iter().any(|&(index, _)| index == entry.0) {
-                continue;
-            }
-            trimmed.push(entry);
-        }
-        kept = trimmed;
-    }
-
-    kept.sort_by(|left, right| left.1.total_cmp(&right.1));
-
-    // Exactly one square is the one being read: the turn the reader's row is in,
-    // or — when that turn is not in the window — the square nearest that row.
-    let active = match kept.is_empty() {
-        true => None,
-        false => {
-            let by_focus = kept
-                .iter()
-                .position(|&(index, _)| Some(index) == focus_owner)
-                .or_else(|| {
-                    focused.map(|row| {
-                        let mut best = 0;
-                        for (position, &(_, other)) in kept.iter().enumerate() {
-                            if (other - row).abs() < (kept[best].1 - row).abs() {
-                                best = position;
-                            }
-                        }
-                        best
-                    })
-                });
-            Some(by_focus.unwrap_or(kept.len() - 1))
-        }
-    };
-
-    let reference = reference_of(placements, &kept);
-    let mut squares: Vec<Square> = kept
+    // Physical intersections remain represented even when the spacing or
+    // recent-history budget would otherwise discard them.
+    let mut squares: Vec<Square> = candidates
         .iter()
-        .enumerate()
-        .map(|(position, &(index, row))| {
+        .map(|&(index, row)| {
             let placement = &placements[index];
             Square {
                 id: placement.id.clone(),
                 kind: placement.kind,
                 y: row,
-                scale: clamp(
-                    1.0 + options.ratio_flex * (placement.total as f64 / 1.0f64.max(reference) - 1.0),
-                    options.scale_min,
-                    options.scale_max,
-                ),
-                active: Some(position) == active,
+                scale: clamp(placement.seen, options.scale_min, 1.0),
+                active: true,
             }
         })
         .collect();
@@ -268,136 +184,102 @@ pub fn relative_layout(
         squares: head,
         band,
         rows,
+        gap: None,
     }
 }
 
-/// A buffer row to the map's own rows, cumulative over the placements and
-/// continuous across the seams. Linear inside a turn, so anything else drawn in
-/// the map's space agrees with the squares.
-fn map_row(placements: &[Placement], row: f64) -> f64 {
-    let mut behind = 0.0f64;
-    for placement in placements {
-        if row < placement.start {
-            break;
-        }
-        if row <= placement.start + placement.rows - 1.0 {
-            return behind + (row - placement.start);
-        }
-        behind += placement.rows;
-    }
-    behind
-}
-
-/// The strip in [`Mode::Map`]: every turn the window holds, at the row it falls
-/// in it, plus the band.
+/// The strip in [`Mode::Recent`]: the newest turns of the session, one square
+/// each, oldest first, uniform.
 ///
-/// `max_squares` trims the window to its newest turns *before* anything is
-/// measured, because the cap changes `span` and with it every square's `y`: the
-/// same pane at two caps is two different maps, and a caller must not mix their
-/// output.
-pub fn map_layout(
-    placements: &[Placement],
+/// `listed` is the session's turns as the caller reads them from the store,
+/// oldest first, ids and kinds only: the window's rows are no help here, because
+/// a turn the window lost is a member like any other. Only the turns
+/// [`drawn_at_all`] admits are listed, so a chatty tool takes no place.
+///
+/// `focus` is the id of the turn the reader's top row is inside, when there is
+/// one. If it names no square — a tool turn, or a row past the end — the newest
+/// square is active instead: the end the reader is heading for.
+///
+/// `max_squares` caps the count by dropping from the FRONT, so the oldest places
+/// fall off silently, with no marker to say how many did. A caller that leaves
+/// it at `0` gets [`DEFAULT_RECENT_MAX`]: recent mode has no window to bound it,
+/// and a block taller than the pane is a list whose end the reader cannot reach.
+///
+/// Every square draws at `1.0`. Relative mode sizes a square by the reader's
+/// intersection with its turn, and a place in a list has neither rows nor a
+/// viewport to intersect: the list is a list of places, so there is no
+/// intersection to scale by and every place is the same size.
+pub fn recent_layout(
+    listed: &[ListedTurn],
+    focus: Option<&str>,
     viewport: Viewport,
-    pins: &[String],
     options: &Options,
-) -> MapStrip {
-    let shown: Vec<Placement> = placements
+) -> RecentStrip {
+    let mut turns: Vec<&ListedTurn> = listed
         .iter()
-        .filter(|placement| drawn_at_all(placement.kind, options))
-        .cloned()
+        .filter(|turn| drawn_at_all(turn.kind))
         .collect();
-    let capped: Vec<Placement> = if options.max_squares > 0 && shown.len() > options.max_squares {
-        let mut ordered = shown;
-        ordered.sort_by(|left, right| left.start.total_cmp(&right.start));
-        ordered.split_off(ordered.len() - options.max_squares)
-    } else {
-        shown
+    let cap = match options.max_squares {
+        0 => DEFAULT_RECENT_MAX,
+        set => set,
     };
-
-    let total: f64 = capped.iter().map(|placement| placement.rows).sum();
-    let span = if total == 0.0 { 1.0 } else { total };
-
-    let focus_row = viewport.top as f64;
-    let active = match capped.is_empty() {
+    if turns.len() > cap {
+        turns.drain(..turns.len() - cap);
+    }
+    let active = match turns.is_empty() {
         true => None,
-        false => Some(match capped.iter().position(|placement| {
-            placement.start.is_finite()
-                && focus_row >= placement.start
-                && focus_row <= placement.start + placement.rows - 1.0
-        }) {
-            Some(index) => index,
-            // A row past the last square, or above the first, falls back to the
-            // end the reader is heading for.
-            None if focus_row < capped[0].start => 0,
-            None => capped.len() - 1,
-        }),
+        false => Some(
+            turns
+                .iter()
+                .position(|turn| Some(turn.id.as_str()) == focus)
+                .unwrap_or(turns.len() - 1),
+        ),
     };
-
-    let reference = {
-        let mut totals: Vec<f64> = capped.iter().map(|placement| placement.total as f64).collect();
-        totals.sort_by(f64::total_cmp);
-        if totals.is_empty() {
-            1.0
-        } else {
-            let middle = totals.len() >> 1;
-            if totals.len() % 2 == 1 {
-                totals[middle]
-            } else {
-                (totals[middle - 1] + totals[middle]) / 2.0
-            }
-        }
-    };
-
-    let mut squares: Vec<Square> = capped
+    let squares: Vec<Square> = turns
         .iter()
         .enumerate()
-        .map(|(index, placement)| Square {
-            id: placement.id.clone(),
-            kind: placement.kind,
-            y: map_row(&capped, placement.start),
-            scale: clamp(
-                1.0 + options.ratio_flex * (placement.total as f64 / 1.0f64.max(reference) - 1.0),
-                options.scale_min,
-                options.scale_max,
-            ),
-            active: Some(index) == active,
+        .map(|(place, turn)| Square {
+            id: turn.id.clone(),
+            kind: turn.kind,
+            y: place as f64,
+            scale: 1.0,
+            active: Some(place) == active,
         })
         .collect();
-    let drawn: Vec<String> = squares.iter().map(|square| square.id.clone()).collect();
-    let mut head = band(pins, &drawn, options);
-    let band = head.len();
-    head.append(&mut squares);
-
-    let top = map_row(&capped, viewport.top as f64);
-    let block = Block {
-        top,
-        height: map_row(&capped, viewport.bottom as f64 + 1.0) - top,
-    };
-    MapStrip {
-        squares: head,
-        band,
-        span,
-        block,
+    RecentStrip {
+        squares,
+        gap: None,
+        // The same track measurement relative mode reports, so a caller centres
+        // both blocks in one space.
+        rows: (viewport.bottom as f64 - viewport.top as f64 + 1.0).max(1.0),
     }
 }
 
 /// Rows and a viewport in, a strip out, in the mode `options` asks for.
 ///
-/// The window is what the strip draws, so nothing is trimmed before it is
+/// [`Mode::Relative`] reads `rows`, and nothing is trimmed before it is
 /// measured: `max_squares` is a budget on the window's own squares.
+/// [`Mode::Recent`] reads the session's turns instead, which this call has none
+/// of — a recency list cannot be built from the window, so it draws an empty
+/// strip. Call [`layout_pinned`] to hand it a list.
 pub fn layout(rows: &[TurnRow], viewport: Viewport, focus_row: i64, options: &Options) -> Layout {
-    layout_pinned(rows, &[], viewport, focus_row, options)
+    layout_pinned(rows, &[], &[], viewport, focus_row, options)
 }
 
-/// [`layout`], with the reader's own turns the window does not hold.
+/// [`layout`], with the reader's own turns the window does not hold and the
+/// session's turns a recency list draws.
 ///
 /// `pins` are the ids of turns the matcher found no rows for — the reader's
 /// prompts above the window, oldest first — which is what the band is built
 /// from. A caller that has no such list passes an empty slice and gets a strip
-/// without a band.
+/// without a band. Only [`Mode::Relative`] reads them.
+///
+/// `listed` is the session's turns, oldest first, ids and kinds only, which is
+/// what [`recent_layout`] draws. Only [`Mode::Recent`] reads it.
 pub fn layout_pinned(
     rows: &[TurnRow],
     pins: &[String],
+    listed: &[ListedTurn],
     viewport: Viewport,
     focus_row: i64,
     options: &Options,
@@ -406,7 +288,8 @@ pub fn layout_pinned(
     let estimates = measure(&samples, viewport);
     let window = window_of(rows);
     let placements = place_window(&window, &samples, &estimates, viewport);
-    match options.mode {
+    let gap = crate::_3a_gap::visible_gap(rows, viewport);
+    let mut result = match options.mode {
         Mode::Relative => Layout::Relative(relative_layout(
             &placements,
             Some(focus_row),
@@ -414,6 +297,43 @@ pub fn layout_pinned(
             pins,
             options,
         )),
-        Mode::Map => Layout::Map(map_layout(&placements, viewport, pins, options)),
+        Mode::Recent => {
+            // Newest first: when two turns' spans meet on the reader's row, the
+            // newer one owns it, which is the one the reader is heading into.
+            let focus = rows
+                .iter()
+                .rposition(|row| row.start <= focus_row && focus_row <= row.end)
+                .map(|index| rows[index].id.as_str());
+            let recent = recent_layout(listed, focus, viewport, options);
+            let retained: Vec<_> = listed
+                .iter()
+                .filter(|turn| {
+                    recent.squares.iter().any(|square| square.id == turn.id)
+                        || rows.iter().any(|row| {
+                            row.id == turn.id
+                                && row.start <= viewport.bottom
+                                && row.end >= viewport.top
+                        })
+                })
+                .cloned()
+                .collect();
+            let expanded = Options {
+                max_squares: retained.len(),
+                ..options.clone()
+            };
+            Layout::Recent(recent_layout(&retained, focus, viewport, &expanded))
+        }
+    };
+    match &mut result {
+        Layout::Relative(strip) => strip.gap = gap,
+        Layout::Recent(strip) => {
+            for square in &mut strip.squares {
+                square.active = rows.iter().any(|row| {
+                    row.id == square.id && row.start <= viewport.bottom && row.end >= viewport.top
+                });
+            }
+            strip.gap = gap;
+        }
     }
+    result
 }

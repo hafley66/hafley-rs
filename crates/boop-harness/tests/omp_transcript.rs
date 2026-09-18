@@ -308,3 +308,69 @@ fn resume_reuses_the_same_file_and_reads_only_new_lines() {
     assert_eq!(chunk.next_offset, std::fs::metadata(&path).unwrap().len());
     println!("omp_transcript resume: ran LIVE");
 }
+
+/// Test 6: a `/clear` in omp is a `reset_boundary` entry, not a new session —
+/// the transcript keeps its id and its file, and the turns on both sides of the
+/// line stay in the store as history. The boundary itself is not a turn: it
+/// lands on the session as the attribute everything that means "this
+/// conversation" consults.
+#[test]
+fn a_clear_boundary_lands_on_the_session_attribute() {
+    const ID: &str = "01a0b1cd-eadb-7000-a5df-7dcaff852728";
+    const BOUNDARY: &str = "2026-09-17T23:59:08.865Z";
+    let message = |id: &str, role: &str, ts: &str, text: &str| {
+        format!(
+            r#"{{"type":"message","id":"{id}","timestamp":"{ts}","message":{{"role":"{role}","content":[{{"type":"text","text":"{text}"}}]}}}}"#
+        )
+    };
+    let transcript = format!(
+        concat!(
+            r#"{{"type":"session","version":3,"id":"{}","timestamp":"2026-09-17T23:57:37.371Z","cwd":"/tmp/clear-probe"}}"#,
+            "\n{}\n{}\n",
+            r#"{{"type":"reset_boundary","id":"b3","timestamp":"{}"}}"#,
+            "\n",
+        ),
+        ID,
+        message("b1", "user", "2026-09-17T23:58:38.431Z", "say only: ok"),
+        message("b2", "assistant", "2026-09-17T23:58:39.470Z", "ok"),
+        BOUNDARY,
+    );
+
+    let dir = tempfile::tempdir().expect("temp agent dir");
+    let encoded = dir.path().join("sessions").join("-tmp-clear-probe-");
+    std::fs::create_dir_all(&encoded).expect("create encoded cwd dir");
+    std::fs::write(
+        encoded.join(format!("2026-09-17T23-57-37-371Z_{ID}.jsonl")),
+        transcript,
+    )
+    .expect("write transcript");
+
+    let _guard = ENV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let sessions = with_env(
+        "PI_CODING_AGENT_DIR",
+        Some(dir.path().to_str().unwrap()),
+        || Omp.sessions().expect("discover omp sessions"),
+    );
+    assert_eq!(sessions.len(), 1);
+    let session = &sessions[0];
+
+    let store_path = dir.path().join("boop.db");
+    let store = boop_store::Store::open(store_path).expect("open store");
+    let stat = boop_harness::sync_session(&store, &Omp, session).expect("sync the session");
+    assert_eq!(stat.written, 2, "the two messages became two turns");
+
+    let turns: i64 = store
+        .connection()
+        .query_row("SELECT COUNT(*) FROM agent_turn", [], |row| row.get(0))
+        .expect("count turns");
+    assert_eq!(turns, 2, "the boundary is not a turn of its own");
+
+    let boundary = boop_store::session::parse_iso_ms(BOUNDARY).expect("boundary stamp");
+    assert_eq!(
+        store.session_attr(ID, boop_store::RESET_ATTR_KEY).unwrap(),
+        Some(boundary.to_string()),
+        "the boundary is what the session remembers as its last reset"
+    );
+}

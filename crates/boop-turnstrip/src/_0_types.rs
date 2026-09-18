@@ -102,6 +102,16 @@ pub struct TurnRow {
     pub lines: i64,
 }
 
+/// One turn of the session, as a recency list needs it: which turn it is and
+/// what kind. No rows: the list draws places in the block, not rows, so a turn
+/// the window lost is a member like any other.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ListedTurn {
+    pub id: String,
+    pub kind: TurnKind,
+}
+
 /// The window's turns, oldest first, as the estimator wants them.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct WindowTurn {
@@ -174,55 +184,57 @@ pub struct Placement {
 ///     the matcher saw on these rows has a row to name, so a turn above the
 ///     window draws no square at all — except the reader's own, which the pinned
 ///     band keeps.
-///   - [`Mode::Map`]: the strip is the rolling window of turns, and a square
-///     sits where its turn falls in it, estimated rows and all, so a scroll
-///     moves the block that marks the reader's rows and leaves the squares
-///     alone. Every turn the window holds draws, measured or not.
+///   - [`Mode::Recent`]: the strip is the newest turns of the session, one
+///     square each, uniform, oldest first; `y` counts places in the block, no
+///     row and no span, so a scroll moves nothing.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Mode {
     #[default]
     Relative,
-    Map,
+    Recent,
 }
 
 /// Pinned by measurement on a busy pane, not by taste. The crate has no pixel
 /// constants in either mode: a caller draws `y * cell_height` (relative) or
-/// scales `y / span` onto its own track (map).
+/// steps `y` along its own track, one square per step (recent).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Options {
     pub mode: Mode,
-    /// Scale given to a turn twice the window's median: `1 + flex` at
-    /// `2 × L_ref`.
-    pub ratio_flex: f64,
+    /// The floor a square's size may fall to. A square is as big as the part of
+    /// its turn the reader can see ([`Square::scale`]), and a sliver of a turn
+    /// clamps here rather than shrinking away, so a turn the window barely holds
+    /// stays findable.
     pub scale_min: f64,
-    pub scale_max: f64,
     /// Least distance between two squares, in window rows. A square draws
     /// smaller than one row, so `1` keeps adjacent rows from touching. Relative
-    /// mode only: a map has no rows to collide on.
+    /// mode only: a recent strip has no rows to collide on.
     pub min_gap: f64,
-    /// The strip's own budget: at most this many squares (`0` = only the mode's
-    /// own bound, which in relative mode is one square per window row). The
-    /// turns a cap drops are the oldest; the one being read is always kept.
+    /// The strip's own budget: at most this many squares. `0` leaves the mode's
+    /// own bound — one square per window row in relative mode, and
+    /// [`DEFAULT_RECENT_MAX`] in recent, which always has a hard max.
     pub max_squares: usize,
-    /// Draw the tool turns at all. A pane whose tools are chatty can fill the
-    /// strip with them, so a reader can ask for the conversation only.
-    pub show_tools: bool,
     /// How many of the reader's own turns stay on the strip even when the mode
     /// does not place them — the pinned band. `0` turns the band off.
     pub user_keep: usize,
 }
 
+/// The most squares a recent block shows when the caller leaves `max_squares`
+/// at its default `0`. A block taller than the pane is a list whose end the
+/// reader cannot reach, so recent mode always has a hard max.
+pub const DEFAULT_RECENT_MAX: usize = 20;
+
 /// The measured defaults, spelled once.
 pub const STRIP_DEFAULTS: Options = Options {
     mode: Mode::Relative,
-    ratio_flex: 0.35,
-    scale_min: 0.7,
-    scale_max: 1.9,
+    // The intersection gradient runs from this floor to full size: a turn 40%
+    // visible draws at 40%, and anything less than that stays at 40% rather than
+    // shrinking out of reach. A floor near 1 compresses the gradient into a
+    // range the reader cannot see, which is what 0.7 did.
+    scale_min: 0.4,
     min_gap: 1.0,
     max_squares: 0,
-    show_tools: true,
     user_keep: 4,
 };
 
@@ -239,20 +251,45 @@ impl Default for Options {
 pub struct Square {
     pub id: String,
     pub kind: TurnKind,
-    /// The turn's first row *inside the window*: `0.0` is the window's first
-    /// row, `height - 1.0` its last. A caller draws it at `y * cell_height`, so
-    /// a square sits on the row its turn starts on and moves with the scroll.
+    /// In the mode's own space. Relative: the turn's first row *inside the
+    /// window*, where `0.0` is the window's first row and `height - 1.0` its
+    /// last, so a caller drawing `y * cell_height` puts the square on the row
+    /// its turn starts on and a scroll moves it. Recent: the turn's place in
+    /// the block, `0.0` the oldest, so a caller steps down its own track and a
+    /// scroll moves nothing.
     pub y: f64,
+    /// How big the turn draws, as the part of it the reader can see: relative
+    /// mode sizes the square from the placement's own intersection with the
+    /// window, floored at `options.scale_min` — a turn scrolled halfway out is
+    /// half a square, a turn wholly in view is full size, and a sliver keeps the
+    /// floor. Always `1.0` in recent mode, which draws every square the same.
     pub scale: f64,
     pub active: bool,
 }
 
-/// The reader's rows, in the same space the map's squares use.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+/// The strip in [`Mode::Recent`]: the newest turns of the session, one square
+/// each, uniform, oldest first. `y` counts places in the block — no row, no
+/// span — so the caller centres the block on its own track and a scroll moves
+/// nothing. `rows` is the reader's window height: the track the block is
+/// centred in. There is no band: a list of the newest turns already holds the
+/// reader's own prompts, so a band beside it would say a turn twice.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Block {
-    pub top: f64,
-    pub height: f64,
+pub struct RecentStrip {
+    pub squares: Vec<Square>,
+    pub rows: f64,
+    #[serde(default)]
+    pub gap: Option<ToolGap>,
+}
+
+/// A visible tool-only interval between conversational turns.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ToolGap {
+    pub before_id: Option<String>,
+    pub after_id: Option<String>,
+    pub start_row: i64,
+    pub end_row: i64,
 }
 
 /// The strip in [`Mode::Relative`]: the window's turns, each at the row it
@@ -270,22 +307,8 @@ pub struct RelativeStrip {
     pub band: usize,
     /// The window's height in rows: what a relative square's `y` is measured in.
     pub rows: f64,
-}
-
-/// The strip in [`Mode::Map`]: every turn the rolling window holds, at the row
-/// it falls in it.
-///
-/// `y` and `span` are map rows — estimated buffer rows — so a caller draws
-/// `y / span` along its own track and the same pane at two track heights is the
-/// same map. `block` is the reader's window in that space, which is what moves
-/// on a scroll while the squares stay.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MapStrip {
-    pub squares: Vec<Square>,
-    pub band: usize,
-    pub span: f64,
-    pub block: Block,
+    #[serde(default)]
+    pub gap: Option<ToolGap>,
 }
 
 /// The strip, in whichever mode was asked for. Tagged on the wire (`"mode"`),
@@ -294,21 +317,24 @@ pub struct MapStrip {
 #[serde(tag = "mode", rename_all = "camelCase")]
 pub enum Layout {
     Relative(RelativeStrip),
-    Map(MapStrip),
+    Recent(RecentStrip),
 }
 
 impl Layout {
+    /// The strip's squares, oldest first: the band's own first in relative mode.
     pub fn squares(&self) -> &[Square] {
         match self {
             Layout::Relative(strip) => &strip.squares,
-            Layout::Map(strip) => &strip.squares,
+            Layout::Recent(strip) => &strip.squares,
         }
     }
 
+    /// How many of [`Layout::squares`] are the pinned band, at its head.
+    /// Relative mode only: a recent strip has no band.
     pub fn band(&self) -> usize {
         match self {
             Layout::Relative(strip) => strip.band,
-            Layout::Map(strip) => strip.band,
+            Layout::Recent(_) => 0,
         }
     }
 }

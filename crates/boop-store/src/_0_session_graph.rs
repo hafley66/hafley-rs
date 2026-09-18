@@ -415,9 +415,6 @@ pub fn load_agent_session_graph_with_runtime(
                 shell.tmux_session = runtime
                     .multiplexer
                     .session_of_pane(runtime.tmux_socket, pane);
-                if runtime.multiplexer.target_alive(runtime.tmux_socket, pane) {
-                    shell.state = "live".to_owned();
-                }
             }
             if !include_history && shell.state != "live" {
                 continue;
@@ -446,6 +443,28 @@ pub fn load_agent_session_graph_with_runtime(
     graph
         .shells
         .sort_by(|left, right| left.lane.cmp(&right.lane));
+    // A durable session row carrying "live" stays live only with fresh
+    // corroboration: a recorded pid still alive in the fresh snapshot, or a
+    // merged shell bound to it ending live. Unprobed rows are history, so
+    // they read "idle"; a row with no probe evidence at all is never
+    // invented into "dead".
+    for session in &mut graph.sessions {
+        if session.state.as_deref() != Some("live") {
+            continue;
+        }
+        let bound_live_shell = graph.shells.iter().any(|shell| {
+            shell.state == "live"
+                && shell.session.as_ref().map(|bound| &bound.id) == Some(&session.session.id)
+        });
+        if bound_live_shell {
+            continue;
+        }
+        let recorded_alive = durable_session_pid(store, &session.session.id)
+            .is_some_and(|pid| runtime.processes.is_alive(pid));
+        if !recorded_alive {
+            session.state = Some("idle".to_owned());
+        }
+    }
     focus_graph(&mut graph, &query);
     if query.include_trace_events {
         graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
@@ -471,16 +490,27 @@ fn shell_from_runtime(
             }
         }
     }
-    let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live)
-        || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live)
-    {
+    // Liveness law: live requires fresh process-tree evidence. A tmux target
+    // that answers while the tree is gone is remain-on-exit residue, not a
+    // live lane. A row nothing could probe is history, so a stale reported
+    // "live" downgrades to "idle" rather than reading as an active agent.
+    let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live) {
         "live"
-    } else if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Dead)
-        || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Dead)
+    } else if matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live) {
+        // The target answered `list-panes` but the fresh tree under its pane
+        // pid is gone (or was never probeable): residue.
+        "dead"
+    } else if matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Dead)
+        && matches!(row.liveness.process, crate::runtime::ProcessLiveness::Dead)
     {
+        // Both the managed target and the stored pid probed dead: an ending.
         "dead"
     } else {
-        row.reported_status.as_deref().unwrap_or("unknown")
+        match row.reported_status.as_deref() {
+            Some("live") => "idle",
+            Some(other) => other,
+            None => "unknown",
+        }
     };
     Some(AgentShellNode {
         lane: row.lane,
@@ -511,6 +541,22 @@ fn shell_from_runtime(
         registered_at: route.registered_at,
     })
 }
+/// The pid a durable `agent_live` row recorded for one session, if any. That
+/// row is a prior observation; the caller must re-check it against a fresh
+/// process snapshot before treating it as current evidence.
+fn durable_session_pid(store: &Store, session: &str) -> Option<u32> {
+    let sql = "SELECT live.pid
+                 FROM agent_live live
+                 JOIN dict_session d ON d.id = live.session_id
+                WHERE d.value = ?1";
+    store
+        .connection()
+        .query_row(sql, rusqlite::params![session], |row| row.get::<_, Option<i64>>(0))
+        .ok()
+        .flatten()
+        .and_then(|pid| u32::try_from(pid).ok())
+}
+
 /// Reduce a broad durable projection to the rooted family selected by exact
 /// tmux evidence. `spawned` is the only edge kind used as parenthood: hail and
 /// delivery edges stay visible when both endpoints are in the family but never
@@ -954,7 +1000,11 @@ mod tests {
                 app_server_socket: None,
             },
         );
-        let mux = FakeMux::available(&["codex-parent"]);
+        // Live now requires fresh tree evidence: the fixture pane carries the
+        // test process itself as its pane pid, so the tree probe answers.
+        let mux = FakeMux::available(&["codex-parent"])
+            .with_pane("%1", "codex-parent")
+            .with_pane_pid("%1", std::process::id());
         let processes = SysinfoSnapshot::capture().unwrap();
 
         let graph = load_agent_session_graph_with_runtime(
@@ -1030,7 +1080,11 @@ mod tests {
         let mut routes = BTreeMap::new();
         routes.insert("feature-lane".into(), lane_route);
 
-        let mux = FakeMux::available(&["feature-lane"]);
+        // Live now requires fresh tree evidence: the fixture pane carries the
+        // test process itself as its pane pid, so the tree probe answers.
+        let mux = FakeMux::available(&["feature-lane"])
+            .with_pane("%1", "feature-lane")
+            .with_pane_pid("%1", std::process::id());
         let processes = SysinfoSnapshot::capture().unwrap();
 
         let graph = load_agent_session_graph_with_runtime(
@@ -1128,7 +1182,9 @@ mod tests {
                 app_server_socket: None,
             },
         );
-        let mux = FakeMux::available(&["sprefa-5"]).with_pane("%1206", "sprefa-5");
+        let mux = FakeMux::available(&["sprefa-5"])
+            .with_pane("%1206", "sprefa-5")
+            .with_pane_pid("%1206", std::process::id());
         let processes = SysinfoSnapshot::capture().unwrap();
         let graph = load_agent_session_graph_with_runtime(
             &store,
@@ -1160,6 +1216,133 @@ mod tests {
         assert_eq!(graph.shells[0].tmux_pane.as_deref(), Some("%1206"));
         assert_eq!(graph.shells[0].tmux_session.as_deref(), Some("sprefa-5"));
         assert_eq!(graph.shells[0].state, "live");
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// A pid that provably exited: the child ran and was reaped, so its pid is
+    /// gone from the process table for the rest of the test.
+    fn exited_pid() -> u32 {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let pid = child.id();
+        child.wait().unwrap();
+        pid
+    }
+
+    /// The 38-row lie: a tmux pane that answers `list-panes` while the process
+    /// tree under its pane pid is gone is remain-on-exit residue and must read
+    /// "dead", never "live". A sibling pane whose tree is alive reads "live".
+    #[test]
+    fn pane_residue_reads_dead_and_a_fresh_tree_reads_live() {
+        let path =
+            std::env::temp_dir().join(format!("boop-session-residue-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let mut routes = BTreeMap::new();
+        for (lane, session, pane) in [
+            ("residue-lane", "thread-residue", "%9"),
+            ("tree-lane", "thread-tree", "%10"),
+        ] {
+            routes.insert(
+                lane.into(),
+                Route {
+                    kind: "coordinator".into(),
+                    harness: Some(HarnessId::Codex),
+                    tmux: Some(pane.into()),
+                    cwd: Some("/repo".into()),
+                    model: None,
+                    mode: None,
+                    session_id: Some(session.into()),
+                    source_path: None,
+                    parent: None,
+                    goal: None,
+                    registered_at: None,
+                    base_sha: None,
+                    worktree_dir: None,
+                    app_server_socket: None,
+                },
+            );
+        }
+        // Both panes answer tmux (they are registered), but only %10 carries a
+        // pane pid whose fresh tree exists; %9's recorded pane process is gone.
+        let mux = FakeMux::available(&[])
+            .with_pane("%9", "residue")
+            .with_pane("%10", "tree")
+            .with_pane_pid("%10", std::process::id());
+        let processes = SysinfoSnapshot::capture().unwrap();
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery {
+                include_history: true,
+                ..AgentSessionGraphQuery::default()
+            },
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+        let state_of = |lane: &str| {
+            graph
+                .shells
+                .iter()
+                .find(|shell| shell.lane == lane)
+                .map(|shell| shell.state.clone())
+                .unwrap()
+        };
+        assert_eq!(state_of("residue-lane"), "dead");
+        assert_eq!(state_of("tree-lane"), "live");
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// The network-view session-node lie: a durable session row whose recorded
+    /// pid is dead and which no live shell corroborates downgrades to "idle".
+    /// A row whose recorded pid is still alive in the fresh snapshot stays
+    /// "live". Neither path ever invents "dead".
+    #[test]
+    fn durable_live_sessions_without_fresh_corroboration_read_idle() {
+        let path =
+            std::env::temp_dir().join(format!("boop-session-idle-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        for (name, pid) in [
+            ("stale-live", exited_pid() as i64),
+            ("corroborated-live", std::process::id() as i64),
+        ] {
+            let session = store.intern_public("dict_session", name).unwrap();
+            store.connection().execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            ).unwrap();
+            store.record_status(name, 1, "live", Some(pid), None).unwrap();
+        }
+        let mux = FakeMux::available(&[]);
+        let processes = SysinfoSnapshot::capture().unwrap();
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery::default(),
+            AgentSessionGraphRuntime {
+                routes: &BTreeMap::new(),
+                messages: &[],
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+        let state_of = |name: &str| {
+            graph
+                .sessions
+                .iter()
+                .find(|node| node.session.id == name)
+                .and_then(|node| node.state.clone())
+                .unwrap()
+        };
+        assert_eq!(state_of("stale-live").as_str(), "idle");
+        assert_eq!(state_of("corroborated-live").as_str(), "live");
         let _ = std::fs::remove_file(path);
     }
 

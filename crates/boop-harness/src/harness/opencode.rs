@@ -10,8 +10,8 @@ use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::Value;
 
 use crate::harness::{
-    Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions, LanePolicy,
-    MailPolicy, OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
+    shell_quote, Capabilities, ControlCapabilities, Harness, HarnessId, Ingested, KnownSessions,
+    LanePolicy, MailPolicy, OneShotSpec, ReadChunk, SessionRef, SpawnSpec, VariantSupport,
 };
 
 const SQLITE_ID_BATCH: usize = 500;
@@ -158,6 +158,25 @@ impl Harness for Opencode {
 
     fn capabilities(&self) -> &'static Capabilities {
         &CAPABILITIES
+    }
+
+    fn interactive_fork_arguments(
+        &self,
+        prompt: &str,
+        model: Option<&str>,
+        effort: Option<&str>,
+        variant: Option<&str>,
+    ) -> String {
+        let mut command = String::new();
+        if let Some(effort) = variant.or(effort) {
+            command.push_str(&format!(" --initial-effort {}", shell_quote(effort)));
+        }
+        command.push_str(" --");
+        if let Some(model) = model {
+            command.push_str(&format!(" --model {}", shell_quote(model)));
+        }
+        command.push_str(&format!(" --prompt {}", shell_quote(prompt)));
+        command
     }
 
     fn tui_composer(&self) -> crate::harness::TuiComposer {

@@ -643,6 +643,31 @@ pub trait Harness: Send + Sync {
         None
     }
 
+    /// The `boop tui` fork's argument tail: this harness's pre-`--` launch
+    /// flags, the `--` separator, then the native executable's own model,
+    /// effort and prompt arguments. The CLI appends it verbatim after the
+    /// shared identity flags, so no caller spells a harness's flag names.
+    fn interactive_fork_arguments(
+        &self,
+        prompt: &str,
+        model: Option<&str>,
+        effort: Option<&str>,
+        variant: Option<&str>,
+    ) -> String {
+        let _ = (effort, variant);
+        let model = model
+            .map(|value| format!(" --model {}", shell_quote(value)))
+            .unwrap_or_default();
+        format!(" --{model} {}", shell_quote(prompt))
+    }
+
+    /// The composer key that submits a line already typed at this harness's
+    /// prompt, when the harness takes mail as keystrokes. `None` means a
+    /// keystroke landing takes the drain notice instead of the body.
+    fn composer_submit_key(&self) -> Option<&'static str> {
+        None
+    }
+
     /// Run one prompt to completion and return the reply text.
     fn one_shot(&self, _spec: &OneShotSpec) -> anyhow::Result<String> {
         anyhow::bail!("harness `{}` has no one-shot support", self.id())

@@ -74,7 +74,11 @@ impl Scratch {
 
     fn pane(&self, target: &str) -> String {
         let output = self.tmux(&["list-panes", "-t", target, "-F", "#{pane_id}"]);
-        assert!(output.status.success(), "list-panes {target}: {}", String::from_utf8_lossy(&output.stderr));
+        assert!(
+            output.status.success(),
+            "list-panes {target}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
         String::from_utf8_lossy(&output.stdout)
             .lines()
             .next()

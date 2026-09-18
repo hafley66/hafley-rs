@@ -4,8 +4,15 @@
 use serde::{Deserialize, Serialize};
 
 mod _1_snapshot;
+#[path = "0_boop_envelope.rs"]
+mod boop_envelope;
+pub use boop_envelope::boop_content;
+#[path = "0_candidates.rs"]
+mod candidates;
+#[path = "1_claude_summary.rs"]
+mod claude_summary;
 pub use _1_snapshot::{
-    logical_lines, locate_snapshot_turns, visible_squares, TurnSquare, PREVIEW_CHARS,
+    locate_snapshot_turns, logical_lines, visible_squares, TurnSquare, PREVIEW_CHARS,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -83,9 +90,8 @@ fn is_leading_marker(c: char) -> bool {
 }
 
 pub fn normalize_turn_line(line: &str) -> String {
-    // JavaScript lowercases before stripping; the order is observable.
-    let lowered: String = line.to_lowercase();
-    let chars: Vec<char> = lowered.chars().collect();
+    // Envelope grammar is case-sensitive; normalize its body afterwards.
+    let chars: Vec<char> = line.chars().collect();
     let mut i = 0;
     while i < chars.len() && is_js_whitespace(chars[i]) {
         i += 1;
@@ -105,11 +111,17 @@ pub fn normalize_turn_line(line: &str) -> String {
     }
     let mut out = String::with_capacity(chars.len());
     let mut pending_space = false;
-    for &c in &chars[i..] {
+    let byte_start: usize = chars[..i]
+        .iter()
+        .map(|character| character.len_utf8())
+        .sum();
+    for c in boop_content(&line[byte_start..]).to_lowercase().chars() {
         if MARKDOWN_DELETE.contains(&c) {
             continue;
         }
-        if BORDER_GLYPHS.contains(&c) {
+        // Every border glyph except `|` is non-ASCII. Avoid walking the
+        // Unicode border table for each ordinary prose character.
+        if c == '|' || (!c.is_ascii() && BORDER_GLYPHS.contains(&c)) {
             pending_space = true;
             continue;
         }
@@ -229,6 +241,12 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
 }
 
 fn source_lines(turn: &BoopTurn) -> Vec<String> {
+    if turn.role == "user" {
+        return boop_content(&turn.said)
+            .split('\n')
+            .map(str::to_owned)
+            .collect();
+    }
     let Some((tool_name, arguments)) = turn.said.split_once('\n') else {
         return turn.said.split('\n').map(str::to_owned).collect();
     };
@@ -404,8 +422,11 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         })
         .collect();
 
+    let candidates = candidates::candidates(&screen, &sources);
     let mut matches: Vec<TurnMatch> = sources
         .iter()
+        .zip(candidates)
+        .filter_map(|(source, candidate)| candidate.then_some(source))
         .filter_map(|source| monotonic_turn_match(&screen, source))
         .collect();
     matches.sort_by(|left, right| {
@@ -467,6 +488,7 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         });
     }
     grow_anchors(&mut visible, &screen, &sources);
+    claude_summary::anchor(lines, turns, &mut visible);
     visible.sort_by(|a, b| {
         a.buffer_start
             .cmp(&b.buffer_start)

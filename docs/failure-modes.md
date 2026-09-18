@@ -1,10 +1,88 @@
 # failure modes
 
+## 16. registering the fifth harness branched the interactive fork in the CLI, and the retire e2e outlived the un-gated note
+
+**Incident.** 2026-09-14. `cargo test --locked -p boop --test main` on `main`
+(`eb80b9fe`) failed two tests, deterministically, locally and on PR #67:
+
+| test | failure |
+|---|---|
+| `t1_harness_boundaries::behavioral_harness_dispatch_stays_in_adapters` | five `dispatch:` rows outside the adapter set |
+| `lane_retire_revive::a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation` | the scenario wrote two retire notes, the test asserted zero |
+
+**RCA.** Two independent causes.
+
+| cause | detail |
+|---|---|
+| `8df35325` (register omp, 2026-09-14) | added `HarnessId::Omp` arms to `0_interactive.rs::command` beside the existing `Kimi`/`Opencode` branches. The rule `8b6097d9` encoded in the boundary test says per-harness dispatch lives only under `crates/boop-harness/`. |
+| `628c2553` (tell the parent when a lane stalls or retires, 2026-09-14) | made the idle-shutdown retire row unconditional, one per result episode. `lane_retire_revive.rs` (last touched `8b6097d9`) still asserted zero notes. The commit message states the row is sent on purpose. |
+
+**Fail-pre-fix.** First-bad for the retire assertion is `628c2553`: its parent
+`161f13a8` passes the test, `628c2553` fails it.
+
+| test | pre-fix result |
+|---|---|
+| `behavioral_harness_dispatch_stays_in_adapters` | forbidden rows at `0_interactive.rs:21,24,34,45` and `deliver.rs:909` (`keystroke_route`) |
+| `a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation` | `fx.mailbox().matches("lane feature-retire retired")` was 2, asserted 0 |
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `Harness::interactive_fork_arguments` returns the pre-`--` launch flags, the separator, and the executable's model/effort/prompt arguments; one override per adapter | `boop-harness/src/harness/{claude,codex,kimi,opencode}.rs` |
+| 2 | `command` asks the registry for the adapter; the CLI names no `HarnessId` variant | `boop/src/cli/job/0_interactive.rs` |
+| 3 | `Harness::composer_submit_key`; `keystroke_route` asks the adapter in place of the `Kimi` comparison | `boop-harness/src/harness.rs`, `boop-proc/src/deliver.rs` |
+| 4 | step 6 counts two retire notes, one per result episode | `boop/tests/lane_retire_revive.rs` |
+
+**Rail.** The boundary test fails on any `HarnessId::Claude`/`Codex`/`Kimi`/
+`Opencode` comparison or match outside `crates/boop-harness/`, the test files,
+and the two ACP channel files. Adding a harness means one adapter override in
+`boop-harness/` and one registry line.
+
+**Rail 2.** When a lifecycle decision changes what the mailbox carries, update
+its e2e in the same commit. `628c2553` changed the retire row, updated
+`lane_lifecycle_e2e.rs`, and left `lane_retire_revive.rs` stale.
+
+**Entry.** `8df35325` added the omp CLI branches; `628c2553` removed the
+retire-note gate; this entry moves the fork branches into the adapters and
+re-points the e2e at the new count.
+
+---
+
+## 15. the workspace Cargo.lock kept an excluded crate's graph, and every CI run failed `--locked`
+
+**Incident.** 2026-09-14. Every `main` CI run since `02cc2ea8` failed at
+`bash crates/boop/scripts/0_regression_gate.sh deterministic` and at
+`cargo test --workspace --locked` with `cannot update the lock file ... because
+--locked was passed`. PR #64 showed the same failure and was read as the PR's
+fault. A clean checkout of `b05b31c9` reproduces it offline.
+
+**RCA.** `02cc2ea8` excluded `crates/sprefa-extract` from the workspace so it
+could keep its own lockfile, and did not re-resolve the root `Cargo.lock`. The
+root lock still carried the excluded crate's dependency graph. Cargo under
+`--locked` refuses to prune it.
+
+| count | what |
+|---|---|
+| 2423 | lock lines removed by `cargo update --workspace --offline` |
+| 65 | lock lines added (entries re-placed, no version bumps) |
+| 196 | `Removing`/`Adding`/`Updating` lines cargo printed |
+
+**Fail-pre-fix test.** `cargo metadata --locked --offline --format-version 1`
+on `b05b31c9`: error. After the update: exit 0.
+
+**Rail.** `cargo update --workspace --offline` after any workspace member add,
+remove or exclude, in the same commit. `cargo metadata --locked --offline` is the
+one-line check before pushing.
+
+**Entry.** `02cc2ea8` excluded the crate; this entry's commit prunes the lock.
+
 Every incident that bit gets a row: what happened, why, the test that fails
 without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 16 | 2026-09-14 | registering omp branched the interactive fork in the CLI, and the retire e2e outlived the un-gated note |
 | 14 | 2026-09-03 | a hail a claude session already held was pushed at it again every 5 s, 29 copies per row |
 | 13 | 2026-08-20 | 512 concurrent `boop db` reads each ran their own transcript sync, and the machine stopped |
 | 12 | 2026-08-21 | a lane that ended its turn to report a finding was closed and read `dead` |
