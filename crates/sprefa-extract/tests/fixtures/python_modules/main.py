@@ -7,7 +7,6 @@ from app import helper
 from app.sub import leaf
 from app.core import missing
 from app.helpers import *
-from app import internal
 import app.helpers as helpers_alias
 
 

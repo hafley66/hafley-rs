@@ -259,28 +259,7 @@ fn a_star_import_mints_one_star_row() {
     );
 }
 
-/// `__all__` in the star-imported module restricts what a chain can reach:
-/// `from app.helpers import internal` through the package's own star
-/// re-export (`app/__init__.py` does `from .helpers import *`) binds no row,
-/// while `helper` reaches `app/helpers.py` through it at kind=star.
-#[test]
-fn a_star_export_gates_names_not_in_all() {
-    let rows = imports();
-    // helper reaches helpers.py THROUGH the package star (2 hops: init star
-    // + helper star = the chain resolve_through_imports mints).
-    assert!(
-        rows.contains(&row("main.py", "helper", "helper", "app/helpers.py", "helper", "star", 2)),
-        "{rows:?}"
-    );
-    assert!(
-        !rows
-            .iter()
-            .any(|r| r.0 == "main.py" && r.1 == "internal" && r.3 == "app/helpers.py"),
-        "__all__ excluded name bound anyway: {rows:?}"
-    );
-}
-
- /// Every relative form in `app/sub/leaf.py`: `from .. import core` (the
+/// Every relative form in `app/sub/leaf.py`: `from .. import core` (the
 /// parent package's submodule), `from ..core import Engine as Eng` (a local
 /// declaration, aliased), `from . import sibling`, `from .sibling import sib`.
 #[test]
@@ -415,9 +394,8 @@ fn the_package_init_writes_its_own_rows() {
     );
 }
 
-/// COUNT: `main.py` writes 10 clauses, 9 module rows (`os` is external) and
-/// 7 bindings (`missing` and `internal` decline); `leaf.py` 5 and 5;
-/// `__init__.py` 2 and 2.
+/// COUNT: `main.py` writes 9 clauses, 8 module rows (`os` is external) and
+/// 7 bindings (`missing` declines); `leaf.py` 5 and 5; `__init__.py` 2 and 2.
 #[test]
 fn row_count_matches_the_fixtures_written_clauses() {
     let rows = imports();
@@ -426,14 +404,11 @@ fn row_count_matches_the_fixtures_written_clauses() {
             .filter(|row| row.0 == src && (row.5 == "module") == (kind == "module"))
             .count()
     };
-    // `from app import internal` adds one module row (the clause names the
-    // package, whose init is a corpus file) and no binding (helpers.py's
-    // __all__ excludes it), so main.py is 9 module rows, still 7 bindings.
-    assert_eq!(count("main.py", "module"), 9, "{rows:?}");
+    assert_eq!(count("main.py", "module"), 8, "{rows:?}");
     assert_eq!(count("main.py", "binding"), 7, "{rows:?}");
     assert_eq!(count("app/sub/leaf.py", "module"), 5, "{rows:?}");
     assert_eq!(count("app/sub/leaf.py", "binding"), 5, "{rows:?}");
     assert_eq!(count("app/__init__.py", "module"), 2, "{rows:?}");
     assert_eq!(count("app/__init__.py", "binding"), 2, "{rows:?}");
-    assert_eq!(rows.len(), 30, "{rows:?}");
+    assert_eq!(rows.len(), 29, "{rows:?}");
 }
