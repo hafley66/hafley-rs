@@ -37,6 +37,15 @@ commits is in scope (user-set 2026-09-18: "extract on its own very
 capable"); a maintained, incremental one is not. `extract watch` emits
 blob deltas and stops there.
 
+One-shot traversal over a single resolve pass is in scope on the same
+grounds (user-set 2026-09-18: "extract must be as capable as possible ...
+we will host or re-use it in dl8 later"). That covers reachability from an
+entrypoint, reverse edges, type usage, and `--expand` closing the file set
+to a fixpoint. A persistent cross-run graph index is not in scope, and
+neither is a maintained dead-code or liveness view: those stay PROGRAMS
+under the map below. dl8 owns row storage, invalidation and eviction, so
+a handle here is a cursor (argv + input digests + offset), never a cache.
+
 ## Analysis family map (program vs facet vs rabbit hole)
 
 PROGRAMS over already-emitted facts (zero new extraction — do NOT add
