@@ -182,8 +182,14 @@ impl Multiplexer for FakeMux {
         })
     }
 
+    /// Resolves the target the way tmux does: an exact pane id lookup first,
+    /// then a session or `session:window.pane` target resolved to its pane.
     fn pane_pid(&self, _: Option<&str>, target: &str) -> Option<u32> {
-        self.pane_pids.get(target).copied()
+        if let Some(pid) = self.pane_pids.get(target) {
+            return Some(*pid);
+        }
+        let pane = self.pane_id(None, target)?;
+        self.pane_pids.get(&pane).copied()
     }
 
     fn live_sessions(&self, _: Option<&str>) -> Option<LiveSessions> {

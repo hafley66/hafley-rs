@@ -16,7 +16,7 @@ use serde::Serialize;
 use crate::bus::{Message, Route};
 use crate::harness_id::HarnessId;
 use crate::ident::Store;
-use crate::proc::{ProcReader, SysinfoSnapshot};
+use crate::proc::{ProcReader, SysinfoSnapshot, tree_sum_of};
 use crate::tmux::{LiveSessions, Multiplexer};
 
 /// A typed reason why one part of a lane runtime could not be resolved.
@@ -246,6 +246,8 @@ fn runtime_snapshot_with_batch(
                 runtime,
                 mailboxes.get(&lane).cloned().unwrap_or_default(),
                 live_sessions,
+                input.multiplexer,
+                input.tmux_socket,
                 input.processes,
             ))
         })
@@ -286,6 +288,8 @@ fn runtime_row(
     runtime: LaneRuntime,
     mailbox: MailboxCounts,
     live_sessions: &Option<LiveSessions>,
+    multiplexer: &dyn Multiplexer,
+    tmux_socket: Option<&str>,
     processes: &dyn ProcReader,
 ) -> AgentRuntimeRow {
     let route = runtime.route.clone();
@@ -297,9 +301,32 @@ fn runtime_row(
         .and_then(|pid| processes.process(pid))
         .and_then(|process| process.cwd)
         .map(|path| path.to_string_lossy().into_owned());
+    // Liveness law: a lane is live when a fresh process tree under the pane
+    // pid its tmux target answers with right now. The pane pid is read fresh
+    // from the multiplexer, never from the stale `agent_live` record; a pane
+    // that answers but whose tree is gone is residue, hence Dead. The stored
+    // pid probe is the fallback for routes the multiplexer cannot resolve.
+    let process = match tmux_target
+        .as_deref()
+        .and_then(|target| multiplexer.pane_pid(tmux_socket, target))
+    {
+        Some(pane_pid) if tree_sum_of(processes, pane_pid).is_some() => ProcessLiveness::Live,
+        Some(_) => ProcessLiveness::Dead,
+        None => process_liveness(processes, pid),
+    };
+    // A pane id never appears in the session listing, so a pane target that
+    // answers a direct probe reads Live even though `live_sessions` lacks it.
+    let mut tmux = tmux_liveness(live_sessions, tmux_target.as_deref());
+    if let Some(target) = tmux_target.as_deref().filter(|target| target.starts_with('%')) {
+        if matches!(tmux, TmuxLiveness::Unmanaged | TmuxLiveness::Dead)
+            && multiplexer.target_alive(tmux_socket, target)
+        {
+            tmux = TmuxLiveness::Live;
+        }
+    }
     let liveness = RuntimeLiveness {
-        tmux: tmux_liveness(live_sessions, tmux_target.as_deref()),
-        process: process_liveness(processes, pid),
+        tmux,
+        process,
     };
     let cwd = route.as_ref().and_then(|route| route.cwd.clone());
     AgentRuntimeRow {
@@ -1566,6 +1593,49 @@ mod tests {
         assert_eq!(rows[0].reported_status.as_deref(), Some("live"));
         assert_eq!(rows[0].liveness.tmux, TmuxLiveness::Inaccessible);
         assert_eq!(rows[0].liveness.process, ProcessLiveness::Dead);
+        drop(store);
+        let _ = std::fs::remove_file(path);
+    }
+
+    /// Pane-less coordinators keep the stored-pid fallback: with no tmux
+    /// target the fresh pane-pid probe cannot run, so the stored pid is
+    /// re-checked against the fresh snapshot. Alive reads Live, gone reads
+    /// Dead (and the graph maps that history to "idle", never "live").
+    #[test]
+    fn pane_less_routes_fall_back_to_the_stored_pid_probe() {
+        let (path, store) = fresh_store("pane-less");
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        let exited = child.id();
+        child.wait().unwrap();
+        for (lane, session, pid) in [
+            ("lane-alive", "generated-alive", std::process::id() as i64),
+            ("lane-gone", "generated-gone", exited as i64),
+        ] {
+            store
+                .attach_trace(lane, &format!("trace-{lane}"), "lane-create", 10)
+                .unwrap();
+            store
+                .attach_trace(session, &format!("trace-{lane}"), "supervisor", 11)
+                .unwrap();
+            add_session(&store, session, 20);
+            store
+                .record_status(session, 30, "live", Some(pid), None)
+                .unwrap();
+        }
+        let mut routes = BTreeMap::new();
+        for (lane, session) in [("lane-alive", "generated-alive"), ("lane-gone", "generated-gone")] {
+            let mut pane_less = route(Some(session));
+            pane_less.tmux = None;
+            routes.insert(lane.into(), pane_less);
+        }
+        let mux = FakeMux::available(&[]);
+        let processes = FakeProcesses::with(std::process::id(), "/test");
+        let rows = snapshot_rows(&store, &routes, &[], &mux, &processes);
+        let alive = rows.iter().find(|row| row.lane == "lane-alive").unwrap();
+        assert_eq!(alive.liveness.tmux, TmuxLiveness::Unmanaged);
+        assert_eq!(alive.liveness.process, ProcessLiveness::Live);
+        let gone = rows.iter().find(|row| row.lane == "lane-gone").unwrap();
+        assert_eq!(gone.liveness.process, ProcessLiveness::Dead);
         drop(store);
         let _ = std::fs::remove_file(path);
     }
