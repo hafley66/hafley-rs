@@ -11,7 +11,7 @@
 
 use std::process::Command;
 
-const DIR: &str = "tests/fixtures/go/binding_legs";
+const DIR: &str = "tests/fixtures/go_binding_legs";
 
 fn resolve() -> String {
     let root = env!("CARGO_MANIFEST_DIR");

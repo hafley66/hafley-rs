@@ -731,24 +731,22 @@ fn duplicate_def_ts() {
     assert_duplicate_def(&base, &after, "step");
 }
 
-/// Invariant 2: the tidy method leaves the class for a free fn in fresh.ts;
-/// the call site's own text is unedited (the method sat below it), so the row
-/// must survive with only callee_path moved.
+/// Invariant 2, member shape: the tidy method leaves the class for a free fn
+/// in fresh.ts. `this.tidy(text)` keeps a KNOWN receiver (Runner) that no
+/// longer declares tidy, so the row must go absent rather than re-point to a
+/// free fn through a name guess (plan v2 lane D: an untyped or memberless
+/// receiver gets no corpus_unique answer). The base row is the receiver leg.
 #[test]
 fn relocation_ts() {
     let (base, after) = run(&ts_scenarios()[1]);
-    assert_eq!(
-        base.calls.len(),
-        after.calls.len(),
-        "relocation changed the edge count"
+    let base_tidy = base.calls_to("tidy");
+    assert_eq!(base_tidy.len(), 1, "base tidy edges: {base_tidy:?}");
+    assert_eq!(base_tidy[0].origin, "receiver");
+    assert!(
+        after.calls_to("tidy").is_empty(),
+        "a method call must not follow its def into a free fn: {:?}",
+        after.calls_to("tidy")
     );
-    let moved = after
-        .calls
-        .iter()
-        .find(|edge| edge.callee_name.as_deref() == Some("tidy"))
-        .expect("relocated def lost its edge");
-    assert_eq!(moved.callee_path, "fresh.ts", "edge did not follow the def");
-    assert_eq!(moved.origin, CORPUS_UNIQUE);
     let bystanders = |rows: &Rows| -> BTreeSet<CallEdge> {
         rows.calls
             .iter()
