@@ -72,10 +72,10 @@ fn phases_of(path: &str) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
-// Ordinary extraction emits debug spans only, so the standard warn default
-// remains silent until a warning or error occurs.
+// The default is sprefa_extract=info (src/trace.rs:580), so an ordinary run
+// narrates itself on stderr while the fact stream stays alone on stdout.
 #[test]
-fn the_warn_default_keeps_an_ordinary_run_off_stderr() {
+fn the_info_default_narrates_an_ordinary_run_on_stderr() {
     let output = Command::new(BIN)
         .args(["--family", "call", FIXTURE])
         .env_remove("RUST_LOG")
@@ -88,11 +88,14 @@ fn the_warn_default_keeps_an_ordinary_run_off_stderr() {
         !output.stdout.is_empty(),
         "the fact stream must still reach stdout"
     );
-    assert_eq!(
-        output.stderr,
-        Vec::<u8>::new(),
-        "stderr must be empty with RUST_LOG unset, got {}",
-        String::from_utf8_lossy(&output.stderr)
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("INFO") && stderr.contains("extract_file"),
+        "the info default must narrate the run on stderr, got {stderr}"
+    );
+    assert!(
+        !String::from_utf8_lossy(&output.stdout).contains("INFO"),
+        "telemetry must never leak into the fact stream"
     );
 }
 
