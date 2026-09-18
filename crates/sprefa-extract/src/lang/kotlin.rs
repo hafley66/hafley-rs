@@ -597,12 +597,14 @@ fn is_noise_kotlin(name: &str) -> bool {
 fn project_call(
     root: tree_sitter::Node,
     src: &[u8],
+    blob: ContentId,
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
     kt_walk_call_defs(root, src, strings, sink, None, false);
     kt_walk_call_sites(root, src, strings, sink);
     kt_module_specifiers(root, src, strings, sink);
+    super::kotlin_receivers::collect_receivers(root, src, blob, strings, sink);
 }
 
 // ── module specifiers (CallFAux.specifiers) ─────────────────────────────────
@@ -765,7 +767,7 @@ fn kt_walk_call_defs(
 /// The def span covers the whole callable `[child.start, body.end)` for
 /// span-containment resolution. Port of v5's `end` computation (the
 /// function_body end, or the decl end for a bodyless fun).
-fn def_span(child: tree_sitter::Node) -> Span {
+pub(crate) fn def_span(child: tree_sitter::Node) -> Span {
     let start = child.start_byte();
     let end = kt_first_child(child, "function_body")
         .unwrap_or(child)
@@ -1665,7 +1667,9 @@ impl Source for KotlinSource {
                         let span = trace::family_span("kotlin", "call");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<CallF>::default();
-                        project_call(root, src_bytes, &mut strings, &mut bundle);
+                        let blob = crate::dispatch::extracting_blob(content)
+                            .unwrap_or_else(|| crate::types::content_id_of(content));
+                        project_call(root, src_bytes, blob, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
                     }
