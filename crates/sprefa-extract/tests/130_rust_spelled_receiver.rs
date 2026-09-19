@@ -102,7 +102,9 @@ fn trait_bound_generic_receiver_binds() {
     // C.5 trait-bound generic leg: `fn f<P: Proj>(p: P) { p.run() }` binds to
     // the trait's own fn def in proj.rs.
     // `Proj::run` and `Widget::run` share a name, so the assert is the callee
-    // span: it must cover the trait's `fn run`, never the inherent one.
+    // span: it must cover the trait's `run` signature, never the inherent one.
+    // Rust callee_start is the IDENT (`def_span` at rust.rs:1547); kotlin's is
+    // the declaration keyword (`node_span` at kotlin.rs:168).
     let src = std::fs::read_to_string(format!(
         "{}/{SRC}/proj.rs",
         env!("CARGO_MANIFEST_DIR")
