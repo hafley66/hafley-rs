@@ -1,6 +1,6 @@
 // kotlin_module_resolve/model/Gadget.kt: a second file in the same package.
-// A bare `shared` declared here AND in Sibling.kt is ambiguous and binds
-// nothing; a bare `lone` binds only here.
+// A bare `lone` is declared only here and binds here through the wildcard
+// import; `Gadget.spin()` is the receiver-plane member call.
 
 package com.acme.model
 

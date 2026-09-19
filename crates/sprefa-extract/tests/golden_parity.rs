@@ -32,8 +32,8 @@ use std::sync::{Arc, Mutex};
 
 use sprefa_extract::{
     build_def_index, byte_range_cached, containing_def_site, content_id_of, covering_def,
-    definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, ContentId,
-    RyiOutput, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap,
+    definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, CallF, ContentId,
+    NodeRef, ProjectEdge, RyiOutput, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap,
     ProjectCx, ProjectDigest, PythonSource, Resolve, RustSource, ScipGo, ScipRust, ScipSource,
     ScipTypescript, Span, TsSource, TypeF, ZERO_CONTENT_ID,
 };
@@ -1026,21 +1026,7 @@ fn call_resolve_scip_ratchet_ts() {
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
         let edges = Resolve::<sprefa_extract::CallF>::resolve(&TsSource, out, &cx);
-        // The twin re-derives outcomes without origins; join each row back
-        // to the arm edge to meter by resolution origin.
-        let mut edge_origin: HashMap<_, &'static str> = HashMap::new();
-        for edge in edges.iter().filter(|edge| edge.kind != CallEdgeKind::ValueRef) {
-            edge_origin.insert(
-                (
-                    edge.src.0,
-                    edge.dst_span.start,
-                    edge.dst_span.end(),
-                    edge.kind.as_str(),
-                    edge.dst_blob.clone(),
-                ),
-                edge.origin.as_str(),
-            );
-        }
+        let edge_origin = origin_by_edge(&edges);
         let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
             .iter()
             // The ratchet grades SITE outcomes against scip occurrences; a
@@ -1103,8 +1089,7 @@ fn call_resolve_scip_ratchet_ts() {
             let mut origin: Option<&'static str> = None;
             if let Some((caller, dst, kind)) = &twin {
                 let from = call.node(*caller).span;
-                let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
-                origin = edge_origin.get(&key).copied();
+                origin = origin_of(&edge_origin, *caller, dst, *kind);
                 expected.push((
                     from.start,
                     dst.1.start,
@@ -1377,21 +1362,7 @@ fn call_resolve_scip_ratchet_go() {
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
         let edges = Resolve::<sprefa_extract::CallF>::resolve(&GoSource, out, &cx);
-        // The twin re-derives outcomes without origins; join each row back
-        // to the arm edge to meter by resolution origin.
-        let mut edge_origin: HashMap<_, &'static str> = HashMap::new();
-        for edge in edges.iter().filter(|edge| edge.kind != CallEdgeKind::ValueRef) {
-            edge_origin.insert(
-                (
-                    edge.src.0,
-                    edge.dst_span.start,
-                    edge.dst_span.end(),
-                    edge.kind.as_str(),
-                    edge.dst_blob.clone(),
-                ),
-                edge.origin.as_str(),
-            );
-        }
+        let edge_origin = origin_by_edge(&edges);
         let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
             .iter()
             // The ratchet grades SITE outcomes against scip occurrences; a
@@ -1454,8 +1425,7 @@ fn call_resolve_scip_ratchet_go() {
             let mut origin: Option<&'static str> = None;
             if let Some((caller, dst, kind)) = &twin {
                 let from = call.node(*caller).span;
-                let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
-                origin = edge_origin.get(&key).copied();
+                origin = origin_of(&edge_origin, *caller, dst, *kind);
                 expected.push((
                     from.start,
                     dst.1.start,
@@ -1716,21 +1686,7 @@ fn call_resolve_scip_ratchet_rust() {
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
         let edges = Resolve::<sprefa_extract::CallF>::resolve(&RustSource, out, &cx);
-        // The twin re-derives outcomes without origins; join each row back
-        // to the arm edge to meter by resolution origin.
-        let mut edge_origin: HashMap<_, &'static str> = HashMap::new();
-        for edge in edges.iter().filter(|edge| edge.kind != CallEdgeKind::ValueRef) {
-            edge_origin.insert(
-                (
-                    edge.src.0,
-                    edge.dst_span.start,
-                    edge.dst_span.end(),
-                    edge.kind.as_str(),
-                    edge.dst_blob.clone(),
-                ),
-                edge.origin.as_str(),
-            );
-        }
+        let edge_origin = origin_by_edge(&edges);
         let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
             .iter()
             // The ratchet grades SITE outcomes against scip occurrences; a
@@ -1795,8 +1751,7 @@ fn call_resolve_scip_ratchet_rust() {
             let mut origin: Option<&'static str> = None;
             if let Some((caller, dst, kind)) = &twin {
                 let from = call.node(*caller).span;
-                let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
-                origin = edge_origin.get(&key).copied();
+                origin = origin_of(&edge_origin, *caller, dst, *kind);
                 expected.push((
                     from.start,
                     dst.1.start,
@@ -1940,6 +1895,40 @@ fn call_resolve_scip_ratchet_rust() {
         "no overbinding: every NameResolve is scip-corpus-resolved\n{}",
         lines.join("\n")
     );
+}
+
+/// Edge identity for the origin join: (src node, dst start, dst end, kind, dst blob).
+type OriginKey = (u32, u32, u32, &'static str, ContentId);
+
+/// The twin re-derives outcomes without origins; join each row back to the
+/// arm edge to meter by resolution origin.
+fn origin_by_edge(edges: &[ProjectEdge<CallF>]) -> HashMap<OriginKey, &'static str> {
+    edges
+        .iter()
+        .filter(|edge| edge.kind != CallEdgeKind::ValueRef)
+        .map(|edge| {
+            (
+                (
+                    edge.src.0,
+                    edge.dst_span.start,
+                    edge.dst_span.end(),
+                    edge.kind.as_str(),
+                    edge.dst_blob.clone(),
+                ),
+                edge.origin.as_str(),
+            )
+        })
+        .collect()
+}
+
+fn origin_of(
+    edge_origin: &HashMap<OriginKey, &'static str>,
+    caller: NodeRef,
+    dst: &(ContentId, Span),
+    kind: CallEdgeKind,
+) -> Option<&'static str> {
+    let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
+    edge_origin.get(&key).copied()
 }
 
 #[derive(Default)]

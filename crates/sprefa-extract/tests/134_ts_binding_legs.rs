@@ -92,11 +92,30 @@ fn the_ctor_return_leg_fires_cross_file() {
     assert_eq!(edge.3, "receiver", "cross-file ctor leg must bind through the receiver");
 }
 
+/// `ifaceCase<Impl>(new Impl())` in use.ts: the explicit type argument leaves
+/// the call bound to the imported generic fn, and `Impl.project` is never a
+/// callee of the caller (the type argument is not a receiver).
+#[test]
+fn a_generic_call_binds_the_imported_fn_across_files() {
+    let edges = resolved_edges();
+    let edge = bind(&edges, "crossFileGeneric", "ifaceCase").expect("crossFileGeneric -> ifaceCase");
+    assert_eq!(edge.3, "module_plane", "the import leg binds the generic fn");
+    assert!(
+        !edges
+            .iter()
+            .any(|(caller, callee, _, _)| caller == "crossFileGeneric" && callee == "project"),
+        "{edges:?}"
+    );
+}
+
 const SHADOW: [&str; 2] = ["free.ts", "shadow.ts"];
 
 /// One resolve run over the shadow universe: `(caller, callee, callee_path,
-/// origin)` edges plus `(detail, reason)` unresolved call rows.
-fn shadow_run() -> (Vec<(String, String, String, String)>, Vec<(String, String)>) {
+/// origin)` edges plus `(detail, reason, span start)` unresolved call rows.
+fn shadow_run() -> (
+    Vec<(String, String, String, String)>,
+    Vec<(String, String, u64)>,
+) {
     let (mut edges, mut drops) = (Vec::new(), Vec::new());
     for line in resolve_files(&SHADOW).lines() {
         let Ok(row) = serde_json::from_str::<serde_json::Value>(line) else {
@@ -112,6 +131,7 @@ fn shadow_run() -> (Vec<(String, String, String, String)>, Vec<(String, String)>
             Some("unresolved") if row["family"] == "call" => drops.push((
                 row["detail"].as_str().unwrap_or("").to_string(),
                 row["reason"].as_str().unwrap_or("").to_string(),
+                row["span"]["start"].as_u64().expect("drop span start"),
             )),
             _ => {}
         }
@@ -119,10 +139,27 @@ fn shadow_run() -> (Vec<(String, String, String, String)>, Vec<(String, String)>
     (edges, drops)
 }
 
-fn names_free_project(edges: &[(String, String, String, String)]) -> bool {
+/// The `(detail, reason)` drops whose call span sits inside `caller`'s
+/// declaration in shadow.ts (its `function` keyword to the closing brace at
+/// column 0), so a drop from another caller cannot satisfy the assert.
+fn drops_of(drops: &[(String, String, u64)], caller: &str) -> Vec<(String, String)> {
+    let src = std::fs::read_to_string(format!("{}/{DIR}/shadow.ts", env!("CARGO_MANIFEST_DIR")))
+        .expect("fixture readable");
+    let start = src
+        .find(&format!("function {caller}("))
+        .expect("caller declared in shadow.ts") as u64;
+    let end = start + src[start as usize..].find("\n}").expect("closing brace") as u64;
+    drops
+        .iter()
+        .filter(|(_, _, at)| (start..end).contains(at))
+        .map(|(detail, reason, _)| (detail.clone(), reason.clone()))
+        .collect()
+}
+
+fn names_free_project(edges: &[(String, String, String, String)], caller: &str) -> bool {
     edges
         .iter()
-        .any(|(_, _, path, _)| path.ends_with("free.ts"))
+        .any(|(c, _, path, _)| c == caller && path.ends_with("free.ts"))
 }
 
 /// C.6: the param `project` owns the name inside `run`, so the plain call
@@ -131,11 +168,10 @@ fn names_free_project(edges: &[(String, String, String, String)]) -> bool {
 #[test]
 fn a_param_shadow_kills_the_name_match() {
     let (edges, drops) = shadow_run();
-    assert!(!names_free_project(&edges), "{edges:?}");
-    assert!(
-        drops
-            .iter()
-            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+    assert!(!names_free_project(&edges, "run"), "{edges:?}");
+    assert_eq!(
+        drops_of(&drops, "run"),
+        vec![("project".to_string(), "inferred".to_string())],
         "{drops:?}"
     );
 }
@@ -152,10 +188,9 @@ fn a_const_binding_shadow_kills_the_name_match() {
                 && path.ends_with("free.ts")),
         "{edges:?}"
     );
-    assert!(
-        drops
-            .iter()
-            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+    assert_eq!(
+        drops_of(&drops, "constCase"),
+        vec![("project".to_string(), "inferred".to_string())],
         "{drops:?}"
     );
 }
@@ -172,10 +207,26 @@ fn an_arrow_param_shadow_kills_the_name_match() {
                 && path.ends_with("free.ts")),
         "{edges:?}"
     );
-    assert!(
-        drops
-            .iter()
-            .any(|(detail, reason)| detail == "project" && reason == "inferred"),
+    assert_eq!(
+        drops_of(&drops, "closureCase"),
+        vec![("project".to_string(), "inferred".to_string())],
         "{drops:?}"
     );
+}
+
+/// A binding owns its name only after its initializer: in `const project =
+/// project()` the call still denotes the outer fn, so it binds free.ts and
+/// drops nothing.
+#[test]
+fn a_self_named_initializer_still_binds_the_outer_fn() {
+    let (edges, drops) = shadow_run();
+    assert!(
+        edges
+            .iter()
+            .any(|(caller, callee, path, _)| caller == "selfInitCase"
+                && callee == "project"
+                && path.ends_with("free.ts")),
+        "{edges:?}"
+    );
+    assert_eq!(drops_of(&drops, "selfInitCase"), Vec::new(), "{drops:?}");
 }

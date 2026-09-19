@@ -1789,14 +1789,19 @@ impl Resolve<CallF> for KotlinSource {
                 // lane does not lift; the drop channel says inferred.
                 Some(_) => None,
                 None => {
-                    let dst = KotlinSource::module_target(
-                        modules,
-                        own_path,
-                        def_index,
-                        paths,
-                        callee,
-                        FamilyTag::Call,
-                    );
+                    let dst = match (modules, own_path, paths) {
+                        (Some(modules), Some(own_path), Some(paths)) => {
+                            KotlinSource::module_target(
+                                modules,
+                                own_path,
+                                def_index,
+                                paths,
+                                callee,
+                                FamilyTag::Call,
+                            )
+                        }
+                        _ => None,
+                    };
                     match dst {
                         Some(x) => Some(x),
                         None => KotlinSource::call_name_match(output, def_index, callee)
@@ -1824,21 +1829,20 @@ impl KotlinSource {
     /// then the same-package leg (a bare name declared in another file of the
     /// referring file's own package). Both stamp `ModulePlane`.
     fn module_target(
-        modules: Option<&KtModuleIndex>,
-        own_path: Option<&str>,
+        modules: &KtModuleIndex,
+        own_path: &str,
         index: &DefIndex,
-        paths: Option<&PathIndex>,
+        paths: &PathIndex,
         callee: &str,
         prefer: FamilyTag,
     ) -> Option<(ContentId, Span, ResolutionOrigin)> {
-        let (modules, own_path, paths) = (modules?, own_path?, paths?);
         if let Some((file, def)) = modules.import_target(own_path, callee) {
             if let Some((blob, span)) = def_in_file(index, paths, &def, &file, prefer) {
                 return Some((blob, span, ResolutionOrigin::ModulePlane));
             }
         }
         if let Some(package) = modules.package_of(own_path) {
-            if let Some(file) = modules.package_scope(package, callee) {
+            if let Some(file) = modules.declaring_file(package, callee) {
                 if file != own_path {
                     if let Some((blob, span)) = def_in_file(index, paths, callee, file, prefer) {
                         return Some((blob, span, ResolutionOrigin::ModulePlane));
@@ -1925,7 +1929,7 @@ fn module_type_file(modules: &KtModuleIndex, own_path: &str, ty: &str) -> Option
         .or_else(|| {
             modules
                 .package_of(own_path)
-                .and_then(|pkg| modules.package_scope(pkg, ty))
+                .and_then(|pkg| modules.declaring_file(pkg, ty))
                 .map(str::to_string)
         })
 }
@@ -2036,15 +2040,8 @@ impl Resolve<TypeF> for KotlinSource {
             let name = output.strings.lookup(candidate.to);
             let module_leg = match (modules, own_path, index, paths) {
                 (Some(m), Some(ow), Some(idx), Some(p)) => {
-                    KotlinSource::module_target(
-                        Some(m),
-                        Some(ow),
-                        idx,
-                        Some(p),
-                        name,
-                        FamilyTag::Type,
-                    )
-                    .map(|(blob, span, _)| (blob, span))
+                    KotlinSource::module_target(m, ow, idx, p, name, FamilyTag::Type)
+                        .map(|(blob, span, _)| (blob, span))
                 }
                 _ => None,
             };
