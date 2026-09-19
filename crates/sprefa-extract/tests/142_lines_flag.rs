@@ -1,0 +1,203 @@
+//! `--lines`: the sink-side line decoration. The extractor law stays
+//! untouched (src/lang/ts.rs:2832): a node is a byte Span, and line/col are
+//! added in the CLI funnel or not at all. Off, stdout is byte-identical; on,
+//! every start/end pair carries 1-based line and col, and col counts BYTES
+//! from the line start.
+#![cfg(feature = "cli")]
+
+use serde_json::Value;
+use std::path::{Path, PathBuf};
+use std::process::Command;
+
+/// `const α = 1;` newlines at 13, `function hop...` ends at 56, one call on
+/// line 3. The α characters are where byte cols and character cols disagree.
+const TS_FIXTURE: &str = "const \u{3b1} = 1;\nfunction hop(n: number) { return n + \u{3b1}; }\nhop(\u{3b1});\n";
+/// The TS fixture's newline offsets: end of each of the first two lines and
+/// the trailing newline.
+const TS_OFFSETS: [u32; 3] = [13, 56, 65];
+
+fn ryi(args: &[&str]) -> std::process::Output {
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .args(args)
+        .env("RUST_LOG", "off")
+        .output()
+        .expect("run ryi")
+}
+
+fn stdout_lines(output: &std::process::Output) -> Vec<String> {
+    assert!(output.status.success());
+    String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .map(str::to_string)
+        .collect()
+}
+
+fn scratch(name: &str) -> PathBuf {
+    let dir = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("scratch dir");
+    dir
+}
+
+fn write_fixture(dir: &Path, name: &str, content: &str) -> PathBuf {
+    let path = dir.join(name);
+    std::fs::write(&path, content).expect("write fixture");
+    path
+}
+
+/// The (line, col) of `start` against `offsets`, 1-based, byte columns: the
+/// same arithmetic the span_lines view applies in SQL.
+fn expected_line_col(offsets: &[u32], start: u32) -> (u32, u32) {
+    let line = offsets.partition_point(|offset| *offset < start);
+    let line_start = line.checked_sub(1).map_or(0, |index| offsets[index] + 1);
+    (line as u32 + 1, start - line_start + 1)
+}
+
+fn assert_decorated(value: &Value, offsets: &[u32]) {
+    match value {
+        Value::Object(map) => {
+            let start = map.get("start").and_then(Value::as_u64);
+            let end = map.get("end").and_then(Value::as_u64);
+            if let (Some(start), Some(end)) = (start, end) {
+                let (line, col) = expected_line_col(offsets, start as u32);
+                assert_eq!(map.get("line"), Some(&Value::from(line)), "line at {value}");
+                assert_eq!(map.get("col"), Some(&Value::from(col)), "col at {value}");
+                assert!(end >= start);
+            } else {
+                assert!(!map.contains_key("line") && !map.contains_key("col"),
+                    "decoration escaped a non-span object: {value}");
+            }
+            for child in map.values() {
+                assert_decorated(child, offsets);
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                assert_decorated(item, offsets);
+            }
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn undecorated_stdout_is_byte_identical() {
+    let dir = scratch("ryi-lines-off");
+    let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
+    let path = fixture.to_string_lossy().into_owned();
+    let digest = "blake3:5aaf58237f593b49a71d78bc09924050d18f011bafe1b4c396f00dc3322da450";
+    let output = ryi(&["--family", "call", "--file-fact", &path]);
+    assert_eq!(
+        stdout_lines(&output),
+        vec![
+            format!(r#"{{"record":"file","path":"{path}","digest":"{digest}","bytes":66,"lines":3}}"#),
+            r#"{"record":"node","family":"call","span":{"start":14,"end":56},"kind":"function","name":"hop"}"#.to_string(),
+            r#"{"record":"node","family":"call","span":{"start":0,"end":66},"kind":"module","name":"<module>"}"#.to_string(),
+            r#"{"record":"site","family":"call","span":{"start":57,"end":60},"callee":"hop","callee_path":null}"#.to_string(),
+        ],
+        "undecorated stdout moved; the no-flag contract is byte-identity"
+    );
+}
+
+#[test]
+fn lines_decorates_every_span_and_only_spans() {
+    let dir = scratch("ryi-lines-on");
+    let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
+    let output = ryi(&["--family", "call", "--lines", &fixture.to_string_lossy()]);
+    let lines = stdout_lines(&output);
+    for line in &lines {
+        let value: Value = serde_json::from_str(line).expect("each stdout row is JSON");
+        assert_decorated(&value, &TS_OFFSETS);
+    }
+    // Inline snapshots of the decorated rows: today's bytes plus line/col and
+    // nothing else.
+    assert_eq!(
+        lines,
+        vec![
+            r#"{"record":"node","family":"call","span":{"start":14,"end":56,"line":2,"col":1},"kind":"function","name":"hop"}"#.to_string(),
+            r#"{"record":"node","family":"call","span":{"start":0,"end":66,"line":1,"col":1},"kind":"module","name":"<module>"}"#.to_string(),
+            r#"{"record":"site","family":"call","span":{"start":57,"end":60,"line":3,"col":1},"callee":"hop","callee_path":null}"#.to_string(),
+        ],
+    );
+}
+
+#[test]
+fn col_counts_bytes_not_characters() {
+    // `{"first": "α", "second": "β"}`: the `second` value starts at byte 27,
+    // two bytes past the α, so its byte col is 28 where a character col
+    // would say 27.
+    let dir = scratch("ryi-lines-bytes");
+    let fixture = write_fixture(&dir, "fixture.json", "{\"first\": \"\u{3b1}\", \"second\": \"\u{3b2}\"}\n");
+    let output = ryi(&["--family", "data", "--lines", &fixture.to_string_lossy()]);
+    assert_eq!(
+        stdout_lines(&output),
+        vec![
+            r#"{"record":"data_doc","family":"data","ordinal":0,"span":{"start":0,"end":31,"line":1,"col":1},"format":"json","doc":{"first":"α","second":"β"}}"#.to_string(),
+            r#"{"record":"data_value","family":"data","ordinal":0,"path":"","kind":"object","text":null,"span":{"start":0,"end":31,"line":1,"col":1}}"#.to_string(),
+            r#"{"record":"data_value","family":"data","ordinal":0,"path":"first","kind":"string","text":"α","span":{"start":11,"end":13,"line":1,"col":12}}"#.to_string(),
+            r#"{"record":"data_value","family":"data","ordinal":0,"path":"second","kind":"string","text":"β","span":{"start":27,"end":29,"line":1,"col":28}}"#.to_string(),
+        ],
+        "col must count bytes from the line start, not characters"
+    );
+}
+
+#[test]
+fn sqlite_arm_writes_line_start_and_the_view_joins_it() {
+    let dir = scratch("ryi-lines-db");
+    let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
+    let database = dir.join("facts.db");
+    let output = ryi(&[
+        "--sqlite",
+        &database.to_string_lossy(),
+        "--lines",
+        &fixture.to_string_lossy(),
+    ]);
+    assert!(output.status.success());
+    let connection = rusqlite::Connection::open(&database).expect("open export");
+    let (path, digest, offsets): (String, String, String) = connection
+        .query_row(
+            "SELECT path, digest, offsets FROM line_start",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )
+        .expect("one line_start row");
+    assert_eq!(path, fixture.to_string_lossy());
+    assert_eq!(digest, "blake3:5aaf58237f593b49a71d78bc09924050d18f011bafe1b4c396f00dc3322da450");
+    assert_eq!(offsets, "[13,56,65]");
+    let line: u32 = connection
+        .query_row(
+            "SELECT line FROM span_lines WHERE _table = 'site' AND start = 57",
+            [],
+            |row| row.get(0),
+        )
+        .expect("the view resolves the site span");
+    assert_eq!(line, 3, "span_lines joins spans to line_start");
+}
+
+#[test]
+fn sqlite_arm_without_the_flag_leaves_line_start_empty() {
+    // The committed gate: line_start rows ride --lines only, and the
+    // span_lines summary says so ("needs --lines for non-empty line_start").
+    let dir = scratch("ryi-lines-gate");
+    let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
+    let database = dir.join("facts.db");
+    let output = ryi(&["--sqlite", &database.to_string_lossy(), &fixture.to_string_lossy()]);
+    assert!(output.status.success());
+    let connection = rusqlite::Connection::open(&database).expect("open export");
+    let rows: i64 = connection
+        .query_row("SELECT count(*) FROM line_start", [], |row| row.get(0))
+        .unwrap();
+    assert_eq!(rows, 0);
+}
+
+#[test]
+fn stdout_never_carries_a_line_start_record() {
+    // line_start is the sqlite-side join key; the stdout contract only adds
+    // line/col decoration.
+    let dir = scratch("ryi-lines-stdout");
+    let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
+    let output = ryi(&["--lines", &fixture.to_string_lossy()]);
+    for line in stdout_lines(&output) {
+        assert!(!line.contains(r#""record":"line_start""#), "{line}");
+    }
+}

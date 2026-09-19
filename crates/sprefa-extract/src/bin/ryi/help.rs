@@ -185,6 +185,7 @@ OUTPUT
   shape, its fields, and the per-kind vocabularies). Spans are half-open byte
   offsets [start, end) into the file; records join across kinds by matching
   spans.
+  --lines decorates that stdout with 1-based line and col beside every span.
 
 LANGUAGE COVERAGE (first-match, by extension)
   ts/tsx/mts/cts/js/jsx/mjs/cjs    full     kinds: cst, type, call, df, const
@@ -416,6 +417,19 @@ Prepend one `file` record carrying the path, the content digest every resolved
 edge is keyed on, the byte count and the line count. Off by default so existing
 output is unchanged; on, it rides the same invocation, so counting lines never
 costs a second read of the file.";
+
+pub const LINES_LONG: &str = "\
+Decorate stdout: every record carrying a start/end span, at any depth, also
+carries line and col beside it. Both are 1-based; col counts BYTES from the
+line start, not characters, matching the byte spans it decorates.
+
+Without the flag stdout is byte-identical to the undecorated stream. The
+decoration covers the per-file verbs (the plain stream, --file-fact,
+--ast-pattern, --witness); whole-project modes (--resolve, --family scip and
+diet_scip, --deps, --scip-facts) stream rows for many files through one
+stdout, so no single line table applies and rows pass through undecorated.
+With --sqlite, --lines also writes one line_start row per input file: the
+newline byte offsets the span_lines view joins on.";
 
 pub const MAX_BYTES_LONG: &str = "\
 Byte ceiling for ONE input file. Over it, the file is not parsed: `ryi`

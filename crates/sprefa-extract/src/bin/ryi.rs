@@ -27,7 +27,8 @@ use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, diet_scip_with_raw,
-    dispatch, file_fact, flatten_cfg_each, flatten_each, package_edges_jsonl, query_patterns,
+    dispatch, file_fact, file_fact_with_content_id, flatten_cfg_each, flatten_each,
+    line_start_fact_with_content_id, newline_offsets, package_edges_jsonl, query_patterns,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
     scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
     size_skip_fact, source_for, AstPatternQuery, FamilyMask, FlatFact, IndexBudget, ResolveArms,
@@ -41,10 +42,11 @@ mod help;
 mod sqlite;
 
 use help::{
-    AFTER_HELP, BENCH_LONG, DEPS_LONG, FAMILY_LONG, FILE_FACT_LONG, GO_CHECKER_LONG, INDEXER_LONG,
-    LONG_ABOUT, MAX_BYTES_LONG, OCCURRENCE_TEXT_LONG, PACKAGE_DEPS_LONG, PATH_LONG,
-    PROJECT_ROOT_LONG, RUST_CHECKER_LONG, SCIP_BUILD_LONG, SCIP_CACHE_LONG, SCIP_DEPS_LONG,
-    SCIP_FACTS_LONG, SCIP_INDEX_LONG, SCIP_RECORD_LONG, SCIP_TIMEOUT_LONG, TS_CHECKER_LONG,
+    AFTER_HELP, BENCH_LONG, DEPS_LONG, FAMILY_LONG, FILE_FACT_LONG, GO_CHECKER_LONG,
+    INDEXER_LONG, LINES_LONG, LONG_ABOUT, MAX_BYTES_LONG, OCCURRENCE_TEXT_LONG,
+    PACKAGE_DEPS_LONG, PATH_LONG, PROJECT_ROOT_LONG, RUST_CHECKER_LONG, SCIP_BUILD_LONG,
+    SCIP_CACHE_LONG, SCIP_DEPS_LONG, SCIP_FACTS_LONG, SCIP_INDEX_LONG, SCIP_RECORD_LONG,
+    SCIP_TIMEOUT_LONG, TS_CHECKER_LONG,
 };
 
 #[path = "../0_query.rs"]
@@ -204,6 +206,10 @@ struct Cli {
     /// Prepend one `file` record: path, content digest, byte count, line count.
     #[arg(long, conflicts_with_all = ["resolve", "scip_facts", "ast_pattern"], long_help = FILE_FACT_LONG)]
     file_fact: bool,
+
+    /// Decorate stdout: 1-based line and col beside every start/end span.
+    #[arg(long, long_help = LINES_LONG)]
+    lines: bool,
 
     /// Wrap the stream in the TSI envelope: protocol, one run per tier, per-row
     /// `fact` ordinals, one witness per resolver leg, coverage per family.
@@ -760,9 +766,26 @@ fn extract_file(
         db.source(&path_str, content_id_of(&content).to_string())?;
     }
     // The file row rides the SAME read as extraction: counting lines must never
-    // cost a second pass over the file, let alone a second subprocess.
-    if cli.file_fact || output.database.is_some() {
-        output.fact(&file_fact(&path_str, &content))?;
+    // cost a second pass over the file, let alone a second subprocess. `--lines`
+    // rides it too: one hash feeds both rows, and the stdout decoration takes
+    // the same file's newline offsets.
+    let want_file_row = cli.file_fact || output.database.is_some();
+    let want_line_row = cli.lines && output.database.is_some();
+    if want_file_row || want_line_row {
+        let content_id = content_id_of(&content);
+        if want_file_row {
+            output.fact(&file_fact_with_content_id(&path_str, &content, &content_id))?;
+        }
+        if want_line_row {
+            output.source_fact(
+                &path_str,
+                &content_id,
+                &line_start_fact_with_content_id(&path_str, &content, &content_id),
+            )?;
+        }
+    }
+    if cli.lines {
+        output.set_line_offsets(newline_offsets(&content));
     }
     // Before any parse, so the ceiling bounds the cost it exists to bound. The
     // file row above is a digest over bytes already read, not that cost.
@@ -1004,30 +1027,26 @@ fn stream(
     witness: bool,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // ONE BufWriter held for the whole run: a per-row println! goes through
-    // LineWriter, which flushes on every newline and turns 2M-row streams
-    // into 2M write syscalls.
+    // ONE BufWriter held for the whole run (Output's own): a per-row println!
+    // goes through LineWriter, which flushes on every newline and turns 2M-row
+    // streams into 2M write syscalls.
     let writing = sprefa_extract::trace::phase_span("-", sprefa_extract::trace::Phase::Write);
     let _entered = writing.enter();
-    let stdout = std::io::stdout();
-    let mut out = CountingWriter {
-        inner: std::io::BufWriter::with_capacity(256 * 1024, stdout.lock()),
-        bytes: 0,
-    };
+    let bytes_before = output.stdout_bytes();
     let mut lines = 0u64;
     // Each row is written and dropped: collecting them first held a second copy
     // of the whole stream, which on a 13 MB bundle is 800 MB of the 1,094 MB peak.
     let mut write = |fact: FlatFact| -> Result<(), std::io::Error> {
-        if output.database.is_some() {
-            output
-                .fact(&fact)
-                .map_err(|error| std::io::Error::other(error.to_string()))?;
-            lines += 1;
-            return Ok(());
-        }
-        serde_json::to_writer(&mut out, &fact)?;
+        output.fact(&fact).map_err(|error| {
+            // The stdout arm's write errors ARE io errors; unwrapping keeps
+            // BrokenPipe kind-tagged so main's closed-pipe intercept sees it.
+            match error.downcast::<std::io::Error>() {
+                Ok(io_error) => *io_error,
+                Err(error) => std::io::Error::other(error.to_string()),
+            }
+        })?;
         lines += 1;
-        out.write_all(b"\n")
+        Ok(())
     };
     // One run per invocation, scoped to the digest of the bytes just read: two
     // runs over the same file are comparable without re-reading it.
@@ -1047,36 +1066,14 @@ fn stream(
             }
         }
     }
-    out.flush()?;
-    sprefa_extract::trace::record_phase(&writing, out.bytes, lines, 1);
+    output.flush()?;
+    sprefa_extract::trace::record_phase(
+        &writing,
+        output.stdout_bytes() - bytes_before,
+        lines,
+        1,
+    );
     Ok(())
-}
-
-/// The byte count the trail records, taken off the stream rather than re-derived:
-/// serde writes straight into the BufWriter and never hands back a length.
-struct CountingWriter<W: Write> {
-    inner: W,
-    bytes: u64,
-}
-
-impl<W: Write> Write for CountingWriter<W> {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        let written = self.inner.write(buf)?;
-        self.bytes += written as u64;
-        Ok(written)
-    }
-
-    /// Forwarded rather than left to the default loop, so the BufWriter under
-    /// this keeps its one-memcpy path on a 2M-row stream.
-    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
-        self.inner.write_all(buf)?;
-        self.bytes += buf.len() as u64;
-        Ok(())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.inner.flush()
-    }
 }
 
 fn bench(

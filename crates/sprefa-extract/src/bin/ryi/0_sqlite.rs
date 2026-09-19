@@ -219,71 +219,165 @@ impl Database {
     }
 }
 
-pub struct Output {
-    pub database: Option<Database>,
-    stdout: BufWriter<std::io::Stdout>,
+/// The byte count the trail records, taken off the stream rather than
+/// re-derived: serde writes straight into the BufWriter and never hands back
+/// a length.
+struct CountingWriter<W: Write> {
+    inner: W,
+    bytes: u64,
 }
 
-impl Output {
-    pub fn new(path: Option<&Path>) -> Result<Self> {
-        Ok(Self {
-            database: path.map(Database::create).transpose()?,
-            stdout: BufWriter::with_capacity(256 * 1024, std::io::stdout()),
-        })
+impl<W: Write> Write for CountingWriter<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let written = self.inner.write(buf)?;
+        self.bytes += written as u64;
+        Ok(written)
     }
-    pub fn line(&mut self, line: &str) -> Result<()> {
-        if let Some(db) = &mut self.database {
-            let fact = serde_json::from_slice::<writers::Fact>(line.as_bytes())?;
-            return db.insert_fact(fact, line.len());
+
+    /// Forwarded rather than left to the default loop, so the BufWriter under
+    /// this keeps its one-memcpy path on a 2M-row stream.
+    fn write_all(&mut self, buf: &[u8]) -> std::io::Result<()> {
+        self.inner.write_all(buf)?;
+        self.bytes += buf.len() as u64;
+        Ok(())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+ pub struct Output {
+     pub database: Option<Database>,
+    stdout: BufWriter<CountingWriter<std::io::Stdout>>,
+    /// Newline byte offsets of the current input while `--lines` decorates
+    /// stdout; None passes every row through untouched.
+    line_offsets: Option<Vec<u32>>,
+ }
+ 
+ impl Output {
+     pub fn new(path: Option<&Path>) -> Result<Self> {
+         Ok(Self {
+             database: path.map(Database::create).transpose()?,
+            stdout: BufWriter::with_capacity(
+                256 * 1024,
+                CountingWriter {
+                    inner: std::io::stdout(),
+                    bytes: 0,
+                },
+            ),
+            line_offsets: None,
+         })
+     }
+    /// Scope `--lines` stdout decoration to one input's newline offsets.
+    pub fn set_line_offsets(&mut self, offsets: Vec<u32>) {
+        self.line_offsets = Some(offsets);
+    }
+    /// Bytes written to stdout so far, the trail's write-phase figure.
+    pub fn stdout_bytes(&self) -> u64 {
+        self.stdout.get_ref().bytes
+    }
+     pub fn line(&mut self, line: &str) -> Result<()> {
+         if let Some(db) = &mut self.database {
+             let fact = serde_json::from_slice::<writers::Fact>(line.as_bytes())?;
+             return db.insert_fact(fact, line.len());
+         }
+        self.write_stdout(line.as_bytes())
+     }
+     pub fn source_fact(
+         &mut self,
+         path: &str,
+         content_id: &sprefa_extract::ContentId,
+         fact: &impl Serialize,
+     ) -> Result<()> {
+         let db = self
+             .database
+             .as_mut()
+             .ok_or("source facts require a SQLite output")?;
+         if db.input_path.as_deref() != Some(path) {
+             db.source(path, content_id.to_string())?;
+         }
+         let encoded = serde_json::to_vec(fact)?;
+         db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len())
+     }
+     pub fn clear_source(&mut self) -> Result<()> {
+         if let Some(db) = &mut self.database {
+             db.clear_source()?;
+         }
+         Ok(())
+     }
+     pub fn fact(&mut self, fact: &impl Serialize) -> Result<()> {
+         if let Some(db) = &mut self.database {
+             let encoded = serde_json::to_vec(fact)?;
+             return db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len());
+         }
+        self.write_stdout(&serde_json::to_vec(fact)?)
+    }
+    /// The stdout half of both funnel arms. Raw pass-through unless `--lines`
+    /// decoration applies, in which case the record is parsed, decorated, and
+    /// re-serialized (key order then follows the JSON map, not the struct).
+    fn write_stdout(&mut self, encoded: &[u8]) -> Result<()> {
+        if let Some(offsets) = &self.line_offsets {
+            if let Ok(text) = std::str::from_utf8(encoded) {
+                if text.contains("\"start\"") {
+                    let mut value: Value = serde_json::from_str(text)?;
+                    decorate_lines(&mut value, offsets);
+                    serde_json::to_writer(&mut self.stdout, &value)?;
+                    self.stdout.write_all(b"\n")?;
+                    return Ok(());
+                }
+            }
         }
-        self.stdout.write_all(line.as_bytes())?;
+        self.stdout.write_all(encoded)?;
         self.stdout.write_all(b"\n")?;
         Ok(())
-    }
-    pub fn source_fact(
-        &mut self,
-        path: &str,
-        content_id: &sprefa_extract::ContentId,
-        fact: &impl Serialize,
-    ) -> Result<()> {
-        let db = self
-            .database
-            .as_mut()
-            .ok_or("source facts require a SQLite output")?;
-        if db.input_path.as_deref() != Some(path) {
-            db.source(path, content_id.to_string())?;
+     }
+     pub fn flush(&mut self) -> Result<()> {
+         if let Some(db) = &mut self.database {
+             db.flush_pending()?;
+         }
+         self.stdout.flush()?;
+         Ok(())
+     }
+     pub fn finish(mut self) -> Result<()> {
+         self.stdout.flush()?;
+         if let Some(db) = self.database {
+             db.finish()?;
+         }
+         Ok(())
+     }
+ }
+
+/// 1-based (line, col) of a byte against newline offsets. Col counts BYTES
+/// from the line start, not characters, matching the spans it decorates.
+fn line_col(offsets: &[u32], start: u32) -> (u32, u32) {
+    let line = offsets.partition_point(|offset| *offset < start);
+    let line_start = line.checked_sub(1).map_or(0, |index| offsets[index] + 1);
+    ((line + 1) as u32, start - line_start + 1)
+}
+
+/// Add `line` and `col` beside every `start`/`end` pair at any depth, so a
+/// decorated record is the undecorated bytes plus exactly those fields.
+fn decorate_lines(value: &mut Value, offsets: &[u32]) {
+    match value {
+        Value::Object(map) => {
+            let start = map.get("start").and_then(Value::as_u64);
+            let end = map.get("end").and_then(Value::as_u64);
+            if let (Some(start), Some(_end)) = (start, end) {
+                let (line, col) = line_col(offsets, start as u32);
+                map.insert("line".to_string(), Value::from(line));
+                map.insert("col".to_string(), Value::from(col));
+            }
+            for child in map.values_mut() {
+                decorate_lines(child, offsets);
+            }
         }
-        let encoded = serde_json::to_vec(fact)?;
-        db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len())
-    }
-    pub fn clear_source(&mut self) -> Result<()> {
-        if let Some(db) = &mut self.database {
-            db.clear_source()?;
+        Value::Array(items) => {
+            for item in items {
+                decorate_lines(item, offsets);
+            }
         }
-        Ok(())
-    }
-    pub fn fact(&mut self, fact: &impl Serialize) -> Result<()> {
-        if let Some(db) = &mut self.database {
-            let encoded = serde_json::to_vec(fact)?;
-            return db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len());
-        }
-        serde_json::to_writer(&mut self.stdout, fact)?;
-        self.stdout.write_all(b"\n")?;
-        Ok(())
-    }
-    pub fn flush(&mut self) -> Result<()> {
-        if let Some(db) = &mut self.database {
-            db.flush_pending()?;
-        }
-        self.stdout.flush()?;
-        Ok(())
-    }
-    pub fn finish(mut self) -> Result<()> {
-        self.stdout.flush()?;
-        if let Some(db) = self.database {
-            db.finish()?;
-        }
-        Ok(())
+        _ => {}
     }
 }
 

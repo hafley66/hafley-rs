@@ -594,22 +594,28 @@ pub fn file_fact_with_content_id(
     }
 }
 
+/// Every newline byte offset in `content`, in order, one pass. The storage
+/// form of `line_start`: line N starts one byte past `offsets[N-1]`, so
+/// `1 + count(offsets < byte)` is that byte's 1-based line.
+pub fn newline_offsets(content: &[u8]) -> Vec<u32> {
+    content
+        .iter()
+        .enumerate()
+        .filter_map(|(offset, byte)| (*byte == b'\n').then_some(offset as u32))
+        .collect()
+}
+
 /// `--lines` sibling of `file_fact_with_content_id`: every newline byte
-/// offset in `content`, in order, one pass, no separate count-then-collect.
+/// offset in `content`, keyed on the same digest `file` carries.
 pub fn line_start_fact_with_content_id(
     path: &str,
     content: &[u8],
     content_id: &crate::shape::ContentId,
 ) -> FlatFact {
-    let offsets: Vec<u32> = content
-        .iter()
-        .enumerate()
-        .filter_map(|(offset, byte)| (*byte == b'\n').then_some(offset as u32))
-        .collect();
     FlatFact::LineStartRow {
         path: path.to_string(),
         digest: content_id.to_string(),
-        offsets,
+        offsets: newline_offsets(content),
     }
 }
 
