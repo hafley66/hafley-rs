@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::cache::{get_or_extract, CacheKey};
 use crate::lang::source_for;
 use crate::shape::{content_id_of, ContentId};
-use crate::source::{ExtractOutput, FamilyMask};
+use crate::source::{RyiOutput, FamilyMask};
 
 thread_local! {
     /// The blob id the in-flight `Source::extract` was keyed on, tagged with the
@@ -45,7 +45,7 @@ pub(crate) fn extracting_blob(content: &[u8]) -> Option<ContentId> {
 /// and the test treat that as "nothing to emit"). The arena(s) are owned inside
 /// `Source::extract`; nothing borrowed crosses this call. The result is the
 /// content-keyed cache's shared entry, so a second identical call skips the parse.
-pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<ExtractOutput>> {
+pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiOutput>> {
     let Some(src) = source_for(path) else {
         tracing::warn!(path, "no Source matches this path; nothing to emit");
         return None;

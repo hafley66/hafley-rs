@@ -196,7 +196,7 @@ fn extract_lang_has_no_path_switch() {
         .expect("extract_lang.rs readable");
     assert!(
         source.contains("source_for"),
-        "ExtractLang::from_path must delegate to the Source roster"
+        "RyiLang::from_path must delegate to the Source roster"
     );
     for suffix in [".pl", ".md", ".markdown", ".horn", ".datalog"] {
         assert!(

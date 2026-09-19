@@ -180,7 +180,7 @@ fn the_bounded_rule_matches_argument_one_and_no_other_atom() {
     const RULE: &str = include_str!("../rules/move_specifier.yml");
     const SRC: &str = ":- module(a, []).\n:- use_module('lib/b').\n:- use_module('lib/c', [c/1]).\n:- use_module(library(lists)).\n:- include('parts/d.pl').\n:- ensure_loaded(plain).\n:- reexport('lib/e').\n:- consult('lib/f').\n:- other_call('lib/g').\n";
 
-    let rule: ast_grep_config::RuleConfig<sprefa_extract::ExtractLang> =
+    let rule: ast_grep_config::RuleConfig<sprefa_extract::RyiLang> =
         ast_grep_config::from_yaml_string(
             &format!("language: prolog\n{RULE}"),
             &ast_grep_config::GlobalRules::default(),
@@ -190,7 +190,7 @@ fn the_bounded_rule_matches_argument_one_and_no_other_atom() {
         .next()
         .expect("one rule");
 
-    let root = ast_grep_core::AstGrep::new(SRC, sprefa_extract::ExtractLang::Prolog);
+    let root = ast_grep_core::AstGrep::new(SRC, sprefa_extract::RyiLang::Prolog);
     let found: Vec<String> = root
         .root()
         .find_all(&rule.matcher)

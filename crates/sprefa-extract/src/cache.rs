@@ -9,7 +9,7 @@ use quick_cache::sync::Cache;
 use quick_cache::Weighter;
 
 use crate::source::FamilyMask;
-use crate::{CallF, CstF, DfF, Edge, ExtractOutput, Node, TypeF};
+use crate::{CallF, CstF, DfF, Edge, RyiOutput, Node, TypeF};
 
 /// Default weight capacity in MiB, when `SPREFA_EXTRACT_BLOB_CACHE_MB` is
 /// unset, unparseable, or zero.
@@ -48,7 +48,7 @@ impl CacheKey {
 
 /// Byte estimate of one output: the interner's heap plus, per present family,
 /// `nodes.len() * size_of::<Node<F>>()` and the same for edges, not exact.
-pub fn estimate_bytes(out: &ExtractOutput) -> usize {
+pub fn estimate_bytes(out: &RyiOutput) -> usize {
     let mut bytes = out.strings.heap_bytes();
     if let Some(bundle) = &out.cst {
         bytes += bundle.nodes.len() * size_of::<Node<CstF>>();
@@ -73,15 +73,15 @@ pub fn estimate_bytes(out: &ExtractOutput) -> usize {
 #[derive(Clone)]
 pub struct BlobWeigher;
 
-impl Weighter<CacheKey, Arc<ExtractOutput>> for BlobWeigher {
-    fn weight(&self, _key: &CacheKey, value: &Arc<ExtractOutput>) -> u64 {
+impl Weighter<CacheKey, Arc<RyiOutput>> for BlobWeigher {
+    fn weight(&self, _key: &CacheKey, value: &Arc<RyiOutput>) -> u64 {
         estimate_bytes(value) as u64
     }
 }
 
 /// The cache type the crate holds. `Arc` value makes `get_or_insert_with`'s
 /// clone cheap.
-pub type BlobCache = Cache<CacheKey, Arc<ExtractOutput>, BlobWeigher>;
+pub type BlobCache = Cache<CacheKey, Arc<RyiOutput>, BlobWeigher>;
 
 /// The env override, in MiB, defaulting to `DEFAULT_CAPACITY_MB`.
 fn capacity_mb_from_env() -> u64 {
@@ -113,8 +113,8 @@ fn cache() -> &'static BlobCache {
 /// misses on one key coalesce into one compute inside `quick_cache`.
 pub fn get_or_extract(
     key: CacheKey,
-    compute: impl FnOnce() -> Arc<ExtractOutput>,
-) -> Arc<ExtractOutput> {
+    compute: impl FnOnce() -> Arc<RyiOutput>,
+) -> Arc<RyiOutput> {
     // The miss flag rides the closure, never a delta on the global counter: the
     // rayon workers share that counter and a concurrent miss would read as this
     // call's own.

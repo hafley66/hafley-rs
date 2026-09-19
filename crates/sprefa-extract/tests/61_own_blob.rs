@@ -6,7 +6,7 @@
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, own_blob, ContentId, ExtractOutput, FamilyMask,
+    build_def_index, content_id_of, dispatch, own_blob, ContentId, RyiOutput, FamilyMask,
     FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
 };
 
@@ -15,7 +15,7 @@ const B_PATH: &str = "tests/fixtures/own_blob/own_blob_b.rs";
 const SRC_A: &[u8] = include_bytes!("fixtures/own_blob/own_blob_a.rs");
 const SRC_B: &[u8] = include_bytes!("fixtures/own_blob/own_blob_b.rs");
 
-type Corpus = Vec<(ContentId, Arc<ExtractOutput>)>;
+type Corpus = Vec<(ContentId, Arc<RyiOutput>)>;
 
 /// Two rust outputs, each with its own blob key. `SRC_A` declares two fns,
 /// `SRC_B` one, and the first fn of each sits at the same byte span.
@@ -33,7 +33,7 @@ fn corpus() -> Corpus {
 }
 
 fn with_fallback_cx<R>(
-    pairs: &[(ContentId, &ExtractOutput)],
+    pairs: &[(ContentId, &RyiOutput)],
     f: impl FnOnce(&ProjectCx<'_>) -> R,
 ) -> R {
     let files = FileSet;
@@ -54,7 +54,7 @@ fn with_fallback_cx<R>(
 }
 
 /// Named CallF def spans of one output, sorted and deduped.
-fn named_spans(output: &ExtractOutput) -> Vec<sprefa_extract::Span> {
+fn named_spans(output: &RyiOutput) -> Vec<sprefa_extract::Span> {
     let mut spans: Vec<sprefa_extract::Span> = output
         .call
         .as_ref()
@@ -87,7 +87,7 @@ fn fixtures_share_one_named_span() {
 #[test]
 fn own_set_wins_over_span_search() {
     let corpus = corpus();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(blob, out)| (blob.clone(), out.as_ref()))
         .collect();
@@ -106,7 +106,7 @@ fn own_set_wins_over_span_search() {
 #[test]
 fn fallback_max_count_breaks_the_shared_span_tie() {
     let corpus = corpus();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(blob, out)| (blob.clone(), out.as_ref()))
         .collect();
@@ -124,7 +124,7 @@ fn fallback_max_count_breaks_the_shared_span_tie() {
 #[test]
 fn fallback_exact_tie_is_none() {
     let corpus = corpus();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(blob, out)| (blob.clone(), out.as_ref()))
         .collect();

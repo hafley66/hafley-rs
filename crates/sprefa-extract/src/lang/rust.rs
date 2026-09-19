@@ -37,7 +37,7 @@ use crate::seams::{
     Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
+use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
 use crate::types::LangKind;
 use crate::types::ScipIndex;
@@ -398,7 +398,7 @@ impl RustSource {
     /// shaping): the aux candidates, deduped on (owner, to, kind). `resolve`
     /// emits its edges in EXACTLY this order, one per candidate — the parity
     /// golden zips the two (the zip discipline: edge i resolves candidate i).
-    pub fn type_edge_candidates(output: &ExtractOutput) -> Vec<TypeEdgeCandidate> {
+    pub fn type_edge_candidates(output: &RyiOutput) -> Vec<TypeEdgeCandidate> {
         let mut set: BTreeSet<TypeEdgeCandidate> = BTreeSet::new();
         if let Some(types) = &output.types {
             for candidate in &types.aux.candidates {
@@ -545,7 +545,7 @@ fn import_bound_target(
 }
 
 impl Resolve<TypeF> for RustSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };
@@ -678,7 +678,7 @@ impl Resolve<TypeF> for RustSource {
 /// The SAME-FILE def named `callee`, extracted so `rust_modules.rs` can run it
 /// before an import-binding leg: a local def shadows an import.
 fn same_file_call_match(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     index: &DefIndex,
     own: Option<&ContentId>,
     callee: &str,
@@ -712,7 +712,7 @@ impl RustSource {
     /// `type_edge_candidates`. Mirror of `TsSource::call_name_match`
     /// (the post-4d dedup sweep owns unifying the per-lang copies).
     pub fn call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
@@ -723,7 +723,7 @@ impl RustSource {
     /// `call_name_match` with the file's own blob already in hand: the blob is
     /// a per-FILE fact, and finding it costs a corpus-index join per call.
     pub fn call_name_match_in(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &DefIndex,
         own: Option<&ContentId>,
         callee: &str,
@@ -942,7 +942,7 @@ fn probe<T>(value: T) -> T {
 
 /// The corpus blob covering every named CallF def of `output`. One def is not
 /// a file identity: two files can hold an identical def at the same offset.
-fn own_file_blob(output: &ExtractOutput, index: &DefIndex) -> Option<ContentId> {
+fn own_file_blob(output: &RyiOutput, index: &DefIndex) -> Option<ContentId> {
     let call = output.call.as_ref()?;
     let own: Vec<(&str, Span)> = call
         .nodes
@@ -1008,7 +1008,7 @@ fn scip_call_target<'a>(
 }
 
 impl Resolve<CallF> for RustSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
         let Some(call) = &output.call else {
             return Vec::new();
         };
@@ -1368,7 +1368,7 @@ const PRELUDE_ITEMS: &[&str] = &[
 ];
 
 pub fn call_drops(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
 ) -> Vec<ResolveDrop> {
@@ -3368,7 +3368,7 @@ impl Source for RustSource {
         path.ends_with(".rs")
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
         // cst via ast-grep (masked). ast-grep's SupportLang has a rust grammar, so
@@ -3438,7 +3438,7 @@ impl Source for RustSource {
             }
         }
 
-        ExtractOutput {
+        RyiOutput {
             strings,
             cst,
             types,

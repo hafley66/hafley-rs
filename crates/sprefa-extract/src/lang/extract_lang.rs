@@ -1,4 +1,4 @@
-//! `ExtractLang`: the one ast-grep `Language` the extractor speaks. `StrDoc<L>`
+//! `RyiLang`: the one ast-grep `Language` the extractor speaks. `StrDoc<L>`
 //! needs `L: LanguageExt` (core tree_sitter/mod.rs:46), so one enum keeps one
 //! `SgRoot` alias: `Sg` delegates to `SupportLang` (ast-grep-language
 //! lib.rs:431-458), the rest carry grammars this crate already links.
@@ -20,7 +20,7 @@ use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 /// are not in ast-grep's `SupportLang`, so `get_ts_language` names them here and
 /// a `.gd`/`.lisp` routes to the `Source` that owns the parse.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-pub enum ExtractLang {
+pub enum RyiLang {
     Sg(SupportLang),
     Prolog,
     Markdown,
@@ -29,7 +29,7 @@ pub enum ExtractLang {
     Commonlisp,
 }
 
-impl ExtractLang {
+impl RyiLang {
     /// Routed through the `Source` roster: each `Source` answers
     /// `extract_lang(path)`; the ast-grep shim is the roster's default. No
     /// path-suffix switch lives here.
@@ -84,7 +84,7 @@ fn rewrite_dollar(expando: char, query: &str) -> Cow<'_, str> {
     Cow::Owned(out.into_iter().collect())
 }
 
-impl Language for ExtractLang {
+impl Language for RyiLang {
     fn meta_var_char(&self) -> char {
         match self {
             Self::Sg(sg) => sg.meta_var_char(),
@@ -121,7 +121,7 @@ impl Language for ExtractLang {
     }
 
     fn from_path<P: AsRef<Path>>(path: P) -> Option<Self> {
-        ExtractLang::from_path(path.as_ref().to_str()?)
+        RyiLang::from_path(path.as_ref().to_str()?)
     }
 
     fn kind_to_id(&self, kind: &str) -> u16 {
@@ -141,14 +141,14 @@ impl Language for ExtractLang {
         }
     }
 
-    /// The pattern doc carries `ExtractLang`, never the inner `SupportLang`:
+    /// The pattern doc carries `RyiLang`, never the inner `SupportLang`:
     /// pattern and candidate have to share one `Doc` type.
     fn build_pattern(&self, builder: &PatternBuilder) -> Result<Pattern, PatternError> {
         builder.build(|src| StrDoc::try_new(src, *self))
     }
 }
 
-impl LanguageExt for ExtractLang {
+impl LanguageExt for RyiLang {
     /// The same `LANGUAGE` constants the raw extractors parse with
     /// (prolog/_0_source.rs:25, markdown/_0_source.rs:86).
     fn get_ts_language(&self) -> TSLanguage {
@@ -165,22 +165,22 @@ impl LanguageExt for ExtractLang {
     }
 }
 
-impl std::fmt::Display for ExtractLang {
+impl std::fmt::Display for RyiLang {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter.write_str(&self.name())
     }
 }
 
-impl Serialize for ExtractLang {
+impl Serialize for RyiLang {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         serializer.serialize_str(&self.name())
     }
 }
 
-impl<'de> Deserialize<'de> for ExtractLang {
+impl<'de> Deserialize<'de> for RyiLang {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         let name = String::deserialize(deserializer)?;
-        ExtractLang::parse_name(&name)
+        RyiLang::parse_name(&name)
             .ok_or_else(|| de::Error::invalid_value(de::Unexpected::Str(&name), &"a known grammar"))
     }
 }

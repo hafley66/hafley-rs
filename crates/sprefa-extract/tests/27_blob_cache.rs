@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use sprefa_extract::{
     cache::{self, CacheKey},
-    content_id_of, dispatch, source_for, ExtractOutput, FamilyMask,
+    content_id_of, dispatch, source_for, RyiOutput, FamilyMask,
 };
 
 fn lock() -> std::sync::MutexGuard<'static, ()> {
@@ -99,7 +99,7 @@ fn eviction_binds_at_the_weight_cap() {
         .collect();
 
     let source = source_for("evict_0.rs").expect("rust source");
-    let outputs: Vec<Arc<ExtractOutput>> = contents
+    let outputs: Vec<Arc<RyiOutput>> = contents
         .iter()
         .map(|(path, body)| Arc::new(source.extract(path, body, FamilyMask::ALL)))
         .collect();
@@ -145,7 +145,7 @@ fn cached_and_uncached_wire_output_are_identical() {
     );
 }
 
-fn wire_bytes(output: &ExtractOutput) -> Vec<u8> {
+fn wire_bytes(output: &RyiOutput) -> Vec<u8> {
     sprefa_extract::flatten(output)
         .iter()
         .flat_map(|fact| serde_json::to_vec(fact).expect("fact serializes"))

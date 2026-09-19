@@ -47,7 +47,7 @@ use crate::seams::{
     corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Parser, Project, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
+use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
 use crate::types::{PathIndex, UnresolvedReason};
 
@@ -1612,7 +1612,7 @@ impl Source for KotlinSource {
         path.ends_with(".kt") || path.ends_with(".kts")
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
         // cst via ast-grep (masked). ast-grep's SupportLang has a kotlin
@@ -1685,7 +1685,7 @@ impl Source for KotlinSource {
             }
         }
 
-        ExtractOutput {
+        RyiOutput {
             strings,
             cst,
             types,
@@ -1702,7 +1702,7 @@ impl KotlinSource {
     /// has no SCIP arm in this crate, so unresolved or ambiguous names emit no
     /// edge.
     pub fn call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
@@ -1735,7 +1735,7 @@ impl KotlinSource {
 }
 
 impl Resolve<CallF> for KotlinSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
         let Some(call) = &output.call else {
             return Vec::new();
         };
@@ -1936,7 +1936,7 @@ impl KotlinSource {
     /// emits its edges in EXACTLY this order, one per candidate; the parity
     /// golden zips the two (the zip discipline: edge i resolves candidate i).
     // @comment-ok: method doc mirroring the go/rust candidate accessors
-    pub fn type_edge_candidates(output: &ExtractOutput) -> Vec<TypeEdgeCandidate> {
+    pub fn type_edge_candidates(output: &RyiOutput) -> Vec<TypeEdgeCandidate> {
         let mut set: BTreeSet<TypeEdgeCandidate> = BTreeSet::new();
         if let Some(types) = &output.types {
             for candidate in &types.aux.candidates {
@@ -2013,7 +2013,7 @@ fn resolve_type_dst(
 }
 
 impl Resolve<TypeF> for KotlinSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };
@@ -2072,7 +2072,7 @@ impl Resolve<TypeF> for KotlinSource {
 /// receiver the plane saw but could not type, and a scope-bound plain call,
 /// drop `inferred`; a corpus-typed receiver's miss keeps the def counts.
 pub fn call_drops(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
 ) -> Vec<crate::project::ResolveDrop> {

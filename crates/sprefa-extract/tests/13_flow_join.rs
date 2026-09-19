@@ -5,7 +5,7 @@
 //! inputs.
 
 use sprefa_extract::{
-    flow_edges, CallEdgeKind, CallF, ContentId, DfArg, DfF, DfNodeKind, DfParam, ExtractOutput,
+    flow_edges, CallEdgeKind, CallF, ContentId, DfArg, DfF, DfNodeKind, DfParam, RyiOutput,
     FamilyBundle, FlowEdgeKind, Node, NodeRef, ProjectEdge, ResolutionOrigin, Span,
 };
 
@@ -34,7 +34,7 @@ fn join_emits_arg_to_param_and_ret_to_call_res() {
         pos: 0,
         arg: arg_ref,
     });
-    let mut caller = ExtractOutput::default();
+    let mut caller = RyiOutput::default();
     caller.df = Some(caller_df);
 
     // Callee: `function helper(x) { return x; }`; parameter at 40..41 and the
@@ -46,7 +46,7 @@ fn join_emits_arg_to_param_and_ret_to_call_res() {
         node: NodeRef(0),
         pos: 0,
     });
-    let mut callee = ExtractOutput::default();
+    let mut callee = RyiOutput::default();
     callee.df = Some(callee_df);
 
     let edge = ProjectEdge::<CallF>::new(
@@ -99,7 +99,7 @@ fn receiver_slot_is_skipped() {
         pos: -1,
         arg: recv_ref,
     });
-    let mut caller = ExtractOutput::default();
+    let mut caller = RyiOutput::default();
     caller.df = Some(caller_df);
 
     let mut callee_df = FamilyBundle::<DfF>::default();
@@ -108,7 +108,7 @@ fn receiver_slot_is_skipped() {
         node: NodeRef(0),
         pos: 0,
     });
-    let mut callee = ExtractOutput::default();
+    let mut callee = RyiOutput::default();
     callee.df = Some(callee_df);
 
     let edge = ProjectEdge::<CallF>::new(

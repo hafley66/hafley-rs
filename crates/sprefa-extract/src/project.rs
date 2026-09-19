@@ -43,7 +43,7 @@ use crate::seams::{
     build_def_index, BlobSource, FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
 };
 use crate::shape::{content_id_of, ContentId, Span};
-use crate::source::{ExtractOutput, FamilyMask, Resolve, Source};
+use crate::source::{RyiOutput, FamilyMask, Resolve, Source};
 use crate::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::types::{
     flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
@@ -217,7 +217,7 @@ pub(crate) struct ProjectInput {
     pub(crate) path: String,
     blob: ContentId,
     file: Option<FlatFact>,
-    pub(crate) output: Arc<ExtractOutput>,
+    pub(crate) output: Arc<RyiOutput>,
     /// This file's module facts, built while its bytes are in hand so the
     /// plane costs no second read. `None` outside a module-plane run.
     module: Option<ModuleFacts>,
@@ -310,7 +310,7 @@ fn resolve_project_inputs(
 ) -> Result<Vec<FlatFact>, ProjectError> {
     let scip_index = load_scip(request, &inputs)?;
 
-    let pairs: Vec<(ContentId, &ExtractOutput)> = inputs
+    let pairs: Vec<(ContentId, &RyiOutput)> = inputs
         .iter()
         .map(|input| (input.blob.clone(), input.output.as_ref()))
         .collect();
@@ -1680,11 +1680,11 @@ impl TypePlane {
 /// `Resolve::resolve` is non-defaulted, so a missing arm cannot be dispatched.
 pub struct ResolveArm {
     pub name: &'static str,
-    pub call: Option<fn(&ExtractOutput, &ProjectCx) -> Vec<ProjectEdge<CallF>>>,
-    pub types: Option<fn(&ExtractOutput, &ProjectCx) -> Vec<ProjectEdge<TypeF>>>,
+    pub call: Option<fn(&RyiOutput, &ProjectCx) -> Vec<ProjectEdge<CallF>>>,
+    pub types: Option<fn(&RyiOutput, &ProjectCx) -> Vec<ProjectEdge<TypeF>>>,
     /// The `call` arm's non-edge channel: one row per site it dropped. `None`
     /// leaves an arm's output byte-identical to the era before the channel.
-    pub drops: Option<fn(&ExtractOutput, &ProjectCx, &[ProjectEdge<CallF>]) -> Vec<ResolveDrop>>,
+    pub drops: Option<fn(&RyiOutput, &ProjectCx, &[ProjectEdge<CallF>]) -> Vec<ResolveDrop>>,
     /// Which types plane the `types` arm reads. Also the phase-1 mask
     /// `read_inputs` dispatches this language under.
     pub type_plane: TypePlane,
@@ -1796,7 +1796,7 @@ fn resolve_mask(path: &str) -> FamilyMask {
 
 fn resolve_call_edges(
     path: &str,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     cx: &ProjectCx,
 ) -> Vec<ProjectEdge<CallF>> {
     let Some(arm) = arm_for(path) else {
@@ -1821,7 +1821,7 @@ fn resolve_call_edges(
 
 fn resolve_type_edges(
     path: &str,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     cx: &ProjectCx,
 ) -> Vec<ProjectEdge<TypeF>> {
     let Some(arm) = arm_for(path) else {
@@ -1904,7 +1904,7 @@ impl<'a> TargetIndex<'a> {
 
 /// The declared name at `span` in one file's table, through that file's own
 /// interner.
-fn name_at(names: Option<&SpanNames>, output: &ExtractOutput, span: Span) -> Option<String> {
+fn name_at(names: Option<&SpanNames>, output: &RyiOutput, span: Span) -> Option<String> {
     RESOLVE_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     names?
         .get(&(span.start, span.len))
@@ -2405,7 +2405,7 @@ fn conformance_tsi_rows(
 /// a null drops the whole row.
 fn caller_name(
     bundle: &FamilyBundle<crate::types::CallF>,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     src: crate::shape::NodeRef,
 ) -> Option<String> {
     let node = bundle.node(src);

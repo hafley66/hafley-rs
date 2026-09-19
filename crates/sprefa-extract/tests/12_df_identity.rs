@@ -11,7 +11,7 @@ use sprefa_extract::{dispatch, flatten_jsonl, FamilyMask};
 
 /// `src/dispatch.rs` verbatim, minus its imports: one call whose value is a
 /// method receiver, a closure whose body is a call, and two implicit returns.
-const SOURCE: &str = r#"pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<ExtractOutput> {
+const SOURCE: &str = r#"pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<RyiOutput> {
     source_for(path).map(|src| src.extract(path, content, mask))
 }
 "#;

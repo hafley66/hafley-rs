@@ -8,7 +8,7 @@
 //! `src/cst.rs::walk_cst`, iterative pre-order DFS, named nodes only, unnamed
 //! nodes reparenting their named descendants to the nearest named ancestor.
 
-use crate::lang::extract_lang::ExtractLang;
+use crate::lang::extract_lang::RyiLang;
 use ast_grep_core::tree_sitter::StrDoc;
 use ast_grep_core::Language as _;
 use ast_grep_core::{AstGrep, Node as SgNode, Pattern};
@@ -19,14 +19,14 @@ use crate::family::{CstEdgeKind, CstF};
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::seams::{ParseError, Parser, Project};
 use crate::shape::{NodeRef, Span, Strings};
-use crate::source::{ExtractOutput, FamilyMask, Source};
+use crate::source::{RyiOutput, FamilyMask, Source};
 use crate::trace;
 
 /// The owned ast-grep root: owns its source `String` + the tree-sitter `Tree`.
 /// `Send`; the borrowed `Node<'r>` is not, so projection (which walks it) runs on
 /// the thread that owns the root. (v5 `src/sg.rs`: `type SgRoot =
-/// AstGrep<StrDoc<ExtractLang>>`.)
-pub type SgRoot = AstGrep<StrDoc<ExtractLang>>;
+/// AstGrep<StrDoc<RyiLang>>`.)
+pub type SgRoot = AstGrep<StrDoc<RyiLang>>;
 
 /// One generic ast-grep pattern and the single-node captures the caller wants
 /// flattened. Query identity belongs to the caller's program; the extractor
@@ -63,7 +63,7 @@ pub fn query_patterns(
     queries: &[AstPatternQuery],
 ) -> Result<Vec<AstCaptureFact>, ParseError> {
     let lang =
-        ExtractLang::from_path(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
+        RyiLang::from_path(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
     let source =
         std::str::from_utf8(content).map_err(|error| ParseError::Utf8(error.to_string()))?;
     let root = AstGrep::new(source, lang);
@@ -145,7 +145,7 @@ impl Parser for AstGrepParser {
 
     fn matches(&self, path: &str) -> bool {
         // SupportLang directly: the roster's per-grammar Sources answer ahead of
-        // this fallback, and ExtractLang::from_path routes through the roster,
+        // this fallback, and RyiLang::from_path routes through the roster,
         // so asking it here would recurse.
         SupportLang::from_path(path).is_some()
     }
@@ -159,7 +159,7 @@ impl Parser for AstGrepParser {
         content: &'a [u8],
     ) -> Result<SgRoot, ParseError> {
         let lang =
-            ExtractLang::from_path(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
+            RyiLang::from_path(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
         let src = std::str::from_utf8(content).map_err(|err| ParseError::Utf8(err.to_string()))?;
         Ok(AstGrep::new(src, lang))
     }
@@ -167,7 +167,7 @@ impl Parser for AstGrepParser {
 
 /// A named node whose kind is an identifier (`identifier`, `type_identifier`,
 /// `property_identifier`, `simple_identifier`, ...) with no named children.
-fn is_identifier_leaf(node: &SgNode<StrDoc<ExtractLang>>, kind: &str) -> bool {
+fn is_identifier_leaf(node: &SgNode<StrDoc<RyiLang>>, kind: &str) -> bool {
     kind.contains("identifier") && node.children().all(|child| !child.is_named())
 }
 
@@ -185,7 +185,7 @@ impl Project<CstF> for CstProjector {
         // nodes emit no row but pass `nearest_named` through so their named
         // descendants attach to the nearest named ancestor. Children are pushed
         // in reverse so they pop in source order. (Port of v5 walk_cst.)
-        let mut stack: Vec<(SgNode<StrDoc<ExtractLang>>, Option<NodeRef>)> =
+        let mut stack: Vec<(SgNode<StrDoc<RyiLang>>, Option<NodeRef>)> =
             vec![(root.root(), None)];
         while let Some((node, nearest_named)) = stack.pop() {
             let my_named = if node.is_named() {
@@ -249,7 +249,7 @@ impl Source for AstgrepSource {
         AstGrepParser.matches(path)
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
         let cst = if mask.cst {
             let arena = AstGrepParser.make_arena();
@@ -269,7 +269,7 @@ impl Source for AstgrepSource {
         } else {
             None
         };
-        ExtractOutput {
+        RyiOutput {
             strings,
             cst,
             types: None,

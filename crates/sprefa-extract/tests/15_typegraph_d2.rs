@@ -87,7 +87,7 @@ fn shape_count(board: &Path) -> usize {
 #[test]
 fn every_emitted_board_compiles_and_reads_wide() {
     let out = scratch("src");
-    let stdout = run_example("src", "src/types.rs::ExtractOutput", &out);
+    let stdout = run_example("src", "src/types.rs::RyiOutput", &out);
 
     let files = boards(&out);
     assert!(
@@ -97,7 +97,7 @@ fn every_emitted_board_compiles_and_reads_wide() {
 
     let first = std::fs::read_to_string(&files[0]).expect("first board");
     assert!(
-        first.contains(": ExtractOutput {"),
+        first.contains(": RyiOutput {"),
         "the entrypoint must be on the first board:\n{first}"
     );
 

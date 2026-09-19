@@ -25,7 +25,7 @@ use crate::lang::rust::{build_line_starts, syn_span};
 use crate::scip::{byte_range_at, definition_of, LineTable};
 use crate::seams::ProjectCx;
 use crate::shape::{ContentId, Span};
-use crate::source::ExtractOutput;
+use crate::source::RyiOutput;
 use crate::types::{
     containing_def_site, covering_def, CallEdgeKind, CallF, ProjectEdge, ResolutionOrigin,
 };
@@ -35,7 +35,7 @@ use crate::types::{
 pub(crate) struct ScipMacroFile<'a> {
     pub path: &'a str,
     pub blob: &'a ContentId,
-    pub output: &'a ExtractOutput,
+    pub output: &'a RyiOutput,
 }
 
 /// One `macro_site` row: the invocation a minted edge came from, with the

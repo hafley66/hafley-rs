@@ -5,7 +5,7 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sprefa_extract::{
-    build_def_index, content_id_of, CallF, ExtractOutput, FamilyMask, FileSet, IndexBag,
+    build_def_index, content_id_of, CallF, RyiOutput, FamilyMask, FileSet, IndexBag,
     ManifestMap, ProjectCx, ProjectDigest, Resolve, RustSource, ScipDocument, ScipIndex, Source,
 };
 
@@ -32,7 +32,7 @@ fn index_over(paths: &[&str]) -> ScipIndex {
 
 #[test]
 fn the_document_join_reads_each_document_once_per_project() {
-    let extracted: Vec<(&str, ExtractOutput)> = FILES
+    let extracted: Vec<(&str, RyiOutput)> = FILES
         .iter()
         .map(|(path, text)| {
             (

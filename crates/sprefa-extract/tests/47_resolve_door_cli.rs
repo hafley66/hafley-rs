@@ -6,7 +6,7 @@ use std::process::{Command, Output};
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, ContentId, ExtractOutput, FamilyMask, FileSet,
+    build_def_index, content_id_of, dispatch, ContentId, RyiOutput, FamilyMask, FileSet,
     IndexBag, ManifestMap, MarkdownSource, ProjectCx, ProjectDigest, Resolve, TypeF,
 };
 
@@ -56,7 +56,7 @@ fn library_doc_ref_count() -> usize {
         df: false,
         data: false,
     };
-    let outputs: Vec<(ContentId, Arc<ExtractOutput>)> = corpus
+    let outputs: Vec<(ContentId, Arc<RyiOutput>)> = corpus
         .iter()
         .map(|(path, bytes, mask)| {
             let mask = if path == MD { types_only } else { *mask };
@@ -66,7 +66,7 @@ fn library_doc_ref_count() -> usize {
             )
         })
         .collect();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = outputs
+    let pairs: Vec<(ContentId, &RyiOutput)> = outputs
         .iter()
         .map(|(blob, out)| (blob.clone(), out.as_ref()))
         .collect();

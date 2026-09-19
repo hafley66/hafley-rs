@@ -33,7 +33,7 @@ use std::sync::{Arc, Mutex};
 use sprefa_extract::{
     build_def_index, byte_range_cached, containing_def_site, content_id_of, covering_def,
     definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, ContentId,
-    ExtractOutput, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap,
+    RyiOutput, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap,
     ProjectCx, ProjectDigest, PythonSource, Resolve, RustSource, ScipGo, ScipRust, ScipSource,
     ScipTypescript, Span, TsSource, TypeF, ZERO_CONTENT_ID,
 };
@@ -459,20 +459,20 @@ fn ported_facets_match_v5() {
     }
 }
 
-/// Build the phase-2 corpus: every case's ExtractOutput + its real blake3 blob
+/// Build the phase-2 corpus: every case's RyiOutput + its real blake3 blob
 /// hash, the DefIndex folded over all of them (the resolution universe), and a
 /// borrowed ProjectCx. Shared by the type_edge parity test and the ledger test.
 fn with_resolve_cx<R>(
-    f: impl FnOnce(&ProjectCx, &[(ContentId, Arc<ExtractOutput>, &'static Case)]) -> R,
+    f: impl FnOnce(&ProjectCx, &[(ContentId, Arc<RyiOutput>, &'static Case)]) -> R,
 ) -> R {
-    let corpus: Vec<(ContentId, Arc<ExtractOutput>, &'static Case)> = CASES
+    let corpus: Vec<(ContentId, Arc<RyiOutput>, &'static Case)> = CASES
         .iter()
         .map(|case| {
             let out = dispatch(case.path, case.fixture, FamilyMask::ALL).expect("source");
             (content_id_of(case.fixture), out, case)
         })
         .collect();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(hash, out, _)| (hash.clone(), out.as_ref()))
         .collect();
@@ -495,7 +495,7 @@ fn with_resolve_cx<R>(
 
 /// The entity name at a candidate's owner span (the from-leg of the oracle's
 /// text shape). A miss is a collection bug, rendered loud, not skipped.
-fn owner_name(out: &ExtractOutput, span: Span) -> String {
+fn owner_name(out: &RyiOutput, span: Span) -> String {
     out.types
         .as_ref()
         .and_then(|types| types.nodes.iter().find(|node| node.span == span))
@@ -977,7 +977,7 @@ fn call_resolve_scip_ratchet_ts() {
         "every scip document is reader-readable: the corpus and the index cover the same universe"
     );
     // The corpus: every fixture file dispatched + the DefIndex over all.
-    let corpus: Vec<(String, ContentId, Arc<ExtractOutput>)> = rels
+    let corpus: Vec<(String, ContentId, Arc<RyiOutput>)> = rels
         .iter()
         .map(|rel| {
             let bytes = reader(rel).unwrap();
@@ -988,7 +988,7 @@ fn call_resolve_scip_ratchet_ts() {
             )
         })
         .collect();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(_, hash, out)| (hash.clone(), out.as_ref()))
         .collect();
@@ -1328,7 +1328,7 @@ fn call_resolve_scip_ratchet_go() {
         "every scip document is reader-readable: the corpus and the index cover the same universe"
     );
     // The corpus: every module file dispatched + the DefIndex over all.
-    let corpus: Vec<(String, ContentId, Arc<ExtractOutput>)> = rels
+    let corpus: Vec<(String, ContentId, Arc<RyiOutput>)> = rels
         .iter()
         .map(|rel| {
             let bytes = reader(rel).unwrap();
@@ -1339,7 +1339,7 @@ fn call_resolve_scip_ratchet_go() {
             )
         })
         .collect();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(_, hash, out)| (hash.clone(), out.as_ref()))
         .collect();
@@ -1667,7 +1667,7 @@ fn call_resolve_scip_ratchet_rust() {
         "every scip document is reader-readable: the corpus and the index cover the same universe"
     );
     // The corpus: every fixture file dispatched + the DefIndex over all.
-    let corpus: Vec<(String, ContentId, Arc<ExtractOutput>)> = rels
+    let corpus: Vec<(String, ContentId, Arc<RyiOutput>)> = rels
         .iter()
         .map(|rel| {
             let bytes = reader(rel).unwrap();
@@ -1678,7 +1678,7 @@ fn call_resolve_scip_ratchet_rust() {
             )
         })
         .collect();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(_, hash, out)| (hash.clone(), out.as_ref()))
         .collect();

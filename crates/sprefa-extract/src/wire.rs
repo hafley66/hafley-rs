@@ -8,7 +8,7 @@
 //! span at the wire (the local id is meaningless outside one file's node vec), so
 //! the JSONL row is span-addressed and self-describing.
 //!
-//! Epic U: the public surface is `flatten(&ExtractOutput)` + `flatten_jsonl`. The
+//! Epic U: the public surface is `flatten(&RyiOutput)` + `flatten_jsonl`. The
 //! per-family flatteners stay as private helpers; the four per-family `_jsonl`
 //! variants are gone (one sorted path serves all).
 //!
@@ -22,21 +22,21 @@ use crate::rows::FamilyBundle;
 pub use crate::schema::SCHEMA;
 pub use crate::scip_rows::{flatten_scip, scip_file_edges};
 use crate::shape::{content_id_of, Strings};
-use crate::source::ExtractOutput;
+use crate::source::RyiOutput;
 use crate::tsi::types::{
     Arg as TsiArg, CoverageOut, FactOut, Method, RunOut, WitnessOut, PROTOCOL_VERSION,
 };
 use crate::types::{CfgF, DataF};
 pub use crate::types::{FlatFact, SpanOut};
 
-/// Flatten one file's `ExtractOutput` to flat facts: every present family, in
+/// Flatten one file's `RyiOutput` to flat facts: every present family, in
 /// family order (cst, type, call, df). The single flatten the stdout stream, the
 /// store seam adapter, and the parity-golden normalize all read. `NodeRef`
 /// resolves to a span through each bundle's own node vec; `NameId` resolves to a
 /// string through the shared `strings`.
 /// Costs a row vector plus every owned `String` on it; a caller that consumes
 /// each row once wants `flatten_each`, which hands the row over and drops it.
-pub fn flatten(out: &ExtractOutput) -> Vec<FlatFact> {
+pub fn flatten(out: &RyiOutput) -> Vec<FlatFact> {
     let mut facts = Vec::new();
     let outcome: Result<(), std::convert::Infallible> = flatten_each(out, None, &mut |fact| {
         facts.push(fact);
@@ -52,7 +52,7 @@ pub fn flatten(out: &ExtractOutput) -> Vec<FlatFact> {
 /// `witness` = `None` is the wire as it has always been, byte for byte;
 /// `Some(run)` wraps the same rows in the TSI envelope.
 pub fn flatten_each<E>(
-    out: &ExtractOutput,
+    out: &RyiOutput,
     witness: Option<&RunOut>,
     push: &mut impl FnMut(FlatFact) -> Result<(), E>,
 ) -> Result<(), E> {
@@ -165,7 +165,7 @@ pub(crate) fn tsi_rows_rebased(rows: &[FactOut], digest: &str, base: u32) -> (Ve
 
 /// The relations a syntax run touched, in walk order. A parse enumerates no
 /// relation exhaustively, so every row it produces here is `partial`.
-fn covered_relations(out: &ExtractOutput) -> Vec<String> {
+fn covered_relations(out: &RyiOutput) -> Vec<String> {
     let present = [
         (out.cst.is_some(), "extract.cst"),
         (out.types.is_some(), "extract.type"),
@@ -243,7 +243,7 @@ fn flatten_data<E>(
 /// Convenience: flatten to sorted JSONL lines. The sort makes the snapshot
 /// deterministic across ast-grep/tree-sitter/oxc traversal-order shifts; the store
 /// seam and parity normalize use the unsorted `flatten` then their own ordering.
-pub fn flatten_jsonl(out: &ExtractOutput) -> Vec<String> {
+pub fn flatten_jsonl(out: &RyiOutput) -> Vec<String> {
     let mut lines: Vec<String> = flatten(out)
         .into_iter()
         .map(|fact| serde_json::to_string(&fact).expect("flat fact is serializable"))

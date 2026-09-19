@@ -42,7 +42,7 @@ use crate::seams::{
     Project, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
+use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
 use crate::types::{PathIndex, ScipIndex, UnresolvedReason};
 
@@ -2737,7 +2737,7 @@ impl Source for GoSource {
         path.ends_with(".go")
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
         // cst via ast-grep (masked). ast-grep's SupportLang has a go grammar, so
@@ -2807,7 +2807,7 @@ impl Source for GoSource {
             }
         }
 
-        ExtractOutput {
+        RyiOutput {
             strings,
             cst,
             types,
@@ -2839,7 +2839,7 @@ impl GoSource {
     /// shaping): the aux candidates, deduped on (owner, to, kind). `resolve`
     /// emits its edges in EXACTLY this order, one per candidate — the parity
     /// golden zips the two (the zip discipline: edge i resolves candidate i).
-    pub fn type_edge_candidates(output: &ExtractOutput) -> Vec<TypeEdgeCandidate> {
+    pub fn type_edge_candidates(output: &RyiOutput) -> Vec<TypeEdgeCandidate> {
         let mut set: BTreeSet<TypeEdgeCandidate> = BTreeSet::new();
         if let Some(types) = &output.types {
             for candidate in &types.aux.candidates {
@@ -2930,7 +2930,7 @@ fn resolve_type_dst(
 }
 
 impl Resolve<TypeF> for GoSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };
@@ -3012,7 +3012,7 @@ impl GoSource {
     /// cross-file a unique corpus blob (the CallF facet's site preferred);
     /// ambiguous/absent -> None.
     pub fn call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
@@ -3675,7 +3675,7 @@ fn go_shadowing_receiver_target(
     module: &Option<GoModule>,
     own: Option<&ContentId>,
     imports: &HashMap<String, String>,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     plan: Option<&GoBindPlan>,
     bound_types: &HashMap<(u32, u32), HashMap<String, String>>,
     site: &CallSite,
@@ -4113,7 +4113,7 @@ type FieldsCache = HashMap<(usize, PathBuf), Arc<FieldsOfDir>>;
 /// `call_name_match` with go's package block ahead of the corpus-wide count:
 /// one own-package def binds wherever it sits, two are a redeclaration.
 fn go_call_name_match(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     def_index: &DefIndex,
     callee: &str,
     own_path: Option<&str>,
@@ -4134,7 +4134,7 @@ fn go_call_name_match(
 }
 
 impl Resolve<CallF> for GoSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
         let Some(call) = &output.call else {
             return Vec::new();
         };
@@ -4794,7 +4794,7 @@ fn is_go_builtin_call(name: &str) -> bool {
 /// One `unresolved` row per dropped predeclared-callee site, plus one per
 /// import spec outside the corpus (reason `external`, import-spec-level).
 pub fn call_drops(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
 ) -> Vec<ResolveDrop> {

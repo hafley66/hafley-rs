@@ -13,7 +13,7 @@ use super::{
     query_ast_rule, query_patterns, query_tree_sitter_spans, AstRuleCapture,
     AstRuleMutationProposal, SourceQuery, SourceQueryError,
 };
-use crate::lang::ExtractLang;
+use crate::lang::RyiLang;
 use crate::shape::content_id_of;
 
 pub const SOURCE_FACT_PROTOCOL: u32 = 1;
@@ -317,7 +317,7 @@ fn normalize_replacement(proposal: AstRuleMutationProposal) -> SourceReplacement
 }
 
 fn grammar_for_path(path: &str) -> Result<String, SourceQueryError> {
-    ExtractLang::from_path(path)
+    RyiLang::from_path(path)
         .map(|language| language.name().to_lowercase())
         .ok_or_else(|| SourceQueryError::Projection(format!("no grammar for {path}")))
 }

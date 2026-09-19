@@ -8,10 +8,10 @@
 //! wired — each of those rosters names this language by absence.
 
 use crate::family::{CstEdgeKind, CstF};
-use crate::lang::extract_lang::ExtractLang;
+use crate::lang::extract_lang::RyiLang;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::shape::{NodeRef, Span, Strings};
-use crate::source::{ExtractOutput, FamilyMask, Source};
+use crate::source::{RyiOutput, FamilyMask, Source};
 use crate::trace;
 
 #[derive(Default)]
@@ -69,12 +69,12 @@ impl Source for CommonlispSource {
             || path.ends_with(".asd")
     }
 
-    fn extract_lang(&self, _path: &str) -> Option<ExtractLang> {
-        Some(ExtractLang::Commonlisp)
+    fn extract_lang(&self, _path: &str) -> Option<RyiLang> {
+        Some(RyiLang::Commonlisp)
     }
 
-    fn extract(&self, _path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
-        let mut output = ExtractOutput::default();
+    fn extract(&self, _path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
+        let mut output = RyiOutput::default();
         if std::str::from_utf8(content).is_err() {
             return output;
         }

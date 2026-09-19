@@ -16,7 +16,7 @@ use rayon::prelude::*;
 use rusqlite::Connection;
 
 use super::PrologSource;
-use crate::lang::extract_lang::ExtractLang;
+use crate::lang::extract_lang::RyiLang;
 use crate::lang::fact::FactSet;
 use crate::move_cx::{dirname, join_rel, relative_between, MoveCx};
 use crate::project::extract_pool;
@@ -168,7 +168,7 @@ impl RehomeShim for PrologSource {
     /// importer this run did not rewrite still loads.
     fn shim(&self, cx: &MoveCx, old: &str, new: &str) -> Option<String> {
         let text = cx.text(old)?;
-        let parse = AstGrep::new(text, ExtractLang::Prolog);
+        let parse = AstGrep::new(text, RyiLang::Prolog);
         let module = module_name(&parse).unwrap_or_else(|| crate::move_cx::stem(old));
         let target = spec_text(dirname(old), new, "''");
         Some(format!(
@@ -201,7 +201,7 @@ enum Scanned {
 }
 
 /// One prolog file's frozen parse, read by the prescan and again by the drain.
-type Parsed = AstGrep<ast_grep_core::tree_sitter::StrDoc<ExtractLang>>;
+type Parsed = AstGrep<ast_grep_core::tree_sitter::StrDoc<RyiLang>>;
 
 struct SpecRows {
     paths: Vec<String>,
@@ -232,7 +232,7 @@ fn carries_specifier(bytes: &[u8], stems: &BTreeSet<String>) -> bool {
 
 /// `language:` is not a field the rule file carries: the grammar is the
 /// caller's, so it is supplied here.
-fn specifier_rule() -> Result<RuleConfig<ExtractLang>, String> {
+fn specifier_rule() -> Result<RuleConfig<RyiLang>, String> {
     let yaml = format!("language: prolog\n{MOVE_SPECIFIER_RULE}");
     from_yaml_string(&yaml, &GlobalRules::default())
         .map_err(|error| format!("rules/move_specifier.yml: {error}"))?
@@ -243,8 +243,8 @@ fn specifier_rule() -> Result<RuleConfig<ExtractLang>, String> {
 
 /// Every spec the rule finds, in source order. A spec is kept as written;
 /// resolution and re-aiming are the caller's.
-fn specifiers(rule: &RuleConfig<ExtractLang>, text: String) -> SpecRows {
-    let parse = AstGrep::new(text, ExtractLang::Prolog);
+fn specifiers(rule: &RuleConfig<RyiLang>, text: String) -> SpecRows {
+    let parse = AstGrep::new(text, RyiLang::Prolog);
     let mut paths: Vec<String> = parse
         .root()
         .find_all(&rule.matcher)
@@ -260,7 +260,7 @@ fn module_name(root: &Parsed) -> Option<String> {
     let pattern = Pattern::contextual(
         "module($NAME, $EXPORTS)",
         "compound_term",
-        ExtractLang::Prolog,
+        RyiLang::Prolog,
     )
     .ok()?;
     let matched = root.root().find(&pattern)?;
@@ -316,7 +316,7 @@ fn candidate_store(rows: &[CandidateRow]) -> Result<Connection, String> {
 fn drain_refs(
     rel: &str,
     parse: &Parsed,
-    rule: &RuleConfig<ExtractLang>,
+    rule: &RuleConfig<RyiLang>,
     facts: &Arc<FactSet>,
     targets: &BTreeMap<(String, String), String>,
 ) -> Vec<ImportRef> {

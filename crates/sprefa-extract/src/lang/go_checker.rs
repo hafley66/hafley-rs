@@ -12,7 +12,7 @@ use std::time::Duration;
 
 use crate::shape::{FamilyTag, NodeRef};
 use crate::types::{
-    CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ExtractOutput, ProjectEdge,
+    CallEdgeKind, CallF, ContentId, DefIndex, DefSite, RyiOutput, ProjectEdge,
     ResolutionOrigin, Span, TypeF,
 };
 
@@ -247,7 +247,7 @@ impl crate::tsi::SemanticRows for GoCheckerIndex {
 pub fn apply_calls(
     index: &GoCheckerIndex,
     path: &str,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     edges: &mut Vec<ProjectEdge<CallF>>,
 ) {
     if !index.knows(path) {
@@ -313,7 +313,7 @@ pub fn apply_calls(
 pub fn apply_types(
     index: &GoCheckerIndex,
     path: &str,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     edges: &mut Vec<ProjectEdge<TypeF>>,
 ) {
     if !index.knows(path) {
@@ -384,7 +384,7 @@ pub fn apply_types(
 /// beside its answer.
 fn site_callee<'a>(
     call: &crate::types::FamilyBundle<CallF>,
-    output: &'a ExtractOutput,
+    output: &'a RyiOutput,
     site: Span,
 ) -> Option<&'a str> {
     call.aux

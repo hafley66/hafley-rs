@@ -66,7 +66,7 @@ pub use astgrep::{
 };
 pub use commonlisp::CommonlispSource;
 pub use data::DataSource;
-pub use extract_lang::ExtractLang;
+pub use extract_lang::RyiLang;
 pub use gdscript::GdscriptSource;
 pub use fact::{
     dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactMatcher, FactSet,

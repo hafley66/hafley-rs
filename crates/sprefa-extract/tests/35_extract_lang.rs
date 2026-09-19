@@ -4,7 +4,7 @@ use ast_grep_core::Language;
 use ast_grep_language::SupportLang;
 use sprefa_extract::{
     decode_ast_rule_yaml, query_ast_rule, query_patterns, AstCaptureFact, AstPatternQuery,
-    AstRuleError, ExtractLang,
+    AstRuleError, RyiLang,
 };
 
 const PROLOG_SAMPLE: &str = "tests/fixtures/prolog/0_sample.pl";
@@ -35,19 +35,19 @@ fn read(path: &str) -> Vec<u8> {
 
 #[test]
 fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
-    assert_eq!(ExtractLang::from_path("go.pl"), Some(ExtractLang::Prolog));
-    assert_eq!(ExtractLang::from_path("t.plt"), Some(ExtractLang::Prolog));
-    assert_eq!(ExtractLang::from_path("r.horn"), Some(ExtractLang::Prolog));
-    assert_eq!(ExtractLang::from_path("a.md"), Some(ExtractLang::Markdown));
+    assert_eq!(RyiLang::from_path("go.pl"), Some(RyiLang::Prolog));
+    assert_eq!(RyiLang::from_path("t.plt"), Some(RyiLang::Prolog));
+    assert_eq!(RyiLang::from_path("r.horn"), Some(RyiLang::Prolog));
+    assert_eq!(RyiLang::from_path("a.md"), Some(RyiLang::Markdown));
     assert_eq!(
-        ExtractLang::from_path("a.markdown"),
-        Some(ExtractLang::Markdown)
+        RyiLang::from_path("a.markdown"),
+        Some(RyiLang::Markdown)
     );
-    assert_eq!(ExtractLang::from_path("p.gd"), Some(ExtractLang::Gdscript));
+    assert_eq!(RyiLang::from_path("p.gd"), Some(RyiLang::Gdscript));
     for lisp in ["l.lisp", "l.lsp", "l.cl", "l.asd"] {
         assert_eq!(
-            ExtractLang::from_path(lisp),
-            Some(ExtractLang::Commonlisp),
+            RyiLang::from_path(lisp),
+            Some(RyiLang::Commonlisp),
             "{lisp}"
         );
     }
@@ -59,31 +59,31 @@ fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
         ("a.go", SupportLang::Go),
         ("a.kt", SupportLang::Kotlin),
     ] {
-        assert_eq!(ExtractLang::from_path(path), Some(ExtractLang::Sg(sg)));
+        assert_eq!(RyiLang::from_path(path), Some(RyiLang::Sg(sg)));
     }
-    assert_eq!(ExtractLang::from_path("README"), None);
-    assert_eq!(ExtractLang::from_path("a.unknownext"), None);
+    assert_eq!(RyiLang::from_path("README"), None);
+    assert_eq!(RyiLang::from_path("a.unknownext"), None);
 }
 
 #[test]
 fn every_lang_name_round_trips_through_the_yaml_spelling() {
     let mut langs = vec![
-        ExtractLang::Prolog,
-        ExtractLang::Markdown,
-        ExtractLang::MarkdownInline,
-        ExtractLang::Gdscript,
-        ExtractLang::Commonlisp,
+        RyiLang::Prolog,
+        RyiLang::Markdown,
+        RyiLang::MarkdownInline,
+        RyiLang::Gdscript,
+        RyiLang::Commonlisp,
     ];
     langs.extend(
         SupportLang::all_langs()
             .iter()
             .copied()
-            .map(ExtractLang::Sg),
+            .map(RyiLang::Sg),
     );
     for lang in langs {
-        assert_eq!(ExtractLang::parse_name(&lang.name()), Some(lang));
+        assert_eq!(RyiLang::parse_name(&lang.name()), Some(lang));
     }
-    assert_eq!(ExtractLang::parse_name("not-a-grammar"), None);
+    assert_eq!(RyiLang::parse_name("not-a-grammar"), None);
 }
 
 /// `µ` is what ast-grep-language picks for every grammar whose identifiers take
@@ -94,24 +94,24 @@ fn every_lang_name_round_trips_through_the_yaml_spelling() {
 /// @comment-ok: fail-first receipt, the sigil is why the two parse at all
 #[test]
 fn expando_char_is_underscore_for_prolog_and_mu_for_markdown() {
-    assert_eq!(ExtractLang::Prolog.expando_char(), '_');
-    assert_eq!(ExtractLang::Gdscript.expando_char(), '_');
-    assert_eq!(ExtractLang::Commonlisp.expando_char(), '_');
-    assert_eq!(ExtractLang::Markdown.expando_char(), 'µ');
-    assert_eq!(ExtractLang::MarkdownInline.expando_char(), 'µ');
+    assert_eq!(RyiLang::Prolog.expando_char(), '_');
+    assert_eq!(RyiLang::Gdscript.expando_char(), '_');
+    assert_eq!(RyiLang::Commonlisp.expando_char(), '_');
+    assert_eq!(RyiLang::Markdown.expando_char(), 'µ');
+    assert_eq!(RyiLang::MarkdownInline.expando_char(), 'µ');
     assert_eq!(
-        ExtractLang::Sg(SupportLang::Rust).expando_char(),
+        RyiLang::Sg(SupportLang::Rust).expando_char(),
         SupportLang::Rust.expando_char()
     );
     assert_eq!(
-        ExtractLang::Sg(SupportLang::C).expando_char(),
+        RyiLang::Sg(SupportLang::C).expando_char(),
         SupportLang::C.expando_char()
     );
     for lang in [
-        ExtractLang::Prolog,
-        ExtractLang::Markdown,
-        ExtractLang::Gdscript,
-        ExtractLang::Commonlisp,
+        RyiLang::Prolog,
+        RyiLang::Markdown,
+        RyiLang::Gdscript,
+        RyiLang::Commonlisp,
     ] {
         assert_eq!(lang.meta_var_char(), '$');
     }
@@ -130,14 +130,14 @@ fn pre_process_pattern_matches_the_ast_grep_rewrite() {
         "no metavar here",
         "$$$",
     ] {
-        let ours = ExtractLang::Sg(SupportLang::Rust).pre_process_pattern(query);
+        let ours = RyiLang::Sg(SupportLang::Rust).pre_process_pattern(query);
         assert_eq!(
             ours,
             SupportLang::Rust.pre_process_pattern(query),
             "{query}"
         );
     }
-    assert_eq!(ExtractLang::Markdown.pre_process_pattern("# $T"), "# µT");
+    assert_eq!(RyiLang::Markdown.pre_process_pattern("# $T"), "# µT");
 }
 
 #[test]

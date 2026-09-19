@@ -36,7 +36,7 @@ use crate::seams::{
     ParseError, Parser, Project, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
+use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
 use crate::tsi::Arg;
 use crate::types::span_arg;
@@ -4054,7 +4054,7 @@ impl Source for TsSource {
         source_type_for(path).is_some()
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
         // cst via ast-grep (masked). Owns its () arena; dropped at block end. A
@@ -4136,7 +4136,7 @@ impl Source for TsSource {
             }
         }
 
-        ExtractOutput {
+        RyiOutput {
             strings,
             cst,
             types,
@@ -4164,7 +4164,7 @@ impl TsSource {
     /// shaping): the aux candidates, deduped on (owner, to, kind). `resolve`
     /// emits its edges in EXACTLY this order, one per candidate — the parity
     /// golden zips the two (the zip discipline: edge i resolves candidate i).
-    pub fn type_edge_candidates(output: &ExtractOutput) -> Vec<TypeEdgeCandidate> {
+    pub fn type_edge_candidates(output: &RyiOutput) -> Vec<TypeEdgeCandidate> {
         let mut set: BTreeSet<TypeEdgeCandidate> = BTreeSet::new();
         if let Some(types) = &output.types {
             for candidate in &types.aux.candidates {
@@ -4203,7 +4203,7 @@ fn resolve_type_dst(
 }
 
 impl Resolve<TypeF> for TsSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };
@@ -4324,7 +4324,7 @@ impl Resolve<TypeF> for TsSource {
 
 /// This file's supplied path, learned the way `own_blob` learns its blob: the
 /// resolve seam carries neither, and the `PathIndex` is the join.
-fn own_path<'a>(output: &ExtractOutput, cx: &'a ProjectCx) -> Option<&'a str> {
+fn own_path<'a>(output: &RyiOutput, cx: &'a ProjectCx) -> Option<&'a str> {
     let blob = own_blob(cx, output)?;
     cx.indexes.paths.get()?.get(&blob)
 }
@@ -4332,7 +4332,7 @@ fn own_path<'a>(output: &ExtractOutput, cx: &'a ProjectCx) -> Option<&'a str> {
 /// The sites ResolveExport judged AMBIGUOUS (two `export *` arms disagree).
 /// ONLY those: a row per unbound free name is 23,894 rows over TS 5.9 `src/**`.
 pub fn call_drops(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
 ) -> Vec<crate::project::ResolveDrop> {
@@ -4487,7 +4487,7 @@ impl TsSource {
     /// cross-file a unique corpus blob (the CallF facet's site preferred);
     /// ambiguous/absent -> None.
     pub fn call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
@@ -4521,7 +4521,7 @@ impl TsSource {
     /// `call_name_match` with the module plane ahead of the corpus-wide count:
     /// among twins the caller's own binding survives, unless it is module-private and no twin is an import claim's target.
     fn ts_call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         def_index: &DefIndex,
         callee: &str,
         modules: Option<&TsModuleIndex>,
@@ -4729,7 +4729,7 @@ const BUILTIN_MEMBERS: &[&str] = &[
 /// call whose receiver names no scope this file can see, spelling a builtin
 /// member name, bound to something that is not a class member.
 fn receiver_blind_builtin(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     call: &FamilyBundle<CallF>,
     site: &CallSite,
     callee: &str,
@@ -4744,7 +4744,7 @@ fn receiver_blind_builtin(
 
 /// Whether a site's receiver names no scope this file can see, which makes the
 /// trailing segment `call_name_match` reads (`out.push`) mean nothing.
-fn unknown_receiver(output: &ExtractOutput, call: &FamilyBundle<CallF>, site: &CallSite) -> bool {
+fn unknown_receiver(output: &RyiOutput, call: &FamilyBundle<CallF>, site: &CallSite) -> bool {
     let Some(path) = site.callee_path else {
         return false;
     };
@@ -4762,7 +4762,7 @@ fn unknown_receiver(output: &ExtractOutput, call: &FamilyBundle<CallF>, site: &C
 }
 
 impl Resolve<CallF> for TsSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
         let Some(call) = &output.call else {
             return Vec::new();
         };

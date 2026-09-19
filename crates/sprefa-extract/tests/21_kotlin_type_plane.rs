@@ -11,7 +11,7 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, ContentId, ExtractOutput, FamilyMask, FileSet,
+    build_def_index, content_id_of, dispatch, ContentId, RyiOutput, FamilyMask, FileSet,
     IndexBag, KotlinSource, ManifestMap, ProjectCx, ProjectDigest, Resolve, Span, TypeF,
 };
 
@@ -35,20 +35,20 @@ fn facet_of(line: &str) -> &str {
     line.split('\t').next().unwrap_or("")
 }
 
-/// The phase-2 corpus: the case's ExtractOutput + its real blake3 blob hash,
+/// The phase-2 corpus: the case's RyiOutput + its real blake3 blob hash,
 /// the DefIndex folded over all of them (the resolution universe), and a
 /// borrowed ProjectCx. Mirror of golden_parity's shared helper.
 fn with_resolve_cx<R>(
-    f: impl FnOnce(&ProjectCx, &[(ContentId, Arc<ExtractOutput>, &'static Case)]) -> R,
+    f: impl FnOnce(&ProjectCx, &[(ContentId, Arc<RyiOutput>, &'static Case)]) -> R,
 ) -> R {
-    let corpus: Vec<(ContentId, Arc<ExtractOutput>, &'static Case)> = CASES
+    let corpus: Vec<(ContentId, Arc<RyiOutput>, &'static Case)> = CASES
         .iter()
         .map(|case| {
             let out = dispatch(case.path, case.fixture, FamilyMask::ALL).expect("source");
             (content_id_of(case.fixture), out, case)
         })
         .collect();
-    let pairs: Vec<(ContentId, &ExtractOutput)> = corpus
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
         .iter()
         .map(|(hash, out, _)| (hash.clone(), out.as_ref()))
         .collect();
@@ -71,7 +71,7 @@ fn with_resolve_cx<R>(
 
 /// The entity name at a candidate's owner span (the from-leg of the oracle's
 /// text shape). A miss is a collection bug, rendered loud, not skipped.
-fn owner_name(out: &ExtractOutput, span: Span) -> String {
+fn owner_name(out: &RyiOutput, span: Span) -> String {
     out.types
         .as_ref()
         .and_then(|types| types.nodes.iter().find(|node| node.span == span))

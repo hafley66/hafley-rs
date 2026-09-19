@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 use crate::lang::astgrep::AstgrepSource;
 use crate::rows::FamilyBundle;
 use crate::shape::{Span, Strings};
-use crate::source::{ExtractOutput, FamilyMask, Source};
+use crate::source::{RyiOutput, FamilyMask, Source};
 use crate::trace;
 use crate::types::{DataDoc, DataF, DataFAux, DataFormat, DataValueKind, DataValueRow};
 
@@ -28,7 +28,7 @@ impl Source for DataSource {
         )
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut out = if mask.cst {
             AstgrepSource.extract(
                 path,
@@ -39,7 +39,7 @@ impl Source for DataSource {
                 },
             )
         } else {
-            ExtractOutput::default()
+            RyiOutput::default()
         };
         if mask.data {
             let span = trace::family_span("data", "data");

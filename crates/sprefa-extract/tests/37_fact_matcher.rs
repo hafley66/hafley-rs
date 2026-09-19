@@ -20,7 +20,7 @@ use std::sync::Arc;
 use ast_grep_core::{AstGrep, Pattern};
 use rusqlite::trace::{TraceEvent, TraceEventCodes};
 use rusqlite::Connection;
-use sprefa_extract::{ExtractLang, FactError, FactSet};
+use sprefa_extract::{RyiLang, FactError, FactSet};
 
 const REL: &str = "callee";
 const COLUMN: &str = "name";
@@ -55,8 +55,8 @@ fn seeded(values: &[&str]) -> Connection {
     store
 }
 
-fn rust() -> ExtractLang {
-    ExtractLang::from_path("main.rs").expect("rust grammar")
+fn rust() -> RyiLang {
+    RyiLang::from_path("main.rs").expect("rust grammar")
 }
 
 #[test]
@@ -205,7 +205,7 @@ const IMPORTER_PL: &str = ":- module(a, []).\n:- use_module('lib/b').\n:- use_mo
 
 #[test]
 fn the_move_rule_finds_every_spec_and_the_facts_keep_one() {
-    let rule: ast_grep_config::RuleConfig<ExtractLang> = ast_grep_config::from_yaml_string(
+    let rule: ast_grep_config::RuleConfig<RyiLang> = ast_grep_config::from_yaml_string(
         &format!("language: prolog\n{MOVE_RULE}"),
         &ast_grep_config::GlobalRules::default(),
     )
@@ -214,7 +214,7 @@ fn the_move_rule_finds_every_spec_and_the_facts_keep_one() {
     .next()
     .expect("one rule");
 
-    let root = AstGrep::new(IMPORTER_PL, ExtractLang::Prolog);
+    let root = AstGrep::new(IMPORTER_PL, RyiLang::Prolog);
     let every: Vec<_> = root
         .root()
         .find_all(&rule.matcher)

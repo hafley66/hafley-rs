@@ -3,4 +3,4 @@
 //! Commit 4a: `Resolve` (the phase-2 extension of `Source`) + the `ProjectCx`
 //! it resolves against ride here too, so a language binding implementing both
 //! phases imports them from one place.
-pub use crate::types::{ExtractOutput, FamilyMask, ProjectCx, Resolve, Source};
+pub use crate::types::{RyiOutput, FamilyMask, ProjectCx, Resolve, Source};

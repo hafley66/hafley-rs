@@ -12,11 +12,11 @@ use crate::family::{
     ProjectEdge, RefPosition, Reference, ResolutionOrigin, Specifier, SpecifierKind,
     TypeEntityKind, TypeF,
 };
-use crate::lang::extract_lang::ExtractLang;
+use crate::lang::extract_lang::RyiLang;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::seams::{corpus_defs, covering_def, ProjectCx, Resolve};
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings};
-use crate::source::{ExtractOutput, FamilyMask, Source};
+use crate::source::{RyiOutput, FamilyMask, Source};
 use crate::trace;
 
 #[derive(Default)]
@@ -1013,7 +1013,7 @@ fn push_df(
 
 impl PrologSource {
     fn call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &crate::seams::DefIndex,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
@@ -1058,12 +1058,12 @@ impl Source for PrologSource {
             || path.ends_with(".horn")
     }
 
-    fn extract_lang(&self, _path: &str) -> Option<ExtractLang> {
-        Some(ExtractLang::Prolog)
+    fn extract_lang(&self, _path: &str) -> Option<RyiLang> {
+        Some(RyiLang::Prolog)
     }
 
-    fn extract(&self, _path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
-        let mut output = ExtractOutput::default();
+    fn extract(&self, _path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
+        let mut output = RyiOutput::default();
         let Ok(src) = std::str::from_utf8(content) else {
             return output;
         };
@@ -1113,7 +1113,7 @@ impl Source for PrologSource {
 }
 
 impl Resolve<CallF> for PrologSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
         let Some(call) = &output.call else {
             return Vec::new();
         };

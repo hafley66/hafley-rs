@@ -27,7 +27,7 @@ use ast_grep_core::Language;
 use ast_grep_language::SupportLang;
 use serde::Serialize;
 
-use crate::lang::extract_lang::ExtractLang;
+use crate::lang::extract_lang::RyiLang;
 use crate::move_cx::MoveCx;
 use crate::rename_cx::{RenameCx, RenameRequest};
 
@@ -829,9 +829,9 @@ impl SpecifierKind {
 /// unresolved). Specifier rows
 /// live HERE, on the existing CallF aux — NOT on a revived ModuleF (D-module:
 /// the binding half is aux side metadata, not a standalone resolution family)
-/// and NOT on ExtractOutput (a new field there would break the four lang
-/// files' exhaustive `ExtractOutput { .. }` literals). Resolve arms of BOTH
-/// families read them: `resolve` takes the whole `ExtractOutput`, and any
+/// and NOT on RyiOutput (a new field there would break the four lang
+/// files' exhaustive `RyiOutput { .. }` literals). Resolve arms of BOTH
+/// families read them: `resolve` takes the whole `RyiOutput`, and any
 /// resolution run masks call+types anyway (the `DefIndex` is built from both
 /// families' output).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -1240,7 +1240,7 @@ impl Family for DfF {
 // ── VALUE-FLOW plane: FlowF  (inter-procedural value flow) ───────────────────
 
 /// Cross-function value flow, a separate family from `DfF`. Phase-2 only: no
-/// `FamilyMask` bit, no `ExtractOutput` field; a pure join computes its edges.
+/// `FamilyMask` bit, no `RyiOutput` field; a pure join computes its edges.
 #[derive(Default, Copy, Clone, Debug)]
 pub struct FlowF;
 
@@ -1291,10 +1291,10 @@ pub struct FlowEdge {
 /// The pure inter-procedural value-flow join: `DfArg` x resolved call edge x
 /// `DfParam` (ArgToParam) plus callee `Ret` nodes (RetToCallRes).
 pub fn flow_edges(
-    inputs: &[(ContentId, &ExtractOutput)],
+    inputs: &[(ContentId, &RyiOutput)],
     resolved: &[(ContentId, Vec<ProjectEdge<CallF>>)],
 ) -> Vec<FlowEdge> {
-    let by_blob: std::collections::HashMap<ContentId, &ExtractOutput> = inputs
+    let by_blob: std::collections::HashMap<ContentId, &RyiOutput> = inputs
         .iter()
         .map(|(blob, out)| (blob.clone(), *out))
         .collect();
@@ -1930,7 +1930,7 @@ pub struct ManifestMap;
 /// (design-audit must-encode): TWO kinds of slot, kept distinct at the type
 /// level so 4b-4d cannot grow three lang-specific name indexes —
 /// - `def_index`: THE corpus name index. ONE lang-agnostic slot, built ONCE per
-///   refresh by `build_def_index` from ALL files' phase-1 ExtractOutputs (CallF
+///   refresh by `build_def_index` from ALL files' phase-1 RyiOutputs (CallF
 ///   defs + TypeF entities) — never per-lang, never by re-parsing
 ///   `ProjectCx.reader` bytes.
 /// - per-language erased slots (RustCrates / ts_packages / GoIndex): the seed's
@@ -2009,7 +2009,7 @@ impl KindIndex {
 /// Build the `KindIndex` ONCE per refresh, from the same phase-1 outputs
 /// `build_def_index` reads. CallF nodes only: TypeF entities carry a different
 /// kind vocabulary.
-pub fn build_kind_index(outputs: &[(ContentId, &ExtractOutput)]) -> KindIndex {
+pub fn build_kind_index(outputs: &[(ContentId, &RyiOutput)]) -> KindIndex {
     let mut index = KindIndex::default();
     for (blob, output) in outputs {
         if let Some(call) = &output.call {
@@ -2042,8 +2042,8 @@ pub struct DefSite {
 /// THE corpus name index: def name -> every def site with that name, across
 /// ALL files and BOTH def-bearing families (CallF defs + TypeF entities).
 /// Lang-agnostic by construction: it is built from phase-1 OUTPUT (the
-/// ExtractOutputs, interned strings included — the NameId -> &str lookup lives
-/// on `ExtractOutput.strings`), so it never re-parses and never special-cases
+/// RyiOutputs, interned strings included — the NameId -> &str lookup lives
+/// on `RyiOutput.strings`), so it never re-parses and never special-cases
 /// a language. Keys are owned Strings so the index outlives any one file's
 /// interner.
 #[derive(Clone, Debug, Default)]
@@ -2072,13 +2072,13 @@ struct DefSpanEntry {
 }
 
 /// Build THE `DefIndex` ONCE per refresh, from every file's phase-1
-/// `ExtractOutput` paired with its blob hash. Never per-lang, NEVER from
+/// `RyiOutput` paired with its blob hash. Never per-lang, NEVER from
 /// `ProjectCx.reader` bytes (re-parsing in phase 2 is the triplication the
 /// phase split exists to prevent). Reaches `Resolve::resolve` through
 /// `ProjectCx.indexes.def_index` — NOT an explicit param: whole-project state
 /// built once per refresh is exactly what the cx exists to carry, and a param
 /// would invite per-call rebuilds beside the cx.
-pub fn build_def_index(outputs: &[(ContentId, &ExtractOutput)]) -> DefIndex {
+pub fn build_def_index(outputs: &[(ContentId, &RyiOutput)]) -> DefIndex {
     let mut index = DefIndex::default();
     for (blob, output) in outputs {
         if let Some(call) = &output.call {
@@ -2208,7 +2208,7 @@ pub fn corpus_defs<'a>(index: &'a DefIndex, name: &str) -> &'a [DefSite] {
 /// distinguish the files, so None. Blobs are scored in sorted `ContentId`
 /// order so the fallback stays stable under any later tie-break. One pass
 /// over the index, never one pass per named span.
-pub fn own_blob(cx: &ProjectCx, output: &ExtractOutput) -> Option<ContentId> {
+pub fn own_blob(cx: &ProjectCx, output: &RyiOutput) -> Option<ContentId> {
     if let Some(own) = OWN.with(|own| own.borrow().clone()) {
         return Some(own);
     }
@@ -2339,10 +2339,10 @@ pub fn containing_def_site_in<'a>(
 /// `CstF` NEVER resolve (no cross-file resolution; `_2_traits.rs`:82-84).
 ///
 /// SHAPE NOTES (4a judgment calls, flagged for human review):
-/// - `output` is the whole phase-1 `ExtractOutput`, not a bare
+/// - `output` is the whole phase-1 `RyiOutput`, not a bare
 ///   `FamilyBundle<F>`: resolution joins on NAMES, and the interner that turns
-///   a `NameId` back into a &str lives on `ExtractOutput.strings`. (Arc plan
-///   2026-07-23:503-504: "resolve(&ExtractOutput, &ProjectCx)".)
+///   a `NameId` back into a &str lives on `RyiOutput.strings`. (Arc plan
+///   2026-07-23:503-504: "resolve(&RyiOutput, &ProjectCx)".)
 /// - No `FamilyMask` param: unlike the seed's non-generic `ProjectExtract`,
 ///   `F` is a type parameter here, so the family is already selected per impl.
 /// - `ProjectEdge<F>` is generic because the seed's `EdgeKind` sum is deleted
@@ -2358,7 +2358,7 @@ pub trait Resolve<F: Family>: Source {
     /// Turn this file's phase-1 specifiers/names into resolved, cross-file
     /// `ProjectEdge`s. The return is ONLY the cross-file resolutions for this
     /// one blob (spec: `_2_traits.rs`:88-96).
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<F>>;
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<F>>;
 }
 
 // ── S6 SCIP: the Tier-1 resolution wire (commit 4c) ─────────────────────────
@@ -2698,7 +2698,7 @@ impl FamilyMask {
 /// One file's extraction: the shared per-file interner + an Option<FamilyBundle<F>>
 /// per family. Sharing ONE Strings is byte-stable (flatten resolves NameId -> &str).
 #[derive(Default)]
-pub struct ExtractOutput {
+pub struct RyiOutput {
     pub strings: Strings,
     pub cst: Option<FamilyBundle<CstF>>,
     pub types: Option<FamilyBundle<TypeF>>,
@@ -2714,12 +2714,12 @@ pub trait Source: Sync + Send {
     fn matches(&self, path: &str) -> bool;
     /// One parse per backing engine, masked projections. Owns the arena(s)
     /// internally; returns owned output (no borrowed parse crosses the seam).
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput;
-    /// The `ExtractLang` this source parses `path` with. Default: the ast-grep
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput;
+    /// The `RyiLang` this source parses `path` with. Default: the ast-grep
     /// shim (its `SupportLang` picks the grammar from the path); a language
     /// with its own grammar overrides.
-    fn extract_lang(&self, path: &str) -> Option<ExtractLang> {
-        SupportLang::from_path(path).map(ExtractLang::Sg)
+    fn extract_lang(&self, path: &str) -> Option<RyiLang> {
+        SupportLang::from_path(path).map(RyiLang::Sg)
     }
 }
 
@@ -3862,16 +3862,16 @@ impl<L: LanguageExt> PendingReplaceDoc<L> {
 // ════════════════════════════════════════════════════════════════════════════
 // @comment-ok: this module mirrors every lang/*.rs shape as a commented sketch
 //
-// pub enum ExtractLang { Sg(SupportLang), Prolog, Markdown, MarkdownInline }
-// impl ExtractLang {
+// pub enum RyiLang { Sg(SupportLang), Prolog, Markdown, MarkdownInline }
+// impl RyiLang {
 //     pub fn from_path(path: &str) -> Option<Self>;  // .pl/.md, else SupportLang
 //     pub fn name(&self) -> Cow<'static, str>;       // the YAML `language:` spelling
 //     pub fn parse_name(name: &str) -> Option<Self>;
 // }
-// impl Language for ExtractLang      // expando_char '_' for prolog, 'µ' for md
-// impl LanguageExt for ExtractLang   // get_ts_language: the linked LANGUAGE consts
+// impl Language for RyiLang      // expando_char '_' for prolog, 'µ' for md
+// impl LanguageExt for RyiLang   // get_ts_language: the linked LANGUAGE consts
 //
-// SgRoot = AstGrep<StrDoc<ExtractLang>> (lang/astgrep.rs), so --ast-pattern and
+// SgRoot = AstGrep<StrDoc<RyiLang>> (lang/astgrep.rs), so --ast-pattern and
 // the YAML rule door reach every grammar in the roster, not just ast-grep's own.
 
 // ════════════════════════════════════════════════════════════════════════════

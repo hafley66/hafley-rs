@@ -77,7 +77,7 @@ pub use lang::{
     query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes, rename_for, renames, respell,
     source_for, sources, ts_specifiers, AstCaptureFact, AstPatternQuery, AstRule, AstRuleCapture,
     AstRuleError, AstRuleMatch, AstRuleMutationProposal, AstRuleRequest, AstgrepSource, BuildPaths,
-    ByteRange, CommonlispSource, DataSource, ExtractLang, FactError, FactMatcher, FactSet,
+    ByteRange, CommonlispSource, DataSource, RyiLang, FactError, FactMatcher, FactSet,
     GdscriptSource, GitBlobFact,
     GoSource, KotlinSource, MarkdownSource, NamedAstRule, OwnedRegion, OwnedRegionError,
     OwnedRegionProposal, PrologSource, PythonSource, RustSource, SourceCaptureFact,
@@ -132,7 +132,7 @@ pub use soopy::{
     RepositoryId as SourceRepositoryId, Revision as SourceRevision, RevisionId as SourceRevisionId,
     SourceEntry, SourceRef,
 };
-pub use source::{ExtractOutput, FamilyMask, Source};
+pub use source::{RyiOutput, FamilyMask, Source};
 pub use types::{
     CfgEdgeKind, CfgF, CfgNodeKind, ImportRef, ImportRefKind, RefRole, Rehome, RehomeArm,
     RehomeManifests, RehomePlanCheck, RehomeShim, RehomeTextSpellings, Rename, RenameStop, Respell,

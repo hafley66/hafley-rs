@@ -7,11 +7,11 @@
 //! syntax source.
 
 use crate::family::{CstEdgeKind, CstF, TypeF};
-use crate::lang::extract_lang::ExtractLang;
+use crate::lang::extract_lang::RyiLang;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::seams::{corpus_defs, ProjectCx, Resolve};
 use crate::shape::{NameId, NodeRef, Span, Strings};
-use crate::source::{ExtractOutput, FamilyMask, Source};
+use crate::source::{RyiOutput, FamilyMask, Source};
 use crate::trace;
 use crate::types::{DocNode, DocNodeKind, ProjectEdge, ResolutionOrigin, TypeEdgeKind};
 
@@ -113,12 +113,12 @@ impl Source for MarkdownSource {
         path.ends_with(".md") || path.ends_with(".markdown")
     }
 
-    fn extract_lang(&self, _path: &str) -> Option<ExtractLang> {
-        Some(ExtractLang::Markdown)
+    fn extract_lang(&self, _path: &str) -> Option<RyiLang> {
+        Some(RyiLang::Markdown)
     }
 
-    fn extract(&self, _path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
-        let mut output = ExtractOutput::default();
+    fn extract(&self, _path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
+        let mut output = RyiOutput::default();
         if std::str::from_utf8(content).is_err() {
             return output;
         }
@@ -492,7 +492,7 @@ fn text_of(node: tree_sitter::Node, content: &[u8]) -> String {
 
 // For this arm `src` indexes `TypeFAux.doc_nodes`, not the node vec.
 impl Resolve<TypeF> for MarkdownSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };

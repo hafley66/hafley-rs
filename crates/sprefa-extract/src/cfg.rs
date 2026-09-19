@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use crate::lang::source_for;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::shape::{NodeRef, Span, Strings};
-use crate::source::{ExtractOutput, FamilyMask};
+use crate::source::{RyiOutput, FamilyMask};
 use crate::types::{CfgEdgeKind, CfgF, CfgNodeKind, CstEdgeKind, CstF};
 use crate::wire::{flatten_cfg, FlatFact};
 
@@ -240,7 +240,7 @@ pub fn build_cfg(
 /// when no `Source` matches the path or the language has no kind_role rows.
 pub fn cfg_bundle(
     path: &str,
-    output: &ExtractOutput,
+    output: &RyiOutput,
     content: &[u8],
 ) -> Option<FamilyBundle<CfgF>> {
     let lang = source_for(path)?.name();

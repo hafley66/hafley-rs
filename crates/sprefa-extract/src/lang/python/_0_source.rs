@@ -31,7 +31,7 @@ use crate::seams::{
     Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::source::{ExtractOutput, FamilyMask, ProjectCx, Source};
+use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
 use crate::trace;
 use crate::types::{DfLoop, LangKind, ScipIndex};
 
@@ -2515,7 +2515,7 @@ impl Source for PythonSource {
         path.ends_with(".py") || path.ends_with(".pyi")
     }
 
-    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> ExtractOutput {
+    fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
         // cst via ast-grep (masked). A failed ast-grep parse leaves cst None.
@@ -2582,7 +2582,7 @@ impl Source for PythonSource {
             }
         }
 
-        ExtractOutput {
+        RyiOutput {
             strings,
             cst,
             types,
@@ -2600,7 +2600,7 @@ impl Source for PythonSource {
 impl PythonSource {
     /// The deduped, deterministically-ordered candidate list; `resolve` emits
     /// one edge per candidate in EXACTLY this order.
-    pub fn type_edge_candidates(output: &ExtractOutput) -> Vec<TypeEdgeCandidate> {
+    pub fn type_edge_candidates(output: &RyiOutput) -> Vec<TypeEdgeCandidate> {
         let mut set: BTreeSet<TypeEdgeCandidate> = BTreeSet::new();
         if let Some(types) = &output.types {
             for candidate in &types.aux.candidates {
@@ -2635,7 +2635,7 @@ fn resolve_type_dst(
 }
 
 impl Resolve<TypeF> for PythonSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
         let Some(types) = &output.types else {
             return Vec::new();
         };
@@ -2676,7 +2676,7 @@ impl Resolve<TypeF> for PythonSource {
 
 impl PythonSource {
     pub fn call_name_match(
-        output: &ExtractOutput,
+        output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
@@ -2727,7 +2727,7 @@ impl PythonSource {
 /// unique corpus blob. `None` when the name is not a class or the class has no
 /// `__init__`.
 fn init_of_class(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     index: &DefIndex,
     callee: &str,
 ) -> Option<(ContentId, Span)> {
@@ -2778,7 +2778,7 @@ fn init_of_class(
 /// The `__init__` call def a same-file class named `class_name` constructs
 /// with: its own, else its bases' in declaration order (cycle-guarded).
 fn same_file_init(
-    output: &ExtractOutput,
+    output: &RyiOutput,
     index: &DefIndex,
     class_name: &str,
     seen: &mut Vec<String>,
@@ -2836,7 +2836,7 @@ fn scip_call_target<'a>(
 }
 
 impl Resolve<CallF> for PythonSource {
-    fn resolve(&self, output: &ExtractOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
         let Some(call) = &output.call else {
             return Vec::new();
         };
@@ -3026,7 +3026,7 @@ impl Resolve<CallF> for PythonSource {
 /// callee name cannot. Every leg is unique-candidate or syntactic-only: a
 /// shape that cannot be resolved honestly resolves to nothing.
 struct PyResolver<'a> {
-    output: &'a ExtractOutput,
+    output: &'a RyiOutput,
     index: &'a DefIndex,
     call: &'a FamilyBundle<CallF>,
     /// This file's blob, when its own bytes are part of the run's file set.
