@@ -36,3 +36,32 @@ pub use crate::types::{
     ReceiverBinding, ReceiverOutcome, RefPosition, Reference, ResolutionOrigin, SigSlot, Specifier,
     SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeFAux, TypeSig,
 };
+
+/// THE DEFAULT FAMILY SET IS DERIVED, PER FILE, FROM THE LANGUAGE'S OWN PLANES.
+/// A `Source::extract` fills one `Option` bundle per plane it claims; when any
+/// non-cst plane answered WITH ROWS, the default families are those planes and
+/// the syntax tree is opt-in via `--family cst`. When none did, cst IS the
+/// default. The no-rows arm is what keeps a default from collapsing into an
+/// empty stream: it covers a cst-only language, a file whose native parse
+/// failed (the bundles answer `None`), and a file whose native planes parsed
+/// but found nothing (a consts-only rust file parses, so its type/call/df
+/// bundles are `Some` and empty). Adding a language never edits this rule:
+/// its own extract fills what it fills, and the default follows from the
+/// same read.
+pub fn default_keeps_cst(output: &crate::types::RyiOutput) -> bool {
+    fn answered<F: crate::types::Family>(bundle: &crate::types::FamilyBundle<F>) -> bool {
+        !bundle.nodes.is_empty() || !bundle.edges.is_empty()
+    }
+    // The data plane carries no nodes at all: DataFAux's docs and values are
+    // the whole plane, so its rows are counted directly. A type/call/df
+    // bundle whose rows were aux-only would keep cst beside them, which errs
+    // toward the stream never being empty.
+    let data = output
+        .data
+        .as_ref()
+        .is_some_and(|d| !d.aux.docs.is_empty() || !d.aux.values.is_empty());
+    !(output.types.as_ref().is_some_and(answered)
+        || output.call.as_ref().is_some_and(answered)
+        || output.df.as_ref().is_some_and(answered)
+        || data)
+}

@@ -827,6 +827,8 @@ fn extract_file(
     }
     let mask = match cli.family.as_deref() {
         Some(families) => parse_mask(families)?,
+        // Bench measures every family; the no-flag stream picks the default
+        // per language in stream_default and never flows through this mask.
         None => FamilyMask::ALL,
     };
     let cfg = cli
@@ -844,10 +846,111 @@ fn extract_file(
     }
     if cli.bench {
         bench(&path_str, &content, mask, cfg)?;
-    } else {
+    } else if cli.family.is_some() {
         output.flush()?;
         stream(&path_str, &content, mask, cfg, cli.witness, output)?;
+    } else {
+        output.flush()?;
+        stream_default(&path_str, &content, cli.witness, output)?;
     }
+
+fn stream(
+    path: &str,
+    content: &[u8],
+    mask: FamilyMask,
+    cfg: bool,
+    witness: bool,
+    output: &mut sqlite::Output,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(bundle) = dispatch(path, content, mask) {
+        stream_bundle(&bundle, path, content, cfg, witness, output)?;
+    }
+    Ok(())
+}
+
+/// The emit half both extraction doors share: one extracted bundle in, the
+/// flat JSONL walk out, the optional cfg derivation on top. The write phase
+/// span and the witness envelope live here so the two doors cannot drift.
+fn stream_bundle(
+    bundle: &sprefa_extract::types::RyiOutput,
+    path: &str,
+    content: &[u8],
+    cfg: bool,
+    witness: bool,
+    output: &mut sqlite::Output,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // ONE BufWriter held for the whole run (Output's own): a per-row println!
+    // goes through LineWriter, which flushes on every newline and turns 2M-row
+    // streams into 2M write syscalls.
+    let writing = sprefa_extract::trace::phase_span("-", sprefa_extract::trace::Phase::Write);
+    let _entered = writing.enter();
+    let bytes_before = output.stdout_bytes();
+    let mut lines = 0u64;
+    // Each row is written and dropped: collecting them first held a second copy
+    // of the whole stream, which on a 13 MB bundle is 800 MB of the 1,094 MB peak.
+    let mut write = |fact: FlatFact| -> Result<(), std::io::Error> {
+        output.fact(&fact).map_err(|error| {
+            // The stdout arm's write errors ARE io errors; unwrapping keeps
+            // BrokenPipe kind-tagged so main's closed-pipe intercept sees it.
+            match error.downcast::<std::io::Error>() {
+                Ok(io_error) => *io_error,
+                Err(error) => std::io::Error::other(error.to_string()),
+            }
+        })?;
+        lines += 1;
+        Ok(())
+    };
+    // One run per invocation, scoped to the digest of the bytes just read: two
+    // runs over the same file are comparable without re-reading it.
+    let run = witness.then(|| RunOut {
+        run: 0,
+        mode: Mode::Syntax,
+        tool: "ryi".to_string(),
+        version: env!("CARGO_PKG_VERSION").to_string(),
+        scope: vec![content_id_of(content).to_string()],
+    });
+    flatten_each(bundle, run.as_ref(), &mut write)?;
+    // The cfg plane rides the SAME parse: it is derived from `bundle.cst`.
+    if cfg {
+        if let Some(cfg_bundle) = cfg_bundle(path, bundle, content) {
+            flatten_cfg_each(&cfg_bundle, &mut write)?;
+        }
+    }
+    output.flush()?;
+    sprefa_extract::trace::record_phase(
+        &writing,
+        output.stdout_bytes() - bytes_before,
+        lines,
+        1,
+    );
+    Ok(())
+}
+
+/// The no-`--family` stream. The default family set is the language's OWN
+/// plane roster (`family::default_keeps_cst`), never the every-kind union:
+/// one extract with the full mask, and the planes that answered decide
+/// whether the syntax tree rides along. `--family` passed explicitly keeps
+/// overriding through `stream`, and `--bench` keeps measuring every family.
+/// This door bypasses the content cache because the prune mutates the bundle;
+/// a default run is one file and one extract either way.
+fn stream_default(
+    path: &str,
+    content: &[u8],
+    witness: bool,
+    output: &mut sqlite::Output,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let Some(src) = source_for(path) else {
+        tracing::warn!(path, "no Source matches this path; nothing to emit");
+        return Ok(());
+    };
+    let span = tracing::info_span!("extract_file", path, lang = src.name(), bytes = content.len());
+    let _entered = span.enter();
+    let mut bundle = src.extract(path, content, FamilyMask::ALL);
+    if !sprefa_extract::family::default_keeps_cst(&bundle) {
+        bundle.cst = None;
+    }
+    stream_bundle(&bundle, path, content, false, witness, output)
+}
     Ok(())
 }
 
@@ -1041,63 +1144,6 @@ fn parse_mask(families: &[String]) -> Result<FamilyMask, String> {
         }
     }
     Ok(mask)
-}
-
-fn stream(
-    path: &str,
-    content: &[u8],
-    mask: FamilyMask,
-    cfg: bool,
-    witness: bool,
-    output: &mut sqlite::Output,
-) -> Result<(), Box<dyn std::error::Error>> {
-    // ONE BufWriter held for the whole run (Output's own): a per-row println!
-    // goes through LineWriter, which flushes on every newline and turns 2M-row
-    // streams into 2M write syscalls.
-    let writing = sprefa_extract::trace::phase_span("-", sprefa_extract::trace::Phase::Write);
-    let _entered = writing.enter();
-    let bytes_before = output.stdout_bytes();
-    let mut lines = 0u64;
-    // Each row is written and dropped: collecting them first held a second copy
-    // of the whole stream, which on a 13 MB bundle is 800 MB of the 1,094 MB peak.
-    let mut write = |fact: FlatFact| -> Result<(), std::io::Error> {
-        output.fact(&fact).map_err(|error| {
-            // The stdout arm's write errors ARE io errors; unwrapping keeps
-            // BrokenPipe kind-tagged so main's closed-pipe intercept sees it.
-            match error.downcast::<std::io::Error>() {
-                Ok(io_error) => *io_error,
-                Err(error) => std::io::Error::other(error.to_string()),
-            }
-        })?;
-        lines += 1;
-        Ok(())
-    };
-    // One run per invocation, scoped to the digest of the bytes just read: two
-    // runs over the same file are comparable without re-reading it.
-    let run = witness.then(|| RunOut {
-        run: 0,
-        mode: Mode::Syntax,
-        tool: "ryi".to_string(),
-        version: env!("CARGO_PKG_VERSION").to_string(),
-        scope: vec![content_id_of(content).to_string()],
-    });
-    if let Some(bundle) = dispatch(path, content, mask) {
-        flatten_each(&bundle, run.as_ref(), &mut write)?;
-        // The cfg plane rides the SAME parse: it is derived from `bundle.cst`.
-        if cfg {
-            if let Some(cfg_bundle) = cfg_bundle(path, &bundle, content) {
-                flatten_cfg_each(&cfg_bundle, &mut write)?;
-            }
-        }
-    }
-    output.flush()?;
-    sprefa_extract::trace::record_phase(
-        &writing,
-        output.stdout_bytes() - bytes_before,
-        lines,
-        1,
-    );
-    Ok(())
 }
 
 fn bench(
