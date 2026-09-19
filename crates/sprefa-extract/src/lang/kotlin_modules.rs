@@ -106,9 +106,6 @@ pub struct KtModuleIndex {
     /// package -> the files declaring it, sorted so a star import's rows are
     /// byte-stable whatever order the inputs arrive in.
     package_files: HashMap<String, Vec<String>>,
-    /// (package, top-level name) -> the one file declaring it; a name two
-    /// files of one package both declare binds nothing (absent from the map).
-    names_by_package: HashMap<(String, String), String>,
 }
 
 impl KtModuleIndex {
@@ -127,23 +124,6 @@ impl KtModuleIndex {
         for paths in index.package_files.values_mut() {
             paths.sort();
         }
-        let mut counts: HashMap<(String, String), (usize, String)> = HashMap::new();
-        for (file, facts) in &files {
-            let Some(package) = &facts.package else {
-                continue;
-            };
-            for name in &facts.top_level {
-                let entry = counts
-                    .entry((package.clone(), name.clone()))
-                    .or_insert_with(|| (0, file.clone()));
-                entry.0 += 1;
-            }
-        }
-        index.names_by_package = counts
-            .into_iter()
-            .filter(|(_, (n, _))| *n == 1)
-            .map(|(key, (_, file))| (key, file))
-            .collect();
         index.facts = files.into_iter().collect();
         index
     }
@@ -151,14 +131,6 @@ impl KtModuleIndex {
     /// `path`'s own `package` header, if it declares one.
     pub fn package_of(&self, path: &str) -> Option<&str> {
         self.facts.get(path)?.package.as_deref()
-    }
-
-    /// The one file declaring `name` at top level in `package`; two files
-    /// declaring it is ambiguous and binds nothing.
-    pub fn package_scope(&self, package: &str, name: &str) -> Option<&str> {
-        self.names_by_package
-            .get(&(package.to_string(), name.to_string()))
-            .map(String::as_str)
     }
 
     /// The def file an import of `path` binds `name` to, with the def's
@@ -188,8 +160,8 @@ impl KtModuleIndex {
         None
     }
     /// The one file in `package` declaring `name` at top level; two files
-    /// declaring it is ambiguous.
-    fn declaring_file(&self, package: &str, name: &str) -> Option<&str> {
+    /// declaring it is ambiguous and binds nothing.
+    pub fn declaring_file(&self, package: &str, name: &str) -> Option<&str> {
         let mut hits = self.package_files.get(package)?.iter().filter(|path| {
             self.facts
                 .get(*path)
