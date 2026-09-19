@@ -23,7 +23,7 @@ use sprefa_extract::FlatFact;
 const FIXTURE: &str = "tests/fixtures/resolve/0_caller.ts";
 
 fn run(args: &[&str]) -> Vec<String> {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()
@@ -231,7 +231,7 @@ fn schema_declares_the_envelope_records() {
 /// coverage rows unnumbered. A named stop beats a half-witnessed stream.
 #[test]
 fn cfg_under_witness_is_a_named_stop() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["--witness", "--family", "cfg", FIXTURE])
         .output()

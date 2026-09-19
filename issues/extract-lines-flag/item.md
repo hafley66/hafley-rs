@@ -5,7 +5,7 @@ type: feature
 status: open
 priority: normal
 epic: extract-parity-move-rename
-labels: [extract]
+labels: [extract, phase-refinement-1, artifact-cli]
 related: ['@extract-graph-verb']
 ---
 
@@ -43,3 +43,14 @@ This blocks hand-use of every verb, not just `graph`. It is the single largest u
 ## Implementation Notes
 
 Ships before `extract-graph-verb`. The graph verb's output is unreadable without it.
+
+## Comments
+
+### 2026-09-18T22:35:43Z · @claude-513
+
+Receipt from the 2026-09-18 ryi rename. rename exited 6 citing 'src/bin/extract.rs byte 1905' and 'tests/0_sqlite.rs byte 56'. Resolving those with head -c | wc -l gave src/bin/extract.rs:40 and tests/0_sqlite.rs:4, two extra shell steps before the diagnostic could be read. See @rename-path-double-reach.
+
+### 2026-09-18T23:48:33Z · @claude-513
+
+Checked whether --lines already landed in a worktree. It did not. `git log --all -S'"--lines"' -- crates/sprefa-extract` returns zero commits, and no branch matches *line* except origin/fix/mux-multiline-brief. Four candidate worktrees inspected: extract-fixes ad865db5 is the diff-verb report, extract-check and extract-oracle-paths-test both sit on 3ee65276 which is a boop cleanup record, extract-post-move-fix 11d09f93 gates the cli identity test. The worktree the 20260918.1 session log labeled 'lane LN --lines' (commit 82978233, now 4bd8cf2f on main) carries schema/1_facts.tsp, the three generated schema files, 0_sqlite.rs and wire.rs: sqlite-side work with no CLI flag. That lane died on 'Prompt is too long' and produced no --lines work.
+

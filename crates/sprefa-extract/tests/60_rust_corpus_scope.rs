@@ -12,7 +12,7 @@ const A: &str = "tests/fixtures/rust_scopes/corpus_scope_a.rs";
 const B: &str = "tests/fixtures/rust_scopes/corpus_scope_b.rs";
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");

@@ -15,7 +15,7 @@ const DIR: &str = "tests/fixtures/go_binding_legs";
 
 fn resolve() -> String {
     let root = env!("CARGO_MANIFEST_DIR");
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg(format!("{root}/{DIR}/go.mod"))
         .arg(format!("{root}/{DIR}/lib.go"))

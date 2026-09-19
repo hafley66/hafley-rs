@@ -74,7 +74,7 @@ fn generated_dl7_region_checks_stages_and_preserves_every_outside_byte() {
         ));
         std::fs::create_dir_all(&state).unwrap();
         let command = |apply: bool| {
-            let mut run = std::process::Command::new(env!("CARGO_BIN_EXE_extract"));
+            let mut run = std::process::Command::new(env!("CARGO_BIN_EXE_ryi"));
             run.args([
                 "region",
                 target.join("generated.dl7").to_str().unwrap(),

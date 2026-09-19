@@ -28,7 +28,7 @@ const DIR: &str = "tests/fixtures/ts5_findings/init_receivers";
 
 fn resolve() -> String {
     let root = env!("CARGO_MANIFEST_DIR");
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg(format!("{root}/{DIR}/printers.ts"))
         .arg(format!("{root}/{DIR}/emit.ts"))

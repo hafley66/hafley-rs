@@ -7,7 +7,7 @@ use std::process::Command;
 
 use rusqlite::Connection;
 
-const BIN: &str = env!("CARGO_BIN_EXE_extract");
+const BIN: &str = env!("CARGO_BIN_EXE_ryi");
 const FIXTURE: &str = "tests/fixtures/rust/sample.rs";
 
 /// A fresh HOME per case, so no two cases share a store and none touches the

@@ -92,7 +92,7 @@ fn copy_tree(source: &Path, target: &Path) {
 }
 
 fn rename_verb(fixture: &Fixture, target: &str, new: &str, extra: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("rename")
         .arg(target)
         .arg(new)
@@ -119,7 +119,7 @@ struct StoppedRun {
 }
 
 fn stopped_rename_verb(fixture: &Fixture, target: &str, new: &str, extra: &[&str]) -> StoppedRun {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("rename")
         .arg(target)
         .arg(new)

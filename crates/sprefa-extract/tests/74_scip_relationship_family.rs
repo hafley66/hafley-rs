@@ -52,7 +52,7 @@ fn records<'a>(stream: &'a str, kind: &str) -> Vec<&'a str> {
 
 fn scip_family() -> String {
     let cache = scratch();
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--family")
         .arg("scip")
         .arg("--scip-cache")

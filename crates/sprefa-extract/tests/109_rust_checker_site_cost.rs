@@ -43,7 +43,7 @@ fn phase_row(table: &str, lang: &str, phase: &str) -> Option<(u64, u64, u64)> {
 
 /// One checker-driven resolve over one supplied file, phase table on stderr.
 fn phases_of(supplied: &str) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "--resolve",

@@ -23,7 +23,7 @@ fn caller_files() -> Vec<String> {
 }
 
 fn resolve() -> String {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(caller_files())
         .output()
@@ -247,7 +247,7 @@ fn resolve_wall(paths: &[String]) -> f64 {
     (0..3)
         .map(|_| {
             let start = Instant::now();
-            let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+            let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
                 .arg("--resolve")
                 .args(paths)
                 .output()

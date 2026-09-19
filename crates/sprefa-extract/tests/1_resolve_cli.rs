@@ -16,7 +16,7 @@ const CLOSURE_CALLEE: &str = "tests/fixtures/resolve/8_closure_callee.rs";
 const CLOSURE_GOLDEN: &str = include_str!("fixtures/resolve/9_closure_resolved_edges.jsonl");
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");
@@ -30,7 +30,7 @@ fn run(args: &[&str]) -> String {
 
 #[test]
 fn resolve_mode_streams_cross_file_edges() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--resolve", CALLER, CALLEE])
         .output()
         .expect("extract binary runs");
@@ -45,7 +45,7 @@ fn resolve_mode_streams_cross_file_edges() {
 
 #[test]
 fn resolve_mode_dispatches_kotlin_call_edges() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--resolve", KOTLIN])
         .output()
         .expect("extract binary runs");

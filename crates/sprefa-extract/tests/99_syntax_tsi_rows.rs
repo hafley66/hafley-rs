@@ -20,7 +20,7 @@ const RUST_PROBE: &str = "tests/fixtures/tsi/probe.rs";
 const GO_PROBE: &str = "tests/fixtures/tsi/probe_graph.go";
 
 fn extract(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()
@@ -434,7 +434,7 @@ fn every_row_is_in_the_registry_and_ingests() {
             );
         }
         let stream = extract(&["--witness", "--family", "type", fixture]);
-        let mut door = Command::new(env!("CARGO_BIN_EXE_extract"))
+        let mut door = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .args(["--ingest", "/dev/stdin"])
             .stdin(Stdio::piped())

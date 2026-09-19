@@ -40,7 +40,7 @@ fn walk(dir: &str) -> Vec<String> {
 /// `(caller_name, callee_name, callee_path, kind)` per resolved edge of one
 /// `--resolve` run over the fixture dir.
 fn resolved_edges() -> Vec<(String, String, String, String)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(multihop_dir())
         .output()

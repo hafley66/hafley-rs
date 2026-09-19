@@ -13,7 +13,7 @@ use std::process::Command;
 const MAIN: &str = "tests/fixtures/py_findings/direct_calls/main.py";
 
 fn callee_names(paths: &[&str]) -> Vec<String> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(paths)
         .output()

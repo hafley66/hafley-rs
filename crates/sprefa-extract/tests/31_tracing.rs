@@ -8,7 +8,7 @@ use sprefa_extract::trace::{SummaryLayer, SummaryState};
 use sprefa_extract::{dispatch, FamilyMask};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 
-const BIN: &str = env!("CARGO_BIN_EXE_extract");
+const BIN: &str = env!("CARGO_BIN_EXE_ryi");
 const FIXTURE: &str = "tests/fixtures/rust/sample.rs";
 
 /// The family table's body: from its wall line to the blank line before the

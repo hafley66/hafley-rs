@@ -85,7 +85,7 @@ fn query_digest_reads_the_blob_from_the_repo_holding_the_path() {
     let source = fixture.root.join("sample.rs");
     let oid = fixture.blob_oid("sample.rs");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(std::env::temp_dir())
         .args([
             "query",

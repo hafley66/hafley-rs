@@ -3,7 +3,7 @@
 ```sh
 just gen
 just gen-check
-cargo run -p sprefa-extract --features cli --bin extract -- \
+cargo run -p sprefa-extract --features cli --bin ryi -- \
   --sqlite facts.db crates/sprefa-extract/src/wire.rs
 sqlite3 facts.db '.tables'
 sqlite3 facts.db '.schema'

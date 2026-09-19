@@ -29,7 +29,7 @@ fn empty_dir(label: &str) -> PathBuf {
 /// One `extract` run from the crate root. `path` replaces `PATH` wholesale,
 /// which is how a tier that shells out to `node` is taken off the machine.
 fn facts(args: &[&str], path: Option<&PathBuf>, typescript: Option<String>) -> Vec<Value> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_extract"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
     if let Some(path) = path {
         command.env("PATH", path);

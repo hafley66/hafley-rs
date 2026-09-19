@@ -19,7 +19,7 @@ const PY_CLASS: &str = "tests/fixtures/python/corpus_8.py";
 const PY_CALLER: &str = "tests/fixtures/python/corpus_9.py";
 
 fn extract(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs")

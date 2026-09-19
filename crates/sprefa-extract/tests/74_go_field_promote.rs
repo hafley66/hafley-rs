@@ -33,7 +33,7 @@ fn walk(dir: &str) -> Vec<String> {
 fn resolved_edges() -> Vec<(String, String, String, String)> {
     let mut paths = walk(&fixture("go_field_promote"));
     paths.sort();
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .args(&paths)
         .output()

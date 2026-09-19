@@ -19,7 +19,7 @@ const TS_PROBE: &str = "tests/fixtures/tsi/probe.ts";
 const RUST_PROBE: &str = "tests/fixtures/tsi/probe.rs";
 
 fn lines(args: &[&str]) -> Vec<String> {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()

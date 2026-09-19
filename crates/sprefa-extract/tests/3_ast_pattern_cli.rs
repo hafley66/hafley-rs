@@ -4,7 +4,7 @@ const SOURCE: &str = "tests/fixtures/ast_pattern/0_rtkq.ts";
 
 #[test]
 fn ast_pattern_mode_batches_patterns_and_flattens_capture_spans() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--ast-pattern",
             "create=createApi({ $$$BEFORE, endpoints: ($BUILDER) => ($BODY), $$$AFTER })",
@@ -50,7 +50,7 @@ fn ast_pattern_mode_batches_patterns_and_flattens_capture_spans() {
 
 #[test]
 fn ast_pattern_mode_refuses_unknown_capture() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--ast-pattern",
             "create=createApi($CONFIG)",

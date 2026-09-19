@@ -80,7 +80,7 @@ impl Repo {
             to.to_string(),
         ];
         args.extend(extra.iter().map(|arg| arg.to_string()));
-        Command::new(env!("CARGO_BIN_EXE_extract"))
+        Command::new(env!("CARGO_BIN_EXE_ryi"))
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .args(&args)
             .output()

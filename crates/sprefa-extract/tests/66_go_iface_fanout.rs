@@ -11,7 +11,7 @@ const DIR: &str = "tests/fixtures/go_findings/iface_fanout";
 
 /// (caller_name, callee_name, kind, caller_site_start) per resolved edge.
 fn resolved_edges(fixture: &str) -> Vec<(String, String, String, u64)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg(env!("CARGO_MANIFEST_DIR").to_owned() + "/" + DIR + "/" + fixture)
         .output()
@@ -39,7 +39,7 @@ fn resolved_edges(fixture: &str) -> Vec<(String, String, String, u64)> {
 }
 
 fn unresolved(fixture: &str) -> Vec<(String, String)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg(env!("CARGO_MANIFEST_DIR").to_owned() + "/" + DIR + "/" + fixture)
         .output()

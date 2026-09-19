@@ -35,7 +35,7 @@ fn run() -> Vec<Value> {
         "call,type".to_string(),
     ];
     args.extend(FILES.iter().map(|name| format!("{DIR}/{name}")));
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()
@@ -134,7 +134,7 @@ fn impl_owner_is_owned_by_the_impls_file() {
 
 /// Every type entity ONE file declares, by name.
 fn declared_in(file: &str) -> Vec<String> {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["--family", "type", &format!("{DIR}/{file}")])
         .output()

@@ -92,7 +92,7 @@ fn move_verb(fixture: &Fixture, extra: &[&str]) -> String {
 }
 
 fn move_output(fixture: &Fixture, extra: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg(fixture.root.join("lib/b.pl"))
         .arg(fixture.root.join("core/b.pl"))
@@ -120,7 +120,7 @@ fn move_list(fixture: &Fixture, rows: &[(&str, &str)], extra: &[&str]) -> String
         })
         .collect();
     std::fs::write(&list, body).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg("--list")
         .arg(&list)
@@ -281,7 +281,7 @@ fn a_one_row_list_plans_what_the_positional_form_plans() {
         ),
     )
     .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg("--list")
         .arg(&list)
@@ -617,7 +617,7 @@ fn verify_false_rolls_the_tree_back_byte_identical() {
     let fixture = helpers_fixture("verify_rollback");
     let before = snapshot(&fixture.root);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg("--list")
         .arg({
@@ -785,7 +785,7 @@ fn multi_move_roots(
         })
         .collect();
     std::fs::write(&list, body).unwrap();
-    let mut command = Command::new(env!("CARGO_BIN_EXE_extract"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command.arg("move").arg("--list").arg(&list);
     for root in roots {
         command.arg("--root").arg(root);
@@ -906,7 +906,7 @@ fn no_root_flag_is_byte_identical_to_before() {
     let without = fixture("multi_norootflag_without");
     let with = fixture("multi_norootflag_with");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg(without.root.join("lib/b.pl"))
         .arg(without.root.join("core/b.pl"))

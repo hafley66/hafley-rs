@@ -14,7 +14,7 @@
 use std::process::Command;
 use std::time::Instant;
 
-const BIN: &str = env!("CARGO_BIN_EXE_extract");
+const BIN: &str = env!("CARGO_BIN_EXE_ryi");
 
 struct Case {
     source: &'static str,

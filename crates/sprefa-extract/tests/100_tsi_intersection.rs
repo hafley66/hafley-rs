@@ -148,7 +148,7 @@ fn typescript() -> String {
 }
 
 fn extract(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .env("SPREFA_TS_CHECKER_TYPESCRIPT", typescript())
         .args(args)

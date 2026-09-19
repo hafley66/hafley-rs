@@ -18,7 +18,7 @@ const SCIP_REL_SOURCE: &str = "tests/fixtures/scip_rel/animal.ts";
 const SCIP_REL_GOLDEN: &str = include_str!("fixtures/scip_rel/expected.jsonl");
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");
@@ -147,7 +147,7 @@ fn scip_record_narrows_the_stream_to_the_requested_kinds() {
 /// than a failure.
 #[test]
 fn an_unknown_scip_record_kind_is_a_named_error() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-facts",
             "--scip-record",
@@ -274,7 +274,7 @@ fn without_metadata(facts: &str) -> String {
 /// An empty stream would read as "this project has no symbols".
 #[test]
 fn scip_facts_without_an_index_is_a_named_error() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-facts",
             "--project-root",

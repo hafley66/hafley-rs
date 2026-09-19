@@ -8,7 +8,7 @@ use std::process::Command;
 use serde_json::Value;
 
 fn run(args: &[&str]) -> Vec<Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()
@@ -267,7 +267,7 @@ fn a_local_named_as_an_argument_mints_no_reference_row() {
 #[test]
 fn scip_facts_help_names_the_git_worktree_requirement() {
     let help = String::from_utf8(
-        Command::new(env!("CARGO_BIN_EXE_extract"))
+        Command::new(env!("CARGO_BIN_EXE_ryi"))
             .arg("--help")
             .output()
             .expect("extract binary runs")

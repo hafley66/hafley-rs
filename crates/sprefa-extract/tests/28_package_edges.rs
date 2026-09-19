@@ -27,7 +27,7 @@ use sprefa_extract::{fold_package_edges, Manifest, ManifestKind};
 const PACKAGES_ROOT: &str = "tests/fixtures/packages";
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs");
@@ -131,7 +131,7 @@ fn a_self_dependency_is_no_edge() {
 /// silently reshape every node name in the output.
 #[test]
 fn package_deps_without_a_project_root_is_a_named_error() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--package-deps", &format!("{PACKAGES_ROOT}/Cargo.toml")])
         .output()
         .expect("extract binary runs");

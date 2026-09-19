@@ -31,7 +31,7 @@ fn run() -> Vec<Value> {
             .iter()
             .map(|name| format!("tests/fixtures/python_modules/{name}")),
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()

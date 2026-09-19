@@ -19,7 +19,7 @@ use std::process::{Command, Output};
 const FIXTURE: &str = "tests/fixtures/prolog/1_refs.pl";
 
 fn raw(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs")

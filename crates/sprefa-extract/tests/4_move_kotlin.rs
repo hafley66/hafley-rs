@@ -96,7 +96,7 @@ fn move_files(fixture: &Fixture, rows: &[(&str, &str)], extra: &[&str]) -> Strin
         })
         .collect();
     std::fs::write(&list, body).unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg("--list")
         .arg(&list)

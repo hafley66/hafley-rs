@@ -10,7 +10,7 @@ const FIXTURE: &str = "tests/fixtures/go_findings/closure_mirror/closure_mirror.
 
 /// `(caller_name, callee_name, caller_site_start)` per resolved edge.
 fn resolved_edges() -> Vec<(String, String, u64)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
         .arg(env!("CARGO_MANIFEST_DIR").to_owned() + "/" + FIXTURE)
         .output()

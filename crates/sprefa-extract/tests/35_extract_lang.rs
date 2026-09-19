@@ -274,7 +274,7 @@ fn the_cli_ast_pattern_door_reaches_every_own_grammar_front_end() {
             "*speed*",
         ),
     ] {
-        let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .args(["--ast-pattern", pattern, "--ast-capture", capture, path])
             .output()
             .expect("extract binary runs");

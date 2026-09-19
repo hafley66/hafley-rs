@@ -47,7 +47,7 @@ impl Run {
 /// The stream arrives on stdin, so a case mutates the fixture text without
 /// writing a file.
 fn ingest(stream: &str) -> Run {
-    let mut child = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let mut child = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["--ingest", "/dev/stdin"])
         .stdin(Stdio::piped())
@@ -364,7 +364,7 @@ fn ids_are_renumbered_from_zero() {
 /// of it is printed from `REGISTRY` rather than re-typed.
 #[test]
 fn schema_prints_every_registry_row() {
-    let output = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .arg("--schema")
         .output()
@@ -386,7 +386,7 @@ fn schema_prints_every_registry_row() {
 /// stream carries no `record=fact` row yet, so this pins the envelope path.
 #[test]
 fn a_witnessed_extract_stream_ingests() {
-    let produced = Command::new(env!("CARGO_BIN_EXE_extract"))
+    let produced = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["--witness", "--family", "type", TS_FIXTURE])
         .output()

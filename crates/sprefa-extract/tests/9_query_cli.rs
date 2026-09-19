@@ -4,14 +4,14 @@ const RUST: &str = "tests/fixtures/rust/sample.rs";
 const TS: &str = "tests/fixtures/ts/sample.ts";
 
 fn run(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(args)
         .output()
         .expect("extract binary runs")
 }
 
 fn run_in(dir: &std::path::Path, args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_extract"))
+    Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(dir)
         .args(args)
         .output()
