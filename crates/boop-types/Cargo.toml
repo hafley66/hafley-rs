@@ -1,0 +1,11 @@
+[package]
+name = "boop-types"
+version = "0.0.1"
+edition.workspace = true
+license.workspace = true
+description = "Reverse description of every boop boundary as OpenAPI 3.1 yaml. No Rust behavior."
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]

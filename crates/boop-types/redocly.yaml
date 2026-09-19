@@ -1,0 +1,14 @@
+extends:
+  - recommended
+rules:
+  # A CLI has no auth scheme and a schema-only doc has no operations to
+  # reference its components; both rules assume an HTTP server.
+  security-defined: off
+  no-unused-components: off
+apis:
+  cli:
+    root: cli.yaml
+  relational:
+    root: relational.yaml
+  queries:
+    root: queries.yaml
