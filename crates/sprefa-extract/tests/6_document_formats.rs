@@ -48,7 +48,17 @@ fn document_format_coverage_is_what_the_cli_claims() {
         let path = dir.join(format!("sample.{extension}"));
         std::fs::write(&path, body(extension)).unwrap();
 
-        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        // The coverage claim is about the GRAMMAR, not the default mask: cst
+        // is opt-in since default-families-no-conditional, so a cst-family row
+        // is proven through its own family. An unhandled extension keeps the
+        // no-flag run: EXIT 0 WITH NO OUTPUT, never an error. That is the
+        // documented contract and it is what lets a caller sweep a mixed tree
+        // without filtering by extension first.
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
+        if !family.is_empty() {
+            command.args(["--family", family]);
+        }
+        let output = command
             .arg(&path)
             .output()
             .expect("extract binary runs");

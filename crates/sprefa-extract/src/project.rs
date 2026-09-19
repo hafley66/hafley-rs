@@ -32,8 +32,8 @@ use crate::lang::python::{py_module_facts, PyModuleFacts, PyModuleIndex};
 use crate::lang::rust_modules::{RustModuleFacts, RustModuleIndex};
 use crate::lang::ts_resolve::{ModuleFacts, TsModuleIndex};
 use crate::lang::{
-    source_for, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource, RustSource,
-    TsSource,
+    source_for, AstgrepSource, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource,
+    RustSource, TsSource,
 };
 use crate::rows::FamilyBundle;
 use crate::scip::{ScipGo, ScipRust, ScipTypescript};
@@ -43,7 +43,7 @@ use crate::seams::{
     build_def_index, BlobSource, FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
 };
 use crate::shape::{content_id_of, ContentId, Span};
-use crate::source::{RyiOutput, FamilyMask, Resolve, Source};
+use crate::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::types::{
     flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
@@ -55,8 +55,8 @@ use crate::wire::{flatten_flow, FlatFact};
 /// states its intent; the CLI defaults `call` on for backward compatibility.
 #[derive(Copy, Clone, Debug, Default, PartialEq, Eq)]
 pub struct ResolveArms {
-    /// `Resolve<CallF>`: resolved caller-to-callee edges. Implemented for every
-    /// source in the roster except the ast-grep CST fallback.
+    /// `Resolve<CallF>`: resolved caller-to-callee edges. Implemented for
+    /// every source in the roster.
     pub call: bool,
     /// `Resolve<TypeF>`: resolved type reference edges. Implemented for TS, Go,
     /// Rust and Kotlin; Prolog has no arm and is skipped, never dispatched.
@@ -1774,11 +1774,14 @@ pub static RESOLVE_ARMS: &[ResolveArm] = &[
         drops: None,
         type_plane: TypePlane::Nodes,
     },
+    // The ast-grep fallback resolves GUESSED calls by the kotlin name-match
+    // law: a unique corpus blob binds CorpusUnique, everything else lands in
+    // the unresolved channel with the def-count reason.
     ResolveArm {
         name: "astgrep",
-        call: None,
+        call: Some(|out, cx| Resolve::<CallF>::resolve(&AstgrepSource, out, cx)),
         types: None,
-        drops: None,
+        drops: Some(crate::lang::astgrep::call_drops),
         type_plane: TypePlane::Nodes,
     },
 ];
@@ -1794,11 +1797,7 @@ fn resolve_mask(path: &str) -> FamilyMask {
     arm_for(path).map_or(FamilyMask::ALL, |arm| arm.type_plane.mask())
 }
 
-fn resolve_call_edges(
-    path: &str,
-    output: &RyiOutput,
-    cx: &ProjectCx,
-) -> Vec<ProjectEdge<CallF>> {
+fn resolve_call_edges(path: &str, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
     let Some(arm) = arm_for(path) else {
         tracing::warn!(path, "no resolve arm is wired for this path");
         return Vec::new();
@@ -1819,11 +1818,7 @@ fn resolve_call_edges(
     edges
 }
 
-fn resolve_type_edges(
-    path: &str,
-    output: &RyiOutput,
-    cx: &ProjectCx,
-) -> Vec<ProjectEdge<TypeF>> {
+fn resolve_type_edges(path: &str, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<TypeF>> {
     let Some(arm) = arm_for(path) else {
         tracing::warn!(path, "no resolve arm is wired for this path");
         return Vec::new();

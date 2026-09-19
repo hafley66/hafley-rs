@@ -2686,6 +2686,17 @@ impl FamilyMask {
         df: true,
         data: true,
     };
+    /// The default family set, ONE for every language (issue
+    /// default-families-no-conditional): every plane but the parse tree. No
+    /// branch on language or file content may narrow or widen this; `--family
+    /// cst` is the opt-in for the tree.
+    pub const DEFAULT: Self = Self {
+        cst: false,
+        types: true,
+        call: true,
+        df: true,
+        data: true,
+    };
     pub const NONE: Self = Self {
         cst: false,
         types: false,

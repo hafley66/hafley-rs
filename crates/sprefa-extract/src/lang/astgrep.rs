@@ -15,12 +15,20 @@ use ast_grep_core::{AstGrep, Node as SgNode, Pattern};
 use ast_grep_language::SupportLang;
 use serde::Serialize;
 
-use crate::family::{CstEdgeKind, CstF};
+use crate::family::{
+    CallEdgeKind, CallF, CallSite, CstEdgeKind, CstF, ProjectEdge, ResolutionOrigin,
+};
 use crate::rows::{Edge, FamilyBundle, Node};
-use crate::seams::{ParseError, Parser, Project};
-use crate::shape::{NodeRef, Span, Strings};
-use crate::source::{RyiOutput, FamilyMask, Source};
+use crate::seams::{corpus_defs, covering_def, DefIndex, ParseError, Parser, Project, Resolve};
+use crate::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings};
+use crate::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::trace;
+use std::collections::BTreeSet;
+
+use crate::lang::call_kinds::{CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS};
+use crate::lang::python::MODULE_CALLER;
+use crate::project::ResolveDrop;
+use crate::types::UnresolvedReason;
 
 /// The owned ast-grep root: owns its source `String` + the tree-sitter `Tree`.
 /// `Send`; the borrowed `Node<'r>` is not, so projection (which walks it) runs on
@@ -62,8 +70,7 @@ pub fn query_patterns(
     content: &[u8],
     queries: &[AstPatternQuery],
 ) -> Result<Vec<AstCaptureFact>, ParseError> {
-    let lang =
-        RyiLang::from_path(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
+    let lang = RyiLang::from_path(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
     let source =
         std::str::from_utf8(content).map_err(|error| ParseError::Utf8(error.to_string()))?;
     let root = AstGrep::new(source, lang);
@@ -185,8 +192,7 @@ impl Project<CstF> for CstProjector {
         // nodes emit no row but pass `nearest_named` through so their named
         // descendants attach to the nearest named ancestor. Children are pushed
         // in reverse so they pop in source order. (Port of v5 walk_cst.)
-        let mut stack: Vec<(SgNode<StrDoc<RyiLang>>, Option<NodeRef>)> =
-            vec![(root.root(), None)];
+        let mut stack: Vec<(SgNode<StrDoc<RyiLang>>, Option<NodeRef>)> = vec![(root.root(), None)];
         while let Some((node, nearest_named)) = stack.pop() {
             let my_named = if node.is_named() {
                 let byte_range = node.range();
@@ -227,16 +233,162 @@ impl Project<CstF> for CstProjector {
     }
 }
 
+/// A named leaf whose kind carries a name: the identifier kinds, plus the
+/// leaf kinds `0_call_kinds.rs` names (php `name`, haskell `variable`, bash
+/// `word`).
+fn is_name_leaf(node: &SgNode<StrDoc<RyiLang>>, kind: &str) -> bool {
+    node.is_named()
+        && node.children().all(|child| !child.is_named())
+        && (kind.contains("identifier") || CALLEE_NAME_KINDS.contains(&kind))
+}
+
+/// The name leaves under `node`, pre-order. A nested call kind stops the
+/// descent: `foo (helper 1)` names `foo` here, and the nested call names
+/// itself when its own turn comes.
+fn collect_name_leaves<'r>(
+    node: &SgNode<'r, StrDoc<RyiLang>>,
+    out: &mut Vec<SgNode<'r, StrDoc<RyiLang>>>,
+) {
+    if CALL_KINDS.contains(&node.kind().as_ref()) {
+        return;
+    }
+    if is_name_leaf(node, &node.kind()) {
+        out.push(node.clone());
+        return;
+    }
+    for child in node.children() {
+        collect_name_leaves(&child, out);
+    }
+}
+
+/// The head of a prefix-application chain: the leftmost name leaf, walking
+/// the first named child through the nesting. tree-sitter-haskell's `apply`
+/// is left-associative, so `map f xs` parses `apply(apply(map, f), xs)` and
+/// the head sits at the end of the first-child spine.
+fn head_leaf<'r>(node: &SgNode<'r, StrDoc<RyiLang>>) -> Option<SgNode<'r, StrDoc<RyiLang>>> {
+    let mut cur = node.clone();
+    loop {
+        let next = cur.children().find(|child| child.is_named());
+        match next {
+            Some(child) => cur = child,
+            None => break,
+        }
+    }
+    Some(cur)
+}
+
+/// One guessed site's callee: the grammar's own seat first (`name`, then
+/// `method`, then `function`), resolved to the seat's LAST name leaf, the
+/// trailing segment of a member chain (`s.fp(...)` names `fp`). `callee_path`
+/// rides the seat text when it says more than the leaf (`s.fp` vs `fp`).
+/// No seat, or a seat that names nothing, falls to the generic walk over the
+/// children before the argument subtree; `apply`-style kinds take the FIRST
+/// leaf (prefix application: `map f xs` names `map`), the rest the last.
+/// `None` mints no site: a call with no name to bind is not a row.
+fn callee_of(
+    node: &SgNode<StrDoc<RyiLang>>,
+    strings: &mut Strings,
+) -> Option<(NameId, Option<NameId>)> {
+    for field in ["name", "method", "function"] {
+        let Some(seat) = node.field(field) else {
+            continue;
+        };
+        let mut leaves = Vec::new();
+        collect_name_leaves(&seat, &mut leaves);
+        let Some(leaf) = leaves.last() else {
+            continue;
+        };
+        let callee = strings.intern(&leaf.text());
+        let seat_text = seat.text();
+        let callee_path = (seat_text != *leaf.text()).then(|| strings.intern(&seat_text));
+        return Some((callee, callee_path));
+    }
+    let mut leaves = Vec::new();
+    for child in node.children() {
+        let kind = child.kind();
+        if kind.contains("argument") || kind.contains("suffix") {
+            continue;
+        }
+        collect_name_leaves(&child, &mut leaves);
+    }
+    if CALLEE_FIRST_KINDS.contains(&node.kind().as_ref()) {
+        let head = head_leaf(node)?;
+        return Some((strings.intern(&head.text()), None));
+    }
+    let leaf = leaves.last()?;
+    Some((strings.intern(&leaf.text()), None))
+}
+
+/// The guessed call projector: one site per node whose kind is in the
+/// call-kind table (0_call_kinds.rs), no per-language code anywhere. The
+/// sites are ORDINARY `CallSite` rows: resolution binds them through
+/// `corpus_unique` or the drop channel says why it did not.
+#[derive(Default)]
+pub struct CallProjector;
+
+impl Project<CallF> for CallProjector {
+    type Parsed<'a> = SgRoot;
+
+    fn project(&self, root: &SgRoot, strings: &mut Strings, sink: &mut FamilyBundle<CallF>) {
+        // The module as nameless covering def, python's MODULE_CALLER seat
+        // reused verbatim: a guessed site then has a caller for
+        // `Resolve<CallF>`'s covering-def join. flatten_call skips the node,
+        // so no def row reaches the wire.
+        let file_range = root.root().range();
+        sink.nodes.push(Node::new(
+            Span {
+                start: file_range.start as u32,
+                len: (file_range.end - file_range.start) as u32,
+            },
+            MODULE_CALLER,
+        ));
+        // The cst walk's discipline: iterative pre-order DFS, children pushed
+        // in reverse so they pop in source order and rows stay doc-ordered.
+        let mut stack: Vec<SgNode<StrDoc<RyiLang>>> = vec![root.root()];
+        while let Some(node) = stack.pop() {
+            let kind = node.kind();
+            if node.is_named() && CALL_KINDS.contains(&kind.as_ref()) {
+                // An application nested in another application is the SAME
+                // chain (the left-associative parse), never another call
+                // site; only the outermost apply mints.
+                let same_chain = CALLEE_FIRST_KINDS.contains(&kind.as_ref())
+                    && node
+                        .parent()
+                        .is_some_and(|p| p.is_named() && CALL_KINDS.contains(&p.kind().as_ref()));
+                if !same_chain {
+                    if let Some((callee, callee_path)) = callee_of(&node, strings) {
+                        let byte_range = node.range();
+                        sink.aux.sites.push(CallSite {
+                            span: Span {
+                                start: byte_range.start as u32,
+                                len: (byte_range.end - byte_range.start) as u32,
+                            },
+                            callee,
+                            callee_path,
+                        });
+                    }
+                }
+            }
+            let mark = stack.len();
+            for child in node.children() {
+                stack.push(child);
+            }
+            stack[mark..].reverse();
+        }
+    }
+}
+
 // ════════════════════════════════════════════════════════════════════════════
-// AstgrepSource: the CST-only Source (the floor for every ast-grep lang). Epic U.
+// AstgrepSource: the floor for every ast-grep lang. Epic U.
 //
-// AstGrepParser + CstProjector as a Source: cst-only (the
-// other families are None). The roster's fallback behind the lang-specific
-// TsSource; a .rs/.go/... that has no native parser still gets the lossless CST.
+// AstGrepParser + CstProjector + CallProjector as a Source: the lossless CST
+// on `--family cst`, and under the default mask a GUESSED call plane minted
+// from the call-kind table. The roster's fallback behind the lang-specific
+// Sources; a .sh/.java/... that has no front-end still answers calls.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// The CST-only `Source`: every ast-grep grammar (rust/ts/tsx/js/go/...) gets the
-/// lossless named-node tree, nothing else.
+/// The ast-grep fallback `Source`: every grammar ast-grep ships that no
+/// lang-specific Source claimed. `cst` opt-in, plus the guessed call plane.
 #[derive(Default)]
 pub struct AstgrepSource;
 
@@ -251,18 +403,34 @@ impl Source for AstgrepSource {
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
-        let cst = if mask.cst {
+        // ONE parse feeds both planes: cst and the guessed calls walk the same
+        // root, so a mask naming either pays the parse exactly once.
+        let parsed = if mask.cst || mask.call {
             let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("astgrep", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
+            let span = trace::parse_span("astgrep", "astgrep");
+            let _entered = span.enter();
+            AstGrepParser.parse(&arena, path, content).ok()
+        } else {
+            None
+        };
+        let cst = if mask.cst {
+            parsed.as_ref().map(|parsed| {
                 let span = trace::family_span("astgrep", "cst");
                 let _entered = span.enter();
                 let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
+                CstProjector.project(parsed, &mut strings, &mut bundle);
+                trace::record_bundle(&span, &bundle, 0);
+                bundle
+            })
+        } else {
+            None
+        };
+        let call = if mask.call {
+            parsed.as_ref().map(|parsed| {
+                let span = trace::family_span("astgrep", "call");
+                let _entered = span.enter();
+                let mut bundle = FamilyBundle::<CallF>::default();
+                CallProjector.project(parsed, &mut strings, &mut bundle);
                 trace::record_bundle(&span, &bundle, 0);
                 bundle
             })
@@ -273,9 +441,99 @@ impl Source for AstgrepSource {
             strings,
             cst,
             types: None,
-            call: None,
+            call,
             df: None,
             data: None,
         }
     }
+}
+
+// The guessed call arm's resolution: the kotlin name-match law minus the
+// planes astgrep does not project (no receivers, no module plane, no same-file
+// defs). A callee naming exactly one corpus blob binds `corpus_unique`;
+// everything else lands in the drop channel with the def-count reason.
+impl Resolve<CallF> for AstgrepSource {
+    fn resolve(&self, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
+        let Some(call) = &output.call else {
+            return Vec::new();
+        };
+        let Some(def_index) = cx.indexes.def_index.get() else {
+            return Vec::new();
+        };
+        let mut edges = Vec::new();
+        for site in &call.aux.sites {
+            let Some(caller) = covering_def(call, site.span) else {
+                continue;
+            };
+            let callee = output.strings.lookup(site.callee);
+            let Some((blob, span)) = unique_corpus_def(def_index, callee) else {
+                continue;
+            };
+            edges.push(
+                ProjectEdge::new(
+                    caller,
+                    blob,
+                    span,
+                    CallEdgeKind::NameResolve,
+                    ResolutionOrigin::CorpusUnique,
+                )
+                .with_call_site(site.span),
+            );
+        }
+        edges
+    }
+}
+
+/// The one corpus CALL def of `name`, or nothing: kotlin's corpus-unique leg
+/// without the same-file seat (the guessed bundle projects no defs).
+fn unique_corpus_def(index: &DefIndex, callee: &str) -> Option<(ContentId, Span)> {
+    let sites = corpus_defs(index, callee);
+    let mut blobs: Vec<ContentId> = Vec::new();
+    for site in sites {
+        if !blobs.contains(&site.blob) {
+            blobs.push(site.blob.clone());
+        }
+    }
+    let [blob] = blobs.as_slice() else {
+        return None;
+    };
+    let site = sites
+        .iter()
+        .find(|site| site.family == FamilyTag::Call)
+        .unwrap_or(&sites[0]);
+    Some((blob.clone(), site.span))
+}
+
+/// The guessed call arm's non-edge channel: one `unresolved` row per site no
+/// edge bound, the reason the def count for the callee's name.
+pub fn call_drops(
+    output: &RyiOutput,
+    cx: &ProjectCx,
+    edges: &[ProjectEdge<CallF>],
+) -> Vec<ResolveDrop> {
+    let (Some(call), Some(def_index)) = (&output.call, cx.indexes.def_index.get()) else {
+        return Vec::new();
+    };
+    let bound: BTreeSet<(u32, u32)> = edges
+        .iter()
+        .filter_map(|edge| edge.call_site.map(|span| (span.start, span.end())))
+        .collect();
+    call.aux
+        .sites
+        .iter()
+        .filter(|site| !bound.contains(&(site.span.start, site.span.end())))
+        .map(|site| {
+            let callee = output.strings.lookup(site.callee);
+            let reason = if corpus_defs(def_index, callee).is_empty() {
+                UnresolvedReason::NoCorpusDef
+            } else {
+                UnresolvedReason::Ambiguous
+            };
+            ResolveDrop {
+                span: site.span,
+                reason,
+                detail: callee.to_string(),
+            }
+        })
+        .collect()
 }

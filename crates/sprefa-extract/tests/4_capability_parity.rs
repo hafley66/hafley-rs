@@ -75,7 +75,10 @@ const ROSTER_FIXTURES: &[(&str, &str)] = &[
 /// Every `Source` in the live roster produces the same facts through the binary
 /// as through the library. This is the phase-1 half of parity, and it covers
 /// every family a language emits at once: the comparison is the whole flattened
-/// stream, not a sampled record kind.
+/// stream, not a sampled record kind. The families are named explicitly
+/// because the no-flag default is `FamilyMask::DEFAULT` (types.rs), not ALL:
+/// parity needs the same mask on both sides, and `cst,type,call,df,data` is
+/// `FamilyMask::ALL` spelled out.
 #[test]
 fn every_roster_source_is_reachable_through_the_binary() {
     let roster: Vec<&'static str> = sources().iter().map(|source| source.name()).collect();
@@ -112,7 +115,7 @@ fn every_roster_source_is_reachable_through_the_binary() {
             "{name}'s fixture {fixture} produces no facts, so it proves nothing"
         );
 
-        let mut from_binary = run(&[fixture]);
+        let mut from_binary = run(&["--family", "cst,type,call,df,data", fixture]);
         from_binary.sort();
         assert_eq!(
             from_binary, from_library,

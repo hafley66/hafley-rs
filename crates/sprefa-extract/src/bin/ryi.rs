@@ -42,11 +42,10 @@ mod help;
 mod sqlite;
 
 use help::{
-    AFTER_HELP, BENCH_LONG, DEPS_LONG, FAMILY_LONG, FILE_FACT_LONG, GO_CHECKER_LONG,
-    INDEXER_LONG, LINES_LONG, LONG_ABOUT, MAX_BYTES_LONG, OCCURRENCE_TEXT_LONG,
-    PACKAGE_DEPS_LONG, PATH_LONG, PROJECT_ROOT_LONG, RUST_CHECKER_LONG, SCIP_BUILD_LONG,
-    SCIP_CACHE_LONG, SCIP_DEPS_LONG, SCIP_FACTS_LONG, SCIP_INDEX_LONG, SCIP_RECORD_LONG,
-    SCIP_TIMEOUT_LONG, TS_CHECKER_LONG,
+    AFTER_HELP, BENCH_LONG, DEPS_LONG, FAMILY_LONG, FILE_FACT_LONG, GO_CHECKER_LONG, INDEXER_LONG,
+    LINES_LONG, LONG_ABOUT, MAX_BYTES_LONG, OCCURRENCE_TEXT_LONG, PACKAGE_DEPS_LONG, PATH_LONG,
+    PROJECT_ROOT_LONG, RUST_CHECKER_LONG, SCIP_BUILD_LONG, SCIP_CACHE_LONG, SCIP_DEPS_LONG,
+    SCIP_FACTS_LONG, SCIP_INDEX_LONG, SCIP_RECORD_LONG, SCIP_TIMEOUT_LONG, TS_CHECKER_LONG,
 };
 
 #[path = "../0_query.rs"]
@@ -827,7 +826,7 @@ fn extract_file(
     }
     let mask = match cli.family.as_deref() {
         Some(families) => parse_mask(families)?,
-        None => FamilyMask::ALL,
+        None => FamilyMask::DEFAULT,
     };
     let cfg = cli
         .family
@@ -1081,22 +1080,36 @@ fn stream(
         version: env!("CARGO_PKG_VERSION").to_string(),
         scope: vec![content_id_of(content).to_string()],
     });
-    if let Some(bundle) = dispatch(path, content, mask) {
-        flatten_each(&bundle, run.as_ref(), &mut write)?;
+    let bundle = dispatch(path, content, mask);
+    if let Some(bundle) = &bundle {
+        flatten_each(bundle, run.as_ref(), &mut write)?;
         // The cfg plane rides the SAME parse: it is derived from `bundle.cst`.
         if cfg {
-            if let Some(cfg_bundle) = cfg_bundle(path, &bundle, content) {
+            if let Some(cfg_bundle) = cfg_bundle(path, bundle, content) {
                 flatten_cfg_each(&cfg_bundle, &mut write)?;
             }
         }
     }
+    // The disclosure doctrine (@extract-graph-verb): a file that yields zero
+    // facts prints what it can plus the commands that would answer, then
+    // exits 0. Never a bare empty stream and never a refusal. The block goes
+    // to stderr so stdout stays JSONL-clean for the pipe.
+    if lines == 0 {
+        match &bundle {
+            None => {
+                let ext = path.rsplit_once('.').map(|(_, ext)| ext).unwrap_or(path);
+                eprintln!("0 facts. No Source matches .{ext}."); // @eprintln-ok
+            }
+            Some(_) => {
+                let name = source_for(path).map_or("a Source", |src| src.name());
+                eprintln!("0 facts. {name} matched {path} but yielded none."); // @eprintln-ok
+            }
+        }
+        eprintln!("  ryi --family cst {path}    the parse tree, if a grammar loaded");
+        eprintln!("  ryi --schema               which extensions have a Source");
+    }
     output.flush()?;
-    sprefa_extract::trace::record_phase(
-        &writing,
-        output.stdout_bytes() - bytes_before,
-        lines,
-        1,
-    );
+    sprefa_extract::trace::record_phase(&writing, output.stdout_bytes() - bytes_before, lines, 1);
     Ok(())
 }
 
