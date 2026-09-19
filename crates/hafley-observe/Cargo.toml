@@ -23,3 +23,8 @@ tracing-opentelemetry = { version = "0.33", default-features = false, optional =
 opentelemetry = { version = "0.32", default-features = false, features = ["trace"], optional = true }
 opentelemetry_sdk = { version = "0.32", default-features = false, features = ["trace", "internal-logs"], optional = true }
 opentelemetry-otlp = { version = "0.32", default-features = false, features = ["trace", "http-proto", "reqwest-blocking-client"], optional = true }
+
+[dev-dependencies]
+tracing-capture = "0.1.0"
+tracing-chrome = "0.7.2"
+serde_json = "1"

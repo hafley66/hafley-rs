@@ -139,14 +139,28 @@ fn a_same_package_name_binds_through_the_module_plane() {
 }
 
 /// Two files of one package both declaring the name is ambiguous: the module
-/// plane binds nothing and no other leg may guess, so no edge exists.
+/// plane binds nothing and no other leg may guess, so no edge exists and the
+/// site drops `ambiguous`. The corpus name match is ambiguous on `dupName`
+/// too (two defs), so its absence alone cannot tell the module leg ran; the
+/// unique `appHelper` beside it, declared in the same file, pins the leg:
+/// with the leg gone it falls to `corpus_unique` and this test fails.
 #[test]
 fn an_ambiguous_same_package_name_binds_nothing() {
     let calls = calls();
     assert!(
+        has_call(&calls, "main", "appHelper", "Helper.kt", "module_plane"),
+        "the module leg is not running: {calls:?}"
+    );
+    assert!(
         !calls.iter().any(|(_, callee, _, _)| callee == "dupName"),
         "{calls:?}"
     );
+    let drops: Vec<Value> = rows()
+        .into_iter()
+        .filter(|row| row["record"] == "unresolved" && row["detail"] == "dupName")
+        .collect();
+    assert_eq!(drops.len(), 1, "{drops:?}");
+    assert_eq!(drops[0]["reason"], "ambiguous", "{drops:?}");
 }
 
 /// Lane K1: `spin` is reached as `Gadget.spin()` - a member call whose

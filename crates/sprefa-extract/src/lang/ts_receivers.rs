@@ -8,7 +8,7 @@
 //! alike. Union, primitive, and literal-inferred receivers never bind.
 //! @comment-ok: module header, the seam list every lang file opens with
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap};
 use std::sync::{Arc, Mutex, OnceLock};
 
 use oxc_allocator::Allocator;
@@ -203,28 +203,30 @@ struct ReceiverWalker {
     facts: TsFileTypes,
     scope: TypeScope,
     this_stack: Vec<String>,
-    /// The current callable's type-parameter constraints, `P extends Proj`
-    /// keyed by the parameter's name. A `p: P` param binds `Proj` so a member
-    /// call on it resolves through the constraint.
-    type_param_constraint: HashMap<String, String>,
-    /// Plain-local names per callable frame, typed or not: params and
-    /// const/let binding identifiers. Feeds the plain-call shadow check only.
-    locals: Vec<HashSet<String>>,
+    /// One frame per enclosing callable: its type-parameter constraints,
+    /// `P extends Proj` keyed by the parameter's name. A `p: P` param binds
+    /// `Proj` so a member call on it resolves through the constraint; a
+    /// nested callable sees its own frame first, then each outer one.
+    type_param_constraint: Vec<HashMap<String, String>>,
+    /// The declarators whose initializer is being walked, as (name, scope
+    /// frame index). A binding owns its name only after its initializer, so a
+    /// plain call to that name inside the init is not shadowed by it.
+    initializing: Vec<(String, usize)>,
 }
 
 impl ReceiverWalker {
     fn load_type_params(&mut self, tp: Option<&ts::TSTypeParameterDeclaration>) {
-        self.type_param_constraint.clear();
+        let mut frame = HashMap::new();
         if let Some(tp) = tp {
             for param in &tp.params {
                 if let Some(constraint) = &param.constraint {
                     if let Some(proj) = named_ref_of(&constraint) {
-                        self.type_param_constraint
-                            .insert(param.name.name.to_string(), proj);
+                        frame.insert(param.name.name.to_string(), proj);
                     }
                 }
             }
         }
+        self.type_param_constraint.push(frame);
     }
 
     fn seed_params(&mut self, params: &ts::FormalParameters) {
@@ -232,10 +234,8 @@ impl ReceiverWalker {
             let ts::BindingPattern::BindingIdentifier(id) = &item.pattern else {
                 continue;
             };
-            if let Some(frame) = self.locals.last_mut() {
-                frame.insert(id.name.to_string());
-            }
             let Some(ann) = &item.type_annotation else {
+                scope_insert(&mut self.scope, id.name.to_string(), TypeBinding::Inferred);
                 continue;
             };
             let binding = match &ann.type_annotation {
@@ -249,7 +249,9 @@ impl ReceiverWalker {
             let binding = match &binding {
                 TypeBinding::Decl(name) => self
                     .type_param_constraint
-                    .get(name)
+                    .iter()
+                    .rev()
+                    .find_map(|frame| frame.get(name))
                     .cloned()
                     .map(TypeBinding::Decl)
                     .unwrap_or_else(|| binding.clone()),
@@ -317,8 +319,8 @@ impl Default for ReceiverWalker {
             facts: TsFileTypes::default(),
             scope: vec![HashMap::new()],
             this_stack: Vec::new(),
-            type_param_constraint: HashMap::new(),
-            locals: vec![HashSet::new()],
+            type_param_constraint: Vec::new(),
+            initializing: Vec::new(),
         }
     }
 }
@@ -427,7 +429,6 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         self.scope.push(HashMap::new());
-        self.locals.push(HashSet::new());
         self.load_type_params(func.type_parameters.as_deref());
         self.seed_params(&func.params);
         if let Some(name) = func
@@ -444,12 +445,11 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         }
         oxc_ast_visit::walk::walk_function(self, func, flags);
         self.scope.pop();
-        self.locals.pop();
+        self.type_param_constraint.pop();
     }
 
     fn visit_arrow_function_expression(&mut self, arrow: &ts::ArrowFunctionExpression<'a>) {
         self.scope.push(HashMap::new());
-        self.locals.push(HashSet::new());
         self.load_type_params(arrow.type_parameters.as_deref());
         self.seed_params(&arrow.params);
         if let Some(name) = arrow
@@ -461,7 +461,7 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         }
         oxc_ast_visit::walk::walk_arrow_function_expression(self, arrow);
         self.scope.pop();
-        self.locals.pop();
+        self.type_param_constraint.pop();
     }
 
     fn visit_variable_declarator(&mut self, declarator: &ts::VariableDeclarator<'a>) {
@@ -505,13 +505,14 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
                 scope_insert(&mut self.scope, name, binding);
             }
         }
-        oxc_ast_visit::walk::walk_variable_declarator(self, declarator);
-        // The binding owns its name only after its initializer: inside the
-        // init, the name still denotes the outer binding.
+        let initializing = matches!(&declarator.id, ts::BindingPattern::BindingIdentifier(_));
         if let ts::BindingPattern::BindingIdentifier(id) = &declarator.id {
-            if let Some(frame) = self.locals.last_mut() {
-                frame.insert(id.name.to_string());
-            }
+            self.initializing
+                .push((id.name.to_string(), self.scope.len() - 1));
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, declarator);
+        if initializing {
+            self.initializing.pop();
         }
     }
 
@@ -551,12 +552,16 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         } else if let ts::Expression::Identifier(id) = &call.callee {
             // A plain call to a scope-bound local names the local, never a
             // corpus fn; the Shadowed row makes every name-match leg decline.
-            if self
-                .locals
+            let bound = self
+                .scope
                 .iter()
-                .rev()
-                .any(|frame| frame.contains(id.name.as_str()))
-            {
+                .rposition(|frame| frame.contains_key(id.name.as_str()));
+            let in_own_init = bound.is_some_and(|frame| {
+                self.initializing
+                    .iter()
+                    .any(|(name, at)| name == id.name.as_str() && *at == frame)
+            });
+            if bound.is_some() && !in_own_init {
                 self.facts.rows.push((
                     call.callee.span().start,
                     call.callee.span().end,

@@ -1,5 +1,5 @@
-// kotlin_module_resolve/model/Sibling.kt: declares `shared` too, making the
-// same-package name ambiguous for Main.kt.
+// kotlin_module_resolve/model/Sibling.kt: the only file declaring `shared`,
+// so the wildcard import binds it here through the module plane.
 
 package com.acme.model
 
