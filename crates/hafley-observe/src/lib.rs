@@ -10,6 +10,9 @@ mod _2_otlp;
 mod _3_chrome;
 #[path = "4_counts.rs"]
 mod _4_counts;
+#[cfg(feature = "sqlite")]
+#[path = "5_sqlite.rs"]
+pub mod sqlite;
 
 pub use _0_types::{Config, OutputFormat, ParseOutputFormatError};
 pub use _1_format::{env_filter, format_layer, FormatConfig, DEFAULT_FILTER_VARIABLE};

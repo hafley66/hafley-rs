@@ -8,19 +8,21 @@ homepage.workspace = true
 description = "Shared executable-owned tracing configuration for hafley-rs binaries"
 
 [features]
-default = ["otlp"]
+default = ["otlp", "sqlite"]
 otlp = [
     "tracing-opentelemetry",
     "opentelemetry",
     "opentelemetry_sdk",
     "opentelemetry-otlp",
 ]
+sqlite = ["dep:rusqlite"]
 
 [dependencies]
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-capture = "0.1.0"
 tracing-chrome = "0.7.2"
+rusqlite = { version = "0.40", default-features = false, features = ["trace"], optional = true }
 tracing-opentelemetry = { version = "0.33", default-features = false, optional = true }
 opentelemetry = { version = "0.32", default-features = false, features = ["trace"], optional = true }
 opentelemetry_sdk = { version = "0.32", default-features = false, features = ["trace", "internal-logs"], optional = true }
