@@ -64,6 +64,12 @@ pub trait Door: Send + Sync {
         Ok(NativeTuiPlan::direct(spec))
     }
 
+    /// The TUI arguments reopening `session`, after `--` on `boop tui <h>`. One
+    /// CLI spelling for every harness would revive codex into a fresh thread.
+    fn tui_resume_args(&self, _session: &str) -> Option<Vec<String>> {
+        None
+    }
+
     /// A fresh process plan resuming `session` after the TUI process died
     /// under a still-wanted route. `None` means this harness has no resume
     /// story and the death is final.

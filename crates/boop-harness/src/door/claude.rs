@@ -336,6 +336,11 @@ impl Door for ClaudeDoor {
         Ok(plan)
     }
 
+    /// `explicit_resume` reads this spelling back out of a revived pane's args.
+    fn tui_resume_args(&self, session: &str) -> Option<Vec<String>> {
+        Some(vec!["--resume".into(), session.into()])
+    }
+
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
         let DoorAddress::UnixSocket { path, token } = &session.door else {
             return Ok(Delivered::Unreachable(format!(
@@ -1028,6 +1033,16 @@ mod tui_launch_tests {
         assert_eq!(explicit_resume(&args(&["--resume"])), None);
         assert_eq!(explicit_resume(&args(&["--resume", "--verbose"])), None);
         assert_eq!(explicit_resume(&args(&["--resume="])), None);
+    }
+
+    /// RECEIPT. A revived pane's resume args parse back to the same session.
+    /// Sabotage: spelling `-r` here returns the picker, not the conversation.
+    #[test]
+    fn resume_args_round_trip_through_explicit_resume() {
+        let session = "f3deaaac-d198-47d5-975d-8e84a038046f";
+        let resume = ClaudeDoor::machine().tui_resume_args(session).unwrap();
+        assert_eq!(resume, ["--resume", session]);
+        assert_eq!(explicit_resume(&resume).as_deref(), Some(session));
     }
 
     #[test]

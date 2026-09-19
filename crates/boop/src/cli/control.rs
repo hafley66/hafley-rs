@@ -9,11 +9,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use boop::bus::Route;
-use boop::harness::{Harness, NativeTuiEvent, NativeTuiPlan, NativeTuiSpec};
+use boop::harness::{Harness, HarnessId, NativeTuiEvent, NativeTuiPlan, NativeTuiSpec};
 use boop::registry::Registry;
 use tracing::{info, warn};
 
-use crate::cli::{mail_dir, write_route};
+use crate::cli::{line, mail_dir, pad, write_route};
 
 /// How long a fresh TUI is given to appear in its harness's own live-session
 /// registry. The route is written either way; an unresolved session leaves the
@@ -468,7 +468,7 @@ pub(crate) fn run_native_tui(
         model: existing.as_ref().and_then(|route| route.model.clone()),
         mode: Some(plan.mode.clone()),
         session_id: plan.session_id.clone(),
-        source_path: plan.source_path.clone(),
+        source_path: stamp_executable(plan.source_path.clone(), executable),
         parent,
         goal: existing.as_ref().and_then(|route| route.goal.clone()),
         registered_at: existing
@@ -588,7 +588,7 @@ pub(crate) fn run_native_tui(
                 frontend_pid = next.frontend.as_ref().unwrap().id();
                 spawned_at = std::time::Instant::now();
                 route.app_server_socket = next.app_server_socket.clone();
-                route.source_path = next.source_path.clone();
+                route.source_path = stamp_executable(next.source_path.clone(), executable);
                 route.session_id = next.session_id.clone();
                 *plan = next;
                 boop::bus::update_native_route(&store, name, &mut route)?;
@@ -730,12 +730,626 @@ pub(crate) fn run_native_tui(
     outcome.and(cleanup)
 }
 
+// --- revive: a coordinator pane killed without /exit -----------------------
+
+/// How long a revived pane has to re-register its route on the same session.
+const REVIVE_WAIT: Duration = Duration::from_secs(60);
+
+/// How often the revive wait re-reads the route.
+const REVIVE_POLL: Duration = Duration::from_millis(200);
+
+/// How long the dying wrapper has to drop its route lock.
+const LOCK_WAIT: Duration = Duration::from_secs(15);
+
+/// The `source_path` field naming the executable a native TUI ran as.
+const EXECUTABLE_FIELD: &str = "native-executable=";
+
+/// Every route records the binary its pane ran, so a revive spawns `ccz` again
+/// and not plain `claude`. A door that wrote the field keeps its spelling.
+fn stamp_executable(source_path: Option<String>, executable: &str) -> Option<String> {
+    let field = format!("{EXECUTABLE_FIELD}{executable}");
+    match source_path {
+        Some(path)
+            if path
+                .split(';')
+                .any(|part| part.starts_with(EXECUTABLE_FIELD)) =>
+        {
+            Some(path)
+        }
+        Some(path) => Some(format!("{field};{path}")),
+        None => Some(field),
+    }
+}
+
+/// The executable a route's pane ran as; `None` when it recorded none.
+pub(crate) fn route_executable(source_path: Option<&str>) -> Option<&str> {
+    source_path?
+        .split(';')
+        .find_map(|part| part.strip_prefix(EXECUTABLE_FIELD))
+        .filter(|executable| !executable.is_empty())
+}
+
+/// Why a route cannot come back, `None` when it can. A revive replays `boop tui
+/// <harness> --cwd <cwd> -- <resume args>` and needs all three fields.
+pub(crate) fn revive_blocker(route: &Route) -> Option<&'static str> {
+    if route.kind != "coordinator" {
+        return Some("not a coordinator route");
+    }
+    if route.harness.is_none() {
+        return Some("no harness recorded");
+    }
+    if route.session_id.as_deref().is_none_or(str::is_empty) {
+        return Some("no session id recorded");
+    }
+    if route.cwd.as_deref().is_none_or(str::is_empty) {
+        return Some("no cwd recorded");
+    }
+    None
+}
+
+/// Whether a dead row earns the REVIVABLE mark in `lane list`.
+pub(crate) fn revivable(route: &Route) -> bool {
+    revive_blocker(route).is_none()
+}
+
+/// The one command a revived coordinator pane runs, the hand-typed recovery of
+/// 2026-09-12 as code. `--mail-dir` is explicit so the pane cannot drift stores.
+pub(crate) fn revive_command(
+    boop: &str,
+    harness: HarnessId,
+    name: &str,
+    cwd: &str,
+    executable: Option<&str>,
+    mail_dir: &Path,
+    resume: &[String],
+) -> String {
+    use boop::harness::shell_quote;
+    let mut command = format!(
+        "{} tui {} --name {} --cwd {} --mail-dir {}",
+        shell_quote(boop),
+        harness.as_str(),
+        shell_quote(name),
+        shell_quote(cwd),
+        shell_quote(&mail_dir.display().to_string()),
+    );
+    if let Some(executable) = executable {
+        command.push_str(&format!(" --bin {}", shell_quote(executable)));
+    }
+    command.push_str(" --");
+    for argument in resume {
+        command.push(' ');
+        command.push_str(&shell_quote(argument));
+    }
+    command
+}
+
+/// The live process still holding this session. `boop tui` refuses to bind a
+/// second TUI to it, so a revive that spawned anyway would leave a dead pane.
+fn live_session_owner(store: &boop::Store, session: &str) -> Option<u32> {
+    store
+        .live_row(session)
+        .ok()
+        .flatten()
+        .and_then(|row| row.pid)
+        .and_then(|pid| u32::try_from(pid).ok())
+        .filter(|pid| boop::live::pid_alive(*pid))
+}
+
+/// The live tmux target a route still owns; `None` when its pane is gone.
+fn live_target(route: &Route, name: &str, socket: Option<&str>) -> Option<String> {
+    let mux = boop::tmux::mux();
+    if let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) {
+        if mux.target_alive(socket, target) {
+            return Some(target.to_owned());
+        }
+    }
+    mux.target_alive(socket, name).then(|| name.to_owned())
+}
+
+/// Width of every message cell in the `--dead` table.
+const CELL: usize = 60;
+
+/// claude writes an explicit `/exit` as a user row. Codex rollouts and the
+/// opencode session table record no exit at all (searched 2026-09-12).
+const EXIT_COMMAND: &str = "<command-name>/exit";
+
+/// A user row the harness wrote itself: a slash command or codex's context
+/// preamble. Never what the operator typed, so never a table cell.
+const HARNESS_WRITTEN: [&str; 5] = [
+    "<command-name>",
+    "<command-message>",
+    "<local-command-stdout>",
+    "<environment_context>",
+    "<user_instructions>",
+];
+
+/// What one session's transcript says: the three messages the table shows, and
+/// whether the pane was closed on purpose.
+#[derive(Clone, Default)]
+pub(crate) struct SessionDigest {
+    pub(crate) started: String,
+    pub(crate) last_user: String,
+    pub(crate) last_bot: String,
+    pub(crate) exited: bool,
+}
+
+/// One offered row: a dead coordinator route that can come back.
+pub(crate) struct ReviveCandidate {
+    pub(crate) name: String,
+    pub(crate) route: Route,
+    pub(crate) harness: HarnessId,
+    pub(crate) session: String,
+    pub(crate) cwd: String,
+    pub(crate) last_activity_ms: u64,
+    pub(crate) digest: SessionDigest,
+}
+
+/// The three messages and the exit verdict, from projected turns in store
+/// order. A `<local-command-stdout>` row is a command's own echo, never a pick.
+pub(crate) fn digest_from_turns(rows: &[serde_json::Value]) -> SessionDigest {
+    let mut digest = SessionDigest::default();
+    let mut last_user_row = String::new();
+    for row in rows {
+        let role = row["role"].as_str().unwrap_or_default();
+        let said = row["said"].as_str().unwrap_or_default().trim();
+        if said.is_empty() {
+            continue;
+        }
+        match role {
+            "user" => {
+                if said.starts_with("<local-command-stdout>") {
+                    continue;
+                }
+                last_user_row = said.to_owned();
+                if HARNESS_WRITTEN
+                    .iter()
+                    .any(|prefix| said.starts_with(prefix))
+                {
+                    continue;
+                }
+                if digest.started.is_empty() {
+                    digest.started = said.to_owned();
+                }
+                digest.last_user = said.to_owned();
+            }
+            "assistant" => digest.last_bot = said.to_owned(),
+            _ => {}
+        }
+    }
+    digest.exited = last_user_row.starts_with(EXIT_COMMAND);
+    digest
+}
+
+/// The transcript's own words, through the harness reader and projected turns;
+/// the CLI parses no transcript. Second value: the transcript mtime.
+fn session_digest(
+    store: &boop::Store,
+    known: &boop::harness::KnownSessions,
+    adapter: &dyn Harness,
+    session: &str,
+    listed: &mut Option<Vec<boop::harness::SessionRef>>,
+) -> (SessionDigest, Option<u64>) {
+    let mut modified_ms = None;
+    // A pane killed in its first minute was never projected, so the store knows
+    // no cursor for it; the harness's own session list still names it.
+    let reference = adapter
+        .sync_candidate(known, session)
+        .ok()
+        .flatten()
+        .or_else(|| {
+            listed
+                .get_or_insert_with(|| adapter.sessions().unwrap_or_default())
+                .iter()
+                .find(|candidate| candidate.session_id == session)
+                .cloned()
+        });
+    if let Some(reference) = reference {
+        modified_ms = Some(reference.modified_ms);
+        if let Err(error) = boop::harness::sync_session(store, adapter, &reference) {
+            warn!(%error, session, "revive table could not project the transcript");
+        }
+    }
+    let rows = store
+        .query_turns(&boop::ident::TurnQuery {
+            session: Some(session.to_owned()),
+            ..boop::ident::TurnQuery::default()
+        })
+        .unwrap_or_default();
+    (digest_from_turns(&rows), modified_ms)
+}
+
+/// Every dead coordinator route worth offering after a tmux server death. A
+/// lane is never offered: a revived coordinator revives its own lanes.
+pub(crate) fn revive_candidates(
+    registry: &Registry,
+    dir: &Path,
+    socket: Option<&str>,
+    since: Duration,
+    report_skips: bool,
+) -> Result<Vec<ReviveCandidate>> {
+    let routes = boop::bus::read_routes(dir)?;
+    let newest_mail = crate::cli::job::newest_lane_activity(&boop::bus::read_messages(dir)?);
+    let store = boop::bus::open_store(dir)?;
+    let known = store.known_sessions()?;
+    let now = boop::live::now_ms();
+    let window = since.as_millis() as u64;
+    let mut out = Vec::new();
+    let mut listed: std::collections::HashMap<HarnessId, Option<Vec<boop::harness::SessionRef>>> =
+        std::collections::HashMap::new();
+    for (name, route) in &routes {
+        if route.kind != "coordinator" || live_target(route, name, socket).is_some() {
+            continue;
+        }
+        if let Some(blocker) = revive_blocker(route) {
+            if report_skips {
+                println!("skip {name}: {blocker}");
+            }
+            continue;
+        }
+        let (Some(harness), Some(session), Some(cwd)) =
+            (route.harness, route.session_id.clone(), route.cwd.clone())
+        else {
+            continue;
+        };
+        if let Some(pid) = live_session_owner(&store, &session) {
+            if report_skips {
+                println!("skip {name}: session {session} still runs as process {pid}");
+            }
+            continue;
+        }
+        let (digest, transcript_ms) = session_digest(
+            &store,
+            &known,
+            registry.get(harness),
+            &session,
+            listed.entry(harness).or_default(),
+        );
+        // A coordinator is a human's pane: no human message, nothing to
+        // revive. An explicit `/exit` is not a skip; the table marks it.
+        if digest.last_user.is_empty() {
+            if report_skips {
+                println!("skip {name}: no human message in session {session}");
+            }
+            continue;
+        }
+        let last_activity_ms = [
+            route
+                .registered_at
+                .as_deref()
+                .and_then(crate::cli::job::parse_iso_ms),
+            newest_mail.get(name).copied(),
+            transcript_ms,
+        ]
+        .into_iter()
+        .flatten()
+        .max()
+        .unwrap_or(0);
+        if now.saturating_sub(last_activity_ms) > window {
+            continue;
+        }
+        out.push(ReviveCandidate {
+            name: name.clone(),
+            route: route.clone(),
+            harness,
+            session,
+            cwd,
+            last_activity_ms,
+            digest,
+        });
+    }
+    out.sort_by(|left, right| {
+        right
+            .last_activity_ms
+            .cmp(&left.last_activity_ms)
+            .then(left.name.cmp(&right.name))
+    });
+    // One row per session: a session re-registered under a second route name
+    // (a hand-typed resume) keeps its newest route only.
+    let mut seen = std::collections::HashSet::new();
+    out.retain(|candidate| seen.insert(candidate.session.clone()));
+    Ok(out)
+}
+
+/// One cell: whitespace flattened, cut to `width` with a visible cut mark.
+pub(crate) fn cut(text: &str, width: usize) -> String {
+    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if flat.chars().count() <= width {
+        return flat;
+    }
+    let kept: String = flat.chars().take(width.saturating_sub(3)).collect();
+    format!("{kept}...")
+}
+
+/// How long ago, in the coarsest unit that still reads true.
+pub(crate) fn age(elapsed_ms: u64) -> String {
+    let seconds = elapsed_ms / 1000;
+    match seconds {
+        0..=90 => format!("{seconds}s"),
+        91..=5400 => format!("{}m", seconds / 60),
+        5401..=172_800 => format!("{}h", seconds / 3600),
+        _ => format!("{}d", seconds / 86_400),
+    }
+}
+
+/// The table the operator picks from.
+fn print_candidates(candidates: &[ReviveCandidate], now: u64) {
+    line(&format!(
+        "{} {} {} {} {} {} {} {}",
+        pad("#", 3),
+        pad("name", 20),
+        pad("harness", 8),
+        pad("cwd", 40),
+        pad("started", CELL),
+        pad("last user", CELL),
+        pad("last bot", CELL),
+        "age",
+    ));
+    for (index, candidate) in candidates.iter().enumerate() {
+        line(&format!(
+            "{} {} {} {} {} {} {} {}",
+            pad(&format!("{}", index + 1), 3),
+            pad(&cut(&candidate.name, 20), 20),
+            pad(candidate.harness.as_str(), 8),
+            pad(&cut(&candidate.cwd, 40), 40),
+            pad(&cut(&candidate.digest.started, CELL), CELL),
+            pad(&cut(&candidate.digest.last_user, CELL), CELL),
+            pad(&cut(&candidate.digest.last_bot, CELL), CELL),
+            format!(
+                "{}{}",
+                age(now.saturating_sub(candidate.last_activity_ms)),
+                if candidate.digest.exited {
+                    " exited"
+                } else {
+                    ""
+                }
+            ),
+        ));
+    }
+}
+
+/// The same rows as JSON, uncut, for a reader that renders its own table.
+fn candidates_json(candidates: &[ReviveCandidate], now: u64) -> Result<String> {
+    let rows: Vec<serde_json::Value> = candidates
+        .iter()
+        .enumerate()
+        .map(|(index, candidate)| {
+            serde_json::json!({
+                "n": index + 1,
+                "name": candidate.name,
+                "harness": candidate.harness.as_str(),
+                "cwd": candidate.cwd,
+                "session_id": candidate.session,
+                "started": candidate.digest.started,
+                "last_user": candidate.digest.last_user,
+                "last_bot": candidate.digest.last_bot,
+                "exited": candidate.digest.exited,
+                "last_activity_ms": candidate.last_activity_ms,
+                "age": age(now.saturating_sub(candidate.last_activity_ms)),
+            })
+        })
+        .collect();
+    Ok(serde_json::to_string_pretty(&rows)?)
+}
+
+/// The operator's answer to `revive [all|1,3,5|none]:`, as row indexes.
+pub(crate) fn parse_selection(answer: &str, count: usize) -> Result<Vec<usize>> {
+    let answer = answer.trim();
+    if answer.is_empty() || answer.eq_ignore_ascii_case("none") {
+        return Ok(Vec::new());
+    }
+    if answer.eq_ignore_ascii_case("all") {
+        return Ok((0..count).collect());
+    }
+    let mut picked = Vec::new();
+    for token in answer
+        .split([',', ' '])
+        .map(str::trim)
+        .filter(|token| !token.is_empty())
+    {
+        let index: usize = token
+            .parse()
+            .map_err(|_| anyhow::anyhow!("`{token}` is not a row number, `all` or `none`"))?;
+        anyhow::ensure!(
+            (1..=count).contains(&index),
+            "row {index} is not one of 1..={count}"
+        );
+        if !picked.contains(&(index - 1)) {
+            picked.push(index - 1);
+        }
+    }
+    Ok(picked)
+}
+
+/// Ask once, on the terminal the operator is standing at.
+fn read_selection(count: usize) -> Result<Vec<usize>> {
+    use std::io::BufRead;
+    print!("revive [all|1,3,5|none]: ");
+    std::io::stdout().flush().ok();
+    let mut answer = String::new();
+    if std::io::stdin().lock().read_line(&mut answer)? == 0 {
+        return Ok(Vec::new());
+    }
+    parse_selection(&answer, count)
+}
+
+/// `boop beep lane revive`: bring back a coordinator pane that died without an
+/// `/exit`, on the conversation its route still names.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn run_lane_revive(
+    registry: &Registry,
+    name: Option<&str>,
+    dead: bool,
+    list: bool,
+    json: bool,
+    yes: bool,
+    since: &str,
+    socket: Option<&str>,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    if let Some(name) = name {
+        let routes = boop::bus::read_routes(&dir)?;
+        let route = routes
+            .get(name)
+            .with_context(|| format!("no route named {name}"))?;
+        if let Some(blocker) = revive_blocker(route) {
+            anyhow::bail!("route {name} cannot revive: {blocker}");
+        }
+        return revive_route(registry, &dir, name, route, socket);
+    }
+    anyhow::ensure!(
+        dead || list,
+        "name a route to revive, or pass --dead (or --list to only look)"
+    );
+    let window = boop::debug::parse_window(since)?;
+    let candidates = revive_candidates(registry, &dir, socket, window, dead && !list)?;
+    let now = boop::live::now_ms();
+    if json {
+        println!("{}", candidates_json(&candidates, now)?);
+        return Ok(());
+    }
+    if candidates.is_empty() {
+        println!(
+            "no dead coordinator route to revive (coordinator kind, harness and session and cwd set, a human message, active within {since})"
+        );
+        return Ok(());
+    }
+    print_candidates(&candidates, now);
+    if list {
+        return Ok(());
+    }
+    let picked = match yes {
+        true => (0..candidates.len()).collect(),
+        false => read_selection(candidates.len())?,
+    };
+    if picked.is_empty() {
+        println!("nothing revived");
+        return Ok(());
+    }
+    let mut failures = Vec::new();
+    for index in picked {
+        let candidate = &candidates[index];
+        if let Err(error) = revive_route(registry, &dir, &candidate.name, &candidate.route, socket)
+        {
+            println!("failed {}: {error}", candidate.name);
+            failures.push(candidate.name.clone());
+        }
+    }
+    anyhow::ensure!(
+        failures.is_empty(),
+        "revive failed for {}",
+        failures.join(", ")
+    );
+    Ok(())
+}
+
+/// Spawn one route's pane again and wait for it to rebind its own session.
+fn revive_route(
+    registry: &Registry,
+    dir: &Path,
+    name: &str,
+    route: &Route,
+    socket: Option<&str>,
+) -> Result<()> {
+    if let Some(target) = live_target(route, name, socket) {
+        anyhow::bail!("route {name} is live at tmux target {target}; revive is for a dead pane");
+    }
+    let harness = route.harness.context("route records no harness")?;
+    let session = route
+        .session_id
+        .as_deref()
+        .context("route records no session id")?;
+    let cwd = route.cwd.as_deref().context("route records no cwd")?;
+    if let Some(pid) = live_session_owner(&boop::bus::open_store(dir)?, session) {
+        anyhow::bail!(
+            "route {name} session {session} still runs as process {pid}; stop it before reviving"
+        );
+    }
+    let resume = registry
+        .get(harness)
+        .door()
+        .tui_resume_args(session)
+        .with_context(|| format!("harness {harness} names no TUI resume arguments"))?;
+    let boop = std::env::current_exe()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|_| "boop".to_owned());
+    let command = revive_command(
+        &boop,
+        harness,
+        name,
+        cwd,
+        route_executable(route.source_path.as_deref()),
+        dir,
+        &resume,
+    );
+    wait_for_free_route_lock(dir, name)?;
+    println!("revive {name} ({harness} session {session} in {cwd})");
+    info!(route = name, %harness, session, command, "reviving a dead coordinator pane");
+    boop::tmux::mux().new_detached_session(socket, name, cwd, &command)?;
+    wait_for_revived_route(dir, name, session, socket)
+}
+
+/// A wrapper killed with its tmux server drops its route lock as it exits, and
+/// a pane spawned into that gap refuses itself and dies. Wait the gap out.
+fn wait_for_free_route_lock(dir: &Path, name: &str) -> Result<()> {
+    let db = boop::bus::db_path(dir)?;
+    let deadline = std::time::Instant::now() + LOCK_WAIT;
+    loop {
+        if boop::bus::try_route_lock(&db, name, "native-tui")?.is_some() {
+            return Ok(());
+        }
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "route {name} still has a native TUI wrapper holding its lock after {LOCK_WAIT:?}"
+        );
+        std::thread::sleep(REVIVE_POLL);
+    }
+}
+
+/// The revive is done when the new pane has written the route back on the same
+/// session. A pane that died first is reported as itself, not as a timeout.
+fn wait_for_revived_route(
+    dir: &Path,
+    name: &str,
+    session: &str,
+    socket: Option<&str>,
+) -> Result<()> {
+    let deadline = std::time::Instant::now() + REVIVE_WAIT;
+    loop {
+        let pane = boop::bus::read_routes(dir)?
+            .remove(name)
+            .filter(|route| route.session_id.as_deref() == Some(session))
+            .and_then(|route| route.tmux)
+            .filter(|pane| !pane.is_empty());
+        if let Some(pane) = pane {
+            if boop::tmux::mux().target_alive(socket, &pane) {
+                println!("revived {name} pane {pane}");
+                return Ok(());
+            }
+        }
+        anyhow::ensure!(
+            boop::tmux::mux().target_alive(socket, name),
+            "revive of {name} left no live pane; `boop debug {name}`"
+        );
+        anyhow::ensure!(
+            std::time::Instant::now() < deadline,
+            "revive of {name} did not re-register session {session} within {REVIVE_WAIT:?}; `boop debug {name}`"
+        );
+        std::thread::sleep(REVIVE_POLL);
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{respawn_wanted, session_for_native_frontend, RESPAWN_MIN_UPTIME};
+    use super::{
+        respawn_wanted, revive_blocker, revive_command, route_executable,
+        session_for_native_frontend, stamp_executable, RESPAWN_MIN_UPTIME,
+    };
     use anyhow::Result;
+    use boop::harness::HarnessId;
     use boop::live::LiveSessions;
     use std::os::unix::process::ExitStatusExt;
+    use std::path::Path;
     use std::process::ExitStatus;
     use std::sync::Mutex;
     use std::time::Duration;
@@ -805,6 +1419,185 @@ mod tests {
                 .map(|session| session.session_id),
             Some("pid-bound".into())
         );
+    }
+    /// RECEIPT (incident 2026-09-12). The assembled line is the command the
+    /// user typed by hand, one argument at a time.
+    #[test]
+    fn the_revive_command_replays_the_hand_typed_recovery() {
+        let command = revive_command(
+            "/usr/local/bin/boop",
+            HarnessId::Claude,
+            "claude-2344",
+            "/Users/c/projects/sprefa",
+            Some("ccz"),
+            Path::new("/Users/c/.agent"),
+            &["--resume".to_owned(), "298b7814".to_owned()],
+        );
+        assert_eq!(
+            command,
+            "'/usr/local/bin/boop' tui claude --name 'claude-2344' \
+             --cwd '/Users/c/projects/sprefa' --mail-dir '/Users/c/.agent' \
+             --bin 'ccz' -- '--resume' '298b7814'"
+        );
+    }
+
+    /// RECEIPT. Each harness's own resume spelling reaches the command line;
+    /// sabotage: one hardcoded `--resume` sends codex into a new thread.
+    #[test]
+    fn each_harness_spells_its_own_resume_arguments() {
+        let registry = boop::registry::Registry::discover();
+        let spellings: Vec<(HarnessId, Vec<String>)> = [
+            HarnessId::Claude,
+            HarnessId::Codex,
+            HarnessId::Opencode,
+            HarnessId::Kimi,
+        ]
+        .into_iter()
+        .map(|id| {
+            (
+                id,
+                registry
+                    .get(id)
+                    .door()
+                    .tui_resume_args("S-1")
+                    .unwrap_or_default(),
+            )
+        })
+        .collect();
+        assert_eq!(
+            spellings,
+            vec![
+                (HarnessId::Claude, vec!["--resume".into(), "S-1".into()]),
+                (HarnessId::Codex, vec!["resume".into(), "S-1".into()]),
+                (HarnessId::Opencode, vec!["--session".into(), "S-1".into()]),
+                (HarnessId::Kimi, vec!["--session".into(), "S-1".into()]),
+            ]
+        );
+        let command = revive_command(
+            "boop",
+            HarnessId::Codex,
+            "codex-7",
+            "/tmp/w",
+            None,
+            Path::new("/tmp/mail"),
+            &spellings[1].1,
+        );
+        assert!(command.ends_with("-- 'resume' 'S-1'"), "{command}");
+        assert!(!command.contains("--bin"), "{command}");
+    }
+
+    /// RECEIPT. The executable survives a round trip through `source_path`, so
+    /// a revived pane runs `ccz` and not the harness's own binary name.
+    #[test]
+    fn the_route_records_the_executable_its_pane_ran() {
+        let stamped = stamp_executable(Some("native-session=abc".into()), "ccz");
+        assert_eq!(
+            stamped.as_deref(),
+            Some("native-executable=ccz;native-session=abc")
+        );
+        assert_eq!(route_executable(stamped.as_deref()), Some("ccz"));
+        let door_written = stamp_executable(
+            Some("native-executable=ccz;requested-resume=abc".into()),
+            "claude",
+        );
+        assert_eq!(route_executable(door_written.as_deref()), Some("ccz"));
+        assert_eq!(
+            route_executable(stamp_executable(None, "opencode").as_deref()),
+            Some("opencode")
+        );
+        assert_eq!(route_executable(Some("owned-app-server=/tmp/s.sock")), None);
+        assert_eq!(route_executable(None), None);
+    }
+
+    /// RECEIPT. A claude pane that typed `/exit` closed on purpose and is not
+    /// offered; the `Bye!` echo after it does not hide the command.
+    #[test]
+    fn an_explicit_exit_is_read_through_its_own_echo() {
+        let rows = turns(&[
+            ("user", "render the terminal flow"),
+            ("assistant", "FIXED_TERMINAL_REPLY"),
+            (
+                "user",
+                "<command-name>/exit</command-name>\n<command-message>exit",
+            ),
+            ("user", "<local-command-stdout>Bye!</local-command-stdout>"),
+        ]);
+        let digest = super::digest_from_turns(&rows);
+        assert!(digest.exited);
+        assert_eq!(digest.started, "render the terminal flow");
+        assert_eq!(digest.last_user, "render the terminal flow");
+        assert_eq!(digest.last_bot, "FIXED_TERMINAL_REPLY");
+    }
+
+    /// RECEIPT. A pane killed mid-turn ends on ordinary rows, so it is offered.
+    /// Sabotage: reading the raw last user row marks every `/model` call exited.
+    #[test]
+    fn a_killed_pane_reads_as_an_unclean_death() {
+        let rows = turns(&[
+            ("user", "first ask"),
+            ("assistant", "first answer"),
+            ("user", "<command-name>/model</command-name>"),
+            ("user", "second ask"),
+            ("assistant", "second answer"),
+        ]);
+        let digest = super::digest_from_turns(&rows);
+        assert!(!digest.exited);
+        assert_eq!(digest.started, "first ask");
+        assert_eq!(digest.last_user, "second ask");
+        assert_eq!(digest.last_bot, "second answer");
+    }
+
+    /// RECEIPT. The selection prompt takes `all`, a list, and nothing; a row
+    /// number outside the table is refused rather than revived by accident.
+    #[test]
+    fn the_selection_prompt_reads_all_a_list_and_none() {
+        use super::parse_selection;
+        assert_eq!(parse_selection("all", 3).unwrap(), vec![0, 1, 2]);
+        assert_eq!(parse_selection("none", 3).unwrap(), Vec::<usize>::new());
+        assert_eq!(parse_selection("\n", 3).unwrap(), Vec::<usize>::new());
+        assert_eq!(parse_selection("1,3", 3).unwrap(), vec![0, 2]);
+        assert_eq!(parse_selection("3 1 3", 3).unwrap(), vec![2, 0]);
+        assert!(parse_selection("4", 3).is_err());
+        assert!(parse_selection("0", 3).is_err());
+        assert!(parse_selection("second", 3).is_err());
+    }
+
+    /// RECEIPT. A cell is one flat line at the stated width; age reads coarse.
+    #[test]
+    fn cells_are_cut_to_width_and_ages_read_coarse() {
+        use super::{age, cut};
+        assert_eq!(cut("one\n  two   three", 60), "one two three");
+        assert_eq!(cut(&"x".repeat(80), 60).chars().count(), 60);
+        assert!(cut(&"x".repeat(80), 60).ends_with("..."));
+        assert_eq!(age(45_000), "45s");
+        assert_eq!(age(600_000), "10m");
+        assert_eq!(age(7_200_000), "2h");
+        assert_eq!(age(3 * 86_400_000), "3d");
+    }
+
+    /// Rows shaped like `query_turns` output.
+    fn turns(rows: &[(&str, &str)]) -> Vec<serde_json::Value> {
+        rows.iter()
+            .map(|(role, said)| serde_json::json!({ "role": role, "said": said }))
+            .collect()
+    }
+
+    /// RECEIPT. The three-field precondition, one blocker per missing field.
+    #[test]
+    fn a_route_missing_one_of_three_fields_cannot_revive() {
+        let mut route = crate::cli::testkit::route_with(None);
+        assert_eq!(revive_blocker(&route), Some("not a coordinator route"));
+        route.kind = "coordinator".into();
+        route.harness = None;
+        assert_eq!(revive_blocker(&route), Some("no harness recorded"));
+        route.harness = Some(HarnessId::Claude);
+        assert_eq!(revive_blocker(&route), Some("no session id recorded"));
+        route.session_id = Some(String::new());
+        assert_eq!(revive_blocker(&route), Some("no session id recorded"));
+        route.session_id = Some("298b7814".into());
+        assert_eq!(revive_blocker(&route), Some("no cwd recorded"));
+        route.cwd = Some("/tmp/w".into());
+        assert_eq!(revive_blocker(&route), None);
     }
 
     #[test]

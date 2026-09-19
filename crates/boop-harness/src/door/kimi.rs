@@ -31,6 +31,11 @@ impl Door for KimiDoor {
     fn notify_idle(&self, _session: &LiveSession, _timeout: Duration) -> Result<IdleNotice> {
         anyhow::bail!("{NO_DOOR}")
     }
+
+    /// `kimi -S <id>` in its long spelling; `kimi --help` names no other.
+    fn tui_resume_args(&self, session: &str) -> Option<Vec<String>> {
+        Some(vec!["--session".into(), session.into()])
+    }
 }
 
 #[cfg(test)]
@@ -50,5 +55,14 @@ mod tests {
         assert!(KimiDoor
             .notify_idle(&session, Duration::from_millis(1))
             .is_err());
+    }
+
+    /// RECEIPT. `kimi --help`: `-S, --session [id]` resumes; nothing else does.
+    #[test]
+    fn resume_args_name_the_session_flag() {
+        assert_eq!(
+            KimiDoor.tui_resume_args("ses_9a").unwrap(),
+            ["--session", "ses_9a"]
+        );
     }
 }

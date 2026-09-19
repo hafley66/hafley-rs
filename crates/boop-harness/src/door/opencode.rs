@@ -642,6 +642,11 @@ impl Door for OpencodeDoor {
         Ok(plan)
     }
 
+    /// `native_request` reads this spelling back out of a revived pane's args.
+    fn tui_resume_args(&self, session: &str) -> Option<Vec<String>> {
+        Some(vec!["--session".into(), session.into()])
+    }
+
     fn deliver(&self, session: &LiveSession, body: &str) -> Result<Delivered> {
         // prompt_async joins an active generation instead of preserving two
         // independent turns. Leave the envelope pending for the wrapper's
@@ -860,6 +865,25 @@ mod tests {
                 effort: Some("high".into()),
             })
         );
+    }
+
+    /// RECEIPT. A revived pane's resume args parse back to the same session.
+    /// Sabotage: `--resume <id>` reaches `attach` as junk and opens a new one.
+    #[test]
+    fn resume_args_round_trip_through_native_request() {
+        let session = "ses_7f2c1d";
+        let resume = OpencodeDoor::machine().tui_resume_args(session).unwrap();
+        assert_eq!(resume, ["--session", session]);
+        let spec = NativeTuiSpec {
+            executable: "opencode".into(),
+            cwd: PathBuf::from("/tmp"),
+            args: resume,
+            env: Vec::new(),
+        };
+        let (prepared, parsed, explicit_model) = native_request(&spec).unwrap();
+        assert_eq!(parsed.as_deref(), Some(session));
+        assert!(prepared.args.is_empty());
+        assert!(!explicit_model);
     }
 
     #[test]

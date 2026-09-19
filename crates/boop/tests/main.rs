@@ -79,6 +79,8 @@ mod t5_live_harness;
 mod tell;
 #[path = "temp_home_rail.rs"]
 mod temp_home_rail;
+#[path = "tui_revive_e2e.rs"]
+mod tui_revive_e2e;
 #[path = "tui_sigint_e2e.rs"]
 mod tui_sigint_e2e;
 #[path = "wait_mail.rs"]

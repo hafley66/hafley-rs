@@ -2255,6 +2255,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             state,
             harness,
             all,
+            socket,
             mail_dir,
         } => run_lane_list(
             registry,
@@ -2262,6 +2263,27 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             state.as_deref(),
             harness.as_deref().map(str::parse).transpose()?,
             all,
+            socket.as_deref(),
+        ),
+        LaneCmd::Revive {
+            lane,
+            dead,
+            list,
+            json,
+            yes,
+            since,
+            socket,
+            mail_dir,
+        } => crate::cli::control::run_lane_revive(
+            registry,
+            lane.as_deref(),
+            dead,
+            list,
+            json,
+            yes,
+            &since,
+            socket.as_deref(),
+            mail_dir.as_deref(),
         ),
         LaneCmd::Create {
             lane,
@@ -2504,10 +2526,11 @@ pub(crate) fn run_lane_list(
     state_filter: Option<&str>,
     harness_filter: Option<HarnessId>,
     all: bool,
+    socket: Option<&str>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
-    let live = tmux::mux().live_sessions(None);
+    let live = tmux::mux().live_sessions(socket);
     let now = epoch_ms();
     let stale_ms = boop::supervise::stale_limit().map(|limit| limit.as_millis() as u64);
     let newest = newest_lane_activity(&bus::read_messages(&dir)?);
@@ -2517,7 +2540,7 @@ pub(crate) fn run_lane_list(
     // two spawns per lane, and the mailbox rows are read one pass for every
     // DEAD token instead of one pass per dead lane.
     let snapshot = proc::SysinfoSnapshot::capture()?;
-    let pane_pids = tmux::mux().pane_pids(None);
+    let pane_pids = tmux::mux().pane_pids(socket);
     let trail_root = boop::trail::lanes_root().ok();
     let mail_rows: Vec<bus::Message> = trail_root
         .as_ref()
@@ -2530,7 +2553,9 @@ pub(crate) fn run_lane_list(
         })
         .unwrap_or_default();
     for (name, route) in &routes {
-        let state = lane_state_with_pids(&dir, name, &live, route, &routes, &snapshot, &pane_pids);
+        let state = lane_state_with_pids(
+            &dir, name, &live, route, &routes, &snapshot, &pane_pids, socket,
+        );
         if let Some(want) = state_filter {
             if state != want {
                 continue;
@@ -2553,8 +2578,12 @@ pub(crate) fn run_lane_list(
                 None => boop::trail::DeadReason::NoTrail.token(),
             };
             suffix.push_str(&format!(" DEAD={token}"));
+            if crate::cli::control::revivable(route) {
+                suffix.push_str(" REVIVABLE");
+            }
         }
-        if let Some(gone) = gone_parent(&dir, &routes, &live, route, &snapshot, &pane_pids) {
+        if let Some(gone) = gone_parent(&dir, &routes, &live, route, &snapshot, &pane_pids, socket)
+        {
             suffix.push_str(&format!(" PARENT-GONE={gone}"));
         }
         line(&format!(
@@ -2637,7 +2666,7 @@ pub(crate) fn run_lane_list(
 
 /// Epoch-ms of the newest row touching each route, from one mailbox pass. Stale
 /// alarm rows are skipped so the flag cannot clear itself.
-fn newest_lane_activity(messages: &[bus::Message]) -> BTreeMap<String, u64> {
+pub(crate) fn newest_lane_activity(messages: &[bus::Message]) -> BTreeMap<String, u64> {
     let mut newest: BTreeMap<String, u64> = BTreeMap::new();
     for message in messages {
         if message.kind == boop::supervise::STALE {
@@ -2698,12 +2727,21 @@ pub(crate) fn gone_parent<'a>(
     route: &'a Route,
     reader: &dyn proc::ProcReader,
     pane_pids: &Option<std::collections::BTreeMap<String, u32>>,
+    socket: Option<&str>,
 ) -> Option<&'a str> {
     let parent = route.parent.as_deref()?;
     match routes.get(parent) {
         Some(parent_route)
-            if lane_state_with_pids(dir, parent, live, parent_route, routes, reader, pane_pids)
-                != "dead" =>
+            if lane_state_with_pids(
+                dir,
+                parent,
+                live,
+                parent_route,
+                routes,
+                reader,
+                pane_pids,
+                socket,
+            ) != "dead" =>
         {
             None
         }
@@ -2759,6 +2797,9 @@ pub(crate) fn dead_reason_token_from_rows(
 /// measured once and no deeper: a parent that is itself pane-less answers `?`,
 /// and a parentless pane-less route answers `?` too. `reader` is captured once
 /// per command and threaded through every hop.
+///
+/// This spelling reads the default tmux server; `lane list --socket` threads
+/// its socket through `lane_state_with_pids` instead.
 pub(crate) fn lane_state(
     dir: &Path,
     name: &str,
@@ -2768,7 +2809,7 @@ pub(crate) fn lane_state(
     reader: &dyn proc::ProcReader,
 ) -> &'static str {
     let pane_pids = tmux::mux().pane_pids(None);
-    lane_state_with_pids(dir, name, live, route, routes, reader, &pane_pids)
+    lane_state_with_pids(dir, name, live, route, routes, reader, &pane_pids, None)
 }
 
 /// `lane_state` over a pane pid batch captured once for the whole command, so
@@ -2781,8 +2822,11 @@ pub(crate) fn lane_state_with_pids(
     routes: &BTreeMap<String, Route>,
     reader: &dyn proc::ProcReader,
     pane_pids: &Option<std::collections::BTreeMap<String, u32>>,
+    socket: Option<&str>,
 ) -> &'static str {
-    lane_state_hop(dir, name, live, route, routes, true, reader, pane_pids)
+    lane_state_hop(
+        dir, name, live, route, routes, true, reader, pane_pids, socket,
+    )
 }
 
 /// The shared body of `lane_state`. A pane-less coordinator/native route has
@@ -2799,6 +2843,7 @@ fn lane_state_hop(
     allow_parent_hop: bool,
     reader: &dyn proc::ProcReader,
     pane_pids: &Option<std::collections::BTreeMap<String, u32>>,
+    socket: Option<&str>,
 ) -> &'static str {
     if route.tmux.is_none() && matches!(route.kind.as_str(), "coordinator" | "native") {
         if !allow_parent_hop {
@@ -2821,6 +2866,7 @@ fn lane_state_hop(
             false,
             reader,
             pane_pids,
+            socket,
         );
     }
     let tmux_alive = match live {
@@ -2838,7 +2884,7 @@ fn lane_state_hop(
             {
                 Some(pid) => Some(pid),
                 None if pane_pids.is_some() => None,
-                None => tmux::mux().pane_pid(None, target),
+                None => tmux::mux().pane_pid(socket, target),
             };
             pane_pid.is_some_and(|pane_pid| proc::tree_sum_of(reader, pane_pid).is_some())
         }),
@@ -4929,7 +4975,8 @@ mod tests {
                 &routes["lane-one"],
                 &routes,
                 &snapshot,
-                &batch
+                &batch,
+                None
             ),
             "live"
         );
@@ -4941,7 +4988,8 @@ mod tests {
                 &routes["lane-two"],
                 &routes,
                 &snapshot,
-                &batch
+                &batch,
+                None
             ),
             "live"
         );
@@ -4953,7 +5001,8 @@ mod tests {
                 &routes["lane-gone"],
                 &routes,
                 &snapshot,
-                &batch
+                &batch,
+                None
             ),
             "dead"
         );

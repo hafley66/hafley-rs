@@ -1047,6 +1047,10 @@ enum LaneCmd {
         /// Include unregistered tmux sessions and native Claude subagents.
         #[arg(long)]
         all: bool,
+        /// Read liveness from this tmux socket; the default server when unset.
+        /// Pane ids repeat across sockets, so a throwaway socket needs it.
+        #[arg(long)]
+        socket: Option<String>,
         /// Directory holding boop.db; defaults to ~/.agent.
         #[arg(long)]
         mail_dir: Option<PathBuf>,
@@ -1194,6 +1198,33 @@ enum LaneCmd {
         /// The executable the harness runs as, threaded from `lane create`.
         #[arg(long)]
         bin: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Bring a dead `boop tui` coordinator pane back on its own session.
+    /// Its route must carry harness, session_id and cwd; a live target refuses.
+    Revive {
+        /// The dead route to revive. Omit for `--dead` or `--list`.
+        lane: Option<String>,
+        /// The turnkey command after a tmux server death: print one table of
+        /// dead coordinator routes, then ask which to revive.
+        #[arg(long)]
+        dead: bool,
+        /// Print that table and exit; the read path, no prompt, no spawn.
+        #[arg(long)]
+        list: bool,
+        /// `--list` as JSON, uncut, for a reader that draws its own table.
+        #[arg(long, requires = "list")]
+        json: bool,
+        /// Skip the prompt and revive every row.
+        #[arg(long, short = 'y')]
+        yes: bool,
+        /// Only routes active this recently: Ns, Nm, Nh.
+        #[arg(long, default_value = "1h")]
+        since: String,
+        /// tmux socket the pane lives on; the default server when unset.
+        #[arg(long)]
+        socket: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },

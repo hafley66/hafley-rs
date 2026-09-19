@@ -269,6 +269,11 @@ impl Door for CodexDoor {
         Ok(plan)
     }
 
+    /// A subcommand, not a flag; `explicit_resume` reads it back out.
+    fn tui_resume_args(&self, session: &str) -> Option<Vec<String>> {
+        Some(vec!["resume".into(), session.into()])
+    }
+
     /// Resume under a new owned backend after an abnormal process exit.
     fn tui_relaunch(
         &self,
@@ -1145,6 +1150,18 @@ mod tests {
         drop(client);
         drop(observer);
         fake.join().unwrap();
+    }
+
+    /// RECEIPT. A revived pane's resume args parse back to the same thread.
+    /// Sabotage: `--resume <id>` opens a fresh thread and drops the history.
+    #[test]
+    fn resume_args_round_trip_through_explicit_resume() {
+        let thread = "019ffb9b-51cb-7e92-be44-4eb469f46d95";
+        let resume = CodexDoor::machine().tui_resume_args(thread).unwrap();
+        assert_eq!(resume, ["resume", thread]);
+        let (parsed, forwarded) = explicit_resume(&resume).unwrap();
+        assert_eq!(parsed.as_deref(), Some(thread));
+        assert!(forwarded.is_empty());
     }
 
     #[test]

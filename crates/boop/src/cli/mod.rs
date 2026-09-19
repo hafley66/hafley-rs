@@ -131,6 +131,27 @@ RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
   pinned conversation, waits up to 60 s for the supervisor to report live,
   and hands it the body as its opening turn. The send's wait then ends on the
   lane's next yield or result row, the same rows its parent reads.
+  A coordinator pane (`boop tui <harness>`) killed without `/exit` (tmux server
+  death, SIGKILL, sleep) comes back on the conversation its route already holds.
+  After a tmux server death this is the one command to type:
+    boop beep lane revive --dead [--since 1h] [--yes] [--socket <s>]
+    boop beep lane revive --list [--json]      look, do not spawn
+    boop beep lane revive <name>               one route by name
+  The precondition is THREE route fields: harness, session_id and cwd. A dead
+  coordinator row carrying all three prints REVIVABLE in `lane list`; one
+  missing a field is named and skipped by --dead. --dead offers kind=coordinator
+  routes only (a revived coordinator revives its own lanes), active within
+  --since, whose transcript holds at least one human message (a coordinator
+  is a human's pane; a route with none is skipped and named). One row per
+  session: a session resumed by hand under a second route name shows once. A
+  transcript ending in claude's `/exit` user row is still offered, marked
+  `exited` in the age column (codex and opencode record no exit at all). It
+  prints one table, one row per candidate, with that session's first user message, last user message
+  and last assistant message read from the transcript, then asks
+  `revive [all|1,3,5|none]:`; --yes answers `all`. Each pick spawns a tmux
+  session named for the route running `boop tui <harness> --name <name> --cwd
+  <cwd>` with the harness's own resume argument, and waits up to 60 s for the
+  route to re-register that same session on a live pane. A live target refuses.
 
 DEBUG: what just went wrong, without opening a log:
     boop debug [--since 2m] [--lane <id>] [--json]
