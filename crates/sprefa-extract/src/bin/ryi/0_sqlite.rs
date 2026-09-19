@@ -346,7 +346,9 @@ impl Output {
             || self.line_root.is_some()
         {
             if let Ok(text) = std::str::from_utf8(encoded) {
-                if text.contains("\"start\"") {
+                // Owned spans suffix their keys (caller_site_start), so the
+                // prefilter matches both the plain key and the suffix form.
+                if text.contains("\"start\"") || text.contains("_start\":") {
                     let mut value: Value = serde_json::from_str(text)?;
                     if self.decorate_record(&mut value) {
                         serde_json::to_writer(&mut self.stdout, &value)?;
@@ -366,6 +368,7 @@ impl Output {
     /// input applies, and whole-project modes leave that unset so their
     /// unattributable rows stay raw bytes.
     fn decorate_record(&mut self, value: &mut Value) -> bool {
+        let owned = self.decorate_owned_spans(value);
         let table = match value.get("path").and_then(Value::as_str) {
             Some(path) => self
                 .line_table_for(path)
@@ -377,8 +380,41 @@ impl Output {
                 decorate_lines(value, &offsets);
                 true
             }
-            None => false,
+            None => owned,
         }
+    }
+    /// A row carrying two files' spans: each span pair names its own file,
+    /// so each pair decorates against its own table (resolved_edge's caller
+    /// site against caller_path and its callee against callee_path,
+    /// resolved_type_edge's owner and target likewise). A pair whose path
+    /// resolves to nothing stays raw.
+    fn decorate_owned_spans(&mut self, value: &mut Value) -> bool {
+        let mut decorated = false;
+        for (path_field, start_field, end_field, line_field, col_field) in OWNED_SPANS {
+            let start = value.get(start_field).and_then(Value::as_u64);
+            let end = value.get(end_field).and_then(Value::as_u64);
+            let (Some(start), Some(_)) = (start, end) else {
+                continue;
+            };
+            let Some(path) = value
+                .get(path_field)
+                .and_then(Value::as_str)
+                .map(str::to_string)
+            else {
+                continue;
+            };
+            let Some(offsets) = self.line_table_for(&path) else {
+                continue;
+            };
+            let Some(object) = value.as_object_mut() else {
+                continue;
+            };
+            let (line, col) = line_col(&offsets, start as u32);
+            object.insert(line_field.to_string(), Value::from(line));
+            object.insert(col_field.to_string(), Value::from(col));
+            decorated = true;
+        }
+        decorated
     }
     /// The table for one path: registered, else read once from the line root
     /// and cached, or a failed probe remembered so a stream of rows naming an
@@ -412,6 +448,39 @@ impl Output {
          Ok(())
      }
  }
+
+/// Span pairs whose owning file is another field of the same row: the pair
+/// decorates against that field's table, one decoration per owning path.
+const OWNED_SPANS: [(&str, &str, &str, &str, &str); 4] = [
+    (
+        "caller_path",
+        "caller_site_start",
+        "caller_site_end",
+        "caller_site_line",
+        "caller_site_col",
+    ),
+    (
+        "callee_path",
+        "callee_start",
+        "callee_end",
+        "callee_line",
+        "callee_col",
+    ),
+    (
+        "owner_path",
+        "owner_start",
+        "owner_end",
+        "owner_line",
+        "owner_col",
+    ),
+    (
+        "target_path",
+        "target_start",
+        "target_end",
+        "target_line",
+        "target_col",
+    ),
+];
 
 /// 1-based (line, col) of a byte against newline offsets. Col counts BYTES
 /// from the line start, not characters, matching the spans it decorates.

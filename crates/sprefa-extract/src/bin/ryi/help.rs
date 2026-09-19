@@ -185,8 +185,8 @@ OUTPUT
   shape, its fields, and the per-kind vocabularies). Spans are half-open byte
   offsets [start, end) into the file; records join across kinds by matching
   spans.
-  --lines decorates that stdout with 1-based line and col beside every span
-  a row's own file can key.
+  --lines decorates that stdout: 1-based line and col beside every span,
+  each against the field that owns it.
 
 LANGUAGE COVERAGE (first-match, by extension)
   ts/tsx/mts/cts/js/jsx/mjs/cjs    full     kinds: cst, type, call, df, const
@@ -424,15 +424,16 @@ Decorate stdout: every record carrying a start/end span, at any depth, also
 carries line and col beside it. Both are 1-based; col counts BYTES from the
 line start, not characters, matching the byte spans it decorates.
 
-Without the flag stdout is byte-identical to the undecorated stream. A row
-that names its file decorates against that file's own line table: a
---resolve unresolved row names the file its site sits in, a --scip-facts row
-names its indexed document (read on demand under --project-root), and the
-per-file verbs (the plain stream, --file-fact, --ast-pattern, --witness)
-apply their current input to rows that name no file. Whole-project rows that
-name NO file pass through undecorated: resolved_edge and its family carry
-two files' flat scalar spans in one row, and no single line table decorates
-a row spanning two files.
+Without the flag stdout is byte-identical to the undecorated stream. A span
+decorates against the field that owns it: an unresolved row's span against
+its path, a resolved_edge row's caller_site span against caller_path and its
+callee span against callee_path (resolved_type_edge: owner_path and
+target_path), a --scip-facts row against its document, read on demand under
+--project-root, and the per-file verbs' rows against their current input.
+Rows whose owning key is not a path stay raw: flow_edge and projectedge name
+their span owners as content digests (from_blob/to_blob), and a
+scip_signature_occurrence's start/end offset into the signature text, not
+into any file.
 With --sqlite, --lines also writes one line_start row per input file: the
 newline byte offsets the span_lines view joins on.";
 

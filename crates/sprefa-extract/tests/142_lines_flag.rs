@@ -257,5 +257,129 @@ fn resolve_without_the_flag_stays_byte_offset() {
     ]);
     for line in stdout_lines(&output) {
         assert!(!line.contains("\"line\":"), "{line}");
+        assert!(!line.contains("_line\":"), "{line}");
     }
+}
+
+#[test]
+fn resolve_decorates_edge_spans_by_their_owning_path() {
+    // resolved_edge carries two files' spans: the caller site decorates
+    // against caller_path's table and the callee against callee_path's;
+    // resolved_type_edge does the same for owner and target. One
+    // decoration per owning path, so a cross-file row mixes two tables.
+    let dir = scratch("ryi-lines-edges");
+    let a_ts = "import { Animal, feed } from \"./b\";\nexport function pet(a: Animal): string {\n  return a.sound();\n}\nexport const run = feed(pet);\n";
+    let b_ts = "export class Animal {\n  sound(): string {\n    return \"\";\n  }\n}\nexport function feed(fn: (a: Animal) => string): string {\n  return fn(new Animal());\n}\n";
+    let a_path = write_fixture(&dir, "a.ts", a_ts);
+    let b_path = write_fixture(&dir, "b.ts", b_ts);
+    let offsets_of = |content: &str| -> Vec<u32> {
+        content
+            .bytes()
+            .enumerate()
+            .filter(|(_, byte)| *byte == b'\n')
+            .map(|(index, _)| index as u32)
+            .collect()
+    };
+    let a_string = a_path.to_string_lossy().into_owned();
+    let b_string = b_path.to_string_lossy().into_owned();
+    let mut saw_edge = false;
+    let mut saw_cross_file_edge = false;
+    let mut saw_type_edge = false;
+    let mut saw_owned_span = false;
+    let outputs = [
+        ryi(&["--resolve", "--lines", &a_string, &b_string]),
+        ryi(&[
+            "--resolve",
+            "--family",
+            "type",
+            "--lines",
+            &a_string,
+            &b_string,
+        ]),
+    ];
+    for output in &outputs {
+        for line in stdout_lines(output) {
+            let value: Value = serde_json::from_str(&line).expect("one record per line");
+            let record = value.get("record").and_then(Value::as_str).unwrap_or("");
+            let pairs: &[(&str, &str)] = match record {
+                "resolved_edge" => {
+                    saw_edge = true;
+                    if value["caller_path"] != value["callee_path"] {
+                        saw_cross_file_edge = true;
+                    }
+                    &[
+                        ("caller_path", "caller_site_start"),
+                        ("callee_path", "callee_start"),
+                    ]
+                }
+                "resolved_type_edge" => {
+                    saw_type_edge = true;
+                    &[("owner_path", "owner_start"), ("target_path", "target_start")]
+                }
+                _ => &[],
+            };
+            for (path_field, start_field) in pairs {
+                let Some(start) = value.get(*start_field).and_then(Value::as_u64) else {
+                    continue;
+                };
+                let path = value
+                    .get(*path_field)
+                    .and_then(Value::as_str)
+                    .expect("every owned span names its file");
+                let content = if path == a_string { a_ts } else { b_ts };
+                let (line_no, col) = expected_line_col(&offsets_of(content), start as u32);
+                let line_field = start_field.replace("start", "line");
+                let col_field = start_field.replace("start", "col");
+                assert_eq!(
+                    value.get(line_field.as_str()),
+                    Some(&Value::from(line_no)),
+                    "{line_field} at {line}"
+                );
+                assert_eq!(
+                    value.get(col_field.as_str()),
+                    Some(&Value::from(col)),
+                    "{col_field} at {line}"
+                );
+                saw_owned_span = true;
+            }
+        }
+    }
+    assert!(saw_edge, "the fixture must emit resolved_edge rows");
+    assert!(saw_cross_file_edge, "at least one edge must cross files");
+    assert!(saw_type_edge, "the typed run must emit resolved_type_edge");
+    assert!(saw_owned_span, "every owned span must carry line and col");
+}
+
+#[test]
+fn diet_scip_decorates_edge_spans_by_their_owning_path() {
+    // The fast family emits the same resolved_edge rows through the same
+    // funnel, so its two-file spans decorate against their owning files too.
+    let dir = scratch("ryi-lines-diet-edges");
+    let a_ts = "import { feed } from \"./b\";\nexport const run = feed();\n";
+    let b_ts = "export function feed(): number {\n  return 1;\n}\n";
+    let a_path = write_fixture(&dir, "a.ts", a_ts);
+    let b_path = write_fixture(&dir, "b.ts", b_ts);
+    let output = ryi(&[
+        "--family",
+        "diet_scip",
+        "--lines",
+        &a_path.to_string_lossy(),
+        &b_path.to_string_lossy(),
+    ]);
+    let mut saw_decorated_edge = false;
+    for line in stdout_lines(&output) {
+        let value: Value = serde_json::from_str(&line).expect("one record per line");
+        if value.get("record").and_then(Value::as_str) == Some("resolved_edge") {
+            assert!(
+                value.get("caller_site_line").is_some(),
+                "caller site decorates: {line}"
+            );
+            assert!(
+                value.get("callee_line").is_some(),
+                "callee decorates: {line}"
+            );
+            saw_decorated_edge = true;
+        }
+    }
+    assert!(saw_decorated_edge, "the fixture must emit resolved_edge rows");
 }

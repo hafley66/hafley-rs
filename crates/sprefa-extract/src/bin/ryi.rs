@@ -719,6 +719,9 @@ fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std:
                 }
                 return Ok(());
             }
+            if cli.lines {
+                register_line_tables(cli, output);
+            }
             for line in diet_scip_jsonl(&cli.paths)? {
                 output.line(&line)?;
             }
