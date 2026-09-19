@@ -1034,7 +1034,7 @@ fn stream(
     let run = witness.then(|| RunOut {
         run: 0,
         mode: Mode::Syntax,
-        tool: "extract".to_string(),
+        tool: "ryi".to_string(),
         version: env!("CARGO_PKG_VERSION").to_string(),
         scope: vec![content_id_of(content).to_string()],
     });

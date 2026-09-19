@@ -374,7 +374,7 @@ fn extract_observations(
         let run = RunOut {
             run: 0,
             mode: Mode::Syntax,
-            tool: "extract-watch".to_string(),
+            tool: "ryi-watch".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             scope: vec![content_id_of(bytes).to_string()],
         };

@@ -89,7 +89,7 @@ fn the_protocol_row_opens_a_witnessed_resolve() {
     assert_eq!(head[1]["record"], "run", "got {}", rows[1]);
     assert_eq!(head[1]["run"], 0);
     assert_eq!(head[1]["mode"], "syntax");
-    assert_eq!(head[1]["tool"], "extract");
+    assert_eq!(head[1]["tool"], "ryi");
     let decoded: Vec<Value> = rows
         .iter()
         .map(|line| serde_json::from_str(line).expect("json"))

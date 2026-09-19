@@ -722,7 +722,7 @@ fn envelope(input: Envelope) -> Vec<FlatFact> {
         FlatFact::Run(RunOut {
             run: SYNTAX_RUN,
             mode: Mode::Syntax,
-            tool: "extract".to_string(),
+            tool: "ryi".to_string(),
             version: env!("CARGO_PKG_VERSION").to_string(),
             scope: inputs.iter().map(|input| input.blob.to_string()).collect(),
         }),

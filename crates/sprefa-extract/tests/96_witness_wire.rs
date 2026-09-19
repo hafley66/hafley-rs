@@ -88,7 +88,7 @@ fn run_is_the_second_row() {
     let second = &rows[1];
     assert_eq!(record(second), "run");
     assert_eq!(second["mode"], "syntax");
-    assert_eq!(second["tool"], "extract");
+    assert_eq!(second["tool"], "ryi");
     let scope = second["scope"].as_array().expect("scope is a list");
     assert!(!scope.is_empty(), "run row carries no scope: {second}");
     assert!(
