@@ -10,3 +10,7 @@ function constCase(): void {
 function closureCase(items: Array<() => void>): void {
     items.forEach(project => project());
 }
+
+function selfInitCase(): void {
+    const project = project();
+}

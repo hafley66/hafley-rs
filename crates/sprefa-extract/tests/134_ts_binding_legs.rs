@@ -156,10 +156,10 @@ fn drops_of(drops: &[(String, String, u64)], caller: &str) -> Vec<(String, Strin
         .collect()
 }
 
-fn names_free_project(edges: &[(String, String, String, String)]) -> bool {
+fn names_free_project(edges: &[(String, String, String, String)], caller: &str) -> bool {
     edges
         .iter()
-        .any(|(_, _, path, _)| path.ends_with("free.ts"))
+        .any(|(c, _, path, _)| c == caller && path.ends_with("free.ts"))
 }
 
 /// C.6: the param `project` owns the name inside `run`, so the plain call
@@ -168,7 +168,7 @@ fn names_free_project(edges: &[(String, String, String, String)]) -> bool {
 #[test]
 fn a_param_shadow_kills_the_name_match() {
     let (edges, drops) = shadow_run();
-    assert!(!names_free_project(&edges), "{edges:?}");
+    assert!(!names_free_project(&edges, "run"), "{edges:?}");
     assert_eq!(
         drops_of(&drops, "run"),
         vec![("project".to_string(), "inferred".to_string())],
@@ -212,4 +212,21 @@ fn an_arrow_param_shadow_kills_the_name_match() {
         vec![("project".to_string(), "inferred".to_string())],
         "{drops:?}"
     );
+}
+
+/// A binding owns its name only after its initializer: in `const project =
+/// project()` the call still denotes the outer fn, so it binds free.ts and
+/// drops nothing.
+#[test]
+fn a_self_named_initializer_still_binds_the_outer_fn() {
+    let (edges, drops) = shadow_run();
+    assert!(
+        edges
+            .iter()
+            .any(|(caller, callee, path, _)| caller == "selfInitCase"
+                && callee == "project"
+                && path.ends_with("free.ts")),
+        "{edges:?}"
+    );
+    assert_eq!(drops_of(&drops, "selfInitCase"), Vec::new(), "{drops:?}");
 }

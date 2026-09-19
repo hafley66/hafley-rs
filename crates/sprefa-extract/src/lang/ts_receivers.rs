@@ -208,6 +208,10 @@ struct ReceiverWalker {
     /// `Proj` so a member call on it resolves through the constraint; a
     /// nested callable sees its own frame first, then each outer one.
     type_param_constraint: Vec<HashMap<String, String>>,
+    /// The declarators whose initializer is being walked, as (name, scope
+    /// frame index). A binding owns its name only after its initializer, so a
+    /// plain call to that name inside the init is not shadowed by it.
+    initializing: Vec<(String, usize)>,
 }
 
 impl ReceiverWalker {
@@ -316,6 +320,7 @@ impl Default for ReceiverWalker {
             scope: vec![HashMap::new()],
             this_stack: Vec::new(),
             type_param_constraint: Vec::new(),
+            initializing: Vec::new(),
         }
     }
 }
@@ -500,7 +505,15 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
                 scope_insert(&mut self.scope, name, binding);
             }
         }
+        let initializing = matches!(&declarator.id, ts::BindingPattern::BindingIdentifier(_));
+        if let ts::BindingPattern::BindingIdentifier(id) = &declarator.id {
+            self.initializing
+                .push((id.name.to_string(), self.scope.len() - 1));
+        }
         oxc_ast_visit::walk::walk_variable_declarator(self, declarator);
+        if initializing {
+            self.initializing.pop();
+        }
     }
 
     fn visit_call_expression(&mut self, call: &ts::CallExpression<'a>) {
@@ -539,7 +552,16 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         } else if let ts::Expression::Identifier(id) = &call.callee {
             // A plain call to a scope-bound local names the local, never a
             // corpus fn; the Shadowed row makes every name-match leg decline.
-            if scope_lookup(&self.scope, id.name.as_str()).is_some() {
+            let bound = self
+                .scope
+                .iter()
+                .rposition(|frame| frame.contains_key(id.name.as_str()));
+            let in_own_init = bound.is_some_and(|frame| {
+                self.initializing
+                    .iter()
+                    .any(|(name, at)| name == id.name.as_str() && *at == frame)
+            });
+            if bound.is_some() && !in_own_init {
                 self.facts.rows.push((
                     call.callee.span().start,
                     call.callee.span().end,
