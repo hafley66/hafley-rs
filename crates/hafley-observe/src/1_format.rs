@@ -27,8 +27,22 @@ impl FormatConfig {
     }
 }
 
-pub fn env_filter(default_filter: &str) -> EnvFilter {
-    EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new(default_filter))
+pub const DEFAULT_FILTER_VARIABLE: &str = "HAFLEY_LOG";
+
+/// Silence hides the defect this crate exists to catch, so an unset RUST_LOG
+/// falls back to trace rather than to the caller's quieter preference.
+pub fn env_filter(caller_filter: &str) -> EnvFilter {
+    if let Ok(filter) = EnvFilter::try_from_default_env() {
+        return filter;
+    }
+    match std::env::var(DEFAULT_FILTER_VARIABLE) {
+        Ok(filter) if !filter.is_empty() => EnvFilter::new(filter),
+        _ => EnvFilter::new(if caller_filter.is_empty() {
+            "trace"
+        } else {
+            caller_filter
+        }),
+    }
 }
 
 pub fn format_layer<S>(

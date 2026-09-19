@@ -14,7 +14,10 @@ pub fn init_with_writer(
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let filter = env_filter(config.default_filter);
     let format = format_layer(FormatConfig::standard(config.format, config.ansi), writer);
-    let subscriber = tracing_subscriber::registry().with(filter).with(format);
+    let subscriber = tracing_subscriber::registry()
+        .with(crate::chrome_layer())
+        .with(filter)
+        .with(format);
     subscriber.with(crate::otlp_layer(&config)).try_init()?;
     startup(&config);
     Ok(())
