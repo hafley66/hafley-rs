@@ -1,9 +1,10 @@
 //! SQLite export only. DDL, columns and wire paths come from TypeSpec.
 //! A private staging database is published after commit, with no overwrite.
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::sync::Arc;
 
 use rusqlite::Connection;
 use serde::Serialize;
@@ -246,19 +247,27 @@ impl<W: Write> Write for CountingWriter<W> {
         self.inner.flush()
     }
 }
-
  pub struct Output {
      pub database: Option<Database>,
     stdout: BufWriter<CountingWriter<std::io::Stdout>>,
-    /// Newline byte offsets of the current input while `--lines` decorates
-    /// stdout; None passes every row through untouched.
-    line_offsets: Option<Vec<u32>>,
+    /// Line tables by the key a row names its file with: the `path` field in
+    /// multi-file streams. Arc so per-row lookups clone a handle, not bytes.
+    line_tables: HashMap<String, Arc<Vec<u32>>>,
+    /// Every path a lookup already settled, hit or miss, so an unreadable
+    /// path costs one probe instead of one per row.
+    line_probed: HashSet<String>,
+    /// Fallback table for rows that name no file: the per-file verbs' current
+    /// input. Whole-project modes leave it unset, so their pathless rows pass
+    /// through undecorated.
+    line_offsets: Option<Arc<Vec<u32>>>,
+    /// Where a row's `path` loads from when its table is not registered:
+    /// the root --scip-facts and --family scip read their documents against.
+    line_root: Option<PathBuf>,
  }
- 
- impl Output {
-     pub fn new(path: Option<&Path>) -> Result<Self> {
-         Ok(Self {
-             database: path.map(Database::create).transpose()?,
+impl Output {
+    pub fn new(path: Option<&Path>) -> Result<Self> {
+        Ok(Self {
+            database: path.map(Database::create).transpose()?,
             stdout: BufWriter::with_capacity(
                 256 * 1024,
                 CountingWriter {
@@ -266,12 +275,27 @@ impl<W: Write> Write for CountingWriter<W> {
                     bytes: 0,
                 },
             ),
+            line_tables: HashMap::new(),
+            line_probed: HashSet::new(),
             line_offsets: None,
-         })
-     }
-    /// Scope `--lines` stdout decoration to one input's newline offsets.
+            line_root: None,
+        })
+    }
+    /// Scope `--lines` stdout decoration to one input's newline offsets: the
+    /// fallback for rows that name no file.
     pub fn set_line_offsets(&mut self, offsets: Vec<u32>) {
-        self.line_offsets = Some(offsets);
+        self.line_offsets = Some(Arc::new(offsets));
+    }
+    /// Register one file's newline offsets under the path its rows will name
+    /// (`--resolve` and the diet family see every input's path up front).
+    pub fn register_line_table(&mut self, path: &str, offsets: Vec<u32>) {
+        self.line_probed.insert(path.to_string());
+        self.line_tables.insert(path.to_string(), Arc::new(offsets));
+    }
+    /// Point `path`-named row lookups at a readable root: --scip-facts and
+    /// --family scip name every indexed document, not just supplied paths.
+    pub fn set_line_root(&mut self, root: Option<PathBuf>) {
+        self.line_root = root;
     }
     /// Bytes written to stdout so far, the trail's write-phase figure.
     pub fn stdout_bytes(&self) -> u64 {
@@ -300,37 +324,78 @@ impl<W: Write> Write for CountingWriter<W> {
          let encoded = serde_json::to_vec(fact)?;
          db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len())
      }
-     pub fn clear_source(&mut self) -> Result<()> {
-         if let Some(db) = &mut self.database {
-             db.clear_source()?;
-         }
-         Ok(())
-     }
-     pub fn fact(&mut self, fact: &impl Serialize) -> Result<()> {
-         if let Some(db) = &mut self.database {
-             let encoded = serde_json::to_vec(fact)?;
-             return db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len());
-         }
+    pub fn clear_source(&mut self) -> Result<()> {
+        if let Some(db) = &mut self.database {
+            db.clear_source()?;
+        }
+        Ok(())
+    }
+    pub fn fact(&mut self, fact: &impl Serialize) -> Result<()> {
+        if let Some(db) = &mut self.database {
+            let encoded = serde_json::to_vec(fact)?;
+            return db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len());
+        }
         self.write_stdout(&serde_json::to_vec(fact)?)
     }
     /// The stdout half of both funnel arms. Raw pass-through unless `--lines`
     /// decoration applies, in which case the record is parsed, decorated, and
     /// re-serialized (key order then follows the JSON map, not the struct).
     fn write_stdout(&mut self, encoded: &[u8]) -> Result<()> {
-        if let Some(offsets) = &self.line_offsets {
+        if !self.line_tables.is_empty()
+            || self.line_offsets.is_some()
+            || self.line_root.is_some()
+        {
             if let Ok(text) = std::str::from_utf8(encoded) {
                 if text.contains("\"start\"") {
                     let mut value: Value = serde_json::from_str(text)?;
-                    decorate_lines(&mut value, offsets);
-                    serde_json::to_writer(&mut self.stdout, &value)?;
-                    self.stdout.write_all(b"\n")?;
-                    return Ok(());
+                    if self.decorate_record(&mut value) {
+                        serde_json::to_writer(&mut self.stdout, &value)?;
+                        self.stdout.write_all(b"\n")?;
+                        return Ok(());
+                    }
                 }
             }
         }
         self.stdout.write_all(encoded)?;
         self.stdout.write_all(b"\n")?;
         Ok(())
+     }
+    /// Decorate one record against the file it names. A `path` that resolves
+    /// to a table wins (data rows also carry a `path`: their JSON dot-path,
+    /// which resolves to nothing); otherwise the per-file verbs' current
+    /// input applies, and whole-project modes leave that unset so their
+    /// unattributable rows stay raw bytes.
+    fn decorate_record(&mut self, value: &mut Value) -> bool {
+        let table = match value.get("path").and_then(Value::as_str) {
+            Some(path) => self
+                .line_table_for(path)
+                .or_else(|| self.line_offsets.clone()),
+            None => self.line_offsets.clone(),
+        };
+        match table {
+            Some(offsets) => {
+                decorate_lines(value, &offsets);
+                true
+            }
+            None => false,
+        }
+    }
+    /// The table for one path: registered, else read once from the line root
+    /// and cached, or a failed probe remembered so a stream of rows naming an
+    /// unreadable file costs one attempt.
+    fn line_table_for(&mut self, path: &str) -> Option<Arc<Vec<u32>>> {
+        if let Some(table) = self.line_tables.get(path) {
+            return Some(Arc::clone(table));
+        }
+        if self.line_probed.contains(path) {
+            return None;
+        }
+        self.line_probed.insert(path.to_string());
+        let full = self.line_root.as_deref()?.join(path);
+        let content = std::fs::read(full).ok()?;
+        let offsets = Arc::new(sprefa_extract::newline_offsets(&content));
+        self.line_tables.insert(path.to_string(), Arc::clone(&offsets));
+        Some(offsets)
      }
      pub fn flush(&mut self) -> Result<()> {
          if let Some(db) = &mut self.database {

@@ -201,3 +201,61 @@ fn stdout_never_carries_a_line_start_record() {
         assert!(!line.contains(r#""record":"line_start""#), "{line}");
     }
 }
+
+#[test]
+fn resolve_decorates_rows_by_their_own_path() {
+    // A multi-file stream keys each row against the file the row itself
+    // names: the unresolved site sits in b.ts and decorates against b.ts's
+    // table, while rows with no span and no single file stay raw.
+    let dir = scratch("ryi-lines-resolve");
+    let b_ts = "export function go() {\n  return Math.pow(2, 3);\n}\n";
+    let a_ts = "import { helper } from \"./b\";\nimport { gone } from \"./nowhere\";\nexport function use() {\n  return gone + helper;\n}\n";
+    let a_path = write_fixture(&dir, "a.ts", a_ts);
+    let b_path = write_fixture(&dir, "b.ts", b_ts);
+    let offsets_b: Vec<u32> = b_ts
+        .bytes()
+        .enumerate()
+        .filter(|(_, byte)| *byte == b'\n')
+        .map(|(index, _)| index as u32)
+        .collect();
+    let output = ryi(&[
+        "--resolve",
+        "--lines",
+        &a_path.to_string_lossy(),
+        &b_path.to_string_lossy(),
+    ]);
+    let mut saw_unresolved = false;
+    for line in stdout_lines(&output) {
+        let value: Value = serde_json::from_str(&line).expect("every line is one record");
+        match value.get("record").and_then(Value::as_str) {
+            Some("unresolved") => {
+                saw_unresolved = true;
+                assert_eq!(value["path"], Value::from(b_path.to_string_lossy().as_ref()));
+                assert_decorated(&value, &offsets_b);
+            }
+            Some("resolved_import") => {
+                assert!(value.get("line").is_none(), "{line}");
+                assert!(value.get("col").is_none(), "{line}");
+            }
+            _ => {}
+        }
+    }
+    assert!(saw_unresolved, "the fixture must emit an unresolved row");
+}
+
+#[test]
+fn resolve_without_the_flag_stays_byte_offset() {
+    let dir = scratch("ryi-lines-resolve-off");
+    let b_ts = "export function go() {\n  return Math.pow(2, 3);\n}\n";
+    let a_ts = "import { helper } from \"./b\";\nimport { gone } from \"./nowhere\";\nexport function use() {\n  return gone + helper;\n}\n";
+    let a_path = write_fixture(&dir, "a.ts", a_ts);
+    let b_path = write_fixture(&dir, "b.ts", b_ts);
+    let output = ryi(&[
+        "--resolve",
+        &a_path.to_string_lossy(),
+        &b_path.to_string_lossy(),
+    ]);
+    for line in stdout_lines(&output) {
+        assert!(!line.contains("\"line\":"), "{line}");
+    }
+}

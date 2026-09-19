@@ -185,7 +185,8 @@ OUTPUT
   shape, its fields, and the per-kind vocabularies). Spans are half-open byte
   offsets [start, end) into the file; records join across kinds by matching
   spans.
-  --lines decorates that stdout with 1-based line and col beside every span.
+  --lines decorates that stdout with 1-based line and col beside every span
+  a row's own file can key.
 
 LANGUAGE COVERAGE (first-match, by extension)
   ts/tsx/mts/cts/js/jsx/mjs/cjs    full     kinds: cst, type, call, df, const
@@ -423,11 +424,15 @@ Decorate stdout: every record carrying a start/end span, at any depth, also
 carries line and col beside it. Both are 1-based; col counts BYTES from the
 line start, not characters, matching the byte spans it decorates.
 
-Without the flag stdout is byte-identical to the undecorated stream. The
-decoration covers the per-file verbs (the plain stream, --file-fact,
---ast-pattern, --witness); whole-project modes (--resolve, --family scip and
-diet_scip, --deps, --scip-facts) stream rows for many files through one
-stdout, so no single line table applies and rows pass through undecorated.
+Without the flag stdout is byte-identical to the undecorated stream. A row
+that names its file decorates against that file's own line table: a
+--resolve unresolved row names the file its site sits in, a --scip-facts row
+names its indexed document (read on demand under --project-root), and the
+per-file verbs (the plain stream, --file-fact, --ast-pattern, --witness)
+apply their current input to rows that name no file. Whole-project rows that
+name NO file pass through undecorated: resolved_edge and its family carry
+two files' flat scalar spans in one row, and no single line table decorates
+a row spanning two files.
 With --sqlite, --lines also writes one line_start row per input file: the
 newline byte offsets the span_lines view joins on.";
 

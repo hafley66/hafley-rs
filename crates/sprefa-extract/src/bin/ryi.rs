@@ -462,6 +462,18 @@ fn stream_scip_family(
     Ok(())
 }
 
+/// `--lines` on a multi-file verb: load each supplied file's newline offsets
+/// under the path its rows will name, so a row carrying `path` decorates
+/// against its own file. Unreadable inputs simply leave their rows raw.
+fn register_line_tables(cli: &Cli, output: &mut sqlite::Output) {
+    for path in &cli.paths {
+        let Ok(content) = std::fs::read(path) else {
+            continue;
+        };
+        output.register_line_table(&path.to_string_lossy(), newline_offsets(&content));
+    }
+}
+
 /// Every mode but `--family scip` takes source FILES. A directory or a missing
 /// path reaches the library as an `io::Error` Debug dump that names no cause.
 fn check_file_paths(paths: &[PathBuf], allow_stdin: bool) {
@@ -687,6 +699,9 @@ fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std:
     let mode = family_mode(cli.family.as_deref())?;
     match mode {
         Some(FamilyMode::Scip) => {
+            if cli.lines {
+                output.set_line_root(Some(cli.paths[0].clone()));
+            }
             stream_scip_family(cli, output)?;
             return Ok(());
         }
@@ -713,6 +728,9 @@ fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std:
     }
 
     if cli.resolve {
+        if cli.lines && output.database.is_none() {
+            register_line_tables(cli, output);
+        }
         stream_resolve(cli, output)?;
         return Ok(());
     }
@@ -739,6 +757,9 @@ fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std:
     }
 
     if cli.scip_facts {
+        if cli.lines {
+            output.set_line_root(cli.project_root.clone());
+        }
         for line in scip_facts_jsonl(&scip_request(&cli)?)? {
             output.line(&line)?;
         }
