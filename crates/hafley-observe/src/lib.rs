@@ -6,10 +6,16 @@ mod _1_format;
 mod _1_init;
 #[path = "2_otlp.rs"]
 mod _2_otlp;
+#[path = "3_chrome.rs"]
+mod _3_chrome;
+#[path = "4_counts.rs"]
+mod _4_counts;
 
 pub use _0_types::{Config, OutputFormat, ParseOutputFormatError};
-pub use _1_format::{env_filter, format_layer, FormatConfig};
+pub use _1_format::{env_filter, format_layer, FormatConfig, DEFAULT_FILTER_VARIABLE};
 pub use _1_init::{init, init_with_writer, startup};
 pub use _2_otlp::shutdown;
+pub use _3_chrome::{chrome_layer, finish_trace, trace_path, TRACE_PATH_VARIABLE};
+pub use _4_counts::{assert_growth, observed_growth, CountRecorder, Growth, SpanCounts};
 
 pub(crate) use _2_otlp::otlp_layer;
