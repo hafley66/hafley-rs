@@ -303,10 +303,21 @@ fn wait_for_screen(server: &str, case: &Case, session: &str, wanted: &str, label
         if text.contains(wanted) {
             return;
         }
+        // A harness that exits at once takes its window and session with it, so
+        // waiting out the deadline on an empty capture says nothing. Name it now.
+        assert!(
+            session_alive(server, session),
+            "{} {label}: session {session} is gone, so the harness exited before \
+             printing {wanted:?}. The executable resolved from PATH may not run \
+             under the scratch HOME this test sets; name a real binary in the \
+             harness's *_BIN variable and re-run.",
+            case.entry
+        );
         assert!(
             Instant::now() < deadline,
-            "{} {label}: never saw {wanted:?}\n{text}",
-            case.entry
+            "{} {label}: never saw {wanted:?} in {} bytes of screen:\n{text}",
+            case.entry,
+            text.len()
         );
         std::thread::sleep(POLL);
     }
