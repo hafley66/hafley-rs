@@ -16,7 +16,7 @@ const FIXTURE: &str = "tests/fixtures/rust/sample.rs";
 fn family_body(table: &str) -> Vec<&str> {
     table
         .lines()
-        .skip_while(|line| !line.starts_with("extract summary: wall "))
+        .skip_while(|line| !line.starts_with("ryi summary: wall "))
         .skip(2)
         .take_while(|line| !line.trim().is_empty())
         .collect()
@@ -26,7 +26,7 @@ fn family_body(table: &str) -> Vec<&str> {
 fn phase_body(table: &str) -> Vec<&str> {
     table
         .lines()
-        .skip_while(|line| !line.starts_with("extract phases: load "))
+        .skip_while(|line| !line.starts_with("ryi phases: load "))
         .skip(2)
         .take_while(|line| !line.trim().is_empty())
         .collect()
@@ -158,7 +158,7 @@ fn summary_layer_renders_a_row_per_lang_and_family() {
         "no extract_file row in\n{table}"
     );
     assert!(
-        table.starts_with("extract summary: wall "),
+        table.starts_with("ryi summary: wall "),
         "table must open with the wall line, got\n{table}"
     );
 }
@@ -175,7 +175,7 @@ fn summary_flag_prints_the_table_to_stderr() {
     assert!(output.status.success(), "extract failed: {output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("extract summary: wall "),
+        stderr.contains("ryi summary: wall "),
         "no summary table on stderr, got {stderr}"
     );
     let rows = table_rows(&stderr);
@@ -300,7 +300,7 @@ fn bench_reports_through_the_summary_table() {
     assert!(output.status.success(), "extract failed: {output:?}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("extract summary: wall ") && stderr.contains("extract phases: load "),
+        stderr.contains("ryi summary: wall ") && stderr.contains("ryi phases: load "),
         "--bench printed no summary, got {stderr}"
     );
     assert!(

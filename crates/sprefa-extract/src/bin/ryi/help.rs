@@ -1,6 +1,6 @@
 //! The `--help` text: every long-help string clap renders.
 //!
-//! Split out of `extract.rs` on size. These are documentation, the parent module
+//! Split out of `ryi.rs` on size. These are documentation, the parent module
 //! is argument dispatch, and they change for different reasons; keeping them
 //! together pushed one file past the size limit on prose alone.
 //!
@@ -9,11 +9,11 @@
 
 pub const AFTER_HELP: &str = concat!(
     "Aliases:\n",
-    "  extract fast PATH...    syntax-only whole-project extraction (diet_scip)\n",
-    "  extract slow ROOT       semantic whole-project extraction (real SCIP/compiler)\n",
+    "  ryi fast PATH...    syntax-only whole-project extraction (diet_scip)\n",
+    "  ryi slow ROOT       semantic whole-project extraction (real SCIP/compiler)\n",
     "\n",
     "Commands:\n",
-    "  extract diff ROOT --from REV --to REV [--pattern GLOB]... [--family call,type]\n",
+    "  ryi diff ROOT --from REV --to REV [--pattern GLOB]... [--family call,type]\n",
     "                          [--sqlite PATH] [--json]\n",
     "    The fact delta between two commits of the repository rooted at ROOT. Both\n",
     "    revisions are resolved to full shas with `git rev-parse` and named in the\n",
@@ -38,22 +38,22 @@ pub const AFTER_HELP: &str = concat!(
     env!("SPREFA_BUILD_DATETIME"),
 );
 
-/// Self-describing enough that `extract --help` + `extract --schema` are a
+/// Self-describing enough that `ryi --help` + `ryi --schema` are a
 /// complete contract for a fresh caller (human or AI). No outside docs needed.
 pub const LONG_ABOUT: &str = "\
 Read source files and emit facts about the code. JSONL goes to stdout;
 --sqlite PATH writes a new SQLite database with TypeSpec-generated tables.
 
 QUICK START
-  extract src/app.ts                       every fact kind for one file
-  extract --family call src/app.ts         only call-graph facts
-  extract --resolve a.ts b.ts              cross-file call edges, parse-based
-  extract --family scip .                  whole-project facts from the real
+  ryi src/app.ts                       every fact kind for one file
+  ryi --family call src/app.ts         only call-graph facts
+  ryi --resolve a.ts b.ts              cross-file call edges, parse-based
+  ryi --family scip .                  whole-project facts from the real
                                            compiler index (exact, slower)
-  extract --schema                         every record shape this can emit
-  extract --sqlite facts.db a.ts b.ts      write per-file facts to SQLite
-  extract fast --sqlite fast.db a.ts b.ts  syntax-resolved facts to SQLite
-  extract slow --sqlite slow.db .         compiler-derived facts to SQLite
+  ryi --schema                         every record shape this can emit
+  ryi --sqlite facts.db a.ts b.ts      write per-file facts to SQLite
+  ryi fast --sqlite fast.db a.ts b.ts  syntax-resolved facts to SQLite
+  ryi slow --sqlite slow.db .         compiler-derived facts to SQLite
 
 SQLITE OUTPUT
   --sqlite requires an explicit new database path. Existing files are refused.
@@ -146,7 +146,7 @@ CROSS-FILE RESOLUTION: --resolve PATH...
   `--schema` also lists (node, edge, sig, site, specifier, unresolved and the
   rest). Those carry no path field on stdout, so they cannot name their file
   in a multi-file stream there; get them one file at a time from a plain
-  `extract FILE`, or add `--sqlite PATH`: the database keeps phase 1 and
+  `ryi FILE`, or add `--sqlite PATH`: the database keeps phase 1 and
   phase 2 both, each phase-1 row naming its file in `path`.
 
   Add `--project-root DIR` plus `--scip-index FILE` (an index you already have)
@@ -181,7 +181,7 @@ PATTERN MODE
   whole-match byte spans. Pattern text is a CLI input, never DL syntax.
 
 OUTPUT
-  Each line is one fact tagged by `record` (run `extract --schema` for every
+  Each line is one fact tagged by `record` (run `ryi --schema` for every
   shape, its fields, and the per-kind vocabularies). Spans are half-open byte
   offsets [start, end) into the file; records join across kinds by matching
   spans.
@@ -418,7 +418,7 @@ output is unchanged; on, it rides the same invocation, so counting lines never
 costs a second read of the file.";
 
 pub const MAX_BYTES_LONG: &str = "\
-Byte ceiling for ONE input file. Over it, the file is not parsed: `extract`
+Byte ceiling for ONE input file. Over it, the file is not parsed: `ryi`
 emits one `size_skip` record naming the path, the byte count and this ceiling,
 and exits 0. Default 16777216; 0 removes the ceiling entirely.
 

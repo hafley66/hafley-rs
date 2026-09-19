@@ -28,8 +28,8 @@ fn help_names_the_build_and_mode_aliases() {
     let help = String::from_utf8_lossy(&output.stdout);
     assert!(help.contains(concat!("git hash: ", env!("SPREFA_BUILD_GIT_HASH"))));
     assert!(help.contains(concat!("datetime: ", env!("SPREFA_BUILD_DATETIME"))));
-    assert!(help.contains("extract fast PATH..."));
-    assert!(help.contains("extract slow ROOT"));
+    assert!(help.contains("ryi fast PATH..."));
+    assert!(help.contains("ryi slow ROOT"));
     assert!(help.contains("sprefa_extract=info"));
     assert!(help.contains("HAFLEY_LOG_FORMAT"));
 }

@@ -313,7 +313,7 @@ mod sink {
             let mut text = String::new();
             let _ = writeln!(
                 text,
-                "extract phases: load {:.2} -> {:.2}",
+                "ryi phases: load {:.2} -> {:.2}",
                 self.load_start,
                 load_avg_1min()
             );
@@ -369,7 +369,7 @@ mod sink {
             let mut text = String::new();
             let _ = writeln!(
                 text,
-                "extract summary: wall {:.1}ms",
+                "ryi summary: wall {:.1}ms",
                 self.start.elapsed().as_secs_f64() * 1000.0
             );
             let _ = writeln!(

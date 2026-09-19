@@ -70,7 +70,7 @@ mod source_rename;
 
 #[derive(Parser)]
 #[command(
-    name = "extract",
+    name = "ryi",
     version,
     about = "sprefa-extract: one source file -> flat graph facts (JSONL to stdout)",
     long_about = LONG_ABOUT,
@@ -351,7 +351,7 @@ fn alias_args() -> Result<Vec<String>, String> {
         })
     {
         return Err(format!(
-            "extract {} pins --family {}; {flag} cannot select or configure another mode",
+            "ryi {} pins --family {}; {flag} cannot select or configure another mode",
             args[1],
             alias.family(),
         ));
@@ -451,7 +451,7 @@ fn stream_scip_family(
         .or_else(|| scip_index_location(&request));
     if let Some(path) = index_location {
         // @eprintln-ok: CLI-UX location line, deliberately off the fact stream.
-        eprintln!("extract: scip index {}", path.display());
+        eprintln!("ryi: scip index {}", path.display());
     }
     Ok(())
 }
@@ -478,7 +478,7 @@ fn check_file_paths(paths: &[PathBuf], allow_stdin: bool) {
             continue;
         };
         // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
-        eprintln!("extract: {stop}");
+        eprintln!("ryi: {stop}");
         std::process::exit(2);
     }
 }
@@ -1158,7 +1158,7 @@ fn stream_ingest(
         }
         Err(error) => {
             // @eprintln-ok: CLI-UX stop, off the fact stream, exit 1.
-            Err(format!("extract: {error}").into())
+            Err(format!("ryi: {error}").into())
         }
     }
 }

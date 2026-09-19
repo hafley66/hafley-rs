@@ -26,7 +26,7 @@ const LIB: &str = "tests/fixtures/tsi/rust_probe/src/lib.rs";
 fn phase_row(table: &str, lang: &str, phase: &str) -> Option<(u64, u64, u64)> {
     table
         .lines()
-        .skip_while(|line| !line.starts_with("extract phases: load "))
+        .skip_while(|line| !line.starts_with("ryi phases: load "))
         .skip(2)
         .take_while(|line| !line.trim().is_empty())
         .find_map(|line| {
