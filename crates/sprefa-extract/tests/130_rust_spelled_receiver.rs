@@ -101,11 +101,29 @@ fn constructor_return_receiver_binds() {
 fn trait_bound_generic_receiver_binds() {
     // C.5 trait-bound generic leg: `fn f<P: Proj>(p: P) { p.run() }` binds to
     // the trait's own fn def in proj.rs.
-    let rows = edges(&["proj.rs"]);
-    assert!(
-        has_origin(&rows, "trait_bound_leg", "run", "proj", "receiver"),
-        "{rows:?}"
-    );
+    // `Proj::run` and `Widget::run` share a name, so the assert is the callee
+    // span: it must cover the trait's `fn run`, never the inherent one.
+    let src = std::fs::read_to_string(format!(
+        "{}/{SRC}/proj.rs",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("fixture readable");
+    let trait_start = src.find("    fn run(&self) -> u32;").expect("trait fn") + "    fn ".len();
+    let trait_span = (trait_start as u64, (trait_start + "run(&self) -> u32".len()) as u64);
+    let inherent_start = src.find("pub fn run(&self)").expect("inherent fn") + "pub fn ".len();
+    assert_ne!(trait_span.0, inherent_start as u64);
+    let spans: Vec<(u64, u64)> = run(&["proj.rs"])
+        .iter()
+        .filter(|row| row["record"] == "resolved_edge" && row["caller_name"] == "trait_bound_leg")
+        .map(|row| {
+            assert_eq!(row["resolution_origin"], "receiver", "{row}");
+            (
+                row["callee_start"].as_u64().expect("callee_start"),
+                row["callee_end"].as_u64().expect("callee_end"),
+            )
+        })
+        .collect();
+    assert_eq!(spans, vec![trait_span], "inherent fn starts at {inherent_start}");
 }
 
 fn drops(names: &[&str]) -> Vec<(String, String)> {
