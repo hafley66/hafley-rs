@@ -26,3 +26,4 @@ opentelemetry-otlp = { version = "0.32", default-features = false, features = ["
 
 [dev-dependencies]
 bigoish = { version = "0.1.4", default-features = false }
+tracing-capture = "0.1.0"
