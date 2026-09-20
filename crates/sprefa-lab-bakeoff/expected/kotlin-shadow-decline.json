@@ -1,0 +1,7 @@
+{
+  "case": "kotlin-shadow-decline",
+  "answer": [
+    "tests/fixtures/kotlin_receivers/use.kt:752-755 unresolved:inferred"
+  ],
+  "notes": "use.kt:33 fun shadow(run: () -> Int) = run(): the call names the lambda parameter, never Widget.run. Declining is the right answer; the reason string must read inferred. The same file also declines at 503-508 (returnLeg), outside this case."
+}

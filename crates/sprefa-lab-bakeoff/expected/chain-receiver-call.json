@@ -1,0 +1,12 @@
+{
+  "case": "chain-receiver-call",
+  "answer": [
+    "chain_caller->new@tests/fixtures/rust_call_grind/widget.rs:45-81",
+    "chain_caller->tick@tests/fixtures/rust_call_grind/widget.rs:94-136",
+    "chain_caller->read@tests/fixtures/rust_call_grind/widget.rs:183-219",
+    "hop_caller->new@tests/fixtures/rust_call_grind/widget.rs:45-81",
+    "hop_caller->tick@tests/fixtures/rust_call_grind/widget.rs:94-136",
+    "hop_caller->read@tests/fixtures/rust_call_grind/widget.rs:183-219"
+  ],
+  "notes": "decoy.rs holds Other::tick and Other::read; both callee spans are widget.rs, so a bare-name bind into decoy.rs scores a diff. chain_caller reaches read through Widget::new().tick()'s declared return type Gauge; hop_caller through the local binding gauge."
+}
