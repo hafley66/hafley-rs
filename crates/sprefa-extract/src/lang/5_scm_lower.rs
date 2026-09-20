@@ -334,6 +334,17 @@ fn lower_predicate(
         });
     }
 
+    // `operator` above keeps the unpeeled spelling, so an unmapped `#not-foo?`
+    // reports itself rather than `foo?`.
+    let (name, negated) = match name.strip_prefix("not-") {
+        Some(rest) => (rest.to_string(), true),
+        None => (name, false),
+    };
+    let negate = |rule: AstRule| match negated {
+        true => AstRule::Not(Box::new(rule)),
+        false => rule,
+    };
+
     let relation: fn(Box<AstRule>, Option<StopBy>) -> AstRule = match name.as_str() {
         "inside" => |rule, stop_by| AstRule::Inside { rule, stop_by },
         "has" => |rule, stop_by| AstRule::Has { rule, stop_by },
@@ -342,7 +353,7 @@ fn lower_predicate(
         "match" => {
             let focus = capture_argument(parameters[0], source)?;
             let pattern = string_argument(parameters[1], source)?;
-            return Ok((focus, AstRule::Regex(pattern)));
+            return Ok((focus, negate(AstRule::Regex(pattern))));
         }
         _ => return Err(ScmLowerError::UnknownPredicate(operator)),
     };
@@ -351,10 +362,10 @@ fn lower_predicate(
     let reference = reference_argument(parameters[1], source, labels)?;
     Ok((
         focus,
-        relation(
+        negate(relation(
             Box::new(AstRule::Matches(reference)),
             Some(StopBy::End("end".into())),
-        ),
+        )),
     ))
 }
 

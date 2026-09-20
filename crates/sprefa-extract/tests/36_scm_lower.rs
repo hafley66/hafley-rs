@@ -311,3 +311,65 @@ fn a_file_of_only_labelled_patterns_matches_every_label() {
         }]
     );
 }
+
+#[test]
+fn a_not_prefix_wraps_every_relation_in_not() {
+    let inside = lower_scm("(block) @s\n\n((call_expression) @m (#not-inside? @m s))")
+        .expect("scm lowers");
+    assert_eq!(
+        inside.rule,
+        AstRule::All(vec![
+            kind("call_expression"),
+            AstRule::Not(Box::new(inside_to_end(AstRule::Matches("s".into())))),
+        ])
+    );
+
+    let follows = lower_scm("(block) @s\n\n((call_expression) @m (#not-follows? @m s))")
+        .expect("scm lowers");
+    assert_eq!(
+        follows.rule,
+        AstRule::All(vec![
+            kind("call_expression"),
+            AstRule::Not(Box::new(AstRule::Follows {
+                rule: Box::new(AstRule::Matches("s".into())),
+                stop_by: Some(StopBy::End("end".into())),
+            })),
+        ])
+    );
+
+    let regex = lower_scm("((identifier) @m (#not-match? @m \"^_\"))").expect("scm lowers");
+    assert_eq!(
+        regex.rule,
+        AstRule::All(vec![
+            kind("identifier"),
+            AstRule::Not(Box::new(AstRule::Regex("^_".into()))),
+        ])
+    );
+}
+
+#[test]
+fn an_unmapped_not_predicate_reports_its_unpeeled_spelling() {
+    assert_eq!(
+        lower_scm("(block) @s\n\n((call_expression) @m (#not-nope? @m s))"),
+        Err(ScmLowerError::UnknownPredicate("not-nope?".into()))
+    );
+}
+
+#[test]
+fn not_inside_and_inside_partition_the_same_corpus() {
+    let scope = "[(closure_expression)] @scope\n\n";
+    let inside = run(
+        "probe.rs",
+        RUST_SRC,
+        &format!("{scope}((field_identifier) @m (#inside? @m scope))"),
+    );
+    let outside = run(
+        "probe.rs",
+        RUST_SRC,
+        &format!("{scope}((field_identifier) @m (#not-inside? @m scope))"),
+    );
+    let all = run("probe.rs", RUST_SRC, "(field_identifier) @m");
+    assert_eq!(inside.len() + outside.len(), all.len());
+    assert_eq!(inside, Vec::new());
+    assert_eq!(outside, all);
+}
