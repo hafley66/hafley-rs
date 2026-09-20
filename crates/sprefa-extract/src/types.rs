@@ -3001,6 +3001,16 @@ pub trait Rename: Source + Sync + Send {
         request: &RenameRequest,
     ) -> Result<Vec<SymbolRef>, RenameStop>;
 
+    /// `symbol_refs` plus every site the arm found and declined to plan. An arm
+    /// that records no abstains keeps this default.
+    fn symbol_refs_and_abstains(
+        &self,
+        cx: &RenameCx,
+        request: &RenameRequest,
+    ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
+        self.symbol_refs(cx, request).map(|refs| (refs, Vec::new()))
+    }
+
     /// The replacement bytes for one occurrence. None = unchanged (an aliased
     /// import `{OLD as local}` leaves `local` alone).
     fn respell_symbol(
