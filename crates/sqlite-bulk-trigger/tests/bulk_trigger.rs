@@ -436,6 +436,87 @@ fn the_state_machine_alone_survives_a_rolled_back_savepoint() {
     assert_eq!(collector.counts().rollback_to, 1);
 }
 
+fn embedded() -> (Connection, Collector) {
+    let db = Connection::open_in_memory().unwrap();
+    let collector = Collector::new("embedded", 2);
+    collector.create_shadow(&db).unwrap();
+    (db, collector)
+}
+
+fn order(id: i64) -> RowChange {
+    RowChange::new(
+        "orders",
+        Sign::Insert,
+        vec![Value::Integer(id), Value::Integer(id * 10)],
+    )
+}
+
+fn ids(batch: &[RowChange]) -> Vec<Value> {
+    batch.iter().map(|change| change.values[0].clone()).collect()
+}
+
+#[test]
+fn a_drain_inside_a_savepoint_hands_the_older_rows_back_on_rollback_to() {
+    let (db, mut collector) = embedded();
+    collector.begin();
+    collector.update(&db, order(1)).unwrap();
+    collector.savepoint(0);
+    collector.update(&db, order(2)).unwrap();
+    collector.update(&db, order(3)).unwrap();
+    let first = collector.drain(&db).unwrap();
+    assert_eq!(sequences(&first), vec![0, 1, 2]);
+    collector.rollback_to(0);
+
+    let second = collector.drain(&db).unwrap();
+    collector.release(0);
+    collector.commit();
+    assert_eq!(ids(&second), vec![Value::Integer(1)]);
+    assert_eq!(sequences(&second), vec![0]);
+}
+
+#[test]
+fn a_drain_before_a_savepoint_is_not_unwound_by_rollback_to() {
+    let (db, mut collector) = embedded();
+    collector.begin();
+    collector.update(&db, order(1)).unwrap();
+    let first = collector.drain(&db).unwrap();
+    assert_eq!(first.len(), 1);
+    collector.savepoint(0);
+    collector.update(&db, order(2)).unwrap();
+    collector.rollback_to(0);
+
+    let second = collector.drain(&db).unwrap();
+    collector.release(0);
+    collector.commit();
+    assert!(second.is_empty());
+}
+
+#[test]
+fn a_drain_inside_the_inner_savepoint_restages_only_rows_before_the_outer() {
+    let (db, mut collector) = embedded();
+    collector.begin();
+    collector.update(&db, order(1)).unwrap();
+    collector.savepoint(0);
+    collector.update(&db, order(2)).unwrap();
+    collector.savepoint(1);
+    collector.update(&db, order(3)).unwrap();
+    let first = collector.drain(&db).unwrap();
+    assert_eq!(sequences(&first), vec![0, 1, 2]);
+    collector.update(&db, order(4)).unwrap();
+    collector.rollback_to(0);
+
+    let second = collector.drain(&db).unwrap();
+    assert_eq!(ids(&second), vec![Value::Integer(1)]);
+    assert_eq!(sequences(&second), vec![0]);
+
+    collector.update(&db, order(5)).unwrap();
+    let third = collector.drain(&db).unwrap();
+    collector.release(0);
+    collector.commit();
+    assert_eq!(ids(&third), vec![Value::Integer(5)]);
+    assert_eq!(sequences(&third), vec![1]);
+}
+
 #[test]
 fn a_delete_against_the_collector_is_refused() {
     let db = orders();

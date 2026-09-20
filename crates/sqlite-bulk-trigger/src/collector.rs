@@ -82,10 +82,11 @@ pub struct Counts {
 #[derive(Clone, Copy, Debug)]
 struct Mark {
     savepoint: i32,
-    staged_len: usize,
-    staged_bytes: usize,
     spilled_rows: usize,
     next_sequence: u64,
+    /// Drains before the mark. A drain numbered at or past this wrote to disk
+    /// after the savepoint, so ROLLBACK TO unwinds its rows.
+    drains: u64,
 }
 
 /// The batch state machine, with its own spill storage and no virtual table.
@@ -109,6 +110,10 @@ pub struct Collector {
     spilled_rows: usize,
     marks: Vec<Mark>,
     next_sequence: u64,
+    /// Memory rows a drain delivered while a savepoint was open, tagged with
+    /// the drain number. Empty whenever no savepoint is open.
+    applied: Vec<(RowChange, u64)>,
+    drains: u64,
     staged_row_cap: usize,
     staged_byte_cap: usize,
 }
@@ -126,6 +131,8 @@ impl Collector {
             spilled_rows: 0,
             marks: Vec::new(),
             next_sequence: 0,
+            applied: Vec::new(),
+            drains: 0,
             staged_row_cap: STAGED_ROWS,
             staged_byte_cap: STAGED_BYTES,
         }
@@ -213,10 +220,9 @@ impl Collector {
         self.marks.retain(|mark| mark.savepoint < savepoint);
         self.marks.push(Mark {
             savepoint,
-            staged_len: self.staged.len(),
-            staged_bytes: self.staged_bytes,
             spilled_rows: self.spilled_rows,
             next_sequence: self.next_sequence,
+            drains: self.drains,
         });
     }
 
@@ -224,10 +230,15 @@ impl Collector {
     pub fn release(&mut self, savepoint: i32) {
         self.counts.release += 1;
         self.marks.retain(|mark| mark.savepoint < savepoint);
+        if self.marks.is_empty() {
+            self.applied.clear();
+        }
     }
 
     /// ROLLBACK TO leaves the named savepoint open, so its mark survives. No
     /// mark at that index means the savepoint predates the first write here.
+    /// Memory rows a later drain wrote return to `staged`; the shadow table
+    /// unwinds with the page on its own.
     pub fn rollback_to(&mut self, savepoint: i32) {
         self.counts.rollback_to += 1;
         let restored = self
@@ -236,26 +247,44 @@ impl Collector {
             .rposition(|mark| mark.savepoint == savepoint)
             .map(|at| self.marks[at]);
         self.marks.retain(|mark| mark.savepoint <= savepoint);
-        match restored {
-            Some(mark) => {
-                self.staged.truncate(mark.staged_len);
-                self.staged_bytes = mark.staged_bytes;
-                self.spilled_rows = mark.spilled_rows;
-                self.next_sequence = mark.next_sequence;
-            }
-            None => self.reset(),
-        }
+        let Some(mark) = restored else {
+            self.reset();
+            return;
+        };
+        let mut staged = std::mem::take(&mut self.staged);
+        staged.retain(|change| change.sequence < mark.next_sequence);
+        let (unwound, kept): (Vec<_>, Vec<_>) = std::mem::take(&mut self.applied)
+            .into_iter()
+            .partition(|(_, drain)| *drain >= mark.drains);
+        self.applied = kept;
+        staged.extend(
+            unwound
+                .into_iter()
+                .map(|(change, _)| change)
+                .filter(|change| change.sequence < mark.next_sequence),
+        );
+        staged.sort_by_key(|change| change.sequence);
+        self.staged_bytes = staged.iter().map(row_bytes).sum();
+        self.staged = staged;
+        self.spilled_rows = mark.spilled_rows;
+        self.next_sequence = mark.next_sequence;
     }
 
     /// Every surviving change in sequence order, memory rows merged with the
-    /// shadow table's. The shadow table is emptied and the transaction cleared.
+    /// shadow table's. The shadow table is emptied. Open savepoints stay open;
+    /// a later ROLLBACK TO can hand the memory rows back to `staged`.
     pub fn drain(&mut self, db: &Connection) -> Result<Vec<RowChange>> {
         self.counts.sync += 1;
         let staged = std::mem::take(&mut self.staged);
         let spilled = self.spilled_rows;
         self.staged_bytes = 0;
         self.spilled_rows = 0;
-        self.marks.clear();
+        if !self.marks.is_empty() {
+            let drain = self.drains;
+            self.applied
+                .extend(staged.iter().cloned().map(|change| (change, drain)));
+        }
+        self.drains += 1;
         if spilled == 0 {
             return Ok(staged);
         }
@@ -322,6 +351,8 @@ impl Collector {
         self.staged_bytes = 0;
         self.spilled_rows = 0;
         self.marks.clear();
+        self.applied.clear();
+        self.drains = 0;
         self.next_sequence = 0;
     }
 }
