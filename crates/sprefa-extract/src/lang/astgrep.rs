@@ -26,9 +26,8 @@ use crate::trace;
 use std::collections::BTreeSet;
 
 use crate::lang::call_kinds::{
-    ARG_KINDS, CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS, NAME_LEAF_KINDS,
+    ARG_KINDS, CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS, MODULE_CALLER, NAME_LEAF_KINDS,
 };
-use crate::lang::python::MODULE_CALLER;
 use crate::project::ResolveDrop;
 use crate::types::UnresolvedReason;
 
@@ -281,21 +280,27 @@ fn is_name_leaf(node: &SgNode<StrDoc<RyiLang>>, kinds: &RootKinds) -> bool {
 
 /// The name leaves under `node`, pre-order. A nested call kind stops the
 /// descent: `foo (helper 1)` names `foo` here, and the nested call names
-/// itself when its own turn comes.
+/// itself when its own turn comes. Iterative on an explicit stack, the walk
+/// discipline of the file's projectors: recursion would die on deep trees.
 fn collect_name_leaves<'r>(
     node: &SgNode<'r, StrDoc<RyiLang>>,
     kinds: &RootKinds,
     out: &mut Vec<SgNode<'r, StrDoc<RyiLang>>>,
 ) {
-    if CALL_KINDS.contains(&node.kind().as_ref()) {
-        return;
-    }
-    if is_name_leaf(node, kinds) {
-        out.push(node.clone());
-        return;
-    }
-    for child in node.children() {
-        collect_name_leaves(&child, kinds, out);
+    let mut stack: Vec<SgNode<'r, StrDoc<RyiLang>>> = vec![node.clone()];
+    while let Some(node) = stack.pop() {
+        if CALL_KINDS.contains(&node.kind().as_ref()) {
+            continue;
+        }
+        if is_name_leaf(&node, kinds) {
+            out.push(node);
+            continue;
+        }
+        let mark = stack.len();
+        for child in node.children() {
+            stack.push(child);
+        }
+        stack[mark..].reverse();
     }
 }
 
@@ -303,16 +308,14 @@ fn collect_name_leaves<'r>(
 /// the first named child through the nesting. tree-sitter-haskell's `apply`
 /// is left-associative, so `map f xs` parses `apply(apply(map, f), xs)` and
 /// the head sits at the end of the first-child spine.
-fn head_leaf<'r>(node: &SgNode<'r, StrDoc<RyiLang>>) -> Option<SgNode<'r, StrDoc<RyiLang>>> {
+fn head_leaf<'r>(node: &SgNode<'r, StrDoc<RyiLang>>) -> SgNode<'r, StrDoc<RyiLang>> {
     let mut cur = node.clone();
     loop {
-        let next = cur.children().find(|child| child.is_named());
-        match next {
-            Some(child) => cur = child,
-            None => break,
-        }
+        let Some(child) = cur.children().find(|child| child.is_named()) else {
+            return cur;
+        };
+        cur = child;
     }
-    Some(cur)
 }
 
 /// One guessed site's callee: the grammar's own seat first (`name`, then
@@ -350,7 +353,7 @@ fn callee_of(
         collect_name_leaves(&child, kinds, &mut leaves);
     }
     if CALLEE_FIRST_KINDS.contains(&node.kind().as_ref()) {
-        let head = head_leaf(node)?;
+        let head = head_leaf(node);
         return Some((strings.intern(&head.text()), None));
     }
     let leaf = leaves.last()?;
@@ -369,8 +372,8 @@ impl Project<CallF> for CallProjector {
 
     fn project(&self, root: &SgRoot, strings: &mut Strings, sink: &mut FamilyBundle<CallF>) {
         let kinds = RootKinds::resolve(root);
-        // The module as nameless covering def, python's MODULE_CALLER seat
-        // reused verbatim: a guessed site then has a caller for
+        // The module as nameless covering def, the MODULE_CALLER seat from
+        // 0_call_kinds: a guessed site then has a caller for
         // `Resolve<CallF>`'s covering-def join. flatten_call skips the node,
         // so no def row reaches the wire.
         let file_range = root.root().range();

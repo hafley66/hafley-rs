@@ -5,6 +5,9 @@
 //! absent and a call kind one does emit is present. This file is DATA, not
 //! code: a new language contributes a row, never a branch in the projector.
 
+use crate::family::CallKind;
+use crate::types::LangKind;
+
 /// Node kinds that ARE a call site, sorted. The grammars that emit each kind:
 ///
 /// - `apply`                      haskell function application
@@ -126,3 +129,14 @@ pub const ARG_KINDS: &[&str] = &[
 /// the argument subtree, the trailing segment of a member chain (`s.fp(...)`
 /// names `fp`).
 pub const CALLEE_FIRST_KINDS: &[&str] = &["apply"];
+
+/// The module as a CALL caller: a nameless whole-file cover def minted by the
+/// call projectors so a module-level call site has a caller under
+/// `Resolve<CallF>`. Not a call_def wire row (skipped in `flatten_call`, v5
+/// emits no such def); `caller_name` answers null, the bench join's empty
+/// src_name for module-level rows. Tag "module" collides with python's TypeF
+/// ext tag only across families, which the vocab rail allows.
+pub const MODULE_CALLER: CallKind = CallKind::Ext(LangKind {
+    lang: "python",
+    tag: "module",
+});

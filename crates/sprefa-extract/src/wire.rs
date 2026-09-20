@@ -383,11 +383,11 @@ fn flatten_call<E>(
     push: &mut impl FnMut(FlatFact) -> Result<(), E>,
 ) -> Result<(), E> {
     for node in &bundle.nodes {
-        // The python module-as-caller def (lang/python MODULE_CALLER) is a
+        // The module-as-caller def (call_kinds MODULE_CALLER) is a
         // resolve-side cover, not a declaration: v5 emits no def row for it,
         // and the parity baselines grade call_def rows by content. Site rows
         // are untouched.
-        if node.kind == crate::lang::python::MODULE_CALLER {
+        if node.kind == crate::lang::call_kinds::MODULE_CALLER {
             continue;
         }
         push(FlatFact::Node {

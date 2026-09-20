@@ -24,6 +24,7 @@ use crate::family::{
     TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
 use crate::lang::{AstGrepParser, CstProjector};
+use crate::lang::call_kinds::MODULE_CALLER;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
@@ -44,16 +45,6 @@ pub const COND: DfNodeKind = DfNodeKind::Ext(LangKind {
 /// The file's module scope, one entity named `<module>` over the whole file:
 /// v5 mints it (`EntityKind::Module`) so a module docstring has an anchor.
 pub const MODULE: TypeEntityKind = TypeEntityKind::Ext(LangKind {
-    lang: "python",
-    tag: "module",
-});
-/// The module as a CALL caller: a nameless whole-file cover def minted by
-/// `project_call` so a module-level call site has a caller under
-/// `Resolve<CallF>`. Not a call_def wire row (skipped in `flatten_call`, v5
-/// emits no such def); `caller_name` answers null, the bench join's empty
-/// src_name for module-level rows. Tag "module" collides with the TypeF ext
-/// tag above only across families, which the vocab rail allows.
-pub const MODULE_CALLER: CallKind = CallKind::Ext(LangKind {
     lang: "python",
     tag: "module",
 });
