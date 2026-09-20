@@ -2,10 +2,11 @@
 created: 2026-09-20
 updated: 2026-09-20
 type: feature
-status: open
+status: done
 priority: normal
 epic: ryi-new-verbs
 labels: [extract, artifact-cli]
+closed: 2026-09-20
 ---
 
 ## Description
@@ -102,15 +103,20 @@ model GraphRoot { ...ExportRow; record: "graph_root"; path: string; name: string
 Command: `ryi graph --callers deep tests/fixtures/ts5_findings/module_plane`
 
 ## Acceptance Criteria
-- [ ] `extract graph --callers NAME` returns reverse edges with the same grade column
-- [ ] every `graph_node` and `graph_edge` row carries `grade`; a summary line prints the `+`/`~`/`-` split
-- [ ] a golden over a fixture directory closed under `resolved_import`, not the instant corpus
-- [ ] `cargo test --features cli --no-fail-fast` green from `crates/sprefa-extract`
+- [x] `extract graph --callers NAME` returns reverse edges with the same grade column
+- [x] every `graph_node` and `graph_edge` row carries `grade`; a summary line prints the `+`/`~`/`-` split
+- [x] a golden over a fixture directory closed under `resolved_import`, not the instant corpus
+- [x] `cargo test --features cli --no-fail-fast` green from `crates/sprefa-extract`
 
 ## Tests Run
 
 ## Implementation Notes
 
 ## Comments
+
+### 2026-09-20T20:29:18Z · @fable-primary
+
+Landed on main 92a05815 (lane feat-graph-callers-arm, luna). Gate: 190 binaries, 1005 passed, 0 failed. Trace: max span 20.8ms extract_file, 16 resolve spans are per import specifier, one resolve_project. Edge kind emitted is import_resolve, not call.
+
 
 ## Decisions
