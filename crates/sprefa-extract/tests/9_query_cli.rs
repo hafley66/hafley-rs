@@ -97,7 +97,7 @@ fn query_rejects_unknown_language_and_invalid_query_with_exit_two() {
     let unknown = run(&[
         "query",
         "--lang",
-        "ruby",
+        "klingon",
         "--query",
         "(identifier) @name",
         RUST,
@@ -105,7 +105,7 @@ fn query_rejects_unknown_language_and_invalid_query_with_exit_two() {
     assert_eq!(unknown.status.code(), Some(2));
     assert_eq!(
         String::from_utf8(unknown.stderr).unwrap(),
-        "unknown lang 'ruby'\n"
+        "unknown lang 'klingon'\n"
     );
 
     let invalid = run(&["query", "--lang", "rust", "--query", "(", RUST]);

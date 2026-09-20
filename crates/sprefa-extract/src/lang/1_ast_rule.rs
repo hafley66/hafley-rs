@@ -177,6 +177,9 @@ impl AstRuleMutationProposal {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum AstRuleError {
     NoGrammar(String),
+    /// A `kind:` string the target grammar does not spell. ast-grep matches
+    /// nothing for one, silently, so it is refused before the run.
+    UnknownKind { kind: String, language: String },
     Utf8(String),
     Yaml(String),
     InvalidRule(String),
@@ -315,6 +318,11 @@ pub fn query_ast_rule_with_content(
         RyiLang::from_path(path).ok_or_else(|| AstRuleError::NoGrammar(path.into()))?;
     let source =
         std::str::from_utf8(bytes).map_err(|error| AstRuleError::Utf8(error.to_string()))?;
+    unknown_kind(&request.rule, language)
+        .into_iter()
+        .chain(request.utils.iter().flat_map(|named| unknown_kind(&named.rule, language)))
+        .next()
+        .map_or(Ok(()), Err)?;
     let config_yaml = serde_yaml::to_string(&ConfigWire::from_request(request, language))
         .map_err(|error| AstRuleError::Yaml(error.to_string()))?;
     let configs: Vec<RuleConfig<RyiLang>> =
@@ -477,6 +485,39 @@ fn put<T: Serialize>(map: &mut BTreeMap<String, serde_yaml::Value>, key: &str, v
         serde_yaml::to_value(value).expect("typed rule serialization"),
     );
 }
+/// Every `kind:` in a rule tree that the grammar does not spell. A grammar
+/// enumerates its node kinds, so this is a lookup, never a heuristic.
+fn unknown_kind(rule: &AstRule, language: RyiLang) -> Option<AstRuleError> {
+    use ast_grep_core::tree_sitter::LanguageExt;
+    let grammar = language.get_ts_language();
+    let spelled = |name: &str| {
+        (0..grammar.node_kind_count())
+            .filter_map(|id| grammar.node_kind_for_id(id as u16))
+            .any(|kind| kind == name)
+    };
+    let children: Vec<&AstRule> = match rule {
+        AstRule::Kind(name) if !spelled(name) => {
+            return Some(AstRuleError::UnknownKind {
+                kind: name.clone(),
+                language: language.name().into_owned(),
+            })
+        }
+        AstRule::All(list) | AstRule::Any(list) => list.iter().collect(),
+        AstRule::Not(inner) => vec![inner.as_ref()],
+        AstRule::Inside { rule, stop_by }
+        | AstRule::Has { rule, stop_by }
+        | AstRule::Follows { rule, stop_by }
+        | AstRule::Precedes { rule, stop_by } => match stop_by {
+            Some(StopBy::Rule(stop)) => vec![rule.as_ref(), stop.as_ref()],
+            _ => vec![rule.as_ref()],
+        },
+        _ => Vec::new(),
+    };
+    children
+        .into_iter()
+        .find_map(|child| unknown_kind(child, language))
+}
+
 fn relation(
     map: &mut BTreeMap<String, serde_yaml::Value>,
     key: &str,
@@ -486,8 +527,12 @@ fn relation(
     let mut inner = match rule_wire(rule) {
         RuleWire::Map(map) => map,
     };
-    if let Some(stop_by) = stop_by {
-        put(&mut inner, "stopBy", stop_by);
+    // `StopBy::Rule` carries an `AstRule`, whose own derive spells the variant
+    // name; only `rule_wire` spells the key ast-grep reads.
+    match stop_by {
+        Some(StopBy::End(value)) => put(&mut inner, "stopBy", value),
+        Some(StopBy::Rule(stop)) => put(&mut inner, "stopBy", &rule_wire(stop)),
+        None => {}
     }
     put(map, key, &RuleWire::Map(inner));
 }

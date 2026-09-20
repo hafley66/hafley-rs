@@ -31,6 +31,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 use super::PrologSource;
+use crate::lang::rust::build_line_starts;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::types::{RefRole, Rename, RenameStop, Respell, Span, SymbolRef, SymbolSeat};
@@ -59,9 +60,13 @@ impl Rename for PrologSource {
         for (rel, scan) in &corpus.scans {
             let anchored = rel == &request.anchor;
             let visible = anchored || seeing.contains(rel);
+            let line_starts = cx
+                .text(rel)
+                .map(|text| build_line_starts(&text))
+                .unwrap_or_default();
             corpus.harvest(
-                rel, scan, key, anchored, visible, &qualifier, &exporting, request, &mut refs,
-                &mut seats,
+                rel, scan, &line_starts, key, anchored, visible, &qualifier, &exporting,
+                request, &mut refs, &mut seats,
             );
         }
         if let Some(stop) = corpus.inexact(&request.anchor, &refs) {
@@ -283,6 +288,7 @@ impl Corpus {
         &self,
         rel: &str,
         scan: &FileScan,
+        line_starts: &[u32],
         key: PredKey,
         anchored: bool,
         visible: bool,
@@ -329,6 +335,8 @@ impl Corpus {
                 seats.push(SymbolSeat {
                     file: rel.to_string(),
                     span: *span,
+                    line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                    reaches: String::new(),
                     form,
                 });
             }

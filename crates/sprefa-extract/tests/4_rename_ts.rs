@@ -335,7 +335,7 @@ fn inexact_is_unreachable_from_the_ts_arm() {
 }
 
 /// `obj["Foo"]` and `import("./m").then(m => m.Foo)` reach the symbol only at
-/// runtime; the run stops with EVERY seat's file and offset, exit 6, and the
+/// runtime; the run stops with EVERY seat's file and line, exit 6, and the
 /// tree stays put. One seat per run would leave the second repair invisible
 /// until the first was fixed, so the stop carries the whole list.
 #[test]
@@ -368,9 +368,10 @@ fn dynamic_stop_lists_every_seat() {
         );
     }
     for offset in [computed_offset, member_offset] {
+        let line = seat_text[..offset].matches('\n').count() + 1;
         assert!(
-            stderr.contains(&format!("{ANCHOR} byte {offset}")),
-            "Dynamic seat offset {offset} missing:\n{}",
+            stderr.contains(&format!("{ANCHOR}:{line}: ")),
+            "Dynamic seat at {ANCHOR}:{line} missing:\n{}",
             stopped.stderr
         );
     }

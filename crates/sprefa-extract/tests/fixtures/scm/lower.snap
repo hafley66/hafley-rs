@@ -1,0 +1,51 @@
+utils: ["closure", "scope", "decl", "receiver", "neighbor"]
+
+rule: All([All([Kind("call_expression"), Has { rule: All([Kind("field_expression"), Not(Has { rule: Kind("arguments"), stop_by: None }), Has { rule: Kind("field_identifier"), stop_by: None }]), stop_by: None }]), Inside { rule: Matches("scope"), stop_by: Some(End("end")) }, Not(Inside { rule: Matches("closure"), stop_by: Some(End("end")) }), Has { rule: Matches("receiver"), stop_by: Some(End("end")) }, Not(Has { rule: Matches("closure"), stop_by: Some(End("end")) }), Follows { rule: Matches("decl"), stop_by: Some(End("end")) }, Not(Precedes { rule: Matches("decl"), stop_by: Some(End("end")) }), Regex("contains"), Not(Regex("is_empty")), Pattern("$R.contains($A)"), Inside { rule: Matches("scope"), stop_by: Some(Rule(Matches("receiver"))) }, Has { rule: Matches("receiver"), stop_by: None }, Follows { rule: Matches("neighbor"), stop_by: Some(End("end")) }])
+
+matches: 1
+
+texts: ["name.contains(\"ab\")"]
+
+## refusals
+  Syntax: Syntax { row: 0, message: "unparsed `.scm` text: (function_item" }
+  Syntax: Syntax { row: 0, message: "a wildcard node `_` has no AstRule" }
+  UnknownPredicate: UnknownPredicate("nope?")
+  UnknownPredicate: UnknownPredicate("not-nope?")
+  PredicateArity: PredicateArity { operator: "inside?", got: 1 }
+  UnboundReference: UnboundReference("no_such")
+  DuplicateLabel: DuplicateLabel("dup")
+  FocusConflict: FocusConflict { first: "a", second: "b" }
+  UnknownStopBy: UnknownStopBy("bogus")
+
+## unknown kind, per language
+  probe.rs: UnknownKind { kind: "no_such_node_kind", language: "Rust" }
+  probe.ts: UnknownKind { kind: "no_such_node_kind", language: "TypeScript" }
+  probe.py: UnknownKind { kind: "no_such_node_kind", language: "Python" }
+  probe.pl: UnknownKind { kind: "no_such_node_kind", language: "prolog" }
+  probe.gd: UnknownKind { kind: "no_such_node_kind", language: "gdscript" }
+
+## AstRule census
+  Pattern: reached
+  Kind: reached
+  Regex: reached
+  Matches: reached
+  All: reached
+  Any: reached
+  Not: reached
+  Inside: reached
+  Has: reached
+  Follows: reached
+  Precedes: reached
+
+## StopBy census
+  End: reached
+  Rule: reached
+
+## ScmLowerError census
+  Syntax: reached
+  UnknownPredicate: reached
+  PredicateArity: reached
+  UnboundReference: reached
+  DuplicateLabel: reached
+  UnknownStopBy: reached
+  FocusConflict: reached

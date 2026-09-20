@@ -5,9 +5,8 @@
 //! boundary and are intentionally absent here.
 
 use std::collections::BTreeMap;
-use std::str::FromStr;
 
-use ast_grep_language::{LanguageExt, SupportLang};
+use ast_grep_language::LanguageExt;
 use serde::Serialize;
 use serde_json::Value;
 use tree_sitter::{
@@ -157,21 +156,12 @@ pub fn query_tree_sitter_spans(
     collect_spanned_matches(&query, tree.root_node(), source.as_bytes())
 }
 
+/// Every language the `Source` roster can parse, through the one name table
+/// `RyiLang::parse_name` owns. A name this rejects reaches no grammar at all.
 fn query_language(name: &str) -> Result<tree_sitter::Language, String> {
-    let language = match name {
-        "md" => return Ok(tree_sitter::Language::new(tree_sitter_md::LANGUAGE)),
-        "md_inline" => return Ok(tree_sitter::Language::new(tree_sitter_md::INLINE_LANGUAGE)),
-        "html" => return Ok(tree_sitter::Language::new(tree_sitter_html::LANGUAGE)),
-        "rust" => SupportLang::from_str("rust"),
-        "ts" => SupportLang::from_str("ts"),
-        "tsx" => SupportLang::from_str("tsx"),
-        "js" => SupportLang::from_str("js"),
-        "go" => SupportLang::from_str("go"),
-        "kotlin" => SupportLang::from_str("kotlin"),
-        _ => return Err(format!("unknown lang '{name}'")),
-    }
-    .map_err(|_| format!("unknown lang '{name}'"))?;
-    Ok(language.get_ts_language())
+    crate::lang::extract_lang::RyiLang::parse_name(name)
+        .map(|lang| lang.get_ts_language())
+        .ok_or_else(|| format!("unknown lang '{name}'"))
 }
 
 fn validate_predicates(query: &Query) -> Result<(), String> {
@@ -266,27 +256,19 @@ fn collect_spanned_matches(
     Ok(rows)
 }
 
+/// A match is gated by its OWN pattern's predicates. A predicate-free pattern
+/// has an empty slice here, which folds to true.
 fn matches_predicates(
     query: &Query,
     found: &tree_sitter::QueryMatch<'_, '_>,
     source: &[u8],
 ) -> Result<bool, String> {
-    let direct = query.general_predicates(found.pattern_index);
-    if !direct.is_empty() {
-        return direct.iter().try_fold(true, |matched, predicate| {
+    query
+        .general_predicates(found.pattern_index)
+        .iter()
+        .try_fold(true, |matched, predicate| {
             Ok(matched && predicate_matches(predicate, found, source)?)
-        });
-    }
-    for pattern in 0..query.pattern_count() {
-        if pattern != found.pattern_index {
-            for predicate in query.general_predicates(pattern) {
-                if !predicate_matches(predicate, found, source)? {
-                    return Ok(false);
-                }
-            }
-        }
-    }
-    Ok(true)
+        })
 }
 
 fn predicate_matches(
