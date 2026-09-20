@@ -1,10 +1,10 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-20
 type: task
 status: open
 priority: normal
-epic: extract-parity-move-rename
+epic: ryi-new-verbs
 related: ['@move-commit-exits-two', '@rename-path-double-reach', '@extract-lines-flag']
 labels: [extract, artifact-cli, intent-architecture, component-rename, phase-refinement-1, needs-chris]
 ---

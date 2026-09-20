@@ -1,13 +1,13 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-20
 type: feature
 status: open
 priority: normal
-epic: extract-parity-move-rename
+epic: ryi-fast-tier
 labels: [extract]
 lane: extract-rename
-blocked_by: ['@flash-review-cleanups']
+blocked_by: ['@flash-review-cleanups', '@scip-ingestion-conformance']
 ---
 
 # ts field rename: property seats typed by the receiver plane
