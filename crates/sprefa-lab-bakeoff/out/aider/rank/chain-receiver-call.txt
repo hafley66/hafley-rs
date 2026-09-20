@@ -1,5 +1,0 @@
-Warning: Input is not a terminal (fd=0).
-def tests/fixtures/rust_call_grind/decoy.rs:1 Other
-def tests/fixtures/rust_call_grind/decoy.rs:8 read
-def tests/fixtures/rust_call_grind/decoy.rs:4 tick
-file ('tests/fixtures/rust_call_grind/widget.rs',)

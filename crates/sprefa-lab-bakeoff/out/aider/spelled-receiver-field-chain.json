@@ -1,7 +1,0 @@
-{
-  "case": "spelled-receiver-field-chain",
-  "answer": [
-    "tests/fixtures/rust_spelled_receiver/src/proj.rs:330-371"
-  ],
-  "notes": "name-join: only Widget::run is tagged (trait method signatures are not function_item), so the join has one candidate"
-}

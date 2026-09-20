@@ -1,2 +1,0 @@
-Warning: Input is not a terminal (fd=0).
-file ('tests/fixtures/rust_spelled_receiver/src/proj.rs',)

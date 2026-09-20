@@ -1,7 +1,0 @@
-{
-  "case": "spelled-receiver-trait-bound",
-  "answer": [
-    "tests/fixtures/rust_spelled_receiver/src/proj.rs:330-371"
-  ],
-  "notes": "name-join: only Widget::run is tagged; the Proj::run signature has no def tag, so the join lands on the same-named decoy"
-}

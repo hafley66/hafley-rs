@@ -1,7 +1,0 @@
-{
-  "case": "spelled-receiver-trait-bound",
-  "answer": [
-    "tests/fixtures/rust_spelled_receiver/src/proj.rs:185-202"
-  ],
-  "notes": "p.run() in trait_bound_leg<P: Proj>(p: P). The bound names the target: Proj::run (proj.rs:14), not Widget::run (proj.rs:25) which shares the bare name."
-}

@@ -1,7 +1,0 @@
-{
-  "case": "rename-safe-occurrence-set",
-  "answer": [
-    "tests/fixtures/rust_rename/fnuse/before/src/util.rs:11-17",
-    "tests/fixtures/rust_rename/fnuse/before/src/lib.rs:69-80"
-  ]
-}

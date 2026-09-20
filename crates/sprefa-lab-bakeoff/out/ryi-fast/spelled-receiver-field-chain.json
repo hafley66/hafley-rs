@@ -1,6 +1,0 @@
-{
-  "case": "spelled-receiver-field-chain",
-  "answer": [
-    "tests/fixtures/rust_spelled_receiver/src/proj.rs:330-371"
-  ]
-}

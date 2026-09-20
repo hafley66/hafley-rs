@@ -1,6 +1,0 @@
-{
-  "case": "kotlin-shadow-decline",
-  "answer": [
-    "tests/fixtures/kotlin_receivers/use.kt:752-755 unresolved:inferred"
-  ]
-}

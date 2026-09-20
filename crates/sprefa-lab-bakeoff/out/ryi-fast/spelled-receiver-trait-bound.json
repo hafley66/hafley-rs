@@ -1,6 +1,0 @@
-{
-  "case": "spelled-receiver-trait-bound",
-  "answer": [
-    "tests/fixtures/rust_spelled_receiver/src/proj.rs:185-202"
-  ]
-}

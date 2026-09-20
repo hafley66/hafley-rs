@@ -1,5 +1,0 @@
-{
-  "case": "variant-literal-not-call",
-  "answer": [],
-  "notes": "no reference.call tag exists in shapes.rs: a struct-variant literal is a struct_expression, which the rust query does not tag"
-}

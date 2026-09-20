@@ -1,5 +1,0 @@
-{
-  "case": "deps-reach-app",
-  "answer": [],
-  "notes": "cannot: the typescript query tags no import, export or specifier, and aider has no module resolver, tsconfig paths, or unresolved reasons"
-}

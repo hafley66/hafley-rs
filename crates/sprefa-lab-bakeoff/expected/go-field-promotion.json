@@ -1,7 +1,0 @@
-{
-  "case": "go-field-promotion",
-  "answer": [
-    "tests/fixtures/go_field_promote/base/base.go:128-176"
-  ],
-  "notes": "o.Part.Ring() in UseOuter. Outer embeds Inner, Inner.Part is *base.Widget, so the target is base.Widget.Ring across two packages. caller.go:10 Decoy.Ring shares the bare name and sits in the calling file."
-}

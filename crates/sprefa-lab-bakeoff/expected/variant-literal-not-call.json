@@ -1,5 +1,0 @@
-{
-  "case": "variant-literal-not-call",
-  "answer": [],
-  "notes": "shapes.rs:11 Shape::Circle { radius: 1 } is a struct-variant literal, not a call. The empty set is the whole answer: any build_circle->Circle entry scores a diff."
-}

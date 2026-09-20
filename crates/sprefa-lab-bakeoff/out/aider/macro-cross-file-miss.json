@@ -1,5 +1,0 @@
-{
-  "case": "macro-cross-file-miss",
-  "answer": [],
-  "notes": "cannot: macro_rules bodies are token trees, so the rust query tags no fn def or call inside them; aider sees mint_helpers only as a macro def and an invocation"
-}

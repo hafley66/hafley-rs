@@ -1,9 +1,0 @@
-Warning: Input is not a terminal (fd=0).
-def tests/fixtures/go_field_promote/base/base.go:4 Widget
-def tests/fixtures/go_field_promote/lib/lib.go:11 Outer
-def tests/fixtures/go_field_promote/base/base.go:7 Ring
-def tests/fixtures/go_field_promote/base/base.go:1 base
-def tests/fixtures/go_field_promote/lib/lib.go:7 Inner
-def tests/fixtures/go_field_promote/lib/lib.go:1 lib
-def tests/fixtures/go_field_promote/lib/lib.go:16 NewOuter
-file ('tests/fixtures/go_field_promote/caller/caller.go',)

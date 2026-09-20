@@ -1,8 +1,0 @@
-{
-  "case": "rename-safe-occurrence-set",
-  "answer": [
-    "tests/fixtures/rust_rename/fnuse/before/src/util.rs:11-17",
-    "tests/fixtures/rust_rename/fnuse/before/src/lib.rs:69-80"
-  ],
-  "notes": "Renaming util::Helper to Tool touches the declaration (util.rs:1) and fn a's Helper::new() call site, which the function-scoped use crate::util::Helper brings into scope. Excluded: lib.rs:3 struct Helper (a distinct type) and fn b's return type and body, which name that local shadow."
-}
