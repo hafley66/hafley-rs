@@ -127,7 +127,7 @@ fn malformed_yaml_and_invalid_rules_are_named_errors() {
             b"fn main() {}",
             &request(AstRule::Kind("not_a_rust_kind".into()))
         ),
-        Err(AstRuleError::InvalidRule(_))
+        Err(AstRuleError::UnknownKind { .. })
     ));
 }
 

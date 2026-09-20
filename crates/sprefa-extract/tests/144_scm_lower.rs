@@ -35,6 +35,7 @@ const SCM: &str = r#"[(closure_expression)] @closure
 [(function_item) (impl_item)] @scope
 [(let_declaration)] @decl
 [(field_expression)] @receiver
+[(let_declaration)] @neighbor
 
 ((call_expression
    function: (field_expression !arguments field: (field_identifier) @name)) @m
@@ -48,7 +49,8 @@ const SCM: &str = r#"[(closure_expression)] @closure
  (#not-match? @m "is_empty")
  (#pattern? @m "$R.contains($A)")
  (#inside? @m scope receiver)
- (#has? @m receiver neighbor))
+ (#has? @m receiver "neighbor")
+ (#follows? @m neighbor "end"))
 "#;
 
 /// One input per `ScmLowerError` variant the surface can produce. A query either
@@ -62,6 +64,7 @@ const REFUSALS: &[&str] = &[
     "((identifier) @m (#inside? @m no_such))",
     "(function_item) @dup\n\n(let_declaration) @dup",
     "(block) @s\n\n((let_declaration (identifier) @a) (identifier) @b (#inside? @a s) (#inside? @b s))",
+    "(block) @s\n\n((identifier) @m (#inside? @m s \"bogus\"))",
 ];
 
 /// Declaration order in `src/lang/1_ast_rule.rs`.
@@ -75,7 +78,7 @@ const STOP_BY_VARIANTS: &[&str] = &["End", "Rule"];
 /// Declaration order in `src/lang/5_scm_lower.rs`.
 const ERROR_VARIANTS: &[&str] = &[
     "Syntax", "UnknownPredicate", "PredicateArity", "UnboundReference", "DuplicateLabel",
-    "FocusConflict",
+    "UnknownStopBy", "FocusConflict",
 ];
 
 /// Variant names a lowered rule uses, appended in tree order.
@@ -114,6 +117,7 @@ fn error_variant(error: &ScmLowerError) -> &'static str {
         ScmLowerError::PredicateArity { .. } => "PredicateArity",
         ScmLowerError::UnboundReference(_) => "UnboundReference",
         ScmLowerError::DuplicateLabel(_) => "DuplicateLabel",
+        ScmLowerError::UnknownStopBy(_) => "UnknownStopBy",
         ScmLowerError::FocusConflict { .. } => "FocusConflict",
     }
 }
@@ -177,12 +181,32 @@ fn scm_lowering() {
         .map(|scm| error_variant(&lower_scm(scm).expect_err("refuses")))
         .collect();
 
+    // A kind no grammar spells is refused before the run, per language, and
+    // ast-grep would otherwise match nothing for it in silence.
+    let kinds: Vec<String> = ["probe.rs", "probe.ts", "probe.py", "probe.pl", "probe.gd"]
+        .iter()
+        .map(|path| {
+            let program = lower_scm("(no_such_node_kind) @m").expect("a bogus kind still lowers");
+            let request = AstRuleRequest {
+                id: "bogus".into(),
+                rule: program.rule,
+                utils: program.utils,
+                fix: None,
+            };
+            match query_ast_rule(path, b"x", &request) {
+                Ok(rows) => panic!("{path} ran a bogus kind and got {} rows", rows.len()),
+                Err(error) => format!("  {path}: {error}"),
+            }
+        })
+        .collect();
+
     let actual = [
         format!("utils: {utils:?}"),
         format!("rule: {:?}", program.rule),
         format!("matches: {}", rows.len()),
         format!("texts: {texts:?}"),
         format!("## refusals\n{}", refusals.join("\n")),
+        format!("## unknown kind, per language\n{}", kinds.join("\n")),
         format!("## AstRule census\n{}", census(AST_RULE_VARIANTS, &rules)),
         format!("## StopBy census\n{}", census(STOP_BY_VARIANTS, &stops)),
         format!("## ScmLowerError census\n{}", census(ERROR_VARIANTS, &errors_seen)),

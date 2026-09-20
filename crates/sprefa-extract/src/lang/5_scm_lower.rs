@@ -10,7 +10,8 @@
 //! ```text
 //! pub struct ScmProgram { rule: AstRule, utils: Vec<NamedAstRule> }
 //! pub enum ScmLowerError { Syntax, UnknownPredicate, PredicateArity,
-//!                          UnboundReference, DuplicateLabel, FocusConflict }
+//!                          UnboundReference, DuplicateLabel, UnknownStopBy,
+//!                          FocusConflict }
 //! pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError>
 //! ```
 //!
@@ -65,6 +66,8 @@ pub enum ScmLowerError {
     UnboundReference(String),
     /// One capture label used by two top-level definitions.
     DuplicateLabel(String),
+    /// A `stopBy` string that is neither `"neighbor"` nor `"end"`.
+    UnknownStopBy(String),
     /// Two predicates in one definition constraining two different captures.
     /// An ast-grep rule reports one node, so one definition has one root.
     FocusConflict { first: String, second: String },
@@ -366,11 +369,15 @@ fn lower_predicate(
 
     let focus = capture_argument(parameters[0], source)?;
     let reference = reference_argument(parameters[1], source, labels)?;
-    // A third argument names the rule the search stops at. `"neighbor"` is the
-    // one spelling that means no walk at all, which ast-grep spells as absent.
+    // A third argument is a STRING for the walk mode and an IDENTIFIER for a
+    // label, so a label spelled `neighbor` is still a label.
     let stop_by = match parameters.get(2) {
         None => Some(StopBy::End("end".into())),
-        Some(node) if source[node.byte_range()] == *"neighbor" => None,
+        Some(node) if node.kind() == "string" => match string_argument(*node, source)?.as_str() {
+            "neighbor" => None,
+            "end" => Some(StopBy::End("end".into())),
+            other => return Err(ScmLowerError::UnknownStopBy(other.to_string())),
+        },
         Some(node) => Some(StopBy::Rule(Box::new(AstRule::Matches(
             reference_argument(*node, source, labels)?,
         )))),
