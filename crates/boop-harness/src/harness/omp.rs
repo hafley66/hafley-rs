@@ -21,6 +21,52 @@ use boop_store::tail;
 
 pub struct Omp;
 
+/// Build the deterministic loopback recipe for an OMP launch.
+///
+/// The executable is supplied by the caller so config-only tests can reuse
+/// the recipe without requiring an installed `omp` binary.
+pub fn mock_tui_launch_with_executable(
+    ctx: &super::mock_tui::MockTuiContext<'_>,
+    executable: impl Into<String>,
+) -> anyhow::Result<super::mock_tui::MockTuiLaunch> {
+    use super::mock_tui::{terminal_env, MockTuiReplay};
+    let agent_dir = ctx.home.join(".omp").join("agent");
+    std::fs::create_dir_all(&agent_dir)?;
+    let config = agent_dir.join("models.yml");
+    std::fs::write(
+        &config,
+        [
+            "providers:".to_owned(),
+            "  llmock:".to_owned(),
+            format!("    baseUrl: http://127.0.0.1:{}/openai/v1", ctx.port),
+            "    apiKey: test".to_owned(),
+            "    api: openai-completions".to_owned(),
+            "    models:".to_owned(),
+            "      - id: mock-model".to_owned(),
+            "        name: Mock Model".to_owned(),
+            String::new(),
+        ]
+        .join("\n"),
+    )?;
+    let mut env = terminal_env(ctx.home);
+    env.push((
+        "PI_CODING_AGENT_DIR".into(),
+        agent_dir.display().to_string(),
+    ));
+    // A fresh scratch HOME otherwise opens OMP's interactive provider
+    // setup before it reads this recipe's loopback model configuration.
+    env.push(("OMP_SKIP_SETUP".into(), "1".into()));
+    Ok(super::mock_tui::MockTuiLaunch {
+        executable: executable.into(),
+        args: vec!["--model".into(), "llmock/mock-model".into()],
+        env,
+        config_paths: vec![config],
+        replay: MockTuiReplay::TypePrompt {
+            readiness: "Mock Model",
+        },
+    })
+}
+
 static CAPABILITIES: Capabilities = Capabilities {
     bans_plan_family_models: true,
     lanes: LanePolicy::Allowed,
@@ -123,47 +169,15 @@ impl Harness for Omp {
         true
     }
 
-    /// instant's kimi recipe held open: `--print` prints and exits, so the mock
-    /// runs the interactive TUI and the driver types. The provider config points
-    /// omp at the loopback llmock server.
+    /// omp's interactive recipe holds open and points its provider config at
+    /// the loopback llmock server, so the driver types the prompt.
     fn mock_tui_launch(
         &self,
         ctx: &super::mock_tui::MockTuiContext<'_>,
     ) -> anyhow::Result<super::mock_tui::MockTuiLaunch> {
-        use super::mock_tui::{terminal_env, MockTuiReplay};
         let executable = super::mock_tui::resolve_executable("omp", "OMP_BIN")
             .ok_or_else(|| anyhow::anyhow!("no omp executable: set OMP_BIN or put it on PATH"))?;
-        let agent_dir = ctx.home.join(".omp").join("agent");
-        std::fs::create_dir_all(&agent_dir)?;
-        let config = agent_dir.join("models.yml");
-        std::fs::write(
-            &config,
-            [
-                "providers:".to_owned(),
-                "  llmock:".to_owned(),
-                format!("    baseUrl: http://127.0.0.1:{}/openai/v1", ctx.port),
-                "    apiKey: test".to_owned(),
-                "    api: openai-completions".to_owned(),
-                "    models:".to_owned(),
-                "      - id: mock-model".to_owned(),
-                "        name: Mock Model".to_owned(),
-                String::new(),
-            ]
-            .join("\n"),
-        )?;
-        let mut env = terminal_env(ctx.home);
-        // A fresh scratch HOME otherwise opens OMP's interactive provider
-        // setup before it reads this recipe's loopback model configuration.
-        env.push(("OMP_SKIP_SETUP".into(), "1".into()));
-        Ok(super::mock_tui::MockTuiLaunch {
-            executable: executable.display().to_string(),
-            args: vec!["--model".into(), "llmock/mock-model".into()],
-            env,
-            config_paths: vec![config],
-            replay: MockTuiReplay::TypePrompt {
-                readiness: "Mock Model",
-            },
-        })
+        mock_tui_launch_with_executable(ctx, executable.display().to_string())
     }
 
     fn sessions(&self) -> Result<Vec<SessionRef>> {

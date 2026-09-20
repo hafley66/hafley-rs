@@ -34,6 +34,8 @@ use std::time::{Duration, Instant};
 
 use anyhow::{bail, Context, Result};
 use boop::Registry;
+use boop_harness::harness::mock_tui::{MockTuiContext, MockTuiReplay};
+use boop_harness::harness::omp::mock_tui_launch_with_executable;
 use boop_harness::harness::replay::{parse_cast, ReplayChannel};
 use boop_harness::{Harness, HarnessId, SessionRef};
 use tui_test::{
@@ -150,7 +152,26 @@ fn launch(
         HarnessId::Claude => claude(home, &workspace_name, port, &mut env)?,
         HarnessId::Kimi => kimi(home, port, &mut env)?,
         HarnessId::Omp => {
-            anyhow::bail!("omp live harness recipe lands with its transcript readers")
+            let launch = mock_tui_launch_with_executable(
+                &MockTuiContext {
+                    home,
+                    workspace: &workspace,
+                    port,
+                },
+                program.display().to_string(),
+            )?;
+            for (key, value) in launch.env {
+                if let Some((_, current)) = env.iter_mut().find(|(name, _)| name == &key) {
+                    *current = value;
+                } else {
+                    env.push((key, value));
+                }
+            }
+            let submit = match launch.replay {
+                MockTuiReplay::PromptArg => LiveSubmit::InArgument,
+                MockTuiReplay::TypePrompt { .. } => LiveSubmit::TypePrompt,
+            };
+            (launch.args, launch.config_paths, submit)
         }
         HarnessId::Opencode => opencode(home, port, &mut env)?,
     };
@@ -400,6 +421,20 @@ fn every_launch_isolates_config_and_names_only_loopback() {
             .find(|(key, _)| key == "HOME")
             .expect("HOME is pinned");
         assert_eq!(home_env.1, home.display().to_string());
+        for (key, suffix) in [
+            ("XDG_CONFIG_HOME", "/.config"),
+            ("XDG_DATA_HOME", "/.local/share"),
+            ("XDG_CACHE_HOME", "/.cache"),
+            ("XDG_STATE_HOME", "/.local/state"),
+        ] {
+            let value = launch
+                .env
+                .iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, value)| value.as_str());
+            let expected = format!("{}{suffix}", home.display());
+            assert_eq!(value, Some(expected.as_str()));
+        }
         for (key, value) in &launch.env {
             if key.ends_with("BASE_URL") {
                 assert!(
@@ -407,6 +442,15 @@ fn every_launch_isolates_config_and_names_only_loopback() {
                     "{id} {key} is not loopback: {value}"
                 );
             }
+        }
+        if id == HarnessId::Omp {
+            let agent_dir = launch
+                .env
+                .iter()
+                .find(|(key, _)| key == "PI_CODING_AGENT_DIR")
+                .map(|(_, value)| value.as_str());
+            let expected = home.join(".omp/agent").display().to_string();
+            assert_eq!(agent_dir, Some(expected.as_str()));
         }
         let _ = std::fs::remove_dir_all(&root);
     }
