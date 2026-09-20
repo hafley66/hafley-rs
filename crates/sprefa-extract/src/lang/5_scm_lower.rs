@@ -9,14 +9,14 @@
 //!
 //! ```text
 //! pub struct ScmProgram { rule: AstRule, utils: Vec<NamedAstRule> }
-//! pub enum ScmLowerError { Parse, Syntax, UnknownPredicate, PredicateArity,
+//! pub enum ScmLowerError { Syntax, UnknownPredicate, PredicateArity,
 //!                          UnboundReference, DuplicateLabel, FocusConflict }
 //! pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError>
 //! ```
 //!
 //! Body, in order:
 //!
-//! 1. Parse the text. A grammar that returns no tree is `Parse`.
+//! 1. Parse the text with the compiled-in grammar, which cannot fail on input.
 //! 2. Reject the tree when it carries an ERROR or MISSING node: `Syntax` with
 //!    the node's zero-based row.
 //! 3. Collect the `program`'s top-level `definition` children. A definition
@@ -54,8 +54,6 @@ pub struct ScmProgram {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum ScmLowerError {
-    /// The grammar produced no tree for the text.
-    Parse(String),
     /// An ERROR or MISSING node stands in the query CST at zero-based `row`.
     Syntax { row: u32, message: String },
     /// A predicate spelled `#foo?` with no `AstRule` mapping.
@@ -81,7 +79,7 @@ impl std::error::Error for ScmLowerError {}
 
 /// Parse `.scm` text with tree-sitter-tsquery and lower it.
 pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError> {
-    let tree = parse_scm(text)?;
+    let tree = parse_scm(text);
     let root = tree.root_node();
     if let Some(broken) = first_broken_node(root) {
         return Err(ScmLowerError::Syntax {
@@ -141,14 +139,16 @@ pub fn scm_language() -> tree_sitter::Language {
     tree_sitter::Language::new(tree_sitter_tsquery::LANGUAGE)
 }
 
-fn parse_scm(text: &str) -> Result<Tree, ScmLowerError> {
+/// The grammar is compiled in and its ABI is railed by the test, so neither step
+/// here depends on `text`: every input-shaped refusal is a [`ScmLowerError`].
+fn parse_scm(text: &str) -> Tree {
     let mut parser = Parser::new();
     parser
         .set_language(&scm_language())
-        .map_err(|error| ScmLowerError::Parse(error.to_string()))?;
+        .expect("tree-sitter-tsquery ABI matches the tree-sitter runtime");
     parser
         .parse(text, None)
-        .ok_or_else(|| ScmLowerError::Parse("query grammar produced no tree".into()))
+        .expect("a parser holding a language always yields a tree")
 }
 
 /// The grammar's `definition` supertype minus `predicate`: a predicate
@@ -327,7 +327,8 @@ fn lower_predicate(
         }
         None => Vec::new(),
     };
-    if parameters.len() != 2 {
+    // A relation takes a third argument naming where the search stops.
+    if !(2..=3).contains(&parameters.len()) {
         return Err(ScmLowerError::PredicateArity {
             operator,
             got: parameters.len(),
@@ -355,17 +356,28 @@ fn lower_predicate(
             let pattern = string_argument(parameters[1], source)?;
             return Ok((focus, negate(AstRule::Regex(pattern))));
         }
+        "pattern" => {
+            let focus = capture_argument(parameters[0], source)?;
+            let pattern = string_argument(parameters[1], source)?;
+            return Ok((focus, negate(AstRule::Pattern(pattern))));
+        }
         _ => return Err(ScmLowerError::UnknownPredicate(operator)),
     };
 
     let focus = capture_argument(parameters[0], source)?;
     let reference = reference_argument(parameters[1], source, labels)?;
+    // A third argument names the rule the search stops at. `"neighbor"` is the
+    // one spelling that means no walk at all, which ast-grep spells as absent.
+    let stop_by = match parameters.get(2) {
+        None => Some(StopBy::End("end".into())),
+        Some(node) if source[node.byte_range()] == *"neighbor" => None,
+        Some(node) => Some(StopBy::Rule(Box::new(AstRule::Matches(
+            reference_argument(*node, source, labels)?,
+        )))),
+    };
     Ok((
         focus,
-        negate(relation(
-            Box::new(AstRule::Matches(reference)),
-            Some(StopBy::End("end".into())),
-        )),
+        negate(relation(Box::new(AstRule::Matches(reference)), stop_by)),
     ))
 }
 

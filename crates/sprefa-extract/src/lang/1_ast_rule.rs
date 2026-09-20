@@ -486,8 +486,12 @@ fn relation(
     let mut inner = match rule_wire(rule) {
         RuleWire::Map(map) => map,
     };
-    if let Some(stop_by) = stop_by {
-        put(&mut inner, "stopBy", stop_by);
+    // `StopBy::Rule` carries an `AstRule`, whose own derive spells the variant
+    // name; only `rule_wire` spells the key ast-grep reads.
+    match stop_by {
+        Some(StopBy::End(value)) => put(&mut inner, "stopBy", value),
+        Some(StopBy::Rule(stop)) => put(&mut inner, "stopBy", &rule_wire(stop)),
+        None => {}
     }
     put(map, key, &RuleWire::Map(inner));
 }

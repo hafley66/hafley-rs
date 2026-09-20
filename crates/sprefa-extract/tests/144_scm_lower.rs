@@ -1,375 +1,205 @@
-//! `.scm` surface lowering, through the library and the real query grammar.
-//! Every end-to-end case runs `query_ast_rule`, which is ast-grep's own matcher.
+//! `.scm` surface lowering, proved by one query that uses every operator the
+//! surface reaches, against one committed snapshot.
+//!
+//! The snapshot carries the lowered rule, the matches, and a census over every
+//! variant of `AstRule`, `StopBy` and `ScmLowerError`. A variant the surface
+//! cannot reach is named as such, so a change that reaches one arrives as
+//! snapshot drift instead of as silence.
 
 use sprefa_extract::lang::{
-    lower_scm, query_ast_rule, scm_language, AstRule, AstRuleRequest, NamedAstRule, ScmLowerError,
-    StopBy,
+    lower_scm, query_ast_rule, scm_language, AstRule, AstRuleRequest, ScmLowerError, StopBy,
 };
 
-const RUST_SRC: &str = r#"fn outer(name: &str) -> bool {
-    let needle = "ab";
-    name.contains(needle)
+const SNAP: &str = "tests/fixtures/scm/lower.snap";
+
+/// A call that satisfies every relation, a generic whose name the regex rejects,
+/// and a call inside a closure that containment rejects.
+const SRC: &str = r#"fn plain(name: &str) -> bool {
+    let a = 1;
+    drop(a);
+    name.contains("ab")
 }
 
-fn other(items: &[u8]) -> bool {
-    items.contains(&3)
+fn generic<T>(i: &[T]) -> bool { i.is_empty() }
+
+fn wrapped(n: &str) -> bool {
+    let f = || n.contains("cd");
+    f()
 }
 "#;
 
-const TS_SRC: &str = r#"function outer(name: string): boolean {
-  const needle = "ab";
-  return name.includes(needle);
-}
-
-const other = (items: number[]) => items.includes(3);
-"#;
-
-const RUST_SCOPE_SCM: &str = r#"[(function_item) (closure_expression) (block)] @local.scope
+/// Four labelled patterns become `utils`; the unlabelled one becomes the rule.
+/// Alternation, field selectors, a negated field, all four relations, both
+/// negated forms, and the regex both ways, in one query on one capture.
+const SCM: &str = r#"[(closure_expression)] @closure
+[(function_item) (impl_item)] @scope
+[(let_declaration)] @decl
+[(field_expression)] @receiver
 
 ((call_expression
-   function: (field_expression field: (field_identifier) @m))
- (#inside? @m local.scope))
+   function: (field_expression !arguments field: (field_identifier) @name)) @m
+ (#inside? @m scope)
+ (#not-inside? @m closure)
+ (#has? @m receiver)
+ (#not-has? @m closure)
+ (#follows? @m decl)
+ (#not-precedes? @m decl)
+ (#match? @m "contains")
+ (#not-match? @m "is_empty")
+ (#pattern? @m "$R.contains($A)")
+ (#inside? @m scope receiver)
+ (#has? @m receiver neighbor))
 "#;
 
-const TS_SCOPE_SCM: &str = r#"[(function_declaration) (arrow_function) (statement_block)] @local.scope
+/// One input per `ScmLowerError` variant the surface can produce. A query either
+/// lowers or fails, so these cannot ride inside `SCM`.
+const REFUSALS: &[&str] = &[
+    "(function_item",
+    "(_) @m",
+    "((identifier) @m (#nope? @m x))",
+    "(block) @s\n\n((identifier) @m (#not-nope? @m s))",
+    "(block) @s\n\n((identifier) @m (#inside? @m))",
+    "((identifier) @m (#inside? @m no_such))",
+    "(function_item) @dup\n\n(let_declaration) @dup",
+    "(block) @s\n\n((let_declaration (identifier) @a) (identifier) @b (#inside? @a s) (#inside? @b s))",
+];
 
-((call_expression
-   function: (member_expression property: (property_identifier) @m))
- (#inside? @m local.scope))
-"#;
+/// Declaration order in `src/lang/1_ast_rule.rs`.
+const AST_RULE_VARIANTS: &[&str] = &[
+    "Pattern", "Kind", "Regex", "Matches", "All", "Any", "Not", "Inside", "Has", "Follows",
+    "Precedes",
+];
 
-fn kind(name: &str) -> AstRule {
-    AstRule::Kind(name.into())
-}
+const STOP_BY_VARIANTS: &[&str] = &["End", "Rule"];
 
-fn has(rule: AstRule) -> AstRule {
-    AstRule::Has {
-        rule: Box::new(rule),
-        stop_by: None,
-    }
-}
+/// Declaration order in `src/lang/5_scm_lower.rs`.
+const ERROR_VARIANTS: &[&str] = &[
+    "Syntax", "UnknownPredicate", "PredicateArity", "UnboundReference", "DuplicateLabel",
+    "FocusConflict",
+];
 
-fn inside_to_end(rule: AstRule) -> AstRule {
-    AstRule::Inside {
-        rule: Box::new(rule),
-        stop_by: Some(StopBy::End("end".into())),
-    }
-}
-
-/// `(path, text)` for every match, which is what a span assertion reads.
-fn run(path: &str, source: &str, scm: &str) -> Vec<(usize, usize, String)> {
-    let program = lower_scm(scm).expect("scm lowers");
-    let request = AstRuleRequest {
-        id: "scm".into(),
-        rule: program.rule,
-        utils: program.utils,
-        fix: None,
+/// Variant names a lowered rule uses, appended in tree order.
+fn walk(rule: &AstRule, rules: &mut Vec<&'static str>, stops: &mut Vec<&'static str>) {
+    let (name, children, stop) = match rule {
+        AstRule::Pattern(_) => ("Pattern", Vec::new(), None),
+        AstRule::Kind(_) => ("Kind", Vec::new(), None),
+        AstRule::Regex(_) => ("Regex", Vec::new(), None),
+        AstRule::Matches(_) => ("Matches", Vec::new(), None),
+        AstRule::All(list) => ("All", list.iter().collect(), None),
+        AstRule::Any(list) => ("Any", list.iter().collect(), None),
+        AstRule::Not(inner) => ("Not", vec![inner.as_ref()], None),
+        AstRule::Inside { rule, stop_by } => ("Inside", vec![rule.as_ref()], stop_by.as_ref()),
+        AstRule::Has { rule, stop_by } => ("Has", vec![rule.as_ref()], stop_by.as_ref()),
+        AstRule::Follows { rule, stop_by } => ("Follows", vec![rule.as_ref()], stop_by.as_ref()),
+        AstRule::Precedes { rule, stop_by } => ("Precedes", vec![rule.as_ref()], stop_by.as_ref()),
     };
-    query_ast_rule(path, source.as_bytes(), &request)
-        .expect("ast-grep evaluates")
-        .into_iter()
-        .map(|found| {
-            let start = found.span.start as usize;
-            let end = start + found.span.len as usize;
-            (start, end, source[start..end].to_string())
-        })
-        .collect()
+    rules.push(name);
+    match stop {
+        Some(StopBy::End(_)) => stops.push("End"),
+        Some(StopBy::Rule(inner)) => {
+            stops.push("Rule");
+            walk(inner, rules, stops);
+        }
+        None => {}
+    }
+    for child in children {
+        walk(child, rules, stops);
+    }
 }
 
+fn error_variant(error: &ScmLowerError) -> &'static str {
+    match error {
+        ScmLowerError::Syntax { .. } => "Syntax",
+        ScmLowerError::UnknownPredicate(_) => "UnknownPredicate",
+        ScmLowerError::PredicateArity { .. } => "PredicateArity",
+        ScmLowerError::UnboundReference(_) => "UnboundReference",
+        ScmLowerError::DuplicateLabel(_) => "DuplicateLabel",
+        ScmLowerError::FocusConflict { .. } => "FocusConflict",
+    }
+}
+
+fn census(all: &[&str], seen: &[&'static str]) -> String {
+    all.iter()
+        .map(|variant| match seen.contains(variant) {
+            true => format!("  {variant}: reached"),
+            false => format!("  {variant}: UNREACHABLE from .scm"),
+        })
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+/// Regenerate with `UPDATE_SNAP=1 cargo test`.
 #[test]
-fn the_query_grammar_abi_sits_inside_the_runtime_window() {
+fn scm_lowering() {
     let abi = scm_language().abi_version();
     assert!(
         (13..=15).contains(&abi),
         "tree-sitter-tsquery ABI {abi} is outside the 13..=15 window tree-sitter 0.25 accepts"
     );
-}
 
-#[test]
-fn a_bare_named_node_lowers_to_kind() {
-    let program = lower_scm("(function_item)").expect("scm lowers");
-    assert_eq!(program.rule, kind("function_item"));
-    assert_eq!(program.utils, Vec::new());
-}
+    let program = lower_scm(SCM).expect("the maximal query lowers");
+    let mut rules = Vec::new();
+    let mut stops = Vec::new();
+    walk(&program.rule, &mut rules, &mut stops);
+    for util in &program.utils {
+        walk(&util.rule, &mut rules, &mut stops);
+    }
 
-#[test]
-fn a_list_lowers_to_any() {
-    let program = lower_scm("[(function_item) (block)]").expect("scm lowers");
-    assert_eq!(
-        program.rule,
-        AstRule::Any(vec![kind("function_item"), kind("block")])
-    );
-    assert_eq!(program.utils, Vec::new());
-}
-
-#[test]
-fn a_nested_field_pattern_lowers_to_kind_plus_has() {
-    let program =
-        lower_scm("(call_expression function: (field_expression))").expect("scm lowers");
-    assert_eq!(
-        program.rule,
-        AstRule::All(vec![kind("call_expression"), has(kind("field_expression"))])
-    );
-    assert_eq!(program.utils, Vec::new());
-}
-
-#[test]
-fn a_grouping_lowers_to_all() {
-    let program = lower_scm("((function_item) (block))").expect("scm lowers");
-    assert_eq!(
-        program.rule,
-        AstRule::All(vec![kind("function_item"), kind("block")])
-    );
-}
-
-#[test]
-fn a_negated_field_lowers_to_not_has() {
-    let program = lower_scm("(function_item !body)").expect("scm lowers");
-    assert_eq!(
-        program.rule,
-        AstRule::All(vec![
-            kind("function_item"),
-            AstRule::Not(Box::new(has(kind("body")))),
-        ])
-    );
-}
-
-#[test]
-fn a_named_reference_lowers_to_matches_plus_one_util() {
-    let program = lower_scm(RUST_SCOPE_SCM).expect("scm lowers");
-    assert_eq!(
-        program.utils,
-        vec![NamedAstRule {
-            id: "local.scope".into(),
-            rule: AstRule::Any(vec![
-                kind("function_item"),
-                kind("closure_expression"),
-                kind("block"),
-            ]),
-        }]
-    );
-    assert_eq!(
-        program.rule,
-        AstRule::All(vec![
-            kind("field_identifier"),
-            inside_to_end(AstRule::All(vec![
-                kind("call_expression"),
-                has(AstRule::All(vec![
-                    kind("field_expression"),
-                    has(kind("field_identifier")),
-                ])),
-            ])),
-            inside_to_end(AstRule::Matches("local.scope".into())),
-        ])
-    );
-}
-
-#[test]
-fn follows_and_precedes_lower_to_their_relations() {
-    let follows = lower_scm("(block) @s\n\n((call_expression) @m (#follows? @m s))")
-        .expect("scm lowers");
-    assert_eq!(
-        follows.rule,
-        AstRule::All(vec![
-            kind("call_expression"),
-            AstRule::Follows {
-                rule: Box::new(AstRule::Matches("s".into())),
-                stop_by: Some(StopBy::End("end".into())),
-            },
-        ])
-    );
-
-    let precedes = lower_scm("(block) @s\n\n((call_expression) @m (#precedes? @m s))")
-        .expect("scm lowers");
-    assert_eq!(
-        precedes.rule,
-        AstRule::All(vec![
-            kind("call_expression"),
-            AstRule::Precedes {
-                rule: Box::new(AstRule::Matches("s".into())),
-                stop_by: Some(StopBy::End("end".into())),
-            },
-        ])
-    );
-}
-
-#[test]
-fn a_has_predicate_lowers_to_has_and_a_match_predicate_to_regex() {
-    let program = lower_scm("(block) @s\n\n((call_expression) @m (#has? @m s))").expect("scm lowers");
-    assert_eq!(
-        program.rule,
-        AstRule::All(vec![
-            kind("call_expression"),
-            AstRule::Has {
-                rule: Box::new(AstRule::Matches("s".into())),
-                stop_by: Some(StopBy::End("end".into())),
-            },
-        ])
-    );
-
-    let regex = lower_scm("((call_expression) @m (#match? @m \"^self\\.\"))").expect("scm lowers");
-    assert_eq!(
-        regex.rule,
-        AstRule::All(vec![
-            kind("call_expression"),
-            AstRule::Regex("^self\\.".into()),
-        ])
-    );
-}
-
-#[test]
-fn the_rust_scope_query_matches_both_method_names() {
-    assert_eq!(
-        run("probe.rs", RUST_SRC, RUST_SCOPE_SCM),
-        vec![
-            (63, 71, "contains".to_string()),
-            (126, 134, "contains".to_string()),
-        ]
-    );
-}
-
-#[test]
-fn the_ts_scope_query_matches_both_method_names() {
-    let found = run("probe.ts", TS_SRC, TS_SCOPE_SCM);
-    assert_eq!(found.len(), 2, "ts scope query matches: {found:?}");
-    assert_eq!(
-        found.iter().map(|row| row.2.as_str()).collect::<Vec<_>>(),
-        vec!["includes", "includes"]
-    );
-}
-
-#[test]
-fn an_unmapped_predicate_is_an_error() {
-    assert_eq!(
-        lower_scm("(#nope? @a b)"),
-        Err(ScmLowerError::UnknownPredicate("nope?".into()))
-    );
-}
-
-#[test]
-fn an_identifier_argument_naming_no_definition_is_an_error() {
-    assert_eq!(
-        lower_scm("(#inside? @m no_such)"),
-        Err(ScmLowerError::UnboundReference("no_such".into()))
-    );
-}
-
-#[test]
-fn a_wrong_parameter_count_is_an_error() {
-    assert_eq!(
-        lower_scm("(block) @s\n(#inside? @m)"),
-        Err(ScmLowerError::PredicateArity {
-            operator: "inside?".into(),
-            got: 1,
+    let utils: Vec<&String> = program.utils.iter().map(|util| &util.id).collect();
+    let request = AstRuleRequest {
+        id: "maximal".into(),
+        rule: program.rule.clone(),
+        utils: program.utils.clone(),
+        fix: None,
+    };
+    let rows = query_ast_rule("probe.rs", SRC.as_bytes(), &request)
+        .expect("the lowered rule compiles for ast-grep");
+    let texts: Vec<&str> = rows
+        .iter()
+        .map(|row| {
+            let start = row.span.start as usize;
+            &SRC[start..start + row.span.len as usize]
         })
-    );
-}
+        .collect();
 
-#[test]
-fn an_error_node_never_lowers_to_a_partial_rule() {
-    assert_eq!(
-        lower_scm("(function_item"),
-        Err(ScmLowerError::Syntax {
-            row: 0,
-            message: "unparsed `.scm` text: (function_item".into(),
+    let refusals: Vec<String> = REFUSALS
+        .iter()
+        .map(|scm| match lower_scm(scm) {
+            Ok(program) => panic!("{scm:?} lowered to {:?} instead of refusing", program.rule),
+            Err(error) => {
+                let variant = error_variant(&error);
+                format!("  {variant}: {error:?}")
+            }
         })
-    );
-}
+        .collect();
+    let errors_seen: Vec<&'static str> = REFUSALS
+        .iter()
+        .map(|scm| error_variant(&lower_scm(scm).expect_err("refuses")))
+        .collect();
 
-#[test]
-fn a_duplicate_top_level_label_is_an_error() {
-    assert_eq!(
-        lower_scm("(block) @s\n(function_item) @s"),
-        Err(ScmLowerError::DuplicateLabel("s".into()))
-    );
-}
+    let actual = [
+        format!("utils: {utils:?}"),
+        format!("rule: {:?}", program.rule),
+        format!("matches: {}", rows.len()),
+        format!("texts: {texts:?}"),
+        format!("## refusals\n{}", refusals.join("\n")),
+        format!("## AstRule census\n{}", census(AST_RULE_VARIANTS, &rules)),
+        format!("## StopBy census\n{}", census(STOP_BY_VARIANTS, &stops)),
+        format!("## ScmLowerError census\n{}", census(ERROR_VARIANTS, &errors_seen)),
+    ]
+    .join("\n\n");
 
-#[test]
-fn two_predicates_on_two_captures_are_an_error() {
-    let scm = "(block) @s\n\n((call_expression (identifier) @x) @y\n (#inside? @x s)\n (#inside? @y s))";
+    if std::env::var("UPDATE_SNAP").is_ok() {
+        std::fs::create_dir_all("tests/fixtures/scm").expect("snap dir");
+        std::fs::write(SNAP, format!("{actual}\n")).expect("write snap");
+        eprintln!("updated {SNAP}");
+        return;
+    }
+    let expected = std::fs::read_to_string(SNAP).expect("snap missing");
     assert_eq!(
-        lower_scm(scm),
-        Err(ScmLowerError::FocusConflict {
-            first: "x".into(),
-            second: "y".into(),
-        })
+        actual,
+        expected.trim_end(),
+        "scm lowering snapshot drifted. Regenerate with UPDATE_SNAP=1 cargo test, or overwrite \
+         {SNAP} with:\n----\n{actual}\n----",
     );
-}
-
-#[test]
-fn a_file_of_only_labelled_patterns_matches_every_label() {
-    let program = lower_scm("(function_item) @local.scope").expect("scm lowers");
-    assert_eq!(
-        program.rule,
-        AstRule::Any(vec![AstRule::Matches("local.scope".into())])
-    );
-    assert_eq!(
-        program.utils,
-        vec![NamedAstRule {
-            id: "local.scope".into(),
-            rule: kind("function_item"),
-        }]
-    );
-}
-
-#[test]
-fn a_not_prefix_wraps_every_relation_in_not() {
-    let inside = lower_scm("(block) @s\n\n((call_expression) @m (#not-inside? @m s))")
-        .expect("scm lowers");
-    assert_eq!(
-        inside.rule,
-        AstRule::All(vec![
-            kind("call_expression"),
-            AstRule::Not(Box::new(inside_to_end(AstRule::Matches("s".into())))),
-        ])
-    );
-
-    let follows = lower_scm("(block) @s\n\n((call_expression) @m (#not-follows? @m s))")
-        .expect("scm lowers");
-    assert_eq!(
-        follows.rule,
-        AstRule::All(vec![
-            kind("call_expression"),
-            AstRule::Not(Box::new(AstRule::Follows {
-                rule: Box::new(AstRule::Matches("s".into())),
-                stop_by: Some(StopBy::End("end".into())),
-            })),
-        ])
-    );
-
-    let regex = lower_scm("((identifier) @m (#not-match? @m \"^_\"))").expect("scm lowers");
-    assert_eq!(
-        regex.rule,
-        AstRule::All(vec![
-            kind("identifier"),
-            AstRule::Not(Box::new(AstRule::Regex("^_".into()))),
-        ])
-    );
-}
-
-#[test]
-fn an_unmapped_not_predicate_reports_its_unpeeled_spelling() {
-    assert_eq!(
-        lower_scm("(block) @s\n\n((call_expression) @m (#not-nope? @m s))"),
-        Err(ScmLowerError::UnknownPredicate("not-nope?".into()))
-    );
-}
-
-#[test]
-fn not_inside_and_inside_partition_the_same_corpus() {
-    let scope = "[(closure_expression)] @scope\n\n";
-    let inside = run(
-        "probe.rs",
-        RUST_SRC,
-        &format!("{scope}((field_identifier) @m (#inside? @m scope))"),
-    );
-    let outside = run(
-        "probe.rs",
-        RUST_SRC,
-        &format!("{scope}((field_identifier) @m (#not-inside? @m scope))"),
-    );
-    let all = run("probe.rs", RUST_SRC, "(field_identifier) @m");
-    assert_eq!(inside.len() + outside.len(), all.len());
-    assert_eq!(inside, Vec::new());
-    assert_eq!(outside, all);
 }
