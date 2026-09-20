@@ -3382,6 +3382,30 @@ pub enum FlatFact {
         /// Which resolver leg answered (`ResolutionOrigin::as_str`).
         resolution_origin: String,
     },
+    #[serde(rename = "graph_node")]
+    GraphNode {
+        path: String,
+        name: Option<String>,
+        depth: u32,
+        grade: String,
+        line: Option<u32>,
+    },
+    #[serde(rename = "graph_edge")]
+    GraphEdge {
+        from_path: String,
+        from_name: Option<String>,
+        to_path: String,
+        to_name: Option<String>,
+        kind: String,
+        grade: String,
+    },
+    #[serde(rename = "graph_root")]
+    GraphRoot {
+        path: String,
+        name: Option<String>,
+        span: Option<SpanOut>,
+        found: bool,
+    },
     /// A project-mode `Resolve<TypeF>` edge: one type reference resolved to the
     /// declaration it names. The flat twin of `ProjectEdge`, for the same reason
     /// as `ResolvedEdge` above: the v6 host decodes top-level keys, so the

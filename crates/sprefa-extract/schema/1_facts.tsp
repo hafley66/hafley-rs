@@ -69,6 +69,9 @@ model ResolvedEdge {
   callee_start: uint32; callee_end: uint32;
   kind: string; resolution_origin: string;
 }
+model GraphNode { ...ExportRow; record: "graph_node"; path: string; name: string | null; depth: uint32; grade: string; line: uint32 | null; }
+model GraphEdge { ...ExportRow; record: "graph_edge"; from_path: string; from_name: string | null; to_path: string; to_name: string | null; kind: string; grade: string; }
+model GraphRoot { ...ExportRow; record: "graph_root"; path: string; name: string | null; span: Extract.SpanOut | null; found: boolean; }
 model ResolvedTypeEdge {
   ...ExportRow; record: "resolved_type_edge"; fact?: uint32;
   owner_path: string; owner_name: string | null; owner_start: uint32; owner_end: uint32;

@@ -433,6 +433,43 @@ CREATE TABLE IF NOT EXISTS "resolved_edge" (
     "resolution_origin" TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "graph_node" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "name" TEXT,
+    "depth" INTEGER NOT NULL,
+    "grade" TEXT NOT NULL,
+    "line" INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS "graph_edge" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "from_path" TEXT NOT NULL,
+    "from_name" TEXT,
+    "to_path" TEXT NOT NULL,
+    "to_name" TEXT,
+    "kind" TEXT NOT NULL,
+    "grade" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "graph_root" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "name" TEXT,
+    "span__start" INTEGER,
+    "span__end" INTEGER,
+    "found" INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "resolved_type_edge" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

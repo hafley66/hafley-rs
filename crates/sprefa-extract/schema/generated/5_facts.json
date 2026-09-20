@@ -3681,6 +3681,281 @@
     ]
   },
   {
+    "record": "graph_node",
+    "table": "graph_node",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "graph_node"
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "path": [
+          "name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "depth",
+        "path": [
+          "depth"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "grade",
+        "path": [
+          "grade"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "line",
+        "path": [
+          "line"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": true
+      }
+    ]
+  },
+  {
+    "record": "graph_edge",
+    "table": "graph_edge",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "graph_edge"
+      },
+      {
+        "name": "from_path",
+        "path": [
+          "from_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_name",
+        "path": [
+          "from_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "to_path",
+        "path": [
+          "to_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "to_name",
+        "path": [
+          "to_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "kind",
+        "path": [
+          "kind"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "grade",
+        "path": [
+          "grade"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "graph_root",
+    "table": "graph_root",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "graph_root"
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "path": [
+          "name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "span__start",
+        "path": [
+          "span",
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "span__end",
+        "path": [
+          "span",
+          "end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "found",
+        "path": [
+          "found"
+        ],
+        "kind": "boolean",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
     "record": "resolved_type_edge",
     "table": "resolved_type_edge",
     "columns": [
