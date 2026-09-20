@@ -36,8 +36,46 @@ pub const CALL_KINDS: &[&str] = &[
     "scoped_call_expression",
 ];
 
+/// Leaf kinds that carry a NAME, the exact form of `kind contains
+/// "identifier"`: every name-leaf kind the loaded grammars declare, collected
+/// the same way as CALL_KINDS, one `ryi --family cst` dump per language
+/// (issue kind-vocab-constraint). A grammar declares a subset; the rest
+/// resolve to no id against it and match nothing there.
+///
+/// - `field_identifier`                       c, cpp, go, rust struct fields
+/// - `identifier`                             c, csharp, css, elixir, go, java,
+///                                            javascript, kotlin, lua, php,
+///                                            python, ruby, rust, scala, ts
+/// - `namespace_identifier`                   cpp
+/// - `nested_type_identifier`                 ts, tsx, `A.B` in type position
+/// - `package_identifier`                     go
+/// - `property_identifier`                    javascript, ts, tsx
+/// - `qualified_identifier`                   cpp, `ns::name`
+/// - `scoped_identifier`                      java, rust
+/// - `scoped_type_identifier`                 java, `A.B` types
+/// - `shorthand_property_identifier`          ts, tsx object-literal shorthand
+/// - `shorthand_property_identifier_pattern`  javascript, ts, tsx destructuring
+/// - `simple_identifier`                      kotlin, swift
+/// - `type_identifier`                        c, cpp, go, java, kotlin, rust,
+///                                            scala, swift, ts, tsx
+pub const NAME_LEAF_KINDS: &[&str] = &[
+    "field_identifier",
+    "identifier",
+    "namespace_identifier",
+    "nested_type_identifier",
+    "package_identifier",
+    "property_identifier",
+    "qualified_identifier",
+    "scoped_identifier",
+    "scoped_type_identifier",
+    "shorthand_property_identifier",
+    "shorthand_property_identifier_pattern",
+    "simple_identifier",
+    "type_identifier",
+];
+
 /// Leaf kinds that carry a callee NAME inside a call node, beyond the
-/// identifier kinds (kind contains `identifier`): php's bare `name`, haskell's
+/// identifier kinds (NAME_LEAF_KINDS): php's bare `name`, haskell's
 /// `variable`, bash's `word` under `command_name`.
 pub const CALLEE_NAME_KINDS: &[&str] = &["name", "variable", "word"];
 

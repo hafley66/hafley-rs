@@ -25,7 +25,7 @@ use crate::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::trace;
 use std::collections::BTreeSet;
 
-use crate::lang::call_kinds::{CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS};
+use crate::lang::call_kinds::{CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS, NAME_LEAF_KINDS};
 use crate::lang::python::MODULE_CALLER;
 use crate::project::ResolveDrop;
 use crate::types::UnresolvedReason;
@@ -172,10 +172,33 @@ impl Parser for AstGrepParser {
     }
 }
 
-/// A named node whose kind is an identifier (`identifier`, `type_identifier`,
-/// `property_identifier`, `simple_identifier`, ...) with no named children.
-fn is_identifier_leaf(node: &SgNode<StrDoc<RyiLang>>, kind: &str) -> bool {
-    kind.contains("identifier") && node.children().all(|child| !child.is_named())
+/// The kind tables resolved to ids against ONE parsed root's own grammar
+/// (`Language::kind_to_id`, once per `project`, never per node). A name the
+/// grammar does not declare resolves to 0, the absent mark: dropped at
+/// resolve time, it can never match a node of that grammar.
+struct RootKinds {
+    name_leaves: Vec<u16>,
+}
+
+impl RootKinds {
+    fn resolve(root: &SgRoot) -> Self {
+        let name_leaves = NAME_LEAF_KINDS
+            .iter()
+            .map(|kind| root.root().lang().kind_to_id(kind))
+            .filter(|id| *id != 0)
+            .collect();
+        Self { name_leaves }
+    }
+
+    fn is_name_leaf_kind(&self, id: u16) -> bool {
+        self.name_leaves.contains(&id)
+    }
+}
+
+/// A named node whose kind is one of the root grammar's name-leaf kinds
+/// (`NAME_LEAF_KINDS`, resolved per root) with no named children.
+fn is_identifier_leaf(node: &SgNode<StrDoc<RyiLang>>, kinds: &RootKinds) -> bool {
+    kinds.is_name_leaf_kind(node.kind_id()) && node.children().all(|child| !child.is_named())
 }
 
 /// The CstF projector: walks the parsed ast-grep tree, emitting one row per
@@ -187,6 +210,7 @@ impl Project<CstF> for CstProjector {
     type Parsed<'a> = SgRoot;
 
     fn project(&self, root: &SgRoot, strings: &mut Strings, sink: &mut FamilyBundle<CstF>) {
+        let kinds = RootKinds::resolve(root);
         // Iterative pre-order DFS. Stack entries carry the node + the index of
         // its nearest named ancestor (None at the root). Unnamed punctuation
         // nodes emit no row but pass `nearest_named` through so their named
@@ -207,7 +231,7 @@ impl Project<CstF> for CstProjector {
                 let mut row = Node::new(span, kind);
                 row.name = match node.field("name") {
                     Some(field) => Some(strings.intern(&field.text())),
-                    None if is_identifier_leaf(&node, &kind_text) => {
+                    None if is_identifier_leaf(&node, &kinds) => {
                         Some(strings.intern(&node.text()))
                     }
                     None => None,
@@ -236,10 +260,11 @@ impl Project<CstF> for CstProjector {
 /// A named leaf whose kind carries a name: the identifier kinds, plus the
 /// leaf kinds `0_call_kinds.rs` names (php `name`, haskell `variable`, bash
 /// `word`).
-fn is_name_leaf(node: &SgNode<StrDoc<RyiLang>>, kind: &str) -> bool {
+fn is_name_leaf(node: &SgNode<StrDoc<RyiLang>>, kinds: &RootKinds) -> bool {
     node.is_named()
         && node.children().all(|child| !child.is_named())
-        && (kind.contains("identifier") || CALLEE_NAME_KINDS.contains(&kind))
+        && (kinds.is_name_leaf_kind(node.kind_id())
+            || CALLEE_NAME_KINDS.contains(&node.kind().as_ref()))
 }
 
 /// The name leaves under `node`, pre-order. A nested call kind stops the
@@ -247,17 +272,18 @@ fn is_name_leaf(node: &SgNode<StrDoc<RyiLang>>, kind: &str) -> bool {
 /// itself when its own turn comes.
 fn collect_name_leaves<'r>(
     node: &SgNode<'r, StrDoc<RyiLang>>,
+    kinds: &RootKinds,
     out: &mut Vec<SgNode<'r, StrDoc<RyiLang>>>,
 ) {
     if CALL_KINDS.contains(&node.kind().as_ref()) {
         return;
     }
-    if is_name_leaf(node, &node.kind()) {
+    if is_name_leaf(node, kinds) {
         out.push(node.clone());
         return;
     }
     for child in node.children() {
-        collect_name_leaves(&child, out);
+        collect_name_leaves(&child, kinds, out);
     }
 }
 
@@ -287,6 +313,7 @@ fn head_leaf<'r>(node: &SgNode<'r, StrDoc<RyiLang>>) -> Option<SgNode<'r, StrDoc
 /// `None` mints no site: a call with no name to bind is not a row.
 fn callee_of(
     node: &SgNode<StrDoc<RyiLang>>,
+    kinds: &RootKinds,
     strings: &mut Strings,
 ) -> Option<(NameId, Option<NameId>)> {
     for field in ["name", "method", "function"] {
@@ -294,7 +321,7 @@ fn callee_of(
             continue;
         };
         let mut leaves = Vec::new();
-        collect_name_leaves(&seat, &mut leaves);
+        collect_name_leaves(&seat, kinds, &mut leaves);
         let Some(leaf) = leaves.last() else {
             continue;
         };
@@ -309,7 +336,7 @@ fn callee_of(
         if kind.contains("argument") || kind.contains("suffix") {
             continue;
         }
-        collect_name_leaves(&child, &mut leaves);
+        collect_name_leaves(&child, kinds, &mut leaves);
     }
     if CALLEE_FIRST_KINDS.contains(&node.kind().as_ref()) {
         let head = head_leaf(node)?;
@@ -330,6 +357,7 @@ impl Project<CallF> for CallProjector {
     type Parsed<'a> = SgRoot;
 
     fn project(&self, root: &SgRoot, strings: &mut Strings, sink: &mut FamilyBundle<CallF>) {
+        let kinds = RootKinds::resolve(root);
         // The module as nameless covering def, python's MODULE_CALLER seat
         // reused verbatim: a guessed site then has a caller for
         // `Resolve<CallF>`'s covering-def join. flatten_call skips the node,
@@ -356,7 +384,7 @@ impl Project<CallF> for CallProjector {
                         .parent()
                         .is_some_and(|p| p.is_named() && CALL_KINDS.contains(&p.kind().as_ref()));
                 if !same_chain {
-                    if let Some((callee, callee_path)) = callee_of(&node, strings) {
+                    if let Some((callee, callee_path)) = callee_of(&node, &kinds, strings) {
                         let byte_range = node.range();
                         sink.aux.sites.push(CallSite {
                             span: Span {
