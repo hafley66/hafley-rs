@@ -266,6 +266,8 @@ fn collect_spanned_matches(
     Ok(rows)
 }
 
+/// A match is gated by its OWN pattern's predicates. A predicate-free pattern
+/// has an empty slice here, which folds to true.
 fn matches_predicates(
     query: &Query,
     found: &tree_sitter::QueryMatch<'_, '_>,
