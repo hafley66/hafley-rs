@@ -1,0 +1,7 @@
+{
+  "case": "spelled-receiver-field-chain",
+  "answer": [
+    "tests/fixtures/rust_spelled_receiver/src/proj.rs:330-371"
+  ],
+  "notes": "b.inner.run() in field_leg(b: &Box). Two hops: Box.inner is typed Widget, so the target is Widget::run (proj.rs:25), not Proj::run (proj.rs:14)."
+}

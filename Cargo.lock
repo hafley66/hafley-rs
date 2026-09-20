@@ -2842,6 +2842,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sprefa-lab-bakeoff"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "sqlite-bulk-trigger"
 version = "0.1.0"
 dependencies = [

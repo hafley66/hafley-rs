@@ -1,0 +1,9 @@
+{
+  "case": "macro-cross-file-miss",
+  "answer": [
+    "Widget::alpha->helper_one@tests/fixtures/rust_macro_callers/user.rs:122-151",
+    "Widget::beta->helper_two@tests/fixtures/rust_macro_callers/user.rs:159-188",
+    "Widget::gamma->helper_one@tests/fixtures/rust_macro_callers/user.rs:122-151"
+  ],
+  "notes": "mint_helpers!(Widget) and mint_single!(Widget) expand at user.rs from bodies defined in macros.rs. The expanded bodies call helper_one/helper_two, which bind to user.rs's own defs, not decoys.rs's same-named pair. This is the one expected set ryi fast does not produce today."
+}
