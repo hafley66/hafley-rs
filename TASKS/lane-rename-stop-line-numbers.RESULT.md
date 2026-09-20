@@ -33,7 +33,7 @@ Measured on the lane's two-route fixture, verbatim pairs: before
 
 ## Tests
 
-`crates/sprefa-extract/tests/38_rename_stop_lines.rs`, five cases, all passing:
+`crates/sprefa-extract/tests/146_rename_stop_lines.rs`, five cases, all passing:
 
 1. `the_stop_prints_file_and_line_not_a_byte_offset`
 2. `an_attr_on_the_first_line_prints_line_one`
