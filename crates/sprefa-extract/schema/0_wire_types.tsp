@@ -21,3 +21,7 @@ model TextArg { text: string; }
 model IntArg { int: int64; }
 model AtomArg { atom: string; }
 union TsiArg { id: IdArg, span: SpanArg, text: TextArg, int: IntArg, atom: AtomArg }
+
+// One `ryi rename` site the arm found and declined to plan; `reason` is an
+// `UnresolvedReason::as_str` spelling.
+model RenameAbstain { file: string; span: Span; symbol: string; reason: string; receiver: string; }

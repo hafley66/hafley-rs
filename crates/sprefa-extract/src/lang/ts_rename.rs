@@ -25,7 +25,8 @@ use crate::move_cx::MoveCx;
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::seams::Parser;
 use crate::types::{
-    ImportRefKind, RefRole, Rehome, Rename, RenameStop, Respell, Span, SymbolRef, SymbolSeat,
+    ImportRefKind, RefRole, Rehome, Rename, RenameAbstain, RenameStop, Respell, Span, SymbolRef,
+    SymbolSeat, UnresolvedReason,
 };
 
 impl Rename for TsSource {
@@ -34,6 +35,15 @@ impl Rename for TsSource {
         cx: &RenameCx,
         request: &RenameRequest,
     ) -> Result<Vec<SymbolRef>, RenameStop> {
+        self.symbol_refs_and_abstains(cx, request)
+            .map(|(refs, _)| refs)
+    }
+
+    fn symbol_refs_and_abstains(
+        &self,
+        cx: &RenameCx,
+        request: &RenameRequest,
+    ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
         let text = cx.text(&request.anchor).ok_or_else(|| not_found(request))?;
         let parser = OxcParser;
         let arena = parser.make_arena();
@@ -88,17 +98,24 @@ impl Rename for TsSource {
         }
 
         let line_starts = build_line_starts(&text);
-        let seats = dynamic_seats(&program, &line_starts, &request.anchor, &request.old);
-        if !seats.is_empty() {
-            return Err(RenameStop::Dynamic(seats));
+        let scanned = scan_member_seats(&program, &request.old);
+        // A computed key is a runtime-only form no plan can carry, so it stops
+        // the run with every seat listed. Untyped member accesses alone abstain.
+        if scanned.iter().any(|seat| seat.receiver.is_none()) {
+            return Err(RenameStop::Dynamic(dynamic_seats(
+                &scanned,
+                &line_starts,
+                &request.anchor,
+            )));
         }
+        let abstains = member_abstains(&scanned, &text, &request.anchor, &request.old);
 
         let mut refs = binding_refs(&semantic, symbol, &request.anchor, &request.old);
         // A symbol no importer can name is file-local, so the run opens one file.
         if exports_bare(&program, &request.old) {
             refs.extend(importer_refs(cx, request));
         }
-        Ok(settle(refs))
+        Ok((settle(refs), abstains))
     }
 
     fn respell_symbol(
@@ -408,49 +425,77 @@ fn plain_name<'a>(name: &ts::ModuleExportName<'a>) -> Option<&'a str> {
 
 // ── the runtime seats ───────────────────────────────────────────────────────
 
-/// One runtime-only seat: the bytes, and how they reach the symbol. A seat is
-/// any member access spelling `old` that the scope plane never binds, so a
-/// rename that skipped it could silently miss the real call site.
-type DynamicSeat = (oxc_span::Span, &'static str);
+/// One member seat: the bytes, and how they reach the symbol. A seat is any
+/// member access spelling `old` that the scope plane never binds, so a rename
+/// that skipped it could silently miss the real call site. `receiver` is the
+/// object expression of a static member access; a computed key has none.
+struct MemberSeat {
+    span: oxc_span::Span,
+    form: &'static str,
+    receiver: Option<oxc_span::Span>,
+}
 
 /// Every seat in the anchor, earliest first. Importers are outside this scan: a
 /// property named `old` on any object anywhere would stop every run.
-fn dynamic_seats(
-    program: &Program<'_>,
-    line_starts: &[u32],
-    file: &str,
-    old: &str,
-) -> Vec<SymbolSeat> {
-    let mut scan = DynamicScan {
+fn scan_member_seats(program: &Program<'_>, old: &str) -> Vec<MemberSeat> {
+    let mut scan = MemberScan {
         old,
         seats: Vec::new(),
     };
     scan.visit_program(program);
     let mut seats = scan.seats;
-    seats.sort_by_key(|(span, _)| span.start);
+    seats.sort_by_key(|seat| seat.span.start);
     seats
-        .into_iter()
-        .map(|(span, form)| SymbolSeat {
+}
+
+fn dynamic_seats(seats: &[MemberSeat], line_starts: &[u32], file: &str) -> Vec<SymbolSeat> {
+    seats
+        .iter()
+        .map(|seat| SymbolSeat {
             file: file.to_string(),
-            span: to_span(span),
-            line: line_starts.partition_point(|start| *start <= span.start) as u32,
+            span: to_span(seat.span),
+            line: line_starts.partition_point(|start| *start <= seat.span.start) as u32,
             reaches: String::new(),
-            form,
+            form: seat.form,
         })
         .collect()
 }
 
-struct DynamicScan<'a> {
-    old: &'a str,
-    seats: Vec<DynamicSeat>,
+/// One abstain per static member access. No leg types a receiver in this arm,
+/// so every receiver is untraced.
+fn member_abstains(seats: &[MemberSeat], text: &str, file: &str, old: &str) -> Vec<RenameAbstain> {
+    seats
+        .iter()
+        .filter_map(|seat| {
+            let receiver = seat.receiver?;
+            Some(RenameAbstain {
+                file: file.to_string(),
+                span: to_span(seat.span),
+                symbol: old.to_string(),
+                reason: UnresolvedReason::Inferred.as_str(),
+                receiver: text
+                    .get(receiver.start as usize..receiver.end as usize)
+                    .unwrap_or_default()
+                    .to_string(),
+            })
+        })
+        .collect()
 }
 
-impl<'a> Visit<'a> for DynamicScan<'a> {
+struct MemberScan<'a> {
+    old: &'a str,
+    seats: Vec<MemberSeat>,
+}
+
+impl<'a> Visit<'a> for MemberScan<'a> {
     fn visit_computed_member_expression(&mut self, expression: &ts::ComputedMemberExpression<'a>) {
         if let ts::Expression::StringLiteral(literal) = &expression.expression {
             if literal.value.as_str() == self.old {
-                self.seats
-                    .push((expression.expression.span(), "computed member"));
+                self.seats.push(MemberSeat {
+                    span: expression.expression.span(),
+                    form: "computed member",
+                    receiver: None,
+                });
             }
         }
         self.visit_expression(&expression.object);
@@ -458,8 +503,11 @@ impl<'a> Visit<'a> for DynamicScan<'a> {
 
     fn visit_static_member_expression(&mut self, expression: &ts::StaticMemberExpression<'a>) {
         if expression.property.name.as_str() == self.old {
-            self.seats
-                .push((expression.property.span(), "member access"));
+            self.seats.push(MemberSeat {
+                span: expression.property.span(),
+                form: "member access",
+                receiver: Some(expression.object.span()),
+            });
         }
         self.visit_expression(&expression.object);
     }

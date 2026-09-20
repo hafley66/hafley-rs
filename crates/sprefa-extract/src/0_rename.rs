@@ -6,12 +6,14 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use sprefa_extract::move_stage::{
     content_id, print_previews, stage_and_commit, state_root, Mirror,
 };
+use sprefa_extract::types::RenameAbstain;
 use sprefa_extract::{
     directory_source, normalize, rename_for, renames, replace_action, RenameCx, RenameRequest,
     RenameStop, Respell, SymbolRef,
@@ -22,10 +24,15 @@ mod rename_verify;
 
 const PRODUCER: &str = "extract-rename";
 
+/// Exit code of a run that emitted a plan and declined at least one site.
+const ABSTAINED: i32 = 7;
+
 /// A failed rename run: the message and the process exit code. One code per
 /// stop, all distinct from 2 for every plan error:
 /// 2 plan error (usage, no arm, verify, claim conflict) · 3 `Ambiguous`, pass
-/// `--at` · 4 `NotFound` · 5 `Inexact` · 6 `Dynamic`.
+/// `--at` · 4 `NotFound` · 5 `Inexact` · 6 `Dynamic`. A run that emitted its
+/// plan exits 7 when abstains exist (`ABSTAINED`): the plan is complete for
+/// every site the arm typed, and each declined site is listed.
 pub struct RenameError {
     pub message: String,
     pub exit: i32,
@@ -57,7 +64,9 @@ fn stop_error(stop: RenameStop) -> RenameError {
 #[derive(Parser)]
 #[command(
     name = "extract rename",
-    about = "rename a symbol and respell every occurrence bound to it"
+    about = "rename a symbol and respell every occurrence bound to it",
+    after_help = "Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, \
+                  6 dynamic, 7 plan emitted with abstains (sites the arm declined to plan)"
 )]
 struct RenameCli {
     /// `<FILE>#<OLD>`: the declaring file and the identifier as written today.
@@ -89,6 +98,10 @@ struct RenameCli {
     /// count never changes the plan, the stages, or the exit code.
     #[arg(long = "verify-scip", value_name = "INDEX")]
     verify_scip: Option<PathBuf>,
+    /// Close the output with one JSON line: `{"abstains": [...]}`, one row per
+    /// site the arm declined to plan, and none of the per-abstain text lines.
+    #[arg(long)]
+    json: bool,
 }
 
 pub fn run<I>(args: I) -> Result<(), RenameError>
@@ -109,6 +122,17 @@ where
     }
     for receipt in &plan.receipts {
         println!("{receipt}");
+    }
+    if !cli.json {
+        for abstain in &plan.abstains {
+            println!(
+                "{}:{}: abstain {} receiver={}",
+                abstain.file,
+                line_of(&plan.cx, &abstain.file, abstain.span.start),
+                abstain.reason,
+                abstain.receiver.replace('\n', " ")
+            );
+        }
     }
     if let Some(index) = cli.verify_scip.as_deref() {
         let disagreements =
@@ -142,7 +166,42 @@ where
             crate::move_text::report_rename(&plan.cx, request, &plan.rewritten);
         }
     }
+    if cli.json {
+        println!("{}", abstains_json(&plan.cx, &plan.abstains));
+    }
+    if !plan.abstains.is_empty() {
+        // The plan is out and the tree is settled; a `RenameError` would add a
+        // message line to stderr for a run that did not fail.
+        let _ = std::io::stdout().flush();
+        std::process::exit(ABSTAINED);
+    }
     Ok(())
+}
+
+/// One-based line of `offset` in `file`; 0 when the file is unreadable.
+fn line_of(cx: &RenameCx, file: &str, offset: u32) -> usize {
+    let Some(text) = cx.text(file) else {
+        return 0;
+    };
+    let prefix = text.get(..offset as usize).unwrap_or_default();
+    1 + prefix.bytes().filter(|byte| *byte == b'\n').count()
+}
+
+fn abstains_json(cx: &RenameCx, abstains: &[RenameAbstain]) -> String {
+    let rows: Vec<serde_json::Value> = abstains
+        .iter()
+        .map(|abstain| {
+            serde_json::json!({
+                "file": abstain.file,
+                "line": line_of(cx, &abstain.file, abstain.span.start),
+                "span": { "start": abstain.span.start, "len": abstain.span.len },
+                "symbol": abstain.symbol,
+                "reason": abstain.reason,
+                "receiver": abstain.receiver,
+            })
+        })
+        .collect();
+    serde_json::json!({ "abstains": rows }).to_string()
 }
 
 /// A rename moves no file, so one stage of `Replace` actions covers the whole
@@ -153,6 +212,8 @@ struct Plan {
     /// One occurrence list per `cx.batch()` row, in batch order.
     refs: Vec<Vec<SymbolRef>>,
     stages: Vec<Vec<soopy::SourceAction>>,
+    /// Every site an arm found and declined to plan, in batch then arm order.
+    abstains: Vec<RenameAbstain>,
     /// Every (file, line) a staged edit rewrites; the text-refs scan leaves
     /// those lines alone.
     rewritten: BTreeSet<(String, usize)>,
@@ -167,6 +228,7 @@ impl Plan {
         let cx = RenameCx::open(&root).map_err(plan_error)?.with_batch(batch);
 
         let mut refs: Vec<Vec<SymbolRef>> = Vec::with_capacity(cx.batch().len());
+        let mut abstains: Vec<RenameAbstain> = Vec::new();
         for request in cx.batch() {
             let arm = rename_for(&request.anchor).ok_or_else(|| {
                 plan_error(format!(
@@ -179,9 +241,12 @@ impl Plan {
                         .join(", ")
                 ))
             })?;
-            let found = arm.symbol_refs(&cx, request).map_err(stop_error)?;
+            let (found, declined) = arm
+                .symbol_refs_and_abstains(&cx, request)
+                .map_err(stop_error)?;
             verify_spans(&cx, &found)?;
             refs.push(found);
+            abstains.extend(declined);
         }
 
         let mut receipts = Vec::new();
@@ -228,6 +293,7 @@ impl Plan {
             cx,
             refs,
             stages,
+            abstains,
             rewritten,
             receipts,
         })

@@ -2913,6 +2913,20 @@ pub struct SymbolSeat {
     pub form: &'static str,
 }
 
+/// One site `rename` found and declined to plan. Sibling of `Unresolved` for
+/// the rename verb: the plan stays complete for every site the arm typed.
+#[derive(Debug)]
+pub struct RenameAbstain {
+    pub file: String,
+    pub span: Span,
+    /// The name under rename.
+    pub symbol: String,
+    /// `UnresolvedReason::as_str` vocabulary.
+    pub reason: &'static str,
+    /// Source text of the receiver expression.
+    pub receiver: String,
+}
+
 /// Why an arm will not plan. A partial rename compiles less often than no
 /// rename at all, so an arm stops instead of emitting a subset.
 #[derive(Debug)]
@@ -2986,6 +3000,16 @@ pub trait Rename: Source + Sync + Send {
         cx: &RenameCx,
         request: &RenameRequest,
     ) -> Result<Vec<SymbolRef>, RenameStop>;
+
+    /// `symbol_refs` plus every site the arm found and declined to plan. An arm
+    /// that records no abstains keeps this default.
+    fn symbol_refs_and_abstains(
+        &self,
+        cx: &RenameCx,
+        request: &RenameRequest,
+    ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
+        self.symbol_refs(cx, request).map(|refs| (refs, Vec::new()))
+    }
 
     /// The replacement bytes for one occurrence. None = unchanged (an aliased
     /// import `{OLD as local}` leaves `local` alone).
