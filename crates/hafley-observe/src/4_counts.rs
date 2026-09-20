@@ -97,6 +97,22 @@ impl CountRecorder {
     }
 }
 
+impl CountRecorder {
+    /// Instances of span `name`, grouped by the text of its `field`.
+    pub fn span_counts_by_field(&self, name: &str, field: &str) -> BTreeMap<String, usize> {
+        let storage = self.storage.lock();
+        let mut counts = BTreeMap::new();
+        for span in storage.all_spans() {
+            if span.metadata().name() != name {
+                continue;
+            }
+            let value = span.value(field).map(text).unwrap_or_default();
+            *counts.entry(value).or_default() += 1;
+        }
+        counts
+    }
+}
+
 fn text(value: &tracing_tunnel::TracedValue) -> String {
     value
         .as_str()

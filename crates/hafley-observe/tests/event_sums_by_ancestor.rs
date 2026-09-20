@@ -35,6 +35,9 @@ fn statements_group_under_the_enclosing_node_kind() {
     assert_eq!(group.events, 5);
     assert!(group.sum_of("vm_step") > map.sum_of("vm_step"));
     assert!(group.sum_of("vm_step") > 0.0);
+    let spans = recorder.span_counts_by_field("node", "kind");
+    assert_eq!(spans["map"], 1);
+    assert_eq!(spans["group"], 1);
 }
 
 #[test]
