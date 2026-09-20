@@ -38,22 +38,6 @@ impl Rename for RustSource {
         request: &RenameRequest,
     ) -> Result<Vec<SymbolRef>, RenameStop> {
         let corpus = Corpus::open(cx, &request.old);
-        // A file two `#[path]` decls name has no module the plane can read;
-        // the run stops before anything is staged.
-        if !corpus.path_stops.is_empty() {
-            let stops = corpus
-                .path_stops
-                .iter()
-                .map(|seat| SymbolSeat {
-                    file: seat.file.clone(),
-                    span: seat.span,
-                    line: seat.line,
-                    reaches: seat.reaches.clone(),
-                    form: seat.form,
-                })
-                .collect();
-            return Err(RenameStop::Dynamic(stops));
-        }
         let anchor = corpus
             .scans
             .get(&request.anchor)
@@ -86,9 +70,12 @@ impl Rename for RustSource {
             (Some(_), _, many) => select_by_at(many, request.at)
                 .ok_or_else(|| ambiguous(request, many.iter().map(|decl| decl.span).collect()))?,
         };
-        let home = corpus.home(&request.anchor);
-        let anchor_module = module_of(home, &declaration.chain);
-        let nameable = corpus.nameable(anchor_module.clone());
+        let anchor_modules: Vec<ModuleId> = corpus
+            .homes_of(&request.anchor)
+            .iter()
+            .map(|home| module_of(home, &declaration.chain))
+            .collect();
+        let nameable = corpus.nameable(&anchor_modules);
         let reexports =
             corpus.reexports(&nameable, (request.anchor.clone(), declaration.chain.clone()));
 
@@ -105,10 +92,12 @@ impl Rename for RustSource {
                 .text(rel)
                 .map(|text| build_line_starts(&text))
                 .unwrap_or_default();
-            corpus.harvest(
-                rel, scan, &line_starts, &nameable, &reexports, anchored, &declaration.kind,
-                &anchor_module, request, &mut refs, &mut seats,
-            );
+            for home in corpus.homes_of(rel) {
+                corpus.harvest(
+                    rel, home, scan, &line_starts, &nameable, &reexports, anchored,
+                    &declaration.kind, &anchor_modules, request, &mut refs, &mut seats,
+                );
+            }
         }
         if let Some(stop) = corpus.inexact(&refs) {
             return Err(stop);
@@ -235,19 +224,17 @@ fn module_of(home: &ModuleId, chain: &[String]) -> ModuleId {
 /// tables the module law reads.
 struct Corpus {
     scans: BTreeMap<String, FileScan>,
-    /// rel -> the module that file IS.
-    homes: BTreeMap<String, ModuleId>,
+    /// rel -> every module that file IS, in route order; never empty.
+    homes: BTreeMap<String, Vec<ModuleId>>,
     /// A crate's identifier as a `use` writes it -> that crate's root file.
     crates: BTreeMap<String, String>,
-    /// One seat per attr literal that names a file twice.
-    path_stops: Vec<SymbolSeat>,
 }
 
 impl Corpus {
     fn open(cx: &RenameCx, old: &str) -> Self {
         let roots = crate_roots(cx);
         let crates = crate_idents(cx);
-        let (path_mods, path_stops) = path_module_table(cx, &roots);
+        let path_mods = path_module_table(cx, &roots);
         let mut scans = BTreeMap::new();
         let mut homes = BTreeMap::new();
         for rel in cx.files_of(&RustSource) {
@@ -279,7 +266,7 @@ impl Corpus {
                 path_mods
                     .get(rel)
                     .cloned()
-                    .unwrap_or_else(|| module_path(rel, &roots)),
+                    .unwrap_or_else(|| vec![module_path(rel, &roots)]),
             );
             scans.insert(rel.to_string(), scan.out);
         }
@@ -287,14 +274,14 @@ impl Corpus {
             scans,
             homes,
             crates,
-            path_stops,
         }
     }
 
-    /// The module a file is. A file under no crate root answers to itself, so its
+    /// The modules a file is. A file under no crate root answers to itself, so its
     /// own paths still resolve against each other.
-    fn home(&self, rel: &str) -> &ModuleId {        static ORPHAN: ModuleId = (String::new(), Vec::new());
-        self.homes.get(rel).unwrap_or(&ORPHAN)
+    fn homes_of(&self, rel: &str) -> &[ModuleId] {
+        static ORPHAN: [ModuleId; 1] = [(String::new(), Vec::new())];
+        self.homes.get(rel).map_or(&ORPHAN, Vec::as_slice)
     }
 
     /// The `::`-prefix of a path, as a module. `None` when it climbs above a
@@ -330,24 +317,24 @@ impl Corpus {
 
     /// Every module the symbol can be named from: the declaring one, plus a hop
     /// per public re-export under the SAME name, to a fixpoint.
-    fn nameable(&self, anchor: ModuleId) -> BTreeSet<ModuleId> {
-        let mut set = BTreeSet::new();
-        set.insert(anchor);
+    fn nameable(&self, anchors: &[ModuleId]) -> BTreeSet<ModuleId> {
+        let mut set: BTreeSet<ModuleId> = anchors.iter().cloned().collect();
         loop {
             let mut grew = false;
             for (rel, scan) in &self.scans {
-                let home = self.home(rel);
-                for leaf in &scan.uses {
-                    if !leaf.exported
-                        || !matches!(leaf.kind, LeafKind::Name | LeafKind::SelfName)
-                    {
-                        continue;
-                    }
-                    let Some(from) = self.resolve(home, &leaf.chain, &leaf.prefix) else {
-                        continue;
-                    };
-                    if set.contains(&from) {
-                        grew |= set.insert(module_of(home, &leaf.chain));
+                for home in self.homes_of(rel) {
+                    for leaf in &scan.uses {
+                        if !leaf.exported
+                            || !matches!(leaf.kind, LeafKind::Name | LeafKind::SelfName)
+                        {
+                            continue;
+                        }
+                        let Some(from) = self.resolve(home, &leaf.chain, &leaf.prefix) else {
+                            continue;
+                        };
+                        if set.contains(&from) {
+                            grew |= set.insert(module_of(home, &leaf.chain));
+                        }
                     }
                 }
             }
@@ -363,6 +350,7 @@ impl Corpus {
         let (rel, home) = self
             .homes
             .iter()
+            .flat_map(|(rel, homes)| homes.iter().map(move |home| (rel, home)))
             .filter(|(_, home)| home.0 == module.0 && module.1.starts_with(&home.1))
             .max_by_key(|(_, home)| home.1.len())?;
         Some((rel.clone(), module.1[home.1.len()..].to_vec()))
@@ -379,23 +367,24 @@ impl Corpus {
         loop {
             let mut grew = false;
             for (rel, scan) in &self.scans {
-                let home = self.home(rel);
-                for leaf in &scan.uses {
-                    if leaf.block.is_some() {
-                        continue;
-                    }
-                    let Some(target) = self.resolve(home, &leaf.chain, &leaf.prefix) else {
-                        continue;
-                    };
-                    let binding = match leaf.kind {
-                        LeafKind::Name | LeafKind::SelfName => nameable.contains(&target),
-                        LeafKind::Glob if !nameable.contains(&target) => self
-                            .scope_of(&target)
-                            .is_some_and(|scope| binds.contains(&scope)),
-                        _ => false,
-                    };
-                    if binding {
-                        grew |= binds.insert((rel.clone(), leaf.chain.clone()));
+                for home in self.homes_of(rel) {
+                    for leaf in &scan.uses {
+                        if leaf.block.is_some() {
+                            continue;
+                        }
+                        let Some(target) = self.resolve(home, &leaf.chain, &leaf.prefix) else {
+                            continue;
+                        };
+                        let binding = match leaf.kind {
+                            LeafKind::Name | LeafKind::SelfName => nameable.contains(&target),
+                            LeafKind::Glob if !nameable.contains(&target) => self
+                                .scope_of(&target)
+                                .is_some_and(|scope| binds.contains(&scope)),
+                            _ => false,
+                        };
+                        if binding {
+                            grew |= binds.insert((rel.clone(), leaf.chain.clone()));
+                        }
                     }
                 }
             }
@@ -416,18 +405,18 @@ impl Corpus {
     fn harvest(
         &self,
         rel: &str,
+        home: &ModuleId,
         scan: &FileScan,
         line_starts: &[u32],
         nameable: &BTreeSet<ModuleId>,
         reexports: &BTreeMap<String, BTreeSet<Vec<String>>>,
         anchored: Option<&Decl>,
         anchor_kind: &DeclKind,
-        anchor_module: &ModuleId,
+        anchor_modules: &[ModuleId],
         request: &RenameRequest,
         refs: &mut Vec<SymbolRef>,
         seats: &mut Vec<SymbolSeat>,
     ) {
-        let home = self.home(rel);
         let mut ours: BTreeSet<&[String]> = BTreeSet::new();
         let mut shadowed: BTreeSet<&[String]> = BTreeSet::new();
         let mut shadow_blocks: Vec<Span> = Vec::new();
@@ -462,7 +451,7 @@ impl Corpus {
                 .is_some_and(|module| nameable.contains(&module));
             let binds_variant = match anchor_kind {
                 DeclKind::Variant { owner } => {
-                    self.variant_leaf(home, &leaf.chain, &leaf.prefix, owner, anchor_module)
+                    self.variant_leaf(home, &leaf.chain, &leaf.prefix, owner, anchor_modules)
                 }
                 _ => false,
             };
@@ -527,7 +516,7 @@ impl Corpus {
             if !path.prefix.is_empty() {
                 let variant = match anchor_kind {
                     DeclKind::Variant { owner } => self.owner_reach(
-                        home, &path.chain, &path.prefix, owner, anchor_module, nameable, scan,
+                        home, &path.chain, &path.prefix, owner, anchor_modules, nameable, scan,
                     ),
                     _ => false,
                 };
@@ -599,7 +588,7 @@ impl Corpus {
                                 chain,
                                 &owner_path(prefix, site_owner),
                                 owner,
-                                anchor_module,
+                                anchor_modules,
                                 nameable,
                                 scan,
                             ) =>
@@ -718,12 +707,12 @@ impl Corpus {
         chain: &[String],
         prefix: &[String],
         owner: &str,
-        anchor: &ModuleId,
+        anchors: &[ModuleId],
     ) -> bool {
         match prefix.split_last() {
             Some((last, before)) if last == owner => self
                 .resolve(home, chain, before)
-                .is_some_and(|module| module == *anchor),
+                .is_some_and(|module| anchors.contains(&module)),
             _ => false,
         }
     }
@@ -737,7 +726,7 @@ impl Corpus {
         chain: &[String],
         prefix: &[String],
         owner: &str,
-        anchor: &ModuleId,
+        anchors: &[ModuleId],
         nameable: &BTreeSet<ModuleId>,
         scan: &FileScan,
     ) -> bool {
@@ -748,7 +737,7 @@ impl Corpus {
             return false;
         }
         match self.resolve(home, chain, before) {
-            Some(module) if module == *anchor => true,
+            Some(module) if anchors.contains(&module) => true,
             Some(_) if before.is_empty() => scan.owner_leaves.iter().any(|leaf| {
                 leaf.name == owner
                     && leaf.block.is_none()
@@ -1968,13 +1957,13 @@ fn path_attrs(attrs: &[syn::Attribute], line_starts: &[u32]) -> Vec<(Span, Strin
     out
 }
 
-/// The files a `#[path = ".."]` decl names, to the module each is: the literal
-/// reads against the declaring file's dir; a file two decls name is a stop.
+/// The files a `#[path = ".."]` decl names, to every module each is: the literal
+/// reads against the declaring file's dir; a file two decls name is two modules.
 fn path_module_table(
     cx: &RenameCx,
     roots: &BTreeSet<String>,
-) -> (BTreeMap<String, ModuleId>, Vec<SymbolSeat>) {
-    let mut named: BTreeMap<String, Vec<(String, Span, u32, ModuleId)>> = BTreeMap::new();
+) -> BTreeMap<String, Vec<ModuleId>> {
+    let mut named: BTreeMap<String, Vec<ModuleId>> = BTreeMap::new();
     for rel in cx.files_of(&RustSource) {
         let Some(text) = cx.text(rel) else {
             continue;
@@ -1990,30 +1979,11 @@ fn path_module_table(
         let home = module_path(rel, roots);
         path_decls(&parsed.items, &[], rel, &home, roots, &line_starts, &mut named);
     }
-    let mut mods = BTreeMap::new();
-    let mut stops = Vec::new();
-    for (file, attrs) in named {
-        match attrs.as_slice() {
-            [(_, _, _, module)] => {
-                mods.insert(file, module.clone());
-            }
-            many => {
-                for (rel, span, line, _) in many {
-                    stops.push(SymbolSeat {
-                        file: rel.clone(),
-                        span: *span,
-                        line: *line,
-                        reaches: file.clone(),
-                        form: "path attr twice",
-                    });
-                }
-            }
-        }
+    for routes in named.values_mut() {
+        let mut seen = BTreeSet::new();
+        routes.retain(|module| seen.insert(module.clone()));
     }
-    stops.sort_by(|left, right| {
-        (&left.file, left.span.start).cmp(&(&right.file, right.span.start))
-    });
-    (mods, stops)
+    named
 }
 
 /// One file's `#[path]` decls, through inline mods: each names a file under
@@ -2025,7 +1995,7 @@ fn path_decls(
     home: &ModuleId,
     roots: &BTreeSet<String>,
     line_starts: &[u32],
-    out: &mut BTreeMap<String, Vec<(String, Span, u32, ModuleId)>>,
+    out: &mut BTreeMap<String, Vec<ModuleId>>,
 ) {
     let mut dir = module_dir(rel, roots);
     for segment in chain {
@@ -2042,11 +2012,10 @@ fn path_decls(
                 target.extend(chain.iter().cloned());
                 target.push(decl.ident.to_string());
                 let root = owning_root(rel, roots).unwrap_or_else(|| rel.to_string());
-                for (span, value) in path_attrs(&decl.attrs, line_starts) {
-                    let line = line_starts.partition_point(|start| *start <= span.start) as u32;
+                for (_, value) in path_attrs(&decl.attrs, line_starts) {
                     out.entry(join_rel(&dir, &value))
                         .or_default()
-                        .push((rel.to_string(), span, line, (root.clone(), target.clone())));
+                        .push((root.clone(), target.clone()));
                 }
             }
             Some((_, inner)) => {
