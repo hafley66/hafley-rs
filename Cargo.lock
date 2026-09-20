@@ -1236,6 +1236,7 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "rusqlite",
  "serde_json",
  "tracing",
  "tracing-capture",
