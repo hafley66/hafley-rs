@@ -1,0 +1,12 @@
+[package]
+name = "sqlite-bulk-trigger"
+description = "One Rust callback per transaction for SQLite row triggers, with savepoint rollback handled inside a collector virtual table."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+rusqlite = { version = "0.40", features = ["bundled", "vtab", "trace"] }
+tracing = { workspace = true }
