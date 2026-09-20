@@ -55,7 +55,7 @@ Each relational rule takes a `stopBy` that says how far the walk goes: `neighbor
 
 `utils` is a map of named rules defined once and referred to by name, which is how a long rule is built from readable parts.
 
-Three more filters exist in ast-grep and are covered at the end of this guide: `nthChild` selects a node by its position among siblings, `range` restricts a match to a line and column window, and `constraints` attach a rule to a `$A` placeholder inside a pattern.
+Three more filters are covered at the end of this guide: `nthChild` selects a node by its position among siblings, `range` selects the node at an exact position, and `constraints` attach a rule to a `$A` placeholder inside a pattern.
 
 ## Why `.scm` grew the same operators
 
@@ -76,6 +76,9 @@ The translation is mechanical and one-to-one:
 | `(#pattern? @m "$A.len()")` | `pattern: $A.len()` |
 | `(#not-inside? @m scope)` and the other `not-` forms | `not: {inside: ...}` |
 | several predicates on one capture | `all: [...]` |
+| `(#nth-child? @m "2")` | `nthChild: 2` |
+| `(#range? @m "3:4" "3:23")` | `range: {start: ..., end: ...}` |
+| `(#pattern? @m "$A.len()" A name)` | `pattern:` plus `constraints: {A: {matches: name}}` |
 
 ## Structure of a query file
 
@@ -308,19 +311,48 @@ When a language is named directly instead of inferred from a path, the aliases `
 
 ## Position, range and placeholder constraints
 
-Three ast-grep filters have no predicate yet. They are the filters reached for as soon as a plain pattern returns too much.
+Three more ast-grep filters are available. They are the ones reached for as soon as a plain pattern returns too much.
 
-**`nthChild`** selects a node by its position among its siblings: the first argument of a call, the last statement of a block. In YAML, `nthChild: 2`, or `nthChild: {position: 2, ofRule: {kind: argument}, reverse: true}` to count only siblings of a given kind, from the end.
+### Position among siblings: `#nth-child?`
 
-**`range`** restricts matches to a line and column window, which is how a rule targets one function body or one hunk of a diff instead of a whole file. In YAML, `range: {start: {line: 10, column: 0}, end: {line: 20, column: 0}}`, zero-based.
-
-**`constraints`** attach a rule to a placeholder inside a pattern. `pattern: $A.len()` with `constraints: {A: {kind: identifier}}` says the receiver must be a bare name, so the pattern stops matching `foo().len()`.
-
-The planned spellings:
+Selects a node by its index among its siblings: the first argument of a call, the last statement of a block. Positions are 1-based and may use the CSS `An+B` form. An optional label counts only siblings matching that pattern, and the string `"reverse"` counts from the end.
 
 ```scheme
-((argument) @a (#nth-child? @a "2"))                  ; the second sibling
-((argument) @a (#nth-child? @a "2" argument))         ; the second sibling that is an argument
-((call_expression) @c (#range? @c "10:0" "20:0"))     ; only inside lines 10 to 20
-((call_expression) @c (#pattern? @c "$A.len()" A name)) ; $A must match the pattern labelled @name
+[(argument)] @arg
+
+((argument) @a (#nth-child? @a "2"))                 ; the second sibling
+((argument) @a (#nth-child? @a "2n+1"))              ; every odd sibling
+((argument) @a (#nth-child? @a "1" arg "reverse"))   ; the last sibling that is an argument
 ```
+
+In YAML this is `nthChild: 2`, or `nthChild: {position: 2, ofRule: {kind: argument}, reverse: true}`.
+
+### Exact position in the file: `#range?`
+
+Selects the node that starts and ends at exactly the given points, written as `"line:column"` with both numbers zero-based. This is how a rule targets one specific expression, for example the node under a cursor or the one a diff hunk names, rather than a region.
+
+```scheme
+((call_expression) @c (#range? @c "3:4" "3:23"))
+```
+
+In YAML this is `range: {start: {line: 3, column: 4}, end: {line: 3, column: 23}}`.
+
+### Constraining a placeholder: `#pattern?` with pairs
+
+A pattern's `$A` placeholders match any subtree. Trailing pairs of `PLACEHOLDER label` after the pattern string require each named placeholder to match a labelled pattern:
+
+```scheme
+[(identifier)] @name
+
+((call_expression) @c (#pattern? @c "$A.len()" A name))
+```
+
+Now `$A` must be a bare identifier, so `foo().len()` no longer matches. In YAML this is `pattern: $A.len()` with `constraints: {A: {kind: identifier}}`.
+
+Constraints are keyed by placeholder name across the whole file. Binding the same placeholder to two different labels in two patterns is an error:
+
+| what you wrote | message |
+| --- | --- |
+| `(#nth-child? @a "x")` | `BadPosition("x")` |
+| `(#range? @c "1:0" "nope")` | `BadPosition("nope")` |
+| `$A` bound to `@s` in one pattern and `@i` in another | `ConstraintConflict { metavariable: "A", first: "s", second: "i" }` |
