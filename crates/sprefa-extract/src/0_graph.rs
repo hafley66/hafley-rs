@@ -154,10 +154,11 @@ pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::e
     let mut args = arguments.collect::<Vec<_>>().into_iter();
     let mut caller_name = None;
     let mut paths = Vec::new();
+    let mut json = false;
     while let Some(argument) = args.next() {
         match argument.as_str() {
             "--callers" => caller_name = args.next(),
-            "--json" => {}
+            "--json" => json = true,
             _ if argument.starts_with('-') => {
                 return Err(format!("unknown graph argument {argument}").into())
             }
@@ -172,6 +173,8 @@ pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::e
     let cx = GraphCx::load(&paths, ResolveArms { call: true, ..ResolveArms::default() })?;
     let edges = run_callers(&cx, &caller_name);
     emit_edges(&edges)?;
-    emit_summary_line(&edges);
+    if !json {
+        emit_summary_line(&edges);
+    }
     Ok(())
 }
