@@ -8,10 +8,11 @@
 //! # Plan
 //!
 //! ```text
-//! pub struct ScmProgram { rule: AstRule, utils: Vec<NamedAstRule> }
+//! pub struct ScmProgram { rule: AstRule, utils: Vec<NamedAstRule>,
+//!                         constraints: Vec<NamedAstRule> }
 //! pub enum ScmLowerError { Syntax, UnknownPredicate, PredicateArity,
 //!                          UnboundReference, DuplicateLabel, UnknownStopBy,
-//!                          FocusConflict }
+//!                          FocusConflict, BadPosition, ConstraintConflict }
 //! pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError>
 //! ```
 //!
@@ -29,6 +30,9 @@
 //! 6. Inside one definition, dispatch each `predicate` by name. Every predicate
 //!    names the capture it constrains; that capture's host node is the rule's
 //!    root, because an ast-grep rule reports exactly one node per match.
+//! 7. `#pattern?` may trail `METAVAR label` pairs; each becomes a `constraints`
+//!    entry, which ast-grep keys per config, so one metavariable name bound to
+//!    two different labels across the file is `ConstraintConflict`.
 //!
 //! # What the surface carries that `AstRule` cannot
 //!
@@ -51,6 +55,8 @@ use crate::lang::ast_rule::{AstRule, NamedAstRule, StopBy};
 pub struct ScmProgram {
     pub rule: AstRule,
     pub utils: Vec<NamedAstRule>,
+    /// One rule per `$NAME` metavariable named by a `#pattern?` predicate.
+    pub constraints: Vec<NamedAstRule>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,6 +77,11 @@ pub enum ScmLowerError {
     /// Two predicates in one definition constraining two different captures.
     /// An ast-grep rule reports one node, so one definition has one root.
     FocusConflict { first: String, second: String },
+    /// A `#nth-child?` or `#range?` argument that is not a number, an `An+B`
+    /// form, or a `line:column` pair.
+    BadPosition(String),
+    /// One metavariable bound to two different labels by `#pattern?`.
+    ConstraintConflict { metavariable: String, first: String, second: String },
 }
 
 impl std::fmt::Display for ScmLowerError {
@@ -109,19 +120,20 @@ pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError> {
         }
     }
 
+    let mut constraints = Vec::new();
     let utils = labelled
         .into_iter()
         .map(|(id, definition)| {
             Ok(NamedAstRule {
                 id,
-                rule: lower_definition(definition, text, &labels)?,
+                rule: lower_definition(definition, text, &labels, &mut constraints)?,
             })
         })
         .collect::<Result<Vec<_>, ScmLowerError>>()?;
 
     let mut lowered = plain
         .into_iter()
-        .map(|definition| lower_definition(definition, text, &labels))
+        .map(|definition| lower_definition(definition, text, &labels, &mut constraints))
         .collect::<Result<Vec<_>, ScmLowerError>>()?;
     let rule = match lowered.len() {
         0 => AstRule::Any(
@@ -133,7 +145,11 @@ pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError> {
         1 => lowered.remove(0),
         _ => AstRule::Any(lowered),
     };
-    Ok(ScmProgram { rule, utils })
+    Ok(ScmProgram {
+        rule,
+        utils,
+        constraints,
+    })
 }
 
 /// The tree-sitter language for the `.scm` query surface. Its ABI is railed by
@@ -227,11 +243,12 @@ fn lower_definition(
     definition: Node<'_>,
     source: &str,
     labels: &BTreeSet<String>,
+    constraints: &mut Vec<NamedAstRule>,
 ) -> Result<AstRule, ScmLowerError> {
     let mut focus: Option<String> = None;
     let mut relations = Vec::new();
     for predicate in predicate_nodes(definition) {
-        let (capture, relation) = lower_predicate(predicate, source, labels)?;
+        let (capture, relation) = lower_predicate(predicate, source, labels, constraints)?;
         match &focus {
             Some(first) if *first != capture => {
                 return Err(ScmLowerError::FocusConflict {
@@ -313,6 +330,7 @@ fn lower_predicate(
     predicate: Node<'_>,
     source: &str,
     labels: &BTreeSet<String>,
+    constraints: &mut Vec<NamedAstRule>,
 ) -> Result<(String, AstRule), ScmLowerError> {
     let name = field_child(predicate, "name")
         .map(|node| source[node.byte_range()].to_string())
@@ -330,20 +348,27 @@ fn lower_predicate(
         }
         None => Vec::new(),
     };
-    // A relation takes a third argument naming where the search stops.
-    if !(2..=3).contains(&parameters.len()) {
-        return Err(ScmLowerError::PredicateArity {
-            operator,
-            got: parameters.len(),
-        });
-    }
-
     // `operator` above keeps the unpeeled spelling, so an unmapped `#not-foo?`
     // reports itself rather than `foo?`.
     let (name, negated) = match name.strip_prefix("not-") {
         Some(rest) => (rest.to_string(), true),
         None => (name, false),
     };
+    // A relation takes a third argument naming where the search stops;
+    // `#nth-child?` takes an optional label and an optional "reverse";
+    // `#range?` takes start and end; `#pattern?` trails metavariable pairs.
+    let arity_ok = match name.as_str() {
+        "nth-child" => (2..=4).contains(&parameters.len()),
+        "range" => parameters.len() == 3,
+        "pattern" => parameters.len() >= 2 && parameters.len() % 2 == 0,
+        _ => (2..=3).contains(&parameters.len()),
+    };
+    if !arity_ok {
+        return Err(ScmLowerError::PredicateArity {
+            operator,
+            got: parameters.len(),
+        });
+    }
     let negate = |rule: AstRule| match negated {
         true => AstRule::Not(Box::new(rule)),
         false => rule,
@@ -362,7 +387,45 @@ fn lower_predicate(
         "pattern" => {
             let focus = capture_argument(parameters[0], source)?;
             let pattern = string_argument(parameters[1], source)?;
+            for pair in parameters[2..].chunks(2) {
+                let metavariable = identifier_argument(pair[0], source)?;
+                let label = reference_argument(pair[1], source, labels)?;
+                bind_constraint(constraints, metavariable, label)?;
+            }
             return Ok((focus, negate(AstRule::Pattern(pattern))));
+        }
+        "nth-child" => {
+            let focus = capture_argument(parameters[0], source)?;
+            let position = position_argument(parameters[1], source)?;
+            let mut of_rule = None;
+            let mut reverse = false;
+            for node in &parameters[2..] {
+                match node.kind() {
+                    "string" => match string_argument(*node, source)?.as_str() {
+                        "reverse" => reverse = true,
+                        other => return Err(ScmLowerError::BadPosition(other.to_string())),
+                    },
+                    _ => {
+                        of_rule = Some(Box::new(AstRule::Matches(reference_argument(
+                            *node, source, labels,
+                        )?)))
+                    }
+                }
+            }
+            return Ok((
+                focus,
+                negate(AstRule::NthChild {
+                    position,
+                    of_rule,
+                    reverse,
+                }),
+            ));
+        }
+        "range" => {
+            let focus = capture_argument(parameters[0], source)?;
+            let start = point_argument(parameters[1], source)?;
+            let end = point_argument(parameters[2], source)?;
+            return Ok((focus, negate(AstRule::Range { start, end })));
         }
         _ => return Err(ScmLowerError::UnknownPredicate(operator)),
     };
@@ -396,6 +459,67 @@ fn capture_argument(node: Node<'_>, source: &str) -> Result<String, ScmLowerErro
     }
     capture_name(node, source)
         .ok_or_else(|| ScmLowerError::UnboundReference(source[node.byte_range()].to_string()))
+}
+
+/// The same metavariable may repeat with the same label; a second label is a
+/// conflict, because ast-grep keys constraints per config, not per rule.
+fn bind_constraint(
+    constraints: &mut Vec<NamedAstRule>,
+    metavariable: String,
+    label: String,
+) -> Result<(), ScmLowerError> {
+    let rule = AstRule::Matches(label.clone());
+    match constraints.iter().find(|named| named.id == metavariable) {
+        Some(named) if named.rule == rule => Ok(()),
+        Some(named) => Err(ScmLowerError::ConstraintConflict {
+            metavariable,
+            first: match &named.rule {
+                AstRule::Matches(first) => first.clone(),
+                _ => unreachable!("constraints hold only Matches"),
+            },
+            second: label,
+        }),
+        None => {
+            constraints.push(NamedAstRule {
+                id: metavariable,
+                rule,
+            });
+            Ok(())
+        }
+    }
+}
+
+fn identifier_argument(node: Node<'_>, source: &str) -> Result<String, ScmLowerError> {
+    if node.kind() != "identifier" {
+        return Err(ScmLowerError::UnboundReference(
+            source[node.byte_range()].to_string(),
+        ));
+    }
+    Ok(source[node.byte_range()].to_string())
+}
+
+/// A quoted number or `An+B` form. The grammar has no number token, so the
+/// position is always a string.
+fn position_argument(node: Node<'_>, source: &str) -> Result<String, ScmLowerError> {
+    let text = string_argument(node, source)?;
+    let compact: String = text.chars().filter(|c| !c.is_whitespace()).collect();
+    let an_b = !compact.is_empty()
+        && compact
+            .chars()
+            .all(|c| c.is_ascii_digit() || matches!(c, 'n' | 'N' | '+' | '-'));
+    if !an_b {
+        return Err(ScmLowerError::BadPosition(text));
+    }
+    Ok(compact)
+}
+
+/// A `"line:column"` string, both zero-based.
+fn point_argument(node: Node<'_>, source: &str) -> Result<(u32, u32), ScmLowerError> {
+    let text = string_argument(node, source)?;
+    let parsed = text
+        .split_once(':')
+        .and_then(|(line, column)| Some((line.trim().parse().ok()?, column.trim().parse().ok()?)));
+    parsed.ok_or(ScmLowerError::BadPosition(text))
 }
 
 fn reference_argument(

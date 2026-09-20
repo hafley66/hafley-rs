@@ -28,14 +28,17 @@ fn wrapped(n: &str) -> bool {
 }
 "#;
 
-/// Four labelled patterns become `utils`; the unlabelled one becomes the rule.
+/// Seven labelled patterns become `utils`; the unlabelled one becomes the rule.
 /// Alternation, field selectors, a negated field, all four relations, both
-/// negated forms, and the regex both ways, in one query on one capture.
+/// negated forms, the regex both ways, the sibling position, the line window,
+/// and a metavariable constraint, in one query on one capture.
 const SCM: &str = r#"[(closure_expression)] @closure
 [(function_item) (impl_item)] @scope
 [(let_declaration)] @decl
 [(field_expression)] @receiver
 [(let_declaration)] @neighbor
+[(call_expression)] @call
+[(identifier)] @ident
 
 ((call_expression
    function: (field_expression !arguments field: (field_identifier) @name)) @m
@@ -47,10 +50,13 @@ const SCM: &str = r#"[(closure_expression)] @closure
  (#not-precedes? @m decl)
  (#match? @m "contains")
  (#not-match? @m "is_empty")
- (#pattern? @m "$R.contains($A)")
+ (#pattern? @m "$R.contains($A)" R ident)
  (#inside? @m scope receiver)
  (#has? @m receiver "neighbor")
- (#follows? @m neighbor "end"))
+ (#follows? @m neighbor "end")
+ (#nth-child? @m "1" call "reverse")
+ (#not-nth-child? @m "2n")
+ (#range? @m "3:4" "3:23"))
 "#;
 
 /// One input per `ScmLowerError` variant the surface can produce. A query either
@@ -65,12 +71,15 @@ const REFUSALS: &[&str] = &[
     "(function_item) @dup\n\n(let_declaration) @dup",
     "(block) @s\n\n((let_declaration (identifier) @a) (identifier) @b (#inside? @a s) (#inside? @b s))",
     "(block) @s\n\n((identifier) @m (#inside? @m s \"bogus\"))",
+    "((identifier) @m (#nth-child? @m \"x\"))",
+    "((identifier) @m (#range? @m \"1:0\" \"nope\"))",
+    "(block) @s\n(identifier) @i\n\n((call_expression) @m (#pattern? @m \"$A\" A s) (#pattern? @m \"$A.b\" A i))",
 ];
 
 /// Declaration order in `src/lang/1_ast_rule.rs`.
 const AST_RULE_VARIANTS: &[&str] = &[
     "Pattern", "Kind", "Regex", "Matches", "All", "Any", "Not", "Inside", "Has", "Follows",
-    "Precedes",
+    "Precedes", "NthChild", "Range",
 ];
 
 const STOP_BY_VARIANTS: &[&str] = &["End", "Rule"];
@@ -78,7 +87,7 @@ const STOP_BY_VARIANTS: &[&str] = &["End", "Rule"];
 /// Declaration order in `src/lang/5_scm_lower.rs`.
 const ERROR_VARIANTS: &[&str] = &[
     "Syntax", "UnknownPredicate", "PredicateArity", "UnboundReference", "DuplicateLabel",
-    "UnknownStopBy", "FocusConflict",
+    "UnknownStopBy", "FocusConflict", "BadPosition", "ConstraintConflict",
 ];
 
 /// Variant names a lowered rule uses, appended in tree order.
@@ -95,6 +104,12 @@ fn walk(rule: &AstRule, rules: &mut Vec<&'static str>, stops: &mut Vec<&'static 
         AstRule::Has { rule, stop_by } => ("Has", vec![rule.as_ref()], stop_by.as_ref()),
         AstRule::Follows { rule, stop_by } => ("Follows", vec![rule.as_ref()], stop_by.as_ref()),
         AstRule::Precedes { rule, stop_by } => ("Precedes", vec![rule.as_ref()], stop_by.as_ref()),
+        AstRule::NthChild { of_rule, .. } => (
+            "NthChild",
+            of_rule.iter().map(|rule| rule.as_ref()).collect(),
+            None,
+        ),
+        AstRule::Range { .. } => ("Range", Vec::new(), None),
     };
     rules.push(name);
     match stop {
@@ -119,6 +134,8 @@ fn error_variant(error: &ScmLowerError) -> &'static str {
         ScmLowerError::DuplicateLabel(_) => "DuplicateLabel",
         ScmLowerError::UnknownStopBy(_) => "UnknownStopBy",
         ScmLowerError::FocusConflict { .. } => "FocusConflict",
+        ScmLowerError::BadPosition(_) => "BadPosition",
+        ScmLowerError::ConstraintConflict { .. } => "ConstraintConflict",
     }
 }
 
@@ -148,12 +165,16 @@ fn scm_lowering() {
     for util in &program.utils {
         walk(&util.rule, &mut rules, &mut stops);
     }
+    for constraint in &program.constraints {
+        walk(&constraint.rule, &mut rules, &mut stops);
+    }
 
     let utils: Vec<&String> = program.utils.iter().map(|util| &util.id).collect();
     let request = AstRuleRequest {
         id: "maximal".into(),
         rule: program.rule.clone(),
         utils: program.utils.clone(),
+        constraints: program.constraints.clone(),
         fix: None,
     };
     let rows = query_ast_rule("probe.rs", SRC.as_bytes(), &request)
@@ -191,6 +212,7 @@ fn scm_lowering() {
                 id: "bogus".into(),
                 rule: program.rule,
                 utils: program.utils,
+                constraints: program.constraints,
                 fix: None,
             };
             match query_ast_rule(path, b"x", &request) {
@@ -202,6 +224,7 @@ fn scm_lowering() {
 
     let actual = [
         format!("utils: {utils:?}"),
+        format!("constraints: {:?}", program.constraints),
         format!("rule: {:?}", program.rule),
         format!("matches: {}", rows.len()),
         format!("texts: {texts:?}"),

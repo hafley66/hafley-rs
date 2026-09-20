@@ -46,6 +46,18 @@ pub enum AstRule {
         #[serde(skip_serializing_if = "Option::is_none")]
         stop_by: Option<StopBy>,
     },
+    /// The node's index among its siblings. `position` is 1-based or a CSS
+    /// `An+B` form; `of_rule` counts only siblings matching it; `reverse`
+    /// counts from the last sibling.
+    NthChild {
+        position: String,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        of_rule: Option<Box<AstRule>>,
+        reverse: bool,
+    },
+    /// The node starts and ends at exactly these zero-based `(line, column)`
+    /// points.
+    Range { start: (u32, u32), end: (u32, u32) },
 }
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -61,6 +73,9 @@ pub struct AstRuleRequest {
     pub rule: AstRule,
     #[serde(default)]
     pub utils: Vec<NamedAstRule>,
+    /// A rule each `$NAME` metavariable of a `pattern` must satisfy.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub constraints: Vec<NamedAstRule>,
     pub fix: Option<String>,
 }
 
@@ -219,6 +234,19 @@ fn decode_request_value(value: serde_yaml::Value) -> Result<AstRuleRequest, Stri
         Some(_) => return Err("utils must be a mapping of name to rule".into()),
         None => Vec::new(),
     };
+    let constraints = match map.remove(&serde_yaml::Value::String("constraints".into())) {
+        Some(serde_yaml::Value::Mapping(constraints)) => constraints
+            .into_iter()
+            .map(|(id, rule)| {
+                Ok(NamedAstRule {
+                    id: yaml_string(id)?,
+                    rule: decode_rule(rule)?,
+                })
+            })
+            .collect::<Result<Vec<_>, String>>()?,
+        Some(_) => return Err("constraints must be a mapping of metavariable to rule".into()),
+        None => Vec::new(),
+    };
     if let Some((field, _)) = map.into_iter().next() {
         return Err(format!(
             "unsupported ast-rule YAML field {}",
@@ -229,6 +257,7 @@ fn decode_request_value(value: serde_yaml::Value) -> Result<AstRuleRequest, Stri
         id,
         rule,
         utils,
+        constraints,
         fix,
     })
 }
@@ -252,8 +281,71 @@ fn decode_rule(value: serde_yaml::Value) -> Result<AstRule, String> {
         "has" => relation_rule(value, |rule, stop_by| AstRule::Has { rule, stop_by }),
         "follows" => relation_rule(value, |rule, stop_by| AstRule::Follows { rule, stop_by }),
         "precedes" => relation_rule(value, |rule, stop_by| AstRule::Precedes { rule, stop_by }),
+        "nthChild" => nth_child_rule(value),
+        "range" => range_rule(value),
         _ => Err(format!("unknown ast-rule operator {operator}")),
     }
+}
+
+/// `nthChild: 2`, `nthChild: "2n+1"`, or the object form with `ofRule` and
+/// `reverse`.
+fn nth_child_rule(value: serde_yaml::Value) -> Result<AstRule, String> {
+    let mut map = match value {
+        serde_yaml::Value::Mapping(map) => map,
+        other => {
+            return Ok(AstRule::NthChild {
+                position: yaml_position(other)?,
+                of_rule: None,
+                reverse: false,
+            })
+        }
+    };
+    let position = yaml_position(take_yaml(&mut map, "position")?)?;
+    let of_rule = match map.remove(&serde_yaml::Value::String("ofRule".into())) {
+        Some(rule) => Some(Box::new(decode_rule(rule)?)),
+        None => None,
+    };
+    let reverse = match map.remove(&serde_yaml::Value::String("reverse".into())) {
+        Some(serde_yaml::Value::Bool(reverse)) => reverse,
+        Some(_) => return Err("nthChild reverse must be a boolean".into()),
+        None => false,
+    };
+    Ok(AstRule::NthChild {
+        position,
+        of_rule,
+        reverse,
+    })
+}
+
+fn yaml_position(value: serde_yaml::Value) -> Result<String, String> {
+    match value {
+        serde_yaml::Value::Number(number) => Ok(number.to_string()),
+        serde_yaml::Value::String(text) => Ok(text),
+        _ => Err("nthChild position must be a number or An+B string".into()),
+    }
+}
+
+/// `range: {start: {line, column}, end: {line, column}}`, zero-based.
+fn range_rule(value: serde_yaml::Value) -> Result<AstRule, String> {
+    let mut map = yaml_map(value)?;
+    let start = yaml_point(take_yaml(&mut map, "start")?)?;
+    let end = yaml_point(take_yaml(&mut map, "end")?)?;
+    Ok(AstRule::Range { start, end })
+}
+
+fn yaml_point(value: serde_yaml::Value) -> Result<(u32, u32), String> {
+    let mut map = yaml_map(value)?;
+    let number = |value: serde_yaml::Value| match value {
+        serde_yaml::Value::Number(number) => number
+            .as_u64()
+            .map(|number| number as u32)
+            .ok_or_else(|| "range line and column are unsigned".to_string()),
+        _ => Err("range line and column are numbers".into()),
+    };
+    Ok((
+        number(take_yaml(&mut map, "line")?)?,
+        number(take_yaml(&mut map, "column")?)?,
+    ))
 }
 
 fn relation_rule(
@@ -321,6 +413,12 @@ pub fn query_ast_rule_with_content(
     unknown_kind(&request.rule, language)
         .into_iter()
         .chain(request.utils.iter().flat_map(|named| unknown_kind(&named.rule, language)))
+        .chain(
+            request
+                .constraints
+                .iter()
+                .flat_map(|named| unknown_kind(&named.rule, language)),
+        )
         .next()
         .map_or(Ok(()), Err)?;
     let config_yaml = serde_yaml::to_string(&ConfigWire::from_request(request, language))
@@ -428,6 +526,8 @@ struct ConfigWire {
     language: RyiLang,
     rule: RuleWire,
     utils: BTreeMap<String, RuleWire>,
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    constraints: BTreeMap<String, RuleWire>,
     fix: Option<String>,
 }
 #[derive(Serialize)]
@@ -444,6 +544,11 @@ impl ConfigWire {
             rule: rule_wire(&request.rule),
             utils: request
                 .utils
+                .iter()
+                .map(|rule| (rule.id.clone(), rule_wire(&rule.rule)))
+                .collect(),
+            constraints: request
+                .constraints
                 .iter()
                 .map(|rule| (rule.id.clone(), rule_wire(&rule.rule)))
                 .collect(),
@@ -475,6 +580,31 @@ fn rule_wire(rule: &AstRule) -> RuleWire {
         Has { rule, stop_by } => relation(&mut map, "has", rule, stop_by),
         Follows { rule, stop_by } => relation(&mut map, "follows", rule, stop_by),
         Precedes { rule, stop_by } => relation(&mut map, "precedes", rule, stop_by),
+        NthChild {
+            position,
+            of_rule,
+            reverse,
+        } => {
+            let mut inner = BTreeMap::new();
+            put(&mut inner, "position", position);
+            if let Some(of_rule) = of_rule {
+                put(&mut inner, "ofRule", &rule_wire(of_rule));
+            }
+            put(&mut inner, "reverse", reverse);
+            put(&mut map, "nthChild", &RuleWire::Map(inner));
+        }
+        Range { start, end } => {
+            let point = |(line, column): &(u32, u32)| {
+                let mut point = BTreeMap::new();
+                put(&mut point, "line", line);
+                put(&mut point, "column", column);
+                point
+            };
+            let mut inner = BTreeMap::new();
+            put(&mut inner, "start", &point(start));
+            put(&mut inner, "end", &point(end));
+            put(&mut map, "range", &RuleWire::Map(inner));
+        }
     }
     RuleWire::Map(map)
 }
@@ -511,6 +641,10 @@ fn unknown_kind(rule: &AstRule, language: RyiLang) -> Option<AstRuleError> {
             Some(StopBy::Rule(stop)) => vec![rule.as_ref(), stop.as_ref()],
             _ => vec![rule.as_ref()],
         },
+        AstRule::NthChild {
+            of_rule: Some(of_rule),
+            ..
+        } => vec![of_rule.as_ref()],
         _ => Vec::new(),
     };
     children
