@@ -245,7 +245,10 @@ impl Door for CodexDoor {
             program: spec.executable.clone(),
             args: native_tui_args(requested_thread.as_deref(), &frontend, &spec.cwd, forwarded),
             mode: "native-owned".into(),
-            session_id: None,
+            // An explicit resume already names the selected conversation.
+            // Publish it before the TUI's first app-server response so route
+            // readers can attribute the revived pane immediately.
+            session_id: requested_thread.clone(),
             source_path: Some(format!("owned-app-server={socket}")),
             app_server_socket: Some(socket.clone()),
             observer: None,
@@ -1162,6 +1165,32 @@ mod tests {
         let (parsed, forwarded) = explicit_resume(&resume).unwrap();
         assert_eq!(parsed.as_deref(), Some(thread));
         assert!(forwarded.is_empty());
+    }
+
+    /// A revived route must name its old thread before the TUI sends any
+    /// app-server response. Instant reads this route to attribute pane rows.
+    #[test]
+    fn explicit_resume_seeds_the_native_plan_session() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let fixture = tempfile::tempdir().unwrap();
+        let backend = fixture.path().join("fake-codex");
+        std::fs::write(
+            &backend,
+            "#!/bin/sh\nexec /usr/bin/python3 -c 'import socket,sys,time; p=sys.argv[1].removeprefix(\"unix://\"); s=socket.socket(socket.AF_UNIX); s.bind(p); s.listen(); time.sleep(30)' \"$3\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(&backend, std::fs::Permissions::from_mode(0o700)).unwrap();
+        let thread = "019ffb9b-51cb-7e92-be44-4eb469f46d95";
+        let spec = NativeTuiSpec {
+            executable: backend.display().to_string(),
+            cwd: fixture.path().to_path_buf(),
+            args: vec!["resume".into(), thread.into()],
+            env: vec![],
+        };
+
+        let plan = CodexDoor::machine().tui_launch(&spec).unwrap();
+        assert_eq!(plan.session_id.as_deref(), Some(thread));
     }
 
     #[test]
