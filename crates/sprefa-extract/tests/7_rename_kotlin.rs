@@ -153,9 +153,10 @@ fn wildcard_importer_is_a_dynamic_stop() {
     let text = std::fs::read_to_string(tree("wildcard", "before").join(importer))
         .expect("wildcard fixture text");
     let import_offset = text.find("import a.*").expect("wildcard in fixture");
+    let import_line = text[..import_offset].matches('\n').count() + 1;
     assert!(
-        stderr.contains(&format!("{importer} byte {import_offset}")),
-        "the stop names the import header's own offset:\n{stderr}"
+        stderr.contains(&format!("{importer}:{import_line}: ")),
+        "the stop names the import header's line:\n{stderr}"
     );
     assert!(
         stderr.contains("wildcard import"),

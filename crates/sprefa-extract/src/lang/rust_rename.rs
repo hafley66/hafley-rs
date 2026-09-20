@@ -47,6 +47,8 @@ impl Rename for RustSource {
                 .map(|seat| SymbolSeat {
                     file: seat.file.clone(),
                     span: seat.span,
+                    line: seat.line,
+                    reaches: seat.reaches.clone(),
                     form: seat.form,
                 })
                 .collect();
@@ -99,9 +101,13 @@ impl Rename for RustSource {
         let mut seats: Vec<SymbolSeat> = Vec::new();
         for (rel, scan) in &corpus.scans {
             let anchored = (rel == &request.anchor).then_some(declaration);
+            let line_starts = cx
+                .text(rel)
+                .map(|text| build_line_starts(&text))
+                .unwrap_or_default();
             corpus.harvest(
-                rel, scan, &nameable, &reexports, anchored, &declaration.kind, &anchor_module,
-                request, &mut refs, &mut seats,
+                rel, scan, &line_starts, &nameable, &reexports, anchored, &declaration.kind,
+                &anchor_module, request, &mut refs, &mut seats,
             );
         }
         if let Some(stop) = corpus.inexact(&refs) {
@@ -411,6 +417,7 @@ impl Corpus {
         &self,
         rel: &str,
         scan: &FileScan,
+        line_starts: &[u32],
         nameable: &BTreeSet<ModuleId>,
         reexports: &BTreeMap<String, BTreeSet<Vec<String>>>,
         anchored: Option<&Decl>,
@@ -559,6 +566,8 @@ impl Corpus {
                 seats.push(SymbolSeat {
                     file: rel.to_string(),
                     span: *span,
+                    line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                    reaches: String::new(),
                     form: "glob import",
                 });
             }
@@ -579,6 +588,8 @@ impl Corpus {
                     FieldSite::Access { span, ty: None, .. } => seats.push(SymbolSeat {
                         file: rel.to_string(),
                         span: *span,
+                        line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                        reaches: String::new(),
                         form: "untyped field",
                     }),
                     FieldSite::Owner { span, chain, prefix, owner: site_owner, pattern, .. }
@@ -633,6 +644,8 @@ impl Corpus {
                 seats.push(SymbolSeat {
                     file: rel.to_string(),
                     span: *span,
+                    line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                    reaches: String::new(),
                     form: "glob import",
                 });
             }
@@ -651,6 +664,9 @@ impl Corpus {
                     seats.push(SymbolSeat {
                         file: rel.to_string(),
                         span: token.span,
+                        line: line_starts.partition_point(|start| *start <= token.span.start)
+                            as u32,
+                        reaches: String::new(),
                         form: "macro body",
                     });
                 }
@@ -681,6 +697,8 @@ impl Corpus {
                 seats.push(SymbolSeat {
                     file: rel.to_string(),
                     span: *span,
+                    line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                    reaches: String::new(),
                     form: "glob import",
                 });
             }
@@ -1956,7 +1974,7 @@ fn path_module_table(
     cx: &RenameCx,
     roots: &BTreeSet<String>,
 ) -> (BTreeMap<String, ModuleId>, Vec<SymbolSeat>) {
-    let mut named: BTreeMap<String, Vec<(String, Span, ModuleId)>> = BTreeMap::new();
+    let mut named: BTreeMap<String, Vec<(String, Span, u32, ModuleId)>> = BTreeMap::new();
     for rel in cx.files_of(&RustSource) {
         let Some(text) = cx.text(rel) else {
             continue;
@@ -1976,14 +1994,16 @@ fn path_module_table(
     let mut stops = Vec::new();
     for (file, attrs) in named {
         match attrs.as_slice() {
-            [(_, _, module)] => {
+            [(_, _, _, module)] => {
                 mods.insert(file, module.clone());
             }
             many => {
-                for (rel, span, _) in many {
+                for (rel, span, line, _) in many {
                     stops.push(SymbolSeat {
                         file: rel.clone(),
                         span: *span,
+                        line: *line,
+                        reaches: file.clone(),
                         form: "path attr twice",
                     });
                 }
@@ -2005,7 +2025,7 @@ fn path_decls(
     home: &ModuleId,
     roots: &BTreeSet<String>,
     line_starts: &[u32],
-    out: &mut BTreeMap<String, Vec<(String, Span, ModuleId)>>,
+    out: &mut BTreeMap<String, Vec<(String, Span, u32, ModuleId)>>,
 ) {
     let mut dir = module_dir(rel, roots);
     for segment in chain {
@@ -2023,9 +2043,10 @@ fn path_decls(
                 target.push(decl.ident.to_string());
                 let root = owning_root(rel, roots).unwrap_or_else(|| rel.to_string());
                 for (span, value) in path_attrs(&decl.attrs, line_starts) {
+                    let line = line_starts.partition_point(|start| *start <= span.start) as u32;
                     out.entry(join_rel(&dir, &value))
                         .or_default()
-                        .push((rel.to_string(), span, (root.clone(), target.clone())));
+                        .push((rel.to_string(), span, line, (root.clone(), target.clone())));
                 }
             }
             Some((_, inner)) => {

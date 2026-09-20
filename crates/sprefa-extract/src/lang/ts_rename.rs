@@ -19,6 +19,7 @@ use oxc_span::GetSpan;
 use oxc_syntax::reference::Reference;
 use oxc_syntax::symbol::SymbolId;
 
+use crate::lang::rust::build_line_starts;
 use crate::lang::ts::{OxcParser, TsSource};
 use crate::move_cx::MoveCx;
 use crate::rename_cx::{RenameCx, RenameRequest};
@@ -86,7 +87,8 @@ impl Rename for TsSource {
             return Err(ambiguous(request, sites));
         }
 
-        let seats = dynamic_seats(&program, &request.anchor, &request.old);
+        let line_starts = build_line_starts(&text);
+        let seats = dynamic_seats(&program, &line_starts, &request.anchor, &request.old);
         if !seats.is_empty() {
             return Err(RenameStop::Dynamic(seats));
         }
@@ -413,7 +415,12 @@ type DynamicSeat = (oxc_span::Span, &'static str);
 
 /// Every seat in the anchor, earliest first. Importers are outside this scan: a
 /// property named `old` on any object anywhere would stop every run.
-fn dynamic_seats(program: &Program<'_>, file: &str, old: &str) -> Vec<SymbolSeat> {
+fn dynamic_seats(
+    program: &Program<'_>,
+    line_starts: &[u32],
+    file: &str,
+    old: &str,
+) -> Vec<SymbolSeat> {
     let mut scan = DynamicScan {
         old,
         seats: Vec::new(),
@@ -426,6 +433,8 @@ fn dynamic_seats(program: &Program<'_>, file: &str, old: &str) -> Vec<SymbolSeat
         .map(|(span, form)| SymbolSeat {
             file: file.to_string(),
             span: to_span(span),
+            line: line_starts.partition_point(|start| *start <= span.start) as u32,
+            reaches: String::new(),
             form,
         })
         .collect()

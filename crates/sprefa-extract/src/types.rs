@@ -2906,6 +2906,10 @@ pub enum RefRole {
 pub struct SymbolSeat {
     pub file: String,
     pub span: Span,
+    /// One-based, resolved at construction against the file's line table.
+    pub line: u32,
+    /// The file this route reaches, when the seat is about a route. Empty otherwise.
+    pub reaches: String,
     pub form: &'static str,
 }
 
@@ -2953,11 +2957,15 @@ impl fmt::Display for RenameStop {
             RenameStop::Dynamic(seats) => {
                 let lines: Vec<String> = seats
                     .iter()
-                    .map(|seat| {
-                        format!(
-                            "{} byte {}: {} reaches the symbol at runtime",
-                            seat.file, seat.span.start, seat.form
-                        )
+                    .map(|seat| match seat.reaches.is_empty() {
+                        true => format!(
+                            "{}:{}: {} reaches the symbol at runtime",
+                            seat.file, seat.line, seat.form
+                        ),
+                        false => format!(
+                            "{}:{}: {} reaches {} at runtime",
+                            seat.file, seat.line, seat.form, seat.reaches
+                        ),
                     })
                     .collect();
                 formatter.write_str(&lines.join("\n"))

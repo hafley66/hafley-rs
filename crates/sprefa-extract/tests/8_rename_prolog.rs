@@ -150,9 +150,10 @@ fn variable_functor_is_a_dynamic_stop() {
     let goal_offset = text
         .find("Goal =.. [helper, Input, Output]")
         .expect("the =.. goal is in the fixture");
+    let goal_line = text[..goal_offset].matches('\n').count() + 1;
     assert!(
-        stderr.contains(&format!("main.pl byte {goal_offset}")),
-        "the stop names the goal's own offset:\n{stderr}"
+        stderr.contains(&format!("main.pl:{goal_line}: ")),
+        "the stop names the goal's line:\n{stderr}"
     );
     let entries = diff_rq(&fixture.root, &tree("dynamic", "before"));
     assert!(

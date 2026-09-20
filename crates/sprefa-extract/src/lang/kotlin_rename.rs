@@ -27,6 +27,7 @@ use std::collections::BTreeMap;
 
 use super::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
 use super::KotlinSource;
+use super::rust::build_line_starts;
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::types::{RefRole, Rename, RenameStop, Respell, Span, SymbolRef, SymbolSeat};
 
@@ -67,7 +68,11 @@ impl Rename for KotlinSource {
         };
         let mut stops: Vec<SymbolSeat> = Vec::new();
         for (rel, scan) in &corpus.scans {
-            harvest(rel, scan, request, &anchor, &mut refs, &mut stops);
+            let line_starts = cx
+                .text(rel)
+                .map(|text| build_line_starts(&text))
+                .unwrap_or_default();
+            harvest(rel, scan, &line_starts, request, &anchor, &mut refs, &mut stops);
         }
         if !stops.is_empty() {
             return Err(RenameStop::Dynamic(stops));
@@ -192,6 +197,7 @@ impl Corpus {
 fn harvest(
     rel: &str,
     scan: &FileScan,
+    line_starts: &[u32],
     request: &RenameRequest,
     anchor: &Anchor,
     refs: &mut Vec<SymbolRef>,
@@ -223,6 +229,8 @@ fn harvest(
         Some(item) if !binds && !shadowed && !imported && writes_bare => stops.push(SymbolSeat {
             file: rel.to_string(),
             span: item,
+            line: line_starts.partition_point(|start| *start <= item.start) as u32,
+            reaches: String::new(),
             form: "wildcard import",
         }),
         _ => {}
