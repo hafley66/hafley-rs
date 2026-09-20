@@ -46,6 +46,45 @@ pub fn watch<T: BulkTrigger>(db: &Connection, name: &str, tables: &[&str], trigg
 An UPDATE arrives as `Delete` of the old image then `Insert` of the new one.
 `on_batch` is not called for an empty batch.
 
+## Two paths over one state machine
+
+| path | who owns the virtual table and the triggers | entry |
+| --- | --- | --- |
+| standalone | this crate | `watch`, `Watch` |
+| embedded | the host, sqlite_ivm today | `Collector` |
+
+An embedded host forwards its own callbacks:
+
+| host callback | `Collector` |
+| --- | --- |
+| xBegin | `begin()` |
+| xUpdate | `update(&Connection, RowChange) -> Result<()>` |
+| xSavepoint | `savepoint(i32)` |
+| xRelease | `release(i32)` |
+| xRollbackTo | `rollback_to(i32)` |
+| xSync | `drain(&Connection) -> Result<Vec<RowChange>>` |
+| xCommit | `commit()` |
+| xRollback | `rollback()` |
+
+`Collector::new(name, width)` sizes the shadow table to the widest watched
+table; `create_shadow` and `drop_shadow` build and remove it. `update` stamps
+`sequence` from its own counter, so `RowChange::new` leaves the field at 0.
+`drain` merges the memory rows with the shadow table in sequence order and
+empties the shadow table.
+
+`vtab.rs` calls these same methods, so the standalone path adds the ABI and
+nothing else.
+
+## Dependency
+
+```toml
+rusqlite = { version = "=0.40.2", features = ["vtab"] }
+```
+
+No `bundled`. A host that builds a loadable extension links the SQLite it is
+loaded into, and a bundled copy in a dependency would link a second SQLite into
+the dylib. The crate's own tests carry `bundled` as a dev-dependency.
+
 ## Payload encoding: one column per source column
 
 The trigger body binds each source column to its own hidden column:

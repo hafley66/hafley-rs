@@ -31,5 +31,5 @@ mod collector;
 mod schema;
 mod vtab;
 
-pub use collector::{BulkTrigger, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS};
+pub use collector::{BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS};
 pub use vtab::{counts, watch, Watch};

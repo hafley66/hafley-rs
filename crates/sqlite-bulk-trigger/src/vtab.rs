@@ -1,5 +1,5 @@
 use crate::collector::{
-    merge, BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS,
+    BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS,
 };
 use crate::schema::{
     self, error, FIRST_VALUE_COLUMN, ROWID_ARGUMENTS, SIGN_COLUMN, SOURCE_COLUMN,
@@ -13,12 +13,22 @@ use std::{
     rc::Rc,
 };
 
+/// The state machine plus what only the standalone path needs: the consumer's
+/// callback and the column count of each watched table.
+struct Installed {
+    collector: Collector,
+    /// Taken out for the duration of `on_batch`, so a statement that re-enters
+    /// the collector from inside the callback finds no callback to run.
+    trigger: Option<Box<dyn BulkTrigger>>,
+    arity: HashMap<String, usize>,
+}
+
 /// A vtab is disconnected and reconnected whenever SQLite resets the schema,
 /// so the batch outlives the `Table` and lives here, keyed by connection.
 type Key = (usize, String);
 
 thread_local! {
-    static COLLECTORS: RefCell<HashMap<Key, Rc<RefCell<Collector>>>> =
+    static COLLECTORS: RefCell<HashMap<Key, Rc<RefCell<Installed>>>> =
         RefCell::new(HashMap::new());
 }
 
@@ -26,11 +36,11 @@ fn key(db: *mut ffi::sqlite3, name: &str) -> Key {
     (db as usize, name.to_string())
 }
 
-fn lookup(db: *mut ffi::sqlite3, name: &str) -> Option<Rc<RefCell<Collector>>> {
+fn lookup(db: *mut ffi::sqlite3, name: &str) -> Option<Rc<RefCell<Installed>>> {
     COLLECTORS.with(|map| map.borrow().get(&key(db, name)).cloned())
 }
 
-fn state_mut(state: &Rc<RefCell<Collector>>) -> Result<RefMut<'_, Collector>> {
+fn state_mut(state: &Rc<RefCell<Installed>>) -> Result<RefMut<'_, Installed>> {
     state
         .try_borrow_mut()
         .map_err(|_| error("the collector re-entered a callback while its state was borrowed"))
@@ -104,7 +114,10 @@ impl<'a> Watch<'a> {
         }
         let handle = unsafe { db.handle() };
         if lookup(handle, self.name).is_some() {
-            return Err(error(format!("collector {:?} is already installed", self.name)));
+            return Err(error(format!(
+                "collector {:?} is already installed",
+                self.name
+            )));
         }
         let mut arity = HashMap::new();
         let mut layout = Vec::new();
@@ -113,12 +126,14 @@ impl<'a> Watch<'a> {
             arity.insert((*table).to_string(), columns.len());
             layout.push(((*table).to_string(), columns));
         }
-        let state = Rc::new(RefCell::new(Collector::new(
-            Box::new(trigger),
+        let width = arity.values().copied().max().unwrap_or(0);
+        let state = Rc::new(RefCell::new(Installed {
+            collector: Collector::new(self.name, width)
+                .staged_rows(self.staged_rows)
+                .staged_bytes(self.staged_bytes),
+            trigger: Some(Box::new(trigger)),
             arity,
-            self.staged_rows.max(1),
-            self.staged_bytes.max(1),
-        )));
+        }));
         db.create_module(self.name, &MODULE, None::<()>)?;
         COLLECTORS.with(|map| map.borrow_mut().insert(key(handle, self.name), state.clone()));
         let built = self.build(db, &layout);
@@ -126,7 +141,7 @@ impl<'a> Watch<'a> {
             COLLECTORS.with(|map| map.borrow_mut().remove(&key(handle, self.name)));
         }
         built?;
-        state_mut(&state)?.counts = Counts::default();
+        state_mut(&state)?.collector.reset_counts();
         Ok(())
     }
 
@@ -146,7 +161,7 @@ impl<'a> Watch<'a> {
 /// Callback counts for the collector named `name` on this connection.
 pub fn counts(db: &Connection, name: &str) -> Option<Counts> {
     let state = lookup(unsafe { db.handle() }, name)?;
-    let counts = state.try_borrow().ok()?.counts;
+    let counts = state.try_borrow().ok()?.collector.counts();
     Some(counts)
 }
 
@@ -157,7 +172,7 @@ pub struct Table {
     name: String,
     width: usize,
     handle: *mut ffi::sqlite3,
-    state: Rc<RefCell<Collector>>,
+    state: Rc<RefCell<Installed>>,
 }
 
 impl Table {
@@ -176,13 +191,16 @@ impl Table {
         let handle = unsafe { db.handle() };
         let state = lookup(handle, &name)
             .ok_or_else(|| error(format!("collector {name:?} was not installed by watch()")))?;
-        let width = state.try_borrow().map_err(|_| error("collector busy"))?.width;
         let connection = unsafe { Connection::from_handle(handle)? };
-        if create {
-            connection.execute_batch(&schema::create_delta(&name, width))?;
-        }
-        let declaration = CString::new(schema::declaration(width))
-            .map_err(|e| error(e.to_string()))?;
+        let width = {
+            let installed = state.try_borrow().map_err(|_| error("collector busy"))?;
+            if create {
+                installed.collector.create_shadow(&connection)?;
+            }
+            installed.arity.values().copied().max().unwrap_or(0)
+        };
+        let declaration =
+            CString::new(schema::declaration(width)).map_err(|e| error(e.to_string()))?;
         Ok((
             Cow::Owned(declaration),
             Self {
@@ -196,72 +214,25 @@ impl Table {
         ))
     }
 
-    fn write_delta(&self, change: &RowChange) -> Result<()> {
-        let mut parameters = Vec::with_capacity(self.width + 4);
-        parameters.push(Value::Integer(change.sequence as i64));
-        parameters.push(Value::Text(change.table.clone()));
-        parameters.push(Value::Integer(change.sign.as_integer()));
-        parameters.push(Value::Integer(change.values.len() as i64));
-        parameters.extend(change.values.iter().cloned());
-        parameters.resize(self.width + 4, Value::Null);
-        self.db
-            .prepare_cached(&schema::insert_delta(&self.name, self.width))?
-            .execute(rusqlite::params_from_iter(parameters))?;
-        Ok(())
-    }
-
-    fn read_delta(&self) -> Result<Vec<RowChange>> {
-        let mut statement = self
-            .db
-            .prepare_cached(&schema::select_delta(&self.name, self.width))?;
-        let rows = statement
-            .query_map([], |row| {
-                let sequence: i64 = row.get(0)?;
-                let table: String = row.get(1)?;
-                let code: i64 = row.get(2)?;
-                let arity: i64 = row.get(3)?;
-                let sign = Sign::from_integer(code)
-                    .ok_or_else(|| error(format!("shadow row carries sign {code}")))?;
-                let values = (0..arity as usize)
-                    .map(|at| row.get::<_, Value>(4 + at))
-                    .collect::<Result<Vec<_>>>()?;
-                Ok(RowChange {
-                    table,
-                    sign,
-                    values,
-                    sequence: sequence as u64,
-                })
-            })?
-            .collect::<Result<Vec<_>>>()?;
-        Ok(rows)
-    }
-
     fn flush(&self) -> Result<()> {
-        let (staged, spilled) = state_mut(&self.state)?.drain_staged();
-        let batch = if spilled == 0 {
-            staged
-        } else {
-            merge(staged, self.read_delta()?)
+        let (batch, taken) = {
+            let mut installed = state_mut(&self.state)?;
+            let batch = installed.collector.drain(&self.db)?;
+            if batch.is_empty() {
+                return Ok(());
+            }
+            let taken = installed.trigger.take();
+            (batch, taken)
         };
-        if batch.is_empty() {
-            return Ok(());
-        }
-        let taken = state_mut(&self.state)?.trigger.take();
         let Some(mut trigger) = taken else {
             return Err(error("the collector callback re-entered its own flush"));
         };
         let delivered = trigger.on_batch(&self.db, &batch);
         match state_mut(&self.state) {
-            Ok(mut collector) => collector.trigger = Some(trigger),
+            Ok(mut installed) => installed.trigger = Some(trigger),
             Err(reason) => tracing::error!(%reason, "the collector could not take its trigger back"),
         }
-        delivered?;
-        if spilled != 0 {
-            self.db
-                .prepare_cached(&schema::delete_delta(&self.name))?
-                .execute([])?;
-        }
-        Ok(())
+        delivered
     }
 }
 
@@ -290,7 +261,7 @@ unsafe impl<'vtab> VTab<'vtab> for Table {
         let staged_rows = self
             .state
             .try_borrow()
-            .map(|collector| collector.staged.len() as i64)
+            .map(|installed| installed.collector.staged().len() as i64)
             .unwrap_or(-1);
         Ok(Cursor {
             base: ffi::sqlite3_vtab_cursor::default(),
@@ -315,16 +286,15 @@ impl<'vtab> CreateVTab<'vtab> for Table {
     }
 
     fn destroy(&self) -> Result<()> {
-        let watched = match self.state.try_borrow() {
-            Ok(collector) => collector.arity.keys().cloned().collect::<Vec<_>>(),
-            Err(_) => return Err(error("a collector cannot be dropped from inside a callback")),
-        };
+        let installed = self
+            .state
+            .try_borrow()
+            .map_err(|_| error("a collector cannot be dropped from inside a callback"))?;
+        let watched = installed.arity.keys().cloned().collect::<Vec<_>>();
         self.db
             .execute_batch(&schema::drop_triggers(&self.name, &watched))?;
-        self.db.execute_batch(&format!(
-            "DROP TABLE IF EXISTS main.{}",
-            schema::quote(&schema::delta_name(&self.name))
-        ))?;
+        installed.collector.drop_shadow(&self.db)?;
+        drop(installed);
         COLLECTORS.with(|map| map.borrow_mut().remove(&key(self.handle, &self.name)));
         Ok(())
     }
@@ -348,21 +318,17 @@ impl<'vtab> UpdateVTab<'vtab> for Table {
             let code: i64 = args.get(ROWID_ARGUMENTS + SIGN_COLUMN)?;
             let sign = Sign::from_integer(code)
                 .ok_or_else(|| error(format!("a trigger wrote sign {code}")))?;
-            let spill = {
-                let mut collector = state_mut(&self.state)?;
-                collector.counts.update += 1;
-                let arity = *collector
-                    .arity
-                    .get(&table)
-                    .ok_or_else(|| error(format!("{table:?} is not watched here")))?;
-                let values = (0..arity)
-                    .map(|at| args.get::<Value>(ROWID_ARGUMENTS + FIRST_VALUE_COLUMN + at))
-                    .collect::<Result<Vec<_>>>()?;
-                collector.admit(table, sign, values)
-            };
-            if let Some(change) = spill {
-                self.write_delta(&change)?;
-            }
+            let mut installed = state_mut(&self.state)?;
+            let arity = *installed
+                .arity
+                .get(&table)
+                .ok_or_else(|| error(format!("{table:?} is not watched here")))?;
+            let values = (0..arity)
+                .map(|at| args.get::<Value>(ROWID_ARGUMENTS + FIRST_VALUE_COLUMN + at))
+                .collect::<Result<Vec<_>>>()?;
+            installed
+                .collector
+                .update(&self.db, RowChange::new(table, sign, values))?;
             Ok(0)
         })
     }
@@ -371,7 +337,7 @@ impl<'vtab> UpdateVTab<'vtab> for Table {
 impl<'vtab> TransactionVTab<'vtab> for Table {
     fn begin(&mut self) -> Result<()> {
         guarded("xBegin", || {
-            state_mut(&self.state)?.begin();
+            state_mut(&self.state)?.collector.begin();
             Ok(())
         })
     }
@@ -380,23 +346,16 @@ impl<'vtab> TransactionVTab<'vtab> for Table {
         guarded("xSync", || self.flush())
     }
 
-    /// SQLite discards this return code, so a leftover batch is reported and
-    /// never raised.
     fn commit(&mut self) -> Result<()> {
         guarded("xCommit", || {
-            let mut collector = state_mut(&self.state)?;
-            collector.counts.commit += 1;
-            let (staged, spilled) = (collector.staged.len(), collector.spilled_rows());
-            if staged != 0 || spilled != 0 {
-                tracing::error!(staged, spilled, "the collector reached commit undrained");
-            }
+            state_mut(&self.state)?.collector.commit();
             Ok(())
         })
     }
 
     fn rollback(&mut self) -> Result<()> {
         guarded("xRollback", || {
-            state_mut(&self.state)?.rollback();
+            state_mut(&self.state)?.collector.rollback();
             Ok(())
         })
     }
@@ -419,14 +378,14 @@ fn dispatch(
 
 unsafe extern "C" fn savepoint(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
     dispatch(raw, "xSavepoint", |table| {
-        state_mut(&table.state)?.savepoint(index);
+        state_mut(&table.state)?.collector.savepoint(index);
         Ok(())
     })
 }
 
 unsafe extern "C" fn release(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
     dispatch(raw, "xRelease", |table| {
-        state_mut(&table.state)?.release(index);
+        state_mut(&table.state)?.collector.release(index);
         Ok(())
     })
 }
@@ -435,7 +394,7 @@ unsafe extern "C" fn release(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int
 /// already removed the spilled ones before this callback ran.
 unsafe extern "C" fn rollback_to(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
     dispatch(raw, "xRollbackTo", |table| {
-        state_mut(&table.state)?.rollback_to(index);
+        state_mut(&table.state)?.collector.rollback_to(index);
         Ok(())
     })
 }

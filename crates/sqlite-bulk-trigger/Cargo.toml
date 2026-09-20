@@ -7,6 +7,11 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 
+# No bundled SQLite here. A host that builds a loadable extension links the
+# SQLite it is loaded into, and a bundled copy in a dependency links a second.
 [dependencies]
-rusqlite = { version = "0.40", features = ["bundled", "vtab", "trace"] }
+rusqlite = { version = "=0.40.2", features = ["vtab"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+rusqlite = { version = "=0.40.2", features = ["bundled", "vtab"] }

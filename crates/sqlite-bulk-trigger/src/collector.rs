@@ -1,5 +1,5 @@
+use crate::schema;
 use rusqlite::{types::Value, Connection, Result};
-use std::{collections::HashMap, ffi::c_int};
 
 /// Rows held in memory before the collector spills to its shadow table.
 /// Protects the process from one transaction that inserts a whole file.
@@ -18,14 +18,14 @@ pub enum Sign {
 
 impl Sign {
     /// The integer a source trigger writes into the collector's `__sign` column.
-    pub(crate) const fn as_integer(self) -> i64 {
+    pub const fn as_integer(self) -> i64 {
         match self {
             Sign::Insert => 1,
             Sign::Delete => -1,
         }
     }
 
-    pub(crate) fn from_integer(value: i64) -> Option<Self> {
+    pub fn from_integer(value: i64) -> Option<Self> {
         match value {
             1 => Some(Sign::Insert),
             -1 => Some(Sign::Delete),
@@ -44,6 +44,18 @@ pub struct RowChange {
     /// Position within the transaction, monotone from 0. `ROLLBACK TO` restores
     /// the counter, so a delivered batch carries contiguous numbers.
     pub sequence: u64,
+}
+
+impl RowChange {
+    /// `sequence` is stamped by [`Collector::update`], so it starts at 0 here.
+    pub fn new(table: impl Into<String>, sign: Sign, values: Vec<Value>) -> Self {
+        Self {
+            table: table.into(),
+            sign,
+            values,
+            sequence: 0,
+        }
+    }
 }
 
 /// Called once per transaction at xSync with every surviving change in sequence
@@ -69,23 +81,30 @@ pub struct Counts {
 /// Position the collector returns to when SQLite rolls back to `savepoint`.
 #[derive(Clone, Copy, Debug)]
 struct Mark {
-    savepoint: c_int,
+    savepoint: i32,
     staged_len: usize,
     staged_bytes: usize,
     spilled_rows: usize,
     next_sequence: u64,
 }
 
-pub(crate) struct Collector {
-    /// Taken out for the duration of `on_batch`, so a statement that re-enters
-    /// the collector from inside the callback finds no borrow.
-    pub(crate) trigger: Option<Box<dyn BulkTrigger>>,
-    /// Column count per watched table, used to cut the trigger's padding off.
-    pub(crate) arity: HashMap<String, usize>,
-    /// Widest watched table, which is the count of `__value` columns.
-    pub(crate) width: usize,
-    pub(crate) counts: Counts,
-    pub(crate) staged: Vec<RowChange>,
+/// The batch state machine, with its own spill storage and no virtual table.
+///
+/// @comment-ok: the call order below is the type's whole contract.
+///
+/// A host that already owns a virtual table and its triggers forwards its
+/// callbacks here: [`begin`](Collector::begin) at xBegin,
+/// [`update`](Collector::update) per row at xUpdate,
+/// [`savepoint`](Collector::savepoint), [`release`](Collector::release) and
+/// [`rollback_to`](Collector::rollback_to) at the savepoint trio,
+/// [`drain`](Collector::drain) at xSync, then [`commit`](Collector::commit) or
+/// [`rollback`](Collector::rollback). [`watch`](crate::watch) is the standalone
+/// path over this same type.
+pub struct Collector {
+    name: String,
+    width: usize,
+    counts: Counts,
+    staged: Vec<RowChange>,
     staged_bytes: usize,
     spilled_rows: usize,
     marks: Vec<Mark>,
@@ -95,16 +114,11 @@ pub(crate) struct Collector {
 }
 
 impl Collector {
-    pub(crate) fn new(
-        trigger: Box<dyn BulkTrigger>,
-        arity: HashMap<String, usize>,
-        staged_row_cap: usize,
-        staged_byte_cap: usize,
-    ) -> Self {
-        let width = arity.values().copied().max().unwrap_or(0);
+    /// `width` is the widest watched table's column count, which sizes the
+    /// shadow table. A row wider than that is refused by [`Collector::update`].
+    pub fn new(name: impl Into<String>, width: usize) -> Self {
         Self {
-            trigger: Some(trigger),
-            arity,
+            name: name.into(),
             width,
             counts: Counts::default(),
             staged: Vec::new(),
@@ -112,29 +126,73 @@ impl Collector {
             spilled_rows: 0,
             marks: Vec::new(),
             next_sequence: 0,
-            staged_row_cap,
-            staged_byte_cap,
+            staged_row_cap: STAGED_ROWS,
+            staged_byte_cap: STAGED_BYTES,
         }
     }
 
-    pub(crate) fn spilled_rows(&self) -> usize {
+    pub fn staged_rows(mut self, rows: usize) -> Self {
+        self.staged_row_cap = rows.max(1);
+        self
+    }
+
+    pub fn staged_bytes(mut self, bytes: usize) -> Self {
+        self.staged_byte_cap = bytes.max(1);
+        self
+    }
+
+    /// Name of the shadow table spilled rows land in.
+    pub fn shadow_table(&self) -> String {
+        schema::delta_name(&self.name)
+    }
+
+    pub fn create_shadow(&self, db: &Connection) -> Result<()> {
+        db.execute_batch(&schema::create_delta(&self.name, self.width))
+    }
+
+    pub fn drop_shadow(&self, db: &Connection) -> Result<()> {
+        db.execute_batch(&format!(
+            "DROP TABLE IF EXISTS main.{}",
+            schema::quote(&self.shadow_table())
+        ))
+    }
+
+    pub fn counts(&self) -> Counts {
+        self.counts
+    }
+
+    pub fn reset_counts(&mut self) {
+        self.counts = Counts::default();
+    }
+
+    /// Rows of the open transaction still held in memory.
+    pub fn staged(&self) -> &[RowChange] {
+        &self.staged
+    }
+
+    /// Rows of the open transaction already written to the shadow table.
+    pub fn spilled_rows(&self) -> usize {
         self.spilled_rows
     }
 
-    /// Numbers the change and reports where it goes. `Some(change)` means the
-    /// caller must write it to the shadow table; the spill is already counted.
-    pub(crate) fn admit(
-        &mut self,
-        table: String,
-        sign: Sign,
-        values: Vec<Value>,
-    ) -> Option<RowChange> {
-        let change = RowChange {
-            table,
-            sign,
-            values,
-            sequence: self.next_sequence,
-        };
+    pub fn begin(&mut self) {
+        self.counts.begin += 1;
+        self.reset();
+    }
+
+    /// Numbers the change and either stages it or writes it to the shadow
+    /// table. The `sequence` the caller supplied is overwritten.
+    pub fn update(&mut self, db: &Connection, change: RowChange) -> Result<()> {
+        self.counts.update += 1;
+        if change.values.len() > self.width {
+            return Err(schema::error(format!(
+                "a {}-column row does not fit a collector of width {}",
+                change.values.len(),
+                self.width
+            )));
+        }
+        let mut change = change;
+        change.sequence = self.next_sequence;
         self.next_sequence += 1;
         let bytes = row_bytes(&change);
         let room = self.staged.len() < self.staged_row_cap
@@ -142,35 +200,13 @@ impl Collector {
         if room {
             self.staged_bytes += bytes;
             self.staged.push(change);
-            return None;
+            return Ok(());
         }
         self.spilled_rows += 1;
-        Some(change)
+        self.write_shadow(db, &change)
     }
 
-    pub(crate) fn begin(&mut self) {
-        self.counts.begin += 1;
-        self.reset();
-    }
-
-    pub(crate) fn rollback(&mut self) {
-        self.counts.rollback += 1;
-        self.reset();
-    }
-
-    /// Hands the memory half of the batch to the caller and clears transaction
-    /// state, so the shadow-table read and `on_batch` run with no borrow held.
-    pub(crate) fn drain_staged(&mut self) -> (Vec<RowChange>, usize) {
-        self.counts.sync += 1;
-        let staged = std::mem::take(&mut self.staged);
-        let spilled = self.spilled_rows;
-        self.staged_bytes = 0;
-        self.spilled_rows = 0;
-        self.marks.clear();
-        (staged, spilled)
-    }
-
-    pub(crate) fn savepoint(&mut self, savepoint: c_int) {
+    pub fn savepoint(&mut self, savepoint: i32) {
         self.counts.savepoint += 1;
         // SQLite numbers savepoints as a stack, so a repeat of an index retires
         // the older mark at that index.
@@ -185,14 +221,14 @@ impl Collector {
     }
 
     /// RELEASE invalidates the named savepoint and everything inside it.
-    pub(crate) fn release(&mut self, savepoint: c_int) {
+    pub fn release(&mut self, savepoint: i32) {
         self.counts.release += 1;
         self.marks.retain(|mark| mark.savepoint < savepoint);
     }
 
     /// ROLLBACK TO leaves the named savepoint open, so its mark survives. No
     /// mark at that index means the savepoint predates the first write here.
-    pub(crate) fn rollback_to(&mut self, savepoint: c_int) {
+    pub fn rollback_to(&mut self, savepoint: i32) {
         self.counts.rollback_to += 1;
         let restored = self
             .marks
@@ -211,6 +247,76 @@ impl Collector {
         }
     }
 
+    /// Every surviving change in sequence order, memory rows merged with the
+    /// shadow table's. The shadow table is emptied and the transaction cleared.
+    pub fn drain(&mut self, db: &Connection) -> Result<Vec<RowChange>> {
+        self.counts.sync += 1;
+        let staged = std::mem::take(&mut self.staged);
+        let spilled = self.spilled_rows;
+        self.staged_bytes = 0;
+        self.spilled_rows = 0;
+        self.marks.clear();
+        if spilled == 0 {
+            return Ok(staged);
+        }
+        let batch = merge(staged, self.read_shadow(db)?);
+        db.prepare_cached(&schema::delete_delta(&self.name))?
+            .execute([])?;
+        Ok(batch)
+    }
+
+    /// SQLite discards xCommit's return code, so a leftover batch is reported
+    /// and never raised.
+    pub fn commit(&mut self) {
+        self.counts.commit += 1;
+        let (staged, spilled) = (self.staged.len(), self.spilled_rows);
+        if staged != 0 || spilled != 0 {
+            tracing::error!(staged, spilled, "the collector reached commit undrained");
+        }
+    }
+
+    pub fn rollback(&mut self) {
+        self.counts.rollback += 1;
+        self.reset();
+    }
+
+    fn write_shadow(&self, db: &Connection, change: &RowChange) -> Result<()> {
+        let mut parameters = Vec::with_capacity(self.width + 4);
+        parameters.push(Value::Integer(change.sequence as i64));
+        parameters.push(Value::Text(change.table.clone()));
+        parameters.push(Value::Integer(change.sign.as_integer()));
+        parameters.push(Value::Integer(change.values.len() as i64));
+        parameters.extend(change.values.iter().cloned());
+        parameters.resize(self.width + 4, Value::Null);
+        db.prepare_cached(&schema::insert_delta(&self.name, self.width))?
+            .execute(rusqlite::params_from_iter(parameters))?;
+        Ok(())
+    }
+
+    fn read_shadow(&self, db: &Connection) -> Result<Vec<RowChange>> {
+        let mut statement = db.prepare_cached(&schema::select_delta(&self.name, self.width))?;
+        let rows = statement
+            .query_map([], |row| {
+                let sequence: i64 = row.get(0)?;
+                let table: String = row.get(1)?;
+                let code: i64 = row.get(2)?;
+                let arity: i64 = row.get(3)?;
+                let sign = Sign::from_integer(code)
+                    .ok_or_else(|| schema::error(format!("shadow row carries sign {code}")))?;
+                let values = (0..arity as usize)
+                    .map(|at| row.get::<_, Value>(4 + at))
+                    .collect::<Result<Vec<_>>>()?;
+                Ok(RowChange {
+                    table,
+                    sign,
+                    values,
+                    sequence: sequence as u64,
+                })
+            })?
+            .collect::<Result<Vec<_>>>()?;
+        Ok(rows)
+    }
+
     fn reset(&mut self) {
         self.staged.clear();
         self.staged_bytes = 0;
@@ -222,7 +328,7 @@ impl Collector {
 
 /// Interleaves the memory half and the shadow-table half of one batch. Both
 /// arrive sorted by sequence.
-pub(crate) fn merge(staged: Vec<RowChange>, spilled: Vec<RowChange>) -> Vec<RowChange> {
+fn merge(staged: Vec<RowChange>, spilled: Vec<RowChange>) -> Vec<RowChange> {
     let mut merged = Vec::with_capacity(staged.len() + spilled.len());
     let mut staged = staged.into_iter().peekable();
     let mut spilled = spilled.into_iter().peekable();

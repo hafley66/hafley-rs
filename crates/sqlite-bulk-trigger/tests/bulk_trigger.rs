@@ -1,5 +1,7 @@
 use rusqlite::{types::Value, Connection};
-use sqlite_bulk_trigger::{counts, watch, BulkTrigger, Counts, RowChange, Sign, Watch};
+use sqlite_bulk_trigger::{
+    counts, watch, BulkTrigger, Collector, Counts, RowChange, Sign, Watch,
+};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
@@ -389,6 +391,49 @@ fn a_hand_written_insert_is_read_as_a_change_and_a_bad_one_is_refused() {
         .execute_batch("INSERT INTO collector(__source,__sign) VALUES('orders',7)")
         .unwrap_err();
     assert!(sign.to_string().contains("wrote sign 7"), "{sign}");
+}
+
+/// The same input as `a_rolled_back_savepoint_drops_its_rows_and_renumbers`,
+/// driven through the exported state machine with no virtual table in sight.
+#[test]
+fn the_state_machine_alone_survives_a_rolled_back_savepoint() {
+    let db = Connection::open_in_memory().unwrap();
+    let mut collector = Collector::new("embedded", 2);
+    collector.create_shadow(&db).unwrap();
+
+    let order = |id: i64, amount: i64| {
+        RowChange::new(
+            "orders",
+            Sign::Insert,
+            vec![Value::Integer(id), Value::Integer(amount)],
+        )
+    };
+
+    collector.begin();
+    collector.savepoint(0);
+    collector.update(&db, order(1, 10)).unwrap();
+    collector.update(&db, order(2, 20)).unwrap();
+    collector.release(0);
+
+    collector.savepoint(0);
+    collector.savepoint(1);
+    collector.update(&db, order(3, 30)).unwrap();
+    collector.update(&db, order(4, 40)).unwrap();
+    collector.release(1);
+    collector.rollback_to(0);
+
+    collector.savepoint(1);
+    collector.update(&db, order(5, 50)).unwrap();
+    collector.release(1);
+
+    let batch = collector.drain(&db).unwrap();
+    collector.commit();
+    assert_eq!(batch.len(), 3);
+    assert_eq!(sequences(&batch), vec![0, 1, 2]);
+    assert_eq!(batch[2].values, vec![Value::Integer(5), Value::Integer(50)]);
+    assert_eq!(delta_rows(&db, "embedded"), 0);
+    assert_eq!(collector.counts().update, 5);
+    assert_eq!(collector.counts().rollback_to, 1);
 }
 
 #[test]
