@@ -66,6 +66,9 @@ mod watch;
 #[path = "../5_diff.rs"]
 mod diff;
 
+#[path = "../0_graph.rs"]
+mod graph;
+
 #[path = "../0_rename.rs"]
 mod source_rename;
 
@@ -609,6 +612,13 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(error) = diff::run(std::env::args().skip(1)) {
             eprintln!("{error}");
             exit(2);
+        }
+        return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("graph") {
+        if let Err(error) = graph::run(std::env::args().skip(2)) {
+            eprintln!("{error}");
+            std::process::exit(2);
         }
         return Ok(());
     }
