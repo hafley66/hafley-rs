@@ -43,6 +43,68 @@ impl CountRecorder {
     }
 }
 
+/// Events under one ancestor span, numeric fields summed. `events` counts them.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EventSums {
+    pub events: usize,
+    pub sums: BTreeMap<String, f64>,
+}
+
+impl EventSums {
+    pub fn sum_of(&self, field: &str) -> f64 {
+        self.sums.get(field).copied().unwrap_or_default()
+    }
+}
+
+impl CountRecorder {
+    /// Group key is (`ancestor_field` on the nearest `ancestor` span, `event_field`
+    /// on the event); either side is empty when absent.
+    pub fn event_sums(
+        &self,
+        target: &str,
+        level: tracing::Level,
+        ancestor: &str,
+        ancestor_field: &str,
+        event_field: Option<&str>,
+    ) -> BTreeMap<(String, String), EventSums> {
+        let storage = self.storage.lock();
+        let mut groups: BTreeMap<(String, String), EventSums> = BTreeMap::new();
+        for event in storage.all_events() {
+            if event.metadata().target() != target || *event.metadata().level() != level {
+                continue;
+            }
+            let group = event
+                .ancestors()
+                .find(|span| span.metadata().name() == ancestor)
+                .and_then(|span| span.value(ancestor_field).map(text))
+                .unwrap_or_default();
+            let key = event_field
+                .and_then(|name| event.value(name).map(text))
+                .unwrap_or_default();
+            let sums = groups.entry((group, key)).or_default();
+            sums.events += 1;
+            for (name, value) in event.values() {
+                let number = value
+                    .as_float()
+                    .or_else(|| value.as_int().map(|n| n as f64))
+                    .or_else(|| value.as_uint().map(|n| n as f64));
+                if let Some(number) = number {
+                    *sums.sums.entry(name.to_string()).or_default() += number;
+                }
+            }
+        }
+        groups
+    }
+}
+
+fn text(value: &tracing_tunnel::TracedValue) -> String {
+    value
+        .as_str()
+        .map(str::to_string)
+        .or_else(|| value.as_debug_str().map(str::to_string))
+        .unwrap_or_else(|| format!("{value:?}"))
+}
+
 impl SpanCounts {
     pub fn instances_of(&self, name: &str) -> usize {
         self.instances.get(name).copied().unwrap_or_default()
