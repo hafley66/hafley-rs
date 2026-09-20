@@ -1,0 +1,9 @@
+{
+  "case": "rename-safe-occurrence-set",
+  "answer": [
+    "tests/fixtures/rust_rename/fnuse/before/src/lib.rs:18-24",
+    "tests/fixtures/rust_rename/fnuse/before/src/util.rs:11-17",
+    "tests/fixtures/rust_rename/fnuse/before/src/util.rs:25-31"
+  ],
+  "notes": "name-join: every tag named Helper; aider has no scopes, so lib.rs's own struct and the impl ref ride along and fn a's Helper::new() (scoped callee) is untagged"
+}

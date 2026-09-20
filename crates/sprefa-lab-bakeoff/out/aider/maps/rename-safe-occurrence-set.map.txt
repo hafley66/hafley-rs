@@ -1,0 +1,26 @@
+Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+
+tests/fixtures/rust_rename/fnuse/before/src/lib.rs:
+│mod util;
+│
+│struct Helper;
+│
+│fn a() {
+│    use crate::util::Helper;
+│    Helper::new();
+⋮
+│fn b() -> Helper {
+│    Helper
+⋮
+
+tests/fixtures/rust_rename/fnuse/before/src/util.rs:
+│pub struct Helper;
+│
+│impl Helper {
+│    pub fn new() -> Helper {
+│        Helper
+│    }
+⋮
+

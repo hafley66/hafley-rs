@@ -1,0 +1,5 @@
+tests/fixtures/rust_call_grind/shapes.rs	def	definition.class	Shape	L1	0-55	name=9-14
+tests/fixtures/rust_call_grind/shapes.rs	def	definition.class	Point	L6	57-93	name=68-73
+tests/fixtures/rust_call_grind/shapes.rs	def	definition.function	build_circle	L10	95-161	name=102-114
+tests/fixtures/rust_call_grind/shapes.rs	def	definition.function	build_dot	L14	163-209	name=170-179
+tests/fixtures/rust_call_grind/shapes.rs	def	definition.function	origin	L18	211-258	name=218-224

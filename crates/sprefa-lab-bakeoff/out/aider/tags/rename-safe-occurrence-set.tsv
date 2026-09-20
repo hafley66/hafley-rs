@@ -1,0 +1,7 @@
+tests/fixtures/rust_rename/fnuse/before/src/lib.rs	def	definition.module	util	L1	0-9	name=4-8
+tests/fixtures/rust_rename/fnuse/before/src/lib.rs	def	definition.class	Helper	L3	11-25	name=18-24
+tests/fixtures/rust_rename/fnuse/before/src/lib.rs	def	definition.function	a	L5	27-85	name=30-31
+tests/fixtures/rust_rename/fnuse/before/src/lib.rs	def	definition.function	b	L10	87-118	name=90-91
+tests/fixtures/rust_rename/fnuse/before/src/util.rs	def	definition.class	Helper	L1	0-18	name=11-17
+tests/fixtures/rust_rename/fnuse/before/src/util.rs	ref	reference.implementation	Helper	L3	20-85	name=25-31
+tests/fixtures/rust_rename/fnuse/before/src/util.rs	def	definition.method	new	L4	38-83	name=45-48

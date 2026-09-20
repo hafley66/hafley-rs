@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Placeholder. The aider lane replaces this file.
-# Contract: run.sh <case-id> writes out/aider/<case-id>.json, one CaseAnswer,
-# entries in the grammar in ../../README.md.
+# usage: run.sh <case-id>   writes out/aider/<case-id>.json (one CaseAnswer),
+# out/aider/maps/<case-id>.map.txt (mechanism 1) and
+# out/aider/tags/<case-id>.tsv (mechanism 2).
 set -euo pipefail
-echo "labs/aider/run.sh: not implemented; the aider lane owns this file" >&2
-exit 1
+here="$(cd "$(dirname "$0")" && pwd)"
+case_id="${1:?usage: run.sh <case-id>}"
+mkdir -p "$here/../../out/aider/maps"
+cd "$here"
+files="$(.venv/bin/python -c 'import sys; from cases import FILES; print(" ".join(FILES[sys.argv[1]]))' "$case_id")"
+# shellcheck disable=SC2086
+./map.sh "$here/../../out/aider/maps/$case_id.map.txt" $files
+.venv/bin/python cases.py "$case_id"

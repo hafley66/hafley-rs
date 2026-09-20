@@ -1,0 +1,47 @@
+Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+
+tests/fixtures/kotlin_receivers/lib.kt:
+⋮
+│class Widget(val id: Int) {
+│    fun run(): Int = id
+⋮
+│class Holder(val w: Widget)
+│
+│object Gadget {
+│    fun spin(): Int = 1
+⋮
+│interface Proj {
+│    fun project(): Int
+⋮
+│class Decoy {
+│    fun run(): Int = 2
+⋮
+│fun makeWidget(): Widget = Widget(1)
+
+tests/fixtures/kotlin_receivers/use.kt:
+⋮
+│fun paramLeg(w: Widget) = w.run()
+│
+│fun ctorLeg() {
+│    val w = Widget(2)
+│    w.run()
+⋮
+│fun returnLeg() {
+│    val w = makeWidget()
+│    w.run()
+⋮
+│fun fieldLeg(h: Holder) = h.w.run()
+│
+│fun <P : Proj> boundLeg(p: P) = p.project()
+│
+│fun objectLeg() = Gadget.spin()
+│
+│class Inner(val id: Int) {
+│    fun me() = this.id
+│    fun self() = run()
+│    fun run() = 0
+⋮
+│fun shadow(run: () -> Int) = run()
+

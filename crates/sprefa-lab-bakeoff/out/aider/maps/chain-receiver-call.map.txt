@@ -1,0 +1,46 @@
+Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+
+tests/fixtures/rust_call_grind/decoy.rs:
+│pub struct Other;
+│
+│impl Other {
+│    pub fn tick(&self) -> u32 {
+│        0
+│    }
+│
+│    pub fn read(&self) -> u32 {
+│        0
+│    }
+⋮
+
+tests/fixtures/rust_call_grind/widget.rs:
+│pub struct Widget;
+│
+│impl Widget {
+│    pub fn new() -> Self {
+│        Widget
+│    }
+│
+│    pub fn tick(&self) -> Gauge {
+│        Gauge
+│    }
+⋮
+│pub struct Gauge;
+│
+│impl Gauge {
+│    pub fn read(&self) -> u32 {
+│        1
+│    }
+⋮
+│pub fn chain_caller() -> u32 {
+│    let gauge = Widget::new().tick();
+│    gauge.read()
+⋮
+│pub fn hop_caller() -> u32 {
+│    let widget = Widget::new();
+│    let gauge = widget.tick();
+│    gauge.read()
+⋮
+

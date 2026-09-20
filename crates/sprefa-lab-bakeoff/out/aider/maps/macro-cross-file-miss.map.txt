@@ -1,0 +1,43 @@
+Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+
+tests/fixtures/rust_macro_callers/decoys.rs:
+⋮
+│pub fn helper_one() -> u32 {
+│    10
+│}
+│pub fn helper_two() -> u32 {
+│    20
+⋮
+
+tests/fixtures/rust_macro_callers/local.rs:
+⋮
+│macro_rules! mint_helpers {
+⋮
+│pub struct Local;
+│
+⋮
+│pub fn helper_two() -> u32 {
+│    2
+⋮
+
+tests/fixtures/rust_macro_callers/macros.rs:
+⋮
+│macro_rules! mint_helpers {
+⋮
+│macro_rules! mint_single {
+⋮
+
+tests/fixtures/rust_macro_callers/user.rs:
+⋮
+│pub struct Widget;
+│
+⋮
+│pub fn helper_one() -> u32 {
+│    1
+│}
+│pub fn helper_two() -> u32 {
+│    2
+⋮
+

@@ -1,0 +1,39 @@
+Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+
+tests/fixtures/go_field_promote/base/base.go:
+│package base
+│
+⋮
+│type Widget struct{}
+│
+⋮
+│func (w *Widget) Ring() string { return "ring" }
+
+tests/fixtures/go_field_promote/caller/caller.go:
+│package caller
+│
+⋮
+│type Decoy struct{}
+│
+⋮
+│func (d *Decoy) Ring() string { return "decoy" }
+│
+⋮
+│func UseOuter(o *lib.Outer) {
+│       o.Part.Ring()
+⋮
+
+tests/fixtures/go_field_promote/lib/lib.go:
+│package lib
+│
+⋮
+│type Inner struct {
+│       Part *base.Widget
+⋮
+│type Outer struct {
+│       Inner
+⋮
+│func NewOuter() *Outer { return &Outer{} }
+
