@@ -74,7 +74,38 @@ export async function generate(entry = join(schemaDirectory, "1_sql_trial.tsp"))
     additionalImports: [join(sql, "dist/src/1_decorators.js"), join(sql, "lib/entity.tsp")],
   });
   if (facts.diagnostics.length) throw new Error(facts.diagnostics.map(d => formatDiagnostic(d)).join("\n"));
-  for (const [name, content] of emitFacts(facts, emitSQL, emitRusqliteTaggedRowWriter)) files.set(name, content);
+  for (const [name, content] of emitFacts(facts, emitSQL, emitRusqliteTaggedRowWriter)) {
+    if (name === "7_writers_auto.rs") {
+      const graphRootSpan = `
+fn graph_root_span<'de, D>(deserializer: D) -> Result<Option<models::SpanOut>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = <Option<serde_json::Value> as serde::Deserialize>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(value)
+            if value.get("start").is_some_and(serde_json::Value::is_null)
+                || value.get("end").is_some_and(serde_json::Value::is_null) =>
+        {
+            Ok(None)
+        }
+        Some(value) => serde_json::from_value(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}
+`;
+      files.set(name, content
+        .replace("fn required_nullable", `${graphRootSpan}\nfn required_nullable`)
+        .replace(
+          "#[serde(deserialize_with = \"super::required_nullable\")]\n        pub span: Option<SpanOut>",
+          "#[serde(deserialize_with = \"super::graph_root_span\")]\n        pub span: Option<SpanOut>",
+        ));
+    } else {
+      files.set(name, content);
+    }
+  }
   return files;
 }
 

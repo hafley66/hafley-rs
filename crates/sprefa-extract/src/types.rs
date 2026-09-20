@@ -3038,6 +3038,27 @@ pub struct SpanOut {
     pub end: u32,
 }
 
+fn deserialize_graph_root_span<'de, D>(
+    deserializer: D,
+) -> Result<Option<SpanOut>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = <Option<serde_json::Value> as serde::Deserialize>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(value)
+            if value.get("start").is_some_and(serde_json::Value::is_null)
+                || value.get("end").is_some_and(serde_json::Value::is_null) =>
+        {
+            Ok(None)
+        }
+        Some(value) => serde_json::from_value(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}
+
 impl SpanOut {
     pub fn new(start: u32, end: u32) -> Self {
         Self { start, end }
@@ -3403,6 +3424,7 @@ pub enum FlatFact {
     GraphRoot {
         path: String,
         name: Option<String>,
+        #[serde(deserialize_with = "deserialize_graph_root_span")]
         span: Option<SpanOut>,
         found: bool,
     },

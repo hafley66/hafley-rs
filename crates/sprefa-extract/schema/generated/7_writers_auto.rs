@@ -24,6 +24,26 @@ fn optional_non_null<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de
 
 }
 
+
+fn graph_root_span<'de, D>(deserializer: D) -> Result<Option<models::SpanOut>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let value = <Option<serde_json::Value> as serde::Deserialize>::deserialize(deserializer)?;
+    match value {
+        None => Ok(None),
+        Some(value)
+            if value.get("start").is_some_and(serde_json::Value::is_null)
+                || value.get("end").is_some_and(serde_json::Value::is_null) =>
+        {
+            Ok(None)
+        }
+        Some(value) => serde_json::from_value(value)
+            .map(Some)
+            .map_err(serde::de::Error::custom),
+    }
+}
+
 fn required_nullable<'de, D: serde::Deserializer<'de>, T: serde::Deserialize<'de>>(deserializer: D) -> Result<Option<T>, D::Error> { <Option<T> as serde::Deserialize>::deserialize(deserializer) }
 
 #[derive(Clone, Copy)]
@@ -626,7 +646,7 @@ pub mod models {
         pub path: String,
         #[serde(deserialize_with = "super::required_nullable")]
         pub name: Option<String>,
-        #[serde(deserialize_with = "super::required_nullable")]
+        #[serde(deserialize_with = "super::graph_root_span")]
         pub span: Option<SpanOut>,
         pub found: bool,
     }
