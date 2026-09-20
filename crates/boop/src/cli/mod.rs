@@ -265,14 +265,21 @@ ROUTE: the session id one lane answers on, whose route cwd is its worktree:
   Mailbox: ~/.agent/boop.db (agent_mail + agent_route); --mail-dir names the
   directory holding it.
 
-TRACE + PURPOSE: a session id is per-process-run and MOVES on /clear, on
-compaction and on resume. A trace does not move, and every session id a lane
-ever wears hangs under one:
+TRACE + PURPOSE: a process can host successive conversation ids after /clear
+or /new. A resumed conversation can retain its id in a new process. Compaction
+can retain the conversation id. Traces group conversations on recorded evidence:
     agent_trace       trace_id, root_session_id, started_ts
     agent_trace_span  session_id -> trace_id, attach_id (WHY it attached)
     agent_lane        one row per spawn: goal text, brief path id, brief body id
     markdown_cache    digest UNIQUE, body, bytes, first_ts (briefs dedupe here)
   `lane create` opens `trace-<lane>`; `--trace <id>` continues an existing one.
+  Native wrappers record session-boundary events when the conversation changes
+  within one frontend process. Each event names both sessions, PID and process
+  start time. Both sessions retain process_pid and process_start_secs attributes;
+  process_previous_session names the prior conversation. A close followed by a
+  new conversation retains that relation. A new process starts a new history.
+  These boundaries record observed conversation changes, without guessing which
+  command or task caused them. Existing trace memberships remain unchanged.
   A session attaches only on evidence boop holds: lane-create, lane-run,
   supervisor-conversation, backfill-spawned-edge. Adjacency in time is NOT
   evidence, so an unattached session stays unattached; a wrong attach would
