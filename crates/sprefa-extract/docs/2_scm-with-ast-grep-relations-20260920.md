@@ -25,7 +25,33 @@ Its tree has a `function_item` for each `fn`, a `block` for each body, a `let_de
 
 asks for every call whose callee is a bare identifier, with the identifier captured as `@callee`. Over the code above it returns two matches, `drop(a)` and `f()`, with `@callee` bound to `drop` and `f`. The method calls are skipped because their callee is a `field_expression`, not an `identifier`. Editors such as Helix and Zed ship one such file per language for highlighting, folding, and scope tracking.
 
-What a query cannot say is "this node, but only when it sits inside that other node". Suppose you want every `.contains(...)` call that is NOT inside a closure. The tree-sitter query language has no ancestor operator; the upstream request for one has been open since 2021. This guide describes an extension that adds ast-grep's relational operators as ordinary `.scm` predicates:
+Now suppose you want every `.contains(...)` call that is NOT inside a closure. In the code above that is `name.contains("ab")` and nothing else.
+
+**You cannot write that in a `.scm` query.** A pattern only describes a node and its children. There is no way to say "and no ancestor of this node is a closure". The closest attempt:
+
+```scheme
+((call_expression) @call
+ (#match? @call "contains"))
+```
+
+returns both `name.contains("ab")` and `n.contains("cd")`, because nothing in the pattern looks upward. Writing the closure into the pattern does not help either: `(closure_expression (call_expression) @call)` finds calls that are direct children of a closure, which is the opposite of what you want, and it only reaches one level down. The upstream request for an ancestor operator has been open since 2021.
+
+**ast-grep can write it.** Its rule language has `inside`, which walks up the ancestors, and `not`, which inverts a rule:
+
+```yaml
+rule:
+  all:
+    - kind: call_expression
+    - regex: contains
+    - not:
+        inside:
+          kind: closure_expression
+          stopBy: end
+```
+
+That returns exactly `name.contains("ab")`.
+
+**This extension lets you write the ast-grep rule in `.scm`:**
 
 ```scheme
 [(closure_expression)] @closure
@@ -35,7 +61,7 @@ What a query cannot say is "this node, but only when it sits inside that other n
  (#not-inside? @call closure))
 ```
 
-The first line defines a name, `closure`, for any closure node. The second pattern reports each call whose text matches `contains` and which has no closure anywhere above it. Over the code above it returns one match, `name.contains("ab")`. The call `n.contains("cd")` is rejected because the walk up from it reaches a `closure_expression`.
+The first line defines a name, `closure`, for any closure node; it is the `utils` entry of the YAML. The second pattern is the `all`: a call, whose text matches `contains`, with no closure anywhere above it. It returns one match, `name.contains("ab")`. The call `n.contains("cd")` is rejected because the walk up from it reaches a `closure_expression`.
 
 Nothing else about `.scm` changes: the same S-expressions, the same captures, the same `#match?` you already use. The rest of this guide covers what ast-grep's rule language can express, how each piece is spelled in `.scm`, and what the errors look like when a query is wrong.
 
