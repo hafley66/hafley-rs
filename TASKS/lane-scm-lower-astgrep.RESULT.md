@@ -13,7 +13,7 @@ implemented, no S-expression parser was hand-written.
 | `crates/sprefa-extract/src/lang/mod.rs` | +3 lines, module and re-export |
 | `crates/sprefa-extract/Cargo.toml` | `tree-sitter-tsquery = "0.8"` plus its comment |
 | `crates/sprefa-extract/Cargo.lock` | generated |
-| `crates/sprefa-extract/tests/36_scm_lower.rs` | new, 313 lines, 18 tests |
+| `crates/sprefa-extract/tests/144_scm_lower.rs` | new, 313 lines, 18 tests |
 
 ## Receipts
 
@@ -85,7 +85,7 @@ capture text is already the match span under this rooting, capture names such as
 
 ## Tests, every name with its assertion
 
-`crates/sprefa-extract/tests/36_scm_lower.rs`, 18 tests, all through the library
+`crates/sprefa-extract/tests/144_scm_lower.rs`, 18 tests, all through the library
 and the real grammar.
 
 | test | assertion |

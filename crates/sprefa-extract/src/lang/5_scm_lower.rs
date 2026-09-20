@@ -136,7 +136,7 @@ pub fn lower_scm(text: &str) -> Result<ScmProgram, ScmLowerError> {
 }
 
 /// The tree-sitter language for the `.scm` query surface. Its ABI is railed by
-/// `tests/36_scm_lower.rs` against the window the tree-sitter runtime accepts.
+/// `tests/144_scm_lower.rs` against the window the tree-sitter runtime accepts.
 pub fn scm_language() -> tree_sitter::Language {
     tree_sitter::Language::new(tree_sitter_tsquery::LANGUAGE)
 }

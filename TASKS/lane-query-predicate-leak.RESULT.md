@@ -28,12 +28,12 @@ Full gate from `crates/sprefa-extract`, per-binary `test result:` lines summed:
 
 - baseline immediately before this lane: 186 binaries, 1007 passed, 0 failed
 - after this lane: 187 binaries, 1012 passed, 0 failed
-- delta: +1 binary (`37_query_predicate_scope`), +5 passed (the new tests),
+- delta: +1 binary (`145_query_predicate_scope`), +5 passed (the new tests),
   0 failed
 
 `cargo metadata --locked --format-version 1` -> `LOCK_OK`.
 
-## New tests, `crates/sprefa-extract/tests/37_query_predicate_scope.rs`
+## New tests, `crates/sprefa-extract/tests/145_query_predicate_scope.rs`
 
 1. `a_predicate_on_one_pattern_never_gates_another_patterns_matches` - the leak
    itself; failed before the fix with left `[(2, "var", "needle")]` against the
