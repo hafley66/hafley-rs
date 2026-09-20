@@ -1,0 +1,13 @@
+tests/fixtures/rust_macro_callers/user.rs	def	definition.class	Widget	L3	49-67	name=60-66
+tests/fixtures/rust_macro_callers/user.rs	ref	reference.call	mint_helpers	L5	69-90	name=69-81
+tests/fixtures/rust_macro_callers/user.rs	ref	reference.call	mint_single	L6	92-112	name=92-103
+tests/fixtures/rust_macro_callers/user.rs	def	definition.function	helper_one	L8	115-151	name=122-132
+tests/fixtures/rust_macro_callers/user.rs	def	definition.function	helper_two	L11	152-188	name=159-169
+tests/fixtures/rust_macro_callers/decoys.rs	def	definition.function	helper_one	L4	178-215	name=185-195
+tests/fixtures/rust_macro_callers/decoys.rs	def	definition.function	helper_two	L7	216-253	name=223-233
+tests/fixtures/rust_macro_callers/macros.rs	def	definition.macro	mint_helpers	L4	174-431	name=187-199
+tests/fixtures/rust_macro_callers/macros.rs	def	definition.macro	mint_single	L19	520-693	name=533-544
+tests/fixtures/rust_macro_callers/local.rs	def	definition.macro	mint_helpers	L4	212-386	name=225-237
+tests/fixtures/rust_macro_callers/local.rs	def	definition.class	Local	L14	388-405	name=399-404
+tests/fixtures/rust_macro_callers/local.rs	ref	reference.call	mint_helpers	L16	407-427	name=407-419
+tests/fixtures/rust_macro_callers/local.rs	def	definition.function	helper_two	L18	430-466	name=437-447

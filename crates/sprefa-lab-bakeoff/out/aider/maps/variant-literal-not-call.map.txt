@@ -1,0 +1,20 @@
+Here are summaries of some files present in my git repository.
+Do not propose changes to these files, treat them as *read-only*.
+If you need to edit any of these files, ask me to *add them to the chat* first.
+
+tests/fixtures/rust_call_grind/shapes.rs:
+│pub enum Shape {
+⋮
+│pub struct Point {
+│    pub x: u32,
+⋮
+│pub fn build_circle() -> Shape {
+│    Shape::Circle { radius: 1 }
+⋮
+│pub fn build_dot() -> Shape {
+│    Shape::Dot
+⋮
+│pub fn origin() -> Point {
+│    Point { x: 0 }
+⋮
+
