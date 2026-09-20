@@ -39,8 +39,8 @@ pub const CALL_KINDS: &[&str] = &[
     "scoped_call_expression",
 ];
 
-/// Leaf kinds that carry a NAME, the exact form of `kind contains
-/// "identifier"`: every name-leaf kind the loaded grammars declare, collected
+/// Leaf kinds that carry a NAME, the exact replacement for the identifier
+/// substring: every name-leaf kind the loaded grammars declare, collected
 /// the same way as CALL_KINDS, one `ryi --family cst` dump per language
 /// (issue kind-vocab-constraint). A grammar declares a subset; the rest
 /// resolve to no id against it and match nothing there.
@@ -83,8 +83,8 @@ pub const NAME_LEAF_KINDS: &[&str] = &[
 pub const CALLEE_NAME_KINDS: &[&str] = &["name", "variable", "word"];
 
 /// Child kinds the generic callee walk skips (astgrep.rs `callee_of`), the
-/// exact form of `kind contains "argument" || contains "suffix"`: the
-/// argument subtrees plus the kotlin/swift navigation suffixes. Collected
+/// exact replacement for the argument/suffix substrings: the argument
+/// subtrees plus the kotlin/swift navigation suffixes. Collected
 /// from the same per-language dumps; a grammar declares a subset, and bash
 /// declares none (its words sit directly under `command`).
 ///
