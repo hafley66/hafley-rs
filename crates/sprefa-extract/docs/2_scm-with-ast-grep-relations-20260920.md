@@ -103,7 +103,7 @@ All([Kind("call_expression"), Inside { rule: Matches("scope"), stop_by: Some(End
 
 The `utils` list holds `scope` with the rule `Any([Kind("function_item"), Kind("impl_item")])`. ast-grep resolves `Matches("scope")` against that list when it evaluates the rule.
 
-The reference is a name because a predicate argument cannot be a nested rule. The runtime type allows a capture or a string. The query grammar allows a capture, an identifier or a string. The comment at `src/lang/5_scm_lower.rs:310` records that constraint, and `src/lang/5_scm_lower.rs:370` builds the `Matches` node from the identifier.
+The reference is a name because a predicate argument cannot be a nested rule. The runtime type allows a capture or a string. The query grammar allows a capture, an identifier or a string. The comment at `src/lang/5_scm_lower.rs:310` records that constraint, and `src/lang/5_scm_lower.rs:371` reads the identifier as a label reference.
 
 An identifier that names no top-level label is `UnboundReference`.
 
