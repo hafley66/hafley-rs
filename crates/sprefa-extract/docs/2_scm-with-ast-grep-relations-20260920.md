@@ -1,8 +1,8 @@
-# Writing `.scm` queries with ast-grep's relational operators
+# `.scm` queries with ast-grep relations
 
-## Introduction
+Tree-sitter queries (`.scm` files) can describe a node and its children. They cannot look upward, sideways, or count siblings. ast-grep's rule language can. This guide shows how to write ast-grep's relational rules inside an ordinary `.scm` file.
 
-A `.scm` query is a pattern written against a parse tree. Tree-sitter turns source code into a tree of named nodes; a `.scm` file describes a shape of nodes in S-expression form and tags the parts you care about with `@captures`. Take this Rust:
+Every example below runs against this file, `x.rs`:
 
 ```rust
 fn plain(name: &str) -> bool {
@@ -15,28 +15,32 @@ fn wrapped(n: &str) -> bool {
     let f = || n.contains("cd");
     f()
 }
+
+impl Widget {
+    fn is_empty(&self) -> bool { self.items.is_empty() }
+    fn render(&self) { self.items.first(); draw(self.items.len(), 1, 2) }
+}
 ```
 
-Its tree has a `function_item` for each `fn`, a `block` for each body, a `let_declaration`, a `closure_expression`, and a `call_expression` for each of `drop(a)`, `name.contains("ab")`, `n.contains("cd")` and `f()`. This query:
+## The problem
+
+Find every `.contains(...)` call that is not inside a closure. The answer is `name.contains("ab")`, and only that.
+
+A plain `.scm` query gets as far as the calls:
 
 ```scheme
-(call_expression function: (identifier) @callee)
+((call_expression) @c
+ (#match? @c "contains"))
 ```
 
-asks for every call whose callee is a bare identifier, with the identifier captured as `@callee`. Over the code above it returns two matches, `drop(a)` and `f()`, with `@callee` bound to `drop` and `f`. The method calls are skipped because their callee is a `field_expression`, not an `identifier`. Editors such as Helix and Zed ship one such file per language for highlighting, folding, and scope tracking.
-
-Now suppose you want every `.contains(...)` call that is NOT inside a closure. In the code above that is `name.contains("ab")` and nothing else.
-
-**You cannot write that in a `.scm` query.** A pattern only describes a node and its children. There is no way to say "and no ancestor of this node is a closure". The closest attempt:
-
-```scheme
-((call_expression) @call
- (#match? @call "contains"))
+```
+name.contains("ab")
+n.contains("cd")
 ```
 
-returns both `name.contains("ab")` and `n.contains("cd")`, because nothing in the pattern looks upward. Writing the closure into the pattern does not help either: `(closure_expression (call_expression) @call)` finds calls that are direct children of a closure, which is the opposite of what you want, and it only reaches one level down. The upstream request for an ancestor operator has been open since 2021.
+Both calls match. `n.contains("cd")` is inside the closure `|| n.contains("cd")`, and nothing in the query can say "and no closure above this". A pattern describes a node and what is inside it. There is no syntax for what is around it.
 
-**ast-grep can write it.** Its rule language has `inside`, which walks up the ancestors, and `not`, which inverts a rule:
+ast-grep has that syntax. Its YAML rule for the same question:
 
 ```yaml
 rule:
@@ -49,180 +53,266 @@ rule:
           stopBy: end
 ```
 
-That returns exactly `name.contains("ab")`.
+```
+name.contains("ab")
+```
 
-**This extension lets you write the ast-grep rule in `.scm`:**
+`inside` walks up through the ancestors. `not` inverts it. `stopBy: end` means walk all the way to the root.
+
+## The solution
+
+The same rule, written in `.scm`:
 
 ```scheme
 [(closure_expression)] @closure
 
-((call_expression) @call
- (#match? @call "contains")
- (#not-inside? @call closure))
+((call_expression) @c
+ (#match? @c "contains")
+ (#not-inside? @c closure))
 ```
 
-The first line defines a name, `closure`, for any closure node; it is the `utils` entry of the YAML. The second pattern is the `all`: a call, whose text matches `contains`, with no closure anywhere above it. It returns one match, `name.contains("ab")`. The call `n.contains("cd")` is rejected because the walk up from it reaches a `closure_expression`.
+```
+name.contains("ab")
+```
 
-Nothing else about `.scm` changes: the same S-expressions, the same captures, the same `#match?` you already use. The rest of this guide covers what ast-grep's rule language can express, how each piece is spelled in `.scm`, and what the errors look like when a query is wrong.
+Two things are new. A top-level pattern with a capture on it, `[(closure_expression)] @closure`, defines a name. A predicate, `#not-inside?`, refers to that name. Everything else is the `.scm` you already write.
 
-## What ast-grep's rule language offers
+## How it works
 
-ast-grep matches code with a YAML rule. A rule is a small algebra over tree nodes.
+Tree-sitter's query parser accepts any predicate spelled `(#anything? ...)` and leaves its meaning to the program running the query. This crate defines ast-grep's operators as predicates, translates the query into ast-grep's rule tree, and lets ast-grep run it. The translation is one-to-one, so anything ast-grep can match, the `.scm` file can ask for.
 
-**Atomic rules** pick a node on its own:
-
-| rule | meaning |
-| --- | --- |
-| `kind: call_expression` | the node has this grammar type |
-| `pattern: $A.len()` | the node matches a code snippet, where `$A` stands for any subtree |
-| `regex: ^is_` | the node's text matches a regular expression |
-
-**Relational rules** place a node against its neighbours:
-
-| rule | meaning |
-| --- | --- |
-| `inside: {...}` | some ancestor matches the inner rule |
-| `has: {...}` | some descendant matches the inner rule |
-| `follows: {...}` | some earlier sibling matches the inner rule |
-| `precedes: {...}` | some later sibling matches the inner rule |
-
-Each relational rule takes a `stopBy` that says how far the walk goes: `neighbor` checks only the adjacent node, `end` walks all the way, and a nested rule walks until a node matches it.
-
-**Composite rules** combine the others:
-
-| rule | meaning |
-| --- | --- |
-| `all: [...]` | every listed rule holds |
-| `any: [...]` | at least one listed rule holds |
-| `not: {...}` | the inner rule does not hold |
-| `matches: name` | the rule defined under `utils` as `name` holds |
-
-`utils` is a map of named rules defined once and referred to by name, which is how a long rule is built from readable parts.
-
-Three more filters are covered at the end of this guide: `nthChild` selects a node by its position among siblings, `range` selects the node at an exact position, and `constraints` attach a rule to a `$A` placeholder inside a pattern.
-
-## Why `.scm` grew the same operators
-
-Every editor, and this crate, already speaks `.scm`. Rewriting each per-language query in YAML would mean two query languages for one grammar and two files per language to keep in step.
-
-The tree-sitter query language leaves predicates to the host program: any `(#name? ...)` is parsed and stored, never interpreted, so a host can define its own. This crate defines the ast-grep vocabulary as predicates. A `.scm` file is translated into the identical rule tree that the equivalent YAML would produce, and ast-grep evaluates it. The result is one query dialect that reaches ast-grep's full matching algebra without anyone writing a new matcher.
-
-The translation is mechanical and one-to-one:
-
-| in `.scm` | in ast-grep YAML |
+| `.scm` | ast-grep YAML |
 | --- | --- |
 | `(function_item)` | `kind: function_item` |
-| `[(a) (b)]` | `any: [{kind: a}, {kind: b}]` |
-| a top-level pattern with a label, `[...] @scope` | an entry under `utils` named `scope` |
-| `(#inside? @m scope)` | `inside: {matches: scope, stopBy: end}` |
-| `(#has? @m x)`, `(#follows? @m x)`, `(#precedes? @m x)` | `has:`, `follows:`, `precedes:` |
-| `(#match? @m "^is_")` | `regex: ^is_` |
-| `(#pattern? @m "$A.len()")` | `pattern: $A.len()` |
-| `(#not-inside? @m scope)` and the other `not-` forms | `not: {inside: ...}` |
-| several predicates on one capture | `all: [...]` |
-| `(#nth-child? @m "2")` | `nthChild: 2` |
-| `(#range? @m "3:4" "3:23")` | `range: {start: ..., end: ...}` |
-| `(#pattern? @m "$A.len()" A name)` | `pattern:` plus `constraints: {A: {matches: name}}` |
+| `[(function_item) (impl_item)]` | `any: [{kind: function_item}, {kind: impl_item}]` |
+| `[(closure_expression)] @closure` at top level | `utils: {closure: {kind: closure_expression}}` |
+| `(#inside? @c closure)` | `inside: {matches: closure, stopBy: end}` |
+| `(#has? @c x)`, `(#follows? @c x)`, `(#precedes? @c x)` | `has:`, `follows:`, `precedes:` |
+| `(#match? @c "^is_")` | `regex: ^is_` |
+| `(#pattern? @c "$A.len()")` | `pattern: $A.len()` |
+| `(#not-inside? @c closure)`, any `not-` form | `not: {inside: ...}` |
+| several predicates on `@c` | `all: [...]` |
+| `(#nth-child? @c "2")` | `nthChild: 2` |
+| `(#range? @c "3:4" "3:23")` | `range: {start: {line: 3, column: 4}, end: {line: 3, column: 23}}` |
+| `(#pattern? @c "$A.len()" A ident)` | `pattern: $A.len()` plus `constraints: {A: {matches: ident}}` |
 
-## Structure of a query file
+## Naming a pattern
 
-A query file has two kinds of top-level pattern.
-
-A **labelled pattern** carries a capture directly on the top-level node. It defines a name that other patterns can refer to, and reports nothing on its own:
+A top-level pattern with a capture directly on it defines a name. It reports nothing by itself.
 
 ```scheme
 [(function_item) (impl_item)] @scope
 [(closure_expression)] @closure
+[(let_declaration)] @let
 ```
 
-An **unlabelled pattern** is what the query reports:
+Any pattern without a top-level capture is a query, and the file reports its matches. A file with several such patterns reports all of them. A file with only named patterns reports every named one.
+
+The capture has to sit directly on the top-level node. This defines `closure`:
 
 ```scheme
-((call_expression) @call
- (#inside? @call scope)
- (#not-inside? @call closure))
+(closure_expression) @closure
 ```
 
-The example reports calls inside a function or impl block but outside any closure.
-
-Rules for the file as a whole:
-
-- One unlabelled pattern reports its matches directly. Several unlabelled patterns report the union of their matches.
-- A file with only labelled patterns reports the union of all of them.
-- Each label may be defined once. A second definition of the same label is an error.
-- Only a capture placed directly on the top-level node is a label. A capture deeper inside a pattern names a node within it and does not define anything.
-
-## Which node a pattern reports
-
-An ast-grep rule reports exactly one node per match, while a `.scm` pattern can hold many captures. The predicates decide which capture is reported:
-
-- Every predicate's first argument is the capture it constrains.
-- The node that carries that capture is the reported node.
-- All predicates in one pattern must name the same capture. Two different captures in one pattern is an error.
-- A pattern with no predicate reports the whole pattern.
-
-When the reported capture sits below the top of the pattern, the surrounding structure still applies. In this query the reported node is the identifier, but only identifiers that appear as the callee of a call are reported:
+This does not; `@body` is inside the pattern and names a child:
 
 ```scheme
-((call_expression function: (identifier) @callee)
- (#match? @callee "^is_"))
+(closure_expression body: (_) @body)
 ```
 
-## The predicates
+Each name can be defined once. Defining `@scope` twice is an error.
 
-### Relations: `#inside?`, `#has?`, `#follows?`, `#precedes?`
+## Looking up: `#inside?`
 
-Each takes the capture to constrain, the label of the pattern it must relate to, and an optional third argument that sets how far the walk goes.
+Calls inside an `impl` block:
+
+```scheme
+[(impl_item)] @imp
+
+((call_expression) @c (#inside? @c imp))
+```
+
+```
+self.items.is_empty()
+self.items.first()
+draw(self.items.len(), 1, 2)
+self.items.len()
+```
+
+The walk goes all the way up by default. `self.items.len()` is three levels below the `impl_item` and still matches.
+
+## Looking down: `#has?`
+
+Calls that have a field access as a direct child, which is what a method call looks like in the Rust grammar:
+
+```scheme
+[(field_expression)] @recv
+
+((call_expression) @c (#has? @c recv "neighbor"))
+```
+
+```
+name.contains("ab")
+n.contains("cd")
+self.items.is_empty()
+self.items.first()
+self.items.len()
+```
+
+`"neighbor"` restricts the walk to direct children. Without it, `#has?` would also match `draw(self.items.len(), 1, 2)`, because a field access sits somewhere below it.
+
+## Looking sideways: `#follows?` and `#precedes?`
+
+Calls that come after a `let` in the same block:
+
+```scheme
+[(let_declaration)] @let
+
+((call_expression) @c (#follows? @c let))
+```
+
+```
+name.contains("ab")
+f()
+```
+
+`drop(a)` is not in the list. In the Rust grammar `drop(a);` is wrapped in an `expression_statement`, so the sibling of the `let` is the statement, not the call.
+
+Calls that come before a `let`:
+
+```scheme
+[(let_declaration)] @let
+
+((call_expression) @c (#precedes? @c let))
+```
+
+```
+(no matches)
+```
+
+## How far to walk
+
+Every relation takes an optional third argument.
 
 ```scheme
 [(function_item)] @fn
 [(block)] @block
-
-((call_expression) @c (#inside? @c fn))            ; any ancestor is a function
-((call_expression) @c (#inside? @c fn "end"))      ; same as above, spelled out
-((call_expression) @c (#inside? @c fn "neighbor")) ; the direct parent is a function
-((call_expression) @c (#inside? @c fn block))      ; walk upward, but stop at the first block
+[(closure_expression)] @closure
 ```
 
-| third argument | walk |
-| --- | --- |
-| absent | to the root, or to the leaves for `#has?`, or across every sibling |
-| `"end"` | same as absent |
-| `"neighbor"` | the immediately adjacent node only |
-| a label | until a node matching that label is reached |
-
-The default here is `"end"`. This differs from writing ast-grep YAML by hand, where an absent `stopBy` means `neighbor`. The default was chosen because "anywhere inside" is the question people ask most.
-
-The third argument is a string for a walk mode and a bare identifier for a label, so a label that happens to be spelled `neighbor` is still read as a label.
-
-### Text: `#match?`
-
-Takes the capture and a regular expression string. Matches when the node's source text matches the expression.
+Walk all the way (the default, also spelled `"end"`):
 
 ```scheme
-((identifier) @name (#match? @name "^is_"))
+((call_expression) @c (#inside? @c fn))
 ```
 
-### Shape: `#pattern?`
+```
+drop(a)
+name.contains("ab")
+n.contains("cd")
+f()
+self.items.is_empty()
+self.items.first()
+draw(self.items.len(), 1, 2)
+self.items.len()
+```
 
-Takes the capture and an ast-grep pattern string. A pattern is a snippet of code in the target language where `$A`, `$B` and so on stand for any single subtree and `$$$` stands for any sequence.
+Check only the direct parent:
+
+```scheme
+((call_expression) @c (#inside? @c block "neighbor"))
+```
+
+```
+name.contains("ab")
+f()
+self.items.is_empty()
+draw(self.items.len(), 1, 2)
+```
+
+These are the calls that sit directly in a block: tail expressions and the ones not wrapped in a statement.
+
+Walk up until a node matching another name is reached:
+
+```scheme
+((call_expression) @c (#inside? @c closure block))
+```
+
+```
+n.contains("cd")
+```
+
+Only one call reaches a closure before it reaches a block. The others hit their enclosing block first and stop.
+
+If you have written ast-grep YAML before: there, an absent `stopBy` means `neighbor`. Here, an absent third argument means `"end"`, because "anywhere above" is the question people ask most.
+
+## Text and shape
+
+`#match?` tests the node's source text against a regular expression:
+
+```scheme
+((identifier) @i (#match? @i "^is_"))
+```
+
+```
+is_empty
+```
+
+`#pattern?` tests the node against a code snippet. `$A` stands for any one subtree, `$$$` for any sequence:
 
 ```scheme
 ((call_expression) @c (#pattern? @c "$A.len()"))
 ```
 
-### Negation: the `not-` prefix
-
-Any predicate can be negated by prefixing its name with `not-`:
-
-```scheme
-((call_expression) @c (#not-inside? @c closure))
-((identifier) @n (#not-match? @n "^_"))
+```
+self.items.len()
 ```
 
-### Combining predicates
+```scheme
+((call_expression) @c (#pattern? @c "$R.contains($A)"))
+```
 
-Several predicates on the same capture all have to hold:
+```
+name.contains("ab")
+n.contains("cd")
+```
+
+## Negation
+
+Prefix any predicate with `not-`:
+
+```scheme
+((call_expression) @c (#not-match? @c "contains|is_empty"))
+```
+
+```
+drop(a)
+f()
+self.items.first()
+draw(self.items.len(), 1, 2)
+self.items.len()
+```
+
+## Which node is reported
+
+A pattern can have several captures. The predicates decide which one is reported: the node carrying the capture that the predicates name.
+
+```scheme
+((function_item name: (identifier) @n)
+ (#match? @n "^is_"))
+```
+
+```
+is_empty
+```
+
+The reported node is the identifier, because `@n` is what the predicate constrains. The surrounding `function_item` still has to be there; an `is_empty` identifier elsewhere would not match.
+
+All predicates in one pattern must name the same capture. A pattern with no predicate reports the whole thing.
+
+## Putting it together
+
+Method calls named `contains`, `first` or `len`, on a field, inside a function or impl block, outside any closure:
 
 ```scheme
 [(function_item) (impl_item)] @scope
@@ -234,169 +324,172 @@ Several predicates on the same capture all have to hold:
  (#inside? @m scope)
  (#not-inside? @m closure)
  (#has? @m receiver "neighbor")
- (#match? @m "contains|starts_with|ends_with|find")
+ (#match? @m "contains|first|len")
  (#not-match? @m "^is_"))
 ```
 
-This reports method calls named `contains`, `starts_with`, `ends_with` or `find`, called on a field, inside a function or impl block, outside any closure.
+```
+name.contains("ab")
+self.items.first()
+self.items.len()
+```
 
-## What is accepted but ignored
+## Position among siblings: `#nth-child?`
 
-Some `.scm` syntax has no counterpart in ast-grep's rule language. The translation accepts it and keeps only the node constraint underneath:
+Positions count from 1. The first call in each block:
 
-| construct | example | effect after translation |
-| --- | --- | --- |
-| field selector | `function: (identifier)` | the child must exist; the field name is not checked |
-| quantifiers | `(identifier)+`, `(identifier)?` | treated as a single child |
-| supertype | `expression/identifier` | the underlying node type is kept |
+```scheme
+((call_expression) @c (#nth-child? @c "1"))
+```
 
-A nested pattern always becomes a direct-child check. `(call_expression (identifier))` means "a call with an identifier as a direct child".
+```
+drop(a)
+self.items.is_empty()
+self.items.first()
+self.items.len()
+```
 
-A negated field such as `(call_expression !arguments)` is translated as "has no direct child of kind `arguments`". This is correct only when the grammar uses the same spelling for the field and the node type, which is true for `arguments` in Rust. Check your grammar's `node-types.json` before relying on it.
+`self.items.len()` is first among the children of its argument list. `drop(a)` is first among the children of its statement.
 
-Two constructs are refused outright: the wildcard `(_)` and `(MISSING x)`.
+`"reverse"` counts from the end:
+
+```scheme
+((call_expression) @c (#nth-child? @c "1" "reverse"))
+```
+
+```
+drop(a)
+name.contains("ab")
+n.contains("cd")
+f()
+self.items.is_empty()
+self.items.first()
+draw(self.items.len(), 1, 2)
+```
+
+The CSS `An+B` form works. Every odd-positioned integer literal:
+
+```scheme
+((integer_literal) @n (#nth-child? @n "2n+1"))
+```
+
+```
+2
+```
+
+A name as the third argument counts only siblings matching that name:
+
+```scheme
+[(integer_literal)] @int
+
+((integer_literal) @n (#nth-child? @n "2" int))
+```
+
+This selects the second integer among the integer siblings, ignoring anything else in between.
+
+## Exact position in the file: `#range?`
+
+Two `"line:column"` points, both zero-based. The node must start and end at exactly those points:
+
+```scheme
+((call_expression) @c (#range? @c "3:4" "3:23"))
+```
+
+```
+name.contains("ab")
+```
+
+This is not a window. Asking for `"0:0"` to `"20:0"` returns nothing, because no call starts at the very beginning of the file and ends on line 20. Use `#range?` to name one specific node, for example the one under a cursor.
+
+## Constraining a placeholder
+
+After the pattern string, `#pattern?` accepts pairs of `PLACEHOLDER name`. Each placeholder must then match the named pattern.
+
+Require the receiver of `.len()` to be a bare identifier:
+
+```scheme
+[(identifier)] @ident
+
+((call_expression) @c (#pattern? @c "$A.len()" A ident))
+```
+
+```
+(no matches)
+```
+
+The only `.len()` call is on `self.items`, which is a field access, not an identifier. Require a field access instead:
+
+```scheme
+[(field_expression)] @field
+
+((call_expression) @c (#pattern? @c "$A.len()" A field))
+```
+
+```
+self.items.len()
+```
+
+Constraints are shared across the whole file. Binding `$A` to `ident` in one pattern and to `field` in another is an error.
+
+## Syntax that is accepted but not enforced
+
+Some `.scm` syntax has no equivalent in ast-grep. It is read and the node constraint underneath is kept.
+
+| written | translated as |
+| --- | --- |
+| `function: (identifier)` | a direct child of kind `identifier`; the field name is not checked |
+| `(identifier)+`, `(identifier)?` | a single child of kind `identifier` |
+| `expression/identifier` | kind `identifier` |
+| `(call_expression !arguments)` | no direct child of kind `arguments` |
+
+The last row works only when a grammar spells the field and the node type the same way. It does for `arguments` in Rust. Check the grammar's `node-types.json` for others.
+
+The wildcard `(_)` and `(MISSING x)` are refused.
 
 ## Errors
 
-Errors come in two groups. The first group is found when the query file is read, before any source is examined:
+These are caught when the query is read:
 
-| what you wrote | message |
+| query | error |
 | --- | --- |
-| an unclosed pattern such as `(identifier` | `Syntax { row: 0, message: "unparsed .scm text: (identifier" }` |
-| `(_)` | `Syntax { row: 0, message: "a wildcard node _ has no AstRule" }` |
-| `(#frob? @m "x")` | `UnknownPredicate("frob?")` |
-| `(#inside? @m)` with too few arguments | `PredicateArity { operator: "inside?", got: 1 }` |
-| `(#inside? @m nowhere)` where no pattern is labelled `@nowhere` | `UnboundReference("nowhere")` |
-| a predicate naming a capture the pattern never binds | `UnboundReference("m")` |
-| two top-level patterns both labelled `@scope` | `DuplicateLabel("scope")` |
+| `(identifier` | `Syntax { row: 0, message: "unparsed .scm text: (identifier" }` |
+| `(_) @m` | `Syntax { row: 0, message: "a wildcard node _ has no AstRule" }` |
+| `((identifier) @m (#frob? @m "x"))` | `UnknownPredicate("frob?")` |
+| `((identifier) @m (#inside? @m))` | `PredicateArity { operator: "inside?", got: 1 }` |
+| `((identifier) @m (#inside? @m nowhere))` | `UnboundReference("nowhere")` |
+| `((identifier) (#inside? @m scope))` | `UnboundReference("m")` |
+| `[(a)] @s` and `[(b)] @s` | `DuplicateLabel("s")` |
 | `(#inside? @m scope "sideways")` | `UnknownStopBy("sideways")` |
-| two predicates in one pattern naming `@a` and `@b` | `FocusConflict { first: "a", second: "b" }` |
+| `(#match? @a "x")` and `(#match? @b "y")` in one pattern | `FocusConflict { first: "a", second: "b" }` |
+| `(#nth-child? @a "x")` | `BadPosition("x")` |
+| `(#range? @c "1:0" "nope")` | `BadPosition("nope")` |
+| `$A` bound to `s` in one pattern and `i` in another | `ConstraintConflict { metavariable: "A", first: "s", second: "i" }` |
 
-`row` is zero-based.
+This one is caught when the query runs, because only then is the target language known:
 
-The second group is found when the query runs against a file, because only then is the target language known:
-
-| what you wrote | message |
+| query | error |
 | --- | --- |
-| `(function_itm)`, a node type the grammar does not have | `UnknownKind { kind: "function_itm", language: "Rust" }` |
+| `(function_itm)` over a Rust file | `UnknownKind { kind: "function_itm", language: "Rust" }` |
 
-This check exists because ast-grep itself matches nothing for an unknown node type and reports no error. The mistyped kind would otherwise fail silently.
+ast-grep itself matches nothing for a misspelled kind and says nothing. The check exists so a typo is an error instead of an empty result.
 
-## Worked example: the same query in `.scm` and in YAML
+## Languages
 
-The crate ships an example program that holds one `.scm` query and its hand-written YAML twin, translates the first, reads the second, and confirms that both produce the same rule and the same matches over one file.
+The language comes from the target file's extension. Twenty-eight are available: Bash, C, C++, C#, CSS, Elixir, Go, Haskell, HTML, Java, JavaScript, JSON, Kotlin, Lua, PHP, Python, Ruby, Rust, Scala, Swift, TSX, TypeScript, YAML, and, added by this crate, Prolog, Markdown, Markdown inline, GDScript and Common Lisp. When naming a language directly, `md`, `md_inline`, `gd`, `lisp` and `cl` are accepted as aliases.
 
-The `.scm` side is the combined query from the previous section. The YAML side is:
+## Checking it yourself
 
-```yaml
-id: twin
-utils:
-  closure:
-    any: [{kind: closure_expression}]
-  scope:
-    any: [{kind: function_item}, {kind: impl_item}]
-  receiver:
-    any: [{kind: field_expression}]
-rule:
-  all:
-    - all:
-        - kind: call_expression
-        - has:
-            all:
-              - kind: field_expression
-              - has: {kind: field_identifier}
-    - inside: {matches: scope, stopBy: end}
-    - not: {inside: {matches: closure, stopBy: end}}
-    - has: {matches: receiver}
-    - regex: contains|starts_with|ends_with|find
-    - not: {regex: "^is_"}
-```
-
-Run it:
+The crate ships an example that holds one `.scm` query and its hand-written YAML twin, translates the first, reads the second, and confirms both produce the same rule and the same matches:
 
 ```bash
 cd crates/sprefa-extract
 cargo run --example scm_vs_yaml --features cli -- src/project.rs
 ```
 
-The output ends with:
-
-```text
+```
 rule trees equal: true
 utils equal:      true
 matches .scm:     16
 matches yaml:     16
 match sets equal: true
 ```
-
-## Checking containment
-
-`#inside?` and `#not-inside?` with the same label split a match set in two. If containment works at every depth, the two counts sum to the unfiltered count. Over one 108 KB Rust file:
-
-| query | matches |
-| --- | --- |
-| every `call_expression` | 1121 |
-| `(#inside? @m closure)` | 282 |
-| `(#not-inside? @m closure)` | 839 |
-| `(#inside? @m closure "neighbor")` | 70 |
-
-282 plus 839 is 1121. The `"neighbor"` mode finds the 70 calls whose direct parent is a closure; the default mode finds the 282 calls with a closure anywhere above them.
-
-## Supported languages
-
-The query file itself is language-independent. The language is chosen from the target file's extension when the query runs. Twenty-eight grammars are available:
-
-| group | languages |
-| --- | --- |
-| bundled by ast-grep | Bash, C, C++, C#, CSS, Elixir, Go, Haskell, HTML, Java, JavaScript, JSON, Kotlin, Lua, PHP, Python, Ruby, Rust, Scala, Swift, TSX, TypeScript, YAML |
-| added by this crate | Prolog, Markdown, Markdown inline, GDScript, Common Lisp |
-
-When a language is named directly instead of inferred from a path, the aliases `md`, `md_inline`, `gd`, `lisp` and `cl` are accepted.
-
-## Position, range and placeholder constraints
-
-Three more ast-grep filters are available. They are the ones reached for as soon as a plain pattern returns too much.
-
-### Position among siblings: `#nth-child?`
-
-Selects a node by its index among its siblings: the first argument of a call, the last statement of a block. Positions are 1-based and may use the CSS `An+B` form. An optional label counts only siblings matching that pattern, and the string `"reverse"` counts from the end.
-
-```scheme
-[(argument)] @arg
-
-((argument) @a (#nth-child? @a "2"))                 ; the second sibling
-((argument) @a (#nth-child? @a "2n+1"))              ; every odd sibling
-((argument) @a (#nth-child? @a "1" arg "reverse"))   ; the last sibling that is an argument
-```
-
-In YAML this is `nthChild: 2`, or `nthChild: {position: 2, ofRule: {kind: argument}, reverse: true}`.
-
-### Exact position in the file: `#range?`
-
-Selects the node that starts and ends at exactly the given points, written as `"line:column"` with both numbers zero-based. This is how a rule targets one specific expression, for example the node under a cursor or the one a diff hunk names, rather than a region.
-
-```scheme
-((call_expression) @c (#range? @c "3:4" "3:23"))
-```
-
-In YAML this is `range: {start: {line: 3, column: 4}, end: {line: 3, column: 23}}`.
-
-### Constraining a placeholder: `#pattern?` with pairs
-
-A pattern's `$A` placeholders match any subtree. Trailing pairs of `PLACEHOLDER label` after the pattern string require each named placeholder to match a labelled pattern:
-
-```scheme
-[(identifier)] @name
-
-((call_expression) @c (#pattern? @c "$A.len()" A name))
-```
-
-Now `$A` must be a bare identifier, so `foo().len()` no longer matches. In YAML this is `pattern: $A.len()` with `constraints: {A: {kind: identifier}}`.
-
-Constraints are keyed by placeholder name across the whole file. Binding the same placeholder to two different labels in two patterns is an error:
-
-| what you wrote | message |
-| --- | --- |
-| `(#nth-child? @a "x")` | `BadPosition("x")` |
-| `(#range? @c "1:0" "nope")` | `BadPosition("nope")` |
-| `$A` bound to `@s` in one pattern and `@i` in another | `ConstraintConflict { metavariable: "A", first: "s", second: "i" }` |
