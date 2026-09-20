@@ -1,0 +1,5 @@
+{
+  "case": "kotlin-shadow-decline",
+  "answer": [],
+  "notes": "cannot: aider has no unresolved or decline concept; it tags the ref run in shadow and joins it to the run defs by name"
+}

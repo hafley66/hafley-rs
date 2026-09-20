@@ -160,7 +160,7 @@ def main(case):
     OUT.mkdir(parents=True, exist_ok=True)
     (OUT / "tags").mkdir(exist_ok=True)
     with open(OUT / "tags" / f"{case}.tsv", "w") as fh:
-        for e in ents:
+        for e in sorted(ents, key=lambda e: (e.path, e.span, e.kind, e.name)):
             fh.write(
                 f"{e.path}\t{e.kind}\t{e.tag}\t{e.name}\tL{e.line}\t{e.span[0]}-{e.span[1]}\t"
                 f"name={e.name_span[0]}-{e.name_span[1]}\n"

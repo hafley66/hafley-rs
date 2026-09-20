@@ -57,3 +57,24 @@ Where several defs share the name, every one is emitted; no candidate is chosen.
 | spelled-receiver-field-chain | 3 | ref `run` in field_leg (proj.rs:39); one fn def `run` (proj.rs:25) | `fn run(&self) -> u32;` in `trait Proj` is a function_signature_item, which the rust query does not tag, so the join has one candidate. Match holds because the trait def is invisible; aider did not read `b.inner`. |
 | spelled-receiver-trait-bound | 3 | ref `run` in trait_bound_leg (proj.rs:48); same single def proj.rs:25 | Same join emits Widget::run 330-371; expected is the untagged Proj::run signature 185-202. diff +1 -1. |
 | rename-safe-occurrence-set | 3 (name-join) | tags named `Helper`: defs at lib.rs:3 and util.rs:1, ref `implementation` at util.rs:3 | aider has no scopes, so every tag named `Helper` is emitted at its name span. util.rs:11-17 matches. lib.rs's own struct and the `impl Helper` ref are extras; `Helper::new()` in fn a is a scoped callee, untagged, so lib.rs:69-80 is missing. diff +2 -1. |
+| kotlin-shadow-decline | 2, 3 | ref `run` in shadow (use.kt:33) tagged at name span 752-755, the span expected names | `cannot`: aider tags the ref but has no unresolved or decline concept and no reason strings. Emitting `752-755 unresolved:inferred` would be a guess at the reason. |
+| deps-reach-app | 1, 2 | zero tags in all seven ts files (no fn, class or call; imports and exports are not in `typescript-tags.scm`); map prints nothing for them | `cannot`: no import edge, no resolver, no tsconfig paths, no stop reasons. cases.py asserts no import or module tag exists. |
+
+## Expected files
+
+No expected file looked wrong.
+
+## Final aider column
+
+| case | cell |
+| --- | --- |
+| chain-receiver-call | diff +4 -2 |
+| deps-reach-app | cannot |
+| go-field-promotion | diff +1 -0 |
+| kotlin-ambiguous-receiver | diff +2 -0 |
+| kotlin-shadow-decline | cannot |
+| macro-cross-file-miss | cannot |
+| rename-safe-occurrence-set | diff +2 -1 |
+| spelled-receiver-field-chain | match |
+| spelled-receiver-trait-bound | diff +1 -1 |
+| variant-literal-not-call | match |
