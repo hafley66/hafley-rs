@@ -2841,6 +2841,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sprefa-lab-bakeoff"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "sqlite-wasm-rs"
 version = "0.5.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"

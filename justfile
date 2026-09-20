@@ -113,3 +113,8 @@ boop-start:
     cargo fetch --quiet
     cargo build -p boop --tests --quiet
     echo "boop-start: cargo fetch and boop tests into $shared, $((SECONDS - started))s"
+
+# The context-tool bakeoff table: crates/sprefa-lab-bakeoff/out/<tool>/*.json
+# diffed against expected/*.json, one row per case.
+lab-score:
+    cargo run --quiet -p sprefa-lab-bakeoff --bin score
