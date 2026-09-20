@@ -8,6 +8,8 @@ repository.workspace = true
 homepage.workspace = true
 
 [dependencies]
+# The terminal matcher accepts adapter-owned transcript-shape hooks.
+boop-turnvis = { version = "0.1.0", path = "../boop-turnvis" }
 # The lane channel each adapter's `open_channel` mints.
 boop-acp = { version = "0.0.2", path = "../boop-acp" }
 # The database an ingest pass writes into, and the session types it shares.

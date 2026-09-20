@@ -7,7 +7,7 @@
 //! the turns are read, the result is returned.
 
 use boop_store::rows::TurnRow;
-use boop_turnvis::{visible_squares, BoopTurn, TurnSquare};
+use boop_turnvis::{visible_squares_with, BoopTurn, TurnSquare};
 use serde::Serialize;
 
 use crate::tmux::TerminalSnapshot;
@@ -54,7 +54,11 @@ pub fn screen_state(
     ScreenState {
         lane: lane.to_owned(),
         session: session.to_owned(),
-        squares: visible_squares(&snapshot, &turns_of(rows)),
+        squares: visible_squares_with(
+            &snapshot,
+            &turns_of(rows),
+            Some(boop_harness::harness::claude_summary::anchor),
+        ),
         snapshot,
     }
 }
