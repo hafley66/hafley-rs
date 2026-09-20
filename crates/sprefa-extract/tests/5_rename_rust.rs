@@ -152,9 +152,10 @@ fn glob_importer_is_a_dynamic_stop() {
     let text = std::fs::read_to_string(tree("glob", "before").join("src/lib.rs"))
         .expect("glob fixture text");
     let glob_offset = text.find("use crate::util::*;").expect("glob in fixture");
+    let glob_line = text[..glob_offset].matches('\n').count() + 1;
     assert!(
-        stderr.contains(&format!("src/lib.rs byte {glob_offset}")),
-        "the stop names the use item's own offset:\n{stderr}"
+        stderr.contains(&format!("src/lib.rs:{glob_line}: ")),
+        "the stop names the use item's line:\n{stderr}"
     );
     assert!(
         stderr.contains("glob import"),
