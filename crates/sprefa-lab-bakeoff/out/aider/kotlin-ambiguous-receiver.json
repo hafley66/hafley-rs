@@ -1,0 +1,9 @@
+{
+  "case": "kotlin-ambiguous-receiver",
+  "answer": [
+    "tests/fixtures/kotlin_receivers/lib.kt:323-342",
+    "tests/fixtures/kotlin_receivers/lib.kt:479-497",
+    "tests/fixtures/kotlin_receivers/use.kt:706-719"
+  ],
+  "notes": "name-join: ref run in fieldLeg joins Widget.run, Decoy.run and Inner.run"
+}
