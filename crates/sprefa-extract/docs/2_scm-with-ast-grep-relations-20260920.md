@@ -2,24 +2,42 @@
 
 ## Introduction
 
-A `.scm` query is a pattern written against a parse tree. Tree-sitter turns source code into a tree of named nodes, and a `.scm` file describes a shape of nodes in S-expression form, tagging the parts you care about with `@captures`. For example:
+A `.scm` query is a pattern written against a parse tree. Tree-sitter turns source code into a tree of named nodes; a `.scm` file describes a shape of nodes in S-expression form and tags the parts you care about with `@captures`. Take this Rust:
 
-```scheme
-(call_expression function: (identifier) @name)
+```rust
+fn plain(name: &str) -> bool {
+    let a = 1;
+    drop(a);
+    name.contains("ab")
+}
+
+fn wrapped(n: &str) -> bool {
+    let f = || n.contains("cd");
+    f()
+}
 ```
 
-finds every call whose callee is a plain identifier and hands you that identifier as `@name`. Editors such as Helix and Zed ship one such file per language for highlighting, folding, and scope tracking, so most people who work on language tooling have written one.
-
-What a query cannot say is "this node, but only when it sits inside that other node". The tree-sitter query language has no ancestor or descendant operator, and the upstream request for one has been open since 2021. This guide describes an extension that adds those operators, borrowed from ast-grep, as ordinary `.scm` predicates:
+Its tree has a `function_item` for each `fn`, a `block` for each body, a `let_declaration`, a `closure_expression`, and a `call_expression` for each of `drop(a)`, `name.contains("ab")`, `n.contains("cd")` and `f()`. This query:
 
 ```scheme
-[(function_item) (impl_item)] @scope
+(call_expression function: (identifier) @callee)
+```
+
+asks for every call whose callee is a bare identifier, with the identifier captured as `@callee`. Over the code above it returns two matches, `drop(a)` and `f()`, with `@callee` bound to `drop` and `f`. The method calls are skipped because their callee is a `field_expression`, not an `identifier`. Editors such as Helix and Zed ship one such file per language for highlighting, folding, and scope tracking.
+
+What a query cannot say is "this node, but only when it sits inside that other node". Suppose you want every `.contains(...)` call that is NOT inside a closure. The tree-sitter query language has no ancestor operator; the upstream request for one has been open since 2021. This guide describes an extension that adds ast-grep's relational operators as ordinary `.scm` predicates:
+
+```scheme
+[(closure_expression)] @closure
 
 ((call_expression) @call
- (#inside? @call scope))
+ (#match? @call "contains")
+ (#not-inside? @call closure))
 ```
 
-That query reports every call that sits anywhere inside a function or an `impl` block. Nothing else about `.scm` changes: the same S-expressions, the same captures, the same `#match?` you already use.
+The first line defines a name, `closure`, for any closure node. The second pattern reports each call whose text matches `contains` and which has no closure anywhere above it. Over the code above it returns one match, `name.contains("ab")`. The call `n.contains("cd")` is rejected because the walk up from it reaches a `closure_expression`.
+
+Nothing else about `.scm` changes: the same S-expressions, the same captures, the same `#match?` you already use. The rest of this guide covers what ast-grep's rule language can express, how each piece is spelled in `.scm`, and what the errors look like when a query is wrong.
 
 ## What ast-grep's rule language offers
 
