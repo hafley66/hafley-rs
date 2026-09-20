@@ -79,6 +79,48 @@ pub const NAME_LEAF_KINDS: &[&str] = &[
 /// `variable`, bash's `word` under `command_name`.
 pub const CALLEE_NAME_KINDS: &[&str] = &["name", "variable", "word"];
 
+/// Child kinds the generic callee walk skips (astgrep.rs `callee_of`), the
+/// exact form of `kind contains "argument" || contains "suffix"`: the
+/// argument subtrees plus the kotlin/swift navigation suffixes. Collected
+/// from the same per-language dumps; a grammar declares a subset, and bash
+/// declares none (its words sit directly under `command`).
+///
+/// - `argument`                csharp, php
+/// - `argument_list`           c, cpp, csharp, go, java, python, ruby
+/// - `arguments`               elixir, javascript, lua, php, rust, scala, ts,
+///                             tsx
+/// - `block_argument`          ruby, `&blk`
+/// - `bracketed_argument_list` csharp, `a[i]`
+/// - `call_suffix`             kotlin, swift
+/// - `constructor_suffix`      swift
+/// - `hash_splat_argument`     ruby, `**h`
+/// - `navigation_suffix`       kotlin, swift, `a.b`
+/// - `splat_argument`          ruby, `*args`
+/// - `template_argument_list`  cpp, `foo<int>(...)`
+/// - `type_argument_list`      csharp, `Foo<int>(...)`
+/// - `type_arguments`          java, kotlin, scala, swift, ts, tsx
+/// - `value_argument`          kotlin, swift
+/// - `value_argument_label`    swift
+/// - `value_arguments`         kotlin, swift
+pub const ARG_KINDS: &[&str] = &[
+    "argument",
+    "argument_list",
+    "arguments",
+    "block_argument",
+    "bracketed_argument_list",
+    "call_suffix",
+    "constructor_suffix",
+    "hash_splat_argument",
+    "navigation_suffix",
+    "splat_argument",
+    "template_argument_list",
+    "type_argument_list",
+    "type_arguments",
+    "value_argument",
+    "value_argument_label",
+    "value_arguments",
+];
+
 /// Call kinds whose callee is the FIRST name leaf (prefix application:
 /// `map f xs` calls `map`). Every other kind takes the LAST name leaf before
 /// the argument subtree, the trailing segment of a member chain (`s.fp(...)`

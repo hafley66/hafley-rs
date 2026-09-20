@@ -25,7 +25,9 @@ use crate::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::trace;
 use std::collections::BTreeSet;
 
-use crate::lang::call_kinds::{CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS, NAME_LEAF_KINDS};
+use crate::lang::call_kinds::{
+    ARG_KINDS, CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS, NAME_LEAF_KINDS,
+};
 use crate::lang::python::MODULE_CALLER;
 use crate::project::ResolveDrop;
 use crate::types::UnresolvedReason;
@@ -178,20 +180,30 @@ impl Parser for AstGrepParser {
 /// resolve time, it can never match a node of that grammar.
 struct RootKinds {
     name_leaves: Vec<u16>,
+    args: Vec<u16>,
 }
 
 impl RootKinds {
     fn resolve(root: &SgRoot) -> Self {
-        let name_leaves = NAME_LEAF_KINDS
-            .iter()
-            .map(|kind| root.root().lang().kind_to_id(kind))
-            .filter(|id| *id != 0)
-            .collect();
-        Self { name_leaves }
+        let ids = |names: &[&str]| {
+            names
+                .iter()
+                .map(|kind| root.root().lang().kind_to_id(kind))
+                .filter(|id| *id != 0)
+                .collect()
+        };
+        Self {
+            name_leaves: ids(NAME_LEAF_KINDS),
+            args: ids(ARG_KINDS),
+        }
     }
 
     fn is_name_leaf_kind(&self, id: u16) -> bool {
         self.name_leaves.contains(&id)
+    }
+
+    fn is_arg(&self, id: u16) -> bool {
+        self.args.contains(&id)
     }
 }
 
@@ -332,8 +344,7 @@ fn callee_of(
     }
     let mut leaves = Vec::new();
     for child in node.children() {
-        let kind = child.kind();
-        if kind.contains("argument") || kind.contains("suffix") {
+        if kinds.is_arg(child.kind_id()) {
             continue;
         }
         collect_name_leaves(&child, kinds, &mut leaves);
