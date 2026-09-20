@@ -1,0 +1,5 @@
+{
+  "case": "macro-cross-file-miss",
+  "answer": [],
+  "notes": "ryi fast emits one row for the whole four-file corpus, local.rs alpha -> helper_two, its own same-file expansion, which is outside this question. Widget::alpha, Widget::beta and Widget::gamma produce no resolved_edge, no unresolved row, and no stderr warning."
+}

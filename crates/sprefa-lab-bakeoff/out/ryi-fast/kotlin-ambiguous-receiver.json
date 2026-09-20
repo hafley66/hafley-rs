@@ -1,0 +1,6 @@
+{
+  "case": "kotlin-ambiguous-receiver",
+  "answer": [
+    "tests/fixtures/kotlin_receivers/lib.kt:323-342"
+  ]
+}

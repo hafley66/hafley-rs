@@ -1,0 +1,17 @@
+{
+  "case": "deps-reach-app",
+  "answer": [
+    "lib/bare.ts|named|1",
+    "lib/bare.ts|namespace|1",
+    "lib/helper.ts|named|2",
+    "lib/mapped.ts|named|1",
+    "lib/util.ts|default|1",
+    "lib/util.ts|named|1",
+    "lib/util.ts|reexport|1",
+    "side.ts|side_effect|1",
+    "widget/index.ts|named|1",
+    "./gone.ts|unresolved:relative_unresolved",
+    "/lib/util.ts|unresolved:absolute_path",
+    "rxjs|unresolved:node_modules_boundary"
+  ]
+}
