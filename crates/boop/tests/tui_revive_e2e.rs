@@ -30,10 +30,8 @@ const START_DEADLINE: Duration = Duration::from_secs(90);
 /// Poll interval under every deadline loop.
 const POLL: Duration = Duration::from_millis(250);
 
-/// Pane ids restart at `%0` with each tmux server, so the pane the route names
-/// must not be `%0`: the canary that restarts the server would take that id
-/// back and the dead route would read live. Two pads push it to `%2`.
-const PAD_PANES: usize = 2;
+/// Exercise pane-id reuse after restart: the canary takes the old `%0`.
+const PAD_PANES: usize = 0;
 
 /// One harness's place in the matrix.
 struct Case {
@@ -467,9 +465,9 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         "SELECT COALESCE(tmux,'') FROM agent_route WHERE route = '{}'",
         scratch.route
     ));
-    assert_ne!(
+    assert_eq!(
         pane, "%0",
-        "{}: the pad panes did not shift the coordinator pane id",
+        "{}: the coordinator must exercise pane-id reuse",
         case.entry
     );
 
@@ -484,7 +482,7 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
     let restart = tmux(
         &server,
         &launch.env,
-        &["new-session", "-d", "-s", "canary", "sleep 100000"],
+        &["new-session", "-d", "-s", &scratch.route, "sleep 100000"],
     );
     assert!(
         restart.status.success(),
@@ -594,10 +592,24 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         String::from_utf8_lossy(&declined.stderr)
     );
     assert!(
-        !session_alive(&server, &scratch.route),
+        !session_alive(&server, &format!("{}-revived-1", scratch.route)),
         "{}: `none` spawned a pane anyway",
         case.entry
     );
+
+    // A persisted PID can now belong to an unrelated live process. Both
+    // candidate selection and native wrapper startup must ignore this cache.
+    let store = boop::Store::open(scratch.mail().join("boop.db")).unwrap();
+    store
+        .record_status(
+            &session_id,
+            boop::live::now_ms(),
+            "live",
+            Some(std::process::id() as i64),
+            Some("%0"),
+        )
+        .unwrap();
+    drop(store);
 
     // Step 4b: the revive itself.
     let revived = scratch.boop(&as_args(&scratch.revive_args(&["--dead", "--yes"])));
@@ -614,8 +626,9 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         case.entry
     );
     assert!(
-        session_alive(&server, &scratch.route),
-        "{}: revive left no live pane",
+        session_alive(&server, &format!("{}-revived-1", scratch.route))
+            && session_alive(&server, &scratch.route),
+        "{}: revive must preserve the restored shell and create a new pane",
         case.entry
     );
     assert_eq!(
@@ -629,7 +642,7 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
     wait_for_screen(
         &server,
         case,
-        &scratch.route,
+        &format!("{}-revived-1", scratch.route),
         mock_tui::MOCK_PROMPT,
         "revived screen",
     );
@@ -638,7 +651,7 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
     let again = scratch.boop(&as_args(&scratch.revive_args(&[&scratch.route])));
     let message = String::from_utf8_lossy(&again.stderr).into_owned();
     assert!(
-        !again.status.success() && message.contains("is live at tmux target"),
+        !again.status.success() && message.contains("is live:"),
         "{}: a second revive answered {:?} / {message:?}",
         case.entry,
         String::from_utf8_lossy(&again.stdout)
@@ -697,4 +710,98 @@ fn a_dead_coordinator_pane_revives_on_its_session_codex() {
         Ok(()) => println!("pass codex"),
         Err(reason) => println!("skip codex: {reason}"),
     }
+}
+
+/// Recovery must survive restored shell names, reused pane ids and stale
+/// cached PIDs, and must offer registered sessions before transcript sync.
+#[test]
+fn restored_shells_do_not_hide_recent_coordinators() {
+    let root = std::env::temp_dir().join(format!("boop-revive-shells-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let scratch = Scratch {
+        server: format!("boop-revive-shells-{}", std::process::id()),
+        session: "claude-a".into(),
+        route: "claude-a".into(),
+        root: root.clone(),
+        env: vec![],
+    };
+    let output = tmux(
+        &scratch.server,
+        &[],
+        &["new-session", "-d", "-s", "claude-a", "sleep 100000"],
+    );
+    assert!(output.status.success(), "{output:?}");
+    std::fs::create_dir_all(scratch.mail()).unwrap();
+    let mut routes = serde_json::Map::new();
+    for (name, harness, kind) in [
+        ("claude-a", "claude", "coordinator"),
+        ("claude-b", "claude", "coordinator"),
+        ("codex-work", "codex", "coordinator"),
+        ("codex-watch", "codex", "coordinator"),
+        ("worker", "codex", "lane"),
+    ] {
+        routes.insert(
+            name.into(),
+            serde_json::json!({
+                "kind":kind, "harness":harness, "sessionId":name,
+                "cwd":root, "tmux":"%0", "registeredAt":boop::bus::now_iso()
+            }),
+        );
+    }
+    std::fs::write(
+        scratch.mail().join("registry.json"),
+        serde_json::to_vec(&routes).unwrap(),
+    )
+    .unwrap();
+    let list = || {
+        let output = scratch.boop(&as_args(&scratch.revive_args(&["--list", "--json"])));
+        assert!(output.status.success(), "{output:?}");
+        let rows: Vec<serde_json::Value> = serde_json::from_slice(&output.stdout).unwrap();
+        let mut names: Vec<String> = rows
+            .iter()
+            .map(|r| r["name"].as_str().unwrap().to_owned())
+            .collect();
+        names.sort();
+        names
+    };
+    assert_eq!(
+        list(),
+        ["claude-a", "claude-b", "codex-watch", "codex-work"]
+    );
+    let db = scratch.mail().join("boop.db");
+    let store = boop::Store::open(db.clone()).unwrap();
+    store
+        .record_status(
+            "claude-a",
+            boop::live::now_ms(),
+            "live",
+            Some(std::process::id() as i64),
+            Some("%0"),
+        )
+        .unwrap();
+    assert_eq!(
+        list(),
+        ["claude-a", "claude-b", "codex-watch", "codex-work"]
+    );
+    let lock = boop::bus::try_route_lock(&db, "codex-work", "native-tui")
+        .unwrap()
+        .unwrap();
+    assert_eq!(list(), ["claude-a", "claude-b", "codex-watch"]);
+    let declined = scratch.boop_answering(&as_args(&scratch.revive_args(&["--dead"])), "none\n");
+    assert!(declined.status.success(), "{declined:?}");
+    let text = String::from_utf8_lossy(&declined.stdout);
+    assert!(
+        text.contains("claude-a") && text.contains("claude-b") && text.contains("codex-watch"),
+        "{text}"
+    );
+    assert!(session_alive(&scratch.server, "claude-a"));
+    drop(lock);
+    assert_eq!(
+        list(),
+        ["claude-a", "claude-b", "codex-watch", "codex-work"]
+    );
+    drop(store);
+    // Only this fixture's private server is removed.
+    let _ = tmux(&scratch.server, &[], &["kill-server"]);
+    std::fs::remove_dir_all(root).unwrap();
 }

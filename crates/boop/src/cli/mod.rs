@@ -141,8 +141,8 @@ RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
   coordinator row carrying all three prints REVIVABLE in `lane list`; one
   missing a field is named and skipped by --dead. --dead offers kind=coordinator
   routes only (a revived coordinator revives its own lanes), active within
-  --since, whose transcript holds at least one human message (a coordinator
-  is a human's pane; a route with none is skipped and named). One row per
+  --since. Registered sessions remain eligible before transcript sync. Live
+  wrapper ownership excludes a route; a restored shell does not. One row per
   session: a session resumed by hand under a second route name shows once. A
   transcript ending in claude's `/exit` user row is still offered, marked
   `exited` in the age column (codex and opencode record no exit at all). It
