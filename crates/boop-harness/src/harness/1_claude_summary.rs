@@ -22,13 +22,9 @@ fn summary(text: &str) -> bool {
         })
 }
 
-fn is_claude(harness: &str) -> bool {
-    harness == "claude"
-}
-
 /// Match rows through the generic engine with Claude's transcript-shape hook.
 /// The hook remains active for mixed-harness inputs and filters every source
-/// row through the Claude predicate above.
+/// row by its harness.
 pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<VisibleTurn> {
     boop_turnvis::locate_visible_turns_with(lines, turns, Some(anchor))
 }
@@ -42,7 +38,7 @@ pub fn anchor(lines: &[LogicalLine], turns: &[BoopTurn], visible: &mut Vec<Visib
             continue;
         }
         let conversation = |turn: &&VisibleTurn| {
-            is_claude(turn.harness.as_str()) && matches!(turn.role.as_str(), "user" | "assistant")
+            turn.harness == "claude" && matches!(turn.role.as_str(), "user" | "assistant")
         };
         let before = visible
             .iter()
@@ -68,7 +64,7 @@ pub fn anchor(lines: &[LogicalLine], turns: &[BoopTurn], visible: &mut Vec<Visib
         let Some(tool) = turns
             .iter()
             .filter(|turn| {
-                is_claude(turn.harness.as_str())
+                turn.harness == "claude"
                     && turn.session == after.session
                     && turn.role == "tool"
                     && low < turn.turn

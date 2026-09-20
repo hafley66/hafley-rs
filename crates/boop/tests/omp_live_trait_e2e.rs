@@ -4,17 +4,22 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use boop::harness::mock_tui::{self, MockTuiContext, MockTuiReplay};
+use boop::harness::mock_tui::{self, MockTuiContext, MockTuiLaunch, MockTuiReplay};
 use boop::harness::{shell_quote, HarnessId};
 use boop::live::session_in_pane_on_socket;
 use boop::Registry;
 use boop_store::ident::{Store, TurnQuery};
+use boop_store::testing::BoopCommandExt;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
 const POLL: Duration = Duration::from_millis(100);
 const DEADLINE: Duration = Duration::from_secs(75);
+static LIVE_ENV: OnceLock<Mutex<()>> = OnceLock::new();
+static NEXT_SCRATCH: AtomicUsize = AtomicUsize::new(0);
 
 struct Scratch {
     root: PathBuf,
@@ -23,7 +28,12 @@ struct Scratch {
 
 impl Scratch {
     fn new() -> Self {
-        let unique = format!("{}-{}", std::process::id(), boop::live::now_ms());
+        let unique = format!(
+            "{}-{}-{}",
+            std::process::id(),
+            boop::live::now_ms(),
+            NEXT_SCRATCH.fetch_add(1, Ordering::Relaxed)
+        );
         let root = std::env::temp_dir().join(format!("boop-omp-live-trait-{unique}"));
         let socket = format!("boop-omp-live-trait-{unique}");
         let _ = std::fs::remove_dir_all(&root);
@@ -81,7 +91,10 @@ impl Scratch {
             &self.socket,
             &["display-message", "-p", "#{socket_path},#{pid},0"],
         );
-        assert!(output.status.success(), "read scratch TMUX context: {output:?}");
+        assert!(
+            output.status.success(),
+            "read scratch TMUX context: {output:?}"
+        );
         String::from_utf8_lossy(&output.stdout).trim().to_owned()
     }
 
@@ -109,7 +122,7 @@ struct EnvGuard {
 impl EnvGuard {
     fn set(key: &'static str, value: impl AsRef<std::ffi::OsStr>) -> Self {
         let previous = std::env::var_os(key);
-        // SAFETY: this standalone integration target contains one test body.
+        // SAFETY: the live test holds LIVE_ENV while it owns these variables.
         unsafe { std::env::set_var(key, value) };
         Self { key, previous }
     }
@@ -117,7 +130,7 @@ impl EnvGuard {
 
 impl Drop for EnvGuard {
     fn drop(&mut self) {
-        // SAFETY: restores the single process-global variable this test owns.
+        // SAFETY: the live test still holds LIVE_ENV while its guards drop.
         unsafe {
             match &self.previous {
                 Some(value) => std::env::set_var(self.key, value),
@@ -154,6 +167,164 @@ fn wait(label: &str, predicate: impl Fn() -> bool, screen: impl Fn() -> String) 
     }
 }
 
+fn tmux_env(command: &Command) -> String {
+    let mut shell = String::from("exec env -i");
+    let envs: Vec<_> = command.get_envs().collect();
+    for key in envs
+        .iter()
+        .filter_map(|(key, value)| value.is_none().then_some(*key))
+    {
+        let key = shell_quote(&key.to_string_lossy());
+        shell.push_str(&format!(" -u {key}"));
+    }
+    for (key, value) in envs
+        .iter()
+        .filter_map(|(key, value)| value.as_ref().map(|value| (*key, *value)))
+    {
+        let key = shell_quote(&key.to_string_lossy());
+        shell.push_str(&format!(" {key}={}", shell_quote(&value.to_string_lossy())));
+    }
+    // `boop_test_root` removes inherited route identity. The pane's own
+    // socket identity is supplied by tmux when this command is evaluated.
+    shell.push_str(" TMUX=\"$TMUX\" TMUX_PANE=\"$TMUX_PANE\"");
+    shell
+}
+
+fn tmux_command(command: &Command) -> String {
+    let mut shell = tmux_env(command);
+    shell.push(' ');
+    shell.push_str(&shell_quote(&command.get_program().to_string_lossy()));
+    for arg in command.get_args() {
+        shell.push(' ');
+        shell.push_str(&shell_quote(&arg.to_string_lossy()));
+    }
+    shell
+}
+
+#[test]
+fn tmux_command_preserves_homes_and_serializes_fixture_overrides() {
+    let _env_lock = LIVE_ENV.get_or_init(|| Mutex::new(())).lock().unwrap();
+    let scratch = Scratch::new();
+    let launch = MockTuiLaunch {
+        executable: "/tmp/omp-fixture".into(),
+        args: vec!["--model".into(), "llmock/mock-model".into()],
+        env: vec![
+            ("HOME".into(), scratch.home().display().to_string()),
+            ("TMPDIR".into(), "/ambient/tmp".into()),
+            (
+                "PI_CODING_AGENT_DIR".into(),
+                scratch.agent_dir().display().to_string(),
+            ),
+        ],
+        config_paths: Vec::new(),
+        replay: MockTuiReplay::PromptArg,
+    };
+    let command = omp_command(
+        &scratch,
+        &launch,
+        Path::new("/tmp/boop-fixture"),
+        "omp-command-test",
+        &[],
+    );
+    let shell = tmux_env(&command);
+    let output = Command::new("sh")
+        .env("BOOP_ROUTE_TEST", "outer-stale")
+        .args(["-c", &format!("{shell} env")])
+        .output()
+        .expect("run serialized command environment");
+    assert!(
+        output.status.success(),
+        "serialized command failed: {output:?}"
+    );
+    let env = String::from_utf8_lossy(&output.stdout);
+    let has = |name: &str, value: &Path| {
+        env.lines()
+            .any(|line| line == format!("{name}={}", value.display()))
+    };
+    assert!(has("BOOP_READER_HOME", &scratch.home()));
+    assert!(has(
+        "BOOP_CONFIG",
+        &scratch.home().join("config/boop/config.json")
+    ));
+    assert!(has("BOOP_DB", &scratch.db()));
+    assert!(has("BOOP_MAIL_DIR", &scratch.mail()));
+    assert!(has("PI_CODING_AGENT_DIR", &scratch.agent_dir()));
+    assert!(has("TMPDIR", &scratch.tmp()));
+    assert!(!env.lines().any(|line| line == "TMPDIR=/ambient/tmp"));
+    assert!(!env.lines().any(|line| line.starts_with("BOOP_ROUTE_TEST=")));
+    if let Some(home) = std::env::var_os("HOME") {
+        assert!(env
+            .lines()
+            .any(|line| line == format!("HOME={}", home.to_string_lossy())));
+    }
+    assert!(!env
+        .lines()
+        .any(|line| line == format!("HOME={}", scratch.home().display())));
+    if let Some(codex_home) = std::env::var_os("CODEX_HOME") {
+        assert!(env
+            .lines()
+            .any(|line| line == format!("CODEX_HOME={}", codex_home.to_string_lossy())));
+    }
+}
+
+fn omp_command(
+    scratch: &Scratch,
+    launch: &MockTuiLaunch,
+    executable: &Path,
+    route: &str,
+    extra_args: &[String],
+) -> Command {
+    let mut child = Command::new(BOOP);
+    child.env_clear();
+    for (key, value) in &launch.env {
+        // terminal_env supplies HOME for ordinary adapter runs. This fixture
+        // pins OMP's actual config through PI_CODING_AGENT_DIR and preserves
+        // the real process homes below.
+        if key != "HOME" {
+            child.env(key, value);
+        }
+    }
+    // The OMP recipe's PI_CODING_AGENT_DIR is the reader/config root. Keep
+    // HOME and CODEX_HOME from the test process so the wrapper does not alter
+    // either process-global home while the child still has fixture readers.
+    for (key, value) in [
+        ("HOME", std::env::var_os("HOME")),
+        ("CODEX_HOME", std::env::var_os("CODEX_HOME")),
+    ] {
+        if let Some(value) = value {
+            child.env(key, value);
+        }
+    }
+    for (key, value) in [
+        ("XDG_CONFIG_HOME", scratch.home().join(".config")),
+        ("XDG_DATA_HOME", scratch.home().join(".local/share")),
+        ("XDG_CACHE_HOME", scratch.home().join(".cache")),
+        ("XDG_STATE_HOME", scratch.home().join(".local/state")),
+        ("TMPDIR", scratch.tmp()),
+    ] {
+        child.env(key, value);
+    }
+    child
+        .boop_test_root(&scratch.home())
+        .env("BOOP_DB", scratch.db())
+        .env("BOOP_MAIL_DIR", scratch.mail())
+        .env("BOOP_NO_SYNC", "1")
+        .env("BOOP_NATIVE_PROJECT_EVERY_MS", "100")
+        .env("BOOP_NATIVE_DISCOVER_EVERY_MS", "100")
+        .env("OMP_SKIP_SETUP", "1")
+        .arg("tui")
+        .arg("omp")
+        .args(["--name", route, "--bin"])
+        .arg(executable)
+        .args(["--cwd"])
+        .arg(scratch.repo())
+        .args(["--mail-dir"])
+        .arg(scratch.mail())
+        .arg("--");
+    child.args(&launch.args).args(extra_args).arg("--auto-approve");
+    child
+}
+
 fn launch_omp(
     scratch: &Scratch,
     registry: &Registry,
@@ -171,34 +342,8 @@ fn launch_omp(
             port,
         })
         .expect("OMP mock-TUI launch recipe");
-    let path = std::env::var("PATH").expect("PATH for installed omp launcher");
-    let mut command = format!(
-        "exec env -i PATH={} HOME={} TMPDIR={} TERM=xterm-256color XDG_CONFIG_HOME={} XDG_DATA_HOME={} XDG_CACHE_HOME={} XDG_STATE_HOME={} PI_CODING_AGENT_DIR={} BOOP_MAIL_DIR={} BOOP_DB={} BOOP_NO_SYNC=1 BOOP_NATIVE_PROJECT_EVERY_MS=100 BOOP_NATIVE_DISCOVER_EVERY_MS=100 OMP_SKIP_SETUP=1 TMUX=\"$TMUX\" TMUX_PANE=\"$TMUX_PANE\" {} tui omp --name {} --bin {} --cwd {} --mail-dir {} --",
-        shell_quote(&path),
-        shell_quote(&scratch.home().display().to_string()),
-        shell_quote(&scratch.tmp().display().to_string()),
-        shell_quote(&scratch.home().join(".config").display().to_string()),
-        shell_quote(&scratch.home().join(".local/share").display().to_string()),
-        shell_quote(&scratch.home().join(".cache").display().to_string()),
-        shell_quote(&scratch.home().join(".local/state").display().to_string()),
-        shell_quote(&scratch.agent_dir().display().to_string()),
-        shell_quote(&scratch.mail().display().to_string()),
-        shell_quote(&scratch.db().display().to_string()),
-        shell_quote(BOOP),
-        shell_quote(route),
-        shell_quote(&executable.display().to_string()),
-        shell_quote(&scratch.repo().display().to_string()),
-        shell_quote(&scratch.mail().display().to_string()),
-    );
-    for arg in &launch.args {
-        command.push(' ');
-        command.push_str(&shell_quote(arg));
-    }
-    for arg in extra_args {
-        command.push(' ');
-        command.push_str(&shell_quote(arg));
-    }
-    command.push_str(" --auto-approve");
+    let child = omp_command(scratch, &launch, executable, route, extra_args);
+    let command = tmux_command(&child);
     let output = tmux(
         &scratch.socket,
         &[
@@ -292,6 +437,7 @@ fn wait_for_turns(scratch: &Scratch, session: &str) {
 /// transcript messages, and Boop's stored turns preserve their distinct UUIDs.
 #[test]
 fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
+    let _env_lock = LIVE_ENV.get_or_init(|| Mutex::new(())).lock().unwrap();
     let Some(llmock) = mock_tui::resolve_llmock() else {
         eprintln!("skip omp_live_trait_e2e: no llmock (set LLMOCK_BIN)");
         return;
@@ -301,7 +447,6 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
         return;
     };
     let scratch = Scratch::new();
-    let _home = EnvGuard::set("HOME", &scratch.home());
     let _mail = EnvGuard::set("BOOP_MAIL_DIR", &scratch.mail());
     let _db = EnvGuard::set("BOOP_DB", &scratch.db());
     let _agent_dir = EnvGuard::set("PI_CODING_AGENT_DIR", &scratch.agent_dir());
