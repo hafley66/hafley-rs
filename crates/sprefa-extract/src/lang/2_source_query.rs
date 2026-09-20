@@ -271,22 +271,12 @@ fn matches_predicates(
     found: &tree_sitter::QueryMatch<'_, '_>,
     source: &[u8],
 ) -> Result<bool, String> {
-    let direct = query.general_predicates(found.pattern_index);
-    if !direct.is_empty() {
-        return direct.iter().try_fold(true, |matched, predicate| {
+    query
+        .general_predicates(found.pattern_index)
+        .iter()
+        .try_fold(true, |matched, predicate| {
             Ok(matched && predicate_matches(predicate, found, source)?)
-        });
-    }
-    for pattern in 0..query.pattern_count() {
-        if pattern != found.pattern_index {
-            for predicate in query.general_predicates(pattern) {
-                if !predicate_matches(predicate, found, source)? {
-                    return Ok(false);
-                }
-            }
-        }
-    }
-    Ok(true)
+        })
 }
 
 fn predicate_matches(
