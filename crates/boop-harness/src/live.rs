@@ -7,8 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 
-use crate::harness::HarnessId;
 use crate::Registry;
+use crate::harness::HarnessId;
 
 /// What a live session is doing at the moment it was observed.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -163,13 +163,84 @@ pub fn session_in_pane_on_socket(
     socket: Option<&str>,
     mail_dir: &Path,
 ) -> anyhow::Result<Option<String>> {
-    for harness in registry.all() {
-        if let Some(session) = session_from_live_in_pane(harness.live(), pane, socket) {
-            return Ok(Some(session));
-        }
+    let registered = live_registered_session_in_pane(pane, socket, mail_dir)
+        .map(|registered| registered.map(|session| resolve_registered_session(registry, &session)));
+    if let Some(session) = session_from_sources(
+        registered,
+        registry.all().iter().map(|harness| harness.live()),
+        pane,
+        socket,
+    ) {
+        return Ok(Some(session));
     }
     route_session_in_pane(pane, socket, mail_dir)
         .map(|session| session.map(|session| resolve_registered_session(registry, &session)))
+}
+
+fn session_from_sources<'a>(
+    registered: anyhow::Result<Option<String>>,
+    live: impl Iterator<Item = &'a dyn LiveSessions>,
+    pane: &str,
+    socket: Option<&str>,
+) -> Option<String> {
+    registered.ok().flatten().or_else(|| {
+        live.filter_map(|source| session_from_live_in_pane(source, pane, socket))
+            .next()
+    })
+}
+
+/// A native wrapper records both its pane route and the frontend process bound
+/// to that session. Prefer that relation while the recorded process is alive:
+/// a harness breadcrumb can survive its TUI and later see the same tty reused
+/// by a different harness in the same pane.
+fn live_registered_session_in_pane(
+    pane: &str,
+    socket: Option<&str>,
+    mail_dir: &Path,
+) -> anyhow::Result<Option<String>> {
+    let Some(panes) = boop_store::tmux::mux().list_panes(socket) else {
+        return Ok(None);
+    };
+    if !panes.iter().any(|candidate| same_pane(&candidate.id, pane)) {
+        return Ok(None);
+    }
+    let routes = boop_store::bus::read_routes(mail_dir)?;
+    let store = boop_store::ident::Store::open_readonly(boop_store::bus::db_path(mail_dir)?)?;
+    live_registered_session(&store, routes.values(), pane)
+}
+
+fn live_registered_session<'a>(
+    store: &boop_store::ident::Store,
+    routes: impl Iterator<Item = &'a boop_store::bus::Route>,
+    pane: &str,
+) -> anyhow::Result<Option<String>> {
+    for route in routes {
+        let Some((held, session)) = route.tmux.as_deref().zip(route.session_id.as_deref()) else {
+            continue;
+        };
+        if !same_pane(held, pane) {
+            continue;
+        }
+        let Some(live) = store.live_row(session)? else {
+            continue;
+        };
+        let recorded_pane = live
+            .tmux_pane
+            .as_deref()
+            .is_some_and(|held| same_pane(held, pane));
+        let process_alive = live
+            .pid
+            .and_then(|pid| u32::try_from(pid).ok())
+            .is_some_and(pid_alive);
+        if recorded_pane && process_alive {
+            return Ok(Some(session.to_owned()));
+        }
+    }
+    Ok(None)
+}
+
+fn same_pane(left: &str, right: &str) -> bool {
+    left.trim_start_matches('%') == right.trim_start_matches('%')
 }
 
 fn session_from_live_in_pane(
@@ -223,18 +294,13 @@ fn route_session_in_pane(
     let Some(panes) = boop_store::tmux::mux().list_panes(socket) else {
         return Ok(None);
     };
-    if !panes
-        .iter()
-        .any(|candidate| candidate.id.trim_start_matches('%') == pane.trim_start_matches('%'))
-    {
+    if !panes.iter().any(|candidate| same_pane(&candidate.id, pane)) {
         return Ok(None);
     }
     let routes = boop_store::bus::read_routes(mail_dir)?;
     Ok(routes.into_values().find_map(|route| {
         let held = route.tmux.as_deref()?;
-        (held.trim_start_matches('%') == pane.trim_start_matches('%'))
-            .then_some(route.session_id)
-            .flatten()
+        same_pane(held, pane).then_some(route.session_id).flatten()
     }))
 }
 
@@ -274,6 +340,56 @@ mod tests {
             Some("tty-bound".into())
         );
         assert_eq!(session_from_live_in_pane(&SocketAware, "%7", None), None);
+    }
+
+    #[test]
+    fn native_claim_survives_an_unavailable_route_store() {
+        assert_eq!(
+            session_from_sources(
+                Err(anyhow::anyhow!("route store unavailable")),
+                [&Two as &dyn LiveSessions].into_iter(),
+                "%1",
+                None,
+            ),
+            Some("a".into())
+        );
+    }
+
+    #[test]
+    fn registered_route_requires_its_live_process_and_pane_observation() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = boop_store::ident::Store::open(dir.path().join("boop.db")).unwrap();
+        store
+            .record_status(
+                "revived-codex",
+                1,
+                "live",
+                Some(i64::from(std::process::id())),
+                Some("%1"),
+            )
+            .unwrap();
+        store
+            .record_status("stale-omp", 1, "detached", None, None)
+            .unwrap();
+        let revived = boop_store::bus::route_from_value(&serde_json::json!({
+            "kind":"coordinator", "harness":"codex", "tmux":"%1",
+            "session_id":"revived-codex"
+        }));
+        let stale = boop_store::bus::route_from_value(&serde_json::json!({
+            "kind":"coordinator", "harness":"omp", "tmux":"%1",
+            "session_id":"stale-omp"
+        }));
+
+        let registered = live_registered_session(&store, [&stale, &revived].into_iter(), "1");
+        assert_eq!(
+            session_from_sources(
+                registered,
+                [&Two as &dyn LiveSessions].into_iter(),
+                "%1",
+                None,
+            ),
+            Some("revived-codex".into())
+        );
     }
 
     fn session(id: &str, pane: Option<&str>) -> LiveSession {
