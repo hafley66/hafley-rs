@@ -9,6 +9,7 @@ fn request(rule: AstRule) -> AstRuleRequest {
         id: "rule".into(),
         rule,
         utils: Vec::new(),
+        constraints: Vec::new(),
         fix: None,
     }
 }
@@ -19,6 +20,7 @@ fn typed_and_documented_yaml_requests_have_equal_rows() {
         id: "println".into(),
         rule: AstRule::Pattern("println!($MESSAGE)".into()),
         utils: Vec::new(),
+        constraints: Vec::new(),
         fix: Some("eprintln!($MESSAGE)".into()),
     };
     let yaml = r#"
@@ -107,6 +109,7 @@ fn named_utils_and_matches_are_resolved_by_the_same_typed_model() {
             id: "print_call".into(),
             rule: AstRule::Pattern("println!($MESSAGE)".into()),
         }],
+        constraints: Vec::new(),
         fix: None,
     };
     let rows = query_ast_rule("main.rs", b"fn main() { println!(\"ok\"); }", &request)
@@ -261,6 +264,7 @@ fn soopy_source_to_common_query_facts_is_one_content_addressed_graph() {
             id: "replace_print".into(),
             rule: AstRule::Pattern("println!($MESSAGE)".into()),
             utils: Vec::new(),
+            constraints: Vec::new(),
             fix: Some("eprintln!($MESSAGE)".into()),
         }),
     ];

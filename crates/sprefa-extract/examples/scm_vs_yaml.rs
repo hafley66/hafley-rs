@@ -71,6 +71,7 @@ fn main() {
         id: "twin".into(),
         rule: lowered.rule,
         utils: lowered.utils,
+        constraints: lowered.constraints,
         fix: None,
     };
     let from_yaml = decode_ast_rule_yaml(YAML).expect("yaml decodes");
