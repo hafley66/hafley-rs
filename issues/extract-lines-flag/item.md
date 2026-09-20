@@ -1,12 +1,14 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-19
 type: feature
-status: open
+status: done
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract, phase-refinement-1, artifact-cli]
 related: ['@extract-graph-verb']
+closed: 2026-09-19
+closed_by: claude-opus-5
 ---
 
 # extract --lines: byte spans as file:line, every verb
@@ -53,4 +55,9 @@ Receipt from the 2026-09-18 ryi rename. rename exited 6 citing 'src/bin/extract.
 ### 2026-09-18T23:48:33Z · @claude-513
 
 Checked whether --lines already landed in a worktree. It did not. `git log --all -S'"--lines"' -- crates/sprefa-extract` returns zero commits, and no branch matches *line* except origin/fix/mux-multiline-brief. Four candidate worktrees inspected: extract-fixes ad865db5 is the diff-verb report, extract-check and extract-oracle-paths-test both sit on 3ee65276 which is a boop cleanup record, extract-post-move-fix 11d09f93 gates the cli identity test. The worktree the 20260918.1 session log labeled 'lane LN --lines' (commit 82978233, now 4bd8cf2f on main) carries schema/1_facts.tsp, the three generated schema files, 0_sqlite.rs and wire.rs: sqlite-side work with no CLI flag. That lane died on 'Prompt is too long' and produced no --lines work.
+
+### 2026-09-19T20:28:27Z · @claude-opus-5
+
+Landed on main at 252a7346 via lane feature-extract-lines-flag (preset glm53f-omp). Gate: cargo test --features cli --no-fail-fast, every target ok, 0 failures. src/lang/ diff empty three-dot against the merge base. Receipt: head -c 43256 instant/src/worktrees.ts | wc -l = 1041, and ryi --lines reports span start 43256 line 1042 col 8 on function_declaration sessionsForWorktree. Decoration is per span by owning path: caller_site against caller_path, callee against callee_path, resolved_type_edge owner/target likewise. Named stops: flow_edge and projectedge own spans by content digest (from_blob/to_blob) with no path in the row, and scip_signature_occurrence offsets index signature text rather than a file.
+
 

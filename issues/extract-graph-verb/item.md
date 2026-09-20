@@ -1,12 +1,13 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-20
 type: feature
 status: open
 priority: normal
-epic: extract-parity-move-rename
+epic: ryi-new-verbs
 labels: [extract]
 related: ['@extract-diff-verb', '@extract-lines-flag', '@cdg-facet-and-throw-edges']
+blocked_by: ['@graph-callers-arm', '@graph-from-arm', '@graph-uses-arm']
 ---
 
 ## Description
@@ -125,3 +126,8 @@ Split out of this issue: `--lines` (`extract-lines-flag`), post-dominance and CD
 ### 2026-09-18T20:16:38Z · @chris
 
 Session 2026-09-18 design pass. Fable review overruled on cutting --from/--uses (user: extract must be as capable as possible). Split out: --lines, CDG+throw edges, sqlite contract, cst default. Ordering flipped so --lines and --callers ship first. No refusals anywhere; HATEOAS next-block pattern from bewpp. Handles are cursors, not caches. Full philosophy at ~/projects/plans/20260918.0.cli-philosophy.md.
+
+### 2026-09-20T18:12:21Z · @chris
+
+2026-09-20: split into graph-callers-arm, graph-from-arm, graph-uses-arm under ryi-new-verbs; this card is the umbrella and closes when all three do.
+
