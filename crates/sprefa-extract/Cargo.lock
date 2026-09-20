@@ -840,7 +840,10 @@ dependencies = [
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
+ "rusqlite",
  "tracing",
+ "tracing-capture",
+ "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber",
 ]
@@ -1117,6 +1120,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ae293c039020f9ec10710af98d29ce6aa2051486638b49c9a6409f3b4a9e98ad"
 
 [[package]]
+name = "id-arena"
+version = "2.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3d3067d79b975e8844ca9eb072e16b31c3c1c36928edf9c6789548c524d0d954"
+
+[[package]]
 name = "idna"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1211,6 +1220,15 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
+
+[[package]]
+name = "itertools"
+version = "0.10.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b0fd2260e829bddf4cb6ea802289de2f86d6a7a690192fbe91b3f46e0f2c8473"
+dependencies = [
+ "either",
+]
 
 [[package]]
 name = "itertools"
@@ -2121,6 +2139,22 @@ checksum = "85eae3c4ed2f50dcfe72643da4befc30deadb458a9b590d720cde2f2b1e97da9"
 dependencies = [
  "zerocopy",
 ]
+
+[[package]]
+name = "predicates"
+version = "2.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "59230a63c37f3e18569bdb90e4a89cbf5bf8b06fea0b84e65ea10cc4df47addd"
+dependencies = [
+ "itertools 0.10.5",
+ "predicates-core",
+]
+
+[[package]]
+name = "predicates-core"
+version = "1.0.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cad38746f3166b4031b1a0d39ad9f954dd291e7854fcc0eed52ee41a0b50d144"
 
 [[package]]
 name = "proc-macro2"
@@ -3487,7 +3521,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c3d1e2c7f27f8d4cb10542a02c49005dbd6e93095799d6f3be745fae9f8fedd4"
 dependencies = [
  "libc",
- "windows-sys 0.60.2",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
@@ -3574,6 +3608,7 @@ dependencies = [
  "tree-sitter-prolog",
  "tree-sitter-python",
  "tree-sitter-toml-ng",
+ "tree-sitter-tsquery",
  "tree-sitter-yaml",
 ]
 
@@ -3904,6 +3939,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "tracing-capture"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0c3b1b84b84d7f95504091cb9518dea662eacba7a3bc23f23e98fe5fafede344"
+dependencies = [
+ "id-arena",
+ "predicates",
+ "tracing-core",
+ "tracing-subscriber",
+ "tracing-tunnel",
+]
+
+[[package]]
+name = "tracing-chrome"
+version = "0.7.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bf0a738ed5d6450a9fb96e86a23ad808de2b727fd1394585da5cdd6788ffe724"
+dependencies = [
+ "serde_json",
+ "tracing-core",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "tracing-core"
 version = "0.1.36"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3980,6 +4039,16 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-subscriber",
+]
+
+[[package]]
+name = "tracing-tunnel"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "507bbab1fc2c9e606543558f5656b62e8014ba7e0ffa68b9484511b6871019c5"
+dependencies = [
+ "serde",
+ "tracing-core",
 ]
 
 [[package]]
@@ -4247,6 +4316,16 @@ name = "tree-sitter-toml-ng"
 version = "0.7.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e9adc2c898ae49730e857d75be403da3f92bb81d8e37a2f918a08dd10de5ebb1"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-tsquery"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1b31e95ea85379972abf3b6857a59b2f6fb7ef3b5e47e9a4fb6c07111dee5e6"
 dependencies = [
  "cc",
  "tree-sitter-language",

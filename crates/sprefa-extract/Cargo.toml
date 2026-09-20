@@ -161,6 +161,20 @@ tree-sitter-gdscript = "6"
 # not to `LANGUAGE`), ABI 14. SupportLang has no lisp variant, so no fallback
 # route exists here either.
 tree-sitter-commonlisp = "0.4"
+# @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
+# tree-sitter-tsquery is the grammar for the `.scm` query surface itself, the
+# parse side of lang/5_scm_lower.rs. Candidates measured against THIS lock:
+# tree-sitter-tsquery 0.8.0 (tree-sitter-grammars/tree-sitter-query, published
+# 2025-11-27), +1 crate, deps only tree-sitter-language + cc, with tree-sitter
+# 0.25.3 dev-only: the same shape tree-sitter-gdscript and tree-sitter-commonlisp
+# already hold here. REJECTED: tree-sitter-query 0.1.0, which carries a normal
+# `tree-sitter ^0.20.9` edge, i.e. a SECOND core copy, the criterion line 157
+# used to reject tree-sitter-clojure; tree-sitter-tsq 0.19.0, abandoned upstream.
+# A hand-written S-expression reader is the third candidate and loses to both:
+# the query surface has quantifiers, predicates, anchors, and negated fields that
+# a paren reader would re-derive. ABI is railed by tests/36_scm_lower.rs against
+# the 13..=15 window tree-sitter 0.25.10 accepts (lib.rs:663-668).
+tree-sitter-tsquery = "0.8"
 # serde on the FLAT wire envelope only (never on the generic Node<F>). The store
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }
