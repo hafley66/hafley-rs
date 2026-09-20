@@ -604,7 +604,13 @@ mod sink {
         } else {
             (None, None)
         };
-        Registry::default().with(printer).with(summary).init();
+        // `HAFLEY_TRACE=<path>` adds the chrome timeline; the guard is flushed
+        // by `finish_trace` at every exit site in `ryi`.
+        Registry::default()
+            .with(printer)
+            .with(summary)
+            .with(hafley_observe::chrome_layer())
+            .init();
         hafley_observe::startup(&observability);
         state
     }

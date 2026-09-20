@@ -496,8 +496,14 @@ fn check_file_paths(paths: &[PathBuf], allow_stdin: bool) {
         };
         // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
         eprintln!("ryi: {stop}");
-        std::process::exit(2);
+        exit(2);
     }
+}
+
+/// Every exit path flushes the chrome timeline first; `process::exit` skips Drop.
+fn exit(code: i32) -> ! {
+    hafley_observe::finish_trace();
+    std::process::exit(code)
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -514,6 +520,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         state.print();
         write_trail(&state);
     }
+    hafley_observe::finish_trace();
     outcome
 }
 
@@ -601,14 +608,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args().nth(1).as_deref() == Some("diff") {
         if let Err(error) = diff::run(std::env::args().skip(1)) {
             eprintln!("{error}");
-            std::process::exit(2);
+            exit(2);
         }
         return Ok(());
     }
     if std::env::args().nth(1).as_deref() == Some("query") {
         if let Err(error) = query::run(std::env::args().skip(1)) {
             eprintln!("{error}");
-            std::process::exit(2);
+            exit(2);
         }
         return Ok(());
     }
@@ -616,7 +623,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let argv: Vec<String> = std::env::args().skip(1).collect();
         if let Err(error) = source_move::run(argv) {
             eprintln!("{error}");
-            std::process::exit(2);
+            exit(2);
         }
         return Ok(());
     }
@@ -624,7 +631,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let argv: Vec<String> = std::env::args().skip(1).collect();
         if let Err(error) = source_rename::run(argv) {
             eprintln!("{error}");
-            std::process::exit(error.exit);
+            exit(error.exit);
         }
         return Ok(());
     }
@@ -632,10 +639,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let argv: Vec<String> = std::env::args().skip(1).collect();
         match region_writer::run(argv) {
             Ok(0) => {}
-            Ok(exit) => std::process::exit(exit),
+            Ok(code) => exit(code),
             Err(error) => {
                 eprintln!("{}", error.message);
-                std::process::exit(error.exit);
+                exit(error.exit);
             }
         }
         return Ok(());
