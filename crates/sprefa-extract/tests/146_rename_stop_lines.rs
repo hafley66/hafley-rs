@@ -1,10 +1,11 @@
-//! `extract rename` stop diagnostics carry `file:line`, and a `#[path]` stop
-//! names the file its route reaches. The old form printed a bare byte offset,
-//! which the reader had to resolve by hand, and the route stayed invisible.
+//! `extract rename` stop diagnostics carry `file:line`. The `#[path]` two-route
+//! stop these cases first pinned is planned as a union now (`147`), so the
+//! two-route cases pin that no stop line, byte offset, or exit 6 remains, and
+//! the TS computed-member case keeps the `file:line` form.
 //!
-//! @comment-ok: fail-first receipt, repo law keeps these in TEST headers.
-//! FAIL-FIRST, against the byte-offset binary: every two-route case fails on
-//! `src/bin/extract.rs byte N` where `src/bin/extract.rs:1` is expected.
+//! @comment-ok: updated in place, the cases keep their fixtures and flip to the union contract.
+//! FAIL-FIRST, against the exit-6 binary: every two-route case fails on
+//! `src/bin/extract.rs:1: path attr twice reaches src/bin/home.rs at runtime`.
 
 use std::path::PathBuf;
 use std::process::Command;
@@ -73,45 +74,35 @@ fn rename_run(fixture: &Fixture, target: &str, new: &str) -> (Option<i32>, Strin
     )
 }
 
-/// Both seats print the declaring file, the attr's one-based line, and the
-/// file the route reaches: the bin root on line 1, the test root on line 3.
+/// The two-route tree plans, so neither attr line prints as a stop.
 #[test]
-fn the_stop_prints_file_and_line_not_a_byte_offset() {
+fn a_two_route_file_prints_no_stop_line() {
     let fixture = fixture("line", TWO_ROUTE);
     let (_code, stderr) = rename_run(&fixture, "src/bin/home.rs#Thing", "Renamed");
-    for line in [
-        "src/bin/extract.rs:1: path attr twice reaches src/bin/home.rs at runtime",
-        "tests/probe.rs:3: path attr twice reaches src/bin/home.rs at runtime",
-    ] {
-        assert!(stderr.contains(line), "expected `{line}`:\n{stderr}");
+    for line in ["src/bin/extract.rs:1:", "tests/probe.rs:3:"] {
+        assert!(!stderr.contains(line), "no stop at `{line}`:\n{stderr}");
     }
 }
 
-/// A line number is one-based: an attr on the first line prints `:1`, so a
-/// `:0` would mean the table fed the formatter a zero-based row.
+/// A plan prints no seat at all, so the old byte-offset form stays gone too.
 #[test]
-fn an_attr_on_the_first_line_prints_line_one() {
+fn a_two_route_file_prints_no_byte_offset() {
     let fixture = fixture("one_based", TWO_ROUTE);
     let (_code, stderr) = rename_run(&fixture, "src/bin/home.rs#Thing", "Renamed");
     assert!(
-        stderr.contains("src/bin/extract.rs:1:"),
-        "the first-line attr prints line one:\n{stderr}"
-    );
-    assert!(
-        !stderr.contains("src/bin/extract.rs:0"),
-        "no zero-based line reaches the reader:\n{stderr}"
+        !stderr.contains("src/bin/extract.rs byte"),
+        "no byte offset reaches the reader:\n{stderr}"
     );
 }
 
-/// The seat is about a route, so the message names the reached file instead of
-/// leaving the reader to re-derive where the attr's value lands.
+/// No seat is about a route, so no message names a reached file.
 #[test]
-fn the_stop_names_the_file_the_route_reaches() {
+fn a_two_route_file_names_no_reached_file() {
     let fixture = fixture("reaches", TWO_ROUTE);
     let (_code, stderr) = rename_run(&fixture, "src/bin/home.rs#Thing", "Renamed");
     assert!(
-        stderr.contains("reaches src/bin/home.rs at runtime"),
-        "the stop names the reached file:\n{stderr}"
+        !stderr.contains("reaches src/bin/home.rs"),
+        "no stop names the reached file:\n{stderr}"
     );
 }
 
@@ -131,11 +122,11 @@ fn other_arms_keep_the_bare_file_and_line_form() {
     );
 }
 
-/// The diagnostic rewrite does not move the refuse-vs-plan line: the two-route
-/// tree still refuses through the `Dynamic` arm, whose exit code is 6.
+/// The two-route tree plans through the union, so the run exits 0 where the
+/// `Dynamic` arm's 6 used to be.
 #[test]
-fn the_two_route_stop_still_exits_six() {
+fn the_two_route_file_exits_zero() {
     let fixture = fixture("exit", TWO_ROUTE);
     let (code, stderr) = rename_run(&fixture, "src/bin/home.rs#Thing", "Renamed");
-    assert_eq!(code, Some(6), "Dynamic exits 6:\n{stderr}");
+    assert_eq!(code, Some(0), "the union plans:\n{stderr}");
 }
