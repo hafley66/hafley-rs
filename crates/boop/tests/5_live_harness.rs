@@ -62,7 +62,7 @@ enum LiveSubmit {
     /// The prompt already rides the launch arguments; the driver only records.
     InArgument,
     /// The driver types the prompt and presses Enter after readiness.
-    TypePrompt,
+    TypePrompt { readiness: &'static str },
 }
 
 /// One adapter's launch intent against the local provider.
@@ -169,7 +169,7 @@ fn launch(
             }
             let submit = match launch.replay {
                 MockTuiReplay::PromptArg => LiveSubmit::InArgument,
-                MockTuiReplay::TypePrompt { .. } => LiveSubmit::TypePrompt,
+                MockTuiReplay::TypePrompt { readiness } => LiveSubmit::TypePrompt { readiness },
             };
             (launch.args, launch.config_paths, submit)
         }
@@ -280,7 +280,9 @@ fn claude(
             "dontAsk".into(),
         ],
         vec![state, settings],
-        LiveSubmit::TypePrompt,
+        LiveSubmit::TypePrompt {
+            readiness: "Claude Code v",
+        },
     ))
 }
 
@@ -456,7 +458,8 @@ fn every_launch_isolates_config_and_names_only_loopback() {
     }
 }
 
-/// claude alone types its turn; the other three pass it as an argument.
+/// Each adapter has a fixed one-turn submission shape. The typed variants also
+/// carry the screen text that proves their composer is ready.
 #[test]
 fn the_one_turn_submission_shape_is_fixed() {
     let root = std::env::temp_dir().join(format!("boop-live-submit-{}", std::process::id()));
@@ -470,12 +473,22 @@ fn the_one_turn_submission_shape_is_fixed() {
             1,
         )
         .unwrap();
-        let expected = if id == HarnessId::Claude {
-            LiveSubmit::TypePrompt
-        } else {
-            LiveSubmit::InArgument
+        let expected = match id {
+            HarnessId::Claude => LiveSubmit::TypePrompt {
+                readiness: "Claude Code v",
+            },
+            HarnessId::Omp => LiveSubmit::TypePrompt {
+                readiness: "Mock Model",
+            },
+            HarnessId::Codex | HarnessId::Kimi | HarnessId::Opencode => LiveSubmit::InArgument,
         };
         assert_eq!(launch.submit, expected, "{id}");
+        let prompt_in_args = launch.args.iter().any(|arg| arg == LIVE_PROMPT);
+        assert_eq!(
+            prompt_in_args,
+            matches!(expected, LiveSubmit::InArgument),
+            "{id}"
+        );
     }
     let _ = std::fs::remove_dir_all(&root);
 }
@@ -678,12 +691,14 @@ fn run_adapter(id: HarnessId, port: u16) -> Result<AdapterReport> {
         })
         .with_context(|| format!("{id} failed to start under the PTY"))?;
 
-    if launch.submit == LiveSubmit::TypePrompt {
-        settle_claude_onboarding(&session)?;
-        // The composer is up once the versioned banner is on screen; typing
-        // before it would be lost.
+    if let LiveSubmit::TypePrompt { readiness } = launch.submit {
+        if id == HarnessId::Claude {
+            settle_claude_onboarding(&session)?;
+        }
+        // The composer is up once the recipe's readiness text is on screen;
+        // typing before it would be lost.
         session
-            .get_by_text("Claude Code v")
+            .get_by_text(readiness)
             .expect_with(LocatorExpectOptions {
                 not: false,
                 timeout_ms: Some(90_000),
