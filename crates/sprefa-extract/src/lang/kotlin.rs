@@ -120,7 +120,8 @@ fn project_types(
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    walk_kotlin_entities(root, src, strings, sink);
+    let comments = KtCommentIds::resolve(&root.language());
+    walk_kotlin_entities(root, &comments, src, strings, sink);
     super::kotlin_type_edges::tsi_rows(root, src, strings, sink);
 }
 
@@ -131,6 +132,7 @@ fn project_types(
 /// `object_declaration`; both mint a `class` entity the same way.
 fn walk_kotlin_entities(
     node: tree_sitter::Node,
+    comments: &KtCommentIds,
     src: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
@@ -156,7 +158,7 @@ fn walk_kotlin_entities(
                     // companion (kotlin_decl_edges runs on class/object only).
                     if child.kind() != "companion_object" {
                         kt_decl_edges(child, span, src, strings, sink);
-                        if let Some(text) = kotlin_leading_kdoc(child, src) {
+                        if let Some(text) = kotlin_leading_kdoc(child, &comments, src) {
                             push_kt_doc(sink, strings, span, &text);
                         }
                     }
@@ -167,7 +169,7 @@ fn walk_kotlin_entities(
                     let name = kt_text(id, src).to_string();
                     let span = node_span(child);
                     push_entity(sink, strings, span, &name, TypeEntityKind::Function);
-                    if let Some(text) = kotlin_leading_kdoc(child, src) {
+                    if let Some(text) = kotlin_leading_kdoc(child, &comments, src) {
                         push_kt_doc(sink, strings, span, &text);
                     }
                     fn_sigs(sink, strings, span, child, src);
@@ -175,7 +177,7 @@ fn walk_kotlin_entities(
             }
             _ => {}
         }
-        walk_kotlin_entities(child, src, strings, sink);
+        walk_kotlin_entities(child, &comments, src, strings, sink);
     }
 }
 
@@ -336,11 +338,38 @@ fn push_kt_doc(sink: &mut FamilyBundle<TypeF>, strings: &mut Strings, span: Span
     });
 }
 
-/// The cleaned KDoc block directly above `node`, or None: a `*comment*` previous
-/// sibling whose text opens with `/**`. Port of v5 `kotlin_leading_kdoc`.
-fn kotlin_leading_kdoc(node: tree_sitter::Node, src: &[u8]) -> Option<String> {
+/// Kotlin's comment kinds as ids, resolved once per parse against the parse's
+/// own grammar (`Language::id_for_node_kind`): a KDoc block is a comment
+/// sibling by id, never by a substring over the kind name. The kotlin grammar
+/// declares exactly two comment kinds, `line_comment` and `multiline_comment`.
+struct KtCommentIds {
+    line_comment: u16,
+    multiline_comment: u16,
+}
+
+impl KtCommentIds {
+    fn resolve(lang: &tree_sitter::Language) -> Self {
+        Self {
+            line_comment: lang.id_for_node_kind("line_comment", true),
+            multiline_comment: lang.id_for_node_kind("multiline_comment", true),
+        }
+    }
+
+    fn is_comment(&self, id: u16) -> bool {
+        id == self.line_comment || id == self.multiline_comment
+    }
+}
+
+/// The cleaned KDoc block directly above `node`, or None: a comment-kind
+/// previous sibling (by id, `KtCommentIds`) whose text opens with `/**`. Port
+/// of v5 `kotlin_leading_kdoc`.
+fn kotlin_leading_kdoc(
+    node: tree_sitter::Node,
+    comments: &KtCommentIds,
+    src: &[u8],
+) -> Option<String> {
     let prev = node.prev_sibling()?;
-    if !prev.kind().contains("comment") {
+    if !comments.is_comment(prev.kind_id()) {
         return None;
     }
     let raw = prev.utf8_text(src).ok()?;
