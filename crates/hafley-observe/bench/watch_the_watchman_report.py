@@ -91,7 +91,7 @@ def median(rows, key):
 def delta(on, off):
     if on is None or off is None:
         return "n/a"
-    return f"{on - off:+d}"
+    return f"{int(round(on - off)):+d}"
 
 
 def verdict(off, on):

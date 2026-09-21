@@ -251,15 +251,15 @@ budget prints the table with `skipped` cells and names every one of them.
 | `tracy-alloc` | immediate | 3 | +0 | 7.81,6.06,6.51 | 6.11,6.09,6.07 | -0.065 | in the noise |
 | `tracy-alloc` | drain | 3 | +0 | 6.19,6.07,6.10 | 6.05,6.03,6.14 | -0.008 | in the noise |
 | `tracy-alloc` | on-commit | 3 | +0 | 6.42,6.63,6.33 | 5.97,5.97,6.08 | -0.069 | gain |
-| `rusage` | immediate | 0 | +17328 | 6.35,5.81,5.87 | 19.83,19.73,19.92 | +2.378 | cost |
-| `rusage` | drain | 0 | +17328 | 5.86,5.98,5.98 | 20.08,20.15,19.87 | +2.359 | cost |
-| `rusage` | on-commit | 0 | +17328 | 5.99,5.89,6.01 | 19.67,20.41,20.86 | +2.405 | cost |
 | `sqlite-sink` | immediate | 6 | +129088 | 6.38,6.08,6.48 | 10342.95,6471.18,6281.96 | +1012.656 | cost |
 | `sqlite-sink` | drain | 6 | +129088 | 6.11,6.09,6.06 | 70.95,76.09,77.01 | +11.502 | cost |
 | `sqlite-sink` | on-commit | 6 | +129088 | 5.95,6.05,6.12 | 57.98,55.87,56.92 | +8.405 | cost |
 | `sqlite-sink-text` | immediate | 6 | +129088 | 6.61,6.49,6.20 | 8253.41,7302.06,6726.79 | +1124.646 | cost |
 | `sqlite-sink-text` | drain | 6 | +129088 | 6.19,6.24,6.13 | 66.11,66.24,67.03 | +9.706 | cost |
 | `sqlite-sink-text` | on-commit | 6 | +129088 | 6.16,6.77,6.01 | 65.19,57.31,58.98 | +8.582 | cost |
+| `rusage` | immediate | 0 | +17328 | 8.97,6.89,6.38 | 18.99,27.57,20.19 | +1.929 | cost |
+| `rusage` | drain | 0 | +17328 | 6.05,6.46,5.96 | 18.95,18.85,19.00 | +2.133 | cost |
+| `rusage` | on-commit | 0 | +17328 | 6.06,6.16,6.08 | 19.80,19.26,20.09 | +2.256 | cost |
 
 The complete table, every column, as written beside this document:
 
@@ -292,15 +292,15 @@ tracy	on-commit	6	+183680	4.65,4.66,4.73	4.88,4.83,5.90	+20824064	+0	+0	6.04,6.1
 tracy-alloc	immediate	3	+0	7.35,6.94,7.41	6.33,5.02,5.16	+32768	+0	+0	7.81,6.06,6.51	6.11,6.09,6.07	-0.065	3285826	in the noise	the tracked global allocator; its cost follows the allocation count, and this workload allocates little
 tracy-alloc	drain	3	+0	7.35,6.94,7.41	6.33,5.02,5.16	+32768	+0	+0	6.19,6.07,6.10	6.05,6.03,6.14	-0.008	3305899	in the noise	the tracked global allocator; its cost follows the allocation count, and this workload allocates little
 tracy-alloc	on-commit	3	+0	7.35,6.94,7.41	6.33,5.02,5.16	+0	+0	+0	6.42,6.63,6.33	5.97,5.97,6.08	-0.069	3347677	gain	the tracked global allocator; its cost follows the allocation count, and this workload allocates little
-rusage	immediate	0	+17328	4.97,5.24,4.73	4.59,4.81,5.63	-131072	+0	+0	6.35,5.81,5.87	19.83,19.73,19.92	+2.378	1008418	cost	the sampler is compiled into every build, so this row prices the publishing layer alone
-rusage	drain	0	+17328	4.97,5.24,4.73	4.59,4.81,5.63	+16384	+0	+0	5.86,5.98,5.98	20.08,20.15,19.87	+2.359	995962	cost	the sampler is compiled into every build, so this row prices the publishing layer alone
-rusage	on-commit	0	+17328	4.97,5.24,4.73	4.59,4.81,5.63	+16384	+0	+0	5.99,5.89,6.01	19.67,20.41,20.86	+2.405	980028	cost	the sampler is compiled into every build, so this row prices the publishing layer alone
 sqlite-sink	immediate	6	+129088	4.99,4.92,4.95	5.53,5.64,5.11	+3014656	+1461710848	+32768	6.38,6.08,6.48	10342.95,6471.18,6281.96	+1012.656	3091	cost	dictionary-encoded: repeated columns interned once, per-row values stored as they are
 sqlite-sink	drain	6	+129088	4.99,4.92,4.95	5.53,5.64,5.11	+6717440	+8327168	+0	6.11,6.09,6.06	70.95,76.09,77.01	+11.502	262857	cost	dictionary-encoded: repeated columns interned once, per-row values stored as they are
 sqlite-sink	on-commit	6	+129088	4.99,4.92,4.95	5.53,5.64,5.11	+5767168	+2109440	+0	5.95,6.05,6.12	57.98,55.87,56.92	+8.405	351388	cost	dictionary-encoded: repeated columns interned once, per-row values stored as they are
 sqlite-sink-text	immediate	6	+129088	5.11,5.61,5.79	5.35,5.58,5.38	+4030464	+1455091712	+32768	6.61,6.49,6.20	8253.41,7302.06,6726.79	+1124.646	2739	cost	the same shape with every key inlined; the R4 control for the dictionary
 sqlite-sink-text	drain	6	+129088	5.11,5.61,5.79	5.35,5.58,5.38	+8011776	+9654272	+8192	6.19,6.24,6.13	66.11,66.24,67.03	+9.706	301930	cost	the same shape with every key inlined; the R4 control for the dictionary
 sqlite-sink-text	on-commit	6	+129088	5.11,5.61,5.79	5.35,5.58,5.38	+7471104	+3829760	+4096	6.16,6.77,6.01	65.19,57.31,58.98	+8.582	339117	cost	the same shape with every key inlined; the R4 control for the dictionary
+rusage	immediate	0	+17328	4.86,4.84,5.23	4.80,4.83,5.58	-131072	+0	+0	8.97,6.89,6.38	18.99,27.57,20.19	+1.929	990477	cost	the sampler is compiled into every build, so this row prices the publishing layer alone
+rusage	drain	0	+17328	4.86,4.84,5.23	4.80,4.83,5.58	-32768	+0	+0	6.05,6.46,5.96	18.95,18.85,19.00	+2.133	1055578	cost	the sampler is compiled into every build, so this row prices the publishing layer alone
+rusage	on-commit	0	+17328	4.86,4.84,5.23	4.80,4.83,5.58	+16384	+0	+0	6.06,6.16,6.08	19.80,19.26,20.09	+2.256	1010097	cost	the sampler is compiled into every build, so this row prices the publishing layer alone
 ```
 
 ### R3: the three-run raw numbers

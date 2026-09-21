@@ -47,7 +47,9 @@ skipped=()
 stamp() { date +%s; }
 clock() { python3 -c 'import time; print(f"{time.time():.3f}")'; }
 since() { python3 -c "print(f'{float($2) - float($1):.3f}')"; }
-progress() { printf '[%s/%ss] %s\n' "$(( $(date +%s) - deadline + budget ))" "$budget" "$1"; }
+# Progress goes to stderr: stdout is the table, and a command substitution that
+# captures a long step must not capture the line announcing it.
+progress() { printf '[%s/%ss] %s\n' "$(( $(date +%s) - deadline + budget ))" "$budget" "$1" >&2; }
 out_of_time() { [ "$(date +%s)" -ge "$deadline" ]; }
 
 build() {
@@ -85,13 +87,17 @@ nodes() {
 # Three rebuilds of the crate and its binary with the dependency graph already
 # built by the same command. A cold dependency build is not in this column.
 rebuild_secs() {
-  local features=$1
+  local candidate=$1 side=$2 features=$3
   local times=()
-  for _ in 1 2 3; do
+  local pass
+  for pass in 1 2 3; do
+    progress "rebuild $candidate/$side $pass of 3"
     touch "$crate_dir/src/lib.rs"
     local started
     started=$(clock)
-    build "$features" >/dev/null 2>&1
+    # Cargo's own progress stays on the terminal and in the log, so a long
+    # rebuild prints as it goes.
+    build "$features" >"$logs/build.$candidate.$side.log" 2> >(tee -a "$logs/build.$candidate.$side.log" >&2)
     times+=("$(since "$started" "$(clock)")")
   done
   printf '%s\n' "${times[*]}"
@@ -103,7 +109,7 @@ side_build() {
     return 0
   fi
   progress "build $candidate/$side (features: ${features:-none})"
-  if ! build "$features" >"$logs/build.$candidate.$side.log" 2>&1; then
+  if ! build "$features" >"$logs/build.$candidate.$side.log" 2> >(tee -a "$logs/build.$candidate.$side.log" >&2); then
     printf 'BUILD FAILED: %s %s (features: %s) see %s\n' "$candidate" "$side" "$features" "$logs/build.$candidate.$side.log"
     return 1
   fi
@@ -116,7 +122,7 @@ side_build() {
   base=$(cat "$logs/done/$candidate.base_nodes")
   added=$(nodes "$features")
   bytes=$(stripped_bytes "$target/release/watch-the-watchman")
-  secs=$(rebuild_secs "$features")
+  secs=$(rebuild_secs "$candidate" "$side" "$features")
   printf '%s\t%s\t%s\t%s\t%s\n' \
     "$candidate" "$side" "$(( added - base ))" "$bytes" "${secs// /,}" >>"$meta"
   touch "$logs/done/$candidate.$side.build"
@@ -160,6 +166,7 @@ for entry in "${candidates[@]}"; do
     fi
     side_build "$candidate" "$side" "$features" || skipped+=("$candidate/$side (build)")
     for strategy in "${strategies[@]}"; do
+      progress "run $candidate/$side/$strategy x$runs"
       for run in $(seq 1 "$runs"); do
         if out_of_time; then
           skipped+=("$candidate/$side/$strategy/$run")
