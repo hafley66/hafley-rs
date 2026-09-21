@@ -13,6 +13,7 @@ use super::scm_lower::{lower_scm, ScmLowerError};
 use crate::types::FlatFact;
 
 const KOTLIN_SCIP_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
+const TYPESCRIPT_SCIP_SCM: &str = include_str!("../../queries/typescript/scip.scm");
 
 /// The outer captures L1 selects. Everything else is read off the native
 /// match that carries one of them.
@@ -131,6 +132,9 @@ fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScipScmError> {
 fn query_for(path: &str) -> Option<(SupportLang, &'static str)> {
     match RyiLang::from_path(path) {
         Some(RyiLang::Sg(SupportLang::Kotlin)) => Some((SupportLang::Kotlin, KOTLIN_SCIP_SCM)),
+        Some(RyiLang::Sg(SupportLang::TypeScript)) => {
+            Some((SupportLang::TypeScript, TYPESCRIPT_SCIP_SCM))
+        }
         _ => None,
     }
 }
