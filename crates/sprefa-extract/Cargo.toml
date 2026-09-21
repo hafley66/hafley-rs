@@ -175,6 +175,12 @@ tree-sitter-commonlisp = "0.4"
 # a paren reader would re-derive. ABI is railed by tests/144_scm_lower.rs against
 # the 13..=15 window tree-sitter 0.25.10 accepts (lib.rs:663-668).
 tree-sitter-tsquery = "0.8"
+# tree-sitter-rust 0.24.2 is ALREADY in this lock as an ast-grep-language
+# transitive, so the direct pin unifies to one copy and adds no grammar.
+tree-sitter-rust = "0.24"
+# The `.scm` engine the Rust CallF defs run through: `#has-ancestor?`/`#has?`
+# over a native tree-sitter query, one MatchArena per run.
+hafley_scm = { path = "../hafley_scm" }
 # serde on the FLAT wire envelope only (never on the generic Node<F>). The store
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }

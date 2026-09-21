@@ -837,6 +837,7 @@ dependencies = [
 name = "hafley-observe"
 version = "0.1.1"
 dependencies = [
+ "libc",
  "opentelemetry",
  "opentelemetry-otlp",
  "opentelemetry_sdk",
@@ -846,6 +847,14 @@ dependencies = [
  "tracing-chrome",
  "tracing-opentelemetry",
  "tracing-subscriber",
+ "tracing-tunnel",
+]
+
+[[package]]
+name = "hafley_scm"
+version = "0.0.1"
+dependencies = [
+ "tree-sitter",
 ]
 
 [[package]]
@@ -3557,6 +3566,7 @@ dependencies = [
  "clap",
  "gomod-parser",
  "hafley-observe",
+ "hafley_scm",
  "ignore",
  "libc",
  "memchr",
@@ -3607,6 +3617,7 @@ dependencies = [
  "tree-sitter-md",
  "tree-sitter-prolog",
  "tree-sitter-python",
+ "tree-sitter-rust",
  "tree-sitter-toml-ng",
  "tree-sitter-tsquery",
  "tree-sitter-yaml",
