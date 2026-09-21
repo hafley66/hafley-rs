@@ -39,3 +39,21 @@ Every disagreement and its cause:
   lab reason is `no_graph_path`; the fast reason is `no_corpus_def`.
 - Module fast-only unresolved `plus/no_corpus_def`: the locals query captures
   named calls and does not mint Kotlin operator lowering calls.
+
+## TypeScript judge
+
+The full `ts5_findings/module_plane` fixture has 0 shared edge keys, 1 lab-only
+key, and 9 fast-only keys. The first whole-corpus lab run hit the 10-second
+limit in recursive traversal across the 24-file import graph. The recorded
+judge runs each file independently and unions the results.
+
+Every disagreement and its cause:
+
+- The 8 cross-file fast-only keys (`normalize`, `widen`, `fromB`, `theDefault`,
+  `member`, `inner`, exported `isIdentifier`, and `deep`) require import,
+  re-export, alias, namespace, default-export, or multi-hop module edges. The
+  per-file run contains no target file root.
+- Fast-only `parse -> isIdentifier` and lab-only `<root> -> isIdentifier` name
+  the same same-file target. The merged Helix query marks the statement block
+  as the innermost scope; the lab owner projection does not associate that
+  nested scope with its containing function name.
