@@ -2786,6 +2786,56 @@ pub struct Respell {
     pub receipt: Option<String>,
 }
 
+/// One `ryi cleave` run's plan: what leaves SRC, what lands in DEST, and who
+/// gets respelled. A dry run prints these rows and writes nothing.
+#[derive(Debug, Default)]
+pub struct CleavePlan {
+    /// Root-relative path the item leaves.
+    pub src: String,
+    /// Root-relative path the item lands in, created when it is missing.
+    pub dest: String,
+    /// The item's declared name.
+    pub item: String,
+    /// The item's whole top-level declaration in SRC, export keyword included.
+    pub item_span: Span,
+    /// Specifiers SRC carries that the item needs, in SRC byte order.
+    pub travelling: Vec<CleaveSpecifier>,
+    /// Specifiers nothing left in SRC references once the item leaves.
+    pub orphans: Vec<CleaveSpecifier>,
+    /// Files importing `SRC#ITEM`, in path order.
+    pub callers: Vec<String>,
+    /// Same-file private helpers `--drag` pulls along, in SRC byte order.
+    pub dragged: Vec<CleaveDrag>,
+    /// Passes the drag fixpoint ran. 1 when the first pass dragged nothing.
+    pub drag_iterations: u32,
+    /// Free names the resolver graded `-`. A non-empty list declines the run.
+    pub unresolved: Vec<String>,
+}
+
+/// One import specifier a cleave moves or drops. `module` is SRC's spelling,
+/// `dest_module` the same target respelled against DEST's directory.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CleaveSpecifier {
+    /// The local name the specifier binds.
+    pub name: String,
+    pub module: String,
+    pub dest_module: String,
+    /// The whole import statement in SRC, trailing newline included.
+    pub span: Span,
+    /// `package`, `relative`, or `carried` when DEST already imports it.
+    pub kind: &'static str,
+}
+
+/// One same-file private helper `--drag` pulls into DEST behind the item.
+#[derive(Clone, Debug)]
+pub struct CleaveDrag {
+    pub name: String,
+    /// The helper's whole top-level declaration in SRC.
+    pub span: Span,
+    /// The one-based fixpoint pass that claimed it.
+    pub iteration: u32,
+}
+
 /// What one language answers when a file it owns moves. Held `&'static` in the
 /// `rehomes()` roster beside `sources()`; one impl per language, no mutable state.
 pub trait Rehome: Source + Sync + Send {

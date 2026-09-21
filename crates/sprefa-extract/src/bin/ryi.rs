@@ -72,6 +72,9 @@ mod graph;
 #[path = "../0_rename.rs"]
 mod source_rename;
 
+#[path = "../0_cleave.rs"]
+mod cleave;
+
 #[derive(Parser)]
 #[command(
     name = "ryi",
@@ -642,6 +645,14 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if let Err(error) = source_rename::run(argv) {
             eprintln!("{error}");
             exit(error.exit);
+        }
+        return Ok(());
+    }
+    if std::env::args().nth(1).as_deref() == Some("cleave") {
+        let argv: Vec<String> = std::env::args().skip(1).collect();
+        if let Err(error) = cleave::run(argv) {
+            eprintln!("{error}");
+            exit(2);
         }
         return Ok(());
     }
