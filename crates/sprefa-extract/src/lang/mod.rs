@@ -46,6 +46,8 @@ pub mod rust_rename;
 pub mod rust_scip_macros;
 pub mod rust_type_edges;
 pub mod rust_type_refs;
+#[path = "7_scip_scm.rs"]
+pub mod scip_scm;
 #[path = "6_scm_family.rs"]
 mod scm_family;
 #[path = "5_scm_lower.rs"]
@@ -88,6 +90,7 @@ pub use owned_region::{
 pub use prolog::PrologSource;
 pub use python::PythonSource;
 pub use rust::RustSource;
+pub use scip_scm::{scip_scm_facts, ScipScmError};
 pub use scm_lower::{lower_scm, scm_language, ScmLowerError, ScmProgram};
 pub use source_facts::{
     query_source_facts, ByteRange, GitBlobFact, SourceCaptureFact, SourceMatchFact, SourcePlace,

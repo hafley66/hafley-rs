@@ -29,7 +29,7 @@ use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, diet_scip_with_raw,
     dispatch, file_fact, file_fact_with_content_id, flatten_cfg_each, flatten_each,
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl, query_patterns,
-    resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
+    resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl, scip_scm_facts,
     scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
     size_skip_fact, source_for, AstPatternQuery, FamilyMask, FlatFact, IndexBudget, ResolveArms,
     ResolveRequest, ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
@@ -471,7 +471,7 @@ fn stream_scip_family(
 }
 
 /// `--family scip_scm`: pass 1 of the SCIP wire, from a per-language `.scm`
-/// query over each supplied file. Phase 1 carries the mode with no rows yet.
+/// query over each supplied file. One file's rows depend on that file alone.
 fn stream_scip_scm_family(
     cli: &Cli,
     output: &mut sqlite::Output,
@@ -479,7 +479,7 @@ fn stream_scip_scm_family(
     if cli.paths.is_empty() {
         return Err("--family scip_scm takes one or more PATHs".into());
     }
-    let facts: Vec<FlatFact> = Vec::new();
+    let facts: Vec<FlatFact> = scip_scm_facts(&cli.paths)?;
     let mut lines: Vec<String> = facts
         .iter()
         .map(|fact| serde_json::to_string(fact).expect("a flat fact is serializable"))
