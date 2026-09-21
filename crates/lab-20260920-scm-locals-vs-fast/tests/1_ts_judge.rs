@@ -23,7 +23,9 @@ fn typescript_module_plane_judge() {
     let target = PathBuf::from(std::env::var("CARGO_TARGET_DIR").expect("CARGO_TARGET_DIR"));
     assert!(!target.to_string_lossy().contains("/.cache/boop/"));
     let ryi = target.join("debug/ryi");
-    let output = Command::new(ryi)
+    let output = Command::new("timeout")
+        .arg("10")
+        .arg(ryi)
         .arg("fast")
         .args(&paths)
         .env("HAFLEY_TRACE", manifest.join("traces/L5-fast.json"))

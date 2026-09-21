@@ -85,8 +85,8 @@ fn judge(case: &str, fixture: &str, extension: &str, expected: Expected) {
     let query = std::fs::read_to_string(manifest.join("queries/kotlin/locals.scm")).unwrap();
     let lab = analyze("kotlin", &query, &paths).unwrap();
     let ryi = ryi_bin();
-    let mut command = Command::new(ryi);
-    command.arg("fast").args(&paths).env(
+    let mut command = Command::new("timeout");
+    command.arg("10").arg(ryi).arg("fast").args(&paths).env(
         "HAFLEY_TRACE",
         manifest.join(format!("traces/L4-{case}-fast.json")),
     );
