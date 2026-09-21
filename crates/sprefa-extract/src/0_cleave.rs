@@ -678,36 +678,52 @@ fn aims_at(caller: &str, module: &str, src: &str) -> bool {
 
 /// Line-aligned cuts merged, then widened over the blank lines they orphan:
 /// forward always, and backward when the cut now runs to the end of the file.
-fn absorb(text: &str, mut cuts: Vec<Span>) -> Vec<Span> {
-    cuts.sort_by_key(|span| span.start);
+/// Widening can make two cuts meet, so the merge runs again after it.
+fn absorb(text: &str, cuts: Vec<Span>) -> Vec<Span> {
     let bytes = text.as_bytes();
-    let mut merged: Vec<Span> = Vec::new();
-    for cut in cuts {
-        match merged.last_mut() {
-            Some(last) if cut.start <= last.end() => {
-                let end = last.end().max(cut.end());
-                last.len = end - last.start;
-            }
-            _ => merged.push(cut),
+    let mut merged = merge(cuts);
+    loop {
+        let before: Vec<(u32, u32)> = merged.iter().map(|cut| (cut.start, cut.len)).collect();
+        for cut in &mut merged {
+            widen(bytes, cut);
+        }
+        merged = merge(merged);
+        if before == merged.iter().map(|cut| (cut.start, cut.len)).collect::<Vec<_>>() {
+            return merged;
         }
     }
-    for cut in &mut merged {
-        let mut end = cut.end() as usize;
-        while end < bytes.len() && bytes[end] == b'\n' {
-            end += 1;
-        }
-        cut.len = end as u32 - cut.start;
-        if end < bytes.len() {
-            continue;
-        }
-        let mut start = cut.start as usize;
+}
+
+/// One cut widened over the blank lines it orphans: forward always, and
+/// backward when it runs to the end of the file.
+fn widen(bytes: &[u8], cut: &mut Span) {
+    let mut end = cut.end() as usize;
+    while end < bytes.len() && bytes[end] == b'\n' {
+        end += 1;
+    }
+    let mut start = cut.start as usize;
+    if end == bytes.len() {
         while start > 0 && bytes[start - 1] == b'\n' && (start < 2 || bytes[start - 2] == b'\n') {
             start -= 1;
         }
-        cut.len = end as u32 - start as u32;
-        cut.start = start as u32;
     }
-    merged
+    cut.start = start as u32;
+    cut.len = end as u32 - start as u32;
+}
+
+/// Overlapping and touching spans folded into one, in offset order.
+fn merge(mut spans: Vec<Span>) -> Vec<Span> {
+    spans.sort_by_key(|span| span.start);
+    let mut out: Vec<Span> = Vec::new();
+    for span in spans {
+        match out.last_mut() {
+            Some(last) if span.start <= last.end() => {
+                last.len = last.end().max(span.end()) - last.start;
+            }
+            _ => out.push(span),
+        }
+    }
+    out
 }
 
 /// Every file importing `src#item`, in path order. `resolved_import` carries

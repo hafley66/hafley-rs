@@ -258,3 +258,62 @@ fn a_failed_verify_rolls_all_three_files_back() {
     );
     assert_eq!(before, digest(&fixture.root), "the rollback left a byte");
 }
+
+#[test]
+fn drag_is_opt_in() {
+    let plain = fixture("drag", "plain");
+    let plan = plan_of(&cleave(
+        &plain,
+        &["src/util.ts#loadConfig", "src/config.ts", "--json"],
+    ));
+    assert_eq!(plan["dragged"].as_array().unwrap().len(), 0);
+    assert_eq!(plan["drag_iterations"], 1);
+
+    let dragged = fixture("drag", "on");
+    let plan = plan_of(&cleave(
+        &dragged,
+        &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
+    ));
+    assert_eq!(names(&plan, "dragged"), ["slug"]);
+    assert_eq!(plan["drag_iterations"], 1);
+}
+
+#[test]
+fn the_drag_fixpoint_reports_its_pass_count() {
+    let fixture = fixture("drag_two_level", "fixpoint");
+    let plan = plan_of(&cleave(
+        &fixture,
+        &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
+    ));
+    assert_eq!(names(&plan, "dragged"), ["slug", "tidy"]);
+    assert_eq!(
+        plan["dragged"][0]["iteration"], 1,
+        "the item's own reference is pass 1"
+    );
+    assert_eq!(
+        plan["dragged"][1]["iteration"], 2,
+        "a helper reached through a helper is pass 2"
+    );
+    assert_eq!(plan["drag_iterations"], 2);
+}
+
+#[test]
+fn a_dragged_helper_lands_in_the_destination() {
+    let fixture = fixture("drag_two_level", "apply");
+    cleave(
+        &fixture,
+        &[
+            "src/util.ts#loadConfig",
+            "src/config.ts",
+            "--drag",
+            "--commit",
+        ],
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/util.ts")).unwrap(),
+        "export const UTIL_VERSION = 1;\n"
+    );
+    assert_eq!(occurrences(&fixture, "src/config.ts", "function tidy"), 1);
+    assert_eq!(occurrences(&fixture, "src/config.ts", "function slug"), 1);
+    assert_eq!(import_lines(&fixture, "src/config.ts"), 1, "LOG came along");
+}
