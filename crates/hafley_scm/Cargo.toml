@@ -1,0 +1,10 @@
+[package]
+name = "hafley_scm"
+version = "0.0.1"
+edition = "2021"
+
+[dependencies]
+tree-sitter = "0.25"
+
+[dev-dependencies]
+tree-sitter-rust = "0.24"
