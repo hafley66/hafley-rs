@@ -2826,7 +2826,8 @@ pub struct CleaveSpecifier {
     pub kind: &'static str,
 }
 
-/// One same-file private helper `--drag` pulls into DEST behind the item.
+/// One same-file private helper the item reaches under `--drag`. A helper
+/// nothing left in SRC references is `moved`; a shared one is `exported`.
 #[derive(Clone, Debug)]
 pub struct CleaveDrag {
     pub name: String,
@@ -2834,6 +2835,77 @@ pub struct CleaveDrag {
     pub span: Span,
     /// The one-based fixpoint pass that claimed it.
     pub iteration: u32,
+    /// `moved` when it travels to DEST, `exported` when it stays in SRC, gains
+    /// `export`, and DEST imports it. A helper is never copied.
+    pub action: &'static str,
+}
+
+/// One import statement a cleave can edit. `span` is line aligned so deleting
+/// it takes the whole line; `module_span` carries the literal's quotes.
+pub struct CleaveImport {
+    pub span: Span,
+    pub module: String,
+    pub module_span: Span,
+    /// Each bound name with the specifier span that binds it, in byte order.
+    pub names: Vec<(String, Span)>,
+}
+
+/// One top-level declaration a cleave can move or export, line aligned.
+#[derive(Clone)]
+pub struct CleaveDecl {
+    pub name: String,
+    pub span: Span,
+    pub exported: bool,
+}
+
+/// One file read for a cleave: every syntactic question the planner asks,
+/// answered once by the language arm.
+#[derive(Default)]
+pub struct CleaveView {
+    pub imports: Vec<CleaveImport>,
+    pub decls: Vec<CleaveDecl>,
+    /// Identifier occurrences that are neither an import binding nor a
+    /// declaring name, in byte order.
+    pub uses: Vec<(String, Span)>,
+    /// Names a parameter or a local declarator binds, by binding span.
+    pub bindings: Vec<(String, Span)>,
+    /// Calls the file writes: the callee as written, its span, and whether it
+    /// was reached through a receiver.
+    pub calls: Vec<(String, Span, bool)>,
+    /// Globals the language answers without an import.
+    pub builtins: Vec<&'static str>,
+}
+
+/// What one language answers when an item is cleaved out of a file it owns.
+/// Held `&'static` in the `CLEAVES` roster; one impl per language, no state.
+pub trait Cleave: Sync + Send {
+    fn name(&self) -> &'static str;
+
+    /// Whether this arm owns `rel`. A cleave stays inside one arm.
+    fn owns(&self, rel: &str) -> bool;
+
+    /// The file read. None when the arm cannot answer for this text.
+    fn view(&self, rel: &str, text: &str) -> Option<CleaveView>;
+
+    /// The bytes inserted at a declaration's start to export it.
+    fn export_prefix(&self) -> &'static str;
+
+    /// One import statement binding `names` from `module`, newline included.
+    fn import_line(&self, names: &[String], module: &str, quote: char) -> String;
+
+    /// Whether `module` names a file by path rather than a package. Only a
+    /// path is re-aimed when the file holding it changes directory.
+    fn is_relative(&self, module: &str) -> bool;
+
+    /// How a file in `from_dir` spells `target`.
+    fn spell_module(&self, from_dir: &str, target: &str) -> String;
+
+    /// Whether `module`, as a file in `from_dir` writes it, names `target`.
+    fn aims_at(&self, from_dir: &str, module: &str, target: &str) -> bool;
+
+    /// The bytes one name's removal takes out of a named-import list: the name
+    /// plus the separator joining it to its neighbour.
+    fn specifier_cut(&self, import: &CleaveImport, index: usize) -> Span;
 }
 
 /// What one language answers when a file it owns moves. Held `&'static` in the

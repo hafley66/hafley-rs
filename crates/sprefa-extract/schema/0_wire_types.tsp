@@ -29,7 +29,7 @@ model RenameAbstain { file: string; span: Span; symbol: string; reason: string; 
 // One `ryi cleave` plan, the shape `--json` closes the run with. `kind` on a
 // specifier is `package`, `relative`, or `carried` when DEST already has it.
 model CleaveSpecifier { name: string; module: string; dest_module: string; span: Span; kind: string; }
-model CleaveDrag { name: string; span: Span; iteration: uint32; }
+model CleaveDrag { name: string; span: Span; iteration: uint32; action: string; }
 model CleavePlan {
   src: string; dest: string; item: string; item_span: Span;
   travelling: CleaveSpecifier[]; orphans: CleaveSpecifier[];

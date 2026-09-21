@@ -259,14 +259,25 @@ fn a_failed_verify_rolls_all_three_files_back() {
     assert_eq!(before, digest(&fixture.root), "the rollback left a byte");
 }
 
+/// The `action` of every dragged helper, in plan order.
+fn actions(plan: &serde_json::Value) -> Vec<&str> {
+    plan["dragged"]
+        .as_array()
+        .expect("dragged is an array")
+        .iter()
+        .map(|row| row["action"].as_str().expect("an action"))
+        .collect()
+}
+
 #[test]
-fn drag_is_opt_in() {
+fn drag_decides_moving_not_whether_the_helper_is_reachable() {
     let plain = fixture("drag", "plain");
     let plan = plan_of(&cleave(
         &plain,
         &["src/util.ts#loadConfig", "src/config.ts", "--json"],
     ));
-    assert_eq!(plan["dragged"].as_array().unwrap().len(), 0);
+    assert_eq!(names(&plan, "dragged"), ["slug"]);
+    assert_eq!(actions(&plan), ["exported"], "no --drag exports, never moves");
     assert_eq!(plan["drag_iterations"], 1);
 
     let dragged = fixture("drag", "on");
@@ -275,7 +286,51 @@ fn drag_is_opt_in() {
         &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
     ));
     assert_eq!(names(&plan, "dragged"), ["slug"]);
+    assert_eq!(actions(&plan), ["moved"], "1 drag candidate under --drag");
     assert_eq!(plan["drag_iterations"], 1);
+}
+
+#[test]
+fn a_helper_the_source_still_uses_is_exported_not_moved() {
+    let fixture = fixture("drag_shared", "split");
+    let plan = plan_of(&cleave(
+        &fixture,
+        &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
+    ));
+    assert_eq!(names(&plan, "dragged"), ["pad", "slug"]);
+    assert_eq!(actions(&plan), ["exported", "moved"]);
+
+    cleave(
+        &fixture,
+        &[
+            "src/util.ts#loadConfig",
+            "src/config.ts",
+            "--drag",
+            "--commit",
+        ],
+    );
+    let util = std::fs::read_to_string(fixture.root.join("src/util.ts")).unwrap();
+    assert!(util.contains("export function pad("), "pad gained an export");
+    assert!(!util.contains("function slug("), "slug left");
+    assert_eq!(occurrences(&fixture, "src/config.ts", "function slug("), 1);
+    assert_eq!(
+        occurrences(&fixture, "src/config.ts", "import { pad } from \"./util\""),
+        1,
+        "the destination imports the shared helper from the source"
+    );
+    assert_eq!(
+        occurrences(&fixture, "src/config.ts", "function pad("),
+        0,
+        "a helper is never copied"
+    );
+}
+
+#[test]
+fn a_non_typescript_source_names_the_out_of_scope_list() {
+    let fixture = fixture("basic", "scope");
+    std::fs::write(fixture.root.join("src/lib.rs"), "pub fn boot() {}\n").unwrap();
+    let (code, _) = run_cleave(&fixture, &["src/lib.rs#boot", "src/other.rs"]);
+    assert_eq!(code, Some(2), "a path no arm owns is a plan error");
 }
 
 #[test]
