@@ -457,7 +457,8 @@ $ git diff --stat origin/main...HEAD
  .../tests/sqlite_statement_counters.rs             |   2 +
  docs/failure-modes.md                              |  40 ++
  justfile                                           |   6 +
- 28 files changed, 3865 insertions(+), 61 deletions(-)```
+ 28 files changed, 3866 insertions(+), 61 deletions(-)
+```
 
 Every path is owned by this lane: `crates/hafley-observe` (sources, manifest,
 bench, tests, example, plans) and the one recipe added to `justfile`. The root
