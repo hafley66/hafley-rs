@@ -1,9 +1,10 @@
-//! The TypeScript `scip_scm` rows through the binary, and the wall time of a
-//! whole-corpus run. No engine code is TypeScript-specific: only the query is.
+//! The TypeScript scm rows of `ryi fast`, and the wall time of a whole-corpus
+//! run. No engine code is TypeScript-specific: only the query is.
 
 #![cfg(feature = "cli")]
 
 use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, Instant};
 
@@ -12,19 +13,22 @@ use serde_json::Value;
 const ROOT: &str = "tests/fixtures/ts";
 
 /// The lab's first whole-corpus TypeScript run hit the 10-second limit in its
-/// recursive SQL traversal. Pass 1 emits per file, so this is the rail.
+/// recursive SQL traversal. Fast emits per file, so this is the rail.
 const LIMIT: Duration = Duration::from_secs(10);
+
+/// The three rows the `.scm` query owns, out of everything fast streams.
+const SCM_RECORDS: [&str; 3] = ["symbol", "occurrence", "local"];
 
 #[test]
 fn the_ts_fixtures_emit_the_pinned_row_counts() {
-    let (rows, _) = family(ROOT, 0);
+    let (rows, _) = fast(&ts_files(ROOT), 0);
     assert_eq!(
         histogram(&rows),
         BTreeMap::from([
-            ("scip_scm_symbol".to_string(), 85),
-            ("scip_scm_occurrence/def".to_string(), 85),
-            ("scip_scm_occurrence/ref".to_string(), 7),
-            ("scip_scm_local".to_string(), 57),
+            ("symbol".to_string(), 85),
+            ("occurrence/def".to_string(), 85),
+            ("occurrence/ref".to_string(), 7),
+            ("local".to_string(), 57),
         ]),
         "row counts over {ROOT}"
     );
@@ -34,20 +38,21 @@ fn the_ts_fixtures_emit_the_pinned_row_counts() {
 #[test]
 fn the_whole_module_plane_corpus_fits_inside_the_limit() {
     let root = "tests/fixtures/ts5_findings/module_plane";
-    let (rows, elapsed) = family(root, 1);
-    let files = std::fs::read_dir(root).expect("fixture directory").count();
+    let files = ts_files(root);
+    let (rows, elapsed) = fast(&files, 1);
     // @eprintln-ok: the measured wall time this phase reports.
     eprintln!(
-        "{root}: {} rows in {elapsed:?} over {files} entries",
-        rows.len()
+        "{root}: {} scm rows in {elapsed:?} over {} files",
+        rows.len(),
+        files.len()
     );
     assert_eq!(
         histogram(&rows),
         BTreeMap::from([
-            ("scip_scm_symbol".to_string(), 39),
-            ("scip_scm_occurrence/def".to_string(), 39),
-            ("scip_scm_occurrence/ref".to_string(), 1),
-            ("scip_scm_local".to_string(), 18),
+            ("symbol".to_string(), 39),
+            ("occurrence/def".to_string(), 39),
+            ("occurrence/ref".to_string(), 1),
+            ("local".to_string(), 18),
         ]),
         "row counts over {root}"
     );
@@ -59,9 +64,9 @@ fn the_whole_module_plane_corpus_fits_inside_the_limit() {
 
 #[test]
 fn a_single_file_costs_a_fraction_of_the_limit() {
-    let (rows, elapsed) = family("tests/fixtures/ts/sample.ts", 2);
+    let (rows, elapsed) = fast(&[PathBuf::from("tests/fixtures/ts/sample.ts")], 2);
     // @eprintln-ok: the measured per-file wall time this phase reports.
-    eprintln!("sample.ts: {} rows in {elapsed:?}", rows.len());
+    eprintln!("sample.ts: {} scm rows in {elapsed:?}", rows.len());
     assert!(
         elapsed < LIMIT / 10,
         "one file must cost well under the limit, took {elapsed:?}"
@@ -81,14 +86,30 @@ fn histogram(rows: &[Value]) -> BTreeMap<String, usize> {
     counts
 }
 
-fn family(path: &str, index: usize) -> (Vec<Value>, Duration) {
-    let trace = std::env::temp_dir().join(format!(
-        "ryi-160-{index}-{}.json",
-        std::process::id()
-    ));
+fn ts_files(root: &str) -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect(Path::new(root), &mut files);
+    files.sort();
+    files
+}
+
+fn collect(path: &Path, files: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(path).expect("fixture directory") {
+        let path = entry.expect("fixture entry").path();
+        if path.is_dir() {
+            collect(&path, files);
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("ts") {
+            files.push(path);
+        }
+    }
+}
+
+fn fast(paths: &[PathBuf], index: usize) -> (Vec<Value>, Duration) {
+    let trace = std::env::temp_dir().join(format!("ryi-160-{index}-{}.json", std::process::id()));
     let started = Instant::now();
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .args(["--family", "scip_scm", path])
+        .arg("fast")
+        .args(paths)
         .env("HAFLEY_TRACE", trace)
         .env("RUST_LOG", "sprefa_extract=debug")
         .output()
@@ -96,13 +117,18 @@ fn family(path: &str, index: usize) -> (Vec<Value>, Duration) {
     let elapsed = started.elapsed();
     assert!(
         output.status.success(),
-        "ryi --family scip_scm {path} failed:\n{}",
+        "ryi fast {paths:?} failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     let rows = String::from_utf8(output.stdout)
         .expect("ryi emits UTF-8")
         .lines()
-        .map(|line| serde_json::from_str(line).expect("the family emits JSON"))
+        .map(|line| serde_json::from_str::<Value>(line).expect("fast emits JSON"))
+        .filter(|row| {
+            row["record"]
+                .as_str()
+                .is_some_and(|record| SCM_RECORDS.contains(&record))
+        })
         .collect();
     (rows, elapsed)
 }

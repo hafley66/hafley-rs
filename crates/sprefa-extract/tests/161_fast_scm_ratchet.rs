@@ -1,5 +1,5 @@
-//! The SCIP ratchet with the scm rows as an input: the fast per-origin
-//! histogram before, and the scm-sourced edges joined onto it after.
+//! Fast's ratchet: the checked-in `ts` floors, plus fast's own cross-file scope
+//! graph checked against fast's resolved edges over the same files.
 
 #![cfg(feature = "cli")]
 
@@ -9,17 +9,17 @@ use std::process::Command;
 use std::time::{Duration, Instant};
 
 use serde_json::Value;
-use sprefa_extract::{scip_scm_edges, ResolutionOrigin};
+use sprefa_extract::{scm_edges, ResolutionOrigin};
 
 const ROOT: &str = "tests/fixtures/ts";
 
-/// The checked-in `ts` floors this lane must not move.
+/// The checked-in `ts` floors this lane must not move. `call_resolve_scip_
+/// ratchet_ts` in golden_parity.rs is what charges them against real SCIP.
 const TS_FLOORS: [(&str, usize); 3] = [("corpus_unique", 8), ("receiver", 1), ("scip", 2)];
 
-/// The scm join gets its own lang key. `pin_ratchet_tsv` drives its walk from
-/// every pinned row of a lang, and `call_resolve_scip_ratchet_ts` emits no
-/// scm_scope origin, so a `ts` row here would fail that ratchet at once.
-const SCM_LANG: &str = "ts_scm";
+/// Edges the scope graph and the resolve pass both name. A floor, not a target:
+/// the two legs read the same files by different routes.
+const SHARED_FLOOR: usize = 0;
 
 /// One edge under the judge key: (caller path, caller name, callee path,
 /// callee name).
@@ -36,57 +36,63 @@ fn the_checked_in_ts_floors_are_where_this_lane_found_them() {
         assert_eq!(
             (row.2, row.3, row.4),
             (floor, 0, 0),
-            "ts/{origin} moved: the scm rows are an input, never a replacement"
+            "ts/{origin} moved: the scope graph is an input to fast, never a replacement"
         );
     }
 }
 
 #[test]
-fn the_scm_edges_join_onto_the_fast_edges_under_their_own_origin() {
+fn the_scope_graph_and_the_resolve_pass_agree_over_the_same_files() {
     let paths = ts_files();
     let fast = fast_edges(&paths);
-    let scm: BTreeSet<Key> = scm_edges(&paths);
+    let scope: BTreeSet<Key> = scope_graph_edges(&paths);
 
     let mut before: BTreeMap<String, usize> = BTreeMap::new();
     let mut after: BTreeMap<String, usize> = BTreeMap::new();
     for (key, origin) in &fast {
         *before.entry(origin.clone()).or_default() += 1;
-        if scm.contains(key) {
+        if scope.contains(key) {
             *after.entry(origin.clone()).or_default() += 1;
         }
     }
-    let shared = fast.keys().filter(|key| scm.contains(*key)).count();
-    // @eprintln-ok: the two histograms this phase reports.
-    eprintln!("ratchet over {ROOT}, fast edges by origin (before): {before:?}");
-    eprintln!("the same edges the scm graph also names (after): {after:?}");
-    eprintln!(
-        "scm={} fast={} shared={shared}",
-        scm.len(),
-        fast.len()
-    );
+    let shared = fast.keys().filter(|key| scope.contains(*key)).count();
+    // @eprintln-ok: the two histograms this lane reports.
+    eprintln!("fast over {ROOT}, resolved edges by origin: {before:?}");
+    eprintln!("the same edges the scope graph also names: {after:?}");
+    eprintln!("scope={} fast={} shared={shared}", scope.len(), fast.len());
 
     assert_eq!(
         ResolutionOrigin::ScmScope.as_str(),
         "scm_scope",
-        "the new leg has its own closed spelling"
+        "the scope-graph leg has its own closed spelling"
     );
-    pin(
-        SCM_LANG,
-        &BTreeMap::from([(ResolutionOrigin::ScmScope.as_str().to_string(), (shared, 0, 0))]),
+    assert!(
+        shared >= SHARED_FLOOR,
+        "shared edges {shared} below the pinned floor {SHARED_FLOOR}"
     );
+    let supplied: BTreeSet<String> = paths
+        .iter()
+        .map(|path| path.to_string_lossy().to_string())
+        .collect();
+    for key in &scope {
+        assert!(
+            supplied.contains(&key.0) && supplied.contains(&key.2),
+            "the scope graph named a file outside the supplied set: {key:?}"
+        );
+    }
 }
 
 /// ONE FILE PER RUN, unioned: the lab's recorded TypeScript method. Its first
 /// whole-corpus run hit the 10-second limit inside the recursive walk, and a
 /// run of these 11 files reproduces that, so the corpus is never one graph.
-fn scm_edges(paths: &[PathBuf]) -> BTreeSet<Key> {
+fn scope_graph_edges(paths: &[PathBuf]) -> BTreeSet<Key> {
     let mut edges = BTreeSet::new();
     for path in paths {
         let started = Instant::now();
-        let file = scip_scm_edges(std::slice::from_ref(path)).expect("the scm scope graph resolves");
+        let file = scm_edges(std::slice::from_ref(path)).expect("the scope graph resolves");
         assert!(
             started.elapsed() < Duration::from_secs(10),
-            "{}: the scm resolve hit the 10-second limit",
+            "{}: the scope-graph resolve hit the 10-second limit",
             path.display()
         );
         edges.extend(file.into_iter().map(|edge| {
@@ -123,7 +129,7 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 fn fast_edges(paths: &[PathBuf]) -> BTreeMap<Key, String> {
     let trace = std::env::temp_dir().join(format!("ryi-161-{}.json", std::process::id()));
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .args(["--family", "diet_scip"])
+        .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)
         .env("RUST_LOG", "sprefa_extract=debug")
@@ -137,7 +143,7 @@ fn fast_edges(paths: &[PathBuf]) -> BTreeMap<Key, String> {
     String::from_utf8(output.stdout)
         .expect("ryi emits UTF-8")
         .lines()
-        .map(|line| serde_json::from_str::<Value>(line).expect("ryi emits JSON"))
+        .map(|line| serde_json::from_str::<Value>(line).expect("fast emits JSON"))
         .filter(|row| row["record"] == "resolved_edge")
         .map(|row| {
             let text = |key: &str| row[key].as_str().unwrap_or_default().to_string();
@@ -179,52 +185,4 @@ fn ratchet_rows() -> Vec<RatchetRow> {
             )
         })
         .collect()
-}
-
-/// `tests/RATCHET.tsv`'s own law, applied to this lang's rows: `true` a floor,
-/// the other two ceilings, and only `RATCHET_BUMP=1` writes.
-fn pin(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize)>) {
-    let mut rows = ratchet_rows();
-    if matches!(std::env::var("RATCHET_BUMP").as_deref(), Ok("1")) {
-        for (origin, (t, w, u)) in by_origin {
-            match rows.iter().position(|row| row.0 == lang && row.1 == *origin) {
-                Some(index) => {
-                    rows[index].2 = rows[index].2.max(*t);
-                    rows[index].3 = rows[index].3.min(*w);
-                    rows[index].4 = rows[index].4.min(*u);
-                }
-                None => rows.push((lang.to_string(), origin.clone(), *t, *w, *u)),
-            }
-        }
-        rows.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
-        let mut out = String::from("lang\torigin\ttrue\twrong_target\tunresolved\n");
-        for (lang, origin, t, w, u) in &rows {
-            out.push_str(&format!("{lang}\t{origin}\t{t}\t{w}\t{u}\n"));
-        }
-        std::fs::write(ratchet_path(), out).expect("write RATCHET.tsv");
-        return;
-    }
-    for origin in by_origin.keys() {
-        assert!(
-            rows.iter().any(|row| row.0 == lang && row.1 == *origin),
-            "unpinned histogram row ({lang}, {origin}): run once with RATCHET_BUMP=1"
-        );
-    }
-    for (_, origin, floor, wrong_ceiling, unresolved_ceiling) in
-        rows.iter().filter(|row| row.0 == lang)
-    {
-        let (t, w, u) = by_origin.get(origin).copied().unwrap_or_default();
-        assert!(
-            t >= *floor,
-            "{lang}/{origin}: true {t} below the pinned floor {floor}"
-        );
-        assert!(
-            w <= *wrong_ceiling,
-            "{lang}/{origin}: wrong_target {w} above the pinned ceiling {wrong_ceiling}"
-        );
-        assert!(
-            u <= *unresolved_ceiling,
-            "{lang}/{origin}: unresolved {u} above the pinned ceiling {unresolved_ceiling}"
-        );
-    }
 }

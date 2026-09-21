@@ -75,7 +75,7 @@ pub use lang::{
     open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_ast_rule,
     query_ast_rule_with_content, query_patterns, query_source, query_source_facts,
     query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes, rename_for, renames, respell,
-    scip_scm_edges, scip_scm_facts, source_for, sources, ts_specifiers, AstCaptureFact,
+    scm_edges, scm_facts, source_for, sources, ts_specifiers, AstCaptureFact,
     AstPatternQuery, AstRule, AstRuleCapture,
     AstRuleError, AstRuleMatch, AstRuleMutationProposal, AstRuleRequest, AstgrepSource, BuildPaths,
     ByteRange, CommonlispSource, DataSource, RyiLang, FactError, FactMatcher, FactSet,

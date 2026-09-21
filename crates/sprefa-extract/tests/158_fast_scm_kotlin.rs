@@ -1,4 +1,4 @@
-//! The Kotlin `scip_scm` rows through the binary: counted, and per-file pure.
+//! The Kotlin scm rows of `ryi fast`: counted, and per-file pure.
 
 #![cfg(feature = "cli")]
 
@@ -13,9 +13,13 @@ const FIXTURES: [&str; 2] = [
     "tests/fixtures/kotlin_module_resolve",
 ];
 
+/// The three rows the `.scm` query owns. Fast's resolved rows ride the same
+/// stream and are counted by their own tests.
+const SCM_RECORDS: [&str; 3] = ["symbol", "occurrence", "local"];
+
 #[test]
 fn the_kotlin_fixtures_emit_the_pinned_row_counts() {
-    let rows = family(&FIXTURES.map(PathBuf::from), 0);
+    let rows = scm_rows(&kotlin_files(), 0);
     let mut counts: BTreeMap<String, usize> = BTreeMap::new();
     for row in &rows {
         let record = row["record"].as_str().expect("record tag");
@@ -28,10 +32,10 @@ fn the_kotlin_fixtures_emit_the_pinned_row_counts() {
     assert_eq!(
         counts,
         BTreeMap::from([
-            ("scip_scm_symbol".to_string(), 47),
-            ("scip_scm_occurrence/def".to_string(), 47),
-            ("scip_scm_occurrence/ref".to_string(), 5),
-            ("scip_scm_local".to_string(), 20),
+            ("symbol".to_string(), 47),
+            ("occurrence/def".to_string(), 47),
+            ("occurrence/ref".to_string(), 5),
+            ("local".to_string(), 20),
         ]),
         "row counts over {FIXTURES:?}"
     );
@@ -39,12 +43,12 @@ fn the_kotlin_fixtures_emit_the_pinned_row_counts() {
 
 #[test]
 fn every_symbol_carries_the_lab_spelling_and_a_defining_occurrence() {
-    let rows = family(&FIXTURES.map(PathBuf::from), 1);
+    let rows = scm_rows(&kotlin_files(), 1);
     let defs: Vec<&Value> = rows
         .iter()
-        .filter(|row| row["record"] == "scip_scm_occurrence" && row["role"] == "def")
+        .filter(|row| row["record"] == "occurrence" && row["role"] == "def")
         .collect();
-    for row in rows.iter().filter(|row| row["record"] == "scip_scm_symbol") {
+    for row in rows.iter().filter(|row| row["record"] == "symbol") {
         let symbol = row["symbol"].as_str().expect("symbol");
         let path = row["path"].as_str().expect("path");
         assert!(
@@ -60,26 +64,26 @@ fn every_symbol_carries_the_lab_spelling_and_a_defining_occurrence() {
 
 #[test]
 fn a_reference_names_a_symbol_the_same_file_defines() {
-    let rows = family(&FIXTURES.map(PathBuf::from), 2);
+    let rows = scm_rows(&kotlin_files(), 2);
     for row in rows
         .iter()
-        .filter(|row| row["record"] == "scip_scm_occurrence" && row["role"] == "ref")
+        .filter(|row| row["record"] == "occurrence" && row["role"] == "ref")
     {
         assert!(
-            rows.iter().any(|other| other["record"] == "scip_scm_symbol"
+            rows.iter().any(|other| other["record"] == "symbol"
                 && other["symbol"] == row["symbol"]
                 && other["path"] == row["path"]),
-            "pass 1 resolves inside one file only: {row}"
+            "the scm rows resolve inside one file only: {row}"
         );
     }
 }
 
 #[test]
 fn the_rows_of_one_file_do_not_depend_on_the_other_files() {
-    let whole = family(&FIXTURES.map(PathBuf::from), 3);
+    let whole = scm_rows(&kotlin_files(), 3);
     let mut apart = Vec::new();
     for (index, file) in kotlin_files().into_iter().enumerate() {
-        apart.extend(family(&[file], 10 + index));
+        apart.extend(scm_rows(&[file], 10 + index));
     }
     let key = |row: &Value| serde_json::to_string(row).expect("a row is serializable");
     let mut whole: Vec<String> = whole.iter().map(key).collect();
@@ -109,22 +113,20 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-fn family(paths: &[PathBuf], index: usize) -> Vec<Value> {
-    let trace = std::env::temp_dir().join(format!(
-        "ryi-158-{index}-{}.json",
-        std::process::id()
-    ));
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
-    command
-        .args(["--family", "scip_scm"])
+/// `ryi fast` over the supplied files, narrowed to the rows the `.scm` owns.
+fn scm_rows(paths: &[PathBuf], index: usize) -> Vec<Value> {
+    let trace = std::env::temp_dir().join(format!("ryi-158-{index}-{}.json", std::process::id()));
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)
-        .env("RUST_LOG", "sprefa_extract=debug");
-    let output = command.output().expect("ryi runs");
+        .env("RUST_LOG", "sprefa_extract=debug")
+        .output()
+        .expect("ryi runs");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         output.status.success(),
-        "ryi --family scip_scm {paths:?} failed:\n{stderr}"
+        "ryi fast {paths:?} failed:\n{stderr}"
     );
     assert!(
         !stderr.contains("ScmLowerError"),
@@ -133,6 +135,11 @@ fn family(paths: &[PathBuf], index: usize) -> Vec<Value> {
     String::from_utf8(output.stdout)
         .expect("ryi emits UTF-8")
         .lines()
-        .map(|line| serde_json::from_str(line).expect("the family emits JSON"))
+        .map(|line| serde_json::from_str::<Value>(line).expect("fast emits JSON"))
+        .filter(|row| {
+            row["record"]
+                .as_str()
+                .is_some_and(|record| SCM_RECORDS.contains(&record))
+        })
         .collect()
 }

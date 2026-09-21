@@ -1,10 +1,11 @@
-//! The judge: `scip_scm` definitions against a real SCIP index, keyed on
-//! (path, name, span). TypeScript is judged; Kotlin is stated unjudged.
+//! Fast's judge: the scm definitions `ryi fast` emits against a real SCIP
+//! index, keyed on (path, name, span). TypeScript is judged; Kotlin is stated
+//! unjudged.
 
 #![cfg(feature = "cli")]
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde_json::Value;
@@ -20,7 +21,7 @@ const BOTH: usize = 85;
 const SCM_ONLY: usize = 0;
 const SCIP_ONLY: usize = 50;
 
-/// Why a scip definition has no `scip_scm` twin. Each bucket is a node kind
+/// Why a scip definition has no fast twin. Each bucket is a node kind
 /// the vendored helix locals query does not capture, or a symbol that is not
 /// a source binding at all.
 fn cause(symbol: &str, key: &Key) -> &'static str {
@@ -81,13 +82,13 @@ fn the_typescript_definitions_agree_with_scip_typescript() {
         .collect::<Vec<_>>()
         .join("\n");
     // @eprintln-ok: the judge prints its split, the way the lab REPORT does.
-    eprintln!("scip_scm vs scip-typescript over {ROOT}");
+    eprintln!("ryi fast vs scip-typescript over {ROOT}");
     eprintln!("  both {} scm-only {} scip-only {}", both.len(), scm_only.len(), scip_only.len());
     eprintln!("{listing}");
 
     assert!(
         scm_only.is_empty(),
-        "every scip_scm definition is a scip definition at the same span; these are not:\n{scm_only:#?}"
+        "every fast scm definition is a scip definition at the same span; these are not:\n{scm_only:#?}"
     );
     assert!(
         !causes.contains_key("unclassified"),
@@ -112,13 +113,16 @@ fn the_kotlin_rows_are_unjudged_because_no_kotlin_indexer_is_reachable() {
 }
 
 fn scm_definitions() -> BTreeMap<Key, String> {
+    let files = ts_files();
+    let mut args: Vec<String> = vec!["fast".to_string()];
+    args.extend(files.iter().map(|path| path.to_string_lossy().to_string()));
     let rows = ryi(
-        &["--family", "scip_scm", ROOT],
-        "scip-scm",
+        &args.iter().map(String::as_str).collect::<Vec<_>>(),
+        "fast",
     );
     let prefix = format!("{ROOT}/");
     rows.iter()
-        .filter(|row| row["record"] == "scip_scm_occurrence" && row["role"] == "def")
+        .filter(|row| row["record"] == "occurrence" && row["role"] == "def")
         .map(|row| {
             let symbol = row["symbol"].as_str().expect("symbol").to_string();
             let path = row["path"]
@@ -141,6 +145,24 @@ fn scm_definitions() -> BTreeMap<Key, String> {
             (key, symbol)
         })
         .collect()
+}
+
+fn ts_files() -> Vec<PathBuf> {
+    let mut files = Vec::new();
+    collect(Path::new(ROOT), &mut files);
+    files.sort();
+    files
+}
+
+fn collect(path: &Path, files: &mut Vec<PathBuf>) {
+    for entry in std::fs::read_dir(path).expect("fixture directory") {
+        let path = entry.expect("fixture entry").path();
+        if path.is_dir() {
+            collect(&path, files);
+        } else if path.extension().and_then(|ext| ext.to_str()) == Some("ts") {
+            files.push(path);
+        }
+    }
 }
 
 fn scip_definitions() -> BTreeMap<Key, String> {

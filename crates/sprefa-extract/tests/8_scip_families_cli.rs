@@ -323,10 +323,10 @@ fn the_scip_family_stream_is_the_v5_relation_vocabulary() {
 
 /// The whole `--family diet_scip` stream over four ts files, pinned. Every row
 /// is a resolve-pass record (`resolved_edge` / `resolved_type_edge`, plus the
-/// drops channel's `unresolved` rows): the family is a LABEL on the existing
-/// resolve pass, not a new wire.
+/// drops channel's `unresolved` rows) or one of the three rows fast reads out
+/// of `queries/<lang>/scip.scm`.
 #[test]
-fn the_diet_scip_family_stream_is_the_resolve_pass_output() {
+fn the_diet_scip_family_stream_is_the_fast_output() {
     let stream = run(&[
         "--family",
         "diet_scip",
@@ -339,22 +339,40 @@ fn the_diet_scip_family_stream_is_the_resolve_pass_output() {
     assert!(
         stream.lines().all(|line| line.contains("\"resolved_edge\"")
             || line.contains("\"resolved_type_edge\"")
-            || line.contains("\"record\":\"unresolved\"")),
-        "a diet stream carries only resolve-pass records (edges + drops): {stream}"
+            || line.contains("\"record\":\"unresolved\"")
+            || is_scm_row(line)),
+        "a fast stream carries resolve-pass records (edges + drops) and scm rows: {stream}"
     );
 }
 
-/// `diet_scip` IS the `--resolve` pass with both arms, byte for byte. Asserting
-/// it here does two jobs: it pins what the new name means, and it is the
-/// regression guard that `--resolve` (whose own default stays the narrower
-/// `call`) was not disturbed by adding the label.
+/// The three records `queries/<lang>/scip.scm` owns.
+fn is_scm_row(line: &str) -> bool {
+    ["symbol", "occurrence", "local"]
+        .iter()
+        .any(|record| line.contains(&format!("\"record\":\"{record}\"")))
+}
+
+/// `diet_scip` IS the `--resolve` pass with both arms plus the scm rows, byte
+/// for byte. Asserting it here does two jobs: it pins what the name means, and
+/// it is the regression guard that `--resolve` (whose own default stays the
+/// narrower `call`) was not disturbed by adding the label.
 #[test]
-fn diet_scip_is_exactly_the_existing_resolve_pass_with_both_arms() {
+fn diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows() {
     let mut labelled: Vec<&str> = vec!["--family", "diet_scip"];
     labelled.extend_from_slice(&TS_TRIO);
     let mut original: Vec<&str> = vec!["--resolve", "--family", "call,type"];
     original.extend_from_slice(&TS_TRIO);
-    assert_eq!(run(&labelled), run(&original));
+    let fast = run(&labelled);
+    let resolved: String = fast
+        .lines()
+        .filter(|line| !is_scm_row(line))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    assert_eq!(resolved, run(&original));
+    assert!(
+        fast.lines().any(is_scm_row),
+        "fast carries the scm rows too: {fast}"
+    );
 
     // The pre-existing spellings are untouched: --resolve alone still defaults
     // to the call arm only, and the phase-1 mask still means the phase-1 mask.
