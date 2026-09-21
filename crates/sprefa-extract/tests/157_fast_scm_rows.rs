@@ -1,4 +1,4 @@
-//! Fast's three scm rows: wire shape, TypeSpec shape, and `ryi fast`'s own
+//! Fast's scm rows: wire shape, TypeSpec shape, and `ryi fast`'s own
 //! stream agreeing with both.
 
 #![cfg(feature = "cli")]
@@ -26,9 +26,22 @@ fn wire_shapes() -> BTreeMap<&'static str, Vec<&'static str>> {
         ("symbol", vec!["kind", "path", "symbol"]),
         (
             "occurrence",
-            vec!["end", "path", "role", "start", "symbol"],
+            vec![
+                "decl_end",
+                "decl_start",
+                "end",
+                "exported",
+                "path",
+                "role",
+                "start",
+                "symbol",
+            ],
         ),
         ("local", vec!["end", "fn", "name", "path", "start"]),
+        (
+            "free_name",
+            vec!["end", "name", "owner_end", "owner_start", "path", "start"],
+        ),
     ])
 }
 
@@ -45,6 +58,9 @@ fn samples() -> Vec<FlatFact> {
             start: 1,
             end: 4,
             role: "def".into(),
+            exported: true,
+            decl_start: 0,
+            decl_end: 20,
         },
         FlatFact::LocalRow {
             enclosing_fn: "run".into(),
@@ -52,6 +68,14 @@ fn samples() -> Vec<FlatFact> {
             path: "a.kt".into(),
             start: 5,
             end: 6,
+        },
+        FlatFact::FreeNameRow {
+            path: "a.kt".into(),
+            owner_start: 0,
+            owner_end: 20,
+            name: "println".into(),
+            start: 7,
+            end: 14,
         },
     ]
 }
@@ -69,7 +93,7 @@ fn keys(value: &Value) -> Vec<String> {
 }
 
 #[test]
-fn the_three_rows_carry_their_field_sets() {
+fn the_rows_carry_their_field_sets() {
     let shapes = wire_shapes();
     for fact in samples() {
         let value = serde_json::to_value(&fact).expect("a flat fact is serializable");
@@ -112,7 +136,7 @@ fn every_row_has_a_typespec_table_with_the_same_columns() {
 }
 
 #[test]
-fn fast_streams_the_three_rows_in_their_pinned_shape() {
+fn fast_streams_the_rows_in_their_pinned_shape() {
     let shapes = wire_shapes();
     let mut seen = BTreeSet::new();
     for line in fast(&KOTLIN_FILES, 0).lines() {
@@ -127,7 +151,7 @@ fn fast_streams_the_three_rows_in_their_pinned_shape() {
     assert_eq!(
         seen,
         shapes.keys().map(|k| (*k).to_string()).collect(),
-        "fast streams all three scm rows over {KOTLIN_FILES:?}"
+        "fast streams every scm row over {KOTLIN_FILES:?}"
     );
 }
 
@@ -148,7 +172,7 @@ fn a_mode_refuses_a_per_file_mask_beside_it() {
 }
 
 /// A language with no bundled `.scm` is not a stop: fast still answers for it,
-/// it just contributes none of the three scm rows.
+/// it just contributes none of the scm rows.
 #[test]
 fn a_language_with_no_query_contributes_no_scm_rows() {
     let shapes = wire_shapes();

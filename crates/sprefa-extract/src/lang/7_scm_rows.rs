@@ -15,12 +15,13 @@ use crate::types::FlatFact;
 
 /// The outer captures L1 selects. Everything else is read off the native
 /// match that carries one of them.
-const SPAN_LABELS: [&str; 5] = [
+const SPAN_LABELS: [&str; 6] = [
     "local.scope",
     "local.def.span",
     "local.site.span",
     "local.import",
     "local.export.package",
+    "local.reference",
 ];
 
 const ROOT: usize = 0;
@@ -76,6 +77,8 @@ struct Definition {
     start: u32,
     end: u32,
     owner: usize,
+    /// The whole declaration the name heads, from the query's own span capture.
+    decl: (u32, u32),
 }
 
 /// One call resolved across the supplied file set, named the way the lab's
@@ -476,6 +479,11 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
     let mut facts = Vec::new();
     for def in &definitions {
         let symbol = symbol(path, &def.name);
+        let exported = def.owner == ROOT
+            && (declaring
+                || exports
+                    .iter()
+                    .any(|export| export.start <= def.start && def.end <= export.end));
         facts.push(FlatFact::SymbolRow {
             symbol: symbol.clone(),
             path: path.to_string(),
@@ -487,12 +495,10 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
             start: def.start,
             end: def.end,
             role: "def".into(),
+            exported,
+            decl_start: def.decl.0,
+            decl_end: def.decl.1,
         });
-        let exported = def.owner == ROOT
-            && (declaring
-                || exports
-                    .iter()
-                    .any(|export| export.start <= def.start && def.end <= export.end));
         if !exported {
             facts.push(FlatFact::LocalRow {
                 enclosing_fn: match def.owner {
@@ -523,9 +529,67 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
             start: call.start,
             end: call.end,
             role: "ref".into(),
+            exported: false,
+            decl_start: call.start,
+            decl_end: call.end,
+        });
+    }
+    facts.extend(free_names(path, file_end, &captures, &scopes, &definitions));
+    facts
+}
+
+/// Every occurrence a top-level item needs from outside itself: an identifier
+/// the file's scope tree answers at file level, or not at all.
+fn free_names(
+    path: &str,
+    file_end: u32,
+    captures: &[Capture],
+    scopes: &[Scope],
+    definitions: &[Definition],
+) -> Vec<FlatFact> {
+    let bound: BTreeSet<(u32, u32)> = definitions.iter().map(|def| (def.start, def.end)).collect();
+    let imports = labelled(captures, |label| label == "local.import");
+    let mut facts = Vec::new();
+    for name in labelled(captures, |label| label == "local.reference") {
+        if bound.contains(&(name.start, name.end)) {
+            continue;
+        }
+        if containing_span(&imports, name.start, name.end).is_some() {
+            continue;
+        }
+        if resolve(&name, scopes, definitions).is_some_and(|def| def.owner != ROOT) {
+            continue;
+        }
+        let owner = top_level(scopes, containing(scopes, name.start, name.end, None));
+        facts.push(FlatFact::FreeNameRow {
+            path: path.to_string(),
+            owner_start: match owner {
+                ROOT => 0,
+                index => scopes[index].start,
+            },
+            owner_end: match owner {
+                ROOT => file_end,
+                index => scopes[index].end,
+            },
+            name: name.text.clone(),
+            start: name.start,
+            end: name.end,
         });
     }
     facts
+}
+
+/// The outermost scope under the file that holds `scope`, which is the item a
+/// free name travels with. ROOT when the occurrence sits at file level.
+fn top_level(scopes: &[Scope], scope: usize) -> usize {
+    let mut at = scope;
+    while let Some(parent) = scopes[at].parent {
+        if parent == ROOT {
+            return at;
+        }
+        at = parent;
+    }
+    ROOT
 }
 
 /// The lexical answer: the innermost scope holding the reference, then its
@@ -584,6 +648,7 @@ fn scope_tree(file_end: u32, spans: &[Capture]) -> Vec<Scope> {
 /// A function or type belongs to the scope AROUND the one it opens: its own
 /// body must not be where its name resolves.
 fn definitions(captures: &[Capture], scopes: &[Scope]) -> Vec<Definition> {
+    let spans = labelled(captures, |label| label == "local.def.span");
     let mut definitions = Vec::new();
     for capture in captures {
         let Some(kind) = capture.label.strip_prefix("local.definition.") else {
@@ -602,6 +667,8 @@ fn definitions(captures: &[Capture], scopes: &[Scope]) -> Vec<Definition> {
             start: capture.start,
             end: capture.end,
             owner,
+            decl: containing_span(&spans, capture.start, capture.end)
+                .map_or((capture.start, capture.end), |span| (span.start, span.end)),
         });
     }
     definitions

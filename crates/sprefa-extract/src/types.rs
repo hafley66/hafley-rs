@@ -3670,8 +3670,8 @@ pub enum FlatFact {
         path: String,
         kind: String,
     },
-    /// `occurrence(symbol, path, start, end, role)`: `role` is `def` at the
-    /// defining span, `ref` at one the file's scope tree resolved to it.
+    /// `occurrence(symbol, path, start, end, role, exported, decl_start,
+    /// decl_end)`. A `ref` row is never exported and repeats its own span.
     #[serde(rename = "occurrence")]
     OccurrenceRow {
         symbol: String,
@@ -3679,6 +3679,20 @@ pub enum FlatFact {
         start: u32,
         end: u32,
         role: String,
+        exported: bool,
+        decl_start: u32,
+        decl_end: u32,
+    },
+    /// `free_name(path, owner_start, owner_end, name, start, end)`: a name the
+    /// owning top-level item needs from outside itself. Owner = file when none.
+    #[serde(rename = "free_name")]
+    FreeNameRow {
+        path: String,
+        owner_start: u32,
+        owner_end: u32,
+        name: String,
+        start: u32,
+        end: u32,
     },
     /// `local(fn, name, path, start, end)`: a binding the document does not
     /// export, attributed to its enclosing callable. File-private fns too.

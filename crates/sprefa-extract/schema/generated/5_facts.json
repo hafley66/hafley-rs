@@ -4902,6 +4902,130 @@
         "kind": "string",
         "optional": false,
         "nullable": false
+      },
+      {
+        "name": "exported",
+        "path": [
+          "exported"
+        ],
+        "kind": "boolean",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "decl_start",
+        "path": [
+          "decl_start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "decl_end",
+        "path": [
+          "decl_end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "free_name",
+    "table": "free_name",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "free_name"
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "owner_start",
+        "path": [
+          "owner_start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "owner_end",
+        "path": [
+          "owner_end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "path": [
+          "name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "start",
+        "path": [
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "end",
+        "path": [
+          "end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
       }
     ]
   },
