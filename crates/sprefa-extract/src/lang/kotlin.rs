@@ -1698,7 +1698,25 @@ impl Source for KotlinSource {
                         let mut bundle = FamilyBundle::<CallF>::default();
                         let blob = crate::dispatch::extracting_blob(content)
                             .unwrap_or_else(|| crate::types::content_id_of(content));
-                        project_call(root, src_bytes, blob, &mut strings, &mut bundle);
+                        if std::env::var("RYI_FAST_SCM").as_deref() == Ok("1") {
+                            super::scm_family::project_kotlin_call(
+                                path,
+                                root,
+                                src_bytes,
+                                &mut strings,
+                                &mut bundle,
+                            );
+                            kt_module_specifiers(root, src_bytes, &mut strings, &mut bundle);
+                            super::kotlin_receivers::collect_receivers(
+                                root,
+                                src_bytes,
+                                blob,
+                                &mut strings,
+                                &mut bundle,
+                            );
+                        } else {
+                            project_call(root, src_bytes, blob, &mut strings, &mut bundle);
+                        }
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
                     }
