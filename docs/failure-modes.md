@@ -1,5 +1,44 @@
 # failure modes
 
+## 17. the layer-off side of every bench row had four layers on, because `--bin` does not select a package
+
+**Incident.** 2026-09-21, `crates/hafley-observe/bench`. The watch-the-watchman
+driver built the harness with
+
+```
+cargo build --release --bin watch-the-watchman --target-dir <bench> --no-default-features
+```
+
+from the workspace root and called the result the off side. The harness printed
+the layer list it was compiled with, and the off side read
+`fmt,chrome,otlp-trace,sqlite-sink`: the four default layers of the crate under
+test. Every differential in the table would have been measured against a
+baseline that already had the layers on.
+
+**RCA.** `--no-default-features` applies to the selected packages. At a
+workspace root, running `cargo build --bin NAME` without `-p` selects the
+default members, which is every member; `boop` and `soopy` depend on
+`hafley-observe` with its default features, so feature unification across that
+build turned the defaults back on for the very package the flag was meant to
+strip. Cargo then reported `Finished` in 0.19 s for a feature set it had already
+built, so the flag never looked ignored.
+
+| evidence | reading |
+|---|---|
+| `--extern rusqlite`, `--extern tracing_chrome`, `--extern opentelemetry` on the bin's rustc line under `--no-default-features` | the default features were on |
+| the same command with `-p hafley-observe` | `--extern tracing_tracy` only, no default features |
+| the harness's own `layers` column | `fmt,chrome,otlp-trace,sqlite-sink` where it had to read `none` |
+
+**Fix.** `-p hafley-observe` on the build and on the `cargo tree` node count.
+
+**Rail.** The harness prints the layers it compiled with, and the driver refuses
+an `off` row whose layer list is not `none`. A differential whose off side names
+a layer is not a differential.
+
+**Entry.** Two numbers that differ by a layer that was on both sides is the same
+defect a logging run inside a timing run produces: the layer is invisible, and
+the table is wrong by exactly its cost.
+
 ## 16. registering the fifth harness branched the interactive fork in the CLI, and the retire e2e outlived the un-gated note
 
 **Incident.** 2026-09-14. `cargo test --locked -p boop --test main` on `main`
@@ -83,6 +122,7 @@ without the fix, the rail that stops it recurring. Newest first.
 | # | date | title |
 |---|---|---|
 | 16 | 2026-09-14 | registering omp branched the interactive fork in the CLI, and the retire e2e outlived the un-gated note |
+| 17 | 2026-09-21 | the layer-off side of every bench row had four layers on, because `--bin` does not select a package |
 | 14 | 2026-09-03 | a hail a claude session already held was pushed at it again every 5 s, 29 copies per row |
 | 13 | 2026-08-20 | 512 concurrent `boop db` reads each ran their own transcript sync, and the machine stopped |
 | 12 | 2026-08-21 | a lane that ended its turn to report a finding was closed and read `dead` |

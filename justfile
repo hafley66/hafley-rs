@@ -94,6 +94,12 @@ perf-soopy-multi-repo-refresh repositories="32" rounds="3" concurrency="4":
 perf-git-status-smoke:
     bash crates/soopy/bench/1_git_status.sh smoke
 
+# Price every tracing layer and every flush strategy in hafley-observe as the
+# difference between one binary with the layer on and the same binary with it
+# off. Writes a terminal table and crate PLANS/watch-the-watchman.tsv.
+watch-the-watchman:
+    bash crates/hafley-observe/bench/watch_the_watchman.sh
+
 perf-git-status repo:
     bash crates/soopy/bench/1_git_status.sh repo "{{repo}}"
 

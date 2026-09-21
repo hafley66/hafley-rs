@@ -151,18 +151,18 @@ pub fn query_plan(connection: &Connection, sql: &str) -> rusqlite::Result<Vec<St
 /// The repeating columns of a log record, each stored once with a surrogate
 /// key. The event row carries the integer.
 pub const DICTIONARY_DDL: &str = "\
-CREATE TABLE log_span(id INTEGER PRIMARY KEY, name TEXT NOT NULL, UNIQUE(name));\
-CREATE TABLE log_target(id INTEGER PRIMARY KEY, target TEXT NOT NULL, UNIQUE(target));\
-CREATE TABLE log_file(id INTEGER PRIMARY KEY, file TEXT NOT NULL, UNIQUE(file));\
-CREATE TABLE log_level(id INTEGER PRIMARY KEY, level TEXT NOT NULL, UNIQUE(level));\
-CREATE TABLE log_field(id INTEGER PRIMARY KEY, field TEXT NOT NULL, UNIQUE(field));\
-CREATE TABLE log_event(id INTEGER PRIMARY KEY, ts_ns INTEGER NOT NULL, \
+CREATE TABLE IF NOT EXISTS log_span(id INTEGER PRIMARY KEY, name TEXT NOT NULL, UNIQUE(name));\
+CREATE TABLE IF NOT EXISTS log_target(id INTEGER PRIMARY KEY, target TEXT NOT NULL, UNIQUE(target));\
+CREATE TABLE IF NOT EXISTS log_file(id INTEGER PRIMARY KEY, file TEXT NOT NULL, UNIQUE(file));\
+CREATE TABLE IF NOT EXISTS log_level(id INTEGER PRIMARY KEY, level TEXT NOT NULL, UNIQUE(level));\
+CREATE TABLE IF NOT EXISTS log_field(id INTEGER PRIMARY KEY, field TEXT NOT NULL, UNIQUE(field));\
+CREATE TABLE IF NOT EXISTS log_event(id INTEGER PRIMARY KEY, ts_ns INTEGER NOT NULL, \
 span_id INTEGER NOT NULL REFERENCES log_span(id), \
 target_id INTEGER NOT NULL REFERENCES log_target(id), \
 file_id INTEGER NOT NULL REFERENCES log_file(id), \
 line INTEGER NOT NULL, \
 level_id INTEGER NOT NULL REFERENCES log_level(id));\
-CREATE TABLE log_value(event_id INTEGER NOT NULL REFERENCES log_event(id), \
+CREATE TABLE IF NOT EXISTS log_value(event_id INTEGER NOT NULL REFERENCES log_event(id), \
 field_id INTEGER NOT NULL REFERENCES log_field(id), value TEXT NOT NULL, \
 PRIMARY KEY(event_id, field_id)) WITHOUT ROWID;";
 
@@ -170,10 +170,10 @@ PRIMARY KEY(event_id, field_id)) WITHOUT ROWID;";
 /// against repetition, and shares the event and value shapes so the only
 /// difference between the two sinks is where the repeated strings live.
 pub const TEXT_DDL: &str = "\
-CREATE TABLE log_event(id INTEGER PRIMARY KEY, ts_ns INTEGER NOT NULL, \
+CREATE TABLE IF NOT EXISTS log_event(id INTEGER PRIMARY KEY, ts_ns INTEGER NOT NULL, \
 span TEXT NOT NULL, target TEXT NOT NULL, file TEXT NOT NULL, \
 line INTEGER NOT NULL, level TEXT NOT NULL);\
-CREATE TABLE log_value(event_id INTEGER NOT NULL, field TEXT NOT NULL, \
+CREATE TABLE IF NOT EXISTS log_value(event_id INTEGER NOT NULL, field TEXT NOT NULL, \
 value TEXT NOT NULL, PRIMARY KEY(event_id, field)) WITHOUT ROWID;";
 
 const DICTIONARY_COLUMNS: [(&str, &str); 5] = [

@@ -193,6 +193,9 @@ fn layer_names() -> String {
     if cfg!(feature = "sqlite-sink") {
         names.push("sqlite-sink");
     }
+    if names.is_empty() {
+        return "none".to_owned();
+    }
     names.join(",")
 }
 
