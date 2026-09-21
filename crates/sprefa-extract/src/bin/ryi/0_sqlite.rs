@@ -24,8 +24,9 @@ pub mod writers {
 
 pub struct Database {
     connection: Connection,
-    temporary: tempfile::NamedTempFile,
-    destination: PathBuf,
+    /// Both `None` for an in-memory store: nothing to sync, nothing to publish.
+    temporary: Option<tempfile::NamedTempFile>,
+    destination: Option<PathBuf>,
     pub rows: i64,
     input_path: Option<String>,
     content_id: Option<String>,
@@ -88,7 +89,114 @@ fn span_lines_view_sql(connection: &Connection) -> Result<String> {
     ))
 }
 
+/// The one grade rule, as SQL over `column`. `ryi graph` reads it out of the
+/// views rather than re-deciding it in Rust.
+fn grade_sql(column: &str) -> String {
+    format!(
+        "CASE {column} WHEN 'module_plane' THEN '+' WHEN 'unresolved' THEN '-' ELSE '~' END \
+         AS \"grade\""
+    )
+}
+
+/// The recursive call-graph closure, seeded by `seed` and capped at 32 hops.
+/// `seed` is SQL, never a name: a searched-for NAME travels as `?1`.
+pub fn reach_walk_sql(seed: &str) -> String {
+    format!(
+        "WITH RECURSIVE \"walk\"(\"src_path\", \"src_name\", \"dst_path\", \"dst_name\", \
+         \"depth\", \"grade\") AS ( \
+         SELECT e.\"caller_path\", e.\"caller_name\", e.\"callee_path\", e.\"callee_name\", 1, {0} \
+         FROM \"resolved_edge\" AS e WHERE {seed} \
+         UNION \
+         SELECT w.\"src_path\", w.\"src_name\", e.\"callee_path\", e.\"callee_name\", \
+         w.\"depth\" + 1, {0} \
+         FROM \"walk\" AS w JOIN \"resolved_edge\" AS e \
+         ON e.\"caller_path\" = w.\"dst_path\" AND e.\"caller_name\" IS w.\"dst_name\" \
+         WHERE w.\"depth\" < {REACH_DEPTH_CAP} )",
+        grade_sql("e.\"resolution_origin\"")
+    )
+}
+
+/// The hop cap on `reach`: a cycle in the call graph is otherwise a
+/// non-terminating closure, and 32 is past any real call depth.
+pub const REACH_DEPTH_CAP: u32 = 32;
+
+/// The three graph views, created by name so `sqlite3 <db> 'SELECT * FROM
+/// callers'` answers the same question `ryi graph --callers` does.
+fn graph_views_sql() -> String {
+    format!(
+        "CREATE VIEW \"callers\" AS SELECT \"callee_path\", \"callee_name\", \"caller_path\", \
+         \"caller_name\", {callers_grade}, \"kind\" FROM \"resolved_edge\"; \
+         CREATE VIEW \"uses\" AS SELECT \"target_path\" AS \"type_path\", \
+         \"target_name\" AS \"type_name\", \"owner_path\" AS \"user_path\", \
+         \"owner_name\" AS \"user_name\", {uses_grade}, \"kind\" FROM \"resolved_type_edge\"; \
+         CREATE VIEW \"reach\" AS {walk} SELECT \"src_path\", \"src_name\", \"dst_path\", \
+         \"dst_name\", \"depth\" FROM \"walk\";",
+        callers_grade = grade_sql("\"resolution_origin\""),
+        uses_grade = grade_sql("\"resolution_origin\""),
+        walk = reach_walk_sql("1")
+    )
+}
+
 impl Database {
+    /// A store with no file behind it: `ryi graph` without `--state` loads
+    /// facts, queries the views, and drops the lot.
+    pub fn memory() -> Result<Self> {
+        let connection = Connection::open_in_memory()?;
+        Self::furnish(connection, None, None)
+    }
+
+    /// The connection the graph views are queried through.
+    pub fn connection(&self) -> &Connection {
+        &self.connection
+    }
+
+    /// Land every pending row so a query on this connection sees it.
+    pub fn flush(&mut self) -> Result<()> {
+        self.flush_pending()
+    }
+
+    /// Commit, and publish the staging file when there is one. Returns the
+    /// published path so `finish` can report it; silent otherwise.
+    pub fn close(mut self) -> Result<Option<PathBuf>> {
+        self.flush_pending()?;
+        self.connection.execute_batch("COMMIT;")?;
+        self.connection.close().map_err(|(_, error)| error)?;
+        let (Some(temporary), Some(destination)) = (self.temporary, self.destination) else {
+            return Ok(None);
+        };
+        temporary.as_file().sync_all()?;
+        temporary.persist_noclobber(&destination)?;
+        Ok(Some(destination))
+    }
+
+    /// DDL, views and batch sizing: everything both constructors owe.
+    fn furnish(
+        connection: Connection,
+        temporary: Option<tempfile::NamedTempFile>,
+        destination: Option<PathBuf>,
+    ) -> Result<Self> {
+        connection.set_prepared_statement_cache_capacity(writers::TABLE_COUNT);
+        connection.busy_timeout(Duration::from_secs(5))?;
+        connection.execute_batch(
+            "PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; BEGIN IMMEDIATE;",
+        )?;
+        connection.execute_batch(DDL)?;
+        connection.execute_batch(&span_lines_view_sql(&connection)?)?;
+        connection.execute_batch(&graph_views_sql())?;
+        let max_batch_rows = writers::max_batch_rows(&connection)?;
+        Ok(Self {
+            connection,
+            temporary,
+            destination,
+            rows: 0,
+            input_path: None,
+            content_id: None,
+            pending: Vec::with_capacity(max_batch_rows),
+            pending_bytes: 0,
+            max_batch_rows,
+        })
+    }
+
     pub fn create(path: &Path) -> Result<Self> {
         if path.as_os_str().is_empty() || path == Path::new(":memory:") {
             return Err("--sqlite requires a filesystem path for a new database".into());
@@ -108,25 +216,11 @@ impl Database {
             .prefix(".extract-sqlite-")
             .tempfile_in(parent)?;
         let connection = Connection::open(temporary.path())?;
-        connection.set_prepared_statement_cache_capacity(writers::TABLE_COUNT);
-        connection.busy_timeout(Duration::from_secs(5))?;
-        connection.execute_batch(
-            "PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; BEGIN IMMEDIATE;",
-        )?;
-        connection.execute_batch(DDL)?;
-        connection.execute_batch(&span_lines_view_sql(&connection)?)?;
-        let max_batch_rows = writers::max_batch_rows(&connection)?;
-        Ok(Self {
+        Self::furnish(
             connection,
-            temporary,
-            destination: std::path::absolute(path)?,
-            rows: 0,
-            input_path: None,
-            content_id: None,
-            pending: Vec::with_capacity(max_batch_rows),
-            pending_bytes: 0,
-            max_batch_rows,
-        })
+            Some(temporary),
+            Some(std::path::absolute(path)?),
+        )
     }
 
     pub fn source(&mut self, path: &str, digest: String) -> Result<()> {
@@ -198,20 +292,14 @@ impl Database {
         Ok(())
     }
 
-    pub fn finish(mut self) -> Result<()> {
-        self.flush_pending()?;
-        self.connection.execute_batch("COMMIT;")?;
-        self.connection.close().map_err(|(_, error)| error)?;
-        self.temporary.as_file().sync_all()?;
-        self.temporary.persist_noclobber(&self.destination)?;
-        let path = shell_quote(&self.destination.to_string_lossy());
+    pub fn finish(self) -> Result<()> {
+        let rows = self.rows;
+        let Some(destination) = self.close()? else {
+            return Ok(());
+        };
+        let path = shell_quote(&destination.to_string_lossy());
         let mut out = std::io::stdout().lock();
-        writeln!(
-            out,
-            "Wrote {} ({} rows)",
-            self.destination.display(),
-            self.rows
-        )?;
+        writeln!(out, "Wrote {} ({rows} rows)", destination.display())?;
         writeln!(out, "Tables: sqlite3 {path} '.tables'")?;
         writeln!(out, "Schema: sqlite3 {path} '.schema'")?;
         writeln!(out, "Query:  sqlite3 -header -column {path} 'SELECT _input_path, family, kind, name FROM node LIMIT 20;'")?;
