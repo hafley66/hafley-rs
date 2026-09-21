@@ -6,12 +6,10 @@ The judge keys edges as `(caller_path, caller_name) -> (callee_path, callee_name
 Duplicate rows collapse in the sets. The current `ryi fast` binary produces 9
 receiver keys and 6 module keys under that identity.
 
-| fixture | both | lab-only | fast-only |
-| --- | ---: | ---: | ---: |
-| `kotlin_receivers` edges | 5 | 1 | 4 |
-| `kotlin_receivers` unresolved | 0 | 2 | 1 |
-| `kotlin_module_resolve` edges | 6 | 3 | 0 |
-| `kotlin_module_resolve` unresolved | 0 | 2 | 4 |
+The receiver edge split is 5 both, 1 lab-only, and 4 fast-only. Its
+unresolved split is 0 both, 2 lab-only, and 1 fast-only. The module edge split
+is 6 both, 3 lab-only, and 0 fast-only. Its unresolved split is 0 both, 2
+lab-only, and 4 fast-only.
 
 Every disagreement and its cause:
 
@@ -57,3 +55,28 @@ Every disagreement and its cause:
   the same same-file target. The merged Helix query marks the statement block
   as the innermost scope; the lab owner projection does not associate that
   nested scope with its containing function name.
+
+## SCIP ratchet
+
+The lab edges were joined to `ryi fast` edges by the judge key, then grouped by
+the fast edge's `resolution_origin`. The checked-in TypeScript floors produced:
+
+```text
+ts/corpus_unique true=0 floor=8 holds=false
+ts/receiver      true=0 floor=1 holds=false
+ts/scip          true=0 floor=2 holds=false
+lab=6 fast=10 shared=0
+```
+
+## Verdict
+
+The `ryi fast` Rust counts below are `src/lang/kotlin*.rs` and
+`src/lang/ts*.rs`, respectively. The engine count is all Rust under the lab's
+`src/`.
+
+| language | `.scm` lines | engine lines | `ryi fast` Rust lines | disagreements |
+| --- | ---: | ---: | ---: | --- |
+| Kotlin | 70 | 508 | 4,751 | 8 edges; 9 unresolved |
+| TypeScript | 67 | 508 | 8,899 | 10 edges; ratchet 0/8, 0/1, 0/2 |
+
+Does not replace `ryi fast`.
