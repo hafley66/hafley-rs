@@ -56,17 +56,25 @@ where
     None
 }
 
-/// The tracked global allocator. A binary installs it; the feature cannot
-/// install it from a library.
+/// The tracked global allocator, from the same client the span layer uses. A
+/// binary installs it; a library cannot.
 #[cfg(feature = "tracy-alloc")]
-pub type Allocator = tracy_full::alloc::GlobalAllocator;
+pub type Allocator = tracy_client::ProfiledAllocator<std::alloc::System>;
 
-/// The allocator a binary declares, or a pass-through when the feature is off.
+/// The callstack depth the allocator collects. Zero reports each allocation
+/// and free with its size, and walks no stack per call.
+#[cfg(feature = "tracy-alloc")]
+pub const ALLOC_CALLSTACK_DEPTH: u16 = 0;
+
+/// The allocator a binary declares.
 #[cfg(feature = "tracy-alloc")]
 #[macro_export]
 macro_rules! tracy_allocator {
     ($name:ident) => {
         #[global_allocator]
-        static $name: $crate::tracy::Allocator = $crate::tracy::Allocator::new();
+        static $name: $crate::tracy::Allocator = $crate::tracy::Allocator::new(
+            std::alloc::System,
+            $crate::tracy::ALLOC_CALLSTACK_DEPTH,
+        );
     };
 }

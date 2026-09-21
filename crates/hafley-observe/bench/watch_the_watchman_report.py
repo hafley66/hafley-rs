@@ -21,7 +21,7 @@ NOTES = {
     "procmetrics": "the bought process collector through the metrics facade, sampled on a bounded span cadence",
     "metrics-ctx": "the bought span-field label layer over the facade recorder",
     "tracy": "tracy drops a span entered and exited on different threads, so its timeline is wrong under async",
-    "tracy-alloc": "the tracked global allocator; its cost follows the allocation count, and this workload allocates little",
+    "tracy-alloc": "the tracked global allocator from the same client the span layer uses; its cost follows the allocation count, and this workload allocates little",
     "rusage": "the sampler is compiled into every build, so this row prices the publishing layer alone",
     "sqlite-sink": "dictionary-encoded: repeated columns interned once, per-row values stored as they are",
     "sqlite-sink-text": "the same shape with every key inlined; the R4 control for the dictionary",

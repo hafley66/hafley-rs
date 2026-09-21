@@ -17,6 +17,12 @@ use hafley_observe::{instruments, rusage, Config, FormatConfig, OutputFormat};
 #[cfg(feature = "sqlite-sink")]
 use hafley_observe::Sink as _;
 
+// The tracked allocator is a property of the binary, so the harness installs
+// it. With the feature off the line does not exist and the default allocator
+// stands.
+#[cfg(feature = "tracy-alloc")]
+hafley_observe::tracy_allocator!(TRACY_ALLOC);
+
 /// The workload, in one place. The shape is a document: an outer paragraph
 /// span, a line span, and a hot token span. Every count below is a constant,
 /// so two runs with the same binaries emit the same events.

@@ -30,7 +30,7 @@ sysmetrics = ["otlp-metrics", "dep:opentelemetry-system-metrics", "dep:tokio", "
 procmetrics = ["otlp-metrics", "dep:metrics-process", "metrics-process/metrics-rs"]
 metrics-ctx = ["otlp-metrics", "dep:metrics-tracing-context", "dep:metrics-util"]
 tracy = ["dep:tracing-tracy", "tracing-tracy/enable"]
-tracy-alloc = ["dep:tracy_full", "tracy_full/enable"]
+tracy-alloc = ["dep:tracy-client", "tracy-client/enable"]
 rusage = []
 sqlite-sink = ["dep:rusqlite"]
 
@@ -53,7 +53,11 @@ metrics-process = { version = "2.4.3", default-features = false, optional = true
 metrics-tracing-context = { version = "0.18", default-features = false, optional = true }
 metrics-util = { version = "0.20", default-features = false, features = ["layers"], optional = true }
 tracing-tracy = { version = "0.12", default-features = false, optional = true }
-tracy_full = { version = "1.13", default-features = false, optional = true }
+# One Tracy client for both features. `tracy_full` vendors its own
+# `tracy-client-sys`, and two of those in one binary is a duplicate-symbol
+# link, then a crash; this crate is the one `tracing-tracy` already uses, so
+# the layer and the allocator share a client.
+tracy-client = { version = "0.19", default-features = false, optional = true }
 tokio = { version = "1", default-features = false, features = ["rt", "time"], optional = true }
 sysinfo = { version = "0.35", default-features = false, optional = true }
 

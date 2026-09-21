@@ -1,5 +1,57 @@
 # failure modes
 
+## 18. two tracy clients in one binary crashed the all-features gate, and the allocator row priced nothing
+
+**Incident.** 2026-09-21, `crates/hafley-observe`. `cargo test -p
+hafley-observe --all-features` failed twice over. The linker reported duplicate
+symbols across two `tracy-client-sys` rlibs, `libtracy_client_sys-3cdaf498` and
+`libtracy_client_sys-f9c2dd6c`, both carrying `TracyClient.o`; the harness
+binary then died with `signal: 11 (SIGSEGV: invalid memory reference)`, which
+stopped the run before any integration test binary executed. The lane's R1
+receipt claimed all-features passed, because the only all-features command it
+had run was `cargo check --all-targets --all-features`, and `check` does not
+link.
+
+A second defect sat in the same row. The tracked global allocator is installed
+by the binary, and the harness declared no `#[global_allocator]`, so the
+`tracy-alloc` candidate measured nothing at all for a whole measurement run.
+The fingerprint was in the table the whole time: that row's `binary_bytes`
+delta read `+0`.
+
+**RCA.**
+
+| cause | detail |
+|---|---|
+| two clients | `tracing-tracy` 0.12 requires `tracy-client >=0.19,<0.20`, which accepts `tracy-client-sys >=0.23,<0.31` and resolves to 0.30; `tracy_full` 1.13 pins `tracy-client-sys ^0.28`. Two semver-incompatible copies. `tracy-client-sys` declares no `links` key, so cargo accepts both and the collision lands at link time, not at resolve time. |
+| the crash, not an error | the duplicate `TracyClient.o` symbols link, and the two clients then start the profiler twice in the same process, which is the SIGSEGV. |
+| an uninstalled allocator | the feature existed, the type existed, and nothing declared the static. A library cannot install a global allocator; only the binary can. |
+| a receipt from the wrong gate | `cargo check` proves types, not links. A feature that pulls a `-sys` crate is only proven by a build that links and a test that runs. |
+
+**Fix.**
+
+| # | change | file |
+|---|---|---|
+| 1 | `tracy-alloc` uses `tracy-client` 0.19, the client `tracing-tracy` already pulls, and `tracy_full` is dropped from the graph | `crates/hafley-observe/Cargo.toml` |
+| 2 | the allocator type is `tracy_client::ProfiledAllocator<System>` at callstack depth zero, and the `tracy_allocator!` macro is the one place a binary installs it | `crates/hafley-observe/src/10_tracy.rs` |
+| 3 | the harness declares the allocator, so the row prices a real allocator | `crates/hafley-observe/bench/watch_the_watchman.rs` |
+
+`cargo tree -e normal --all-features` now names one `tracy-client-sys`, and
+`cargo test -p hafley-observe --all-features` exits 0 three times running.
+
+**Rail.** A feature that pulls a `-sys` crate is proven by a command that
+links: `cargo test --all-features`, never `cargo check --all-features`. The
+receipt states the exit code of three runs.
+
+**Rail 2.** A candidate whose feature adds code must move its artifact size. A
+`binary_bytes` delta of zero on a row that claims a layer is the signature of a
+feature that was compiled but never installed, and the row is a defect until it
+is explained.
+
+**Entry.** The lane read the two clients' manifests before trusting the graph
+and found that neither crate marks the collision; the brief's own table wanted
+`tracy` on `tracing-tracy` and `tracy-alloc` on `tracy_full`, and that pair
+cannot coexist in one binary. One client serves both.
+
 ## 17. the layer-off side of every bench row had four layers on, because `--bin` does not select a package
 
 **Incident.** 2026-09-21, `crates/hafley-observe/bench`. The watch-the-watchman
@@ -121,6 +173,7 @@ without the fix, the rail that stops it recurring. Newest first.
 
 | # | date | title |
 |---|---|---|
+| 18 | 2026-09-21 | two tracy clients in one binary crashed the all-features gate, and the allocator row priced nothing |
 | 16 | 2026-09-14 | registering omp branched the interactive fork in the CLI, and the retire e2e outlived the un-gated note |
 | 17 | 2026-09-21 | the layer-off side of every bench row had four layers on, because `--bin` does not select a package |
 | 14 | 2026-09-03 | a hail a claude session already held was pushed at it again every 5 s, 29 copies per row |

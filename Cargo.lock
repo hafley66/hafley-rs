@@ -1323,7 +1323,7 @@ dependencies = [
  "tracing-opentelemetry",
  "tracing-subscriber",
  "tracing-tracy",
- "tracy_full",
+ "tracy-client",
 ]
 
 [[package]]
@@ -3748,17 +3748,7 @@ checksum = "d93fd676d8946eaeaff4881d26d2240a8d106fcaccbd47cb9f1389e3561ba490"
 dependencies = [
  "loom",
  "once_cell",
- "tracy-client-sys 0.30.0",
-]
-
-[[package]]
-name = "tracy-client-sys"
-version = "0.28.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5f7c95348f20c1c913d72157b3c6dee6ea3e30b3d19502c5a7f6d3f160dacbf"
-dependencies = [
- "cc",
- "windows-targets 0.52.6",
+ "tracy-client-sys",
 ]
 
 [[package]]
@@ -3769,17 +3759,6 @@ checksum = "eef8a023d2b19f44e430da334f7dfb5e5db219bb83e2b4f56a09c1cb12abe915"
 dependencies = [
  "cc",
  "windows-targets 0.53.5",
-]
-
-[[package]]
-name = "tracy_full"
-version = "1.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed68379ccc9badc857fae272f94e07d9816ad4a3075df094efe628a894298b50"
-dependencies = [
- "once_cell",
- "rustc_version",
- "tracy-client-sys 0.28.0",
 ]
 
 [[package]]

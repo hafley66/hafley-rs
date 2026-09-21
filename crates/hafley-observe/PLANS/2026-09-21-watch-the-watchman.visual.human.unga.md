@@ -21,7 +21,7 @@ the host names the commit point?
 | `procmetrics` | reads the process on a bounded span cadence through the bought collector |
 | `metrics-ctx` | copies span fields into metric labels for every instrument the facade records |
 | `tracy` | walks a callstack at every zone, and its timeline is wrong under async |
-| `tracy-alloc` | reports every allocation in the process |
+| `tracy-alloc` | reports every allocation in the process, from the same client as the span layer |
 | `rusage` | reads the kernel counters at every span close and emits a record |
 | `sqlite-sink` | interns the repeating columns and writes a transaction per batch, or per event when immediate |
 
@@ -139,7 +139,7 @@ In plain words, from the table:
 | the tracing context layer | added a tenth to a fifth |
 | the process collector | added a tenth, sampled on a cadence |
 | the system observer | read as noise, because it samples on its own thread |
-| the Tracy zone layer | multiplied the path by two to four and a half |
+| the Tracy zone layer | nearly doubled the path |
 | the tracked allocator | read as noise, because the workload allocates little |
 | the usage layer | multiplied the path by about two to two and a quarter |
 | the relational sink | see the two sink rows below |
