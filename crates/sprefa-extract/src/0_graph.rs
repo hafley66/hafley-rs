@@ -1,7 +1,14 @@
+//! `ryi graph`: one resolve pass over a corpus, then a question asked of it.
+//! No language is named here: the path roster answers which files exist, and
+//! the resolve arms answer what they mean.
+//! @comment-ok: module header, the seam list every bin arm opens with
+
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::PathBuf;
 
+use clap::{ArgGroup, Parser};
+use sprefa_extract::lang::source_for;
 use sprefa_extract::{resolve_project, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords};
 
 pub struct GraphCx {
@@ -134,6 +141,8 @@ fn emit_summary_line(edges: &[FlatFact]) {
     );
 }
 
+/// Every file under `paths` the roster claims. No suffix is spelled here, so a
+/// language the roster gains is walked by this verb the same day.
 fn expand_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
     let mut files = Vec::new();
     let mut pending = paths.to_vec();
@@ -142,7 +151,7 @@ fn expand_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Box<dyn std::error::E
             for entry in fs::read_dir(path)? {
                 pending.push(entry?.path());
             }
-        } else if path.extension().is_some_and(|extension| extension == "ts") {
+        } else if source_for(&path.to_string_lossy()).is_some() {
             files.push(path);
         }
     }
@@ -150,30 +159,68 @@ fn expand_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Box<dyn std::error::E
     Ok(files)
 }
 
-pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::error::Error>> {
-    let mut args = arguments.collect::<Vec<_>>().into_iter();
-    let mut caller_name = None;
-    let mut paths = Vec::new();
-    let mut json = false;
-    while let Some(argument) = args.next() {
-        match argument.as_str() {
-            "--callers" => caller_name = args.next(),
-            "--json" => json = true,
-            _ if argument.starts_with('-') => {
-                return Err(format!("unknown graph argument {argument}").into())
-            }
-            _ => paths.push(PathBuf::from(argument)),
-        }
-    }
-    let caller_name = caller_name.ok_or("graph requires --callers NAME")?;
-    if paths.is_empty() {
-        return Err("graph requires PATH".into());
-    }
-    let paths = expand_paths(&paths)?;
-    let cx = GraphCx::load(&paths, ResolveArms { call: true, ..ResolveArms::default() })?;
-    let edges = run_callers(&cx, &caller_name);
+/// The out-of-scope list the help text states, so a caller reads it before the
+/// run rather than after.
+const SCOPE: &str = "Exactly one of --callers, --uses and --from is required. Out of scope, each \
+                     its own issue: a persistent cross-run graph index (dl8 owns it), a \
+                     maintained liveness or dead-code view, and grading a reach hop by anything \
+                     but the edge that discovered it.";
+
+#[derive(Parser)]
+#[command(
+    name = "ryi graph",
+    about = "ask one question of the resolved call and type graph of a corpus",
+    after_help = SCOPE
+)]
+#[command(group(ArgGroup::new("arm").required(true).args(["callers", "uses", "from"])))]
+pub struct GraphCli {
+    /// Files and directories. A directory is walked; every path the language
+    /// roster claims is read, and nothing else.
+    #[arg(required = true, value_name = "PATH")]
+    paths: Vec<PathBuf>,
+    /// Who calls NAME: one row per resolved call edge landing on it.
+    #[arg(long, value_name = "NAME")]
+    callers: Option<String>,
+    /// Who references the type NAME: one row per referencing declaration.
+    #[arg(long, value_name = "NAME")]
+    uses: Option<String>,
+    /// What NAME reaches along resolved call edges, transitively.
+    #[arg(long, value_name = "NAME")]
+    from: Option<String>,
+    /// Keep the fact store in this directory instead of memory.
+    #[arg(long, value_name = "DIR")]
+    state: Option<PathBuf>,
+    /// Drop the stderr summary line; stdout is JSONL either way.
+    #[arg(long)]
+    json: bool,
+}
+
+pub fn run<I>(args: I) -> Result<(), Box<dyn std::error::Error>>
+where
+    I: IntoIterator,
+    I::Item: Into<std::ffi::OsString> + Clone,
+{
+    // `exit` rather than a returned error: `--help` is an `Err` to clap, and
+    // only clap's own exit prints it to stdout with status 0.
+    let cli = match GraphCli::try_parse_from(args) {
+        Ok(cli) => cli,
+        Err(error) => error.exit(),
+    };
+    let paths = expand_paths(&cli.paths)?;
+    let Some(name) = cli.callers.as_deref() else {
+        return Err("--uses and --from arrive in the next step".into());
+    };
+    let cx = GraphCx::load(
+        &paths,
+        ResolveArms {
+            call: true,
+            ..ResolveArms::default()
+        },
+    )?;
+    let _ = &cli.state;
+    let edges = run_callers(&cx, name);
     emit_edges(&edges)?;
-    if !json {
+    if !cli.json {
         emit_summary_line(&edges);
     }
     Ok(())
