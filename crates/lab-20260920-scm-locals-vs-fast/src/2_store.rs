@@ -74,7 +74,10 @@ impl Store {
 
     pub fn edge(&self, src: i64, dst: i64) -> Result<(), LabError> {
         self.db
-            .execute("INSERT OR IGNORE INTO edge(src,dst) VALUES(?1,?2)", [src, dst])
+            .execute(
+                "INSERT OR IGNORE INTO edge(src,dst) VALUES(?1,?2)",
+                [src, dst],
+            )
             .map_err(sql)?;
         Ok(())
     }

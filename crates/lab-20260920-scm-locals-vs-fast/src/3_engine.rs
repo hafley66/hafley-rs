@@ -1,7 +1,9 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use crate::{matches_only, Analysis, Capture, LabError, NamedEdge, NodeKind, Store, Unresolved};
+use crate::{
+    matches_only, Analysis, Capture, LabError, NamedEdge, NodeKind, ScmRow, Store, Unresolved,
+};
 
 #[derive(Clone)]
 struct SpanNode {
@@ -23,6 +25,7 @@ pub fn analyze(language: &str, query: &str, paths: &[PathBuf]) -> Result<Analysi
     let mut roots = Vec::new();
     let mut references = Vec::new();
     let mut imports = Vec::new();
+    let mut rows = Vec::new();
 
     for path in paths {
         let source = std::fs::read(path).map_err(|error| LabError::Io(error.to_string()))?;
@@ -44,6 +47,7 @@ pub fn analyze(language: &str, query: &str, paths: &[PathBuf]) -> Result<Analysi
             output.captures,
             &mut references,
             &mut imports,
+            &mut rows,
         )?;
     }
 
@@ -69,6 +73,12 @@ pub fn analyze(language: &str, query: &str, paths: &[PathBuf]) -> Result<Analysi
             });
         } else {
             for (callee_name, callee_path, _, _) in targets {
+                rows.push(ScmRow::ScipRef {
+                    file: reference.path.clone(),
+                    symbol: symbol(&callee_path, &callee_name),
+                    def_file: callee_path.clone(),
+                    repo: "scm".into(),
+                });
                 analysis.edges.push(NamedEdge {
                     caller_path: reference.path.clone(),
                     caller_name: reference.owner.clone(),
@@ -81,6 +91,9 @@ pub fn analyze(language: &str, query: &str, paths: &[PathBuf]) -> Result<Analysi
     analysis.edges.sort();
     analysis.edges.dedup();
     analysis.unresolved.sort();
+    rows.sort();
+    rows.dedup();
+    analysis.rows = rows;
     Ok(analysis)
 }
 
@@ -92,6 +105,7 @@ fn ingest_file(
     captures: Vec<Capture>,
     references: &mut Vec<Reference>,
     imports: &mut Vec<(i64, i64)>,
+    rows: &mut Vec<ScmRow>,
 ) -> Result<(), LabError> {
     let mut scopes = vec![SpanNode {
         id: root,
@@ -112,6 +126,7 @@ fn ingest_file(
     }
 
     let definitions = unique(&captures, |label| label.starts_with("local.definition"));
+    let owner_names = scope_names(&scope_spans, &definitions);
     let mut definition_spans = BTreeSet::new();
     for definition in &definitions {
         definition_spans.insert((definition.start, definition.end));
@@ -129,17 +144,48 @@ fn ingest_file(
         } else {
             direct_owner
         };
-        let pop = store.node(NodeKind::Pop, &definition.text, path, definition.start, definition.end)?;
-        let def = store.node(NodeKind::Def, &definition.text, path, definition.start, definition.end)?;
+        let pop = store.node(
+            NodeKind::Pop,
+            &definition.text,
+            path,
+            definition.start,
+            definition.end,
+        )?;
+        let def = store.node(
+            NodeKind::Def,
+            &definition.text,
+            path,
+            definition.start,
+            definition.end,
+        )?;
         store.edge(owner.id, pop)?;
         store.edge(pop, def)?;
+        rows.push(ScmRow::ScipDef {
+            symbol: symbol(path, &definition.text),
+            file: path.into(),
+            repo: "scm".into(),
+        });
+        if definition.label.contains("variable") {
+            let enclosing_fn = containing_capture(&scope_spans, definition.start, definition.end)
+                .and_then(|span| owner_names.get(&(span.start, span.end)).cloned())
+                .unwrap_or_else(|| "<root>".into());
+            rows.push(ScmRow::ScipLocal {
+                enclosing_fn,
+                name: definition.text.clone(),
+            });
+        }
         if owner.id == root {
-            let export = store.node(NodeKind::Export, &definition.text, path, definition.start, definition.end)?;
+            let export = store.node(
+                NodeKind::Export,
+                &definition.text,
+                path,
+                definition.start,
+                definition.end,
+            )?;
             store.edge(export, def)?;
         }
     }
 
-    let owner_names = scope_names(&scope_spans, &definitions);
     let calls = unique(&captures, |label| label == "local.call");
     for call in calls {
         if definition_spans.contains(&(call.start, call.end)) {
@@ -162,15 +208,31 @@ fn ingest_file(
     }
 
     for capture in unique(&captures, |label| label == "local.import") {
-        let import = store.node(NodeKind::Import, &capture.text, path, capture.start, capture.end)?;
+        let import = store.node(
+            NodeKind::Import,
+            &capture.text,
+            path,
+            capture.start,
+            capture.end,
+        )?;
         store.edge(root, import)?;
         imports.push((import, root));
     }
     for capture in unique(&captures, |label| label == "local.export.package") {
-        let export = store.node(NodeKind::Export, &capture.text, path, capture.start, capture.end)?;
+        let export = store.node(
+            NodeKind::Export,
+            &capture.text,
+            path,
+            capture.start,
+            capture.end,
+        )?;
         store.edge(export, root)?;
     }
     Ok(())
+}
+
+fn symbol(path: &str, name: &str) -> String {
+    format!("scm . . `{path}`/{name}().")
 }
 
 fn unique(captures: &[Capture], accepts: impl Fn(&str) -> bool) -> Vec<Capture> {

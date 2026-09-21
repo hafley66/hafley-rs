@@ -9,7 +9,11 @@ pub fn language(name: &str) -> Result<Language, LabError> {
         other => Err(LabError::Query(format!("unknown language: {other}"))),
     }
 }
-pub fn matches_only(language_name: &str, query_text: &str, source: &[u8]) -> Result<QueryOutput, LabError> {
+pub fn matches_only(
+    language_name: &str,
+    query_text: &str,
+    source: &[u8],
+) -> Result<QueryOutput, LabError> {
     let language = language(language_name)?;
     let mut parser = Parser::new();
     parser

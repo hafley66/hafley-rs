@@ -60,6 +60,31 @@ pub struct Unresolved {
 pub struct Analysis {
     pub edges: Vec<NamedEdge>,
     pub unresolved: Vec<Unresolved>,
+    pub rows: Vec<ScmRow>,
+}
+
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd, Serialize, Deserialize)]
+#[serde(tag = "record")]
+pub enum ScmRow {
+    #[serde(rename = "scip_def")]
+    ScipDef {
+        symbol: String,
+        file: String,
+        repo: String,
+    },
+    #[serde(rename = "scip_ref")]
+    ScipRef {
+        file: String,
+        symbol: String,
+        def_file: String,
+        repo: String,
+    },
+    #[serde(rename = "scip_local")]
+    ScipLocal {
+        #[serde(rename = "fn")]
+        enclosing_fn: String,
+        name: String,
+    },
 }
 
 #[derive(Debug)]

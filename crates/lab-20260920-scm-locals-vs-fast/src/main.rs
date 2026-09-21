@@ -22,13 +22,15 @@ fn main() {
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args().skip(1);
-    let language = args.next().ok_or("usage: lab <kotlin|ts> <query> <paths...>")?;
+    let language = args
+        .next()
+        .ok_or("usage: lab <kotlin|ts> <query> <paths...>")?;
     let query_path = PathBuf::from(args.next().ok_or("missing query path")?);
     let paths = args.map(PathBuf::from).collect::<Vec<_>>();
     let query = std::fs::read_to_string(query_path)?;
     let analysis = analyze(&language, &query, &paths)?;
-    for edge in analysis.edges {
-        println!("{}", serde_json::to_string(&edge)?);
+    for row in analysis.rows {
+        println!("{}", serde_json::to_string(&row)?);
     }
     for unresolved in analysis.unresolved {
         eprintln!("{}", serde_json::to_string(&unresolved)?);

@@ -13,21 +13,34 @@ fn lab_edges_against_checked_in_ts_floors() {
     let query = std::fs::read_to_string(manifest.join("queries/typescript/locals.scm")).unwrap();
     let lab = paths
         .iter()
-        .flat_map(|path| analyze("ts", &query, std::slice::from_ref(path)).unwrap().edges)
+        .flat_map(|path| {
+            analyze("ts", &query, std::slice::from_ref(path))
+                .unwrap()
+                .edges
+        })
         .collect::<BTreeSet<_>>();
 
-    let ryi = std::env::var("RYI_BIN")
-        .unwrap_or_else(|_| "/Users/chrishafley/.cache/boop/cargo-target/debug/ryi".into());
+    let target = PathBuf::from(std::env::var("CARGO_TARGET_DIR").expect("CARGO_TARGET_DIR"));
+    assert!(!target.to_string_lossy().contains("/.cache/boop/"));
+    let ryi = target.join("debug/ryi");
     let output = Command::new(ryi)
         .arg("fast")
         .args(&paths)
         .env("HAFLEY_TRACE", manifest.join("traces/L6-fast.json"))
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let mut fast = BTreeMap::new();
-    for line in output.stdout.split(|byte| *byte == b'\n').filter(|line| !line.is_empty()) {
+    for line in output
+        .stdout
+        .split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+    {
         let row: serde_json::Value = serde_json::from_slice(line).unwrap();
         if row["record"] != "resolved_edge" {
             continue;
@@ -49,14 +62,26 @@ fn lab_edges_against_checked_in_ts_floors() {
             *actual.entry(origin.clone()).or_default() += 1;
         }
     }
-    let rows = std::fs::read_to_string(manifest.join("../sprefa-extract/tests/RATCHET.tsv")).unwrap();
+    let rows =
+        std::fs::read_to_string(manifest.join("../sprefa-extract/tests/RATCHET.tsv")).unwrap();
     for line in rows.lines().skip(1).filter(|line| line.starts_with("ts\t")) {
         let cells = line.split('\t').collect::<Vec<_>>();
         let floor = cells[2].parse::<usize>().unwrap();
         let count = actual.get(cells[1]).copied().unwrap_or_default();
-        println!("ts/{} true={} floor={} holds={}", cells[1], count, floor, count >= floor);
+        println!(
+            "ts/{} true={} floor={} holds={}",
+            cells[1],
+            count,
+            floor,
+            count >= floor
+        );
     }
-    println!("lab={} fast={} shared={}", lab.len(), fast.len(), lab.iter().filter(|edge| fast.contains_key(*edge)).count());
+    println!(
+        "lab={} fast={} shared={}",
+        lab.len(),
+        fast.len(),
+        lab.iter().filter(|edge| fast.contains_key(*edge)).count()
+    );
 }
 
 fn collect(root: &Path) -> Vec<PathBuf> {

@@ -68,6 +68,22 @@ ts/scip          true=0 floor=2 holds=false
 lab=6 fast=10 shared=0
 ```
 
+## SCIP-SCM row shape
+
+The resolver emits the existing `FlatFact` SCIP relation field names. These are
+the pass-1 rows for a later extraction family:
+
+```text
+scip_def   { symbol, file, repo }
+scip_ref   { file, symbol, def_file, repo }
+scip_local { fn, name }
+```
+
+`repo` is `scm`. A definition symbol is
+`scm . . \`<path>\`/<name>().`; resolved references copy that symbol and its
+defining file. Variable and parameter definitions emit `scip_local` with their
+enclosing callable name.
+
 ## Verdict
 
 The `ryi fast` Rust counts below are `src/lang/kotlin*.rs` and
@@ -76,7 +92,7 @@ The `ryi fast` Rust counts below are `src/lang/kotlin*.rs` and
 
 | language | `.scm` lines | engine lines | `ryi fast` Rust lines | disagreements |
 | --- | ---: | ---: | ---: | --- |
-| Kotlin | 70 | 508 | 4,751 | 8 edges; 9 unresolved |
-| TypeScript | 67 | 508 | 8,899 | 10 edges; ratchet 0/8, 0/1, 0/2 |
+| Kotlin | 70 | 606 | 4,751 | 8 edges; 9 unresolved |
+| TypeScript | 67 | 606 | 8,899 | 10 edges; ratchet 0/8, 0/1, 0/2 |
 
 Does not replace `ryi fast`.
