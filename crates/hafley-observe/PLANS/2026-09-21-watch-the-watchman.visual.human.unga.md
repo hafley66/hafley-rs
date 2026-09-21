@@ -132,17 +132,17 @@ In plain words, from the table:
 
 | layer | what it did to the event path |
 |---|---|
-| the text formatter | more than doubled it, and is still the cheapest layer here |
-| the chrome timeline | multiplied it by three and a half, and added tens of megabytes resident |
-| the OTLP span exporter | multiplied it by six to nine, plus twenty odd megabytes resident |
-| the OTLP metrics pipeline | added a quarter to a third on top of the trace exporter it needs |
+| the text formatter | doubled it, and tripled it on one strategy, and is still the cheapest layer here |
+| the chrome timeline | multiplied it by about three and a half, and added tens of megabytes resident |
+| the OTLP span exporter | multiplied it by seven to nine, plus twenty odd megabytes resident |
+| the OTLP metrics pipeline | added a fifth to a third on top of the trace exporter it needs |
 | the tracing context layer | added a tenth to a fifth |
 | the process collector | added a tenth, sampled on a cadence |
 | the system observer | read as noise, because it samples on its own thread |
 | the Tracy zone layer | multiplied the path by two to four and a half |
 | the tracked allocator | read as noise, because the workload allocates little |
-| the usage layer | multiplied the path by two and a third |
-| the relational sink | see the four rows below |
+| the usage layer | multiplied the path by about two to two and a quarter |
+| the relational sink | see the two sink rows below |
 
 The flush strategy moves the sink, not the layer:
 
@@ -159,8 +159,8 @@ The two sink rows, compared against each other:
 | dictionary | 80000 | 1531904 | 70.95, 76.09, 77.01 |
 | all TEXT | 80000 | 3305472 | 66.11, 66.24, 67.03 |
 
-The dictionary keeps the disk to about half and loses about five points of the
-drain wall at this volume. It stays, because repeating a key once per row is
+The dictionary keeps the disk to about half and loses about ten milliseconds of
+the drain wall at this volume, against an off wall of about six. It stays, because repeating a key once per row is
 denormalization and the design law forbids the control shape.
 
 What this means for a host: turn a layer on when its question is worth a
