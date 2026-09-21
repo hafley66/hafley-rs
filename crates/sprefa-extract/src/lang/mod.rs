@@ -60,6 +60,7 @@ pub mod source_facts;
 pub mod source_query;
 pub mod ts;
 pub mod ts_checker;
+pub mod ts_mutate;
 pub mod ts_paths;
 pub mod ts_receivers;
 pub mod ts_rehome;
@@ -111,7 +112,7 @@ pub use ts_rehome::{build_paths, compiled_spellings, BuildPaths};
 pub use ts_resolve::{respell, TsResolver};
 
 use crate::source::Source;
-use crate::types::{RehomeArm, Rename};
+use crate::types::{Mutate, RehomeArm, Rename};
 
 /// The first-match roster. Order matters: the lang-specific `Source`s precede the
 /// ast-grep CST fallback (v5 `type_langs()` convention). RustSource is first so a
@@ -203,4 +204,17 @@ pub fn renames() -> &'static [&'static dyn Rename] {
 pub fn rename_for(path: &str) -> Option<&'static dyn Rename> {
     let owner = source_for(path)?.name();
     renames().iter().copied().find(|arm| arm.name() == owner)
+}
+
+/// The `Mutate` roster, in `sources()` order. Membership is "this language can
+/// be text-edited by a verb", a third question again from `rehomes()`'s.
+pub fn mutates() -> &'static [&'static dyn Mutate] {
+    &[&TsSource]
+}
+
+/// The `Mutate` that owns `path`, under the SAME first-match law `rehome_for`
+/// states: only `source_for`'s own winner may claim a path.
+pub fn mutate_for(path: &str) -> Option<&'static dyn Mutate> {
+    let owner = source_for(path)?.name();
+    mutates().iter().copied().find(|arm| arm.name() == owner)
 }

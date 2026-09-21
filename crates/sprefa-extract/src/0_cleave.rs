@@ -1,6 +1,6 @@
 //! `ryi cleave <SRC>#<ITEM> <DEST>`: one item leaves SRC and lands in DEST,
-//! carrying the specifiers it needs and respelling every importer. The
-//! `Cleave` roster answers per language; nothing in this file names one.
+//! carrying the specifiers it needs and respelling every importer. The plan is
+//! fact rows only; the `Mutate` roster spells the three edits they cannot.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
 use std::collections::{BTreeMap, BTreeSet};
@@ -11,25 +11,21 @@ use sprefa_extract::move_stage::{
     content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
     VerifyJournal,
 };
-use sprefa_extract::types::{CleaveDecl, CleaveDrag, CleavePlan, CleaveSpecifier, CleaveView};
+use sprefa_extract::types::{CleaveDrag, CleavePlan, CleaveSpecifier};
 use sprefa_extract::{
-    directory_path, directory_source, dirname, normalize, replace_action, resolve_project,
-    FlatFact, MoveCx, ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
+    directory_path, directory_source, dispatch, flatten_each, mutate_for, normalize,
+    replace_action, resolve_project, scm_facts, FamilyMask, FlatFact, MoveCx, Mutate,
+    ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
 };
-
-#[path = "lang/ts_cleave.rs"]
-mod ts_cleave;
-
-use ts_cleave::{cleave_for, reaim};
 
 const PRODUCER: &str = "extract-cleave";
 
 /// The out-of-scope list the help text states, so a caller reads it before the
 /// run rather than after.
-const SCOPE: &str = "Out of scope, each its own issue: Rust cleave (the `mod` relocation and \
-                     visibility widening), cross-language cleave, moving a type together with \
-                     its `impl` blocks, and an item whose free names carry a `-` grade (the \
-                     names and the `ryi graph --uses` command that answers them print, exit 0).";
+const SCOPE: &str = "Out of scope, each its own issue: cross-language cleave, moving a type \
+                     together with its `impl` blocks, and an item whose free names no specifier \
+                     and no declaration answer (the names and the `ryi graph --uses` command that \
+                     answers them print, exit 0).";
 
 #[derive(Parser)]
 #[command(
@@ -174,7 +170,7 @@ fn verify_after_commit(
 fn report_text_refs(plan: &Plan) {
     let edited: BTreeSet<String> = plan.touched().into_iter().collect();
     for rel in plan.cx.files() {
-        if cleave_for(rel).is_some() || edited.contains(rel) {
+        if mutate_for(rel).is_some() || edited.contains(rel) {
             continue;
         }
         let Some(text) = plan.cx.text(rel) else {
@@ -228,19 +224,19 @@ fn plan_json(rows: &CleavePlan) -> String {
 struct Plan {
     root: PathBuf,
     cx: MoveCx,
-    arm: &'static dyn sprefa_extract::types::Cleave,
+    arm: &'static dyn Mutate,
     rows: CleavePlan,
-    source: FileView,
+    source: FileFacts,
     /// None when DEST does not exist yet and this run creates it.
-    dest_view: Option<FileView>,
+    dest_facts: Option<FileFacts>,
     /// The item's text and each moved helper's, in SRC byte order.
     moving_text: Vec<String>,
-    /// `(name, module)` DEST must import beyond the travelling specifiers: one
-    /// per helper that stays in SRC and gains an export.
-    extra_imports: Vec<(String, String)>,
-    /// The quote style DEST's own imports use.
-    quote: char,
-    callers: Vec<FileView>,
+    /// The names DEST must bind per module, in SRC order: the travelling
+    /// specifiers it does not already carry, then the exported helpers.
+    dest_imports: Vec<(String, Vec<String>)>,
+    callers: Vec<FileFacts>,
+    /// Each caller's module spelling for SRC, beside its own facts.
+    caller_modules: Vec<String>,
 }
 
 impl Plan {
@@ -256,23 +252,23 @@ impl Plan {
         if src == dest {
             return Err(format!("{src} is both the source and the destination"));
         }
-        let arm = cleave_for(&src).ok_or_else(|| out_of_scope(&src))?;
-        let landing = cleave_for(&dest).ok_or_else(|| out_of_scope(&dest))?;
+        let arm = mutate_for(&src).ok_or_else(|| out_of_scope(&src))?;
+        let landing = mutate_for(&dest).ok_or_else(|| out_of_scope(&dest))?;
         if arm.name() != landing.name() {
             return Err(format!(
                 "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
             ));
         }
 
-        let source = FileView::open(&cx, arm, &src)?;
+        let source = FileFacts::open(&cx, &src, true)?;
         let item_decl = source
-            .view
             .decls
             .iter()
             .find(|decl| decl.name == item)
             .ok_or_else(|| format!("{src} declares no {item}"))?
             .clone();
 
+        let imports = Imports::read(&cx, &root)?;
         let unresolved = source.ungraded(&[item_decl.span]);
         if !unresolved.is_empty() {
             return Ok(Plan {
@@ -289,11 +285,11 @@ impl Plan {
                     ..CleavePlan::default()
                 },
                 source,
-                dest_view: None,
+                dest_facts: None,
                 moving_text: Vec::new(),
-                extra_imports: Vec::new(),
-                quote: '"',
+                dest_imports: Vec::new(),
                 callers: Vec::new(),
+                caller_modules: Vec::new(),
             });
         }
 
@@ -306,70 +302,86 @@ impl Plan {
                 .map(|row| row.span),
         );
 
-        let dest_view = match cx.contains(&dest) {
-            true => Some(FileView::open(&cx, arm, &dest)?),
+        let dest_facts = match cx.contains(&dest) {
+            true => Some(FileFacts::open(&cx, &dest, false)?),
             false => None,
         };
-        let quote = dest_view
-            .as_ref()
-            .and_then(FileView::quote)
-            .or_else(|| source.quote())
-            .unwrap_or('"');
-        let dest_dir = dirname(&dest).to_string();
-        let src_dir = dirname(&src).to_string();
-        let carried: BTreeSet<(String, String)> = dest_view
+        let carried: BTreeSet<(String, String)> = dest_facts
             .iter()
-            .flat_map(|view| view.view.imports.iter())
-            .flat_map(|statement| {
-                let module = statement.module.clone();
-                statement
-                    .names
-                    .iter()
-                    .map(move |(name, _)| (name.clone(), module.clone()))
-            })
+            .flat_map(|facts| facts.specifiers.iter())
+            .map(|row| (row.name.clone(), row.module.clone()))
             .collect();
 
         let mut travelling = Vec::new();
         let mut orphans = Vec::new();
-        for statement in &source.view.imports {
-            for (name, _) in &statement.names {
-                let dest_module = reaim(arm, &src_dir, &dest_dir, &statement.module);
-                let kind = match (
-                    carried.contains(&(name.clone(), dest_module.clone())),
-                    arm.is_relative(&statement.module),
-                ) {
-                    (true, _) => "carried",
-                    (false, true) => "relative",
-                    (false, false) => "package",
-                };
-                let row = CleaveSpecifier {
-                    name: name.clone(),
-                    module: statement.module.clone(),
-                    dest_module,
-                    span: statement.span,
-                    kind,
-                };
-                if source.refs_in(name, &moving) > 0 {
-                    travelling.push(row.clone());
-                }
-                if source.refs_outside(name, &moving) == 0 {
-                    orphans.push(row);
+        for row in &source.specifiers {
+            let dest_module = match imports.target(&src, &row.module) {
+                Some(target) => arm.spell_module(&dest, target),
+                None => row.module.clone(),
+            };
+            let kind = match (
+                carried.contains(&(row.name.clone(), dest_module.clone())),
+                imports.target(&src, &row.module).is_some(),
+            ) {
+                (true, _) => "carried",
+                (false, true) => "relative",
+                (false, false) => "package",
+            };
+            let plan_row = CleaveSpecifier {
+                name: row.name.clone(),
+                module: row.module.clone(),
+                dest_module,
+                span: row.span,
+                kind,
+            };
+            if source.refs_in(&row.name, &moving) > 0 {
+                travelling.push(plan_row.clone());
+            }
+            if source.refs_outside(&row.name, &moving) == 0 {
+                orphans.push(plan_row);
+            }
+        }
+
+        let src_module = arm.spell_module(&dest, &src);
+        let mut dest_imports: Vec<(String, Vec<String>)> = Vec::new();
+        let wanted = travelling
+            .iter()
+            .filter(|row| row.kind != "carried")
+            .map(|row| (row.name.clone(), row.dest_module.clone()))
+            .chain(
+                dragged
+                    .iter()
+                    .filter(|row| row.action == "exported")
+                    .filter(|row| !carried.contains(&(row.name.clone(), src_module.clone())))
+                    .map(|row| (row.name.clone(), src_module.clone())),
+            );
+        for (name, module) in wanted {
+            match dest_imports.iter_mut().find(|(held, _)| *held == module) {
+                Some((_, names)) => names.push(name),
+                None => {
+                    let mut names: Vec<String> = dest_facts
+                        .iter()
+                        .flat_map(|facts| facts.specifiers.iter())
+                        .filter(|row| row.module == module)
+                        .map(|row| row.name.clone())
+                        .collect();
+                    names.push(name);
+                    dest_imports.push((module, names));
                 }
             }
         }
 
-        let src_module = arm.spell_module(&dest_dir, &src);
-        let extra_imports: Vec<(String, String)> = dragged
-            .iter()
-            .filter(|row| row.action == "exported")
-            .filter(|row| !carried.contains(&(row.name.clone(), src_module.clone())))
-            .map(|row| (row.name.clone(), src_module.clone()))
-            .collect();
-
-        let callers = callers_of(&cx, &root, &src, &item)?;
+        let callers = imports.callers(&src, &item);
         let mut views = Vec::with_capacity(callers.len());
+        let mut caller_modules = Vec::with_capacity(callers.len());
         for caller in &callers {
-            views.push(FileView::open(&cx, arm, caller)?);
+            views.push(FileFacts::open(&cx, caller, false)?);
+            caller_modules.push(
+                imports
+                    .module_of(caller, &src)
+                    .map(str::to_string)
+                    .unwrap_or_default(),
+            );
         }
         moving.sort_by_key(|span| span.start);
         let moving_text = moving
@@ -393,11 +405,11 @@ impl Plan {
                 unresolved,
             },
             source,
-            dest_view,
+            dest_facts,
             moving_text,
-            extra_imports,
-            quote,
+            dest_imports,
             callers: views,
+            caller_modules,
         })
     }
 
@@ -434,36 +446,36 @@ impl Plan {
             .collect();
         let mut edits: Vec<Respell> = Vec::new();
         for row in self.rows.dragged.iter().filter(|row| row.action == "exported") {
+            let Some(edit) = self.arm.edit_export(&self.source.text, row.span, true) else {
+                continue;
+            };
             edits.push(Respell {
                 file: self.rows.src.clone(),
-                span: Span::anchor(row.span.start),
-                text: self.arm.export_prefix().to_string(),
+                span: edit.span,
+                text: edit.text,
                 receipt: Some(format!("export {} stays in {}", row.name, self.rows.src)),
             });
         }
-        for statement in &self.source.view.imports {
-            let kept = statement
-                .names
+        for (module, names) in self.source.modules() {
+            let kept: Vec<String> = names
                 .iter()
-                .filter(|(name, _)| !orphaned.contains(name.as_str()))
-                .count();
-            if kept == statement.names.len() {
+                .filter(|name| !orphaned.contains(name.as_str()))
+                .cloned()
+                .collect();
+            if kept.len() == names.len() {
                 continue;
             }
-            if kept == 0 {
-                cuts.push(statement.span);
+            let Some(edit) = self.arm.edit_import(&self.source.text, &kept, &module) else {
                 continue;
-            }
-            for (index, (name, _)) in statement.names.iter().enumerate() {
-                if !orphaned.contains(name.as_str()) {
-                    continue;
-                }
-                edits.push(Respell {
+            };
+            match edit.text.is_empty() {
+                true => cuts.push(edit.span),
+                false => edits.push(Respell {
                     file: self.rows.src.clone(),
-                    span: self.arm.specifier_cut(statement, index),
-                    text: String::new(),
+                    span: edit.span,
+                    text: edit.text,
                     receipt: None,
-                });
+                }),
             }
         }
         let mut out: Vec<Respell> = absorb(&self.source.text, cuts)
@@ -480,102 +492,81 @@ impl Plan {
     }
 
     /// DEST gains the imports it does not already carry, then the moving text.
+    /// The import block is rewritten whole, so two new modules never anchor at
+    /// one offset.
     fn dest_respells(&self) -> Vec<Respell> {
-        let Some(view) = self.dest_view.as_ref() else {
+        let Some(facts) = self.dest_facts.as_ref() else {
             return Vec::new();
         };
         let mut out = Vec::new();
-        let imports = self.import_block();
-        if !imports.is_empty() {
-            let at = view
-                .view
-                .imports
-                .iter()
-                .map(|statement| statement.span.end())
-                .max()
-                .unwrap_or(0);
+        let (at, block) = self.import_block(&facts.text);
+        if block != facts.text[..at as usize] {
             out.push(Respell {
                 file: self.rows.dest.clone(),
-                span: Span::anchor(at),
-                text: imports,
+                span: Span { start: 0, len: at },
+                text: block,
                 receipt: None,
             });
         }
         out.push(Respell {
             file: self.rows.dest.clone(),
-            span: Span::anchor(view.text.len() as u32),
+            span: Span::anchor(facts.text.len() as u32),
             text: format!("\n{}", self.moving_text.join("\n")),
             receipt: None,
         });
         out
     }
 
-    /// The import lines DEST gains, one per module, in SRC order.
-    fn import_block(&self) -> String {
-        let mut per_module: Vec<(String, Vec<String>)> = Vec::new();
-        let travelling = self
-            .rows
-            .travelling
-            .iter()
-            .filter(|row| row.kind != "carried")
-            .map(|row| (row.name.clone(), row.dest_module.clone()));
-        for (name, module) in travelling.chain(self.extra_imports.iter().cloned()) {
-            match per_module.iter_mut().find(|(held, _)| *held == module) {
-                Some((_, names)) => names.push(name),
-                None => per_module.push((module, vec![name])),
+    /// DEST's import region after every wanted module lands in it, beside the
+    /// length of the region it replaces.
+    fn import_block(&self, text: &str) -> (u32, String) {
+        let at = self
+            .dest_facts
+            .as_ref()
+            .map_or(0, |facts| facts.import_region(text));
+        let mut block = text[..at as usize].to_string();
+        for (module, names) in &self.dest_imports {
+            if let Some(edit) = self.arm.edit_import(&block, names, module) {
+                block = apply(&block, &edit);
             }
         }
-        per_module
-            .into_iter()
-            .map(|(module, names)| self.arm.import_line(&names, &module, self.quote))
-            .collect()
+        (at, block)
     }
 
-    /// Every importer of `SRC#ITEM` re-aimed at DEST. A specifier binding other
-    /// names is split; one binding only the item has its module rewritten.
+    /// Every importer of `SRC#ITEM` re-aimed at DEST: the SRC import loses the
+    /// item, and one naming DEST lands beside it.
     fn caller_respells(&self) -> Vec<Respell> {
         let mut out = Vec::new();
-        for (rel, view) in self.rows.callers.iter().zip(&self.callers) {
-            let from_dir = dirname(rel);
-            let spelling = self.arm.spell_module(from_dir, &self.rows.dest);
-            for statement in &view.view.imports {
-                if !self.arm.aims_at(from_dir, &statement.module, &self.rows.src) {
-                    continue;
-                }
-                let Some(index) = statement
-                    .names
-                    .iter()
-                    .position(|(name, _)| *name == self.rows.item)
-                else {
-                    continue;
-                };
-                let quote = view
-                    .slice(statement.module_span)
-                    .chars()
-                    .next()
-                    .unwrap_or('"');
-                if statement.names.len() == 1 {
-                    out.push(Respell {
-                        file: rel.clone(),
-                        span: statement.module_span,
-                        text: format!("{quote}{spelling}{quote}"),
-                        receipt: Some(format!("caller {rel}: {} -> {spelling}", statement.module)),
-                    });
-                    continue;
-                }
+        let spellings = self.rows.callers.iter().zip(&self.callers);
+        for ((rel, facts), module) in spellings.zip(&self.caller_modules) {
+            let kept: Vec<String> = facts
+                .specifiers
+                .iter()
+                .filter(|row| row.module == *module && row.name != self.rows.item)
+                .map(|row| row.name.clone())
+                .collect();
+            if let Some(edit) = self.arm.edit_import(&facts.text, &kept, module) {
                 out.push(Respell {
                     file: rel.clone(),
-                    span: self.arm.specifier_cut(statement, index),
-                    text: String::new(),
-                    receipt: None,
+                    span: edit.span,
+                    text: edit.text,
+                    receipt: Some(format!("caller {rel}: {module} loses {}", self.rows.item)),
                 });
+            }
+            let spelling = self.arm.spell_module(rel, &self.rows.dest);
+            let mut landing: Vec<String> = facts
+                .specifiers
+                .iter()
+                .filter(|row| row.module == spelling)
+                .map(|row| row.name.clone())
+                .collect();
+            landing.push(self.rows.item.clone());
+            if let Some(edit) = self.arm.edit_import(&facts.text, &landing, &spelling) {
                 out.push(Respell {
                     file: rel.clone(),
-                    span: Span::anchor(statement.span.end()),
-                    text: self
-                        .arm
-                        .import_line(&[self.rows.item.clone()], &spelling, quote),
-                    receipt: Some(format!("caller {rel}: {} split", self.rows.item)),
+                    span: edit.span,
+                    text: edit.text,
+                    receipt: Some(format!("caller {rel}: {} -> {spelling}", self.rows.item)),
                 });
             }
         }
@@ -620,11 +611,11 @@ impl Plan {
         if !edits.is_empty() {
             stages.push(edits);
         }
-        if self.dest_view.is_none() {
+        if self.dest_facts.is_none() {
+            let (_, block) = self.import_block("");
             stages.push(vec![soopy::SourceAction::Create {
                 path: directory_path(&self.rows.dest),
-                bytes: format!("{}\n{}", self.import_block(), self.moving_text.join("\n"))
-                    .into_bytes(),
+                bytes: format!("{block}\n{}", self.moving_text.join("\n")).into_bytes(),
             }]);
         }
         Ok(stages)
@@ -634,7 +625,7 @@ impl Plan {
     fn touched(&self) -> Vec<String> {
         let mut out: BTreeSet<String> = BTreeSet::new();
         out.insert(self.rows.src.clone());
-        if self.dest_view.is_some() {
+        if self.dest_facts.is_some() {
             out.insert(self.rows.dest.clone());
         }
         out.extend(self.rows.callers.iter().cloned());
@@ -643,15 +634,22 @@ impl Plan {
 
     /// The paths this run creates. A rollback deletes them, as it does a shim.
     fn created(&self) -> Vec<String> {
-        match self.dest_view.is_none() {
+        match self.dest_facts.is_none() {
             true => vec![self.rows.dest.clone()],
             false => Vec::new(),
         }
     }
 }
 
-/// The message a path no arm owns produces. Rust, Kotlin and Go cleave arms
-/// land with their own issues; this verb ships the TypeScript one.
+/// `edit` applied to `text`, which is how a block built from nothing grows.
+fn apply(text: &str, edit: &sprefa_extract::Edit) -> String {
+    let mut out = text[..edit.span.start as usize].to_string();
+    out.push_str(&edit.text);
+    out.push_str(&text[edit.span.end() as usize..]);
+    out
+}
+
+/// The message a path no arm owns produces.
 fn out_of_scope(rel: &str) -> String {
     format!("cleave has no arm for {rel}; {SCOPE}")
 }
@@ -705,55 +703,98 @@ fn merge(mut spans: Vec<Span>) -> Vec<Span> {
     out
 }
 
-/// Every file importing `src#item`, in path order. `resolved_import` carries
-/// the importer and the declaration it reached, so one resolve answers it.
-fn callers_of(cx: &MoveCx, root: &Path, src: &str, item: &str) -> Result<Vec<String>, String> {
-    let paths: Vec<PathBuf> = cx
-        .files()
-        .iter()
-        .filter(|rel| cleave_for(rel).is_some())
-        .map(|rel| cx.abs(rel))
-        .collect();
-    let request = ResolveRequest {
-        paths: &paths,
-        arms: ResolveArms {
-            call: true,
-            ..ResolveArms::default()
-        },
-        scip: ScipMode::Off,
-        project_root: Some(root),
-        scip_records: ScipRecords::default(),
-        occurrence_text: false,
-        rust_checker: None,
-        ts_checker: None,
-        go_checker: None,
-        witness: false,
-    };
-    let facts = resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
-    let mut callers = BTreeSet::new();
-    for fact in &facts {
-        let FlatFact::ResolvedImportRow {
-            src_path,
-            target_path,
-            target_name,
-            ..
-        } = fact
-        else {
-            continue;
+// ── the cross-file read ─────────────────────────────────────────────────────
+
+/// One resolve pass over the corpus, read as `resolved_import` rows: which
+/// module spelling reaches which file, and who imports `SRC#ITEM`.
+struct Imports {
+    /// `(importer, module as written) -> the file it reaches`.
+    modules: BTreeMap<(String, String), String>,
+    /// `(importer, bound name) -> (file, declared name)`.
+    names: Vec<(String, String, String, String)>,
+}
+
+impl Imports {
+    fn read(cx: &MoveCx, root: &Path) -> Result<Self, String> {
+        let paths: Vec<PathBuf> = cx
+            .files()
+            .iter()
+            .filter(|rel| mutate_for(rel).is_some())
+            .map(|rel| cx.abs(rel))
+            .collect();
+        let request = ResolveRequest {
+            paths: &paths,
+            arms: ResolveArms {
+                call: true,
+                ..ResolveArms::default()
+            },
+            scip: ScipMode::Off,
+            project_root: Some(root),
+            scip_records: ScipRecords::default(),
+            occurrence_text: false,
+            rust_checker: None,
+            ts_checker: None,
+            go_checker: None,
+            witness: false,
         };
-        if target_name.as_deref() != Some(item) {
-            continue;
-        }
-        if rel_of(root, target_path).as_deref() != Some(src) {
-            continue;
-        }
-        if let Some(importer) = rel_of(root, src_path) {
-            if importer != src {
-                callers.insert(importer);
+        let facts =
+            resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
+        let mut modules = BTreeMap::new();
+        let mut names = Vec::new();
+        for fact in &facts {
+            let FlatFact::ResolvedImportRow {
+                src_path,
+                name,
+                target_path,
+                target_name,
+                kind,
+                ..
+            } = fact
+            else {
+                continue;
+            };
+            let (Some(importer), Some(target)) = (rel_of(root, src_path), rel_of(root, target_path))
+            else {
+                continue;
+            };
+            match (kind.as_str(), target_name) {
+                ("module", _) => {
+                    modules.insert((importer, name.clone()), target);
+                }
+                (_, Some(declared)) => {
+                    names.push((importer, name.clone(), target, declared.clone()));
+                }
+                _ => {}
             }
         }
+        Ok(Self { modules, names })
     }
-    Ok(callers.into_iter().collect())
+
+    /// The corpus file `module`, as `importer` writes it, reaches.
+    fn target(&self, importer: &str, module: &str) -> Option<&str> {
+        self.modules
+            .get(&(importer.to_string(), module.to_string()))
+            .map(String::as_str)
+    }
+
+    /// The spelling `importer` reaches `target` by.
+    fn module_of(&self, importer: &str, target: &str) -> Option<&str> {
+        self.modules
+            .iter()
+            .find(|((from, _), to)| from == importer && to.as_str() == target)
+            .map(|((_, module), _)| module.as_str())
+    }
+
+    /// Every file importing `src#item`, in path order.
+    fn callers(&self, src: &str, item: &str) -> Vec<String> {
+        let mut out: BTreeSet<String> = BTreeSet::new();
+        for (importer, _, target, declared) in &self.names {
+            if target == src && declared == item && importer != src {
+                out.insert(importer.clone());
+            }
+        }
+        out.into_iter().collect()
+    }
 }
 
 /// A resolve echoes the path spellings it was given, which are absolute here.
@@ -766,26 +807,107 @@ fn rel_of(root: &Path, path: &str) -> Option<String> {
 
 // ── the file read ───────────────────────────────────────────────────────────
 
-/// One corpus file's text beside the arm's answer about it. Every method here
-/// is set arithmetic over the view; none of it reads syntax.
-struct FileView {
-    text: String,
-    view: CleaveView,
+/// One import specifier the file writes, as a fact row carries it.
+struct SpecifierRow {
+    name: String,
+    module: String,
+    span: Span,
 }
 
-impl FileView {
-    fn open(
-        cx: &MoveCx,
-        arm: &dyn sprefa_extract::types::Cleave,
-        rel: &str,
-    ) -> Result<Self, String> {
+/// One top-level declaration, line aligned so a cut takes whole lines.
+#[derive(Clone)]
+struct Decl {
+    name: String,
+    span: Span,
+    exported: bool,
+}
+
+/// One corpus file's rows beside its bytes. Every method here is set
+/// arithmetic over fact rows; none of it reads syntax.
+struct FileFacts {
+    text: String,
+    specifiers: Vec<SpecifierRow>,
+    /// The callee, its span, and whether it was reached through a receiver.
+    sites: Vec<(String, Span, bool)>,
+    decls: Vec<Decl>,
+    /// Names the file needs from outside the item that owns them.
+    free: Vec<(String, Span)>,
+}
+
+impl FileFacts {
+    /// `whole`: also read the scope rows only SRC needs (declarations, their
+    /// exported-ness, and the free names each one carries).
+    fn open(cx: &MoveCx, rel: &str, whole: bool) -> Result<Self, String> {
         let text = cx
             .text(rel)
             .ok_or_else(|| format!("read {rel}, or it is not UTF-8"))?;
-        let view = arm
-            .view(rel, &text)
-            .ok_or_else(|| format!("the {} arm declined {rel}", arm.name()))?;
-        Ok(Self { text, view })
+        let mask = FamilyMask {
+            call: true,
+            ..FamilyMask::NONE
+        };
+        let out = dispatch(rel, text.as_bytes(), mask)
+            .ok_or_else(|| format!("no fact arm owns {rel}"))?;
+        let mut specifiers = Vec::new();
+        let mut sites = Vec::new();
+        flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
+            match fact {
+                FlatFact::Specifier {
+                    span,
+                    name,
+                    module: Some(module),
+                    ..
+                } => specifiers.push(SpecifierRow {
+                    name,
+                    module,
+                    span: span_of(span.start, span.end),
+                }),
+                FlatFact::Site {
+                    span,
+                    callee,
+                    callee_path,
+                    ..
+                } => sites.push((
+                    callee,
+                    span_of(span.start, span.end),
+                    callee_path.is_some(),
+                )),
+                _ => {}
+            }
+            Ok(())
+        })
+        .map_err(|_| format!("flatten {rel}"))?;
+        let (decls, free) = match whole {
+            false => (Vec::new(), Vec::new()),
+            true => scope_rows(cx, rel, &text)?,
+        };
+        Ok(Self {
+            text,
+            specifiers,
+            sites,
+            decls,
+            free,
+        })
+    }
+
+    /// The names the file binds per module, in byte order.
+    fn modules(&self) -> Vec<(String, Vec<String>)> {
+        let mut out: Vec<(String, Vec<String>)> = Vec::new();
+        for row in &self.specifiers {
+            match out.iter_mut().find(|(held, _)| *held == row.module) {
+                Some((_, names)) => names.push(row.name.clone()),
+                None => out.push((row.module.clone(), vec![row.name.clone()])),
+            }
+        }
+        out
+    }
+
+    /// The end of the file's import region: one past the last import it writes.
+    fn import_region(&self, text: &str) -> u32 {
+        self.specifiers
+            .iter()
+            .map(|row| line_end(text, row.span.end()))
+            .max()
+            .unwrap_or(0)
     }
 
     /// The file's bytes under `span`, empty when the span is off the end.
@@ -795,78 +917,47 @@ impl FileView {
             .unwrap_or_default()
     }
 
-    /// The quote character the file's own imports wear.
-    fn quote(&self) -> Option<char> {
-        self.view
-            .imports
-            .first()
-            .and_then(|statement| self.slice(statement.module_span).chars().next())
-    }
-
-    /// Occurrences of `name` inside any of `spans`.
+    /// Free occurrences of `name` inside any of `spans`.
     fn refs_in(&self, name: &str, spans: &[Span]) -> usize {
-        self.view
-            .uses
+        self.free
             .iter()
             .filter(|(used, span)| used == name && spans.iter().any(|scope| inside(*span, *scope)))
             .count()
     }
 
-    /// Occurrences of `name` outside every one of `spans`.
+    /// Free occurrences of `name` outside every one of `spans`.
     fn refs_outside(&self, name: &str, spans: &[Span]) -> usize {
-        self.view
-            .uses
+        self.free
             .iter()
             .filter(|(used, span)| used == name && !spans.iter().any(|scope| inside(*span, *scope)))
             .count()
     }
 
-    /// Names a local binding inside `spans` answers.
-    fn locals_in(&self, spans: &[Span]) -> BTreeSet<&str> {
-        self.view
-            .bindings
-            .iter()
-            .filter(|(_, span)| spans.iter().any(|scope| inside(*span, *scope)))
-            .map(|(name, _)| name.as_str())
-            .collect()
-    }
-
-    /// Free names inside `spans` that no specifier, declaration, local binding
-    /// or builtin answers. A call through a receiver is a member access.
+    /// Names the moving set calls directly that no specifier and no top-level
+    /// declaration answer. A call through a receiver is a member access.
     fn ungraded(&self, spans: &[Span]) -> Vec<String> {
-        let imported: BTreeSet<&str> = self
-            .view
-            .imports
+        let bound: BTreeSet<&str> = self
+            .specifiers
             .iter()
-            .flat_map(|row| row.names.iter())
-            .map(|(name, _)| name.as_str())
+            .map(|row| row.name.as_str())
+            .chain(self.decls.iter().map(|decl| decl.name.as_str()))
             .collect();
-        let declared: BTreeSet<&str> = self
-            .view
-            .decls
-            .iter()
-            .map(|decl| decl.name.as_str())
-            .collect();
-        let locals = self.locals_in(spans);
         let mut out: BTreeSet<String> = BTreeSet::new();
-        for (callee, span, through_receiver) in &self.view.calls {
+        for (callee, span, through_receiver) in &self.sites {
             if *through_receiver || !spans.iter().any(|scope| inside(*span, *scope)) {
                 continue;
             }
-            let known = imported.contains(callee.as_str())
-                || declared.contains(callee.as_str())
-                || locals.contains(callee.as_str())
-                || self.view.builtins.contains(&callee.as_str());
-            if !known {
-                out.insert(callee.clone());
+            if bound.contains(callee.as_str()) || self.refs_in(callee, spans) == 0 {
+                continue;
             }
+            out.insert(callee.clone());
         }
         out.into_iter().collect()
     }
 
     /// Every private helper the item reaches, with the fixpoint pass count.
     /// Only a `moved` helper widens the set a later pass reads.
-    fn drag_fixpoint(&self, item: &CleaveDecl, drag: bool) -> (Vec<CleaveDrag>, u32) {
+    fn drag_fixpoint(&self, item: &Decl, drag: bool) -> (Vec<CleaveDrag>, u32) {
         let mut moving = vec![item.span];
         let mut claimed: Vec<CleaveDrag> = Vec::new();
         let mut iterations = 1u32;
@@ -898,7 +989,7 @@ impl FileView {
 
     /// Where one helper goes, answered once and never revised. A helper nothing
     /// left in SRC references travels under `--drag`; a shared one exports.
-    fn drag_action(&self, decl: &CleaveDecl, moving: &[Span], drag: bool) -> &'static str {
+    fn drag_action(&self, decl: &Decl, moving: &[Span], drag: bool) -> &'static str {
         let mut scope = moving.to_vec();
         scope.push(decl.span);
         match drag && self.refs_outside(&decl.name, &scope) == 0 {
@@ -908,14 +999,8 @@ impl FileView {
     }
 
     /// Private declarations the moving set references and no pass has claimed.
-    fn drag_candidates(
-        &self,
-        item: &CleaveDecl,
-        moving: &[Span],
-        claimed: &[CleaveDrag],
-    ) -> Vec<CleaveDecl> {
-        self.view
-            .decls
+    fn drag_candidates(&self, item: &Decl, moving: &[Span], claimed: &[CleaveDrag]) -> Vec<Decl> {
+        self.decls
             .iter()
             .filter(|decl| !decl.exported && decl.name != item.name)
             .filter(|decl| !claimed.iter().any(|row| row.name == decl.name))
@@ -923,6 +1008,103 @@ impl FileView {
             .cloned()
             .collect()
     }
+}
+
+/// The scope rows one file contributes: its top-level declarations, line
+/// aligned, and every free name each of them carries.
+#[allow(clippy::type_complexity)]
+fn scope_rows(
+    cx: &MoveCx,
+    rel: &str,
+    text: &str,
+) -> Result<(Vec<Decl>, Vec<(String, Span)>), String> {
+    let path = cx.abs(rel);
+    let facts =
+        scm_facts(&[path]).map_err(|error| format!("scope rows for {rel}: {error}"))?;
+    let mut decls: Vec<Decl> = Vec::new();
+    let mut free = Vec::new();
+    let file = Span {
+        start: 0,
+        len: text.len() as u32,
+    };
+    for fact in &facts {
+        match fact {
+            FlatFact::OccurrenceRow {
+                role,
+                exported,
+                decl_start,
+                decl_end,
+                symbol,
+                ..
+            } if role == "def" => {
+                let span = line_span(text, span_of(*decl_start, *decl_end));
+                if span == file || !top_level(text, span) {
+                    continue;
+                }
+                let name = declared(symbol);
+                if decls.iter().any(|held| held.name == name) {
+                    continue;
+                }
+                decls.push(Decl {
+                    name,
+                    span,
+                    exported: *exported,
+                });
+            }
+            FlatFact::FreeNameRow {
+                name, start, end, ..
+            } => free.push((name.clone(), span_of(*start, *end))),
+            _ => {}
+        }
+    }
+    decls.sort_by_key(|decl| decl.span.start);
+    Ok((decls, free))
+}
+
+/// Whether the declaration under `span` starts its own line, which is what
+/// makes it a top-level item rather than a parameter or a nested binding.
+fn top_level(text: &str, span: Span) -> bool {
+    let end = span.end() as usize;
+    span.start == 0 || text.as_bytes().get(end.saturating_sub(1)) == Some(&b'\n')
+}
+
+/// The declared name inside a `scm` symbol spelling.
+fn declared(symbol: &str) -> String {
+    symbol
+        .rsplit_once('/')
+        .map_or(symbol, |(_, tail)| tail)
+        .trim_end_matches("().")
+        .to_string()
+}
+
+fn span_of(start: u32, end: u32) -> Span {
+    Span {
+        start,
+        len: end - start,
+    }
+}
+
+/// `span` widened to whole lines, the newline closing its last included.
+fn line_span(text: &str, span: Span) -> Span {
+    let bytes = text.as_bytes();
+    let mut start = span.start as usize;
+    while start > 0 && bytes[start - 1] != b'\n' {
+        start -= 1;
+    }
+    Span {
+        start: start as u32,
+        len: line_end(text, span.end()) - start as u32,
+    }
+}
+
+/// One past the newline that closes the line `at` sits on.
+fn line_end(text: &str, at: u32) -> u32 {
+    let bytes = text.as_bytes();
+    let mut end = at as usize;
+    while end < bytes.len() && bytes[end - 1] != b'\n' {
+        end += 1;
+    }
+    end as u32
 }
 
 /// Whether `inner` sits inside `outer`, endpoints included.
