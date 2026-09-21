@@ -186,10 +186,107 @@ pub fn assert_growth(
 ) {
     let actual = observed_growth(small, large, name, size_ratio);
     assert_eq!(
-        actual, expected,
+        actual,
+        expected,
         "span {name} grew {:?} from {} to {} entries across a {size_ratio}x input",
         actual,
         small.entries_of(name),
         large.entries_of(name)
     );
+}
+
+/// Numeric samples retained for exact sums and nearest-rank percentiles.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct FieldStats {
+    pub samples: Vec<f64>,
+}
+
+impl FieldStats {
+    pub fn sum(&self) -> f64 {
+        self.samples.iter().sum()
+    }
+
+    pub fn mean(&self) -> Option<f64> {
+        (!self.samples.is_empty()).then(|| self.sum() / self.samples.len() as f64)
+    }
+
+    /// Nearest-rank percentile in [0, 100]. Empty samples return None.
+    pub fn percentile(&self, percentile: f64) -> Option<f64> {
+        assert!((0.0..=100.0).contains(&percentile));
+        if self.samples.is_empty() {
+            return None;
+        }
+        let mut samples = self.samples.clone();
+        samples.sort_by(f64::total_cmp);
+        let index = ((samples.len() as f64 * percentile / 100.0).ceil() as usize).saturating_sub(1);
+        Some(samples[index])
+    }
+}
+
+/// Numeric event fields and nearest-ancestor fields, sampled once per event.
+/// Missing fields have no sample. Ancestor fields reflect their final recorded
+/// value, including fields recorded after an event was emitted.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct EventStats {
+    pub events: usize,
+    pub fields: BTreeMap<String, FieldStats>,
+    pub ancestor_fields: BTreeMap<String, FieldStats>,
+}
+
+impl CountRecorder {
+    /// Group matching events by caller-selected fields of their nearest named
+    /// ancestor. Events without that ancestor are excluded. Missing grouping
+    /// fields use the empty string, matching `event_sums`.
+    pub fn event_stats<const N: usize>(
+        &self,
+        target: &str,
+        level: tracing::Level,
+        ancestor: &str,
+        group_fields: [&str; N],
+    ) -> BTreeMap<[String; N], EventStats> {
+        let storage = self.storage.lock();
+        let mut groups = BTreeMap::<[String; N], EventStats>::new();
+        for event in storage.all_events() {
+            if event.metadata().target() != target || *event.metadata().level() != level {
+                continue;
+            }
+            let Some(span) = event
+                .ancestors()
+                .find(|span| span.metadata().name() == ancestor)
+            else {
+                continue;
+            };
+            let key = group_fields.map(|field| span.value(field).map(text).unwrap_or_default());
+            let stats = groups.entry(key).or_default();
+            stats.events += 1;
+            for (name, value) in event.values() {
+                if let Some(number) = number(value) {
+                    stats
+                        .fields
+                        .entry(name.to_string())
+                        .or_default()
+                        .samples
+                        .push(number);
+                }
+            }
+            for (name, value) in span.values() {
+                if let Some(number) = number(value) {
+                    stats
+                        .ancestor_fields
+                        .entry(name.to_string())
+                        .or_default()
+                        .samples
+                        .push(number);
+                }
+            }
+        }
+        groups
+    }
+}
+
+fn number(value: &tracing_tunnel::TracedValue) -> Option<f64> {
+    value
+        .as_float()
+        .or_else(|| value.as_int().map(|value| value as f64))
+        .or_else(|| value.as_uint().map(|value| value as f64))
 }
