@@ -1,0 +1,1011 @@
+//! `ryi cleave <SRC>#<ITEM> <DEST>`: one item leaves SRC and lands in DEST,
+//! carrying the specifiers it needs and respelling every importer. The
+//! `Cleave` roster answers per language; nothing in this file names one.
+//! @comment-ok: module header, the seam list every bin arm opens with
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+
+use clap::Parser;
+use sprefa_extract::move_stage::{
+    content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
+    VerifyJournal,
+};
+use sprefa_extract::types::{CleaveDecl, CleaveDrag, CleavePlan, CleaveSpecifier, CleaveView};
+use sprefa_extract::{
+    directory_path, directory_source, dirname, normalize, replace_action, resolve_project,
+    FlatFact, MoveCx, ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
+};
+
+#[path = "lang/ts_cleave.rs"]
+mod ts_cleave;
+
+use ts_cleave::{cleave_for, reaim};
+
+const PRODUCER: &str = "extract-cleave";
+
+/// The out-of-scope list the help text states, so a caller reads it before the
+/// run rather than after.
+const SCOPE: &str = "Out of scope, each its own issue: Rust cleave (the `mod` relocation and \
+                     visibility widening), cross-language cleave, moving a type together with \
+                     its `impl` blocks, and an item whose free names carry a `-` grade (the \
+                     names and the `ryi graph --uses` command that answers them print, exit 0).";
+
+#[derive(Parser)]
+#[command(
+    name = "ryi cleave",
+    about = "move one item out of a file into another, with the imports it needs",
+    after_help = SCOPE
+)]
+pub struct CleaveCli {
+    /// `<SRC>#<ITEM>`: the file the item is declared in and its name.
+    target: String,
+    /// The file it lands in. Created when it does not exist.
+    dest: PathBuf,
+    /// Corpus root. Defaults to the git root holding SRC.
+    #[arg(long)]
+    root: Option<PathBuf>,
+    /// Soopy state root. Must sit outside the corpus root.
+    #[arg(long)]
+    state: Option<PathBuf>,
+    /// Move the same-file private helpers only the item uses. A shared helper
+    /// is exported and imported either way; this decides the sole-user ones.
+    #[arg(long)]
+    drag: bool,
+    /// Apply the plan to the real tree instead of dry running it.
+    #[arg(long)]
+    commit: bool,
+    /// Run this shell command in the root after `--commit`; a non-zero or
+    /// timed-out run rolls every touched file back to its pre-run state.
+    #[arg(long = "verify")]
+    verify: Option<String>,
+    /// Report the SRC spellings this cleave leaves behind in plain text.
+    #[arg(long = "text-refs")]
+    text_refs: bool,
+    /// Close the output with one JSON line carrying the whole plan.
+    #[arg(long)]
+    json: bool,
+}
+
+pub fn run<I>(args: I) -> Result<(), String>
+where
+    I: IntoIterator,
+    I::Item: Into<std::ffi::OsString> + Clone,
+{
+    let cli = CleaveCli::try_parse_from(args).map_err(|error| error.to_string())?;
+    if cli.verify.is_some() && !cli.commit {
+        return Err(
+            "--verify runs the command only after --commit; a dry run never runs it".to_string(),
+        );
+    }
+    let plan = Plan::build(&cli)?;
+    let state = state_root(cli.state.as_deref())?;
+
+    println!("root {}", plan.root.display());
+    println!(
+        "plan {}#{} -> {}",
+        plan.rows.src, plan.rows.item, plan.rows.dest
+    );
+    if !plan.rows.unresolved.is_empty() {
+        for name in &plan.rows.unresolved {
+            println!("ungraded {name}");
+        }
+        println!(
+            "next: ryi graph --uses {} {}",
+            plan.rows.unresolved[0],
+            plan.root.display()
+        );
+        return Ok(());
+    }
+    for row in &plan.rows.travelling {
+        println!(
+            "travel {} from {} as {} ({})",
+            row.name, row.module, row.dest_module, row.kind
+        );
+    }
+    for row in &plan.rows.orphans {
+        println!("orphan {} from {}", row.name, row.module);
+    }
+    for row in &plan.rows.dragged {
+        println!("drag {} {} pass {}", row.name, row.action, row.iteration);
+    }
+    println!("drag fixpoint {} passes", plan.rows.drag_iterations);
+    for caller in &plan.rows.callers {
+        println!("caller {caller}");
+    }
+
+    let stages = plan.stages()?;
+    match cli.commit {
+        true => {
+            let journal =
+                VerifyJournal::capture(&plan.root, &[], &plan.created(), &plan.touched())?;
+            for stage in &stages {
+                let (id, previews) =
+                    stage_and_commit(&plan.root, &state, stage, soopy::Durability::Durable)?;
+                print_previews(&previews, "");
+                println!("stage {id} committed");
+            }
+            verify_after_commit(&plan, &state, cli.verify.as_deref(), &journal)?;
+        }
+        false => {
+            let mirror = Mirror::build(&plan.root, &stages)?;
+            for stage in &stages {
+                let (id, previews) =
+                    stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
+                print_previews(&previews, "");
+                println!("stage {id} dry run, tree untouched");
+            }
+        }
+    }
+    if cli.text_refs {
+        report_text_refs(&plan);
+    }
+    if cli.json {
+        println!("{}", plan_json(&plan.rows));
+    }
+    Ok(())
+}
+
+/// Keep-if-pass: a non-zero or timed-out checker walks every touched path back
+/// to its pre-run bytes, deletes the DEST this run created, and exits 3.
+fn verify_after_commit(
+    plan: &Plan,
+    state: &Path,
+    command: Option<&str>,
+    journal: &VerifyJournal,
+) -> Result<(), String> {
+    let Some(command) = command else {
+        return Ok(());
+    };
+    match run_verify_command(&plan.root, command)? {
+        Some(0) => println!("verify ok"),
+        code => {
+            let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
+            let count = journal.restore(&plan.root, state, &[])?;
+            println!("verify failed (rc={reason}): rolled back {count} files");
+            std::process::exit(3);
+        }
+    }
+    Ok(())
+}
+
+/// Lines naming the item in files no arm owns and no plan edit covers.
+/// Rewriting text carriers is out of scope for `move` and for this verb.
+fn report_text_refs(plan: &Plan) {
+    let edited: BTreeSet<String> = plan.touched().into_iter().collect();
+    for rel in plan.cx.files() {
+        if cleave_for(rel).is_some() || edited.contains(rel) {
+            continue;
+        }
+        let Some(text) = plan.cx.text(rel) else {
+            continue;
+        };
+        for (index, line) in text.lines().enumerate() {
+            if line.contains(&plan.rows.item) {
+                println!(
+                    "text-ref {rel}:{} {} -> {}",
+                    index + 1,
+                    plan.rows.src,
+                    plan.rows.dest
+                );
+            }
+        }
+    }
+}
+
+fn plan_json(rows: &CleavePlan) -> String {
+    let specifier = |row: &CleaveSpecifier| {
+        serde_json::json!({
+            "name": row.name,
+            "module": row.module,
+            "dest_module": row.dest_module,
+            "span": { "start": row.span.start, "len": row.span.len },
+            "kind": row.kind,
+        })
+    };
+    serde_json::json!({
+        "record": "cleave_plan",
+        "src": rows.src,
+        "dest": rows.dest,
+        "item": rows.item,
+        "item_span": { "start": rows.item_span.start, "len": rows.item_span.len },
+        "travelling": rows.travelling.iter().map(specifier).collect::<Vec<_>>(),
+        "orphans": rows.orphans.iter().map(specifier).collect::<Vec<_>>(),
+        "callers": rows.callers,
+        "dragged": rows.dragged.iter().map(|row| serde_json::json!({
+            "name": row.name,
+            "span": { "start": row.span.start, "len": row.span.len },
+            "iteration": row.iteration,
+            "action": row.action,
+        })).collect::<Vec<_>>(),
+        "drag_iterations": rows.drag_iterations,
+        "unresolved": rows.unresolved,
+    })
+    .to_string()
+}
+
+/// One cleave, planned whole before a byte moves.
+struct Plan {
+    root: PathBuf,
+    cx: MoveCx,
+    arm: &'static dyn sprefa_extract::types::Cleave,
+    rows: CleavePlan,
+    source: FileView,
+    /// None when DEST does not exist yet and this run creates it.
+    dest_view: Option<FileView>,
+    /// The item's text and each moved helper's, in SRC byte order.
+    moving_text: Vec<String>,
+    /// `(name, module)` DEST must import beyond the travelling specifiers: one
+    /// per helper that stays in SRC and gains an export.
+    extra_imports: Vec<(String, String)>,
+    /// The quote style DEST's own imports use.
+    quote: char,
+    callers: Vec<FileView>,
+}
+
+impl Plan {
+    fn build(cli: &CleaveCli) -> Result<Self, String> {
+        let (src, item) = split_target(&cli.target)?;
+        let root = plan_root(cli.root.as_ref(), &src)?;
+        let cx = MoveCx::open(&root)?;
+        let src = within_root(&root, &anchor_file(&src)?)?;
+        let dest = within_root(&root, &canonical_unborn(&absolute(&cli.dest)?))?;
+        if !cx.contains(&src) {
+            return Err(format!("cleave source is outside the corpus: {src}"));
+        }
+        if src == dest {
+            return Err(format!("{src} is both the source and the destination"));
+        }
+        let arm = cleave_for(&src).ok_or_else(|| out_of_scope(&src))?;
+        let landing = cleave_for(&dest).ok_or_else(|| out_of_scope(&dest))?;
+        if arm.name() != landing.name() {
+            return Err(format!(
+                "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
+            ));
+        }
+
+        let source = FileView::open(&cx, arm, &src)?;
+        let item_decl = source
+            .view
+            .decls
+            .iter()
+            .find(|decl| decl.name == item)
+            .ok_or_else(|| format!("{src} declares no {item}"))?
+            .clone();
+
+        let unresolved = source.ungraded(&[item_decl.span]);
+        if !unresolved.is_empty() {
+            return Ok(Plan {
+                root,
+                cx,
+                arm,
+                rows: CleavePlan {
+                    src,
+                    dest,
+                    item,
+                    item_span: item_decl.span,
+                    drag_iterations: 1,
+                    unresolved,
+                    ..CleavePlan::default()
+                },
+                source,
+                dest_view: None,
+                moving_text: Vec::new(),
+                extra_imports: Vec::new(),
+                quote: '"',
+                callers: Vec::new(),
+            });
+        }
+
+        let (dragged, drag_iterations) = source.drag_fixpoint(&item_decl, cli.drag);
+        let mut moving: Vec<Span> = vec![item_decl.span];
+        moving.extend(
+            dragged
+                .iter()
+                .filter(|row| row.action == "moved")
+                .map(|row| row.span),
+        );
+
+        let dest_view = match cx.contains(&dest) {
+            true => Some(FileView::open(&cx, arm, &dest)?),
+            false => None,
+        };
+        let quote = dest_view
+            .as_ref()
+            .and_then(FileView::quote)
+            .or_else(|| source.quote())
+            .unwrap_or('"');
+        let dest_dir = dirname(&dest).to_string();
+        let src_dir = dirname(&src).to_string();
+        let carried: BTreeSet<(String, String)> = dest_view
+            .iter()
+            .flat_map(|view| view.view.imports.iter())
+            .flat_map(|statement| {
+                let module = statement.module.clone();
+                statement
+                    .names
+                    .iter()
+                    .map(move |(name, _)| (name.clone(), module.clone()))
+            })
+            .collect();
+
+        let mut travelling = Vec::new();
+        let mut orphans = Vec::new();
+        for statement in &source.view.imports {
+            for (name, _) in &statement.names {
+                let dest_module = reaim(arm, &src_dir, &dest_dir, &statement.module);
+                let kind = match (
+                    carried.contains(&(name.clone(), dest_module.clone())),
+                    arm.is_relative(&statement.module),
+                ) {
+                    (true, _) => "carried",
+                    (false, true) => "relative",
+                    (false, false) => "package",
+                };
+                let row = CleaveSpecifier {
+                    name: name.clone(),
+                    module: statement.module.clone(),
+                    dest_module,
+                    span: statement.span,
+                    kind,
+                };
+                if source.refs_in(name, &moving) > 0 {
+                    travelling.push(row.clone());
+                }
+                if source.refs_outside(name, &moving) == 0 {
+                    orphans.push(row);
+                }
+            }
+        }
+
+        let src_module = arm.spell_module(&dest_dir, &src);
+        let extra_imports: Vec<(String, String)> = dragged
+            .iter()
+            .filter(|row| row.action == "exported")
+            .filter(|row| !carried.contains(&(row.name.clone(), src_module.clone())))
+            .map(|row| (row.name.clone(), src_module.clone()))
+            .collect();
+
+        let callers = callers_of(&cx, &root, &src, &item)?;
+        let mut views = Vec::with_capacity(callers.len());
+        for caller in &callers {
+            views.push(FileView::open(&cx, arm, caller)?);
+        }
+        moving.sort_by_key(|span| span.start);
+        let moving_text = moving
+            .iter()
+            .map(|span| source.slice(*span).to_string())
+            .collect();
+        Ok(Plan {
+            root,
+            cx,
+            arm,
+            rows: CleavePlan {
+                src,
+                dest,
+                item,
+                item_span: item_decl.span,
+                travelling,
+                orphans,
+                callers,
+                dragged,
+                drag_iterations,
+                unresolved,
+            },
+            source,
+            dest_view,
+            moving_text,
+            extra_imports,
+            quote,
+            callers: views,
+        })
+    }
+
+    /// Every byte this cleave rewrites, as one `Respell` per span, in (file,
+    /// offset) order. Nothing here touches the tree; the stages do.
+    fn respells(&self) -> Vec<Respell> {
+        let mut out = self.source_respells();
+        out.extend(self.dest_respells());
+        out.extend(self.caller_respells());
+        out.sort_by(|left, right| {
+            left.file
+                .cmp(&right.file)
+                .then(left.span.start.cmp(&right.span.start))
+        });
+        out
+    }
+
+    /// SRC loses the moving spans and every specifier nothing left references,
+    /// and gains an export on each helper that stays behind for DEST.
+    fn source_respells(&self) -> Vec<Respell> {
+        let mut cuts: Vec<Span> = vec![self.rows.item_span];
+        cuts.extend(
+            self.rows
+                .dragged
+                .iter()
+                .filter(|row| row.action == "moved")
+                .map(|row| row.span),
+        );
+        let orphaned: BTreeSet<&str> = self
+            .rows
+            .orphans
+            .iter()
+            .map(|row| row.name.as_str())
+            .collect();
+        let mut edits: Vec<Respell> = Vec::new();
+        for row in self.rows.dragged.iter().filter(|row| row.action == "exported") {
+            edits.push(Respell {
+                file: self.rows.src.clone(),
+                span: Span::anchor(row.span.start),
+                text: self.arm.export_prefix().to_string(),
+                receipt: Some(format!("export {} stays in {}", row.name, self.rows.src)),
+            });
+        }
+        for statement in &self.source.view.imports {
+            let kept = statement
+                .names
+                .iter()
+                .filter(|(name, _)| !orphaned.contains(name.as_str()))
+                .count();
+            if kept == statement.names.len() {
+                continue;
+            }
+            if kept == 0 {
+                cuts.push(statement.span);
+                continue;
+            }
+            for (index, (name, _)) in statement.names.iter().enumerate() {
+                if !orphaned.contains(name.as_str()) {
+                    continue;
+                }
+                edits.push(Respell {
+                    file: self.rows.src.clone(),
+                    span: self.arm.specifier_cut(statement, index),
+                    text: String::new(),
+                    receipt: None,
+                });
+            }
+        }
+        let mut out: Vec<Respell> = absorb(&self.source.text, cuts)
+            .into_iter()
+            .map(|span| Respell {
+                file: self.rows.src.clone(),
+                span,
+                text: String::new(),
+                receipt: None,
+            })
+            .collect();
+        out.extend(edits);
+        out
+    }
+
+    /// DEST gains the imports it does not already carry, then the moving text.
+    fn dest_respells(&self) -> Vec<Respell> {
+        let Some(view) = self.dest_view.as_ref() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let imports = self.import_block();
+        if !imports.is_empty() {
+            let at = view
+                .view
+                .imports
+                .iter()
+                .map(|statement| statement.span.end())
+                .max()
+                .unwrap_or(0);
+            out.push(Respell {
+                file: self.rows.dest.clone(),
+                span: Span::anchor(at),
+                text: imports,
+                receipt: None,
+            });
+        }
+        out.push(Respell {
+            file: self.rows.dest.clone(),
+            span: Span::anchor(view.text.len() as u32),
+            text: format!("\n{}", self.moving_text.join("\n")),
+            receipt: None,
+        });
+        out
+    }
+
+    /// The import lines DEST gains, one per module, in SRC order.
+    fn import_block(&self) -> String {
+        let mut per_module: Vec<(String, Vec<String>)> = Vec::new();
+        let travelling = self
+            .rows
+            .travelling
+            .iter()
+            .filter(|row| row.kind != "carried")
+            .map(|row| (row.name.clone(), row.dest_module.clone()));
+        for (name, module) in travelling.chain(self.extra_imports.iter().cloned()) {
+            match per_module.iter_mut().find(|(held, _)| *held == module) {
+                Some((_, names)) => names.push(name),
+                None => per_module.push((module, vec![name])),
+            }
+        }
+        per_module
+            .into_iter()
+            .map(|(module, names)| self.arm.import_line(&names, &module, self.quote))
+            .collect()
+    }
+
+    /// Every importer of `SRC#ITEM` re-aimed at DEST. A specifier binding other
+    /// names is split; one binding only the item has its module rewritten.
+    fn caller_respells(&self) -> Vec<Respell> {
+        let mut out = Vec::new();
+        for (rel, view) in self.rows.callers.iter().zip(&self.callers) {
+            let from_dir = dirname(rel);
+            let spelling = self.arm.spell_module(from_dir, &self.rows.dest);
+            for statement in &view.view.imports {
+                if !self.arm.aims_at(from_dir, &statement.module, &self.rows.src) {
+                    continue;
+                }
+                let Some(index) = statement
+                    .names
+                    .iter()
+                    .position(|(name, _)| *name == self.rows.item)
+                else {
+                    continue;
+                };
+                let quote = view
+                    .slice(statement.module_span)
+                    .chars()
+                    .next()
+                    .unwrap_or('"');
+                if statement.names.len() == 1 {
+                    out.push(Respell {
+                        file: rel.clone(),
+                        span: statement.module_span,
+                        text: format!("{quote}{spelling}{quote}"),
+                        receipt: Some(format!("caller {rel}: {} -> {spelling}", statement.module)),
+                    });
+                    continue;
+                }
+                out.push(Respell {
+                    file: rel.clone(),
+                    span: self.arm.specifier_cut(statement, index),
+                    text: String::new(),
+                    receipt: None,
+                });
+                out.push(Respell {
+                    file: rel.clone(),
+                    span: Span::anchor(statement.span.end()),
+                    text: self
+                        .arm
+                        .import_line(&[self.rows.item.clone()], &spelling, quote),
+                    receipt: Some(format!("caller {rel}: {} split", self.rows.item)),
+                });
+            }
+        }
+        out
+    }
+
+    /// One soopy stage of Replace actions, plus a Create stage when DEST is new.
+    fn stages(&self) -> Result<Vec<Vec<soopy::SourceAction>>, String> {
+        let identity = soopy::SourceRoot::open_directory(&self.root)
+            .map_err(|error| format!("open root {}: {error}", self.root.display()))?
+            .directory()
+            .identity
+            .clone();
+        let producer = soopy::ActionProducer::unordered(PRODUCER);
+        let mut by_file: BTreeMap<String, Vec<soopy::TextEdit>> = BTreeMap::new();
+        for respell in self.respells() {
+            let source = directory_source(&identity, &respell.file);
+            let start = respell.span.start as u64;
+            by_file
+                .entry(respell.file)
+                .or_default()
+                .push(soopy::TextEdit {
+                    range: soopy::ActionSpan {
+                        source,
+                        start,
+                        end: start + respell.span.len as u64,
+                    },
+                    replacement: respell.text.into_bytes(),
+                    producer: producer.clone(),
+                });
+        }
+        let mut edits: Vec<soopy::SourceAction> = Vec::new();
+        for (rel, file_edits) in by_file {
+            let source = directory_source(&identity, &rel);
+            edits.push(replace_action(
+                source,
+                content_id(&self.root, &rel)?,
+                file_edits,
+            ));
+        }
+        let mut stages = Vec::new();
+        if !edits.is_empty() {
+            stages.push(edits);
+        }
+        if self.dest_view.is_none() {
+            stages.push(vec![soopy::SourceAction::Create {
+                path: directory_path(&self.rows.dest),
+                bytes: format!("{}\n{}", self.import_block(), self.moving_text.join("\n"))
+                    .into_bytes(),
+            }]);
+        }
+        Ok(stages)
+    }
+
+    /// Every path a stage reads or writes, so a verify rollback can restore it.
+    fn touched(&self) -> Vec<String> {
+        let mut out: BTreeSet<String> = BTreeSet::new();
+        out.insert(self.rows.src.clone());
+        if self.dest_view.is_some() {
+            out.insert(self.rows.dest.clone());
+        }
+        out.extend(self.rows.callers.iter().cloned());
+        out.into_iter().collect()
+    }
+
+    /// The paths this run creates. A rollback deletes them, as it does a shim.
+    fn created(&self) -> Vec<String> {
+        match self.dest_view.is_none() {
+            true => vec![self.rows.dest.clone()],
+            false => Vec::new(),
+        }
+    }
+}
+
+/// The message a path no arm owns produces. Rust, Kotlin and Go cleave arms
+/// land with their own issues; this verb ships the TypeScript one.
+fn out_of_scope(rel: &str) -> String {
+    format!("cleave has no arm for {rel}; {SCOPE}")
+}
+
+/// Line-aligned cuts merged, then widened over the blank lines they orphan.
+/// Widening can make two cuts meet, so both run to a fixpoint.
+fn absorb(text: &str, cuts: Vec<Span>) -> Vec<Span> {
+    let bytes = text.as_bytes();
+    let mut merged = merge(cuts);
+    loop {
+        let before: Vec<(u32, u32)> = merged.iter().map(|cut| (cut.start, cut.len)).collect();
+        for cut in &mut merged {
+            widen(bytes, cut);
+        }
+        merged = merge(merged);
+        if before == merged.iter().map(|cut| (cut.start, cut.len)).collect::<Vec<_>>() {
+            return merged;
+        }
+    }
+}
+
+/// One cut widened over the blank lines it orphans: forward always, and
+/// backward when it runs to the end of the file.
+fn widen(bytes: &[u8], cut: &mut Span) {
+    let mut end = cut.end() as usize;
+    while end < bytes.len() && bytes[end] == b'\n' {
+        end += 1;
+    }
+    let mut start = cut.start as usize;
+    if end == bytes.len() {
+        while start > 0 && bytes[start - 1] == b'\n' && (start < 2 || bytes[start - 2] == b'\n') {
+            start -= 1;
+        }
+    }
+    cut.start = start as u32;
+    cut.len = end as u32 - start as u32;
+}
+
+/// Overlapping and touching spans folded into one, in offset order.
+fn merge(mut spans: Vec<Span>) -> Vec<Span> {
+    spans.sort_by_key(|span| span.start);
+    let mut out: Vec<Span> = Vec::new();
+    for span in spans {
+        match out.last_mut() {
+            Some(last) if span.start <= last.end() => {
+                last.len = last.end().max(span.end()) - last.start;
+            }
+            _ => out.push(span),
+        }
+    }
+    out
+}
+
+/// Every file importing `src#item`, in path order. `resolved_import` carries
+/// the importer and the declaration it reached, so one resolve answers it.
+fn callers_of(cx: &MoveCx, root: &Path, src: &str, item: &str) -> Result<Vec<String>, String> {
+    let paths: Vec<PathBuf> = cx
+        .files()
+        .iter()
+        .filter(|rel| cleave_for(rel).is_some())
+        .map(|rel| cx.abs(rel))
+        .collect();
+    let request = ResolveRequest {
+        paths: &paths,
+        arms: ResolveArms {
+            call: true,
+            ..ResolveArms::default()
+        },
+        scip: ScipMode::Off,
+        project_root: Some(root),
+        scip_records: ScipRecords::default(),
+        occurrence_text: false,
+        rust_checker: None,
+        ts_checker: None,
+        go_checker: None,
+        witness: false,
+    };
+    let facts = resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
+    let mut callers = BTreeSet::new();
+    for fact in &facts {
+        let FlatFact::ResolvedImportRow {
+            src_path,
+            target_path,
+            target_name,
+            ..
+        } = fact
+        else {
+            continue;
+        };
+        if target_name.as_deref() != Some(item) {
+            continue;
+        }
+        if rel_of(root, target_path).as_deref() != Some(src) {
+            continue;
+        }
+        if let Some(importer) = rel_of(root, src_path) {
+            if importer != src {
+                callers.insert(importer);
+            }
+        }
+    }
+    Ok(callers.into_iter().collect())
+}
+
+/// A resolve echoes the path spellings it was given, which are absolute here.
+fn rel_of(root: &Path, path: &str) -> Option<String> {
+    Path::new(path)
+        .strip_prefix(root)
+        .ok()
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+}
+
+// ── the file read ───────────────────────────────────────────────────────────
+
+/// One corpus file's text beside the arm's answer about it. Every method here
+/// is set arithmetic over the view; none of it reads syntax.
+struct FileView {
+    text: String,
+    view: CleaveView,
+}
+
+impl FileView {
+    fn open(
+        cx: &MoveCx,
+        arm: &dyn sprefa_extract::types::Cleave,
+        rel: &str,
+    ) -> Result<Self, String> {
+        let text = cx
+            .text(rel)
+            .ok_or_else(|| format!("read {rel}, or it is not UTF-8"))?;
+        let view = arm
+            .view(rel, &text)
+            .ok_or_else(|| format!("the {} arm declined {rel}", arm.name()))?;
+        Ok(Self { text, view })
+    }
+
+    /// The file's bytes under `span`, empty when the span is off the end.
+    fn slice(&self, span: Span) -> &str {
+        self.text
+            .get(span.start as usize..span.end() as usize)
+            .unwrap_or_default()
+    }
+
+    /// The quote character the file's own imports wear.
+    fn quote(&self) -> Option<char> {
+        self.view
+            .imports
+            .first()
+            .and_then(|statement| self.slice(statement.module_span).chars().next())
+    }
+
+    /// Occurrences of `name` inside any of `spans`.
+    fn refs_in(&self, name: &str, spans: &[Span]) -> usize {
+        self.view
+            .uses
+            .iter()
+            .filter(|(used, span)| used == name && spans.iter().any(|scope| inside(*span, *scope)))
+            .count()
+    }
+
+    /// Occurrences of `name` outside every one of `spans`.
+    fn refs_outside(&self, name: &str, spans: &[Span]) -> usize {
+        self.view
+            .uses
+            .iter()
+            .filter(|(used, span)| used == name && !spans.iter().any(|scope| inside(*span, *scope)))
+            .count()
+    }
+
+    /// Names a local binding inside `spans` answers.
+    fn locals_in(&self, spans: &[Span]) -> BTreeSet<&str> {
+        self.view
+            .bindings
+            .iter()
+            .filter(|(_, span)| spans.iter().any(|scope| inside(*span, *scope)))
+            .map(|(name, _)| name.as_str())
+            .collect()
+    }
+
+    /// Free names inside `spans` that no specifier, declaration, local binding
+    /// or builtin answers. A call through a receiver is a member access.
+    fn ungraded(&self, spans: &[Span]) -> Vec<String> {
+        let imported: BTreeSet<&str> = self
+            .view
+            .imports
+            .iter()
+            .flat_map(|row| row.names.iter())
+            .map(|(name, _)| name.as_str())
+            .collect();
+        let declared: BTreeSet<&str> = self
+            .view
+            .decls
+            .iter()
+            .map(|decl| decl.name.as_str())
+            .collect();
+        let locals = self.locals_in(spans);
+        let mut out: BTreeSet<String> = BTreeSet::new();
+        for (callee, span, through_receiver) in &self.view.calls {
+            if *through_receiver || !spans.iter().any(|scope| inside(*span, *scope)) {
+                continue;
+            }
+            let known = imported.contains(callee.as_str())
+                || declared.contains(callee.as_str())
+                || locals.contains(callee.as_str())
+                || self.view.builtins.contains(&callee.as_str());
+            if !known {
+                out.insert(callee.clone());
+            }
+        }
+        out.into_iter().collect()
+    }
+
+    /// Every private helper the item reaches, with the fixpoint pass count.
+    /// Only a `moved` helper widens the set a later pass reads.
+    fn drag_fixpoint(&self, item: &CleaveDecl, drag: bool) -> (Vec<CleaveDrag>, u32) {
+        let mut moving = vec![item.span];
+        let mut claimed: Vec<CleaveDrag> = Vec::new();
+        let mut iterations = 1u32;
+        loop {
+            let found = self.drag_candidates(item, &moving, &claimed);
+            if found.is_empty() {
+                return (claimed, iterations);
+            }
+            let mut widened = false;
+            for decl in found {
+                let action = self.drag_action(&decl, &moving, drag);
+                if action == "moved" {
+                    moving.push(decl.span);
+                    widened = true;
+                }
+                claimed.push(CleaveDrag {
+                    name: decl.name,
+                    span: decl.span,
+                    iteration: iterations,
+                    action,
+                });
+            }
+            if !widened || self.drag_candidates(item, &moving, &claimed).is_empty() {
+                return (claimed, iterations);
+            }
+            iterations += 1;
+        }
+    }
+
+    /// Where one helper goes, answered once and never revised. A helper nothing
+    /// left in SRC references travels under `--drag`; a shared one exports.
+    fn drag_action(&self, decl: &CleaveDecl, moving: &[Span], drag: bool) -> &'static str {
+        let mut scope = moving.to_vec();
+        scope.push(decl.span);
+        match drag && self.refs_outside(&decl.name, &scope) == 0 {
+            true => "moved",
+            false => "exported",
+        }
+    }
+
+    /// Private declarations the moving set references and no pass has claimed.
+    fn drag_candidates(
+        &self,
+        item: &CleaveDecl,
+        moving: &[Span],
+        claimed: &[CleaveDrag],
+    ) -> Vec<CleaveDecl> {
+        self.view
+            .decls
+            .iter()
+            .filter(|decl| !decl.exported && decl.name != item.name)
+            .filter(|decl| !claimed.iter().any(|row| row.name == decl.name))
+            .filter(|decl| self.refs_in(&decl.name, moving) > 0)
+            .cloned()
+            .collect()
+    }
+}
+
+/// Whether `inner` sits inside `outer`, endpoints included.
+fn inside(inner: Span, outer: Span) -> bool {
+    inner.start >= outer.start && inner.end() <= outer.end()
+}
+
+// ── the request ─────────────────────────────────────────────────────────────
+
+/// `<SRC>#<ITEM>` split at the last `#`, so a path holding one still parses.
+fn split_target(target: &str) -> Result<(PathBuf, String), String> {
+    let (src, item) = target
+        .rsplit_once('#')
+        .ok_or_else(|| format!("a cleave target is `<SRC>#<ITEM>`, not {target}"))?;
+    if src.is_empty() || item.is_empty() {
+        return Err(format!("a cleave target is `<SRC>#<ITEM>`, not {target}"));
+    }
+    Ok((PathBuf::from(src), item.to_string()))
+}
+
+/// The corpus root: as asked, else the git root holding SRC.
+fn plan_root(requested: Option<&PathBuf>, src: &Path) -> Result<PathBuf, String> {
+    let root = match requested {
+        Some(root) => {
+            let root = absolute(root)?;
+            if !root.is_dir() {
+                return Err(format!("--root is not a directory: {}", root.display()));
+            }
+            root
+        }
+        None => {
+            let src = anchor_file(src)?;
+            let parent = src.parent().unwrap_or(&src).to_path_buf();
+            soopy::discover(&parent)
+                .map_err(|error| format!("discover root for {}: {error}", src.display()))?
+                .root
+        }
+    };
+    root.canonicalize()
+        .map_err(|error| format!("canonicalize root {}: {error}", root.display()))
+}
+
+fn anchor_file(path: &Path) -> Result<PathBuf, String> {
+    let path = absolute(path)?;
+    if !path.is_file() {
+        return Err(format!("cleave source is not a file: {}", path.display()));
+    }
+    path.canonicalize()
+        .map_err(|error| format!("canonicalize {}: {error}", path.display()))
+}
+
+fn absolute(path: &Path) -> Result<PathBuf, String> {
+    if path.is_absolute() {
+        return Ok(normalize(path));
+    }
+    let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
+    Ok(normalize(&cwd.join(path)))
+}
+
+/// DEST need not exist yet, so only its deepest existing ancestor canonicalizes;
+/// the tail is re-appended so root-relative stripping still holds.
+fn canonical_unborn(path: &Path) -> PathBuf {
+    let path = normalize(path);
+    let mut tail = Vec::new();
+    let mut probe = path.as_path();
+    loop {
+        if let Ok(real) = probe.canonicalize() {
+            let mut out = real;
+            for part in tail.iter().rev() {
+                out.push(part);
+            }
+            return out;
+        }
+        let (Some(parent), Some(name)) = (probe.parent(), probe.file_name()) else {
+            return path;
+        };
+        tail.push(name.to_os_string());
+        probe = parent;
+    }
+}
+
+fn within_root(root: &Path, path: &Path) -> Result<String, String> {
+    path.strip_prefix(root)
+        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
+        .map_err(|_| format!("{} is outside root {}", path.display(), root.display()))
+}
