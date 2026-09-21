@@ -1,4 +1,4 @@
-//! Byte parity between the Rust and `.scm` Kotlin CallF projectors.
+//! Golden: the Kotlin CallF rows `ryi fast` reads from `queries/kotlin/call.scm`.
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -8,33 +8,21 @@ const FIXTURES: [&str; 2] = [
     "tests/fixtures/kotlin_module_resolve",
 ];
 
+const GOLDEN: &str = include_str!("goldens/150_kotlin_call_scm.jsonl");
+
 #[test]
-fn kotlin_scm_call_rows_match_rust() {
-    let mut differences = Vec::new();
+fn the_kotlin_call_rows_answer_the_golden() {
+    let mut lines = Vec::new();
     for (index, path) in fixture_files().into_iter().enumerate() {
-        let rust = call_rows(&path, false, index);
-        let scm = call_rows(&path, true, index);
-        if rust != scm {
-            let rust_only = rust
-                .iter()
-                .filter(|row| !scm.contains(row))
-                .cloned()
-                .collect::<Vec<_>>();
-            let scm_only = scm
-                .iter()
-                .filter(|row| !rust.contains(row))
-                .cloned()
-                .collect::<Vec<_>>();
-            differences.push(format!(
-                "{}\n  rust only: {rust_only:#?}\n  scm only: {scm_only:#?}",
-                path.display()
-            ));
+        let name = path.to_string_lossy().to_string();
+        for row in call_rows(&path, index) {
+            lines.push(format!("{name}\t{row}"));
         }
     }
-    assert!(
-        differences.is_empty(),
-        "Kotlin CallF rows differ:\n{}",
-        differences.join("\n")
+    assert_eq!(
+        lines.join("\n"),
+        GOLDEN.trim_end_matches('\n'),
+        "Kotlin CallF rows from the scm path"
     );
 }
 
@@ -58,24 +46,19 @@ fn collect_files(path: &Path, files: &mut Vec<PathBuf>) {
     }
 }
 
-fn call_rows(path: &Path, scm: bool, index: usize) -> Vec<String> {
-    let mode = if scm { "scm" } else { "rust" };
-    let trace = std::env::temp_dir().join(format!("ryi-150-{mode}-{index}-{}.json", std::process::id()));
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
-    command
+fn call_rows(path: &Path, index: usize) -> Vec<String> {
+    let trace =
+        std::env::temp_dir().join(format!("ryi-150-{index}-{}.json", std::process::id()));
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args(["--family", "call"])
         .arg(path)
         .env("HAFLEY_TRACE", trace)
-        .env("RUST_LOG", "sprefa_extract=debug");
-    if scm {
-        command.env("RYI_FAST_SCM", "1");
-    } else {
-        command.env_remove("RYI_FAST_SCM");
-    }
-    let output = command.output().expect("ryi runs");
+        .env("RUST_LOG", "sprefa_extract=debug")
+        .output()
+        .expect("ryi runs");
     assert!(
         output.status.success(),
-        "ryi {mode} {} failed:\n{}",
+        "ryi --family call {} failed:\n{}",
         path.display(),
         String::from_utf8_lossy(&output.stderr)
     );
