@@ -9,6 +9,7 @@ use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use super::ast_rule::{query_ast_rule, AstRule, AstRuleRequest};
 use super::extract_lang::RyiLang;
+use super::scip_scm_store::{NodeKind, Store};
 use super::scm_lower::{lower_scm, ScmLowerError};
 use crate::types::FlatFact;
 
@@ -39,6 +40,8 @@ pub enum ScipScmError {
     Query { path: String, detail: String },
     /// tree-sitter stopped enumerating matches, so the captures are partial.
     MatchLimit { path: String },
+    /// The phase-5 scope graph refused a statement.
+    Sql(String),
 }
 
 impl std::fmt::Display for ScipScmError {
@@ -57,6 +60,7 @@ impl std::fmt::Display for ScipScmError {
                 out,
                 "{path}: the scip_scm query exceeded the tree-sitter match limit"
             ),
+            Self::Sql(detail) => out.write_str(detail),
         }
     }
 }
@@ -83,6 +87,216 @@ struct Definition {
     start: u32,
     end: u32,
     owner: usize,
+}
+
+/// One call resolved across the supplied file set, named the way the lab's
+/// judge keys an edge.
+#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
+pub struct ScmEdge {
+    pub caller_path: String,
+    pub caller_name: String,
+    pub callee_path: String,
+    pub callee_name: String,
+}
+
+struct SpanNode {
+    id: i64,
+    start: u32,
+    end: u32,
+}
+
+struct Reference {
+    id: i64,
+    path: String,
+    owner: String,
+}
+
+/// THE CROSS-FILE PASS, off the family path: one scope graph over every
+/// supplied file, resolved by the recursive walk in `8_scip_scm_store.rs`.
+pub fn scip_scm_edges(paths: &[PathBuf]) -> Result<Vec<ScmEdge>, ScipScmError> {
+    let store = Store::memory()?;
+    let mut roots = Vec::new();
+    let mut references = Vec::new();
+    let mut imports = Vec::new();
+    for path in expand(paths)? {
+        let (name, end, captured) = file_captures(&path)?;
+        let root = store.node(NodeKind::Root, "", &name, 0, end)?;
+        roots.push(root);
+        ingest(
+            &store,
+            root,
+            &name,
+            end,
+            &captured.into_iter().collect::<Vec<_>>(),
+            &mut references,
+            &mut imports,
+        )?;
+    }
+    for (import, own_root) in imports {
+        for root in roots.iter().copied().filter(|root| *root != own_root) {
+            store.edge(import, root)?;
+        }
+    }
+    for own_root in roots.iter().copied() {
+        for root in roots.iter().copied().filter(|root| *root != own_root) {
+            store.edge(own_root, root)?;
+        }
+    }
+    let mut edges = Vec::new();
+    for reference in references {
+        for (callee_name, callee_path) in store.resolve(reference.id)? {
+            edges.push(ScmEdge {
+                caller_path: reference.path.clone(),
+                caller_name: reference.owner.clone(),
+                callee_path,
+                callee_name,
+            });
+        }
+    }
+    edges.sort();
+    edges.dedup();
+    Ok(edges)
+}
+
+/// One file's captures as graph nodes: scopes under their parents, definitions
+/// behind a pop, calls behind a push, imports and package exports at the root.
+fn ingest(
+    store: &Store,
+    root: i64,
+    path: &str,
+    file_end: u32,
+    captures: &[Capture],
+    references: &mut Vec<Reference>,
+    imports: &mut Vec<(i64, i64)>,
+) -> Result<(), ScipScmError> {
+    let mut nodes = vec![SpanNode {
+        id: root,
+        start: 0,
+        end: file_end,
+    }];
+    let scope_spans = labelled(captures, |label| label == "local.scope");
+    for span in &scope_spans {
+        nodes.push(SpanNode {
+            id: store.node(NodeKind::Scope, "", path, span.start, span.end)?,
+            start: span.start,
+            end: span.end,
+        });
+    }
+    for index in 1..nodes.len() {
+        let parent = holder(&nodes, nodes[index].start, nodes[index].end, Some(index));
+        store.edge(nodes[index].id, nodes[parent].id)?;
+    }
+
+    let definitions = labelled(captures, |label| label.starts_with("local.definition"));
+    let owners = span_names(&scope_spans, &definitions);
+    let mut definition_spans = BTreeSet::new();
+    for definition in &definitions {
+        definition_spans.insert((definition.start, definition.end));
+        let direct = holder(&nodes, definition.start, definition.end, None);
+        let owner = match definition.label.as_str() {
+            "local.definition.function" | "local.definition.type" => {
+                holder(&nodes, nodes[direct].start, nodes[direct].end, Some(direct))
+            }
+            _ => direct,
+        };
+        let pop = store.node(
+            NodeKind::Pop,
+            &definition.text,
+            path,
+            definition.start,
+            definition.end,
+        )?;
+        let def = store.node(
+            NodeKind::Def,
+            &definition.text,
+            path,
+            definition.start,
+            definition.end,
+        )?;
+        store.edge(nodes[owner].id, pop)?;
+        store.edge(pop, def)?;
+        if nodes[owner].id == root {
+            let export = store.node(
+                NodeKind::Export,
+                &definition.text,
+                path,
+                definition.start,
+                definition.end,
+            )?;
+            store.edge(export, def)?;
+        }
+    }
+
+    for call in labelled(captures, |label| label == "local.call") {
+        if definition_spans.contains(&(call.start, call.end)) {
+            continue;
+        }
+        let owner = holder(&nodes, call.start, call.end, None);
+        let reference = store.node(NodeKind::Ref, &call.text, path, call.start, call.end)?;
+        let push = store.node(NodeKind::Push, &call.text, path, call.start, call.end)?;
+        store.edge(reference, push)?;
+        store.edge(push, nodes[owner].id)?;
+        references.push(Reference {
+            id: reference,
+            path: path.to_string(),
+            owner: containing_span(&scope_spans, call.start, call.end)
+                .and_then(|span| owners.get(&(span.start, span.end)).cloned())
+                .unwrap_or_else(|| "<root>".into()),
+        });
+    }
+
+    for capture in labelled(captures, |label| label == "local.import") {
+        let import = store.node(
+            NodeKind::Import,
+            &capture.text,
+            path,
+            capture.start,
+            capture.end,
+        )?;
+        store.edge(root, import)?;
+        imports.push((import, root));
+    }
+    for capture in labelled(captures, |label| label == "local.export.package") {
+        let export = store.node(
+            NodeKind::Export,
+            &capture.text,
+            path,
+            capture.start,
+            capture.end,
+        )?;
+        store.edge(export, root)?;
+    }
+    Ok(())
+}
+
+fn holder(nodes: &[SpanNode], start: u32, end: u32, skip: Option<usize>) -> usize {
+    nodes
+        .iter()
+        .enumerate()
+        .filter(|(index, node)| skip != Some(*index) && node.start <= start && end <= node.end)
+        .min_by_key(|(_, node)| node.end - node.start)
+        .map(|(index, _)| index)
+        .unwrap_or(ROOT)
+}
+
+fn containing_span<'a>(spans: &'a [Capture], start: u32, end: u32) -> Option<&'a Capture> {
+    spans
+        .iter()
+        .filter(|span| span.start <= start && end <= span.end)
+        .min_by_key(|span| span.end - span.start)
+}
+
+fn span_names(spans: &[Capture], definitions: &[Capture]) -> BTreeMap<(u32, u32), String> {
+    spans
+        .iter()
+        .filter_map(|span| {
+            definitions
+                .iter()
+                .filter(|def| span.start <= def.start && def.end <= span.end)
+                .min_by_key(|def| def.start)
+                .map(|def| ((span.start, span.end), def.text.clone()))
+        })
+        .collect()
 }
 
 /// Every pass-1 row for the supplied files, in emission order. One file's rows
@@ -139,7 +353,14 @@ fn query_for(path: &str) -> Option<(SupportLang, &'static str)> {
     }
 }
 
-fn file_facts(path: &PathBuf) -> Result<Vec<FlatFact>, ScipScmError> {
+fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScipScmError> {
+    let (name, end, captured) = file_captures(path)?;
+    Ok(rows(&name, end, captured))
+}
+
+/// One file's two-step pass: L1 selects the spans, the native run groups the
+/// captures. Every later projection reads this and nothing else.
+fn file_captures(path: &Path) -> Result<(String, u32, BTreeSet<Capture>), ScipScmError> {
     let name = path.to_string_lossy().to_string();
     let Some((lang, query_text)) = query_for(&name) else {
         return Err(ScipScmError::OutOfScope {
@@ -155,7 +376,7 @@ fn file_facts(path: &PathBuf) -> Result<Vec<FlatFact>, ScipScmError> {
     })?;
     let selected = lowered_spans(&name, &source, query_text)?;
     let captured = native_captures(&name, lang, query_text, &source, &selected)?;
-    Ok(rows(&name, source.len() as u32, captured))
+    Ok((name, source.len() as u32, captured))
 }
 
 /// L1 supplies the candidate spans. Native execution retains the capture

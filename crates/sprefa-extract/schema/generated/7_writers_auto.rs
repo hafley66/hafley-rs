@@ -152,6 +152,8 @@ pub mod models {
         CheckerWalk,
         #[serde(rename = "foreign")]
         Foreign,
+        #[serde(rename = "scm_scope")]
+        ScmScope,
     }
     impl Method {
         pub(super) fn as_str(&self) -> &'static str {
@@ -173,6 +175,7 @@ pub mod models {
                 Self::Parse => "parse",
                 Self::CheckerWalk => "checker_walk",
                 Self::Foreign => "foreign",
+                Self::ScmScope => "scm_scope",
             }
         }
     }

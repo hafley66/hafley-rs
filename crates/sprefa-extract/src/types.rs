@@ -1695,6 +1695,9 @@ pub enum ResolutionOrigin {
     /// No leg answered; the edge carries a placeholder target, which the flat
     /// wire then drops. Type-edge candidates are the only minters.
     Unresolved,
+    /// The `.scm` scope graph answered: a lexical push/pop walk over the
+    /// captures, with no type and no compiler. Emitted off the family path.
+    ScmScope,
 }
 
 impl ResolutionOrigin {
@@ -1714,6 +1717,7 @@ impl ResolutionOrigin {
             ResolutionOrigin::ReturnCall => "return_call",
             ResolutionOrigin::Scip => "scip",
             ResolutionOrigin::Unresolved => "unresolved",
+            ResolutionOrigin::ScmScope => "scm_scope",
         }
     }
 
@@ -1736,6 +1740,7 @@ impl ResolutionOrigin {
             ResolutionOrigin::ReturnCall => Method::ReturnCall,
             ResolutionOrigin::Scip => Method::Scip,
             ResolutionOrigin::Unresolved => Method::Unresolved,
+            ResolutionOrigin::ScmScope => Method::ScmScope,
         }
     }
 }

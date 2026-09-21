@@ -381,7 +381,8 @@
           "unresolved",
           "parse",
           "checker_walk",
-          "foreign"
+          "foreign",
+          "scm_scope"
         ]
       }
     ]

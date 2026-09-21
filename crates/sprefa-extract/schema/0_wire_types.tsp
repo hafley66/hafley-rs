@@ -13,6 +13,7 @@ enum Method {
   SelfType: "self_type", IfaceImpl: "iface_impl", Decorator: "decorator",
   Subscript: "subscript", ReturnCall: "return_call", Scip: "scip",
   Unresolved: "unresolved", Parse: "parse", CheckerWalk: "checker_walk", Foreign: "foreign",
+  ScmScope: "scm_scope",
 }
 
 model IdArg { id: uint32; }
