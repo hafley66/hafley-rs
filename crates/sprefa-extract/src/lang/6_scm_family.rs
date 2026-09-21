@@ -1,4 +1,4 @@
-//! Kotlin CallF projection from the captures in `queries/kotlin/call.scm`.
+//! Kotlin CallF projection from the CallF captures in `queries/kotlin/scip.scm`.
 
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -11,7 +11,7 @@ use crate::family::{CallF, CallKind, CallSite};
 use crate::rows::{FamilyBundle, Node};
 use crate::shape::{Span, Strings};
 
-const KOTLIN_CALL_SCM: &str = include_str!("../../queries/kotlin/call.scm");
+const KOTLIN_CALL_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
 
 #[derive(Default)]
 struct SiteCapture {
