@@ -209,13 +209,13 @@ pub fn rename_for(path: &str) -> Option<&'static dyn Rename> {
 
 /// The `Mutate` roster, in `sources()` order. Membership is "this language can
 /// be text-edited by a verb", a third question again from `rehomes()`'s.
-pub fn mutates() -> &'static [&'static dyn Cleave] {
+pub fn cleaves() -> &'static [&'static dyn Cleave] {
     &[&RustSource, &TsSource]
 }
 
 /// The `Mutate` that owns `path`, under the SAME first-match law `rehome_for`
 /// states: only `source_for`'s own winner may claim a path.
-pub fn mutate_for(path: &str) -> Option<&'static dyn Cleave> {
+pub fn cleave_for(path: &str) -> Option<&'static dyn Cleave> {
     let owner = source_for(path)?.name();
-    mutates().iter().copied().find(|arm| arm.name() == owner)
+    cleaves().iter().copied().find(|arm| arm.name() == owner)
 }

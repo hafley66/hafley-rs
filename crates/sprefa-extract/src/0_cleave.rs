@@ -13,7 +13,7 @@ use sprefa_extract::move_stage::{
 };
 use sprefa_extract::types::{CleaveDrag, CleavePlan, CleaveSpecifier};
 use sprefa_extract::{
-    directory_path, directory_source, dispatch, flatten_each, mutate_for, normalize,
+    directory_path, directory_source, dispatch, flatten_each, cleave_for, normalize,
     replace_action, resolve_project, scm_facts, FamilyMask, FlatFact, MoveCx, Cleave,
     ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
 };
@@ -170,7 +170,7 @@ fn verify_after_commit(
 fn report_text_refs(plan: &Plan) {
     let edited: BTreeSet<String> = plan.touched().into_iter().collect();
     for rel in plan.cx.files() {
-        if mutate_for(rel).is_some() || edited.contains(rel) {
+        if cleave_for(rel).is_some() || edited.contains(rel) {
             continue;
         }
         let Some(text) = plan.cx.text(rel) else {
@@ -252,8 +252,8 @@ impl Plan {
         if src == dest {
             return Err(format!("{src} is both the source and the destination"));
         }
-        let arm = mutate_for(&src).ok_or_else(|| out_of_scope(&src))?;
-        let landing = mutate_for(&dest).ok_or_else(|| out_of_scope(&dest))?;
+        let arm = cleave_for(&src).ok_or_else(|| out_of_scope(&src))?;
+        let landing = cleave_for(&dest).ok_or_else(|| out_of_scope(&dest))?;
         if arm.name() != landing.name() {
             return Err(format!(
                 "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
@@ -724,7 +724,7 @@ impl Imports {
         let paths: Vec<PathBuf> = cx
             .files()
             .iter()
-            .filter(|rel| mutate_for(rel).is_some())
+            .filter(|rel| cleave_for(rel).is_some())
             .map(|rel| cx.abs(rel))
             .collect();
         let request = ResolveRequest {

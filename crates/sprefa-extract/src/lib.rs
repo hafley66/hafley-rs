@@ -74,7 +74,7 @@ pub use lang::{
     build_paths, compiled_spellings, decode_ast_rule_yaml, dl6_db_path, find_owned_region,
     open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_ast_rule,
     query_ast_rule_with_content, query_patterns, query_source, query_source_facts,
-    mutate_for, mutates, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
+    cleave_for, cleaves, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
     rename_for, renames, respell,
     scm_edges, scm_facts, source_for, sources, ts_specifiers, AstCaptureFact,
     AstPatternQuery, AstRule, AstRuleCapture,
