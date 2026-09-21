@@ -94,6 +94,9 @@ model ScipFnEdge { ...ExportRow; record: "scip_fn_edge"; caller: string; callee:
 model ScipCalleeType { ...ExportRow; record: "scip_callee_type"; sym: string; type: string; }
 model ScipLocal { ...ExportRow; record: "scip_local"; `fn`: string; name: string; }
 model ScipImpl { ...ExportRow; record: "scip_impl"; impl: string; iface: string; }
+model ScipScmSymbol { ...ExportRow; record: "scip_scm_symbol"; symbol: string; path: string; kind: string; }
+model ScipScmOccurrence { ...ExportRow; record: "scip_scm_occurrence"; symbol: string; path: string; start: uint32; end: uint32; role: string; }
+model ScipScmLocal { ...ExportRow; record: "scip_scm_local"; `fn`: string; name: string; path: string; start: uint32; end: uint32; }
 model ScipIndex {
   ...ExportRow; record: "scip_index"; reused: boolean; tool_name: string; tool_version: string;
   documents: uint32; index_mtime_unix_ms: uint64 | null; staleness: string;
