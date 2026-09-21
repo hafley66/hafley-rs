@@ -2,6 +2,9 @@
 //! file's tests is `--test main -- <module>`, and `autotests = false` in
 //! Cargo.toml is what stops cargo minting a second target per file.
 
+#[path = "0_remind_cli.rs"]
+mod t0_remind_cli;
+
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;
 #[path = "codex_usage_e2e.rs"]

@@ -23,7 +23,7 @@ use cli::debug::{run_config, run_debug, run_lane_debug};
 use cli::job::{run_beep, run_lane_wait, run_wait};
 use cli::mail::{run_inbox, run_send, Outbound};
 #[cfg(feature = "agent-read")]
-use cli::me::run_me_favorite;
+use cli::me::{run_me_favorite, run_me_remind};
 use cli::me::{run_me_mood, run_whoami};
 use cli::tag::{
     run_tag_add, run_tag_backfill, run_tag_for, run_tag_list, run_tag_of, run_tag_recent,
@@ -218,6 +218,12 @@ enum SubCmd {
         mail_dir: Option<PathBuf>,
         #[command(subcommand)]
         cmd: MeCmd,
+    },
+    /// Print the newest user messages from the caller's tracked conversation.
+    #[cfg(feature = "agent-read")]
+    Remind {
+        /// Number of user messages to print, newest window first in chronology.
+        count: u64,
     },
     /// The shared tag table: apply tags to any surface, read the recent five
     /// back. Search reads `agent_tag` only, never a message body.
@@ -573,6 +579,8 @@ fn run_cli(cli: Cli) -> Result<()> {
                 #[cfg(feature = "agent-read")]
                 MeCmd::Favorite { index, note } => run_me_favorite(index, note.as_deref()),
             },
+            #[cfg(feature = "agent-read")]
+            SubCmd::Remind { count } => run_me_remind(count),
             SubCmd::Tag { cmd } => match cmd {
                 TagCmd::Add { tags, source } => run_tag_add(&tags, source.as_deref()),
                 TagCmd::Recent { limit, format } => run_tag_recent(limit, format),
@@ -780,6 +788,7 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
             }
             | SubCmd::Agent { .. }
             | SubCmd::Me { .. }
+            | SubCmd::Remind { .. }
             | SubCmd::Debug { .. }
     )
 }
@@ -2191,6 +2200,7 @@ mod tests {
             vec!["boop", "agent", "summary"],
             vec!["boop", "db", "turn", "list"],
             vec!["boop", "db", "status"],
+            vec!["boop", "remind", "2"],
         ];
         for argv in transcript_readers {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));

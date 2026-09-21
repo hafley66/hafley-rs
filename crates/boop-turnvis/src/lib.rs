@@ -442,19 +442,29 @@ pub fn locate_visible_turns_with(
         .filter_map(|(source, candidate)| candidate.then_some(source))
         .filter_map(|source| monotonic_turn_match(&screen, source))
         .collect();
+    let marked_user_prompt = |m: &TurnMatch| {
+        m.source.turn.role == "user"
+            && m.hits
+                .iter()
+                .any(|hit| hit.line.text.trim_start().starts_with('❯'))
+    };
     matches.sort_by(|left, right| {
-        right
-            .hits
-            .len()
-            .cmp(&left.hits.len())
-            .then(left.source_span.cmp(&right.source_span))
+        marked_user_prompt(right)
+            .cmp(&marked_user_prompt(left))
             .then(
-                left.source
-                    .normalized
+                right
+                    .hits
                     .len()
-                    .cmp(&right.source.normalized.len()),
+                    .cmp(&left.hits.len())
+                    .then(left.source_span.cmp(&right.source_span))
+                    .then(
+                        left.source
+                            .normalized
+                            .len()
+                            .cmp(&right.source.normalized.len()),
+                    )
+                    .then(right.source.turn.ts.cmp(&left.source.turn.ts)),
             )
-            .then(right.source.turn.ts.cmp(&left.source.turn.ts))
     });
 
     let row_owners = match_row_owners(&matches);

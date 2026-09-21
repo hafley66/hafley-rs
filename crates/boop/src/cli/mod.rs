@@ -351,6 +351,11 @@ TAGS: one tag table every surface shares (favorites, comments, turns, lanes).
 ME: the caller's own conversation.
     boop me mood [--as <name>]        the mood template hails render with
     boop me favorite -1               see FAVORITE
+    boop remind 3                     print the latest three user messages
+                                      from the BOOP_SESSION conversation
+  `remind` requires a tracked caller session; it never infers a session from
+  the current working directory. Messages print oldest-to-newest within the
+  selected window.
 
 SHELL: `eval \"$(boop shell-init bash)\"` defines codex, claude, ccz, kimi and
   opencode as functions. Inside tmux they run `boop tui <harness>`, registering
@@ -583,7 +588,7 @@ pub(crate) mod testkit {
 mod tests {
     use super::*;
     use crate::cli::testkit::temp_mail_dir;
-    use boop::bus::{read_routes, Route};
+    use boop::bus::{Route, read_routes};
 
     /// RECEIPT (job 1). A route written with --goal round-trips through the
     /// registry.
