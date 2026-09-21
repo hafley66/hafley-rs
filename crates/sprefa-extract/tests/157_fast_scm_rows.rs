@@ -176,12 +176,12 @@ fn a_mode_refuses_a_per_file_mask_beside_it() {
 #[test]
 fn a_language_with_no_query_contributes_no_scm_rows() {
     let shapes = wire_shapes();
-    for line in fast(&["src/lang/go_modules.rs"], 2).lines() {
+    for line in fast(&["tests/fixtures/go_binding_legs/lib.go"], 2).lines() {
         let value: Value = serde_json::from_str(line).expect("fast emits JSON");
         let record = value["record"].as_str().expect("record tag");
         assert!(
             !shapes.contains_key(record),
-            "a rust file has no bundled scm query, so no {record} row: {line}"
+            "a go file has no bundled scm query, so no {record} row: {line}"
         );
     }
 }
