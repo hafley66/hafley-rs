@@ -261,6 +261,47 @@ fn short_unambiguous_non_tool_turn_is_visible() {
 }
 
 #[test]
+fn user_prompt_marker_wins_when_assistant_quotes_the_prompt() {
+    let found = locate_visible_turns(
+        &[
+            line("❯ please track the financial product outputs of a research agent yes", 1),
+            line("", 2),
+            line("The research agent output is now tracked.", 3),
+        ],
+        &[
+            turn(
+                1,
+                "user",
+                "please track the financial product outputs of a research agent yes",
+            ),
+            turn(
+                2,
+                "assistant",
+                "please track the financial product outputs of a research agent yes\nThe research agent output is now tracked.",
+            ),
+        ],
+    );
+    assert_eq!(
+        found
+            .iter()
+            .map(|turn| (
+                turn.turn,
+                turn.role.as_str(),
+                turn.anchor_start,
+                turn.anchor_end
+            ))
+            .collect::<Vec<_>>(),
+        vec![(1, "user", 1, 1), (2, "assistant", 3, 3)]
+    );
+
+    let assistant_only = locate_visible_turns(
+        &[line("❯ quoted syntax in an assistant answer", 8)],
+        &[turn(3, "assistant", "❯ quoted syntax in an assistant answer")],
+    );
+    assert_eq!(assistant_only[0].turn, 3);
+}
+
+#[test]
 fn compact_parent_turn_beats_approval_quoting_the_same_response() {
     let response = "Properties:\n- Every streamed write resets the quiet timer.\n- switchMap cancels the previous wait.\n- No polling.";
     let mut parent = turn(14, "assistant", response);

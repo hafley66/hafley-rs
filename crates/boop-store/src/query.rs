@@ -349,6 +349,28 @@ impl Store {
 
     /// Turns as typed rows, filtered like `query_turns`.
     pub fn turn_rows(&self, query: &TurnQuery) -> Result<Vec<TurnRow>> {
+        self.turn_rows_ordered(query, false, query.limit)
+    }
+
+    /// Read the newest matching turns without loading the older rows. The
+    /// result is returned in ascending session/turn order for callers that
+    /// render a bounded history chronologically.
+    pub fn turn_rows_recent(&self, query: &TurnQuery, limit: u64) -> Result<Vec<TurnRow>> {
+        anyhow::ensure!(
+            query.session.is_some(),
+            "recent turn rows require a session filter"
+        );
+        let mut rows = self.turn_rows_ordered(query, true, Some(limit))?;
+        rows.reverse();
+        Ok(rows)
+    }
+
+    fn turn_rows_ordered(
+        &self,
+        query: &TurnQuery,
+        descending: bool,
+        limit: Option<u64>,
+    ) -> Result<Vec<TurnRow>> {
         // Conditions are appended only when set. The earlier `(?n IS NULL OR
         // col = ?n)` form made SQLite SCAN all of agent_turn (518k rows) even
         // for a single-session read, since the planner cannot use the
@@ -398,9 +420,18 @@ impl Store {
                 opt_string(Some(&format!("{path}%"))),
             );
         }
-        sql.push_str(" ORDER BY t.session_id, t.turn");
+        sql.push_str(if descending {
+            " ORDER BY t.session_id DESC, t.turn DESC"
+        } else {
+            " ORDER BY t.session_id, t.turn"
+        });
+        if let Some(limit) = limit {
+            sql.push_str(" LIMIT ?");
+            values.push(rusqlite::types::Value::Integer(
+                i64::try_from(limit).unwrap_or(i64::MAX),
+            ));
+        }
         let mut statement = self.connection().prepare(&sql)?;
-        let limit = query.limit;
         let base = statement.query_map(rusqlite::params_from_iter(values.iter()), |row| {
             Ok(TurnRow {
                 session: row.get(0)?,
@@ -411,9 +442,7 @@ impl Store {
                 said: row.get(5)?,
             })
         })?;
-        let mut out = base.collect::<Result<Vec<_>, _>>()?;
-        out.truncate(limit.unwrap_or(u64::MAX) as usize);
-        Ok(out)
+        Ok(base.collect::<Result<Vec<_>, _>>()?)
     }
 
     /// The per-transcript resume cursor for each session: the harness, session
@@ -1072,6 +1101,126 @@ mod tests {
         drop(store);
         let _ = std::fs::remove_file(&db_path);
         let _ = std::fs::remove_file(&log_path);
+    }
+
+    #[test]
+    fn recent_turn_rows_bounds_before_materializing_and_restores_chronology() {
+        use crate::ident::TurnQuery;
+        use crate::session::SessionRef;
+        use std::io::Write;
+
+        let (store, db_path) = store();
+        let log_path = std::env::temp_dir().join(format!(
+            "boop_recent_user_{}_{}.jsonl",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        let mut file = std::fs::File::create(&log_path).unwrap();
+        for (index, text) in [(1, "first"), (2, "second"), (3, "third")] {
+            writeln!(
+                file,
+                r#"{{"type":"user","sessionId":"ses-recent","timestamp":"2026-08-01T00:00:0{index}.000Z","message":"{text}"}}"#
+            )
+            .unwrap();
+        }
+        writeln!(
+            file,
+            r#"{{"type":"assistant","sessionId":"ses-recent","timestamp":"2026-08-01T00:00:04.000Z","message":{{"content":[{{"type":"tool_use","name":"Read","input":{{"file_path":"/tmp/a.rs"}}}}]}}}}"#
+        )
+        .unwrap();
+        drop(file);
+        let session = SessionRef {
+            harness: HarnessId::Claude,
+            session_id: "ses-recent".to_owned(),
+            nickname: "ses-recent".to_owned(),
+            path: log_path.clone(),
+            cwd: Some("/w".to_owned()),
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        };
+        crate::ident::sync_session_with(&store, &session, None, 0, |store, session, cursor| {
+            crate::ident::project_transcript(store, session, cursor.offset)
+        })
+        .unwrap();
+
+        let other_path = std::env::temp_dir().join(format!(
+            "boop_recent_other_{}_{}.jsonl",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_nanos())
+                .unwrap_or(0)
+        ));
+        std::fs::write(
+            &other_path,
+            r#"{"type":"user","sessionId":"ses-other","timestamp":"2026-08-01T00:00:09.000Z","message":"other session"}
+"#,
+        )
+        .unwrap();
+        let other = SessionRef {
+            harness: HarnessId::Claude,
+            session_id: "ses-other".to_owned(),
+            nickname: "ses-other".to_owned(),
+            path: other_path.clone(),
+            cwd: Some("/w".to_owned()),
+            git_branch: None,
+            modified_ms: 0,
+            size: 0,
+            tmux: None,
+            tmux_socket: None,
+            parent: None,
+        };
+        store.project_discovered_session(&other).unwrap();
+        store
+            .write_turn("ses-other", 1, 9, "user", "other session", Some("/w"))
+            .unwrap();
+
+        let recent = |session: &str, limit| {
+            store
+                .turn_rows_recent(
+                    &TurnQuery {
+                        session: Some(session.to_owned()),
+                        role: Some("user".to_owned()),
+                        ..Default::default()
+                    },
+                    limit,
+                )
+                .unwrap()
+        };
+        let rows = recent("ses-recent", 2);
+        assert_eq!(
+            rows.iter()
+                .map(|row| (row.turn, row.said.as_str()))
+                .collect::<Vec<_>>(),
+            [(2, "second"), (3, "third")]
+        );
+        assert!(recent("ses-recent", 0).is_empty());
+        assert_eq!(
+            recent("ses-recent", 99)
+                .iter()
+                .map(|row| row.said.as_str())
+                .collect::<Vec<_>>(),
+            ["first", "second", "third"]
+        );
+        assert_eq!(
+            recent("ses-other", 99)
+                .iter()
+                .map(|row| row.said.as_str())
+                .collect::<Vec<_>>(),
+            ["other session"]
+        );
+
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
+        let _ = std::fs::remove_file(&log_path);
+        let _ = std::fs::remove_file(&other_path);
     }
 
     /// RECEIPT (Job 2). A live pid on an agent_live row carries nonzero rss_kb

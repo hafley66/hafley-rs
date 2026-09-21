@@ -197,6 +197,43 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
     Ok(())
 }
 
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_me_remind(count: u64) -> Result<()> {
+    anyhow::ensure!(count > 0, "remind count must be positive");
+
+    let dir = mail_dir(None)?;
+    let routes = bus::read_routes(&dir).unwrap_or_default();
+    let identity = identity::resolve_as(None);
+    let caller = identity
+        .session
+        .as_deref()
+        .context("no caller session resolved: no BOOP_SESSION stamp in this process")?;
+    let route = routes
+        .get(caller)
+        .with_context(|| format!("caller session {caller} is not tracked"))?;
+    let session = route
+        .session_id
+        .as_deref()
+        .with_context(|| format!("caller route {caller} has no bound native conversation"))?
+        .to_owned();
+    let store = open_store()?;
+    let rows = store.turn_rows_recent(
+        &ident::TurnQuery {
+            session: Some(session.clone()),
+            role: Some("user".to_owned()),
+            ..Default::default()
+        },
+        count,
+    )?;
+    anyhow::ensure!(!rows.is_empty(), "session {session} has no user messages");
+    for row in rows {
+        line(&format!("[user turn {}]", row.turn));
+        line(&row.said);
+        line("");
+    }
+    Ok(())
+}
+
 /// Read or write the caller's mood. Writing validates the name against the
 /// stored moods, so a typo never reaches a delivery path.
 pub(crate) fn run_me_mood(
@@ -491,5 +528,12 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn remind_reads_a_positive_message_count() {
+        let cli = Cli::try_parse_from(["boop", "remind", "3"])
+            .expect("caller-relative reminder command parses");
+        assert!(matches!(cli.command, Some(SubCmd::Remind { count: 3 })));
     }
 }
