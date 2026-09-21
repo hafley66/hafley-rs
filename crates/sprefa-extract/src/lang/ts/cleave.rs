@@ -1,4 +1,4 @@
-//! The TypeScript `Mutate` arm: the only file on a cleave's path that names a
+//! The TypeScript `Cleave` arm: the only file on a cleave's path that names a
 //! TypeScript node kind, a `./` specifier or the `export` keyword. The planner
 //! reads fact rows and asks here for the three spellings no fact carries.
 //! @comment-ok: module header, the seam list every lang arm opens with

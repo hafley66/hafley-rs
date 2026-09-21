@@ -1,6 +1,6 @@
 //! `ryi cleave <SRC>#<ITEM> <DEST>`: one item leaves SRC and lands in DEST,
 //! carrying the specifiers it needs and respelling every importer. The plan is
-//! fact rows only; the `Mutate` roster spells the three edits they cannot.
+//! fact rows only; the `Cleave` roster spells the three edits they cannot.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
 use std::collections::{BTreeMap, BTreeSet};

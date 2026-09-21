@@ -1,4 +1,4 @@
-//! The Rust `Mutate` arm: the only file on a cleave's path that names a Rust
+//! The Rust `Cleave` arm: the only file on a cleave's path that names a Rust
 //! node kind, the `pub` keyword or a `crate::` path. The planner reads fact
 //! rows and asks here for the three spellings no fact carries.
 //! @comment-ok: module header, the seam list every lang arm opens with
