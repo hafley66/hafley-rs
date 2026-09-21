@@ -160,8 +160,9 @@ The two sink rows, compared against each other:
 | all TEXT | 80000 | 3305472 | 66.11, 66.24, 67.03 |
 
 The dictionary keeps the disk to about half and loses about ten milliseconds of
-the drain wall at this volume, against an off wall of about six. It stays, because repeating a key once per row is
-denormalization and the design law forbids the control shape.
+the drain wall at this volume, against an off wall of about six. It stays,
+because repeating a key once per row is denormalization and the design law
+forbids the control shape.
 
 What this means for a host: turn a layer on when its question is worth a
 multiple of the event path. The formatter and the usage record are the cheap
