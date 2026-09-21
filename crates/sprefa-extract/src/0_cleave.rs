@@ -4,16 +4,22 @@
 //! the soopy stages and the verify rollback are `move`'s, reused as they are.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
-use sprefa_extract::move_stage::state_root;
+use sprefa_extract::move_stage::{
+    content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
+    VerifyJournal,
+};
 use sprefa_extract::types::{CleaveDrag, CleavePlan, CleaveSpecifier};
 use sprefa_extract::{
-    dirname, dispatch, flatten_each, normalize, relative_between, resolve_project, FamilyMask,
-    FamilyTag, FlatFact, MoveCx, ResolveArms, ResolveRequest, ScipMode, ScipRecords, Span,
+    directory_path, directory_source, dirname, dispatch, flatten_each, normalize,
+    relative_between, replace_action, resolve_project, FamilyMask, FamilyTag, FlatFact, MoveCx,
+    ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
 };
+
+const PRODUCER: &str = "extract-cleave";
 
 /// The out-of-scope list the help text states, so a caller reads it before the
 /// run rather than after.
@@ -108,7 +114,7 @@ where
         );
     }
     let plan = Plan::build(&cli)?;
-    let _state = state_root(cli.state.as_deref())?;
+    let state = state_root(cli.state.as_deref())?;
 
     println!("root {}", plan.root.display());
     println!(
@@ -144,10 +150,88 @@ where
     for caller in &plan.rows.callers {
         println!("caller {caller}");
     }
+
+    let stages = plan.stages()?;
+    match cli.commit {
+        true => {
+            let journal = VerifyJournal::capture(
+                &plan.root,
+                &[],
+                &plan.created(),
+                &plan.touched(),
+            )?;
+            for stage in &stages {
+                let (id, previews) =
+                    stage_and_commit(&plan.root, &state, stage, soopy::Durability::Durable)?;
+                print_previews(&previews, "");
+                println!("stage {id} committed");
+            }
+            verify_after_commit(&plan, &state, cli.verify.as_deref(), &journal)?;
+        }
+        false => {
+            let mirror = Mirror::build(&plan.root, &stages)?;
+            for stage in &stages {
+                let (id, previews) =
+                    stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
+                print_previews(&previews, "");
+                println!("stage {id} dry run, tree untouched");
+            }
+        }
+    }
+    if cli.text_refs {
+        report_text_refs(&plan);
+    }
     if cli.json {
         println!("{}", plan_json(&plan.rows));
     }
     Ok(())
+}
+
+/// Keep-if-pass: a non-zero or timed-out checker walks every touched path back
+/// to its pre-run bytes, deletes the DEST this run created, and exits 3.
+fn verify_after_commit(
+    plan: &Plan,
+    state: &Path,
+    command: Option<&str>,
+    journal: &VerifyJournal,
+) -> Result<(), String> {
+    let Some(command) = command else {
+        return Ok(());
+    };
+    match run_verify_command(&plan.root, command)? {
+        Some(0) => println!("verify ok"),
+        code => {
+            let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
+            let count = journal.restore(&plan.root, state, &[])?;
+            println!("verify failed (rc={reason}): rolled back {count} files");
+            std::process::exit(3);
+        }
+    }
+    Ok(())
+}
+
+/// Lines naming the item in files no plan edit covers. Rewriting text carriers
+/// is out of scope for `move` and for this verb; the scan only names them.
+fn report_text_refs(plan: &Plan) {
+    let edited: BTreeSet<String> = plan.touched().into_iter().collect();
+    for rel in plan.cx.files() {
+        if is_ts(rel) || edited.contains(rel) {
+            continue;
+        }
+        let Some(text) = plan.cx.text(rel) else {
+            continue;
+        };
+        for (index, line) in text.lines().enumerate() {
+            if line.contains(&plan.rows.item) {
+                println!(
+                    "text-ref {rel}:{} {} -> {}",
+                    index + 1,
+                    plan.rows.src,
+                    plan.rows.dest
+                );
+            }
+        }
+    }
 }
 
 fn plan_json(rows: &CleavePlan) -> String {
@@ -183,7 +267,14 @@ fn plan_json(rows: &CleavePlan) -> String {
 /// One cleave, planned whole before a byte moves.
 struct Plan {
     root: PathBuf,
+    cx: MoveCx,
     rows: CleavePlan,
+    source: FileView,
+    /// None when DEST does not exist yet and this run creates it.
+    dest_view: Option<FileView>,
+    /// The item text, and each dragged helper's, in SRC byte order.
+    moving_text: Vec<String>,
+    callers: Vec<FileView>,
 }
 
 impl Plan {
@@ -220,6 +311,7 @@ impl Plan {
         if !unresolved.is_empty() {
             return Ok(Plan {
                 root,
+                cx,
                 rows: CleavePlan {
                     src,
                     dest,
@@ -229,6 +321,10 @@ impl Plan {
                     unresolved,
                     ..CleavePlan::default()
                 },
+                source,
+                dest_view: None,
+                moving_text: Vec::new(),
+                callers: Vec::new(),
             });
         }
 
@@ -289,8 +385,18 @@ impl Plan {
         }
 
         let callers = callers_of(&cx, &root, &src, &item)?;
+        let mut views = Vec::with_capacity(callers.len());
+        for caller in &callers {
+            views.push(FileView::open(&cx, caller)?);
+        }
+        moving.sort_by_key(|span| span.start);
+        let moving_text = moving
+            .iter()
+            .map(|span| source.slice(*span).to_string())
+            .collect();
         Ok(Plan {
             root,
+            cx,
             rows: CleavePlan {
                 src,
                 dest,
@@ -303,8 +409,305 @@ impl Plan {
                 drag_iterations,
                 unresolved,
             },
+            source,
+            dest_view,
+            moving_text,
+            callers: views,
         })
     }
+
+    /// Every byte this cleave rewrites, as one `Respell` per span, in (file,
+    /// offset) order. Nothing here touches the tree; the stages do.
+    fn respells(&self) -> Vec<Respell> {
+        let mut out = self.source_respells();
+        out.extend(self.dest_respells());
+        out.extend(self.caller_respells());
+        out.sort_by(|left, right| {
+            left.file
+                .cmp(&right.file)
+                .then(left.span.start.cmp(&right.span.start))
+        });
+        out
+    }
+
+    /// SRC loses the moving spans and every specifier nothing left references.
+    fn source_respells(&self) -> Vec<Respell> {
+        let mut cuts: Vec<Span> = Vec::new();
+        cuts.push(self.rows.item_span);
+        cuts.extend(self.rows.dragged.iter().map(|row| row.span));
+        let orphaned: BTreeSet<&str> = self
+            .rows
+            .orphans
+            .iter()
+            .map(|row| row.name.as_str())
+            .collect();
+        let mut trims: Vec<Respell> = Vec::new();
+        for statement in &self.source.imports {
+            let kept: Vec<&(String, Span)> = statement
+                .names
+                .iter()
+                .filter(|(name, _)| !orphaned.contains(name.as_str()))
+                .collect();
+            if kept.len() == statement.names.len() {
+                continue;
+            }
+            if kept.is_empty() {
+                cuts.push(statement.span);
+                continue;
+            }
+            for (index, (name, span)) in statement.names.iter().enumerate() {
+                if !orphaned.contains(name.as_str()) {
+                    continue;
+                }
+                trims.push(Respell {
+                    file: self.rows.src.clone(),
+                    span: separator_cut(statement, index, *span),
+                    text: String::new(),
+                    receipt: None,
+                });
+            }
+        }
+        let mut out: Vec<Respell> = absorb(&self.source.text, cuts)
+            .into_iter()
+            .map(|span| Respell {
+                file: self.rows.src.clone(),
+                span,
+                text: String::new(),
+                receipt: None,
+            })
+            .collect();
+        out.extend(trims);
+        out
+    }
+
+    /// DEST gains the travelling specifiers it does not already carry, then the
+    /// moving text. A DEST this run creates gets both as its whole content.
+    fn dest_respells(&self) -> Vec<Respell> {
+        let Some(view) = self.dest_view.as_ref() else {
+            return Vec::new();
+        };
+        let mut out = Vec::new();
+        let imports = self.import_block();
+        if !imports.is_empty() {
+            let at = view
+                .imports
+                .iter()
+                .map(|statement| statement.span.end())
+                .max()
+                .unwrap_or(0);
+            out.push(Respell {
+                file: self.rows.dest.clone(),
+                span: Span::anchor(at),
+                text: imports,
+                receipt: None,
+            });
+        }
+        out.push(Respell {
+            file: self.rows.dest.clone(),
+            span: Span::anchor(view.text.len() as u32),
+            text: format!("\n{}", self.moving_text.join("\n")),
+            receipt: None,
+        });
+        out
+    }
+
+    /// The import lines DEST gains, one per module, in SRC order.
+    fn import_block(&self) -> String {
+        let mut per_module: Vec<(String, Vec<String>)> = Vec::new();
+        for row in &self.rows.travelling {
+            if row.kind == "carried" {
+                continue;
+            }
+            match per_module
+                .iter_mut()
+                .find(|(module, _)| *module == row.dest_module)
+            {
+                Some((_, names)) => names.push(row.name.clone()),
+                None => per_module.push((row.dest_module.clone(), vec![row.name.clone()])),
+            }
+        }
+        per_module
+            .into_iter()
+            .map(|(module, names)| format!("import {{ {} }} from \"{module}\";\n", names.join(", ")))
+            .collect()
+    }
+
+    /// Every importer of `SRC#ITEM` re-aimed at DEST. A specifier binding other
+    /// names is split; one binding only the item has its module rewritten.
+    fn caller_respells(&self) -> Vec<Respell> {
+        let mut out = Vec::new();
+        for (rel, view) in self.rows.callers.iter().zip(&self.callers) {
+            let spelling = spell_relative(dirname(rel), &self.rows.dest);
+            for statement in &view.imports {
+                if !aims_at(rel, &statement.module, &self.rows.src) {
+                    continue;
+                }
+                let Some(index) = statement
+                    .names
+                    .iter()
+                    .position(|(name, _)| *name == self.rows.item)
+                else {
+                    continue;
+                };
+                let quote = view.slice(statement.module_span).chars().next().unwrap_or('"');
+                if statement.names.len() == 1 {
+                    out.push(Respell {
+                        file: rel.clone(),
+                        span: statement.module_span,
+                        text: format!("{quote}{spelling}{quote}"),
+                        receipt: Some(format!("caller {rel}: {} -> {spelling}", statement.module)),
+                    });
+                    continue;
+                }
+                let (_, span) = statement.names[index];
+                out.push(Respell {
+                    file: rel.clone(),
+                    span: separator_cut(statement, index, span),
+                    text: String::new(),
+                    receipt: None,
+                });
+                out.push(Respell {
+                    file: rel.clone(),
+                    span: Span::anchor(statement.span.end()),
+                    text: format!(
+                        "import {{ {} }} from {quote}{spelling}{quote};\n",
+                        self.rows.item
+                    ),
+                    receipt: Some(format!("caller {rel}: {} split", self.rows.item)),
+                });
+            }
+        }
+        out
+    }
+
+    /// One soopy stage of Replace actions, plus a Create stage when DEST is new.
+    fn stages(&self) -> Result<Vec<Vec<soopy::SourceAction>>, String> {
+        let identity = soopy::SourceRoot::open_directory(&self.root)
+            .map_err(|error| format!("open root {}: {error}", self.root.display()))?
+            .directory()
+            .identity
+            .clone();
+        let producer = soopy::ActionProducer::unordered(PRODUCER);
+        let mut by_file: BTreeMap<String, Vec<soopy::TextEdit>> = BTreeMap::new();
+        for respell in self.respells() {
+            let source = directory_source(&identity, &respell.file);
+            let start = respell.span.start as u64;
+            by_file
+                .entry(respell.file)
+                .or_default()
+                .push(soopy::TextEdit {
+                    range: soopy::ActionSpan {
+                        source,
+                        start,
+                        end: start + respell.span.len as u64,
+                    },
+                    replacement: respell.text.into_bytes(),
+                    producer: producer.clone(),
+                });
+        }
+        let mut edits: Vec<soopy::SourceAction> = Vec::new();
+        for (rel, file_edits) in by_file {
+            let source = directory_source(&identity, &rel);
+            edits.push(replace_action(
+                source,
+                content_id(&self.root, &rel)?,
+                file_edits,
+            ));
+        }
+        let mut stages = Vec::new();
+        if !edits.is_empty() {
+            stages.push(edits);
+        }
+        if self.dest_view.is_none() {
+            stages.push(vec![soopy::SourceAction::Create {
+                path: directory_path(&self.rows.dest),
+                bytes: format!("{}\n{}", self.import_block(), self.moving_text.join("\n"))
+                    .into_bytes(),
+            }]);
+        }
+        Ok(stages)
+    }
+
+    /// Every path a stage reads or writes, so a verify rollback can restore it.
+    fn touched(&self) -> Vec<String> {
+        let mut out: BTreeSet<String> = BTreeSet::new();
+        out.insert(self.rows.src.clone());
+        if self.dest_view.is_some() {
+            out.insert(self.rows.dest.clone());
+        }
+        out.extend(self.rows.callers.iter().cloned());
+        out.into_iter().collect()
+    }
+
+    /// The paths this run creates. A rollback deletes them, as it does a shim.
+    fn created(&self) -> Vec<String> {
+        match self.dest_view.is_none() {
+            true => vec![self.rows.dest.clone()],
+            false => Vec::new(),
+        }
+    }
+}
+
+/// The bytes a named import loses when one of its names goes: the name plus the
+/// separator that joined it to the one after, or to the one before when last.
+fn separator_cut(statement: &ImportStatement, index: usize, span: Span) -> Span {
+    if let Some((_, next)) = statement.names.get(index + 1) {
+        return Span {
+            start: span.start,
+            len: next.start - span.start,
+        };
+    }
+    match index.checked_sub(1).and_then(|at| statement.names.get(at)) {
+        Some((_, previous)) => Span {
+            start: previous.end(),
+            len: span.end() - previous.end(),
+        },
+        None => span,
+    }
+}
+
+/// Whether `module`, as `caller` writes it, names `src`.
+fn aims_at(caller: &str, module: &str, src: &str) -> bool {
+    if !module.starts_with('.') {
+        return false;
+    }
+    let target = sprefa_extract::join_rel(dirname(caller), module);
+    let src = drop_extension(src);
+    target == src || target == format!("{src}/index")
+}
+
+/// Line-aligned cuts merged, then widened over the blank lines they orphan:
+/// forward always, and backward when the cut now runs to the end of the file.
+fn absorb(text: &str, mut cuts: Vec<Span>) -> Vec<Span> {
+    cuts.sort_by_key(|span| span.start);
+    let bytes = text.as_bytes();
+    let mut merged: Vec<Span> = Vec::new();
+    for cut in cuts {
+        match merged.last_mut() {
+            Some(last) if cut.start <= last.end() => {
+                let end = last.end().max(cut.end());
+                last.len = end - last.start;
+            }
+            _ => merged.push(cut),
+        }
+    }
+    for cut in &mut merged {
+        let mut end = cut.end() as usize;
+        while end < bytes.len() && bytes[end] == b'\n' {
+            end += 1;
+        }
+        cut.len = end as u32 - cut.start;
+        if end < bytes.len() {
+            continue;
+        }
+        let mut start = cut.start as usize;
+        while start > 0 && bytes[start - 1] == b'\n' && (start < 2 || bytes[start - 2] == b'\n') {
+            start -= 1;
+        }
+        cut.len = end as u32 - start as u32;
+        cut.start = start as u32;
+    }
+    merged
 }
 
 /// Every file importing `src#item`, in path order. `resolved_import` carries
@@ -589,6 +992,13 @@ impl FileView {
             bindings,
             sites,
         }
+    }
+
+    /// The file's bytes under `span`, empty when the span is off the end.
+    fn slice(&self, span: Span) -> &str {
+        self.text
+            .get(span.start as usize..span.end() as usize)
+            .unwrap_or_default()
     }
 
     /// Occurrences of `name` inside any of `spans`.

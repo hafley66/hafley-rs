@@ -86,7 +86,7 @@ fn digest(root: &Path) -> BTreeMap<String, Vec<u8>> {
     out
 }
 
-fn cleave(fixture: &Fixture, args: &[&str]) -> String {
+fn run_cleave(fixture: &Fixture, args: &[&str]) -> (Option<i32>, String) {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("cleave")
         .args(args)
@@ -99,12 +99,32 @@ fn cleave(fixture: &Fixture, args: &[&str]) -> String {
         .env("RUST_LOG", "sprefa_extract=debug")
         .output()
         .expect("cleave binary runs");
-    assert!(
-        output.status.success(),
-        "cleave {args:?} failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).expect("cleave stdout is UTF-8")
+    (
+        output.status.code(),
+        String::from_utf8(output.stdout).expect("cleave stdout is UTF-8"),
+    )
+}
+
+fn cleave(fixture: &Fixture, args: &[&str]) -> String {
+    let (code, stdout) = run_cleave(fixture, args);
+    assert_eq!(code, Some(0), "cleave {args:?} exited {code:?}:\n{stdout}");
+    stdout
+}
+
+/// `import` lines in one root-relative file.
+fn import_lines(fixture: &Fixture, rel: &str) -> usize {
+    std::fs::read_to_string(fixture.root.join(rel))
+        .expect("read fixture file")
+        .lines()
+        .filter(|line| line.starts_with("import "))
+        .count()
+}
+
+fn occurrences(fixture: &Fixture, rel: &str, needle: &str) -> usize {
+    std::fs::read_to_string(fixture.root.join(rel))
+        .expect("read fixture file")
+        .matches(needle)
+        .count()
 }
 
 /// The one `cleave_plan` line `--json` closes with.
@@ -168,4 +188,73 @@ fn plan_partitions_the_three_file_step_trace() {
 
     assert_eq!(before, digest(&fixture.root), "a dry run writes no byte");
     assert!(trace_spans(&fixture) > 0, "the run emitted no chrome spans");
+}
+
+#[test]
+fn commit_moves_the_item_and_its_imports() {
+    let fixture = fixture("basic", "commit");
+    assert_eq!(import_lines(&fixture, "src/util.ts"), 3);
+    assert_eq!(import_lines(&fixture, "src/config.ts"), 1);
+    assert_eq!(import_lines(&fixture, "src/app.ts"), 1);
+
+    cleave(
+        &fixture,
+        &["src/util.ts#loadConfig", "src/config.ts", "--commit"],
+    );
+
+    assert_eq!(import_lines(&fixture, "src/util.ts"), 0, "3 imports left");
+    assert_eq!(import_lines(&fixture, "src/config.ts"), 3, "2 imports came");
+    assert_eq!(import_lines(&fixture, "src/app.ts"), 2, "1 import came");
+    assert_eq!(
+        occurrences(&fixture, "src/config.ts", "node:path"),
+        1,
+        "config.ts already carried join"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/util.ts")).unwrap(),
+        "export function slug(raw: string): string { return raw.toLowerCase(); }\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/app.ts")).unwrap(),
+        "import { slug } from \"./util\";\n\
+         import { loadConfig } from \"./config\";\n\
+         export function boot(dir: string) { return slug(loadConfig(dir)); }\n"
+    );
+}
+
+#[test]
+fn a_missing_destination_is_created_with_every_specifier() {
+    let fixture = fixture("basic", "create");
+    cleave(
+        &fixture,
+        &["src/util.ts#loadConfig", "src/loader.ts", "--commit"],
+    );
+    assert_eq!(import_lines(&fixture, "src/loader.ts"), 3);
+    assert_eq!(
+        occurrences(&fixture, "src/app.ts", "\"./loader\""),
+        1,
+        "the caller aims at the new file"
+    );
+}
+
+#[test]
+fn a_failed_verify_rolls_all_three_files_back() {
+    let fixture = fixture("basic", "verify");
+    let before = digest(&fixture.root);
+    let (code, stdout) = run_cleave(
+        &fixture,
+        &[
+            "src/util.ts#loadConfig",
+            "src/config.ts",
+            "--commit",
+            "--verify",
+            "exit 1",
+        ],
+    );
+    assert_eq!(code, Some(3), "a failed verify exits 3:\n{stdout}");
+    assert!(
+        stdout.contains("verify failed (rc=1): rolled back 3 files"),
+        "no rollback receipt:\n{stdout}"
+    );
+    assert_eq!(before, digest(&fixture.root), "the rollback left a byte");
 }
