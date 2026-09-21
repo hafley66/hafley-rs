@@ -432,7 +432,7 @@ $ git diff --stat origin/main...HEAD
  Cargo.lock                                         | 553 +++++++++++++++++++-
  crates/hafley-observe/Cargo.toml                   |  49 +-
  .../PLANS/2026-09-21-watch-the-watchman.md         | 494 ++++++++++++++++++
- ...6-09-21-watch-the-watchman.visual.human.unga.md | 178 +++++++
+ ...6-09-21-watch-the-watchman.visual.human.unga.md | 179 +++++++
  crates/hafley-observe/PLANS/watch-the-watchman.tsv |  37 ++
  crates/hafley-observe/bench/watch_the_watchman.rs  | 298 +++++++++++
  crates/hafley-observe/bench/watch_the_watchman.sh  | 192 +++++++
@@ -457,7 +457,7 @@ $ git diff --stat origin/main...HEAD
  .../tests/sqlite_statement_counters.rs             |   2 +
  docs/failure-modes.md                              |  40 ++
  justfile                                           |   6 +
- 28 files changed, 3866 insertions(+), 61 deletions(-)
+ 28 files changed, 3867 insertions(+), 61 deletions(-)
 ```
 
 Every path is owned by this lane: `crates/hafley-observe` (sources, manifest,
