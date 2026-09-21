@@ -431,7 +431,7 @@ construction: this lane's diff touches one crate, one recipe and one doc.
 $ git diff --stat origin/main...HEAD
  Cargo.lock                                         | 553 +++++++++++++++++++-
  crates/hafley-observe/Cargo.toml                   |  49 +-
- .../PLANS/2026-09-21-watch-the-watchman.md         | 493 ++++++++++++++++++
+ .../PLANS/2026-09-21-watch-the-watchman.md         | 494 ++++++++++++++++++
  ...6-09-21-watch-the-watchman.visual.human.unga.md | 178 +++++++
  crates/hafley-observe/PLANS/watch-the-watchman.tsv |  37 ++
  crates/hafley-observe/bench/watch_the_watchman.rs  | 298 +++++++++++
