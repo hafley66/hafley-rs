@@ -1,7 +1,12 @@
+//! The scope graph behind the phase-5 join: nodes, edges and one recursive SQL
+//! walk. Never on the per-file family path.
+
 use rusqlite::{params, Connection};
 
-use crate::{LabError, NodeKind};
+use super::scip_scm::ScipScmError;
 
+/// The lab's resolver, verbatim: a push/pop symbol stack walked over the graph,
+/// answering with every definition reachable on a balanced path.
 pub const RESOLVE_SQL: &str = r#"
 WITH RECURSIVE walk(id, stack, depth, seen) AS (
     SELECT ?1, '', 0, printf(',%d,', ?1)
@@ -31,12 +36,41 @@ SELECT node.id, node.sym, node.blob, node.span_start, node.span_end, walk.depth
  ORDER BY walk.depth, node.blob, node.span_start
 "#;
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NodeKind {
+    Root,
+    Scope,
+    Def,
+    Ref,
+    Push,
+    Pop,
+    Export,
+    Import,
+}
+
+impl NodeKind {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Root => "root",
+            Self::Scope => "scope",
+            Self::Def => "def",
+            Self::Ref => "ref",
+            Self::Push => "push",
+            Self::Pop => "pop",
+            Self::Export => "export",
+            Self::Import => "import",
+        }
+    }
+}
+
+/// One invocation's graph. In memory, dropped with the walk that built it: the
+/// crate keeps no database between runs.
 pub struct Store {
     pub db: Connection,
 }
 
 impl Store {
-    pub fn memory() -> Result<Self, LabError> {
+    pub fn memory() -> Result<Self, ScipScmError> {
         let db = Connection::open_in_memory().map_err(sql)?;
         db.execute_batch(
             "CREATE TABLE node(
@@ -62,7 +96,7 @@ impl Store {
         blob: &str,
         start: u32,
         end: u32,
-    ) -> Result<i64, LabError> {
+    ) -> Result<i64, ScipScmError> {
         self.db
             .execute(
                 "INSERT INTO node(kind,sym,blob,span_start,span_end) VALUES(?1,?2,?3,?4,?5)",
@@ -72,7 +106,7 @@ impl Store {
         Ok(self.db.last_insert_rowid())
     }
 
-    pub fn edge(&self, src: i64, dst: i64) -> Result<(), LabError> {
+    pub fn edge(&self, src: i64, dst: i64) -> Result<(), ScipScmError> {
         self.db
             .execute(
                 "INSERT OR IGNORE INTO edge(src,dst) VALUES(?1,?2)",
@@ -82,17 +116,16 @@ impl Store {
         Ok(())
     }
 
-    pub fn resolve(&self, reference: i64) -> Result<Vec<(String, String, u32, u32)>, LabError> {
+    /// Every definition the reference reaches on a balanced path, nearest first.
+    pub fn resolve(&self, reference: i64) -> Result<Vec<(String, String)>, ScipScmError> {
         let mut statement = self.db.prepare(RESOLVE_SQL).map_err(sql)?;
         let rows = statement
-            .query_map([reference], |row| {
-                Ok((row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
-            })
+            .query_map([reference], |row| Ok((row.get(1)?, row.get(2)?)))
             .map_err(sql)?;
         rows.collect::<Result<Vec<_>, _>>().map_err(sql)
     }
 }
 
-fn sql(error: rusqlite::Error) -> LabError {
-    LabError::Sql(error.to_string())
+fn sql(error: rusqlite::Error) -> ScipScmError {
+    ScipScmError::Sql(error.to_string())
 }

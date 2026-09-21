@@ -1,3 +1,4 @@
+; @comment-ok: the vendored MPL-2.0 header below travels with the file.
 ; Vendored and inheritance-expanded from:
 ; https://github.com/helix-editor/helix/blob/079a789e8cb08ead67f19e1971a1b7438b37354b/runtime/queries/typescript/locals.scm
 ; https://github.com/helix-editor/helix/blob/079a789e8cb08ead67f19e1971a1b7438b37354b/runtime/queries/_typescript/locals.scm
@@ -23,36 +24,34 @@
   (finally_clause)
 ] @local.scope
 
-; Definitions from _typescript and ecma.
-(type_parameter
-  name: (type_identifier) @local.definition.type.parameter)
-
-(required_parameter
-  (identifier) @local.definition.variable.parameter)
-
-(optional_parameter
-  (identifier) @local.definition.variable.parameter)
-
-(arrow_function
-  parameter: (identifier) @local.definition.variable.parameter)
+; Definitions from _typescript and ecma. The outer capture is the span L1
+; selects; the inner captures carry the helix vocabulary.
+[
+  (type_parameter
+    name: (type_identifier) @local.definition.type.parameter)
+  (required_parameter
+    (identifier) @local.definition.variable.parameter)
+  (optional_parameter
+    (identifier) @local.definition.variable.parameter)
+  (arrow_function
+    parameter: (identifier) @local.definition.variable.parameter)
+  (function_declaration
+    name: (identifier) @local.definition.function)
+  (method_definition
+    name: (property_identifier) @local.definition.function)
+  (class_declaration
+    name: (type_identifier) @local.definition.type)
+  (variable_declarator
+    name: (identifier) @local.definition.variable)
+] @local.def.span
 
 ; References from _typescript and ecma.
-(type_identifier) @local.reference
-(identifier) @local.reference
+[
+  (type_identifier)
+  (identifier)
+] @local.reference
 
-; Local extensions: declarations, calls, imports, and exports.
-(function_declaration
-  name: (identifier) @local.definition.function)
-
-(method_definition
-  name: (property_identifier) @local.definition.function)
-
-(class_declaration
-  name: (type_identifier) @local.definition.type)
-
-(variable_declarator
-  name: (identifier) @local.definition.variable)
-
+; Call sites, under the same outer span capture as the definitions.
 [
   (call_expression
     function: (identifier) @local.call)
@@ -61,7 +60,7 @@
       property: (property_identifier) @local.call))
   (new_expression
     constructor: (identifier) @local.call)
-]
+] @local.site.span
 
 (import_statement) @local.import
 (export_statement) @local.export.package

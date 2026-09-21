@@ -381,7 +381,8 @@
           "unresolved",
           "parse",
           "checker_walk",
-          "foreign"
+          "foreign",
+          "scm_scope"
         ]
       }
     ]
@@ -5265,6 +5266,252 @@
           "iface"
         ],
         "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "scip_scm_symbol",
+    "table": "scip_scm_symbol",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "scip_scm_symbol"
+      },
+      {
+        "name": "symbol",
+        "path": [
+          "symbol"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "kind",
+        "path": [
+          "kind"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "scip_scm_occurrence",
+    "table": "scip_scm_occurrence",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "scip_scm_occurrence"
+      },
+      {
+        "name": "symbol",
+        "path": [
+          "symbol"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "start",
+        "path": [
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "end",
+        "path": [
+          "end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "role",
+        "path": [
+          "role"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "scip_scm_local",
+    "table": "scip_scm_local",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "scip_scm_local"
+      },
+      {
+        "name": "fn",
+        "path": [
+          "fn"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "path": [
+          "name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "start",
+        "path": [
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "end",
+        "path": [
+          "end"
+        ],
+        "kind": "uint32",
         "optional": false,
         "nullable": false
       }

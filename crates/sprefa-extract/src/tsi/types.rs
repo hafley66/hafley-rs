@@ -101,6 +101,8 @@ pub enum Method {
     CheckerWalk,
     /// The row arrived through the reverse door.
     Foreign,
+    /// A `.scm` scope graph answered, lexically.
+    ScmScope,
 }
 
 /// `coverage` is a two-valued word, not a boolean: `partial` and `complete`

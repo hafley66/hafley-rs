@@ -1695,6 +1695,9 @@ pub enum ResolutionOrigin {
     /// No leg answered; the edge carries a placeholder target, which the flat
     /// wire then drops. Type-edge candidates are the only minters.
     Unresolved,
+    /// The `.scm` scope graph answered: a lexical push/pop walk over the
+    /// captures, with no type and no compiler. Emitted off the family path.
+    ScmScope,
 }
 
 impl ResolutionOrigin {
@@ -1714,6 +1717,7 @@ impl ResolutionOrigin {
             ResolutionOrigin::ReturnCall => "return_call",
             ResolutionOrigin::Scip => "scip",
             ResolutionOrigin::Unresolved => "unresolved",
+            ResolutionOrigin::ScmScope => "scm_scope",
         }
     }
 
@@ -1736,6 +1740,7 @@ impl ResolutionOrigin {
             ResolutionOrigin::ReturnCall => Method::ReturnCall,
             ResolutionOrigin::Scip => Method::Scip,
             ResolutionOrigin::Unresolved => Method::Unresolved,
+            ResolutionOrigin::ScmScope => Method::ScmScope,
         }
     }
 }
@@ -3650,6 +3655,35 @@ pub enum FlatFact {
         #[serde(rename = "impl")]
         implementor: String,
         iface: String,
+    },
+    /// `scip_scm_symbol(symbol, path, kind)`: one definition a `.scm` query
+    /// captured, `kind` being the capture label's tail (`function`, `variable`).
+    #[serde(rename = "scip_scm_symbol")]
+    ScipScmSymbolRow {
+        symbol: String,
+        path: String,
+        kind: String,
+    },
+    /// `scip_scm_occurrence(symbol, path, start, end, role)`: `role` is `def`
+    /// at the defining span, `ref` at one the file's scope tree resolved to it.
+    #[serde(rename = "scip_scm_occurrence")]
+    ScipScmOccurrenceRow {
+        symbol: String,
+        path: String,
+        start: u32,
+        end: u32,
+        role: String,
+    },
+    /// `scip_scm_local(fn, name, path, start, end)`: a binding the document does
+    /// not export, attributed to its enclosing callable. File-private fns too.
+    #[serde(rename = "scip_scm_local")]
+    ScipScmLocalRow {
+        #[serde(rename = "fn")]
+        enclosing_fn: String,
+        name: String,
+        path: String,
+        start: u32,
+        end: u32,
     },
     /// The `scip` family's index header: which tool answered, and whether an
     /// index already on disk was reused or one was built. Self-diagnosis on the

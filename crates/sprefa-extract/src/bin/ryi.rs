@@ -29,7 +29,7 @@ use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, diet_scip_with_raw,
     dispatch, file_fact, file_fact_with_content_id, flatten_cfg_each, flatten_each,
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl, query_patterns,
-    resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
+    resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl, scip_scm_facts,
     scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
     size_skip_fact, source_for, AstPatternQuery, FamilyMask, FlatFact, IndexBudget, ResolveArms,
     ResolveRequest, ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
@@ -313,6 +313,8 @@ enum FamilyMode {
     Scip,
     /// The tree-sitter + heuristic resolve pass over the supplied paths.
     DietScip,
+    /// Pass 1 of the SCIP shape from a per-language `.scm` query, per file.
+    ScipScm,
 }
 
 #[derive(Clone, Copy)]
@@ -385,6 +387,7 @@ fn family_mode(families: Option<&[String]>) -> Result<Option<FamilyMode>, String
     let mode = named.iter().find_map(|name| match *name {
         "scip" => Some(FamilyMode::Scip),
         "diet_scip" => Some(FamilyMode::DietScip),
+        "scip_scm" => Some(FamilyMode::ScipScm),
         _ => None,
     });
     let Some(mode) = mode else {
@@ -393,7 +396,7 @@ fn family_mode(families: Option<&[String]>) -> Result<Option<FamilyMode>, String
     let mode_names: Vec<&str> = named
         .iter()
         .copied()
-        .filter(|name| matches!(*name, "scip" | "diet_scip"))
+        .filter(|name| matches!(*name, "scip" | "diet_scip" | "scip_scm"))
         .collect();
     if mode_names.len() > 1 {
         return Err(format!(
@@ -405,7 +408,7 @@ fn family_mode(families: Option<&[String]>) -> Result<Option<FamilyMode>, String
     let extras: Vec<&str> = named
         .iter()
         .copied()
-        .filter(|name| !matches!(*name, "scip" | "diet_scip"))
+        .filter(|name| !matches!(*name, "scip" | "diet_scip" | "scip_scm"))
         .collect();
     if !extras.is_empty() {
         return Err(format!(
@@ -465,6 +468,39 @@ fn stream_scip_family(
         eprintln!("ryi: scip index {}", path.display());
     }
     Ok(())
+}
+
+/// `--family scip_scm`: pass 1 of the SCIP wire, from a per-language `.scm`
+/// query over each supplied file. One file's rows depend on that file alone.
+fn stream_scip_scm_family(
+    cli: &Cli,
+    output: &mut sqlite::Output,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if cli.paths.is_empty() {
+        return Err("--family scip_scm takes one or more PATHs".into());
+    }
+    let facts: Vec<FlatFact> = scip_scm_facts(&cli.paths).map_err(|error| error.to_string())?;
+    let mut lines: Vec<String> = facts
+        .iter()
+        .map(|fact| serde_json::to_string(fact).expect("a flat fact is serializable"))
+        .collect();
+    lines.sort();
+    for line in lines {
+        output.line(&line)?;
+    }
+    Ok(())
+}
+
+/// `--family scip_scm` takes files AND directories, so it checks existence
+/// only; the family walks a directory for the extensions it owns.
+fn check_paths_exist(paths: &[PathBuf]) {
+    for path in paths {
+        if !path.exists() {
+            // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
+            eprintln!("ryi: {} does not exist", path.display());
+            exit(2);
+        }
+    }
 }
 
 /// `--lines` on a multi-file verb: load each supplied file's newline offsets
@@ -707,7 +743,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         {
             return Err("--scip-index requires --project-root outside --family scip ROOT".into());
         }
-        if !matches!(mode, Some(FamilyMode::Scip)) && !cli.scip_facts && !cli.scip_deps {
+        if matches!(mode, Some(FamilyMode::ScipScm)) {
+            check_paths_exist(&cli.paths);
+        } else if !matches!(mode, Some(FamilyMode::Scip)) && !cli.scip_facts && !cli.scip_deps {
             check_file_paths(&cli.paths, false);
         }
     }
@@ -730,6 +768,13 @@ fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std:
                 output.set_line_root(Some(cli.paths[0].clone()));
             }
             stream_scip_family(cli, output)?;
+            return Ok(());
+        }
+        Some(FamilyMode::ScipScm) => {
+            if cli.lines {
+                register_line_tables(cli, output);
+            }
+            stream_scip_scm_family(cli, output)?;
             return Ok(());
         }
         Some(FamilyMode::DietScip) => {
