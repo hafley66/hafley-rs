@@ -3,7 +3,7 @@
 
 use rusqlite::{params, Connection};
 
-use super::scip_scm::ScipScmError;
+use super::scm_rows::ScmError;
 
 /// The lab's resolver, verbatim: a push/pop symbol stack walked over the graph,
 /// answering with every definition reachable on a balanced path.
@@ -70,7 +70,7 @@ pub struct Store {
 }
 
 impl Store {
-    pub fn memory() -> Result<Self, ScipScmError> {
+    pub fn memory() -> Result<Self, ScmError> {
         let db = Connection::open_in_memory().map_err(sql)?;
         db.execute_batch(
             "CREATE TABLE node(
@@ -96,7 +96,7 @@ impl Store {
         blob: &str,
         start: u32,
         end: u32,
-    ) -> Result<i64, ScipScmError> {
+    ) -> Result<i64, ScmError> {
         self.db
             .execute(
                 "INSERT INTO node(kind,sym,blob,span_start,span_end) VALUES(?1,?2,?3,?4,?5)",
@@ -106,7 +106,7 @@ impl Store {
         Ok(self.db.last_insert_rowid())
     }
 
-    pub fn edge(&self, src: i64, dst: i64) -> Result<(), ScipScmError> {
+    pub fn edge(&self, src: i64, dst: i64) -> Result<(), ScmError> {
         self.db
             .execute(
                 "INSERT OR IGNORE INTO edge(src,dst) VALUES(?1,?2)",
@@ -117,7 +117,7 @@ impl Store {
     }
 
     /// Every definition the reference reaches on a balanced path, nearest first.
-    pub fn resolve(&self, reference: i64) -> Result<Vec<(String, String)>, ScipScmError> {
+    pub fn resolve(&self, reference: i64) -> Result<Vec<(String, String)>, ScmError> {
         let mut statement = self.db.prepare(RESOLVE_SQL).map_err(sql)?;
         let rows = statement
             .query_map([reference], |row| Ok((row.get(1)?, row.get(2)?)))
@@ -126,6 +126,6 @@ impl Store {
     }
 }
 
-fn sql(error: rusqlite::Error) -> ScipScmError {
-    ScipScmError::Sql(error.to_string())
+fn sql(error: rusqlite::Error) -> ScmError {
+    ScmError::Sql(error.to_string())
 }

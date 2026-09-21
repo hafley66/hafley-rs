@@ -2737,6 +2737,12 @@ pub trait Source: Sync + Send {
     fn extract_lang(&self, path: &str) -> Option<RyiLang> {
         SupportLang::from_path(path).map(RyiLang::Sg)
     }
+    /// The `.scm` fast's `symbol`/`occurrence`/`local` rows come from, bundled
+    /// by this language's own file. `path`: one `Source` can span grammars.
+    fn scm_query(&self, path: &str) -> Option<&'static str> {
+        let _ = path;
+        None
+    }
 }
 
 // ── the Rehome seam: what one language answers when a file moves ────────────
@@ -3656,28 +3662,28 @@ pub enum FlatFact {
         implementor: String,
         iface: String,
     },
-    /// `scip_scm_symbol(symbol, path, kind)`: one definition a `.scm` query
+    /// `symbol(symbol, path, kind)`: one definition a fast `.scm` query
     /// captured, `kind` being the capture label's tail (`function`, `variable`).
-    #[serde(rename = "scip_scm_symbol")]
-    ScipScmSymbolRow {
+    #[serde(rename = "symbol")]
+    SymbolRow {
         symbol: String,
         path: String,
         kind: String,
     },
-    /// `scip_scm_occurrence(symbol, path, start, end, role)`: `role` is `def`
-    /// at the defining span, `ref` at one the file's scope tree resolved to it.
-    #[serde(rename = "scip_scm_occurrence")]
-    ScipScmOccurrenceRow {
+    /// `occurrence(symbol, path, start, end, role)`: `role` is `def` at the
+    /// defining span, `ref` at one the file's scope tree resolved to it.
+    #[serde(rename = "occurrence")]
+    OccurrenceRow {
         symbol: String,
         path: String,
         start: u32,
         end: u32,
         role: String,
     },
-    /// `scip_scm_local(fn, name, path, start, end)`: a binding the document does
-    /// not export, attributed to its enclosing callable. File-private fns too.
-    #[serde(rename = "scip_scm_local")]
-    ScipScmLocalRow {
+    /// `local(fn, name, path, start, end)`: a binding the document does not
+    /// export, attributed to its enclosing callable. File-private fns too.
+    #[serde(rename = "local")]
+    LocalRow {
         #[serde(rename = "fn")]
         enclosing_fn: String,
         name: String,

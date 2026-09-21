@@ -143,6 +143,8 @@ pub enum ProjectError {
     DepsPathOutsideRoot(PathBuf),
     /// Manifest edges were requested without `project_root`.
     ManifestsNeedRoot,
+    /// A bundled `.scm` query refused one of fast's files.
+    Scm(String),
 }
 
 impl std::fmt::Display for ProjectError {
@@ -167,6 +169,7 @@ impl std::fmt::Display for ProjectError {
                 f,
                 "package edges need --project-root: a package graph's node names are project-relative manifest paths"
             ),
+            Self::Scm(detail) => write!(f, "scm: {detail}"),
         }
     }
 }
@@ -1272,7 +1275,15 @@ pub fn scip_family_from_index_jsonl(
 /// default; this family is the labelled entry, not a replacement.
 // @comment-ok: one pre-existing diet_scip design note, edited by one line.
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    resolve_project(&diet_scip_request(paths))
+    let mut facts = resolve_project(&diet_scip_request(paths))?;
+    facts.extend(scm_rows(paths)?);
+    Ok(facts)
+}
+
+/// The `symbol`/`occurrence`/`local` rows fast reads straight out of
+/// `queries/<lang>/scip.scm`. A language with no query yet contributes none.
+fn scm_rows(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
+    crate::scm_facts(paths).map_err(|error| ProjectError::Scm(error.to_string()))
 }
 
 /// The diet/fast family with the phase-1 rows retained through the same sink
@@ -1281,7 +1292,9 @@ pub fn diet_scip_with_raw<E>(
     paths: &[PathBuf],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    resolve_project_with_raw(&diet_scip_request(paths), push_raw)
+    let mut facts = resolve_project_with_raw(&diet_scip_request(paths), push_raw)?;
+    facts.extend(scm_rows(paths).map_err(ResolveWithRawError::Project)?);
+    Ok(facts)
 }
 
 fn diet_scip_request(paths: &[PathBuf]) -> ResolveRequest<'_> {

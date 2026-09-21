@@ -20,7 +20,7 @@
 //! KotlinSource wires cst via ast-grep + a
 //! tree-sitter-kotlin parse; type/call/df projections are stubbed empty.
 //! `walk_kotlin_entities` + `kotlin_fn_type` cover TypeF (nodes +
-//! arrow-type sigs); `kt_walk_call_defs` + `kt_walk_call_sites` cover CallF;
+//! arrow-type sigs); `queries/kotlin/call.scm` covers CallF;
 //! `kotlin_dataflow_from` covers DfF (nodes + Direct edges,
 //! incl. the `lam_sym` closure naming).
 //!
@@ -38,7 +38,7 @@ use std::collections::BTreeSet;
 
 use super::astgrep::{AstGrepParser, CstProjector};
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
+    CallEdgeKind, CallF, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
     DfParam, DocFact, DocTag, ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier,
     SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
@@ -52,6 +52,10 @@ use crate::trace;
 use crate::types::{PathIndex, UnresolvedReason};
 
 use super::kotlin_modules::KtModuleIndex;
+
+/// Kotlin's own `.scm`: the scope/definition/call captures fast lowers through
+/// L1. Owned here, read through `Source::scm_query`, never named elsewhere.
+pub(crate) const KOTLIN_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
 
 // ── the tree-sitter-kotlin parse (one parse feeds type/call/df) ─────────────
 
@@ -603,38 +607,9 @@ fn is_noise_kotlin(name: &str) -> bool {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CallF: callable definitions (nodes) + call sites (aux).
-//
-// Ports v5 `kt_walk_call_defs` (defs, incl. ctors + lambda literals) +
-// `kt_walk_call_sites`/`kt_callee` (sites). v5's `sym`/`end` line are dropped:
-// a def is span + kind + name (the name is the bare identifier for callee
-// resolution, NOT a qualified sym). The def span COVERS its body (decl start
-// -> function_body end) so the seam's span-containment can bind a site's
-// caller; the parity line reads `line_of(span.start)` = the decl start line
-// (v5's `def.line`). Kind rules (v5-exact): a fun inside a class/object body
-// is a Method (a nested LOCAL fun is Free - descending into a fn body resets
-// the owner); primary/secondary constructors are Method rows named after the
-// CLASS (so a `Widget(x)` call site name-matches here); a lambda literal
-// inside a fn body is a nameless Lambda (a property-init lambda has no
-// enclosing fn scope and is skipped). A fn with no name (an anonymous
-// `fun(x) {}` expression) still mints a def with an empty name, like v5.
+// CallF defs and sites: `queries/kotlin/call.scm` via `6_scm_family.rs`.
+// NOT YET SCM: the module specifiers and receiver bindings below.
 // ════════════════════════════════════════════════════════════════════════════
-
-/// Project the CallF family: one def node per callable (Free / Method /
-/// Lambda) + one site per call expression. Port of v5 `kt_walk_call_defs` +
-/// `kt_walk_call_sites`.
-fn project_call(
-    root: tree_sitter::Node,
-    src: &[u8],
-    blob: ContentId,
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    kt_walk_call_defs(root, src, strings, sink, None, false);
-    kt_walk_call_sites(root, src, strings, sink);
-    kt_module_specifiers(root, src, strings, sink);
-    super::kotlin_receivers::collect_receivers(root, src, blob, strings, sink);
-}
 
 // ── module specifiers (CallFAux.specifiers) ─────────────────────────────────
 // @comment-ok: the kind/name/module contract, pinned row-for-row by
@@ -652,7 +627,7 @@ fn project_call(
 // overrides the bound name; a wildcard binds the last dotted segment.
 
 /// Kotlin module specifiers: one row per `import_header`. Rides the one
-/// tree-sitter parse `project_call` already holds. v5 reads the same facts
+/// tree-sitter parse the `extract` arm already holds. v5 reads the same facts
 /// with a regex over stripped text (`src/graph/modgraph/kotlin.rs:19-26`).
 fn kt_module_specifiers(
     root: tree_sitter::Node,
@@ -721,78 +696,6 @@ fn last_segment(path: &str) -> &str {
     path.rsplit('.').next().unwrap_or(path)
 }
 
-/// Walk every callable declaration, minting one def node per Free function /
-/// Method / Lambda. Port of v5 `kt_walk_call_defs`. `parent` is the enclosing
-/// class/object name (v5's `parent`); `in_fn` is v5's `!enclosing.is_empty()`:
-/// a lambda literal only mints a Lambda def when inside a fn/lambda body (a
-/// property-init lambda has no enclosing scope to join). v6 drops the sym
-/// strings themselves - only the gate survives, the def's span is its only
-/// coordinate.
-fn kt_walk_call_defs(
-    node: tree_sitter::Node,
-    src: &[u8],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-    parent: Option<&str>,
-    in_fn: bool,
-) {
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        match child.kind() {
-            "class_declaration" | "object_declaration" => {
-                let owner = kt_first_child(child, "type_identifier").map(|n| kt_text(n, src));
-                // A class body is not a fn scope: reset `in_fn` (v5 resets
-                // `enclosing` to "") so a bare property-init lambda is skipped;
-                // a member fun opens its own scope below.
-                kt_walk_call_defs(child, src, strings, sink, owner, false);
-            }
-            // @callable kotlin function / @callable kotlin method
-            "function_declaration" => {
-                let name = kt_first_child(child, "simple_identifier")
-                    .map(|n| kt_text(n, src).to_string())
-                    .unwrap_or_default();
-                let kind = match parent {
-                    Some(_) => CallKind::Method,
-                    None => CallKind::Free,
-                };
-                // The def span covers the whole callable body [decl.start,
-                // body.end) for span-containment resolution; abstract/interface
-                // funs have no body, so fall back to the decl end (v5's exact
-                // fallback). line_of(span.start) == v5's def.line.
-                let span = def_span(child);
-                sink.nodes
-                    .push(Node::new(span, kind).with_name(strings.intern(&name)));
-                // v5 threads the fn's df_sym as `enclosing` and resets the
-                // owner: a nested local fun is Free, not a method.
-                kt_walk_call_defs(child, src, strings, sink, None, true);
-            }
-            // Primary/secondary constructors: Method rows named after the
-            // class, so a `Widget(x)` call site resolves here via the bare-name
-            // convention. Only minted inside a class/object body (parent Some).
-            // @callable kotlin method
-            "primary_constructor" | "secondary_constructor" => {
-                if let Some(owner) = parent {
-                    sink.nodes.push(
-                        Node::new(node_span(child), CallKind::Method)
-                            .with_name(strings.intern(owner)),
-                    );
-                }
-                kt_walk_call_defs(child, src, strings, sink, parent, in_fn);
-            }
-            // `{ it + 1 }` inside a fn body: a nameless Lambda def (v5 keys it
-            // by the same `lambda_sym` the df lift mints; v6 keeps only the
-            // span - the df closure VALUE node carries that name instead).
-            // @callable kotlin lambda
-            "lambda_literal" if in_fn => {
-                sink.nodes
-                    .push(Node::new(node_span(child), CallKind::Lambda));
-                kt_walk_call_defs(child, src, strings, sink, parent, true);
-            }
-            _ => kt_walk_call_defs(child, src, strings, sink, parent, in_fn),
-        }
-    }
-}
-
 /// The def span covers the whole callable `[child.start, body.end)` for
 /// span-containment resolution. Port of v5's `end` computation (the
 /// function_body end, or the decl end for a bodyless fun).
@@ -804,230 +707,6 @@ pub(crate) fn def_span(child: tree_sitter::Node) -> Span {
     Span {
         start: start as u32,
         len: (end - start) as u32,
-    }
-}
-
-/// Walk every call-shaped node, minting one call site per call. Port of v5
-/// `kt_walk_call_sites` plus the operator/infix/invoke sites v5 dropped. The
-/// site span is the LEAD callee node's span (line_of(span.start) = v5's
-/// reported site line - for `recv.m()` the navigation_expression's start, NOT
-/// the suffix's). Operator-shaped calls span their operator token (or the
-/// infix name), so `--resolve` joins them to the `operator fun` /
-/// `infix fun` def by name:
-///  - `a infixName b`  -> infix_expression, callee = the infix name
-///  - `a + b` etc.     -> additive/multiplicative/range/comparison/equality
-///                        expression, callee = the operator-function name
-///  - `a in b`         -> check_expression, callee = contains
-///  - `-a` `!a` `++a`  -> prefix_expression (unaryMinus/unaryPlus/not/inc/dec)
-///  - `a++` `a--`      -> postfix_expression (inc/dec)
-///  - `a[i]`           -> indexing_suffix, callee = get (`a[i] = v` -> set)
-///  - `a += b` etc.    -> assignment (plusAssign/minusAssign/...)
-///  - `f(x)()`         -> call_expression over a call_expression, callee =
-///                        invoke, span = the `()` call_suffix
-fn kt_walk_call_sites(
-    node: tree_sitter::Node,
-    src: &[u8],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        match child.kind() {
-            "call_expression" => {
-                if let Some((callee, lead)) = kt_callee(child, src) {
-                    kt_push_site(node_span(lead), &callee, strings, sink);
-                } else {
-                    // An invoked expression value: `f(x)()` calls `invoke`
-                    // on the result of the inner call.
-                    let mut lead_cur = child.walk();
-                    let lead_kind = child
-                        .children(&mut lead_cur)
-                        .find(|c| c.kind() != "call_suffix")
-                        .map(|l| l.kind());
-                    if lead_kind == Some("call_expression") {
-                        if let Some(suffix) = kt_first_child(child, "call_suffix") {
-                            kt_push_site(node_span(suffix), "invoke", strings, sink);
-                        }
-                    }
-                }
-            }
-            // `1 plus2 2`: seq(expr, simple_identifier, expr) - the middle
-            // child is the infix function name.
-            "infix_expression" => {
-                let mut infix = child.walk();
-                let mid = child.children(&mut infix).nth(1);
-                if let Some(name) = mid {
-                    if name.kind() == "simple_identifier" {
-                        let callee = kt_text(name, src).to_string();
-                        kt_push_site(node_span(name), &callee, strings, sink);
-                    }
-                }
-            }
-            "additive_expression"
-            | "multiplicative_expression"
-            | "range_expression"
-            | "comparison_expression"
-            | "equality_expression" => {
-                if let Some(callee) = kt_anon_token(child, src).and_then(|op| kt_operator_name(&op))
-                {
-                    kt_bin_site(child, callee, strings, sink);
-                }
-            }
-            // `a in b` / `a !in b` both lower to a `contains` site. The `!` of
-            // `!in` is its own anonymous token, so scan every anonymous child
-            // for the `in` token instead of reading only the first one.
-            // `is`/`!is` has no operator fun.
-            "check_expression" => {
-                let mut cursor = child.walk();
-                let is_in = child
-                    .children(&mut cursor)
-                    .any(|c| !c.is_named() && matches!(kt_text(c, src), "in" | "!in"));
-                if is_in {
-                    kt_bin_site(child, "contains", strings, sink);
-                }
-            }
-            "prefix_expression" => {
-                if let Some(callee) = kt_anon_token(child, src).and_then(|op| kt_prefix_name(&op)) {
-                    kt_bin_site(child, callee, strings, sink);
-                }
-            }
-            "postfix_expression" => {
-                if let Some(callee) = kt_anon_token(child, src).and_then(|op| kt_postfix_name(&op))
-                {
-                    kt_bin_site(child, callee, strings, sink);
-                }
-            }
-            "indexing_expression" => {
-                if let Some(suffix) = kt_first_child(child, "indexing_suffix") {
-                    kt_push_site(node_span(suffix), "get", strings, sink);
-                }
-            }
-            "assignment" => {
-                if let Some(callee) = kt_anon_token(child, src).and_then(|op| kt_assign_name(&op)) {
-                    kt_bin_site(child, callee, strings, sink);
-                }
-                // `a[i] = v` lowers to `set` on the index suffix (the lhs is
-                // a directly_assignable_expression wrapping the suffix; there
-                // is no indexing_expression node in the write position).
-                if let Some(lhs) = kt_first_child(child, "directly_assignable_expression") {
-                    if let Some(suffix) = kt_first_child(lhs, "indexing_suffix") {
-                        kt_push_site(node_span(suffix), "set", strings, sink);
-                    }
-                }
-            }
-            _ => {}
-        }
-        kt_walk_call_sites(child, src, strings, sink);
-    }
-}
-
-/// Push one call site onto the aux sink.
-fn kt_push_site(span: Span, callee: &str, strings: &mut Strings, sink: &mut FamilyBundle<CallF>) {
-    sink.aux.sites.push(CallSite {
-        span,
-        callee: strings.intern(callee),
-        callee_path: None,
-    });
-}
-
-/// Mint an operator site spanned by the node's anonymous operator token
-/// (`a + b` spans the `+`); fall back to the whole node when the grammar
-/// folds the operator into a named child.
-fn kt_bin_site(
-    expr: tree_sitter::Node,
-    callee: &str,
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    let span = kt_anon_token_node(expr)
-        .map(node_span)
-        .unwrap_or_else(|| node_span(expr));
-    kt_push_site(span, callee, strings, sink);
-}
-
-/// The text of the node's first anonymous (non-named) child, if any.
-fn kt_anon_token(node: tree_sitter::Node, src: &[u8]) -> Option<String> {
-    Some(kt_text(kt_anon_token_node(node)?, src).to_string())
-}
-
-fn kt_anon_token_node<'a>(node: tree_sitter::Node<'a>) -> Option<tree_sitter::Node<'a>> {
-    let mut cursor = node.walk();
-    let found = node.children(&mut cursor).find(|c| !c.is_named());
-    found
-}
-
-/// Binary/infix operator token -> Kotlin operator-function name.
-fn kt_operator_name(op: &str) -> Option<&'static str> {
-    Some(match op {
-        "+" => "plus",
-        "-" => "minus",
-        "*" => "times",
-        "/" => "div",
-        "%" => "rem",
-        ".." => "rangeTo",
-        "..<" => "rangeUntil",
-        "in" => "contains",
-        "==" | "!=" => "equals",
-        "<" | ">" | "<=" | ">=" => "compareTo",
-        _ => return None,
-    })
-}
-
-/// Prefix unary operator token -> operator-function name.
-fn kt_prefix_name(op: &str) -> Option<&'static str> {
-    Some(match op {
-        "-" => "unaryMinus",
-        "+" => "unaryPlus",
-        "!" => "not",
-        "++" => "inc",
-        "--" => "dec",
-        _ => return None,
-    })
-}
-
-/// Postfix unary operator token -> operator-function name (`!!` is notNull,
-/// which has no operator fun).
-fn kt_postfix_name(op: &str) -> Option<&'static str> {
-    Some(match op {
-        "++" => "inc",
-        "--" => "dec",
-        _ => return None,
-    })
-}
-
-/// Compound-assignment operator token -> operator-function name.
-fn kt_assign_name(op: &str) -> Option<&'static str> {
-    Some(match op {
-        "+=" => "plusAssign",
-        "-=" => "minusAssign",
-        "*=" => "timesAssign",
-        "/=" => "divAssign",
-        "%=" => "remAssign",
-        _ => return None,
-    })
-}
-
-/// (callee name, lead node) for a `call_expression`, or None when the callee
-/// is not a plain/navigation name (e.g. an invoked lambda value). Port of v5
-/// `kt_callee`: the lead is the call's first child that is not the
-/// `call_suffix`; a bare `simple_identifier` is the callee, or the trailing
-/// `simple_identifier` of a `navigation_expression` (`recv.qux()` -> "qux").
-fn kt_callee<'a>(
-    call: tree_sitter::Node<'a>,
-    src: &[u8],
-) -> Option<(String, tree_sitter::Node<'a>)> {
-    let mut cursor = call.walk();
-    let lead = call
-        .children(&mut cursor)
-        .find(|c| c.kind() != "call_suffix")?;
-    match lead.kind() {
-        "simple_identifier" => Some((kt_text(lead, src).to_string(), lead)),
-        "navigation_expression" => {
-            let nav = kt_first_child(lead, "navigation_suffix")?;
-            let id = kt_first_child(nav, "simple_identifier")?;
-            Some((kt_text(id, src).to_string(), lead))
-        }
-        _ => None,
     }
 }
 
@@ -1641,6 +1320,12 @@ impl Source for KotlinSource {
         path.ends_with(".kt") || path.ends_with(".kts")
     }
 
+    /// `.kt` and `.kts` both parse under the one kotlin grammar the query was
+    /// written against, so every path this source claims is covered.
+    fn scm_query(&self, _path: &str) -> Option<&'static str> {
+        Some(KOTLIN_SCM)
+    }
+
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
@@ -1698,25 +1383,21 @@ impl Source for KotlinSource {
                         let mut bundle = FamilyBundle::<CallF>::default();
                         let blob = crate::dispatch::extracting_blob(content)
                             .unwrap_or_else(|| crate::types::content_id_of(content));
-                        if std::env::var("RYI_FAST_SCM").as_deref() == Ok("1") {
-                            super::scm_family::project_kotlin_call(
-                                path,
-                                root,
-                                src_bytes,
-                                &mut strings,
-                                &mut bundle,
-                            );
-                            kt_module_specifiers(root, src_bytes, &mut strings, &mut bundle);
-                            super::kotlin_receivers::collect_receivers(
-                                root,
-                                src_bytes,
-                                blob,
-                                &mut strings,
-                                &mut bundle,
-                            );
-                        } else {
-                            project_call(root, src_bytes, blob, &mut strings, &mut bundle);
-                        }
+                        super::scm_family::project_kotlin_call(
+                            path,
+                            root,
+                            src_bytes,
+                            &mut strings,
+                            &mut bundle,
+                        );
+                        kt_module_specifiers(root, src_bytes, &mut strings, &mut bundle);
+                        super::kotlin_receivers::collect_receivers(
+                            root,
+                            src_bytes,
+                            blob,
+                            &mut strings,
+                            &mut bundle,
+                        );
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
                     }

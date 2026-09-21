@@ -1,10 +1,10 @@
-//! The three `scip_scm` rows: wire shape, TypeSpec shape, and the binary's
-//! own stream agreeing with both.
+//! Fast's three scm rows: wire shape, TypeSpec shape, and `ryi fast`'s own
+//! stream agreeing with both.
 
 #![cfg(feature = "cli")]
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::Command;
 
 use serde_json::Value;
@@ -15,36 +15,38 @@ const CATALOG: &str = include_str!(concat!(
     "/schema/generated/5_facts.json"
 ));
 
-/// The pass-1 row vocabulary, tag by field set.
+const KOTLIN_FILES: [&str; 2] = [
+    "tests/fixtures/kotlin_receivers/lib.kt",
+    "tests/fixtures/kotlin_receivers/use.kt",
+];
+
+/// The scm row vocabulary of `ryi fast`, tag by field set.
 fn wire_shapes() -> BTreeMap<&'static str, Vec<&'static str>> {
     BTreeMap::from([
-        ("scip_scm_symbol", vec!["kind", "path", "symbol"]),
+        ("symbol", vec!["kind", "path", "symbol"]),
         (
-            "scip_scm_occurrence",
+            "occurrence",
             vec!["end", "path", "role", "start", "symbol"],
         ),
-        (
-            "scip_scm_local",
-            vec!["end", "fn", "name", "path", "start"],
-        ),
+        ("local", vec!["end", "fn", "name", "path", "start"]),
     ])
 }
 
 fn samples() -> Vec<FlatFact> {
     vec![
-        FlatFact::ScipScmSymbolRow {
+        FlatFact::SymbolRow {
             symbol: "scm . . `a.kt`/run().".into(),
             path: "a.kt".into(),
             kind: "function".into(),
         },
-        FlatFact::ScipScmOccurrenceRow {
+        FlatFact::OccurrenceRow {
             symbol: "scm . . `a.kt`/run().".into(),
             path: "a.kt".into(),
             start: 1,
             end: 4,
             role: "def".into(),
         },
-        FlatFact::ScipScmLocalRow {
+        FlatFact::LocalRow {
             enclosing_fn: "run".into(),
             name: "x".into(),
             path: "a.kt".into(),
@@ -67,7 +69,7 @@ fn keys(value: &Value) -> Vec<String> {
 }
 
 #[test]
-fn the_three_rows_carry_the_pass_one_field_sets() {
+fn the_three_rows_carry_their_field_sets() {
     let shapes = wire_shapes();
     for fact in samples() {
         let value = serde_json::to_value(&fact).expect("a flat fact is serializable");
@@ -110,25 +112,30 @@ fn every_row_has_a_typespec_table_with_the_same_columns() {
 }
 
 #[test]
-fn the_family_streams_only_pass_one_rows() {
-    let fixture = Path::new("tests/fixtures/kotlin_receivers");
-    let output = ryi(&["--family", "scip_scm", &fixture.to_string_lossy()], 0);
+fn fast_streams_the_three_rows_in_their_pinned_shape() {
     let shapes = wire_shapes();
-    for line in output.lines() {
-        let value: Value = serde_json::from_str(line).expect("the family emits JSON");
+    let mut seen = BTreeSet::new();
+    for line in fast(&KOTLIN_FILES, 0).lines() {
+        let value: Value = serde_json::from_str(line).expect("fast emits JSON");
         let record = value["record"].as_str().expect("record tag").to_string();
-        let want = shapes
-            .get(record.as_str())
-            .unwrap_or_else(|| panic!("the family emitted a foreign record: {record}"));
+        let Some(want) = shapes.get(record.as_str()) else {
+            continue;
+        };
         assert_eq!(keys(&value), *want, "streamed shape: {record}");
+        seen.insert(record);
     }
+    assert_eq!(
+        seen,
+        shapes.keys().map(|k| (*k).to_string()).collect(),
+        "fast streams all three scm rows over {KOTLIN_FILES:?}"
+    );
 }
 
 #[test]
-fn the_mode_refuses_a_per_file_mask_beside_it() {
+fn a_mode_refuses_a_per_file_mask_beside_it() {
     let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command
-        .args(["--family", "scip_scm,cst", "tests/fixtures/kotlin_receivers"])
+        .args(["--family", "diet_scip,cst", "tests/fixtures/kotlin_receivers/lib.kt"])
         .env("HAFLEY_TRACE", trace_path(1))
         .env("RUST_LOG", "sprefa_extract=debug");
     let output = command.output().expect("ryi runs");
@@ -140,47 +147,36 @@ fn the_mode_refuses_a_per_file_mask_beside_it() {
     );
 }
 
+/// A language with no bundled `.scm` is not a stop: fast still answers for it,
+/// it just contributes none of the three scm rows.
 #[test]
-fn a_language_outside_pass_one_is_a_named_stop() {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
-    command
-        .args(["--family", "scip_scm", "src/lib.rs"])
-        .env("HAFLEY_TRACE", trace_path(2))
-        .env("RUST_LOG", "sprefa_extract=debug");
-    let output = command.output().expect("ryi runs");
-    assert!(!output.status.success(), "a rust file has no pass-1 query");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    for stated in [
-        "covers kotlin and typescript",
-        "no compiler leg",
-        "no indexer leg",
-        "no cross-repo symbol",
-        "no persistent index",
-    ] {
+fn a_language_with_no_query_contributes_no_scm_rows() {
+    let shapes = wire_shapes();
+    for line in fast(&["src/lang/go_modules.rs"], 2).lines() {
+        let value: Value = serde_json::from_str(line).expect("fast emits JSON");
+        let record = value["record"].as_str().expect("record tag");
         assert!(
-            stderr.contains(stated),
-            "the error states what is out of scope ({stated}): {stderr}"
+            !shapes.contains_key(record),
+            "a rust file has no bundled scm query, so no {record} row: {line}"
         );
     }
 }
 
 fn trace_path(index: usize) -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "ryi-157-{index}-{}.json",
-        std::process::id()
-    ))
+    std::env::temp_dir().join(format!("ryi-157-{index}-{}.json", std::process::id()))
 }
 
-fn ryi(args: &[&str], index: usize) -> String {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
-    command
-        .args(args)
+fn fast(paths: &[&str], index: usize) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .arg("fast")
+        .args(paths)
         .env("HAFLEY_TRACE", trace_path(index))
-        .env("RUST_LOG", "sprefa_extract=debug");
-    let output = command.output().expect("ryi runs");
+        .env("RUST_LOG", "sprefa_extract=debug")
+        .output()
+        .expect("ryi runs");
     assert!(
         output.status.success(),
-        "ryi {args:?} failed:\n{}",
+        "ryi fast {paths:?} failed:\n{}",
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).expect("ryi emits UTF-8")

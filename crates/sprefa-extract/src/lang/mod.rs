@@ -46,12 +46,12 @@ pub mod rust_rename;
 pub mod rust_scip_macros;
 pub mod rust_type_edges;
 pub mod rust_type_refs;
-#[path = "7_scip_scm.rs"]
-pub mod scip_scm;
-#[path = "8_scip_scm_store.rs"]
-pub mod scip_scm_store;
 #[path = "6_scm_family.rs"]
 mod scm_family;
+#[path = "7_scm_rows.rs"]
+pub mod scm_rows;
+#[path = "8_scm_store.rs"]
+pub mod scm_store;
 #[path = "5_scm_lower.rs"]
 pub mod scm_lower;
 #[path = "3_source_facts.rs"]
@@ -92,7 +92,7 @@ pub use owned_region::{
 pub use prolog::PrologSource;
 pub use python::PythonSource;
 pub use rust::RustSource;
-pub use scip_scm::{scip_scm_edges, scip_scm_facts, ScipScmError, ScmEdge};
+pub use scm_rows::{scm_edges, scm_facts, ScmEdge, ScmError};
 pub use scm_lower::{lower_scm, scm_language, ScmLowerError, ScmProgram};
 pub use source_facts::{
     query_source_facts, ByteRange, GitBlobFact, SourceCaptureFact, SourceMatchFact, SourcePlace,

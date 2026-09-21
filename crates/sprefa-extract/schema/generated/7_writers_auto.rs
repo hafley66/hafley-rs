@@ -749,6 +749,34 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct Symbol {
+        pub symbol: String,
+        pub path: String,
+        pub kind: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct Occurrence {
+        pub symbol: String,
+        pub path: String,
+        pub start: u32,
+        pub end: u32,
+        pub role: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct Local {
+        pub r#fn: String,
+        pub name: String,
+        pub path: String,
+        pub start: u32,
+        pub end: u32,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct ScipDef {
         pub symbol: String,
         pub file: String,
@@ -805,34 +833,6 @@ pub mod models {
     pub struct ScipImpl {
         pub r#impl: String,
         pub iface: String,
-    }
-
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    pub struct ScipScmSymbol {
-        pub symbol: String,
-        pub path: String,
-        pub kind: String,
-    }
-
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    pub struct ScipScmOccurrence {
-        pub symbol: String,
-        pub path: String,
-        pub start: u32,
-        pub end: u32,
-        pub role: String,
-    }
-
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    pub struct ScipScmLocal {
-        pub r#fn: String,
-        pub name: String,
-        pub path: String,
-        pub start: u32,
-        pub end: u32,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1115,6 +1115,15 @@ pub enum Fact {
     #[serde(rename = "capture")]
     Capture(models::Capture),
 
+    #[serde(rename = "symbol")]
+    Symbol(models::Symbol),
+
+    #[serde(rename = "occurrence")]
+    Occurrence(models::Occurrence),
+
+    #[serde(rename = "local")]
+    Local(models::Local),
+
     #[serde(rename = "scip_def")]
     ScipDef(models::ScipDef),
 
@@ -1138,15 +1147,6 @@ pub enum Fact {
 
     #[serde(rename = "scip_impl")]
     ScipImpl(models::ScipImpl),
-
-    #[serde(rename = "scip_scm_symbol")]
-    ScipScmSymbol(models::ScipScmSymbol),
-
-    #[serde(rename = "scip_scm_occurrence")]
-    ScipScmOccurrence(models::ScipScmOccurrence),
-
-    #[serde(rename = "scip_scm_local")]
-    ScipScmLocal(models::ScipScmLocal),
 
     #[serde(rename = "scip_index")]
     ScipIndex(models::ScipIndex),
@@ -1282,6 +1282,12 @@ impl Fact {
 
             Self::Capture(row) => row.insert(conn, source),
 
+            Self::Symbol(row) => row.insert(conn, source),
+
+            Self::Occurrence(row) => row.insert(conn, source),
+
+            Self::Local(row) => row.insert(conn, source),
+
             Self::ScipDef(row) => row.insert(conn, source),
 
             Self::ScipName(row) => row.insert(conn, source),
@@ -1297,12 +1303,6 @@ impl Fact {
             Self::ScipLocal(row) => row.insert(conn, source),
 
             Self::ScipImpl(row) => row.insert(conn, source),
-
-            Self::ScipScmSymbol(row) => row.insert(conn, source),
-
-            Self::ScipScmOccurrence(row) => row.insert(conn, source),
-
-            Self::ScipScmLocal(row) => row.insert(conn, source),
 
             Self::ScipIndex(row) => row.insert(conn, source),
 
@@ -1472,6 +1472,12 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let mut capture: Vec<(usize, &models::Capture)> = Vec::new();
 
+    let mut symbol: Vec<(usize, &models::Symbol)> = Vec::new();
+
+    let mut occurrence: Vec<(usize, &models::Occurrence)> = Vec::new();
+
+    let mut local: Vec<(usize, &models::Local)> = Vec::new();
+
     let mut scip_def: Vec<(usize, &models::ScipDef)> = Vec::new();
 
     let mut scip_name: Vec<(usize, &models::ScipName)> = Vec::new();
@@ -1487,12 +1493,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut scip_local: Vec<(usize, &models::ScipLocal)> = Vec::new();
 
     let mut scip_impl: Vec<(usize, &models::ScipImpl)> = Vec::new();
-
-    let mut scip_scm_symbol: Vec<(usize, &models::ScipScmSymbol)> = Vec::new();
-
-    let mut scip_scm_occurrence: Vec<(usize, &models::ScipScmOccurrence)> = Vec::new();
-
-    let mut scip_scm_local: Vec<(usize, &models::ScipScmLocal)> = Vec::new();
 
     let mut scip_index: Vec<(usize, &models::ScipIndex)> = Vec::new();
 
@@ -1612,6 +1612,12 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::Capture(value) => capture.push((index, value)),
 
+            Fact::Symbol(value) => symbol.push((index, value)),
+
+            Fact::Occurrence(value) => occurrence.push((index, value)),
+
+            Fact::Local(value) => local.push((index, value)),
+
             Fact::ScipDef(value) => scip_def.push((index, value)),
 
             Fact::ScipName(value) => scip_name.push((index, value)),
@@ -1627,12 +1633,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
             Fact::ScipLocal(value) => scip_local.push((index, value)),
 
             Fact::ScipImpl(value) => scip_impl.push((index, value)),
-
-            Fact::ScipScmSymbol(value) => scip_scm_symbol.push((index, value)),
-
-            Fact::ScipScmOccurrence(value) => scip_scm_occurrence.push((index, value)),
-
-            Fact::ScipScmLocal(value) => scip_scm_local.push((index, value)),
 
             Fact::ScipIndex(value) => scip_index.push((index, value)),
 
@@ -1752,6 +1752,12 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let capture_capacity = if capture.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
+    let symbol_capacity = if symbol.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
+
+    let occurrence_capacity = if occurrence.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let local_capacity = if local.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
     let scip_def_capacity = if scip_def.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_def\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
     let scip_name_capacity = if scip_name.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
@@ -1767,12 +1773,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let scip_local_capacity = if scip_local.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
     let scip_impl_capacity = if scip_impl.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
-
-    let scip_scm_symbol_capacity = if scip_scm_symbol.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_scm_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
-
-    let scip_scm_occurrence_capacity = if scip_scm_occurrence.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"scip_scm_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
-
-    let scip_scm_local_capacity = if scip_scm_local.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"scip_scm_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let scip_index_capacity = if scip_index.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"scip_index\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2295,6 +2295,39 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
         inserted += statement.raw_execute()?;
     }
 
+    for chunk in symbol.chunks(symbol_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in occurrence.chunks(occurrence_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in local.chunks(local_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
     for chunk in scip_def.chunks(scip_def_capacity) {
         let sql = multi_row_sql("INSERT INTO \"scip_def\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
@@ -2374,39 +2407,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in scip_impl.chunks(scip_impl_capacity) {
         let sql = multi_row_sql("INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES ", "(?, ?, ?, ?, ?, ?)", chunk.len());
-        let mut statement = conn.prepare_cached(&sql)?;
-        let mut parameter = 1;
-        for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
-            parameter = row.bind(&mut statement, parameter, &row_source)?;
-        }
-        inserted += statement.raw_execute()?;
-    }
-
-    for chunk in scip_scm_symbol.chunks(scip_scm_symbol_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_scm_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)", chunk.len());
-        let mut statement = conn.prepare_cached(&sql)?;
-        let mut parameter = 1;
-        for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
-            parameter = row.bind(&mut statement, parameter, &row_source)?;
-        }
-        inserted += statement.raw_execute()?;
-    }
-
-    for chunk in scip_scm_occurrence.chunks(scip_scm_occurrence_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_scm_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
-        let mut statement = conn.prepare_cached(&sql)?;
-        let mut parameter = 1;
-        for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
-            parameter = row.bind(&mut statement, parameter, &row_source)?;
-        }
-        inserted += statement.raw_execute()?;
-    }
-
-    for chunk in scip_scm_local.chunks(scip_scm_local_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"scip_scm_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3937,6 +3937,89 @@ impl models::Capture {
     }
 }
 
+impl models::Symbol {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "symbol")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.kind.as_str())?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::Occurrence {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "occurrence")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.end)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.role.as_str())?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::Local {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "local")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.r#fn.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.end)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
 impl models::ScipDef {
     fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
         statement.raw_bind_parameter(parameter, source.row)?;
@@ -4124,89 +4207,6 @@ impl models::ScipImpl {
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES (?, ?, ?, ?, ?, ?)")?;
-        self.bind(&mut statement, 1, source)?;
-        Ok(statement.raw_execute()?)
-    }
-}
-
-impl models::ScipScmSymbol {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
-        statement.raw_bind_parameter(parameter, source.row)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_scm_symbol")?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.path.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.kind.as_str())?;
-        parameter += 1;
-        Ok(parameter)
-    }
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_scm_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
-        self.bind(&mut statement, 1, source)?;
-        Ok(statement.raw_execute()?)
-    }
-}
-
-impl models::ScipScmOccurrence {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
-        statement.raw_bind_parameter(parameter, source.row)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_scm_occurrence")?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.path.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.start)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.end)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.role.as_str())?;
-        parameter += 1;
-        Ok(parameter)
-    }
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_scm_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
-        self.bind(&mut statement, 1, source)?;
-        Ok(statement.raw_execute()?)
-    }
-}
-
-impl models::ScipScmLocal {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
-        statement.raw_bind_parameter(parameter, source.row)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "scip_scm_local")?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.r#fn.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.name.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.path.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.start)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.end)?;
-        parameter += 1;
-        Ok(parameter)
-    }
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"scip_scm_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

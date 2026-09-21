@@ -1,20 +1,17 @@
-//! The `scip_scm` family: pass 1 of the SCIP shape, from a per-language `.scm`
+//! `ryi fast`'s symbol / occurrence / local rows, from a per-language `.scm`
 //! query lowered through L1 and executed natively, plus the file's scope tree.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use ast_grep_language::{LanguageExt, SupportLang};
+use ast_grep_core::tree_sitter::LanguageExt;
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use super::ast_rule::{query_ast_rule, AstRule, AstRuleRequest};
 use super::extract_lang::RyiLang;
-use super::scip_scm_store::{NodeKind, Store};
+use super::scm_store::{NodeKind, Store};
 use super::scm_lower::{lower_scm, ScmLowerError};
 use crate::types::FlatFact;
-
-const KOTLIN_SCIP_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
-const TYPESCRIPT_SCIP_SCM: &str = include_str!("../../queries/typescript/scip.scm");
 
 /// The outer captures L1 selects. Everything else is read off the native
 /// match that carries one of them.
@@ -29,11 +26,9 @@ const SPAN_LABELS: [&str; 5] = [
 const ROOT: usize = 0;
 
 #[derive(Debug)]
-pub enum ScipScmError {
+pub enum ScmError {
     /// A supplied path could not be read.
     Io { path: String, detail: String },
-    /// A language pass 1 does not cover. Kotlin and TypeScript are the roster.
-    OutOfScope { path: String, lang: String },
     /// The bundled query did not lower through L1.
     Lower { path: String, error: ScmLowerError },
     /// L1 or the native engine refused the bundled query.
@@ -44,28 +39,22 @@ pub enum ScipScmError {
     Sql(String),
 }
 
-impl std::fmt::Display for ScipScmError {
+impl std::fmt::Display for ScmError {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io { path, detail } => write!(out, "{path}: {detail}"),
-            Self::OutOfScope { path, lang } => write!(
-                out,
-                "{path}: --family scip_scm covers kotlin and typescript, not {lang}. \
-                 Pass 1 has no compiler leg, no indexer leg, no cross-repo symbol \
-                 and no persistent index"
-            ),
             Self::Lower { path, error } => write!(out, "{path}: ScmLowerError: {error}"),
             Self::Query { path, detail } => write!(out, "{path}: {detail}"),
             Self::MatchLimit { path } => write!(
                 out,
-                "{path}: the scip_scm query exceeded the tree-sitter match limit"
+                "{path}: the fast scm query exceeded the tree-sitter match limit"
             ),
             Self::Sql(detail) => out.write_str(detail),
         }
     }
 }
 
-impl std::error::Error for ScipScmError {}
+impl std::error::Error for ScmError {}
 
 #[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
 struct Capture {
@@ -112,14 +101,16 @@ struct Reference {
 }
 
 /// THE CROSS-FILE PASS, off the family path: one scope graph over every
-/// supplied file, resolved by the recursive walk in `8_scip_scm_store.rs`.
-pub fn scip_scm_edges(paths: &[PathBuf]) -> Result<Vec<ScmEdge>, ScipScmError> {
+/// supplied file, resolved by the recursive walk in `8_scm_store.rs`.
+pub fn scm_edges(paths: &[PathBuf]) -> Result<Vec<ScmEdge>, ScmError> {
     let store = Store::memory()?;
     let mut roots = Vec::new();
     let mut references = Vec::new();
     let mut imports = Vec::new();
     for path in expand(paths)? {
-        let (name, end, captured) = file_captures(&path)?;
+        let Some((name, end, captured)) = file_captures(&path)? else {
+            continue;
+        };
         let root = store.node(NodeKind::Root, "", &name, 0, end)?;
         roots.push(root);
         ingest(
@@ -168,7 +159,7 @@ fn ingest(
     captures: &[Capture],
     references: &mut Vec<Reference>,
     imports: &mut Vec<(i64, i64)>,
-) -> Result<(), ScipScmError> {
+) -> Result<(), ScmError> {
     let mut nodes = vec![SpanNode {
         id: root,
         start: 0,
@@ -301,7 +292,7 @@ fn span_names(spans: &[Capture], definitions: &[Capture]) -> BTreeMap<(u32, u32)
 
 /// Every pass-1 row for the supplied files, in emission order. One file's rows
 /// are a function of that file alone.
-pub fn scip_scm_facts(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ScipScmError> {
+pub fn scm_facts(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ScmError> {
     let mut facts = Vec::new();
     for path in expand(paths)? {
         facts.extend(file_facts(&path)?);
@@ -309,9 +300,9 @@ pub fn scip_scm_facts(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ScipScmError> 
     Ok(facts)
 }
 
-/// A named file is taken as given; a directory contributes every file under it
-/// whose language pass 1 covers.
-fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, ScipScmError> {
+/// Every supplied path, filtered to the files a bundled query covers: a
+/// language with no `.scm` yet contributes no rows to fast.
+fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, ScmError> {
     let mut files = Vec::new();
     for path in paths {
         if path.is_dir() {
@@ -319,15 +310,15 @@ fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, ScipScmError> {
             walk(path, &mut covered)?;
             covered.sort();
             files.extend(covered);
-        } else {
+        } else if query_for(&path.to_string_lossy()).is_some() {
             files.push(path.clone());
         }
     }
     Ok(files)
 }
 
-fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScipScmError> {
-    let entries = std::fs::read_dir(dir).map_err(|error| ScipScmError::Io {
+fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScmError> {
+    let entries = std::fs::read_dir(dir).map_err(|error| ScmError::Io {
         path: dir.to_string_lossy().to_string(),
         detail: error.to_string(),
     })?;
@@ -343,40 +334,33 @@ fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScipScmError> {
 }
 
 /// The bundled query for a path's language, with the grammar it executes on.
-fn query_for(path: &str) -> Option<(SupportLang, &'static str)> {
-    match RyiLang::from_path(path) {
-        Some(RyiLang::Sg(SupportLang::Kotlin)) => Some((SupportLang::Kotlin, KOTLIN_SCIP_SCM)),
-        Some(RyiLang::Sg(SupportLang::TypeScript)) => {
-            Some((SupportLang::TypeScript, TYPESCRIPT_SCIP_SCM))
-        }
-        _ => None,
-    }
+/// Both come off the `Source` roster, so no language is named here.
+fn query_for(path: &str) -> Option<(RyiLang, &'static str)> {
+    let source = super::source_for(path)?;
+    Some((source.extract_lang(path)?, source.scm_query(path)?))
 }
 
-fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScipScmError> {
-    let (name, end, captured) = file_captures(path)?;
+fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScmError> {
+    let Some((name, end, captured)) = file_captures(path)? else {
+        return Ok(Vec::new());
+    };
     Ok(rows(&name, end, captured))
 }
 
 /// One file's two-step pass: L1 selects the spans, the native run groups the
 /// captures. Every later projection reads this and nothing else.
-fn file_captures(path: &Path) -> Result<(String, u32, BTreeSet<Capture>), ScipScmError> {
+fn file_captures(path: &Path) -> Result<Option<(String, u32, BTreeSet<Capture>)>, ScmError> {
     let name = path.to_string_lossy().to_string();
     let Some((lang, query_text)) = query_for(&name) else {
-        return Err(ScipScmError::OutOfScope {
-            lang: RyiLang::from_path(&name)
-                .map(|lang| lang.name().to_string())
-                .unwrap_or_else(|| "an unrostered language".into()),
-            path: name,
-        });
+        return Ok(None);
     };
-    let source = std::fs::read(path).map_err(|error| ScipScmError::Io {
+    let source = std::fs::read(path).map_err(|error| ScmError::Io {
         path: name.clone(),
         detail: error.to_string(),
     })?;
     let selected = lowered_spans(&name, &source, query_text)?;
     let captured = native_captures(&name, lang, query_text, &source, &selected)?;
-    Ok((name, source.len() as u32, captured))
+    Ok(Some((name, source.len() as u32, captured)))
 }
 
 /// L1 supplies the candidate spans. Native execution retains the capture
@@ -385,8 +369,8 @@ fn lowered_spans(
     path: &str,
     source: &[u8],
     query_text: &str,
-) -> Result<BTreeSet<(u32, u32)>, ScipScmError> {
-    let program = lower_scm(query_text).map_err(|error| ScipScmError::Lower {
+) -> Result<BTreeSet<(u32, u32)>, ScmError> {
+    let program = lower_scm(query_text).map_err(|error| ScmError::Lower {
         path: path.to_string(),
         error,
     })?;
@@ -403,7 +387,7 @@ fn lowered_spans(
         constraints: program.constraints,
         fix: None,
     };
-    let matches = query_ast_rule(path, source, &request).map_err(|error| ScipScmError::Query {
+    let matches = query_ast_rule(path, source, &request).map_err(|error| ScmError::Query {
         path: path.to_string(),
         detail: error.to_string(),
     })?;
@@ -417,26 +401,26 @@ fn lowered_spans(
 /// capture is one L1 selected.
 fn native_captures(
     path: &str,
-    lang: SupportLang,
+    lang: RyiLang,
     query_text: &str,
     source: &[u8],
     selected: &BTreeSet<(u32, u32)>,
-) -> Result<BTreeSet<Capture>, ScipScmError> {
+) -> Result<BTreeSet<Capture>, ScmError> {
     let language = lang.get_ts_language();
     let mut parser = Parser::new();
     parser
         .set_language(&language)
-        .map_err(|error| ScipScmError::Query {
+        .map_err(|error| ScmError::Query {
             path: path.to_string(),
             detail: format!("set language: {error}"),
         })?;
     let tree = parser
         .parse(source, None)
-        .ok_or_else(|| ScipScmError::Query {
+        .ok_or_else(|| ScmError::Query {
             path: path.to_string(),
             detail: "parse returned no tree".into(),
         })?;
-    let query = Query::new(&language, query_text).map_err(|error| ScipScmError::Query {
+    let query = Query::new(&language, query_text).map_err(|error| ScmError::Query {
         path: path.to_string(),
         detail: format!("query row {}: {error}", error.row + 1),
     })?;
@@ -467,7 +451,7 @@ fn native_captures(
     }
     drop(matches);
     if cursor.did_exceed_match_limit() {
-        return Err(ScipScmError::MatchLimit {
+        return Err(ScmError::MatchLimit {
             path: path.to_string(),
         });
     }
@@ -492,12 +476,12 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
     let mut facts = Vec::new();
     for def in &definitions {
         let symbol = symbol(path, &def.name);
-        facts.push(FlatFact::ScipScmSymbolRow {
+        facts.push(FlatFact::SymbolRow {
             symbol: symbol.clone(),
             path: path.to_string(),
             kind: def.kind.clone(),
         });
-        facts.push(FlatFact::ScipScmOccurrenceRow {
+        facts.push(FlatFact::OccurrenceRow {
             symbol,
             path: path.to_string(),
             start: def.start,
@@ -510,7 +494,7 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
                     .iter()
                     .any(|export| export.start <= def.start && def.end <= export.end));
         if !exported {
-            facts.push(FlatFact::ScipScmLocalRow {
+            facts.push(FlatFact::LocalRow {
                 enclosing_fn: match def.owner {
                     ROOT => "<root>".into(),
                     owner => names.get(&owner).cloned().unwrap_or_else(|| "<root>".into()),
@@ -533,7 +517,7 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
         let Some(target) = resolve(&call, &scopes, &definitions) else {
             continue;
         };
-        facts.push(FlatFact::ScipScmOccurrenceRow {
+        facts.push(FlatFact::OccurrenceRow {
             symbol: symbol(path, &target.name),
             path: path.to_string(),
             start: call.start,

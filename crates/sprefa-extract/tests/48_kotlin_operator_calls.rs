@@ -24,7 +24,8 @@ fn run(args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("stdout is UTF-8")
 }
 
-/// (span start, span end, callee) per `site` record, in emission order.
+/// (span start, span end, callee) per `site` record, in emission order. The
+/// `.scm` path keys its sites by span, so emission order is span order.
 fn sites(args: &[&str]) -> Vec<(u32, u32, String)> {
     run(args)
         .lines()
@@ -62,11 +63,11 @@ fn infix_operator_and_invoke_sites_are_minted() {
             (289, 292, "Box".to_string()),  // Box(value + other.value)
             (299, 300, "plus".to_string()), // `value + other.value`
             (386, 391, "plus2".to_string()), // `1 plus2 2`
-            (424, 425, "plus".to_string()), // `Box(1) + Box(2)`
             (417, 420, "Box".to_string()),  // Box(1)
+            (424, 425, "plus".to_string()), // `Box(1) + Box(2)`
             (426, 429, "Box".to_string()),  // Box(2)
-            (460, 462, "invoke".to_string()), // Box(3)()
             (454, 457, "Box".to_string()),  // Box(3)
+            (460, 462, "invoke".to_string()), // Box(3)()
         ]
     );
 }

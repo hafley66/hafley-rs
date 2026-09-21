@@ -577,6 +577,40 @@ CREATE TABLE IF NOT EXISTS "capture" (
     "match_end" INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "symbol" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "kind" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "occurrence" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL,
+    "role" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "local" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "fn" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "scip_def" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,
@@ -651,40 +685,6 @@ CREATE TABLE IF NOT EXISTS "scip_impl" (
     "record" TEXT NOT NULL,
     "impl" TEXT NOT NULL,
     "iface" TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS "scip_scm_symbol" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
-    "symbol" TEXT NOT NULL,
-    "path" TEXT NOT NULL,
-    "kind" TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS "scip_scm_occurrence" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
-    "symbol" TEXT NOT NULL,
-    "path" TEXT NOT NULL,
-    "start" INTEGER NOT NULL,
-    "end" INTEGER NOT NULL,
-    "role" TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS "scip_scm_local" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
-    "fn" TEXT NOT NULL,
-    "name" TEXT NOT NULL,
-    "path" TEXT NOT NULL,
-    "start" INTEGER NOT NULL,
-    "end" INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "scip_index" (
