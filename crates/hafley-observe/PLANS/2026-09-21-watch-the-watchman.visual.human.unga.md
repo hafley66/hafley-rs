@@ -23,16 +23,17 @@ the host names the commit point?
 | `tracy` | walks a callstack at every zone, and its timeline is wrong under async |
 | `tracy-alloc` | reports every allocation in the process |
 | `rusage` | reads the kernel counters at every span close and emits a record |
-| `sqlite-sink` | interns the repeating columns and writes a transaction per batch |
+| `sqlite-sink` | interns the repeating columns and writes a transaction per batch, or per event when immediate |
 
 The measured numbers live in the row tables below.
 
 ## How a row is built
 
 Each candidate is built twice from the same source. The off build has no
-layers. The on build has the candidate and whatever smaller set it needs. Both
-run the same workload three times per strategy. The table keeps the three
-walls on each side and the median change between them.
+layers, or only the smaller set the candidate is priced on top of. The on build
+has the candidate and that same smaller set. Both run the same workload three
+times per strategy. The table keeps the three walls on each side and the
+median change between them.
 
 The cell reads `cost` only when every on-run sits outside the spread of the
 off-runs. Otherwise the cell reads `in the noise`, and the six raw numbers are

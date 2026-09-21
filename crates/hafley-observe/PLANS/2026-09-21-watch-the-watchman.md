@@ -102,6 +102,13 @@ The version pinned for `opentelemetry-system-metrics` is `0.32`, the release
 that pairs with the otel `0.32` this crate already carries. The brief's `0.4`
 line predates that pairing.
 
+Every candidate on the brief's list was made to work and appears in the table.
+No candidate was dropped, so no row cites a throw site. The two additions this
+lab would propose, and did not add, are a `logs` exporter for the OTLP signal
+that is still missing and a bounded-ring sink that keeps the newest rows rather
+than the oldest; both are features of this crate and neither is in the brief's
+list.
+
 ## The relational sink
 
 The rule, and the reason for the lab: log records are relational data, and
@@ -205,9 +212,15 @@ on any of the twelve builds.
 
 ### R2: the table, from the one command
 
-`just watch-the-watchman` built, measured and wrote the table. The full run took
-nine minutes fifty-one seconds of wall time on this machine, under the ceiling
-the brief sets.
+`just watch-the-watchman` built, measured and wrote the table. It is one
+command, and the driver resumes: cells already measured are kept, so the table
+below is the sum of two invocations. The first measured every candidate in nine
+minutes fifty-two seconds, under the ceiling the brief sets. The second
+re-measured the two sink candidates in two minutes seventeen seconds, because
+their schema became idempotent in between and their rows had to be counted
+again. Both invocations ran with `WATCH_BUDGET_SECONDS` above the ceiling;
+the shipped default is six hundred seconds, and an invocation that runs out of
+budget prints the table with `skipped` cells and names every one of them.
 
 | feature | strategy | crates | binary bytes | wall off (ms, 3 runs) | wall on (ms, 3 runs) | pct cost | verdict |
 |---|---|---|---|---|---|---|---|
@@ -335,9 +348,9 @@ Three readings, none of them rounded away:
 - On disk the dictionary wins decisively: the same rows in 1.5 MB against
   3.3 MB, a factor of 2.16, at every strategy.
 - On the drain wall the dictionary loses. Its three on-runs (70.95, 76.09,
-  77.01) sit entirely above the control's (66.11, 66.24, 67.03), so this is
-  not a shift inside noise. The dictionary costs about five points of the
-  drain's wall at this scale.
+  77.01) sit entirely above the control's (66.11, 66.24, 67.03), a gap of
+  about ten milliseconds against an off wall of about six. Against each sink's
+  own off side that is `+11.5%` for the dictionary and `+9.7%` for the control.
 - On the immediate and on-commit walls the two overlap and the difference is
   not readable: immediate is dominated by one transaction per event, and
   on-commit is a wash.
@@ -414,7 +427,48 @@ construction: this lane's diff touches one crate, one recipe and one doc.
 
 ### R7: diff scope
 
-<!-- R7 -->
+```
+$ git diff --stat origin/main...HEAD
+ Cargo.lock                                         | 553 +++++++++++++++++++-
+ crates/hafley-observe/Cargo.toml                   |  49 +-
+ .../PLANS/2026-09-21-watch-the-watchman.md         | 440 ++++++++++++++++
+ ...6-09-21-watch-the-watchman.visual.human.unga.md | 177 +++++++
+ crates/hafley-observe/PLANS/watch-the-watchman.tsv |  37 ++
+ crates/hafley-observe/bench/watch_the_watchman.rs  | 298 +++++++++++
+ crates/hafley-observe/bench/watch_the_watchman.sh  | 185 +++++++
+ .../bench/watch_the_watchman_report.py             | 207 ++++++++
+ crates/hafley-observe/examples/otlp_probe.rs       |   4 +
+ crates/hafley-observe/src/0_types.rs               |  12 +
+ crates/hafley-observe/src/10_tracy.rs              |  72 +++
+ crates/hafley-observe/src/1_format.rs              |  16 +-
+ crates/hafley-observe/src/1_init.rs                |  14 +-
+ crates/hafley-observe/src/2_otlp.rs                |  34 +-
+ crates/hafley-observe/src/3_chrome.rs              |  28 +-
+ crates/hafley-observe/src/5_sqlite.rs              | 273 ++++++++++
+ crates/hafley-observe/src/6_flush.rs               | 315 ++++++++++++
+ crates/hafley-observe/src/7_sink.rs                | 154 ++++++
+ crates/hafley-observe/src/8_rusage.rs              | 134 +++++
+ crates/hafley-observe/src/9_metrics.rs             | 561 +++++++++++++++++++++
+ crates/hafley-observe/src/lib.rs                   |  44 +-
+ crates/hafley-observe/tests/bounded_loops.rs       | 108 ++++
+ crates/hafley-observe/tests/flush_contract.rs      |  98 ++++
+ crates/hafley-observe/tests/otlp_roundtrip.rs      |   2 +
+ crates/hafley-observe/tests/span_chrome_trace.rs   |   2 +
+ .../tests/sqlite_statement_counters.rs             |   2 +
+ docs/failure-modes.md                              |  40 ++
+ justfile                                           |   6 +
+ 28 files changed, 3804 insertions(+), 61 deletions(-)
+```
+
+Every path is owned by this lane: `crates/hafley-observe` (sources, manifest,
+bench, tests, example, plans) and the one recipe added to `justfile`. The root
+`Cargo.lock` changed because the crate gained dependencies, which the brief
+allows. One file outside that list is present by the brief's own law: the row
+`docs/failure-modes.md` gained for the off-side defect, because every incident
+that bites gets a row there.
+
+The workspace `Cargo.lock` was regenerated by cargo, not hand-merged, and
+`cargo check --workspace --all-targets --locked` above holds on it.
 
 ### R8: the bounded-loop scanner
 
