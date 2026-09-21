@@ -1,3 +1,5 @@
+#![cfg(feature = "sqlite-sink")]
+
 use hafley_observe::sqlite::{query_plan, StatementFinding};
 use rusqlite::Connection;
 use tracing_capture::{CaptureLayer, SharedStorage};
