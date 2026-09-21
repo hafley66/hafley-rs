@@ -431,11 +431,11 @@ construction: this lane's diff touches one crate, one recipe and one doc.
 $ git diff --stat origin/main...HEAD
  Cargo.lock                                         | 553 +++++++++++++++++++-
  crates/hafley-observe/Cargo.toml                   |  49 +-
- .../PLANS/2026-09-21-watch-the-watchman.md         | 440 ++++++++++++++++
- ...6-09-21-watch-the-watchman.visual.human.unga.md | 177 +++++++
+ .../PLANS/2026-09-21-watch-the-watchman.md         | 494 ++++++++++++++++++
+ ...6-09-21-watch-the-watchman.visual.human.unga.md | 178 +++++++
  crates/hafley-observe/PLANS/watch-the-watchman.tsv |  37 ++
  crates/hafley-observe/bench/watch_the_watchman.rs  | 298 +++++++++++
- crates/hafley-observe/bench/watch_the_watchman.sh  | 185 +++++++
+ crates/hafley-observe/bench/watch_the_watchman.sh  | 192 +++++++
  .../bench/watch_the_watchman_report.py             | 207 ++++++++
  crates/hafley-observe/examples/otlp_probe.rs       |   4 +
  crates/hafley-observe/src/0_types.rs               |  12 +
@@ -457,8 +457,7 @@ $ git diff --stat origin/main...HEAD
  .../tests/sqlite_statement_counters.rs             |   2 +
  docs/failure-modes.md                              |  40 ++
  justfile                                           |   6 +
- 28 files changed, 3804 insertions(+), 61 deletions(-)
-```
+ 28 files changed, 3866 insertions(+), 61 deletions(-)```
 
 Every path is owned by this lane: `crates/hafley-observe` (sources, manifest,
 bench, tests, example, plans) and the one recipe added to `justfile`. The root
