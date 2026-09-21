@@ -619,7 +619,8 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         return Ok(());
     }
     if std::env::args().nth(1).as_deref() == Some("graph") {
-        if let Err(error) = graph::run(std::env::args().skip(2)) {
+        let argv: Vec<String> = std::env::args().skip(1).collect();
+        if let Err(error) = graph::run(argv) {
             eprintln!("{error}");
             std::process::exit(2);
         }
