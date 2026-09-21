@@ -46,6 +46,8 @@ pub mod rust_rename;
 pub mod rust_scip_macros;
 pub mod rust_type_edges;
 pub mod rust_type_refs;
+#[path = "6_scm_family.rs"]
+mod scm_family;
 #[path = "5_scm_lower.rs"]
 pub mod scm_lower;
 #[path = "3_source_facts.rs"]
