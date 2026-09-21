@@ -60,7 +60,7 @@ fn collect_files(path: &Path, files: &mut Vec<PathBuf>) {
 
 fn call_rows(path: &Path, scm: bool, index: usize) -> Vec<String> {
     let mode = if scm { "scm" } else { "rust" };
-    let trace = format!("{}/traces/phase3-{mode}-{index}.json", env!("CARGO_MANIFEST_DIR"));
+    let trace = std::env::temp_dir().join(format!("ryi-150-{mode}-{index}-{}.json", std::process::id()));
     let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command
         .args(["--family", "call"])
