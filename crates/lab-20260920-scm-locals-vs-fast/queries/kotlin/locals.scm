@@ -1,0 +1,70 @@
+; Vendored from:
+; https://github.com/helix-editor/helix/blob/079a789e8cb08ead67f19e1971a1b7438b37354b/runtime/queries/kotlin/locals.scm
+; Upstream commit: 079a789e8cb08ead67f19e1971a1b7438b37354b
+; This Source Code Form is subject to the terms of the Mozilla Public
+; License, v. 2.0. If a copy of the MPL was not distributed with this
+; file, You can obtain one at https://mozilla.org/MPL/2.0/.
+
+; Scopes
+[
+  (class_declaration)
+  (function_declaration)
+  (lambda_literal)
+  ; `fun(x) { … }` expression form: has its own parameters and body.
+  (anonymous_function)
+  (control_structure_body)
+  (when_entry)
+  ; for/while loop variables are declared on the statement, not in its body.
+  (for_statement)
+] @local.scope
+
+; Definitions
+(type_parameter
+  (type_identifier) @local.definition.type.parameter)
+
+(parameter
+  (simple_identifier) @local.definition.variable.parameter)
+
+(lambda_literal
+  (lambda_parameters
+    (variable_declaration
+      (simple_identifier) @local.definition.variable.parameter)))
+
+; Loop and local `val`/`var` bindings; defined so inner references resolve and
+; shadow correctly.
+(variable_declaration
+  (simple_identifier) @local.definition.variable)
+
+; References
+(simple_identifier) @local.reference
+(type_identifier) @local.reference
+(interpolated_identifier) @local.reference
+
+; Member access after `.` is not a local reference.
+(navigation_suffix
+  (simple_identifier) @_)
+
+; Local extensions: declaration names, call sites, package names, and imports.
+(function_declaration
+  (simple_identifier) @local.definition.function)
+
+[
+  (class_declaration
+    (type_identifier) @local.definition.type)
+  (object_declaration
+    (type_identifier) @local.definition.type)
+  (type_alias
+    (type_identifier) @local.definition.type)
+]
+
+[
+  (call_expression
+    (simple_identifier) @local.call)
+  (call_expression
+    (navigation_expression
+      (navigation_suffix
+        (simple_identifier) @local.call)))
+]
+
+(package_header) @local.export.package
+(import_header) @local.import
