@@ -140,6 +140,30 @@ fn the_mode_refuses_a_per_file_mask_beside_it() {
     );
 }
 
+#[test]
+fn a_language_outside_pass_one_is_a_named_stop() {
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
+    command
+        .args(["--family", "scip_scm", "src/lib.rs"])
+        .env("HAFLEY_TRACE", trace_path(2))
+        .env("RUST_LOG", "sprefa_extract=debug");
+    let output = command.output().expect("ryi runs");
+    assert!(!output.status.success(), "a rust file has no pass-1 query");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    for stated in [
+        "covers kotlin and typescript",
+        "no compiler leg",
+        "no indexer leg",
+        "no cross-repo symbol",
+        "no persistent index",
+    ] {
+        assert!(
+            stderr.contains(stated),
+            "the error states what is out of scope ({stated}): {stderr}"
+        );
+    }
+}
+
 fn trace_path(index: usize) -> PathBuf {
     std::env::temp_dir().join(format!(
         "ryi-157-{index}-{}.json",

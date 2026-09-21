@@ -479,7 +479,7 @@ fn stream_scip_scm_family(
     if cli.paths.is_empty() {
         return Err("--family scip_scm takes one or more PATHs".into());
     }
-    let facts: Vec<FlatFact> = scip_scm_facts(&cli.paths)?;
+    let facts: Vec<FlatFact> = scip_scm_facts(&cli.paths).map_err(|error| error.to_string())?;
     let mut lines: Vec<String> = facts
         .iter()
         .map(|fact| serde_json::to_string(fact).expect("a flat fact is serializable"))
