@@ -315,13 +315,13 @@ impl Plan {
         let mut travelling = Vec::new();
         let mut orphans = Vec::new();
         for row in &source.specifiers {
-            let dest_module = match imports.target(&src, &row.module) {
+            let dest_module = match imports.target(&src, &row.name) {
                 Some(target) => arm.spell_module(&dest, target),
                 None => row.module.clone(),
             };
             let kind = match (
                 carried.contains(&(row.name.clone(), dest_module.clone())),
-                imports.target(&src, &row.module).is_some(),
+                imports.target(&src, &row.name).is_some(),
             ) {
                 (true, _) => "carried",
                 (false, true) => "relative",
@@ -375,13 +375,15 @@ impl Plan {
         let mut views = Vec::with_capacity(callers.len());
         let mut caller_modules = Vec::with_capacity(callers.len());
         for caller in &callers {
-            views.push(FileFacts::open(&cx, caller, false)?);
+            let facts = FileFacts::open(&cx, caller, false)?;
             caller_modules.push(
-                imports
-                    .module_of(caller, &src)
-                    .map(str::to_string)
-                    .unwrap_or_default(),
+                facts
+                    .specifiers
+                    .iter()
+                    .find(|row| row.name == item)
+                    .map_or_else(String::new, |row| row.module.clone()),
             );
+            views.push(facts);
         }
         moving.sort_by_key(|span| span.start);
         let moving_text = moving
@@ -706,10 +708,8 @@ fn merge(mut spans: Vec<Span>) -> Vec<Span> {
 // ── the cross-file read ─────────────────────────────────────────────────────
 
 /// One resolve pass over the corpus, read as `resolved_import` rows: which
-/// module spelling reaches which file, and who imports `SRC#ITEM`.
+/// bound name reaches which file, and who imports `SRC#ITEM`.
 struct Imports {
-    /// `(importer, module as written) -> the file it reaches`.
-    modules: BTreeMap<(String, String), String>,
     /// `(importer, bound name) -> (file, declared name)`.
     names: Vec<(String, String, String, String)>,
 }
@@ -739,15 +739,13 @@ impl Imports {
         };
         let facts =
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
-        let mut modules = BTreeMap::new();
         let mut names = Vec::new();
         for fact in &facts {
             let FlatFact::ResolvedImportRow {
                 src_path,
                 name,
                 target_path,
-                target_name,
-                kind,
+                target_name: Some(declared),
                 ..
             } = fact
             else {
@@ -757,32 +755,18 @@ impl Imports {
             else {
                 continue;
             };
-            match (kind.as_str(), target_name) {
-                ("module", _) => {
-                    modules.insert((importer, name.clone()), target);
-                }
-                (_, Some(declared)) => {
-                    names.push((importer, name.clone(), target, declared.clone()));
-                }
-                _ => {}
-            }
+            names.push((importer, name.clone(), target, declared.clone()));
         }
-        Ok(Self { modules, names })
+        Ok(Self { names })
     }
 
-    /// The corpus file `module`, as `importer` writes it, reaches.
-    fn target(&self, importer: &str, module: &str) -> Option<&str> {
-        self.modules
-            .get(&(importer.to_string(), module.to_string()))
-            .map(String::as_str)
-    }
-
-    /// The spelling `importer` reaches `target` by.
-    fn module_of(&self, importer: &str, target: &str) -> Option<&str> {
-        self.modules
+    /// The corpus file the specifier binding `name` in `importer` reaches. A
+    /// package import reaches nothing, which is what makes it a package.
+    fn target(&self, importer: &str, name: &str) -> Option<&str> {
+        self.names
             .iter()
-            .find(|((from, _), to)| from == importer && to.as_str() == target)
-            .map(|((_, module), _)| module.as_str())
+            .find(|(from, bound, _, _)| from == importer && bound == name)
+            .map(|(_, _, target, _)| target.as_str())
     }
 
     /// Every file importing `src#item`, in path order.

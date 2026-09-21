@@ -40,6 +40,7 @@ mod rust_checker_ra;
 pub mod rust_docs;
 pub mod rust_mbe;
 pub mod rust_modules;
+pub mod rust_mutate;
 pub mod rust_receivers;
 pub mod rust_rehome;
 pub mod rust_rename;
@@ -209,7 +210,7 @@ pub fn rename_for(path: &str) -> Option<&'static dyn Rename> {
 /// The `Mutate` roster, in `sources()` order. Membership is "this language can
 /// be text-edited by a verb", a third question again from `rehomes()`'s.
 pub fn mutates() -> &'static [&'static dyn Mutate] {
-    &[&TsSource]
+    &[&RustSource, &TsSource]
 }
 
 /// The `Mutate` that owns `path`, under the SAME first-match law `rehome_for`
