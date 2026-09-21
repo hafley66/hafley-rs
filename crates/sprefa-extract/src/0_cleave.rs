@@ -269,30 +269,6 @@ impl Plan {
             .clone();
 
         let imports = Imports::read(&cx, &root)?;
-        let unresolved = source.ungraded(&[item_decl.span]);
-        if !unresolved.is_empty() {
-            return Ok(Plan {
-                root,
-                cx,
-                arm,
-                rows: CleavePlan {
-                    src,
-                    dest,
-                    item,
-                    item_span: item_decl.span,
-                    drag_iterations: 1,
-                    unresolved,
-                    ..CleavePlan::default()
-                },
-                source,
-                dest_facts: None,
-                moving_text: Vec::new(),
-                dest_imports: Vec::new(),
-                callers: Vec::new(),
-                caller_modules: Vec::new(),
-            });
-        }
-
         let (dragged, drag_iterations) = source.drag_fixpoint(&item_decl, cli.drag);
         let mut moving: Vec<Span> = vec![item_decl.span];
         moving.extend(
@@ -340,6 +316,35 @@ impl Plan {
             if source.refs_outside(&row.name, &moving) == 0 {
                 orphans.push(plan_row);
             }
+        }
+
+        let carried_names: BTreeSet<&str> = travelling
+            .iter()
+            .map(|row| row.name.as_str())
+            .chain(dragged.iter().map(|row| row.name.as_str()))
+            .collect();
+        let unresolved = source.ungraded(&moving, &carried_names);
+        if !unresolved.is_empty() {
+            return Ok(Plan {
+                root,
+                cx,
+                arm,
+                rows: CleavePlan {
+                    src,
+                    dest,
+                    item,
+                    item_span: item_decl.span,
+                    drag_iterations,
+                    unresolved,
+                    ..CleavePlan::default()
+                },
+                source,
+                dest_facts: None,
+                moving_text: Vec::new(),
+                dest_imports: Vec::new(),
+                callers: Vec::new(),
+                caller_modules: Vec::new(),
+            });
         }
 
         let src_module = arm.spell_module(&dest, &src);
@@ -917,9 +922,10 @@ impl FileFacts {
             .count()
     }
 
-    /// Names the moving set calls directly that no specifier and no top-level
-    /// declaration answer. A call through a receiver is a member access.
-    fn ungraded(&self, spans: &[Span]) -> Vec<String> {
+    /// Names the moving set calls that SRC binds and the plan carries nowhere.
+    /// A name SRC does not bind is ambient — the language answers it in DEST
+    /// the same way — and a call through a receiver is a member access.
+    fn ungraded(&self, spans: &[Span], carried: &BTreeSet<&str>) -> Vec<String> {
         let bound: BTreeSet<&str> = self
             .specifiers
             .iter()
@@ -931,7 +937,10 @@ impl FileFacts {
             if *through_receiver || !spans.iter().any(|scope| inside(*span, *scope)) {
                 continue;
             }
-            if bound.contains(callee.as_str()) || self.refs_in(callee, spans) == 0 {
+            if !bound.contains(callee.as_str()) || carried.contains(callee.as_str()) {
+                continue;
+            }
+            if self.refs_in(callee, spans) == 0 {
                 continue;
             }
             out.insert(callee.clone());
@@ -976,7 +985,7 @@ impl FileFacts {
     fn drag_action(&self, decl: &Decl, moving: &[Span], drag: bool) -> &'static str {
         let mut scope = moving.to_vec();
         scope.push(decl.span);
-        match drag && self.refs_outside(&decl.name, &scope) == 0 {
+        match drag && !decl.exported && self.refs_outside(&decl.name, &scope) == 0 {
             true => "moved",
             false => "exported",
         }
@@ -986,7 +995,7 @@ impl FileFacts {
     fn drag_candidates(&self, item: &Decl, moving: &[Span], claimed: &[CleaveDrag]) -> Vec<Decl> {
         self.decls
             .iter()
-            .filter(|decl| !decl.exported && decl.name != item.name)
+            .filter(|decl| decl.name != item.name)
             .filter(|decl| !claimed.iter().any(|row| row.name == decl.name))
             .filter(|decl| self.refs_in(&decl.name, moving) > 0)
             .cloned()

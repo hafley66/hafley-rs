@@ -3,7 +3,6 @@
 //! rows and asks here for the three spellings no fact carries.
 //! @comment-ok: module header, the seam list every lang arm opens with
 
-use crate::move_cx::dirname;
 use crate::source::{FamilyMask, Source};
 use crate::types::{Edit, FamilyTag, Mutate, Span};
 use crate::wire::{flatten_each, FlatFact};
@@ -67,10 +66,11 @@ impl Mutate for RustSource {
     }
 
     /// `crate::a::b`, or `super::b` when the two files are siblings under a
-    /// module rather than under the crate root.
+    /// module rather than under the crate root. Siblings is a module question,
+    /// not a directory one: `lang/mod.rs` IS `lang`, so `lang/ts.rs` is under it.
     fn spell_module(&self, from_path: &str, to_path: &str) -> String {
         let to = module_parts(to_path);
-        let siblings = dirname(from_path) == dirname(to_path);
+        let siblings = parent_of(&module_parts(from_path)) == parent_of(&to);
         match (siblings, to.len() > 1) {
             (true, true) => format!("super::{}", to.last().cloned().unwrap_or_default()),
             _ => match to.is_empty() {
@@ -79,6 +79,11 @@ impl Mutate for RustSource {
             },
         }
     }
+}
+
+/// A module path without its own last segment.
+fn parent_of(parts: &[String]) -> &[String] {
+    parts.split_last().map_or(parts, |(_, head)| head)
 }
 
 /// The full paths `module` must supply once it binds `names`.
