@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::flush::Flush;
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum OutputFormat {
     #[default]
@@ -69,6 +71,16 @@ impl Config {
             format,
             ansi,
         })
+    }
+
+    /// The flush strategy every sink obeys, read from the environment.
+    ///
+    /// The strategy is one enum on this configuration, not a per-sink choice.
+    /// It is read here rather than stored in a field because callers build
+    /// `Config` as a struct literal, and a new field would break every one of
+    /// them for a value the environment already carries.
+    pub fn flush(&self) -> Flush {
+        Flush::from_env()
     }
 }
 

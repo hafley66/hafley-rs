@@ -4,6 +4,10 @@
 //! `http://127.0.0.1:4318/v1/traces`) to see `probe`, `parse` and `lower`
 //! land in the store.
 
+#[cfg(not(feature = "otlp-trace"))]
+fn main() {}
+
+#[cfg(feature = "otlp-trace")]
 fn main() {
     hafley_observe::init(
         hafley_observe::Config::from_env(
