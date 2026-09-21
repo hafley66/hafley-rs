@@ -2737,6 +2737,12 @@ pub trait Source: Sync + Send {
     fn extract_lang(&self, path: &str) -> Option<RyiLang> {
         SupportLang::from_path(path).map(RyiLang::Sg)
     }
+    /// The `.scm` fast's `symbol`/`occurrence`/`local` rows come from, bundled
+    /// by this language's own file. `path`: one `Source` can span grammars.
+    fn scm_query(&self, path: &str) -> Option<&'static str> {
+        let _ = path;
+        None
+    }
 }
 
 // ── the Rehome seam: what one language answers when a file moves ────────────

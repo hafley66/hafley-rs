@@ -53,6 +53,10 @@ use crate::types::{PathIndex, UnresolvedReason};
 
 use super::kotlin_modules::KtModuleIndex;
 
+/// Kotlin's own `.scm`: the scope/definition/call captures fast lowers through
+/// L1. Owned here, read through `Source::scm_query`, never named elsewhere.
+pub(crate) const KOTLIN_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
+
 // ── the tree-sitter-kotlin parse (one parse feeds type/call/df) ─────────────
 
 /// Parse Kotlin source via tree-sitter-kotlin-sg. Port of v5's inline parse in
@@ -1314,6 +1318,12 @@ impl Source for KotlinSource {
 
     fn matches(&self, path: &str) -> bool {
         path.ends_with(".kt") || path.ends_with(".kts")
+    }
+
+    /// `.kt` and `.kts` both parse under the one kotlin grammar the query was
+    /// written against, so every path this source claims is covered.
+    fn scm_query(&self, _path: &str) -> Option<&'static str> {
+        Some(KOTLIN_SCM)
     }
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {

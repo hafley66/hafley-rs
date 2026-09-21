@@ -48,6 +48,10 @@ use crate::types::{KindIndex, ScipIndex};
 use super::ts_checker::TsCheckerAnswer;
 use super::ts_receivers;
 
+/// TypeScript's own `.scm`: the scope/definition/call captures fast lowers
+/// through L1. Owned here, read through `Source::scm_query`.
+const TYPESCRIPT_SCM: &str = include_str!("../../queries/typescript/scip.scm");
+
 /// `oxc_span::Span` (start + end) -> our byte `Span` (start + len). One
 /// coordinate; the engine derives line/col from the file bytes when needed.
 fn to_span(s: oxc_span::Span) -> Span {
@@ -4052,6 +4056,14 @@ impl Source for TsSource {
 
     fn matches(&self, path: &str) -> bool {
         source_type_for(path).is_some()
+    }
+
+    /// The query names typescript-only kinds (`type_alias_declaration`,
+    /// `type_identifier`) the js/jsx grammars refuse.
+    fn scm_query(&self, path: &str) -> Option<&'static str> {
+        source_type_for(path)
+            .filter(|source_type| source_type.is_typescript())
+            .map(|_| TYPESCRIPT_SCM)
     }
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {

@@ -5,13 +5,11 @@ use std::collections::{BTreeMap, BTreeSet};
 use tree_sitter::{Node as TsNode, Query, QueryCursor, StreamingIterator};
 
 use super::ast_rule::{query_ast_rule, AstRule, AstRuleRequest};
-use super::kotlin::{kt_child_kind, kt_first_child, kt_text, node_span};
+use super::kotlin::{kt_child_kind, kt_first_child, kt_text, node_span, KOTLIN_SCM};
 use super::scm_lower::lower_scm;
 use crate::family::{CallF, CallKind, CallSite};
 use crate::rows::{FamilyBundle, Node};
 use crate::shape::{Span, Strings};
-
-const KOTLIN_CALL_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
 
 #[derive(Default)]
 struct SiteCapture {
@@ -31,7 +29,7 @@ pub(crate) fn project_kotlin_call(
     let selected = lowered_spans(path, src);
     let language = root.language();
     let query =
-        Query::new(&language, KOTLIN_CALL_SCM).expect("the bundled Kotlin CallF query compiles");
+        Query::new(&language, KOTLIN_SCM).expect("the bundled Kotlin CallF query compiles");
     let names = query.capture_names();
     let mut cursor = QueryCursor::new();
     let mut matches = cursor.matches(&query, root, src);
@@ -123,7 +121,7 @@ pub(crate) fn project_kotlin_call(
 /// L1 supplies the definition and site candidate spans. Native query execution
 /// retains capture grouping, which the AstRule representation does not store.
 fn lowered_spans(path: &str, src: &[u8]) -> BTreeSet<Span> {
-    let program = lower_scm(KOTLIN_CALL_SCM).expect("the bundled Kotlin CallF query lowers");
+    let program = lower_scm(KOTLIN_SCM).expect("the bundled Kotlin CallF query lowers");
     let rule = AstRule::Any(
         ["def.span", "site.span"]
             .into_iter()

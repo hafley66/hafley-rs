@@ -4,7 +4,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use ast_grep_language::{LanguageExt, SupportLang};
+use ast_grep_core::tree_sitter::LanguageExt;
 use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
 
 use super::ast_rule::{query_ast_rule, AstRule, AstRuleRequest};
@@ -12,9 +12,6 @@ use super::extract_lang::RyiLang;
 use super::scm_store::{NodeKind, Store};
 use super::scm_lower::{lower_scm, ScmLowerError};
 use crate::types::FlatFact;
-
-const KOTLIN_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
-const TYPESCRIPT_SCM: &str = include_str!("../../queries/typescript/scip.scm");
 
 /// The outer captures L1 selects. Everything else is read off the native
 /// match that carries one of them.
@@ -337,14 +334,10 @@ fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScmError> {
 }
 
 /// The bundled query for a path's language, with the grammar it executes on.
-fn query_for(path: &str) -> Option<(SupportLang, &'static str)> {
-    match RyiLang::from_path(path) {
-        Some(RyiLang::Sg(SupportLang::Kotlin)) => Some((SupportLang::Kotlin, KOTLIN_SCM)),
-        Some(RyiLang::Sg(SupportLang::TypeScript)) => {
-            Some((SupportLang::TypeScript, TYPESCRIPT_SCM))
-        }
-        _ => None,
-    }
+/// Both come off the `Source` roster, so no language is named here.
+fn query_for(path: &str) -> Option<(RyiLang, &'static str)> {
+    let source = super::source_for(path)?;
+    Some((source.extract_lang(path)?, source.scm_query(path)?))
 }
 
 fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScmError> {
@@ -408,7 +401,7 @@ fn lowered_spans(
 /// capture is one L1 selected.
 fn native_captures(
     path: &str,
-    lang: SupportLang,
+    lang: RyiLang,
     query_text: &str,
     source: &[u8],
     selected: &BTreeSet<(u32, u32)>,
