@@ -29,7 +29,7 @@ pub use _1_format::{env_filter, format_layer, FormatConfig, DEFAULT_FILTER_VARIA
 pub use _1_init::{init, init_with_writer, startup};
 pub use _2_otlp::shutdown;
 pub use _3_chrome::{chrome_layer, finish_trace, trace_path, TRACE_PATH_VARIABLE};
-pub use _4_counts::{assert_growth, observed_growth, CountRecorder, Growth, SpanCounts};
+pub use _4_counts::{assert_growth, observed_growth, CountRecorder, EventSums, Growth, SpanCounts};
 pub use flush::{Flush, ParseFlushError, Row, Sink, Writer};
 pub use instruments::{proc_layer, span_layer};
 pub use rusage::{layer as rusage_layer, sample as process_sample, Usage};

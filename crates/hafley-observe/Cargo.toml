@@ -38,6 +38,7 @@ sqlite-sink = ["dep:rusqlite"]
 tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-capture = "0.1.0"
+tracing-tunnel = "0.1.0"
 # The process sampler reads rusage through this; it is compiled on every build
 # so the harness can measure with the layers off.
 libc = "0.2"
