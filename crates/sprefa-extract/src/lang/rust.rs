@@ -38,6 +38,10 @@ use crate::seams::{
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+
+/// Rust's own `.scm`: the scope/definition/call captures fast lowers through
+/// L1. Owned here, read through `Source::scm_query`.
+const RUST_SCM: &str = include_str!("../../queries/rust/scip.scm");
 use crate::trace;
 use crate::types::LangKind;
 use crate::types::ScipIndex;
@@ -3366,6 +3370,10 @@ impl Source for RustSource {
 
     fn matches(&self, path: &str) -> bool {
         path.ends_with(".rs")
+    }
+
+    fn scm_query(&self, _path: &str) -> Option<&'static str> {
+        Some(RUST_SCM)
     }
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {

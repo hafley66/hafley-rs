@@ -763,6 +763,20 @@ pub mod models {
         pub start: u32,
         pub end: u32,
         pub role: String,
+        pub exported: bool,
+        pub decl_start: u32,
+        pub decl_end: u32,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct FreeName {
+        pub path: String,
+        pub owner_start: u32,
+        pub owner_end: u32,
+        pub name: String,
+        pub start: u32,
+        pub end: u32,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1121,6 +1135,9 @@ pub enum Fact {
     #[serde(rename = "occurrence")]
     Occurrence(models::Occurrence),
 
+    #[serde(rename = "free_name")]
+    FreeName(models::FreeName),
+
     #[serde(rename = "local")]
     Local(models::Local),
 
@@ -1286,6 +1303,8 @@ impl Fact {
 
             Self::Occurrence(row) => row.insert(conn, source),
 
+            Self::FreeName(row) => row.insert(conn, source),
+
             Self::Local(row) => row.insert(conn, source),
 
             Self::ScipDef(row) => row.insert(conn, source),
@@ -1334,7 +1353,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 68;
+pub const TABLE_COUNT: usize = 69;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1476,6 +1495,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let mut occurrence: Vec<(usize, &models::Occurrence)> = Vec::new();
 
+    let mut free_name: Vec<(usize, &models::FreeName)> = Vec::new();
+
     let mut local: Vec<(usize, &models::Local)> = Vec::new();
 
     let mut scip_def: Vec<(usize, &models::ScipDef)> = Vec::new();
@@ -1616,6 +1637,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::Occurrence(value) => occurrence.push((index, value)),
 
+            Fact::FreeName(value) => free_name.push((index, value)),
+
             Fact::Local(value) => local.push((index, value)),
 
             Fact::ScipDef(value) => scip_def.push((index, value)),
@@ -1754,7 +1777,9 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let symbol_capacity = if symbol.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let occurrence_capacity = if occurrence.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let occurrence_capacity = if occurrence.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let free_name_capacity = if free_name.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let local_capacity = if local.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2307,7 +2332,18 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in occurrence.chunks(occurrence_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in free_name.chunks(free_name_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3982,10 +4018,47 @@ impl models::Occurrence {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.role.as_str())?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.exported)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.decl_start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.decl_end)?;
+        parameter += 1;
         Ok(parameter)
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::FreeName {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "free_name")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.owner_start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.owner_end)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.end)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

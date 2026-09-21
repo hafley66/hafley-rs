@@ -74,7 +74,8 @@ pub use lang::{
     build_paths, compiled_spellings, decode_ast_rule_yaml, dl6_db_path, find_owned_region,
     open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_ast_rule,
     query_ast_rule_with_content, query_patterns, query_source, query_source_facts,
-    query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes, rename_for, renames, respell,
+    cleave_for, cleaves, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
+    rename_for, renames, respell,
     scm_edges, scm_facts, source_for, sources, ts_specifiers, AstCaptureFact,
     AstPatternQuery, AstRule, AstRuleCapture,
     AstRuleError, AstRuleMatch, AstRuleMutationProposal, AstRuleRequest, AstgrepSource, BuildPaths,
@@ -135,7 +136,7 @@ pub use soopy::{
 };
 pub use source::{RyiOutput, FamilyMask, Source};
 pub use types::{
-    CfgEdgeKind, CfgF, CfgNodeKind, ImportRef, ImportRefKind, RefRole, Rehome, RehomeArm,
+    CfgEdgeKind, CfgF, CfgNodeKind, Edit, ImportRef, ImportRefKind, Cleave, RefRole, Rehome, RehomeArm,
     RehomeManifests, RehomePlanCheck, RehomeShim, RehomeTextSpellings, Rename, RenameStop, Respell,
     SymbolId, SymbolInterner, SymbolRef, SymbolSeat,
 };

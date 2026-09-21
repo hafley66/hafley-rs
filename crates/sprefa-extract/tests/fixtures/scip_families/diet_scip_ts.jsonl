@@ -1,3 +1,30 @@
+{"record":"free_name","path":"tests/fixtures/ts/consts.ts","owner_start":0,"owner_end":1297,"name":"Routes","start":790,"end":796}
+{"record":"free_name","path":"tests/fixtures/ts/consts.ts","owner_start":0,"owner_end":1297,"name":"name","start":576,"end":580}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":0,"owner_end":1544,"name":"Dir","start":960,"end":963}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1022,"owner_end":1322,"name":"Math","start":1155,"end":1159}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1022,"owner_end":1322,"name":"Vec2","start":1263,"end":1267}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1022,"owner_end":1322,"name":"Vec2","start":1285,"end":1289}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1501,"owner_end":1542,"name":"Point","start":1505,"end":1510}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1501,"owner_end":1542,"name":"Point","start":1513,"end":1518}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":820,"owner_end":865,"name":"Point","start":830,"end":835}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":899,"owner_end":918,"name":"Point","start":910,"end":915}
+{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":899,"owner_end":918,"name":"Vec","start":904,"end":907}
+{"record":"free_name","path":"tests/fixtures/ts/lambdas.ts","owner_start":1422,"owner_end":1501,"name":"double","start":1491,"end":1497}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":0,"owner_end":989,"name":"Dir","start":481,"end":484}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":0,"owner_end":989,"name":"Point","start":819,"end":824}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Dir","start":272,"end":275}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Point","start":262,"end":267}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Vec2","start":278,"end":282}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Vec2","start":354,"end":358}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":394,"owner_end":439,"name":"Point","start":404,"end":409}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":448,"owner_end":467,"name":"Point","start":459,"end":464}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":448,"owner_end":467,"name":"Vec","start":453,"end":456}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Math","start":632,"end":636}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Vec","start":741,"end":744}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Vec2","start":747,"end":751}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Vec2","start":769,"end":773}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":946,"owner_end":987,"name":"Point","start":950,"end":955}
+{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":946,"owner_end":987,"name":"Point","start":958,"end":963}
 {"record":"local","fn":"INNER_TABLE","name":"INNER_TABLE","path":"tests/fixtures/ts/consts.ts","start":1225,"end":1236}
 {"record":"local","fn":"Vec2","name":"constructor","path":"tests/fixtures/ts/docs.ts","start":1037,"end":1048}
 {"record":"local","fn":"Vec2","name":"constructor","path":"tests/fixtures/ts/sample.ts","start":546,"end":557}
@@ -37,72 +64,72 @@
 {"record":"local","fn":"value","name":"value","path":"tests/fixtures/ts/lambdas.ts","start":799,"end":804}
 {"record":"local","fn":"value","name":"value","path":"tests/fixtures/ts/lambdas.ts","start":916,"end":921}
 {"record":"local","fn":"x","name":"x","path":"tests/fixtures/ts/consts.ts","start":1093,"end":1094}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/INNER_TABLE().","path":"tests/fixtures/ts/consts.ts","start":1225,"end":1236,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/count().","path":"tests/fixtures/ts/consts.ts","start":665,"end":670,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/greeting().","path":"tests/fixtures/ts/consts.ts","start":559,"end":567,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/handler().","path":"tests/fixtures/ts/consts.ts","start":1082,"end":1089,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/home().","path":"tests/fixtures/ts/consts.ts","start":306,"end":310,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/makeTable().","path":"tests/fixtures/ts/consts.ts","start":1203,"end":1212,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/mutablePath().","path":"tests/fixtures/ts/consts.ts","start":937,"end":948,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/pinned().","path":"tests/fixtures/ts/consts.ts","start":972,"end":978,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/routes().","path":"tests/fixtures/ts/consts.ts","start":391,"end":397,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/x().","path":"tests/fixtures/ts/consts.ts","start":1093,"end":1094,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","start":1028,"end":1032,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","start":1285,"end":1289,"role":"ref"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/add().","path":"tests/fixtures/ts/docs.ts","start":725,"end":728,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/by().","path":"tests/fixtures/ts/docs.ts","start":1250,"end":1252,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/constructor().","path":"tests/fixtures/ts/docs.ts","start":1037,"end":1048,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/greeting().","path":"tests/fixtures/ts/docs.ts","start":1420,"end":1428,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/left().","path":"tests/fixtures/ts/docs.ts","start":729,"end":733,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/magnitude().","path":"tests/fixtures/ts/docs.ts","start":1122,"end":1131,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/mirror().","path":"tests/fixtures/ts/docs.ts","start":1492,"end":1498,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/p().","path":"tests/fixtures/ts/docs.ts","start":1502,"end":1503,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/right().","path":"tests/fixtures/ts/docs.ts","start":743,"end":748,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/scaled().","path":"tests/fixtures/ts/docs.ts","start":1243,"end":1249,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/x().","path":"tests/fixtures/ts/docs.ts","start":1056,"end":1057,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/y().","path":"tests/fixtures/ts/docs.ts","start":1074,"end":1075,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/acc().","path":"tests/fixtures/ts/lambdas.ts","start":1071,"end":1074,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/double().","path":"tests/fixtures/ts/lambdas.ts","start":535,"end":541,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/doubleAll().","path":"tests/fixtures/ts/lambdas.ts","start":1431,"end":1440,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/factor().","path":"tests/fixtures/ts/lambdas.ts","start":679,"end":685,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/inner().","path":"tests/fixtures/ts/lambdas.ts","start":1307,"end":1312,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/n().","path":"tests/fixtures/ts/lambdas.ts","start":545,"end":546,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/outer().","path":"tests/fixtures/ts/lambdas.ts","start":1273,"end":1278,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/pairs().","path":"tests/fixtures/ts/lambdas.ts","start":1216,"end":1221,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/positive().","path":"tests/fixtures/ts/lambdas.ts","start":890,"end":898,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/scaled().","path":"tests/fixtures/ts/lambdas.ts","start":778,"end":784,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/summarize().","path":"tests/fixtures/ts/lambdas.ts","start":591,"end":600,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/value().","path":"tests/fixtures/ts/lambdas.ts","start":1076,"end":1081,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/value().","path":"tests/fixtures/ts/lambdas.ts","start":799,"end":804,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/value().","path":"tests/fixtures/ts/lambdas.ts","start":916,"end":921,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":1222,"end":1228,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":1441,"end":1447,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":601,"end":607,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":354,"end":358,"role":"ref"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":537,"end":541,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":769,"end":773,"role":"ref"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/a().","path":"tests/fixtures/ts/sample.ts","start":864,"end":865,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/add().","path":"tests/fixtures/ts/sample.ts","start":16,"end":19,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/b().","path":"tests/fixtures/ts/sample.ts","start":875,"end":876,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/by().","path":"tests/fixtures/ts/sample.ts","start":737,"end":739,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/clamp().","path":"tests/fixtures/ts/sample.ts","start":296,"end":301,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/clamp().","path":"tests/fixtures/ts/sample.ts","start":359,"end":364,"role":"ref"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/clamp().","path":"tests/fixtures/ts/sample.ts","start":371,"end":376,"role":"ref"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/constructor().","path":"tests/fixtures/ts/sample.ts","start":546,"end":557,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/d().","path":"tests/fixtures/ts/sample.ts","start":269,"end":270,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/left().","path":"tests/fixtures/ts/sample.ts","start":20,"end":24,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/magnitude().","path":"tests/fixtures/ts/sample.ts","start":599,"end":608,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/mirror().","path":"tests/fixtures/ts/sample.ts","start":937,"end":943,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/n().","path":"tests/fixtures/ts/sample.ts","start":302,"end":303,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/origin().","path":"tests/fixtures/ts/sample.ts","start":811,"end":817,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/p().","path":"tests/fixtures/ts/sample.ts","start":259,"end":260,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/p().","path":"tests/fixtures/ts/sample.ts","start":947,"end":948,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/right().","path":"tests/fixtures/ts/sample.ts","start":34,"end":39,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/scaled().","path":"tests/fixtures/ts/sample.ts","start":730,"end":736,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/shift().","path":"tests/fixtures/ts/sample.ts","start":253,"end":258,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/sub().","path":"tests/fixtures/ts/sample.ts","start":857,"end":860,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/x().","path":"tests/fixtures/ts/sample.ts","start":565,"end":566,"role":"def"}
-{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/y().","path":"tests/fixtures/ts/sample.ts","start":583,"end":584,"role":"def"}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/INNER_TABLE().","path":"tests/fixtures/ts/consts.ts","start":1225,"end":1236,"role":"def","exported":false,"decl_start":1225,"decl_end":1271}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/count().","path":"tests/fixtures/ts/consts.ts","start":665,"end":670,"role":"def","exported":true,"decl_start":665,"decl_end":674}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/greeting().","path":"tests/fixtures/ts/consts.ts","start":559,"end":567,"role":"def","exported":true,"decl_start":559,"decl_end":582}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/handler().","path":"tests/fixtures/ts/consts.ts","start":1082,"end":1089,"role":"def","exported":true,"decl_start":1082,"decl_end":1112}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/home().","path":"tests/fixtures/ts/consts.ts","start":306,"end":310,"role":"def","exported":true,"decl_start":306,"decl_end":320}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/makeTable().","path":"tests/fixtures/ts/consts.ts","start":1203,"end":1212,"role":"def","exported":true,"decl_start":1194,"decl_end":1296}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/mutablePath().","path":"tests/fixtures/ts/consts.ts","start":937,"end":948,"role":"def","exported":true,"decl_start":937,"decl_end":957}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/pinned().","path":"tests/fixtures/ts/consts.ts","start":972,"end":978,"role":"def","exported":true,"decl_start":972,"decl_end":996}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/routes().","path":"tests/fixtures/ts/consts.ts","start":391,"end":397,"role":"def","exported":true,"decl_start":391,"decl_end":460}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/x().","path":"tests/fixtures/ts/consts.ts","start":1093,"end":1094,"role":"def","exported":false,"decl_start":1093,"decl_end":1102}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","start":1028,"end":1032,"role":"def","exported":true,"decl_start":1022,"decl_end":1322}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","start":1285,"end":1289,"role":"ref","exported":false,"decl_start":1285,"decl_end":1289}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/add().","path":"tests/fixtures/ts/docs.ts","start":725,"end":728,"role":"def","exported":true,"decl_start":716,"decl_end":792}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/by().","path":"tests/fixtures/ts/docs.ts","start":1250,"end":1252,"role":"def","exported":false,"decl_start":1250,"decl_end":1260}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/constructor().","path":"tests/fixtures/ts/docs.ts","start":1037,"end":1048,"role":"def","exported":false,"decl_start":1037,"decl_end":1087}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/greeting().","path":"tests/fixtures/ts/docs.ts","start":1420,"end":1428,"role":"def","exported":true,"decl_start":1420,"decl_end":1435}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/left().","path":"tests/fixtures/ts/docs.ts","start":729,"end":733,"role":"def","exported":false,"decl_start":729,"decl_end":741}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/magnitude().","path":"tests/fixtures/ts/docs.ts","start":1122,"end":1131,"role":"def","exported":false,"decl_start":1122,"decl_end":1204}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/mirror().","path":"tests/fixtures/ts/docs.ts","start":1492,"end":1498,"role":"def","exported":true,"decl_start":1492,"decl_end":1542}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/p().","path":"tests/fixtures/ts/docs.ts","start":1502,"end":1503,"role":"def","exported":false,"decl_start":1502,"decl_end":1510}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/right().","path":"tests/fixtures/ts/docs.ts","start":743,"end":748,"role":"def","exported":false,"decl_start":743,"decl_end":756}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/scaled().","path":"tests/fixtures/ts/docs.ts","start":1243,"end":1249,"role":"def","exported":false,"decl_start":1243,"decl_end":1320}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/x().","path":"tests/fixtures/ts/docs.ts","start":1056,"end":1057,"role":"def","exported":false,"decl_start":1049,"decl_end":1065}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/y().","path":"tests/fixtures/ts/docs.ts","start":1074,"end":1075,"role":"def","exported":false,"decl_start":1067,"decl_end":1083}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/acc().","path":"tests/fixtures/ts/lambdas.ts","start":1071,"end":1074,"role":"def","exported":false,"decl_start":1071,"decl_end":1074}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/double().","path":"tests/fixtures/ts/lambdas.ts","start":535,"end":541,"role":"def","exported":true,"decl_start":535,"decl_end":572}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/doubleAll().","path":"tests/fixtures/ts/lambdas.ts","start":1431,"end":1440,"role":"def","exported":true,"decl_start":1422,"decl_end":1501}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/factor().","path":"tests/fixtures/ts/lambdas.ts","start":679,"end":685,"role":"def","exported":false,"decl_start":679,"decl_end":689}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/inner().","path":"tests/fixtures/ts/lambdas.ts","start":1307,"end":1312,"role":"def","exported":false,"decl_start":1307,"decl_end":1312}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/n().","path":"tests/fixtures/ts/lambdas.ts","start":545,"end":546,"role":"def","exported":false,"decl_start":545,"decl_end":554}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/outer().","path":"tests/fixtures/ts/lambdas.ts","start":1273,"end":1278,"role":"def","exported":false,"decl_start":1273,"decl_end":1278}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/pairs().","path":"tests/fixtures/ts/lambdas.ts","start":1216,"end":1221,"role":"def","exported":true,"decl_start":1207,"decl_end":1338}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/positive().","path":"tests/fixtures/ts/lambdas.ts","start":890,"end":898,"role":"def","exported":false,"decl_start":890,"decl_end":954}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/scaled().","path":"tests/fixtures/ts/lambdas.ts","start":778,"end":784,"role":"def","exported":false,"decl_start":778,"decl_end":824}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/summarize().","path":"tests/fixtures/ts/lambdas.ts","start":591,"end":600,"role":"def","exported":true,"decl_start":582,"decl_end":1119}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/value().","path":"tests/fixtures/ts/lambdas.ts","start":1076,"end":1081,"role":"def","exported":false,"decl_start":1076,"decl_end":1081}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/value().","path":"tests/fixtures/ts/lambdas.ts","start":799,"end":804,"role":"def","exported":false,"decl_start":799,"decl_end":804}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/value().","path":"tests/fixtures/ts/lambdas.ts","start":916,"end":921,"role":"def","exported":false,"decl_start":916,"decl_end":921}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":1222,"end":1228,"role":"def","exported":false,"decl_start":1222,"decl_end":1238}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":1441,"end":1447,"role":"def","exported":false,"decl_start":1441,"decl_end":1457}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":601,"end":607,"role":"def","exported":false,"decl_start":601,"decl_end":617}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":354,"end":358,"role":"ref","exported":false,"decl_start":354,"decl_end":358}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":537,"end":541,"role":"def","exported":true,"decl_start":531,"decl_end":796}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":769,"end":773,"role":"ref","exported":false,"decl_start":769,"decl_end":773}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/a().","path":"tests/fixtures/ts/sample.ts","start":864,"end":865,"role":"def","exported":false,"decl_start":864,"decl_end":873}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/add().","path":"tests/fixtures/ts/sample.ts","start":16,"end":19,"role":"def","exported":true,"decl_start":7,"decl_end":83}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/b().","path":"tests/fixtures/ts/sample.ts","start":875,"end":876,"role":"def","exported":false,"decl_start":875,"decl_end":884}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/by().","path":"tests/fixtures/ts/sample.ts","start":737,"end":739,"role":"def","exported":false,"decl_start":737,"decl_end":744}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/clamp().","path":"tests/fixtures/ts/sample.ts","start":296,"end":301,"role":"def","exported":false,"decl_start":287,"decl_end":340}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/clamp().","path":"tests/fixtures/ts/sample.ts","start":359,"end":364,"role":"ref","exported":false,"decl_start":359,"decl_end":364}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/clamp().","path":"tests/fixtures/ts/sample.ts","start":371,"end":376,"role":"ref","exported":false,"decl_start":371,"decl_end":376}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/constructor().","path":"tests/fixtures/ts/sample.ts","start":546,"end":557,"role":"def","exported":false,"decl_start":546,"decl_end":596}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/d().","path":"tests/fixtures/ts/sample.ts","start":269,"end":270,"role":"def","exported":false,"decl_start":269,"decl_end":275}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/left().","path":"tests/fixtures/ts/sample.ts","start":20,"end":24,"role":"def","exported":false,"decl_start":20,"decl_end":32}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/magnitude().","path":"tests/fixtures/ts/sample.ts","start":599,"end":608,"role":"def","exported":false,"decl_start":599,"decl_end":681}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/mirror().","path":"tests/fixtures/ts/sample.ts","start":937,"end":943,"role":"def","exported":true,"decl_start":937,"decl_end":987}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/n().","path":"tests/fixtures/ts/sample.ts","start":302,"end":303,"role":"def","exported":false,"decl_start":302,"decl_end":311}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/origin().","path":"tests/fixtures/ts/sample.ts","start":811,"end":817,"role":"def","exported":true,"decl_start":811,"decl_end":841}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/p().","path":"tests/fixtures/ts/sample.ts","start":259,"end":260,"role":"def","exported":false,"decl_start":259,"decl_end":267}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/p().","path":"tests/fixtures/ts/sample.ts","start":947,"end":948,"role":"def","exported":false,"decl_start":947,"decl_end":955}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/right().","path":"tests/fixtures/ts/sample.ts","start":34,"end":39,"role":"def","exported":false,"decl_start":34,"decl_end":47}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/scaled().","path":"tests/fixtures/ts/sample.ts","start":730,"end":736,"role":"def","exported":false,"decl_start":730,"decl_end":794}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/shift().","path":"tests/fixtures/ts/sample.ts","start":253,"end":258,"role":"def","exported":true,"decl_start":244,"decl_end":385}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/sub().","path":"tests/fixtures/ts/sample.ts","start":857,"end":860,"role":"def","exported":true,"decl_start":857,"decl_end":894}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/x().","path":"tests/fixtures/ts/sample.ts","start":565,"end":566,"role":"def","exported":false,"decl_start":558,"decl_end":574}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/y().","path":"tests/fixtures/ts/sample.ts","start":583,"end":584,"role":"def","exported":false,"decl_start":576,"decl_end":592}
 {"record":"resolved_edge","caller_path":"tests/fixtures/ts/docs.ts","caller_name":"scaled","callee_path":"tests/fixtures/ts/docs.ts","callee_name":"Vec2","caller_site_start":1281,"caller_site_end":1315,"callee_start":1037,"callee_end":1087,"kind":"name_resolve","resolution_origin":"corpus_unique"}
 {"record":"resolved_edge","caller_path":"tests/fixtures/ts/lambdas.ts","caller_name":"doubleAll","callee_path":"tests/fixtures/ts/lambdas.ts","callee_name":"double","caller_site_start":1491,"caller_site_end":1497,"callee_start":535,"callee_end":572,"kind":"value_ref","resolution_origin":"corpus_unique"}
 {"record":"resolved_edge","caller_path":"tests/fixtures/ts/sample.ts","caller_name":"scaled","callee_path":"tests/fixtures/ts/sample.ts","callee_name":"Vec2","caller_site_start":765,"caller_site_end":789,"callee_start":546,"callee_end":596,"kind":"name_resolve","resolution_origin":"corpus_unique"}

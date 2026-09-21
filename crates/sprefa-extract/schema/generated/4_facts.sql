@@ -596,7 +596,23 @@ CREATE TABLE IF NOT EXISTS "occurrence" (
     "path" TEXT NOT NULL,
     "start" INTEGER NOT NULL,
     "end" INTEGER NOT NULL,
-    "role" TEXT NOT NULL
+    "role" TEXT NOT NULL,
+    "exported" INTEGER NOT NULL,
+    "decl_start" INTEGER NOT NULL,
+    "decl_end" INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "free_name" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "owner_start" INTEGER NOT NULL,
+    "owner_end" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS "local" (

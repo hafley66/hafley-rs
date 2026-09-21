@@ -323,8 +323,8 @@ fn the_scip_family_stream_is_the_v5_relation_vocabulary() {
 
 /// The whole `--family diet_scip` stream over four ts files, pinned. Every row
 /// is a resolve-pass record (`resolved_edge` / `resolved_type_edge`, plus the
-/// drops channel's `unresolved` rows) or one of the three rows fast reads out
-/// of `queries/<lang>/scip.scm`.
+/// drops channel's `unresolved` rows) or one of the rows fast reads out of
+/// `queries/<lang>/scip.scm`.
 #[test]
 fn the_diet_scip_family_stream_is_the_fast_output() {
     let stream = run(&[
@@ -345,9 +345,9 @@ fn the_diet_scip_family_stream_is_the_fast_output() {
     );
 }
 
-/// The three records `queries/<lang>/scip.scm` owns.
+/// The records `queries/<lang>/scip.scm` owns.
 fn is_scm_row(line: &str) -> bool {
-    ["symbol", "occurrence", "local"]
+    ["symbol", "occurrence", "local", "free_name"]
         .iter()
         .any(|record| line.contains(&format!("\"record\":\"{record}\"")))
 }

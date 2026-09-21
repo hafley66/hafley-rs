@@ -40,6 +40,7 @@ mod rust_checker_ra;
 pub mod rust_docs;
 pub mod rust_mbe;
 pub mod rust_modules;
+#[path = "rust/cleave.rs"] pub mod rust_mutate;
 pub mod rust_receivers;
 pub mod rust_rehome;
 pub mod rust_rename;
@@ -60,6 +61,7 @@ pub mod source_facts;
 pub mod source_query;
 pub mod ts;
 pub mod ts_checker;
+#[path = "ts/cleave.rs"] pub mod ts_mutate;
 pub mod ts_paths;
 pub mod ts_receivers;
 pub mod ts_rehome;
@@ -111,7 +113,7 @@ pub use ts_rehome::{build_paths, compiled_spellings, BuildPaths};
 pub use ts_resolve::{respell, TsResolver};
 
 use crate::source::Source;
-use crate::types::{RehomeArm, Rename};
+use crate::types::{Cleave, RehomeArm, Rename};
 
 /// The first-match roster. Order matters: the lang-specific `Source`s precede the
 /// ast-grep CST fallback (v5 `type_langs()` convention). RustSource is first so a
@@ -203,4 +205,17 @@ pub fn renames() -> &'static [&'static dyn Rename] {
 pub fn rename_for(path: &str) -> Option<&'static dyn Rename> {
     let owner = source_for(path)?.name();
     renames().iter().copied().find(|arm| arm.name() == owner)
+}
+
+/// The `Cleave` roster, in `sources()` order. Membership is "this language can
+/// be text-edited by a verb", a third question again from `rehomes()`'s.
+pub fn cleaves() -> &'static [&'static dyn Cleave] {
+    &[&RustSource, &TsSource]
+}
+
+/// The `Cleave` that owns `path`, under the SAME first-match law `rehome_for`
+/// states: only `source_for`'s own winner may claim a path.
+pub fn cleave_for(path: &str) -> Option<&'static dyn Cleave> {
+    let owner = source_for(path)?.name();
+    cleaves().iter().copied().find(|arm| arm.name() == owner)
 }
