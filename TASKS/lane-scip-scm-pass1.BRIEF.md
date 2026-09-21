@@ -182,3 +182,11 @@ headers keep their upstream commit and license lines.
    invocation, but the cross-file resolve is not per-file. Does the family
    keep the SQL walk as written, or does pass 1 ship per-file only and leave
    the cross-file join to the dl layer?
+
+## Answers to the open questions (coordinator, 2026-09-21)
+
+1. Phase 3 judges TypeScript against scip-typescript on `tests/fixtures/ts`. Kotlin is stated as unjudged in the commit body and REPORT. No scip-java install.
+2. Confirmed: `scip_scm_*` tags. Never the indexer's tags.
+3. New `ResolutionOrigin::ScmScope` with its own `RATCHET.tsv` row, pinned in phase 5 through `RATCHET_BUMP=1` at the measured floor. Existing origin counts must not move.
+4. SCIP rule: every binding the document does not export is a `local`, file-private functions included.
+5. Row emission is per file and pure. The cross-file `WITH RECURSIVE` resolve stays, but only behind the phase 5 join and the judge tests, never in the per-file family path.
