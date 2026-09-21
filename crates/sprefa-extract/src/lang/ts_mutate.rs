@@ -5,7 +5,7 @@
 
 use crate::move_cx::{dirname, relative_between};
 use crate::source::{FamilyMask, Source};
-use crate::types::{Edit, FamilyTag, Mutate, Span};
+use crate::types::{Edit, FamilyTag, Cleave, Span};
 use crate::wire::{flatten_each, FlatFact};
 
 use super::ts::TsSource;
@@ -16,7 +16,7 @@ const EXTENSIONS: [&str; 6] = ["ts", "tsx", "mts", "cts", "js", "mjs"];
 /// The path the parse is told it is reading. Only the extension is consulted.
 const PARSE_AS: &str = "cleave.ts";
 
-impl Mutate for TsSource {
+impl Cleave for TsSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
         let at = decl.start as usize;
         let head = text.get(..at)?;

@@ -2862,7 +2862,7 @@ pub struct Edit {
 
 /// The text a language cannot be edited without. A verb plans from fact rows
 /// and asks here for the three spellings no fact carries.
-pub trait Mutate: Source + Sync + Send {
+pub trait Cleave: Source + Sync + Send {
     /// `text`'s declaration at `decl` with its export marker on or off. None
     /// when it already reads that way.
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit>;

@@ -136,7 +136,7 @@ pub use soopy::{
 };
 pub use source::{RyiOutput, FamilyMask, Source};
 pub use types::{
-    CfgEdgeKind, CfgF, CfgNodeKind, Edit, ImportRef, ImportRefKind, Mutate, RefRole, Rehome, RehomeArm,
+    CfgEdgeKind, CfgF, CfgNodeKind, Edit, ImportRef, ImportRefKind, Cleave, RefRole, Rehome, RehomeArm,
     RehomeManifests, RehomePlanCheck, RehomeShim, RehomeTextSpellings, Rename, RenameStop, Respell,
     SymbolId, SymbolInterner, SymbolRef, SymbolSeat,
 };

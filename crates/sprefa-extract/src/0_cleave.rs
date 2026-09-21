@@ -14,7 +14,7 @@ use sprefa_extract::move_stage::{
 use sprefa_extract::types::{CleaveDrag, CleavePlan, CleaveSpecifier};
 use sprefa_extract::{
     directory_path, directory_source, dispatch, flatten_each, mutate_for, normalize,
-    replace_action, resolve_project, scm_facts, FamilyMask, FlatFact, MoveCx, Mutate,
+    replace_action, resolve_project, scm_facts, FamilyMask, FlatFact, MoveCx, Cleave,
     ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
 };
 
@@ -224,7 +224,7 @@ fn plan_json(rows: &CleavePlan) -> String {
 struct Plan {
     root: PathBuf,
     cx: MoveCx,
-    arm: &'static dyn Mutate,
+    arm: &'static dyn Cleave,
     rows: CleavePlan,
     source: FileFacts,
     /// None when DEST does not exist yet and this run creates it.

@@ -4,7 +4,7 @@
 //! @comment-ok: module header, the seam list every lang arm opens with
 
 use crate::source::{FamilyMask, Source};
-use crate::types::{Edit, FamilyTag, Mutate, Span};
+use crate::types::{Edit, FamilyTag, Cleave, Span};
 use crate::wire::{flatten_each, FlatFact};
 
 use super::rust::RustSource;
@@ -19,7 +19,7 @@ const SOURCE_ROOT: &str = "src/";
 /// File stems that stand for their own directory rather than a module of it.
 const DIRECTORY_STEMS: [&str; 3] = ["mod", "lib", "main"];
 
-impl Mutate for RustSource {
+impl Cleave for RustSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
         let at = decl.start as usize;
         let head = text.get(..at)?;
