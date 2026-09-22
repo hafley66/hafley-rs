@@ -479,17 +479,20 @@ The language comes from the target file's extension. Twenty-eight are available:
 
 ## Checking it yourself
 
-The crate ships an example that holds one `.scm` query and its hand-written YAML twin, translates the first, reads the second, and confirms both produce the same rule and the same matches:
+`ryi query` runs a `.scm` query through the real binary, the real grammar, and
+the crate's `.scm` engine, streaming one JSONL row per match:
 
 ```bash
 cd crates/sprefa-extract
-cargo run --example scm_vs_yaml --features cli -- src/project.rs
+cargo run --features cli --bin ryi -- query --lang rust \
+  --query '(call_expression function: (identifier) @call)' -- src/project.rs
 ```
 
 ```
-rule trees equal: true
-utils equal:      true
-matches .scm:     16
-matches yaml:     16
-match sets equal: true
+{"call":"read_inputs_with_modules","end_line":240,"line":240}
+{"call":"resolve_project_inputs","end_line":241,"line":241}
+{"call":"read_inputs_with_modules","end_line":280,"line":280}
+{"call":"push_raw","end_line":282,"line":282}
+...
 ```
+

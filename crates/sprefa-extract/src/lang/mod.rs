@@ -52,8 +52,6 @@ mod scm_family;
 pub mod scm_rows;
 #[path = "8_scm_store.rs"]
 pub mod scm_store;
-#[path = "5_scm_lower.rs"]
-pub mod scm_lower;
 #[path = "3_source_facts.rs"]
 pub mod source_facts;
 #[path = "2_source_query.rs"]
@@ -94,7 +92,6 @@ pub use prolog::PrologSource;
 pub use python::PythonSource;
 pub use rust::RustSource;
 pub use scm_rows::{scm_edges, scm_facts, ScmEdge, ScmError};
-pub use scm_lower::{lower_scm, scm_language, ScmLowerError, ScmProgram};
 pub use source_facts::{
     query_source_facts, ByteRange, GitBlobFact, SourceCaptureFact, SourceMatchFact, SourcePlace,
     SourceQueryFact, SourceQueryFacts, SourceReplacementFact, SourceRevisionFact,
