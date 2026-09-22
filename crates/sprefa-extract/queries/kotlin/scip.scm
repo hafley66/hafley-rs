@@ -66,6 +66,36 @@
 (package_header) @local.export.package
 (import_header) @local.import
 
+; ── TypeF entities ──────────────────────────────────────────────────────────
+; The generic class match also sees interfaces and enums. Their more specific
+; matches override its kind for the same declaration span.
+((class_declaration
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "class")
+  (#set! "type.form" "declaration"))
+((class_declaration
+    "interface"
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "interface")
+  (#set! "type.form" "declaration"))
+((class_declaration
+    "enum"
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "enum")
+  (#set! "type.form" "declaration"))
+((object_declaration
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "class")
+  (#set! "type.form" "declaration"))
+((companion_object
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "class")
+  (#set! "type.form" "companion"))
+((function_declaration
+    (simple_identifier) @type.name) @type.span
+  (#set! "type.kind" "function")
+  (#set! "type.form" "function"))
+
 ; ── CallF ───────────────────────────────────────────────────────────────────
 ; Hand-written, not vendored: the vendored helix captures end above.
 ; 6_scm_family.rs reads only these labels, 7_scm_rows.rs only the local.* ones.

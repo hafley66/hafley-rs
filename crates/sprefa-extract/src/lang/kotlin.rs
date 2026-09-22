@@ -17,12 +17,9 @@
 //! (`start_byte`/`end_byte`), so `Span { start: node.start_byte(), len:
 //! node.end_byte() - node.start_byte() }` is the whole story.
 //!
-//! KotlinSource wires cst via the shared walk + a
-//! tree-sitter-kotlin parse; type/call/df projections are stubbed empty.
-//! `walk_kotlin_entities` + `kotlin_fn_type` cover TypeF (nodes +
-//! arrow-type sigs); `queries/kotlin/call.scm` covers CallF;
-//! `kotlin_dataflow_from` covers DfF (nodes + Direct edges,
-//! incl. the `lam_sym` closure naming).
+//! KotlinSource wires cst via the shared walk + a tree-sitter-kotlin parse.
+//! One `queries/kotlin/scip.scm` run supplies TypeF entity labels and CallF
+//! definitions/sites; Rust projects TypeF enrichments and DfF value flow.
 //!
 //! Deferred follow-ups (the same set the other langs parked): df literal/loop/
 //! nesting aux. Named-argument field names are emitted. The type_edge
@@ -34,7 +31,8 @@
 //! emitting none either.
 // @comment-ok: the module header is a crate-level doc block predating the rail
 
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
+use std::sync::OnceLock;
 
 use super::fallback::cst_bundle;
 use crate::family::{
@@ -53,9 +51,10 @@ use crate::types::{PathIndex, UnresolvedReason};
 
 use super::kotlin_modules::KtModuleIndex;
 
-/// Kotlin's own `.scm`: the scope/definition/call captures fast lowers through
-/// L1. Owned here, read through `Source::scm_query`, never named elsewhere.
+/// Kotlin's `.scm`: scope, type-entity, and call captures shared by the family
+/// projectors and fast's scope rows.
 pub(crate) const KOTLIN_SCM: &str = include_str!("../../queries/kotlin/scip.scm");
+static KOTLIN_FAMILY_QUERY: OnceLock<hafley_scm::QueryExt> = OnceLock::new();
 
 // ── the tree-sitter-kotlin parse (one parse feeds type/call/df) ─────────────
 
@@ -100,9 +99,8 @@ pub(crate) fn kt_first_child<'a>(
 // Ports v5 `walk_kotlin_entities` (src/graph/typegraph/kotlin.rs:741) +
 // `kotlin_fn_type` (kotlin.rs:847, the arrow-type payload). Entities:
 // class_declaration / object_declaration / companion_object with a direct
-// type_identifier child -> Class/Interface/Enum (keyword scan of the decl's own
-// children: an `interface` keyword -> Interface, an `enum` keyword -> Enum,
-// else Class); EVERY function_declaration (top-level, member, or local - v5
+// type_identifier child -> Class/Interface/Enum (the query labels the keyword
+// variant); EVERY function_declaration (top-level, member, or local - v5
 // never mints a Method entity for kotlin) -> Function + arrow sigs.
 //
 // v6 drops v5's `sym`/`parent`/`file`/`line`: a node is span+kind+name; the
@@ -115,74 +113,95 @@ pub(crate) fn kt_first_child<'a>(
 // @comment-ok: pre-existing TypeF section header block
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Project the TypeF family: one entity node per class/object/fun declaration
-/// + an arrow-type sig per callable param/return type reference. Port of v5
-/// `walk_kotlin_entities` + `kotlin_fn_type`.
+/// Project TypeF entities from the query's declaration labels. The captured
+/// declaration node remains available for docs, edges, and arrow-type sigs.
 fn project_types(
     root: tree_sitter::Node,
     src: &[u8],
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
     let comments = KtCommentIds::resolve(&root.language());
-    walk_kotlin_entities(root, &comments, src, strings, sink);
-    super::kotlin_type_edges::tsi_rows(root, src, strings, sink);
-}
-
-/// Walk every declaration, minting one entity node per class/object/fun decl.
-/// Port of v5 `walk_kotlin_entities`. Recurses everywhere: member funs, local
-/// funs, nested classes, and companion objects all mint (v5's walk has no
-/// depth gate). `companion_object` is a distinct grammar node from
-/// `object_declaration`; both mint a `class` entity the same way.
-fn walk_kotlin_entities(
-    node: tree_sitter::Node,
-    comments: &KtCommentIds,
-    src: &[u8],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        match child.kind() {
-            "class_declaration" | "object_declaration" | "companion_object" => {
-                let mut c = child.walk();
-                let kids: Vec<tree_sitter::Node> = child.children(&mut c).collect();
-                if let Some(id) = kids.iter().find(|n| n.kind() == "type_identifier") {
-                    let name = kt_text(*id, src).to_string();
-                    let kind = if kids.iter().any(|n| n.kind() == "interface") {
-                        TypeEntityKind::Interface
-                    } else if kids.iter().any(|n| n.kind() == "enum") {
-                        TypeEntityKind::Enum
-                    } else {
-                        TypeEntityKind::Class
-                    };
-                    let span = node_span(child);
-                    push_entity(sink, strings, span, &name, kind);
-                    // v5 walk_kotlin docs + edges walk class/object only, not
-                    // companion (kotlin_decl_edges runs on class/object only).
-                    if child.kind() != "companion_object" {
-                        kt_decl_edges(child, span, src, strings, sink);
-                        if let Some(text) = kotlin_leading_kdoc(child, &comments, src) {
-                            push_kt_doc(sink, strings, span, &text);
-                        }
-                    }
+    let mut entities: BTreeMap<Span, (String, TypeEntityKind, String)> = BTreeMap::new();
+    for row in &arena.rows {
+        let mut span = None;
+        let mut name = None;
+        for capture in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
+            match query.names[capture.name as usize].as_ref() {
+                "type.span" => {
+                    span = Some(Span {
+                        start: capture.bytes.start,
+                        len: capture.bytes.end - capture.bytes.start,
+                    })
                 }
-            }
-            "function_declaration" => {
-                if let Some(id) = kt_first_child(child, "simple_identifier") {
-                    let name = kt_text(id, src).to_string();
-                    let span = node_span(child);
-                    push_entity(sink, strings, span, &name, TypeEntityKind::Function);
-                    if let Some(text) = kotlin_leading_kdoc(child, &comments, src) {
-                        push_kt_doc(sink, strings, span, &text);
-                    }
-                    fn_sigs(sink, strings, span, child, src);
+                "type.name" => {
+                    name = Some(
+                        std::str::from_utf8(
+                            &src[capture.bytes.start as usize..capture.bytes.end as usize],
+                        )
+                        .expect("Kotlin type name is utf8")
+                        .to_string(),
+                    )
                 }
+                _ => {}
             }
-            _ => {}
         }
-        walk_kotlin_entities(child, &comments, src, strings, sink);
+        let (Some(span), Some(name)) = (span, name) else {
+            continue;
+        };
+        let properties = query.user.property_settings(row.pattern as usize);
+        let setting = |key: &str| {
+            properties
+                .iter()
+                .find(|property| property.key.as_ref() == key)
+                .and_then(|property| property.value.as_deref())
+        };
+        let kind = match setting("type.kind") {
+            Some("class") => TypeEntityKind::Class,
+            Some("interface") => TypeEntityKind::Interface,
+            Some("enum") => TypeEntityKind::Enum,
+            Some("function") => TypeEntityKind::Function,
+            _ => panic!("Kotlin TypeF entity has no type.kind"),
+        };
+        let form = setting("type.form").expect("Kotlin TypeF entity has type.form");
+        // The class pattern also matches interface and enum declarations.
+        let entry = entities
+            .entry(span)
+            .or_insert_with(|| (name.clone(), kind, form.to_string()));
+        if kind == TypeEntityKind::Interface || kind == TypeEntityKind::Enum {
+            *entry = (name, kind, form.to_string());
+        }
     }
+    for (span, (name, kind, form)) in entities {
+        push_entity(sink, strings, span, &name, kind);
+        let node = root
+            .descendant_for_byte_range(span.start as usize, span.end() as usize)
+            .expect("Kotlin TypeF declaration capture has a node");
+        assert_eq!(
+            node_span(node),
+            span,
+            "Kotlin TypeF capture names a whole declaration"
+        );
+        match form.as_str() {
+            "declaration" => {
+                kt_decl_edges(node, span, src, strings, sink);
+                if let Some(text) = kotlin_leading_kdoc(node, &comments, src) {
+                    push_kt_doc(sink, strings, span, &text);
+                }
+            }
+            "function" => {
+                if let Some(text) = kotlin_leading_kdoc(node, &comments, src) {
+                    push_kt_doc(sink, strings, span, &text);
+                }
+                fn_sigs(sink, strings, span, node, src);
+            }
+            "companion" => {}
+            _ => panic!("Kotlin TypeF entity has unknown type.form"),
+        }
+    }
+    super::kotlin_type_edges::tsi_rows(root, src, strings, sink);
 }
 
 fn push_entity(
@@ -1362,11 +1381,25 @@ impl Source for KotlinSource {
                 if let Some(tree) = tree {
                     let root = tree.root_node();
                     let src_bytes = src.as_bytes();
+                    let scm = if mask.types || mask.call {
+                        let language = root.language();
+                        let query = KOTLIN_FAMILY_QUERY.get_or_init(|| {
+                            hafley_scm::build(&language, KOTLIN_SCM)
+                                .expect("the bundled Kotlin family query compiles")
+                        });
+                        let mut arena = hafley_scm::MatchArena::default();
+                        hafley_scm::run(&query, path, src_bytes, &tree, u32::MAX, &mut arena)
+                            .expect("the Kotlin family query never exceeds the engine match limit");
+                        Some((query, arena))
+                    } else {
+                        None
+                    };
                     if mask.types {
                         let span = trace::family_span("kotlin", "type");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<TypeF>::default();
-                        project_types(root, src_bytes, &mut strings, &mut bundle);
+                        let (query, arena) = scm.as_ref().expect("TypeF uses the Kotlin query");
+                        project_types(root, src_bytes, query, arena, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, 0);
                         types = Some(bundle);
                     }
@@ -1376,10 +1409,11 @@ impl Source for KotlinSource {
                         let mut bundle = FamilyBundle::<CallF>::default();
                         let blob = crate::dispatch::extracting_blob(content)
                             .unwrap_or_else(|| crate::types::content_id_of(content));
+                        let (query, arena) = scm.as_ref().expect("CallF uses the Kotlin query");
                         super::scm_family::project_kotlin_call(
-                            path,
-                            &tree,
                             src_bytes,
+                            query,
+                            arena,
                             &mut strings,
                             &mut bundle,
                         );

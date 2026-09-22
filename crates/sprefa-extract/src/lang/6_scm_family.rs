@@ -2,9 +2,6 @@
 
 use std::collections::BTreeMap;
 
-use tree_sitter::Tree;
-
-use super::kotlin::KOTLIN_SCM;
 use crate::family::{CallF, CallKind, CallSite};
 use crate::rows::{FamilyBundle, Node};
 use crate::shape::{Span, Strings};
@@ -23,24 +20,14 @@ struct DefCapture {
     body_end: Option<u32>,
 }
 
-/// Build the bundled query once, run it through the shared engine, then map
-/// the arena's grouped captures onto CallF rows from the existing Kotlin parse.
+/// Map the shared query arena's grouped captures onto CallF rows.
 pub(crate) fn project_kotlin_call(
-    path: &str,
-    tree: &Tree,
     src: &[u8],
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    let root = tree.root_node();
-    let language = root.language();
-    let query =
-        hafley_scm::build(&language, KOTLIN_SCM).expect("the bundled Kotlin CallF query compiles");
-    let mut arena = hafley_scm::MatchArena::default();
-    // The fresh-cursor default the direct run always had; the engine's limit
-    // check cannot fire at u32::MAX.
-    hafley_scm::run(&query, path, src, tree, u32::MAX, &mut arena)
-        .expect("the Kotlin CallF query never exceeds the engine match limit");
     let names = &query.names;
     let mut defs = BTreeMap::new();
     let mut sites: BTreeMap<Span, SiteCapture> = BTreeMap::new();
