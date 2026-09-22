@@ -5,6 +5,7 @@ mod walk;
 #[cfg(feature = "rust_syn")]
 pub mod lang;
 
+pub mod cst;
 pub use types::*;
 
 use tree_sitter::{Language, Query, Tree};
