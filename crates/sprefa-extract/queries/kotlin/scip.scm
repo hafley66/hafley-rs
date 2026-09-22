@@ -88,12 +88,21 @@
     (navigation_expression
       (navigation_suffix
         (simple_identifier) @site.callee)) @site.receiver)
-  (call_expression)
-  (infix_expression)
-  (check_expression)
-  (indexing_expression)
-  (assignment)
+  (infix_expression
+    (simple_identifier) @site.callee)
 ] @site.span
+
+((call_expression
+    (call_expression)
+    (call_suffix) @site.operator) @site.span
+  (#set! "call.callee" "invoke"))
+((indexing_expression
+    (indexing_suffix) @site.operator) @site.span
+  (#set! "call.callee" "get"))
+((assignment
+    (directly_assignable_expression
+      (indexing_suffix) @site.operator)) @site.span
+  (#set! "call.callee" "set"))
 
 ; Operator spellings are Kotlin's call-site names. The match keeps the
 ; expression span for the existing ordered CallF projection; the token is the
@@ -124,6 +133,8 @@
   (#set! "call.callee" "compareTo"))
 ((comparison_expression ">=" @site.operator) @site.span
   (#set! "call.callee" "compareTo"))
+((check_expression "in" @site.operator) @site.span
+  (#set! "call.callee" "contains"))
 ((prefix_expression "-" @site.operator) @site.span
   (#set! "call.callee" "unaryMinus"))
 ((prefix_expression "+" @site.operator) @site.span

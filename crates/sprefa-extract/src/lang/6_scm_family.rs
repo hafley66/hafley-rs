@@ -4,7 +4,7 @@ use std::collections::BTreeMap;
 
 use tree_sitter::{Node as TsNode, Tree};
 
-use super::kotlin::{kt_child_kind, kt_first_child, kt_text, node_span, KOTLIN_SCM};
+use super::kotlin::{kt_first_child, kt_text, node_span, KOTLIN_SCM};
 use crate::family::{CallF, CallKind, CallSite};
 use crate::rows::{FamilyBundle, Node};
 use crate::shape::{Span, Strings};
@@ -13,7 +13,7 @@ use crate::shape::{Span, Strings};
 struct SiteCapture {
     callee: Option<(String, Span)>,
     receiver: Option<Span>,
-    operator: Option<(String, Span)>,
+    operators: Vec<(String, Span)>,
 }
 
 /// Build the bundled query once, run it through the shared engine, then map
@@ -36,7 +36,7 @@ pub(crate) fn project_kotlin_call(
         .expect("the Kotlin CallF query never exceeds the engine match limit");
     let names = &query.names;
     let mut defs = BTreeMap::new();
-    let mut sites: BTreeMap<Span, (TsNode<'_>, SiteCapture)> = BTreeMap::new();
+    let mut sites: BTreeMap<Span, SiteCapture> = BTreeMap::new();
     let mut class_names = Vec::new();
 
     for row in &arena.rows {
@@ -45,7 +45,7 @@ pub(crate) fn project_kotlin_call(
         let mut site_span = None;
         let mut site_callee = None;
         let mut site_receiver = None;
-        let mut site_operator = None;
+        let mut site_operators = Vec::new();
         for span in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
             let label = names[span.name as usize].as_ref();
             if label == "site.operator" {
@@ -56,7 +56,7 @@ pub(crate) fn project_kotlin_call(
                     .find(|property| property.key.as_ref() == "call.callee")
                     .and_then(|property| property.value.as_deref())
                     .expect("a Kotlin operator capture names its call.callee");
-                site_operator = Some((
+                site_operators.push((
                     callee.to_string(),
                     Span {
                         start: span.bytes.start,
@@ -65,13 +65,38 @@ pub(crate) fn project_kotlin_call(
                 ));
                 continue;
             }
-            let node = captured_node(root, (span.bytes.start, span.bytes.end), label);
             match label {
-                "def.span" => def_span = Some(node),
-                "def.name" => def_name = Some(node),
-                "site.span" => site_span = Some(node),
-                "site.callee" => site_callee = Some(node),
-                "site.receiver" => site_receiver = Some(node),
+                "def.span" => {
+                    def_span = Some(captured_node(root, (span.bytes.start, span.bytes.end), label))
+                }
+                "def.name" => {
+                    def_name = Some(captured_node(root, (span.bytes.start, span.bytes.end), label))
+                }
+                "site.span" => {
+                    site_span = Some(Span {
+                        start: span.bytes.start,
+                        len: span.bytes.end - span.bytes.start,
+                    })
+                }
+                "site.callee" => {
+                    let text = std::str::from_utf8(
+                        &src[span.bytes.start as usize..span.bytes.end as usize],
+                    )
+                    .expect("Kotlin identifier capture is utf8");
+                    site_callee = Some((
+                        text.to_string(),
+                        Span {
+                            start: span.bytes.start,
+                            len: span.bytes.end - span.bytes.start,
+                        },
+                    ));
+                }
+                "site.receiver" => {
+                    site_receiver = Some(Span {
+                        start: span.bytes.start,
+                        len: span.bytes.end - span.bytes.start,
+                    })
+                }
                 _ => {}
             }
         }
@@ -86,20 +111,15 @@ pub(crate) fn project_kotlin_call(
                 class_names.push((node_span(owner), kt_text(name, src).to_string()));
             }
         }
-        if let Some(node) = site_span {
-            let span = node_span(node);
-            let entry = sites
-                .entry(span)
-                .or_insert_with(|| (node, SiteCapture::default()));
+        if let Some(span) = site_span {
+            let entry = sites.entry(span).or_default();
             if let Some(callee) = site_callee {
-                entry.1.callee = Some((kt_text(callee, src).to_string(), node_span(callee)));
+                entry.callee = Some(callee);
             }
             if let Some(receiver) = site_receiver {
-                entry.1.receiver = Some(node_span(receiver));
+                entry.receiver = Some(receiver);
             }
-            if let Some(operator) = site_operator {
-                entry.1.operator = Some(operator);
-            }
+            entry.operators.extend(site_operators);
         }
     }
 
@@ -128,8 +148,19 @@ pub(crate) fn project_kotlin_call(
         }
     }
 
-    for (_, (node, captures)) in sites {
-        map_site(node, captures, src, strings, sink);
+    for (_, captures) in sites {
+        if let Some((callee, callee_span)) = captures.callee {
+            push_site(
+                captures.receiver.unwrap_or(callee_span),
+                &callee,
+                strings,
+                sink,
+            );
+        } else {
+            for (callee, span) in captures.operators {
+                push_site(span, &callee, strings, sink);
+            }
+        }
     }
 }
 
@@ -199,64 +230,4 @@ fn push_site(span: Span, callee: &str, strings: &mut Strings, sink: &mut FamilyB
         callee: strings.intern(callee),
         callee_path: None,
     });
-}
-
-fn map_site(
-    node: TsNode<'_>,
-    captures: SiteCapture,
-    src: &[u8],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    if let Some((callee, span)) = captures.operator {
-        push_site(span, &callee, strings, sink);
-    }
-    match node.kind() {
-        "call_expression" => {
-            if let Some((callee, callee_span)) = captures.callee {
-                let span = captures.receiver.unwrap_or(callee_span);
-                push_site(span, &callee, strings, sink);
-            } else {
-                let mut cursor = node.walk();
-                let lead = node
-                    .children(&mut cursor)
-                    .find(|child| child.kind() != "call_suffix");
-                if lead.is_some_and(|lead| lead.kind() == "call_expression") {
-                    if let Some(suffix) = kt_first_child(node, "call_suffix") {
-                        push_site(node_span(suffix), "invoke", strings, sink);
-                    }
-                }
-            }
-        }
-        "infix_expression" => {
-            let mut cursor = node.walk();
-            if let Some(name) = node.children(&mut cursor).nth(1) {
-                if name.kind() == "simple_identifier" {
-                    push_site(node_span(name), kt_text(name, src), strings, sink);
-                }
-            };
-        }
-        "check_expression" => {
-            let mut cursor = node.walk();
-            if let Some(operator) = node
-                .children(&mut cursor)
-                .find(|child| !child.is_named() && matches!(kt_text(*child, src), "in" | "!in"))
-            {
-                push_site(node_span(operator), "contains", strings, sink);
-            };
-        }
-        "indexing_expression" => {
-            if let Some(suffix) = kt_first_child(node, "indexing_suffix") {
-                push_site(node_span(suffix), "get", strings, sink);
-            }
-        }
-        "assignment" => {
-            if let Some(lhs) = kt_first_child(node, "directly_assignable_expression") {
-                if let Some(suffix) = kt_child_kind(lhs, "indexing_suffix") {
-                    push_site(node_span(suffix), "set", strings, sink);
-                }
-            }
-        }
-        _ => {}
-    }
 }
