@@ -1,10 +1,10 @@
-//! `rust_mbe::expand_file` plus the `RustSource::extract` call-arm hook that
+//! `hafley_scm::lang::rust::expand_file` plus the `RustSource::extract` call-arm hook that
 //! splices it in. `RustSource.extract(fixture)` now folds the gained facts
 //! straight into `call.nodes`/`call.aux.sites`, spans already mapped back to
 //! the original file, so these end-to-end counts ARE the lab's "expanded"
 //! column (`plans/extract-macro-lab-2026-08-29/PLAN.md` Option 1 table).
 
-use sprefa_extract::lang::rust_mbe::expand_file;
+use hafley_scm::lang::rust::expand_file;
 use sprefa_extract::{FamilyMask, RustSource, Source};
 
 const MBE_DIR: &str = "tests/fixtures/rust_findings/mbe";
@@ -73,7 +73,7 @@ fn gained_site_spans_map_inside_the_invocation() {
         if expanded.is_macro_span(range.clone()) {
             saw_macro_site = true;
             let original = expanded.map_span(range).expect("macro span always maps");
-            let text = &src[original.start as usize..(original.start + original.len) as usize];
+            let text = &src[original.start as usize..original.end as usize];
             assert!(
                 text.contains("mkfn"),
                 "mapped span {original:?} does not cover the mkfn! invocation: {text:?}"
@@ -119,7 +119,7 @@ fn extract_emits_one_macro_site_row_naming_mkfn() {
     let site = &call.aux.macro_sites[0];
     assert_eq!(output.strings.lookup(site.macro_name), "mkfn");
     assert_eq!(site.source, sprefa_extract::types::MacroSiteSource::Mbe);
-    let text = &src[site.span.start as usize..(site.span.start + site.span.len) as usize];
+    let text = &src[site.span.start as usize..site.span.end() as usize];
     assert!(text.contains("mkfn"));
 }
 
@@ -183,7 +183,7 @@ fn corpus_wall_time_and_macro_sites_tsv() {
                 "{}\t{}\t{}\t{}\n",
                 rel.display(),
                 span.start,
-                span.end(),
+                span.end,
                 name
             ));
         }

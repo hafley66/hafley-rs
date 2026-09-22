@@ -38,7 +38,6 @@ pub mod rust_checker;
 #[cfg(feature = "rust-checker")]
 mod rust_checker_ra;
 pub mod rust_docs;
-pub mod rust_mbe;
 pub mod rust_modules;
 #[path = "rust/cleave.rs"] pub mod rust_mutate;
 pub mod rust_receivers;

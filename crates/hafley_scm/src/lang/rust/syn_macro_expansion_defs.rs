@@ -12,8 +12,6 @@ use ra_ap_tt::TopSubtree;
 use std::collections::HashMap;
 use std::ops::Range;
 
-use crate::types::Span;
-
 // A macro that keeps minting more of itself, never a budget to raise.
 const MAX_PASSES: u32 = 8;
 const MAX_GROWTH_FACTOR: usize = 4;
@@ -29,7 +27,7 @@ enum Chunk {
     Macro {
         start: u32,
         end: u32,
-        origin: Span,
+        origin: Range<u32>,
         name: String,
     },
 }
@@ -59,7 +57,7 @@ pub struct Expanded {
 impl Expanded {
     /// Translate a byte range of `self.text` to the original file: exact for a
     /// `Verbatim` range, the whole invocation span for a `Macro` range.
-    pub fn map_span(&self, spliced: Range<u32>) -> Option<Span> {
+    pub fn map_span(&self, spliced: Range<u32>) -> Option<Range<u32>> {
         let idx = self
             .chunks
             .binary_search_by(|c| {
@@ -79,11 +77,8 @@ impl Expanded {
         match chunk {
             Chunk::Verbatim {
                 start, orig_start, ..
-            } => Some(Span {
-                start: orig_start + (spliced.start - start),
-                len: spliced.end - spliced.start,
-            }),
-            Chunk::Macro { origin, .. } => Some(*origin),
+            } => Some(orig_start + (spliced.start - start)..orig_start + (spliced.end - start)),
+            Chunk::Macro { origin, .. } => Some(origin.clone()),
         }
     }
 
@@ -96,14 +91,14 @@ impl Expanded {
 
     /// One row per distinct invocation, deduped across nested chunks that
     /// share one origin (f3: `outer!`/`inner!` collapse to one row).
-    pub fn macro_sites(&self) -> Vec<(Span, &str)> {
+    pub fn macro_sites(&self) -> Vec<(Range<u32>, &str)> {
         let mut seen = Vec::new();
         for c in &self.chunks {
             let Chunk::Macro { origin, name, .. } = c else {
                 continue;
             };
-            if !seen.iter().any(|(s, _): &(Span, &str)| *s == *origin) {
-                seen.push((*origin, name.as_str()));
+            if !seen.iter().any(|(s, _): &(Range<u32>, &str)| *s == *origin) {
+                seen.push((origin.clone(), name.as_str()));
             }
         }
         seen
@@ -299,7 +294,7 @@ fn apply_pass(
                     Chunk::Macro { origin, name, .. } => new_chunks.push(Chunk::Macro {
                         start: new_start,
                         end: new_end,
-                        origin: *origin,
+                        origin: origin.clone(),
                         name: name.clone(),
                     }),
                 }
@@ -330,28 +325,22 @@ fn apply_pass(
 
 /// The (span, name) an invocation at `range` reports: its own verbatim
 /// position and its own name, or whatever the enclosing macro chunk carries.
-fn invocation_origin(old_chunks: &[Chunk], range: Range<u32>, own_name: &str) -> (Span, String) {
+fn invocation_origin(old_chunks: &[Chunk], range: Range<u32>, own_name: &str) -> (Range<u32>, String) {
     for c in old_chunks {
         if c.start() <= range.start && range.end <= c.end() {
             return match c {
                 Chunk::Verbatim {
                     start, orig_start, ..
                 } => (
-                    Span {
-                        start: orig_start + (range.start - start),
-                        len: range.end - range.start,
-                    },
+                    orig_start + (range.start - start)..orig_start + (range.end - start),
                     own_name.to_string(),
                 ),
-                Chunk::Macro { origin, name, .. } => (*origin, name.clone()),
+                Chunk::Macro { origin, name, .. } => (origin.clone(), name.clone()),
             };
         }
     }
     (
-        Span {
-            start: range.start,
-            len: range.end - range.start,
-        },
+        range,
         own_name.to_string(),
     )
 }

@@ -2,6 +2,9 @@ mod pipeline;
 mod types;
 mod walk;
 
+#[cfg(feature = "rust_syn")]
+pub mod lang;
+
 pub use types::*;
 
 use tree_sitter::{Language, Query, Tree};

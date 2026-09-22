@@ -3283,10 +3283,10 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 // across all four families.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Re-runs `project_call` over `rust_mbe::expand_file`'s spliced text, folding
+/// Re-runs `project_call` over `hafley_scm::lang::rust::expand_file`'s spliced text, folding
 /// in only the defs/sites born inside a macro expansion, span-mapped back.
 fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut FamilyBundle<CallF>) {
-    let Some(expanded) = super::rust_mbe::expand_file(src) else {
+    let Some(expanded) = hafley_scm::lang::rust::expand_file(src) else {
         return;
     };
     let Ok(expanded_parsed) = syn::parse_file(&expanded.text) else {
@@ -3307,7 +3307,10 @@ fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut Family
             continue;
         }
         if let Some(mapped) = expanded.map_span(range) {
-            node.span = mapped;
+            node.span = Span {
+                start: mapped.start,
+                len: mapped.end - mapped.start,
+            };
             bundle.nodes.push(node);
         }
     }
@@ -3317,13 +3320,19 @@ fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut Family
             continue;
         }
         if let Some(mapped) = expanded.map_span(range) {
-            site.span = mapped;
+            site.span = Span {
+                start: mapped.start,
+                len: mapped.end - mapped.start,
+            };
             bundle.aux.sites.push(site);
         }
     }
     for (span, name) in expanded.macro_sites() {
         bundle.aux.macro_sites.push(MacroSite {
-            span,
+            span: Span {
+                start: span.start,
+                len: span.end - span.start,
+            },
             macro_name: strings.intern(name),
             source: MacroSiteSource::Mbe,
         });
