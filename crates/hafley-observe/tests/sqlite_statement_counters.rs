@@ -91,3 +91,32 @@ fn the_planner_account_names_the_temporary_btree() {
         "expected a temp b-tree step, got {plan:?}"
     );
 }
+
+#[test]
+fn cached_statement_counters_describe_each_execution() {
+    let storage = SharedStorage::default();
+    let subscriber = tracing_subscriber::registry().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || {
+        let connection = seeded_connection();
+        let sql = "SELECT count(*) FROM unindexed WHERE value > 100";
+        // Populate the statement cache before tracing starts.
+        let first: i64 = connection.query_row(sql, [], |r| r.get(0)).unwrap();
+        assert_eq!(first, 99);
+        hafley_observe::sqlite::instrument(&connection);
+        for _ in 0..2 {
+            let count: i64 = connection.query_row(sql, [], |r| r.get(0)).unwrap();
+            assert_eq!(count, 99);
+        }
+        hafley_observe::sqlite::silence(&connection);
+    });
+    let storage = storage.lock();
+    let profiles = storage.all_events()
+        .filter(|event| event.metadata().target() == "sqlite")
+        .filter(|event| *event.metadata().level() == tracing::Level::DEBUG)
+        .filter(|event| event.value("sql").is_some())
+        .filter_map(|event| event.value("vm_step").and_then(|v|v.as_int()))
+        .collect::<Vec<_>>();
+    assert_eq!(profiles.len(), 2, "profile VM steps: {profiles:?}");
+    assert_eq!(profiles[0], profiles[1], "cached executions accumulated VM steps");
+    assert!(profiles[0] > 0);
+}
