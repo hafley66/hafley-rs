@@ -1,16 +1,15 @@
-// Inventory of direct call.scm rows and production CallF rows. This example
+// Inventory of direct Rust CallF query rows and production CallF rows. This example
 // deliberately does not compare the production path with its implementation.
 // Run: cargo run --example rust_call_scm_parity -- PATH...
 use std::collections::BTreeMap;
 
+use hafley_scm::lang::rust::RUST_CALL_QUERY;
 use sprefa_extract::{FamilyMask, RustSource, Source};
-
-const CALL_SCM: &str = include_str!("../queries/rust/call.scm");
 
 fn main() {
     let paths: Vec<String> = std::env::args().skip(1).collect();
     let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-    let q = hafley_scm::build(&language, CALL_SCM).expect("call.scm builds");
+    let q = hafley_scm::build(&language, RUST_CALL_QUERY).expect("rust call query builds");
     let (mut files, mut direct_scm_rows, mut production_claimed_rows, mut macro_minted_rows) =
         (0, 0, 0, 0);
     let mut const_init_rows = 0;

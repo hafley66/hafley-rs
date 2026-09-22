@@ -1,4 +1,8 @@
-; CallF defs. Pattern order is the projection's precedence: the first pattern to
+//! The Rust CallF query, owned by this crate: one byte-exact source for
+//! every consumer, instead of copies of a sibling crate's queries file.
+
+/// The Rust CallF query: defs (method/free/variant/lambda) and their sites.
+pub const RUST_CALL_QUERY: &str = r#"; CallF defs. Pattern order is the projection's precedence: the first pattern to
 ; claim a def span wins, so an impl/trait method is a method before it is a fn.
 
 (impl_item
@@ -39,3 +43,4 @@
       name: (identifier) @def.name @def.variant)))
 
 (closure_expression) @def.lambda
+"#;

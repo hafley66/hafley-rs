@@ -17,6 +17,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::LazyLock;
 
+use hafley_scm::lang::rust::RUST_CALL_QUERY;
 use syn::spanned::Spanned;
 use syn::ReturnType;
 
@@ -40,10 +41,9 @@ use crate::seams::{
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 
-/// Rust's own `.scm`: the scope/definition/call captures fast lowers through
-/// L1. Owned here, read through `Source::scm_query`.
+/// Rust's own `.scm` (scope/definition captures), read through
+/// `Source::scm_query`; the CallF query is crate-owned in `hafley_scm`.
 const RUST_SCM: &str = include_str!("../../queries/rust/scip.scm");
-const RUST_CALL_SCM: &str = include_str!("../../queries/rust/call.scm");
 use crate::trace;
 use crate::types::LangKind;
 use crate::types::ScipIndex;
@@ -3340,7 +3340,7 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 fn rust_call_query() -> &'static hafley_scm::QueryExt {
     static QUERY: LazyLock<hafley_scm::QueryExt> = LazyLock::new(|| {
         let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-        hafley_scm::build(&language, RUST_CALL_SCM).expect("rust call.scm builds")
+        hafley_scm::build(&language, RUST_CALL_QUERY).expect("rust call query builds")
     });
     &QUERY
 }
