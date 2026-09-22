@@ -1385,7 +1385,7 @@ impl Source for KotlinSource {
                             .unwrap_or_else(|| crate::types::content_id_of(content));
                         super::scm_family::project_kotlin_call(
                             path,
-                            root,
+                            &tree,
                             src_bytes,
                             &mut strings,
                             &mut bundle,

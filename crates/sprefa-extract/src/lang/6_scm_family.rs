@@ -1,12 +1,10 @@
 //! Kotlin CallF projection from the CallF captures in `queries/kotlin/scip.scm`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 
-use tree_sitter::{Node as TsNode, Query, QueryCursor, StreamingIterator};
+use tree_sitter::{Node as TsNode, Tree};
 
-use super::ast_rule::{query_ast_rule, AstRule, AstRuleRequest};
 use super::kotlin::{kt_child_kind, kt_first_child, kt_text, node_span, KOTLIN_SCM};
-use super::scm_lower::lower_scm;
 use crate::family::{CallF, CallKind, CallSite};
 use crate::rows::{FamilyBundle, Node};
 use crate::shape::{Span, Strings};
@@ -17,35 +15,39 @@ struct SiteCapture {
     receiver: Option<Span>,
 }
 
-/// Lower the bundled query through L1, execute its span captures, then map the
-/// native grouped captures onto CallF rows from the existing Kotlin parse.
+/// Build the bundled query once, run it through the shared engine, then map
+/// the arena's grouped captures onto CallF rows from the existing Kotlin parse.
 pub(crate) fn project_kotlin_call(
     path: &str,
-    root: TsNode<'_>,
+    tree: &Tree,
     src: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    let selected = lowered_spans(path, src);
+    let root = tree.root_node();
     let language = root.language();
     let query =
-        Query::new(&language, KOTLIN_SCM).expect("the bundled Kotlin CallF query compiles");
-    let names = query.capture_names();
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(&query, root, src);
+        hafley_scm::build(&language, KOTLIN_SCM).expect("the bundled Kotlin CallF query compiles");
+    let mut arena = hafley_scm::MatchArena::default();
+    // The fresh-cursor default the direct run always had; the engine's limit
+    // check cannot fire at u32::MAX.
+    hafley_scm::run(&query, path, src, tree, u32::MAX, &mut arena)
+        .expect("the Kotlin CallF query never exceeds the engine match limit");
+    let names = &query.names;
     let mut defs = BTreeMap::new();
     let mut sites: BTreeMap<Span, (TsNode<'_>, SiteCapture)> = BTreeMap::new();
     let mut class_names = Vec::new();
 
-    while let Some(found) = matches.next() {
+    for row in &arena.rows {
         let mut def_span = None;
         let mut def_name = None;
         let mut site_span = None;
         let mut site_callee = None;
         let mut site_receiver = None;
-        for capture in found.captures {
-            let node = capture.node;
-            match names[capture.index as usize] {
+        for span in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
+            let label = names[span.name as usize].as_ref();
+            let node = captured_node(root, (span.bytes.start, span.bytes.end), label);
+            match label {
                 "def.span" => def_span = Some(node),
                 "def.name" => def_name = Some(node),
                 "site.span" => site_span = Some(node),
@@ -56,12 +58,10 @@ pub(crate) fn project_kotlin_call(
         }
         if let Some(node) = def_span {
             let span = node_span(node);
-            if selected.contains(&span) {
-                defs.entry(span).or_insert_with(|| {
-                    let name = def_name.map(|name| kt_text(name, src).to_string());
-                    (node, name)
-                });
-            }
+            defs.entry(span).or_insert_with(|| {
+                let name = def_name.map(|name| kt_text(name, src).to_string());
+                (node, name)
+            });
         } else if let Some(name) = def_name {
             if let Some(owner) = ancestor(name, &["class_declaration"]) {
                 class_names.push((node_span(owner), kt_text(name, src).to_string()));
@@ -69,24 +69,17 @@ pub(crate) fn project_kotlin_call(
         }
         if let Some(node) = site_span {
             let span = node_span(node);
-            if selected.contains(&span) {
-                let entry = sites
-                    .entry(span)
-                    .or_insert_with(|| (node, SiteCapture::default()));
-                if let Some(callee) = site_callee {
-                    entry.1.callee = Some((kt_text(callee, src).to_string(), node_span(callee)));
-                }
-                if let Some(receiver) = site_receiver {
-                    entry.1.receiver = Some(node_span(receiver));
-                }
+            let entry = sites
+                .entry(span)
+                .or_insert_with(|| (node, SiteCapture::default()));
+            if let Some(callee) = site_callee {
+                entry.1.callee = Some((kt_text(callee, src).to_string(), node_span(callee)));
+            }
+            if let Some(receiver) = site_receiver {
+                entry.1.receiver = Some(node_span(receiver));
             }
         }
     }
-    drop(matches);
-    assert!(
-        !cursor.did_exceed_match_limit(),
-        "Kotlin CallF query exceeded the tree-sitter match limit"
-    );
 
     for (_, (node, name)) in defs {
         match node.kind() {
@@ -118,28 +111,22 @@ pub(crate) fn project_kotlin_call(
     }
 }
 
-/// L1 supplies the definition and site candidate spans. Native query execution
-/// retains capture grouping, which the AstRule representation does not store.
-fn lowered_spans(path: &str, src: &[u8]) -> BTreeSet<Span> {
-    let program = lower_scm(KOTLIN_SCM).expect("the bundled Kotlin CallF query lowers");
-    let rule = AstRule::Any(
-        ["def.span", "site.span"]
-            .into_iter()
-            .map(|name| AstRule::Matches(name.to_string()))
-            .collect(),
+/// The exact node the engine captured, recovered from the arena's byte range
+/// against the file's own parse. The bundled CallF labels always name whole
+/// nodes, so the range must land on one exactly; anything else is a defect
+/// this module names loudly instead of silently mis-projecting.
+fn captured_node<'tree>(root: TsNode<'tree>, range: (u32, u32), label: &str) -> TsNode<'tree> {
+    let (start, end) = (range.0 as usize, range.1 as usize);
+    let node = root
+        .descendant_for_byte_range(start, end)
+        .unwrap_or_else(|| panic!("Kotlin CallF: no node for {label} at {range:?}"));
+    assert!(
+        node.start_byte() == start && node.end_byte() == end,
+        "Kotlin CallF: {label} range {range:?} is not an exact node ({}..{})",
+        node.start_byte(),
+        node.end_byte()
     );
-    let request = AstRuleRequest {
-        id: "kotlin-call".into(),
-        rule,
-        utils: program.utils,
-        constraints: program.constraints,
-        fix: None,
-    };
-    query_ast_rule(path, src, &request)
-        .expect("the lowered Kotlin CallF query executes")
-        .into_iter()
-        .map(|row| row.span)
-        .collect()
+    node
 }
 
 fn function_kind(node: TsNode<'_>) -> CallKind {
