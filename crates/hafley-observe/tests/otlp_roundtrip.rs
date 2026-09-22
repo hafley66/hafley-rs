@@ -1,3 +1,5 @@
+#![cfg(feature = "otlp-trace")]
+
 //! End-to-end OTLP roundtrip: the `otlp_probe` example exports three spans to
 //! a locally running otel-desktop-viewer, and the DuckDB file it writes is
 //! queried back through the `duckdb` CLI.

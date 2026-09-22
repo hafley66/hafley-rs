@@ -1,3 +1,5 @@
+#![cfg(feature = "chrome")]
+
 use std::fs;
 use std::path::PathBuf;
 use tracing_chrome::ChromeLayerBuilder;

@@ -45,10 +45,10 @@ pub fn env_filter(caller_filter: &str) -> EnvFilter {
     }
 }
 
-pub fn format_layer<S>(
-    config: FormatConfig,
-    writer: BoxMakeWriter,
-) -> Box<dyn Layer<S> + Send + Sync>
+/// The text baseline. With the feature off the layer is an identity, so a host
+/// keeps its call site and the binary carries no formatter.
+#[cfg(feature = "fmt")]
+pub fn format_layer<S>(config: FormatConfig, writer: BoxMakeWriter) -> Box<dyn Layer<S> + Send + Sync>
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
@@ -69,4 +69,12 @@ where
             .with_writer(writer)
             .boxed(),
     }
+}
+
+#[cfg(not(feature = "fmt"))]
+pub fn format_layer<S>(_config: FormatConfig, _writer: BoxMakeWriter) -> Box<dyn Layer<S> + Send + Sync>
+where
+    S: Subscriber + for<'a> LookupSpan<'a>,
+{
+    tracing_subscriber::layer::Identity::new().boxed()
 }
