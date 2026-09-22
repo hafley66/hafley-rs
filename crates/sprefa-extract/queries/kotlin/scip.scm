@@ -70,16 +70,26 @@
 ; Hand-written, not vendored: the vendored helix captures end above.
 ; 6_scm_family.rs reads only these labels, 7_scm_rows.rs only the local.* ones.
 
-[
-  (function_declaration
-    (simple_identifier) @def.name)
-  (primary_constructor)
-  (secondary_constructor)
-  (lambda_literal)
-] @def.span
+((function_declaration
+    (simple_identifier) @def.name) @def.span @def.scope
+  (#set! "call.def" "function")
+  (#set! "call.scope" "free"))
+((function_declaration
+    (function_body) @def.body) @def.span
+  (#set! "call.def" "function"))
+((primary_constructor) @def.span
+  (#set! "call.def" "constructor"))
+((secondary_constructor) @def.span
+  (#set! "call.def" "constructor"))
+((lambda_literal) @def.span
+  (#has-ancestor? @def.span "function_declaration")
+  (#set! "call.def" "lambda"))
 
-(class_declaration
-  (type_identifier) @def.name)
+((class_declaration
+    (type_identifier) @def.name) @def.scope
+  (#set! "call.scope" "method"))
+((object_declaration) @def.scope
+  (#set! "call.scope" "method"))
 
 [
   (call_expression

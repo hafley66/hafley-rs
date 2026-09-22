@@ -2,9 +2,9 @@
 
 use std::collections::BTreeMap;
 
-use tree_sitter::{Node as TsNode, Tree};
+use tree_sitter::Tree;
 
-use super::kotlin::{kt_first_child, kt_text, node_span, KOTLIN_SCM};
+use super::kotlin::KOTLIN_SCM;
 use crate::family::{CallF, CallKind, CallSite};
 use crate::rows::{FamilyBundle, Node};
 use crate::shape::{Span, Strings};
@@ -14,6 +14,13 @@ struct SiteCapture {
     callee: Option<(String, Span)>,
     receiver: Option<Span>,
     operators: Vec<(String, Span)>,
+}
+
+#[derive(Default)]
+struct DefCapture {
+    name: Option<String>,
+    kind: Option<String>,
+    body_end: Option<u32>,
 }
 
 /// Build the bundled query once, run it through the shared engine, then map
@@ -37,11 +44,13 @@ pub(crate) fn project_kotlin_call(
     let names = &query.names;
     let mut defs = BTreeMap::new();
     let mut sites: BTreeMap<Span, SiteCapture> = BTreeMap::new();
-    let mut class_names = Vec::new();
+    let mut scopes: BTreeMap<Span, (String, Option<String>)> = BTreeMap::new();
 
     for row in &arena.rows {
         let mut def_span = None;
         let mut def_name = None;
+        let mut def_body = None;
+        let mut def_scope = None;
         let mut site_span = None;
         let mut site_callee = None;
         let mut site_receiver = None;
@@ -66,12 +75,18 @@ pub(crate) fn project_kotlin_call(
                 continue;
             }
             match label {
-                "def.span" => {
-                    def_span = Some(captured_node(root, (span.bytes.start, span.bytes.end), label))
-                }
+                "def.span" => def_span = Some(capture_span(span.bytes.start, span.bytes.end)),
                 "def.name" => {
-                    def_name = Some(captured_node(root, (span.bytes.start, span.bytes.end), label))
+                    def_name = Some(
+                        std::str::from_utf8(
+                            &src[span.bytes.start as usize..span.bytes.end as usize],
+                        )
+                        .expect("Kotlin definition name is utf8")
+                        .to_string(),
+                    )
                 }
+                "def.body" => def_body = Some(span.bytes.end),
+                "def.scope" => def_scope = Some(capture_span(span.bytes.start, span.bytes.end)),
                 "site.span" => {
                     site_span = Some(Span {
                         start: span.bytes.start,
@@ -100,16 +115,22 @@ pub(crate) fn project_kotlin_call(
                 _ => {}
             }
         }
-        if let Some(node) = def_span {
-            let span = node_span(node);
-            defs.entry(span).or_insert_with(|| {
-                let name = def_name.map(|name| kt_text(name, src).to_string());
-                (node, name)
-            });
-        } else if let Some(name) = def_name {
-            if let Some(owner) = ancestor(name, &["class_declaration"]) {
-                class_names.push((node_span(owner), kt_text(name, src).to_string()));
+        let properties = query.user.property_settings(row.pattern as usize);
+        if let Some(span) = def_span {
+            let def = defs.entry(span).or_insert_with(DefCapture::default);
+            def.name = def.name.take().or(def_name.take());
+            def.body_end = def.body_end.or(def_body);
+            if let Some(kind) = property(properties, "call.def") {
+                def.kind = Some(kind.to_string());
             }
+        }
+        if let Some(span) = def_scope {
+            let kind = property(properties, "call.scope")
+                .expect("a Kotlin definition scope has call.scope");
+            let scope = scopes
+                .entry(span)
+                .or_insert_with(|| (kind.to_string(), None));
+            scope.1 = scope.1.take().or(def_name);
         }
         if let Some(span) = site_span {
             let entry = sites.entry(span).or_default();
@@ -123,26 +144,35 @@ pub(crate) fn project_kotlin_call(
         }
     }
 
-    for (_, (node, name)) in defs {
-        match node.kind() {
-            "function_declaration" => {
-                let kind = function_kind(node);
-                let span = function_span(node);
-                let name = name.unwrap_or_default();
+    for (span, def) in defs {
+        match def.kind.as_deref() {
+            Some("function") => {
+                let kind = nearest_scope(span, &scopes)
+                    .map(|(_, (kind, _))| {
+                        if kind == "method" {
+                            CallKind::Method
+                        } else {
+                            CallKind::Free
+                        }
+                    })
+                    .unwrap_or(CallKind::Free);
+                let end = def.body_end.unwrap_or(span.end());
+                let span = Span {
+                    start: span.start,
+                    len: end - span.start,
+                };
+                let name = def.name.unwrap_or_default();
                 sink.nodes
                     .push(Node::new(span, kind).with_name(strings.intern(&name)));
             }
-            "primary_constructor" | "secondary_constructor" => {
-                if let Some(name) = containing_name(node_span(node), &class_names) {
-                    sink.nodes.push(
-                        Node::new(node_span(node), CallKind::Method)
-                            .with_name(strings.intern(name)),
-                    );
+            Some("constructor") => {
+                if let Some((_, (_, Some(name)))) = nearest_named_scope(span, &scopes) {
+                    sink.nodes
+                        .push(Node::new(span, CallKind::Method).with_name(strings.intern(name)));
                 }
             }
-            "lambda_literal" if ancestor(node, &["function_declaration"]).is_some() => {
-                sink.nodes
-                    .push(Node::new(node_span(node), CallKind::Lambda));
+            Some("lambda") => {
+                sink.nodes.push(Node::new(span, CallKind::Lambda));
             }
             _ => {}
         }
@@ -164,64 +194,43 @@ pub(crate) fn project_kotlin_call(
     }
 }
 
-/// The exact node the engine captured, recovered from the arena's byte range
-/// against the file's own parse. The bundled CallF labels always name whole
-/// nodes, so the range must land on one exactly; anything else is a defect
-/// this module names loudly instead of silently mis-projecting.
-fn captured_node<'tree>(root: TsNode<'tree>, range: (u32, u32), label: &str) -> TsNode<'tree> {
-    let (start, end) = (range.0 as usize, range.1 as usize);
-    let node = root
-        .descendant_for_byte_range(start, end)
-        .unwrap_or_else(|| panic!("Kotlin CallF: no node for {label} at {range:?}"));
-    assert!(
-        node.start_byte() == start && node.end_byte() == end,
-        "Kotlin CallF: {label} range {range:?} is not an exact node ({}..{})",
-        node.start_byte(),
-        node.end_byte()
-    );
-    node
-}
-
-fn function_kind(node: TsNode<'_>) -> CallKind {
-    let mut parent = node.parent();
-    while let Some(scope) = parent {
-        match scope.kind() {
-            "function_declaration" => return CallKind::Free,
-            "class_declaration" | "object_declaration" => return CallKind::Method,
-            _ => parent = scope.parent(),
-        }
-    }
-    CallKind::Free
-}
-
-fn function_span(node: TsNode<'_>) -> Span {
-    let start = node.start_byte();
-    let end = kt_first_child(node, "function_body")
-        .unwrap_or(node)
-        .end_byte();
+/// The query arena stores byte endpoints for each captured fact.
+fn capture_span(start: u32, end: u32) -> Span {
     Span {
-        start: start as u32,
-        len: (end - start) as u32,
+        start,
+        len: end - start,
     }
 }
 
-fn ancestor<'tree>(node: TsNode<'tree>, kinds: &[&str]) -> Option<TsNode<'tree>> {
-    let mut parent = node.parent();
-    while let Some(candidate) = parent {
-        if kinds.contains(&candidate.kind()) {
-            return Some(candidate);
-        }
-        parent = candidate.parent();
-    }
-    None
-}
-
-fn containing_name(span: Span, owners: &[(Span, String)]) -> Option<&str> {
-    owners
+fn property<'a>(properties: &'a [tree_sitter::QueryProperty], key: &str) -> Option<&'a str> {
+    properties
         .iter()
-        .filter(|(owner, _)| owner.start <= span.start && span.end() <= owner.end())
+        .find(|p| p.key.as_ref() == key)
+        .and_then(|p| p.value.as_deref())
+}
+
+fn nearest_scope<'a>(
+    span: Span,
+    scopes: &'a BTreeMap<Span, (String, Option<String>)>,
+) -> Option<(&'a Span, &'a (String, Option<String>))> {
+    scopes
+        .iter()
+        .filter(|(owner, _)| {
+            owner.len > span.len && owner.start <= span.start && span.end() <= owner.end()
+        })
         .min_by_key(|(owner, _)| owner.len)
-        .map(|(_, name)| name.as_str())
+}
+
+fn nearest_named_scope<'a>(
+    span: Span,
+    scopes: &'a BTreeMap<Span, (String, Option<String>)>,
+) -> Option<(&'a Span, &'a (String, Option<String>))> {
+    scopes
+        .iter()
+        .filter(|(owner, (_, name))| {
+            name.is_some() && owner.start <= span.start && span.end() <= owner.end()
+        })
+        .min_by_key(|(owner, _)| owner.len)
 }
 
 fn push_site(span: Span, callee: &str, strings: &mut Strings, sink: &mut FamilyBundle<CallF>) {
