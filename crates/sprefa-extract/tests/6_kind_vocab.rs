@@ -2,9 +2,10 @@
 //! extension (option B). The core list in types.rs carries only the kinds two
 //! or more languages construct; a kind one language owns lives in that
 //! language's file as an `Ext(LangKind)` constant. The wire tags are frozen:
-//! the committed `wire_golden.jsonl` is the extract output over
-//! `tests/fixtures/**` at 946460d75, and today's output must reproduce it
-//! byte-for-byte.
+//! the committed `wire_golden.jsonl` is the extract output over the corpus
+//! `tests/fixtures/**` at 946460d75 (regenerated when the ast-pattern query
+//! doors were removed, which dropped their fixture rows), and today's output
+//! must reproduce it byte-for-byte.
 
 use std::collections::BTreeSet;
 use std::process::Command;
@@ -207,7 +208,7 @@ fn extract_lang_has_no_path_switch() {
 }
 
 #[test]
-fn wire_output_is_byte_identical_to_the_946460d75_golden() {
+fn wire_output_is_byte_identical_to_the_kind_vocab_golden() {
     let manifest = env!("CARGO_MANIFEST_DIR");
     let exe = env!("CARGO_BIN_EXE_ryi");
     // The corpus is the fixture list at 946460d75, pinned in corpus.txt so a
@@ -243,7 +244,7 @@ fn wire_output_is_byte_identical_to_the_946460d75_golden() {
     assert_eq!(
         current.len(),
         golden.len(),
-        "wire byte count drifted from the 946460d75 golden"
+        "wire byte count drifted from the kind-vocab golden"
     );
     if current != golden {
         let first_diff = current

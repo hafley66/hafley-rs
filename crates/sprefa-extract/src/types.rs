@@ -4092,8 +4092,8 @@ impl<L: LanguageExt> PendingReplaceDoc<L> {
 // impl Language for RyiLang      // expando_char '_' for prolog, 'µ' for md
 // impl LanguageExt for RyiLang   // get_ts_language: the linked LANGUAGE consts
 //
-// SgRoot = AstGrep<StrDoc<RyiLang>> (lang/astgrep.rs), so --ast-pattern and
-// the YAML rule door reach every grammar in the roster, not just ast-grep's own.
+// SgRoot = AstGrep<StrDoc<RyiLang>> (lang/astgrep.rs), so the cst projection
+// reaches every grammar in the roster, not just ast-grep's own.
 
 // ════════════════════════════════════════════════════════════════════════════
 // STATUS  (flip a cell when it ships; [x] = ported + parity-green)
