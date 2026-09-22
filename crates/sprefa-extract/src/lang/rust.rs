@@ -1529,77 +1529,6 @@ fn scm_call_defs(
     }
 }
 
-fn syn_const_init_defs(
-    parsed: &syn::File,
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    let defs: Vec<Span> = sink.nodes.iter().map(|node| node.span).collect();
-    fn visit(
-        items: &[syn::Item],
-        line_starts: &[u32],
-        defs: &[Span],
-        strings: &mut Strings,
-        sink: &mut FamilyBundle<CallF>,
-    ) {
-        for item in items {
-            match item {
-                syn::Item::Const(item) => add_const_init(item, line_starts, defs, strings, sink),
-                syn::Item::Static(item) => add_static_init(item, line_starts, defs, strings, sink),
-                syn::Item::Mod(item) => {
-                    if let Some((_, inner)) = &item.content {
-                        visit(inner, line_starts, defs, strings, sink);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    fn uncovered(expr: &syn::Expr, line_starts: &[u32], defs: &[Span]) -> bool {
-        let mut sites = CallCollector {
-            line_starts,
-            sites: Vec::new(),
-            under_cfg: None,
-        };
-        syn::visit::Visit::visit_expr(&mut sites, expr);
-        sites.sites.iter().any(|site| {
-            !defs
-                .iter()
-                .any(|span| span.start <= site.span.start && site.span.end() <= span.end())
-        })
-    }
-    fn add_const_init(
-        item: &syn::ItemConst,
-        line_starts: &[u32],
-        defs: &[Span],
-        strings: &mut Strings,
-        sink: &mut FamilyBundle<CallF>,
-    ) {
-        if uncovered(&item.expr, line_starts, defs) {
-            let span = def_span(line_starts, item.ident.span(), item.expr.span());
-            sink.nodes.push(
-                Node::new(span, CONST_INIT).with_name(strings.intern(&item.ident.to_string())),
-            );
-        }
-    }
-    fn add_static_init(
-        item: &syn::ItemStatic,
-        line_starts: &[u32],
-        defs: &[Span],
-        strings: &mut Strings,
-        sink: &mut FamilyBundle<CallF>,
-    ) {
-        if uncovered(&item.expr, line_starts, defs) {
-            let span = def_span(line_starts, item.ident.span(), item.expr.span());
-            sink.nodes.push(
-                Node::new(span, CONST_INIT).with_name(strings.intern(&item.ident.to_string())),
-            );
-        }
-    }
-    visit(&parsed.items, line_starts, &defs, strings, sink);
-}
-
 /// The crate's metadata rows, interned and appended onto the CallF aux.
 fn syn_call_metadata(
     parsed: &syn::File,
@@ -1633,27 +1562,35 @@ fn syn_call_metadata(
         });
     }
 }
-
-/// Project the CallF family: one def node per callable (Free / Method / Lambda)
-/// + one site per call expression. Port of v5 `rust_call_{defs,sites}_from`.
+/// Project the CallF family: one def node per callable (Free / Method / Lambda
+/// / ConstInit) + one site per call expression. Port of v5
+/// `rust_call_{defs,sites}_from` + `CallCollector`.
 fn project_call(
     parsed: &syn::File,
     line_starts: &[u32],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    syn_const_init_defs(parsed, line_starts, strings, sink);
-    syn_call_metadata(parsed, line_starts, strings, sink);
-
-    // Sites: one walk over the whole file for every call/method-call/struct-literal
-    // expression. The callee is the trailing name as written (unresolved in phase
-    // 1). Port of v5's CallCollector.
+    // Defs snapshot before the walk: a CONST_INIT is minted only when its
+    // initializer's calls escape the engine's own def spans.
+    let defs: Vec<Span> = sink.nodes.iter().map(|node| node.span).collect();
     let mut collector = CallCollector {
         line_starts,
         sites: Vec::new(),
         under_cfg: None,
+        defs: &defs,
+        const_inits: Vec::new(),
+        in_block: false,
     };
     syn::visit::visit_file(&mut collector, parsed);
+    // Mint the CONST_INIT defs in walk order, before metadata reads the node
+    // set: a gated const's cfg row is admitted by its own CONST_INIT node.
+    for (span, name) in collector.const_inits.drain(..) {
+        sink.nodes
+            .push(Node::new(span, CONST_INIT).with_name(strings.intern(&name)));
+    }
+    syn_call_metadata(parsed, line_starts, strings, sink);
+
     for (callee, predicate) in test_only_calls(&collector.sites) {
         sink.aux.test_only_calls.push(TestOnlyCall {
             callee: strings.intern(&callee),
@@ -1876,13 +1813,22 @@ fn test_only_calls(sites: &[CollectedSite]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Walks the whole file for call expressions (`f(x)`, `recv.m(x)`, `Foo { .. }`).
-/// Port of v5 `CallCollector`.
+/// Walks the whole file for call expressions (`f(x)`, `recv.m(x)`, `Foo { .. }`)
+/// and mints a CONST_INIT def for every file- or mod-scope const/static whose
+/// initializer calls escape the engine's def spans. Port of v5 `CallCollector`
+/// plus v5's const-init supplement.
 struct CallCollector<'a> {
     line_starts: &'a [u32],
     sites: Vec<CollectedSite>,
     /// The cfg predicate the walk currently sits under, restored on the way out.
     under_cfg: Option<String>,
+    /// Engine def spans snapshotted before the walk: a site inside one is owned.
+    defs: &'a [Span],
+    /// CONST_INIT candidates in walk order: the def span and the ident text.
+    const_inits: Vec<(Span, String)>,
+    /// True inside any block, so only file- and inline-mod-scope items mint
+    /// CONST_INIT (a const in a fn body never did).
+    in_block: bool,
 }
 
 impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
@@ -1892,8 +1838,44 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
         let outer = self.under_cfg.take();
         let own = cfg_test_predicate(item_attrs(item));
         self.under_cfg = outer.clone().or(own);
+        // Sites pushed while the item's subtree is walked are exactly its
+        // initializer's calls; the expr filter drops any type-position ones
+        // (e.g. an array length) the old expr-only walk never saw.
+        let candidate = match item {
+            syn::Item::Const(item) if !self.in_block => {
+                Some((item.ident.span(), &item.expr, item.ident.to_string()))
+            }
+            syn::Item::Static(item) if !self.in_block => {
+                Some((item.ident.span(), &item.expr, item.ident.to_string()))
+            }
+            _ => None,
+        };
+        let mark = self.sites.len();
         syn::visit::visit_item(self, item);
+        if let Some((ident, expr, name)) = candidate {
+            let init = syn_span(self.line_starts, expr.span());
+            if self.sites[mark..]
+                .iter()
+                .filter(|site| init.start <= site.span.start && site.span.end() <= init.end())
+                .any(|site| {
+                    !self
+                        .defs
+                        .iter()
+                        .any(|span| span.start <= site.span.start && site.span.end() <= span.end())
+                })
+            {
+                self.const_inits
+                    .push((def_span(self.line_starts, ident, expr.span()), name));
+            }
+        }
         self.under_cfg = outer;
+    }
+
+    fn visit_block(&mut self, block: &'ast syn::Block) {
+        let outer = self.in_block;
+        self.in_block = true;
+        syn::visit::visit_block(self, block);
+        self.in_block = outer;
     }
 
     fn visit_expr(&mut self, expr: &'ast syn::Expr) {
