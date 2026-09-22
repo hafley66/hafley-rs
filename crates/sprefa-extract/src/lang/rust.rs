@@ -14,10 +14,10 @@
 //! parity oracle (v5_normalize) reconstructs the byte as `line_starts[line-1] +
 //! col`, which is exactly `line_col_to_byte`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
-use hafley_scm::lang::rust::RUST_CALL_QUERY;
+use hafley_scm::lang::rust::{call_definition_rows, CallDefinitionKind, RUST_CALL_QUERY};
 use syn::spanned::Spanned;
 use syn::ReturnType;
 
@@ -1537,54 +1537,19 @@ fn scm_call_defs(
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    let mut arena = hafley_scm::MatchArena::default();
-    hafley_scm::run(query, "rust-call", src, tree, u32::MAX, &mut arena)
-        .expect("rust call query runs");
-    let mut defs = BTreeMap::<(u32, u32), (CallKind, Option<String>)>::new();
-    for row in &arena.rows {
-        let spans = &arena.spans[row.spans.start as usize..row.spans.end as usize];
-        let capture = |label: &str| {
-            spans
-                .iter()
-                .find(|span| query.names[span.name as usize].as_ref() == label)
-                .map(|span| span.bytes.clone())
-        };
-        let name = capture("def.name").map(|range| {
-            String::from_utf8_lossy(&src[range.start as usize..range.end as usize]).into_owned()
-        });
-        let Some((kind, range)) = (if let Some(lambda) = capture("def.lambda") {
-            Some((CallKind::Lambda, lambda))
-        } else if let Some(variant) = capture("def.variant") {
-            Some((CallKind::Free, variant))
-        } else if let (Some(name_range), Some(body)) = (capture("def.name"), capture("def.body")) {
-            let kind = if capture("def.method").is_some() {
-                CallKind::Method
-            } else {
-                CallKind::Free
-            };
-            Some((kind, name_range.start..body.end))
-        } else if let (Some(name_range), Some(sig)) = (capture("def.name"), capture("def.sig")) {
-            let mut end = sig.end.saturating_sub(1);
-            while end > name_range.end && src[end as usize - 1].is_ascii_whitespace() {
-                end -= 1;
-            }
-            Some((CallKind::Method, name_range.start..end))
-        } else {
-            None
-        }) else {
-            continue;
-        };
-        defs.entry((range.start, range.end)).or_insert((kind, name));
-    }
-    for ((start, end), (kind, name)) in defs {
+    for row in call_definition_rows(query, "rust-call", src, tree) {
         let mut node = Node::new(
             Span {
-                start,
-                len: end - start,
+                start: row.range.start,
+                len: row.range.end - row.range.start,
             },
-            kind,
+            match row.kind {
+                CallDefinitionKind::Free => CallKind::Free,
+                CallDefinitionKind::Method => CallKind::Method,
+                CallDefinitionKind::Lambda => CallKind::Lambda,
+            },
         );
-        if let Some(name) = name {
+        if let Some(name) = row.name {
             node = node.with_name(strings.intern(&name));
         }
         sink.nodes.push(node);
