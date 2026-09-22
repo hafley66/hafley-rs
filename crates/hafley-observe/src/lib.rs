@@ -21,6 +21,9 @@ pub mod sink;
 #[cfg(feature = "sqlite-sink")]
 #[path = "5_sqlite.rs"]
 pub mod sqlite;
+#[cfg(feature = "sqlite-sink")]
+#[path = "5a_sqlite_memory.rs"]
+pub mod sqlite_memory;
 #[path = "10_tracy.rs"]
 pub mod tracy;
 
