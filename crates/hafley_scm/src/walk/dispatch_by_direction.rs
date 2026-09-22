@@ -5,9 +5,13 @@ use super::ts_descendant_holds::descendant_holds;
 use crate::types::{Predicate, Walk};
 
 pub fn holds(p: &Predicate, node: Node, kind_ids: &[u32]) -> bool {
-    match p.walk {
-        Walk::Ancestor => ancestor_holds(node, &p.stop, kind_ids),
-        Walk::Descendant => descendant_holds(node, &p.stop, kind_ids),
+    match &p.kind {
+        crate::types::PredicateKind::Node { walk, stop, .. } => match walk {
+            Walk::Ancestor => ancestor_holds(node, stop, kind_ids),
+            Walk::Parent => ancestor_holds(node, &crate::types::Stop::Neighbor, kind_ids),
+            Walk::Descendant => descendant_holds(node, stop, kind_ids),
+        },
+        crate::types::PredicateKind::Contains { .. } => false,
     }
 }
 

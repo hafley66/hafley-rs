@@ -11,7 +11,7 @@ use pipeline::{build_query_ext as build, run_over_file_tree as run};
 
 pub fn build(language: &Language, scm: &str) -> Result<QueryExt, QueryExtError> {
     let user = Query::new(language, scm).map_err(QueryExtError::Parse)?;
-    let (predicates, kind_names) = split::read_and_parse_predicates(&user)?;
+    let (predicates, kind_names, predicate_kinds, literals) = split::read_and_parse_predicates(&user)?;
     let kinds = build::query_new_per_kind(language, &kind_names)?;
     let names = build::intern_names(&user);
     Ok(QueryExt {
@@ -19,6 +19,8 @@ pub fn build(language: &Language, scm: &str) -> Result<QueryExt, QueryExtError> 
         kinds,
         predicates,
         names,
+        predicate_kinds,
+        literals,
     })
 }
 

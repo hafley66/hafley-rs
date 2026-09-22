@@ -5,4 +5,6 @@ pub struct QueryExt {
     pub kinds: Vec<tree_sitter::Query>,
     pub predicates: Vec<super::Predicate>,
     pub names: Vec<Box<str>>,
+    pub predicate_kinds: Vec<u16>,
+    pub literals: Vec<Box<[u8]>>,
 }

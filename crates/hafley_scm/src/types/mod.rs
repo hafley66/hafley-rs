@@ -10,7 +10,7 @@ mod walk;
 pub use captured_span::CapturedSpan;
 pub use match_arena::MatchArena;
 pub use match_row::MatchRow;
-pub use predicate::Predicate;
+pub use predicate::{Predicate, PredicateKind};
 pub use query_ext::QueryExt;
 pub use query_ext_error::QueryExtError;
 pub use stop::Stop;
