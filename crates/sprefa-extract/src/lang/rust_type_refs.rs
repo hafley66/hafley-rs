@@ -5,6 +5,9 @@ use syn::{
     AngleBracketedGenericArguments, GenericArgument, Path, PathArguments, ReturnType, Type,
     TypeParamBound,
 };
+// The name-text helpers moved to `hafley_scm::lang::rust`; re-exported so the
+// downstream imports here stay one path.
+pub use hafley_scm::lang::rust::{path_name, primary_type};
 
 // ── type-reference collection (the arrow-type payload) ──────────────────────
 //
@@ -105,61 +108,5 @@ pub(crate) fn collect_path_args(path: &Path, out: &mut Vec<String>) {
             }
             PathArguments::None => {}
         }
-    }
-}
-
-/// The trailing path name (`a::b::c` -> `a::b::c`), or None for a primitive /
-/// `Self`. Port of v5 `path_name`.
-pub(crate) fn path_name(path: &Path) -> Option<String> {
-    let parts: Vec<String> = path.segments.iter().map(|s| s.ident.to_string()).collect();
-    if parts.is_empty() {
-        return None;
-    }
-    let name = parts.join("::");
-    if is_noise_type(&name) {
-        None
-    } else {
-        Some(name)
-    }
-}
-
-/// Primitive + `Self` filter: a reference to `u32`/`str`/`Self` carries no
-/// resolvable declaration. Port of v5 `is_noise_type`.
-fn is_noise_type(name: &str) -> bool {
-    matches!(
-        name,
-        "Self"
-            | "bool"
-            | "char"
-            | "str"
-            | "u8"
-            | "u16"
-            | "u32"
-            | "u64"
-            | "u128"
-            | "usize"
-            | "i8"
-            | "i16"
-            | "i32"
-            | "i64"
-            | "i128"
-            | "isize"
-            | "f32"
-            | "f64"
-    )
-}
-
-/// The primary (head, wrapper-peeled) path name of a type: `&mut Foo<T>` is
-/// `Foo`, `()`/primitives are None. Port of v5 `primary_type` — the
-/// method sym's owner. (`path_name` / `is_noise_type` are the existing ports
-/// this recursion composes.)
-pub(crate) fn primary_type(ty: &Type) -> Option<String> {
-    match ty {
-        Type::Group(t) => primary_type(&t.elem),
-        Type::Paren(t) => primary_type(&t.elem),
-        Type::Path(t) => path_name(&t.path),
-        Type::Ptr(t) => primary_type(&t.elem),
-        Type::Reference(t) => primary_type(&t.elem),
-        _ => None,
     }
 }

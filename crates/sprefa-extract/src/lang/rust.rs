@@ -17,7 +17,10 @@
 use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
-use hafley_scm::lang::rust::{call_definition_rows, CallDefinitionKind, RUST_CALL_QUERY};
+use hafley_scm::lang::rust::{
+    call_definition_rows, call_metadata_rows, cfg_test_predicate, item_attrs, line_col_to_byte,
+    path_string, CallDefinitionKind, RUST_CALL_QUERY,
+};
 use syn::spanned::Spanned;
 use syn::ReturnType;
 
@@ -53,30 +56,7 @@ use crate::types::{
 };
 
 // ── span bridge: proc_macro2 line/col -> v6 byte Span ───────────────────────
-
-/// Byte offset of the start of each 1-based line: line N starts at `out[N-1]`.
-/// Mirrors v5_normalize's `line_starts`; built once per file in `extract`.
-pub(crate) fn build_line_starts(src: &str) -> Vec<u32> {
-    let mut out = vec![0u32];
-    for (byte_off, byte) in src.bytes().enumerate() {
-        if byte == b'\n' {
-            out.push((byte_off + 1) as u32);
-        }
-    }
-    out
-}
-
-/// Convert a syn (1-based line, 0-based column) coordinate to a byte offset.
-/// `column` is proc_macro2's char column; for ASCII source it equals the byte
-/// column (v5's `rust_line`/`ts_push` make the same char-as-byte approximation,
-/// and the parity oracle reconstructs bytes the same way).
-fn line_col_to_byte(line_starts: &[u32], line: u32, col: u32) -> u32 {
-    line_starts
-        .get((line as usize).saturating_sub(1))
-        .copied()
-        .unwrap_or(0)
-        .saturating_add(col)
-}
+pub(crate) use hafley_scm::lang::rust::{build_line_starts, variant_def_range};
 
 /// A proc_macro2 span -> v6 byte Span. Used for entity/def spans where a real
 /// length is kept (joins + future resolution); df nodes use start-only anchors.
@@ -1521,13 +1501,6 @@ pub(crate) fn def_span(
     }
 }
 
-/// One enum variant's def span, the ident alone. None unless the span covers
-/// exactly the ident: wider is an mbe-expanded variant reporting the macro call.
-pub(crate) fn variant_def_span(line_starts: &[u32], variant: &syn::Variant) -> Option<Span> {
-    let span = syn_span(line_starts, variant.ident.span());
-    (span.len as usize == variant.ident.to_string().len()).then_some(span)
-}
-
 /// Descends inline `mod name { .. }`: the SITE half walks the whole file, so a
 /// callable declared in one needs a def or the file reports uses without them.
 fn scm_call_defs(
@@ -1627,225 +1600,38 @@ fn syn_const_init_defs(
     visit(&parsed.items, line_starts, &defs, strings, sink);
 }
 
-fn syn_cfg_scopes(
+/// The crate's metadata rows, interned and appended onto the CallF aux.
+fn syn_call_metadata(
     parsed: &syn::File,
     line_starts: &[u32],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    let node_spans: BTreeSet<(u32, u32)> = sink
+    let defs: BTreeSet<(u32, u32)> = sink
         .nodes
         .iter()
-        .map(|node| (node.span.start, node.span.len))
+        .map(|node| (node.span.start, node.span.end()))
         .collect();
-    fn add(
-        span: Span,
-        active: Option<&str>,
-        node_spans: &BTreeSet<(u32, u32)>,
-        strings: &mut Strings,
-        sink: &mut FamilyBundle<CallF>,
-    ) {
-        if let Some(predicate) = active.filter(|_| node_spans.contains(&(span.start, span.len))) {
-            sink.aux.cfg_scopes.push(CfgScope {
-                span,
-                cfg: strings.intern(predicate),
-            });
-        }
+    let (cfg, owners) = call_metadata_rows(parsed, line_starts, &defs);
+    for row in cfg {
+        sink.aux.cfg_scopes.push(CfgScope {
+            span: Span {
+                start: row.start,
+                len: row.end - row.start,
+            },
+            cfg: strings.intern(&row.predicate),
+        });
     }
-    fn visit(
-        items: &[syn::Item],
-        line_starts: &[u32],
-        inherited: Option<&str>,
-        node_spans: &BTreeSet<(u32, u32)>,
-        strings: &mut Strings,
-        sink: &mut FamilyBundle<CallF>,
-    ) {
-        for item in items {
-            let own = cfg_test_predicate(item_attrs(item));
-            let active = inherited.or(own.as_deref());
-            match item {
-                syn::Item::Fn(item) => add(
-                    def_span(line_starts, item.sig.ident.span(), item.block.span()),
-                    active,
-                    node_spans,
-                    strings,
-                    sink,
-                ),
-                syn::Item::Impl(item) => {
-                    for child in &item.items {
-                        if let syn::ImplItem::Fn(method) = child {
-                            add(
-                                def_span(line_starts, method.sig.ident.span(), method.block.span()),
-                                active,
-                                node_spans,
-                                strings,
-                                sink,
-                            );
-                        }
-                    }
-                }
-                syn::Item::Trait(item) => {
-                    for child in &item.items {
-                        if let syn::TraitItem::Fn(method) = child {
-                            let span = method.default.as_ref().map_or_else(
-                                || {
-                                    def_span(
-                                        line_starts,
-                                        method.sig.ident.span(),
-                                        method.sig.span(),
-                                    )
-                                },
-                                |body| def_span(line_starts, method.sig.ident.span(), body.span()),
-                            );
-                            add(span, active, node_spans, strings, sink);
-                        }
-                    }
-                }
-                syn::Item::Enum(item) => {
-                    for variant in &item.variants {
-                        if let Some(span) = variant_def_span(line_starts, variant) {
-                            add(span, active, node_spans, strings, sink);
-                        }
-                    }
-                }
-                syn::Item::Const(item) => add(
-                    def_span(line_starts, item.ident.span(), item.expr.span()),
-                    active,
-                    node_spans,
-                    strings,
-                    sink,
-                ),
-                syn::Item::Static(item) => add(
-                    def_span(line_starts, item.ident.span(), item.expr.span()),
-                    active,
-                    node_spans,
-                    strings,
-                    sink,
-                ),
-                syn::Item::Mod(item) => {
-                    if let Some((_, inner)) = &item.content {
-                        visit(inner, line_starts, active, node_spans, strings, sink);
-                    }
-                }
-                _ => {}
-            }
-        }
+    for row in owners {
+        sink.aux.method_owners.push(MethodOwner {
+            span: Span {
+                start: row.start,
+                len: row.end - row.start,
+            },
+            self_type: row.self_type.map(|name| strings.intern(&name)),
+            trait_name: row.trait_name.map(|name| strings.intern(&name)),
+        });
     }
-    visit(&parsed.items, line_starts, None, &node_spans, strings, sink);
-}
-
-fn syn_method_owners(
-    parsed: &syn::File,
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    fn visit(
-        items: &[syn::Item],
-        line_starts: &[u32],
-        strings: &mut Strings,
-        sink: &mut FamilyBundle<CallF>,
-    ) {
-        for item in items {
-            match item {
-                syn::Item::Impl(item) => {
-                    let self_type = primary_type(&item.self_ty).map(|name| strings.intern(&name));
-                    let trait_name = item
-                        .trait_
-                        .as_ref()
-                        .map(|(_, path, _)| strings.intern(&path_string(path)));
-                    for child in &item.items {
-                        if let syn::ImplItem::Fn(method) = child {
-                            sink.aux.method_owners.push(MethodOwner {
-                                span: def_span(
-                                    line_starts,
-                                    method.sig.ident.span(),
-                                    method.block.span(),
-                                ),
-                                self_type,
-                                trait_name,
-                            });
-                        }
-                    }
-                }
-                syn::Item::Trait(item) => {
-                    for child in &item.items {
-                        if let syn::TraitItem::Fn(method) = child {
-                            let span = method.default.as_ref().map_or_else(
-                                || {
-                                    def_span(
-                                        line_starts,
-                                        method.sig.ident.span(),
-                                        method.sig.span(),
-                                    )
-                                },
-                                |body| def_span(line_starts, method.sig.ident.span(), body.span()),
-                            );
-                            sink.aux.method_owners.push(MethodOwner {
-                                span,
-                                self_type: None,
-                                trait_name: Some(strings.intern(&item.ident.to_string())),
-                            });
-                        }
-                    }
-                }
-                syn::Item::Mod(item) => {
-                    if let Some((_, inner)) = &item.content {
-                        visit(inner, line_starts, strings, sink);
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-    visit(&parsed.items, line_starts, strings, sink);
-}
-
-/// Every syn item form that can carry attributes, so a cfg predicate on any of
-/// them is seen. The forms with no attributes yield an empty slice rather than
-/// being skipped, which keeps the match total and the default safe.
-fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
-    match item {
-        syn::Item::Fn(i) => &i.attrs,
-        syn::Item::Impl(i) => &i.attrs,
-        syn::Item::Trait(i) => &i.attrs,
-        syn::Item::Mod(i) => &i.attrs,
-        syn::Item::Struct(i) => &i.attrs,
-        syn::Item::Enum(i) => &i.attrs,
-        syn::Item::Const(i) => &i.attrs,
-        syn::Item::Static(i) => &i.attrs,
-        syn::Item::Type(i) => &i.attrs,
-        syn::Item::Use(i) => &i.attrs,
-        syn::Item::Macro(i) => &i.attrs,
-        syn::Item::TraitAlias(i) => &i.attrs,
-        syn::Item::Union(i) => &i.attrs,
-        syn::Item::ExternCrate(i) => &i.attrs,
-        syn::Item::ForeignMod(i) => &i.attrs,
-        _ => &[],
-    }
-}
-
-/// The `cfg` predicate as written, when it names `test` anywhere inside it.
-/// `#[cfg(test)]`, `#[cfg(any(test, feature = "x"))]` and `#[cfg(all(test,
-/// unix))]` all qualify; `#[cfg(feature = "testing")]` does not, because the
-/// token is matched as a whole word and not as a substring.
-fn cfg_test_predicate(attrs: &[syn::Attribute]) -> Option<String> {
-    for attr in attrs {
-        if !attr.path().is_ident("cfg") {
-            continue;
-        }
-        let syn::Meta::List(list) = &attr.meta else {
-            continue;
-        };
-        let text = list.tokens.to_string();
-        let names_test = text
-            .split(|c: char| !c.is_alphanumeric() && c != '_')
-            .any(|word| word == "test");
-        if names_test {
-            return Some(text);
-        }
-    }
-    None
 }
 
 /// Project the CallF family: one def node per callable (Free / Method / Lambda)
@@ -1857,8 +1643,7 @@ fn project_call(
     sink: &mut FamilyBundle<CallF>,
 ) {
     syn_const_init_defs(parsed, line_starts, strings, sink);
-    syn_cfg_scopes(parsed, line_starts, strings, sink);
-    syn_method_owners(parsed, line_starts, strings, sink);
+    syn_call_metadata(parsed, line_starts, strings, sink);
 
     // Sites: one walk over the whole file for every call/method-call/struct-literal
     // expression. The callee is the trailing name as written (unresolved in phase
@@ -2176,15 +1961,6 @@ fn is_variant_literal_path(path: &syn::Path) -> bool {
             .chars()
             .next()
             .is_some_and(char::is_uppercase)
-}
-
-/// Render a syn::Path as `a::b::c`. Port of v5 `path_string`.
-fn path_string(path: &syn::Path) -> String {
-    path.segments
-        .iter()
-        .map(|segment| segment.ident.to_string())
-        .collect::<Vec<_>>()
-        .join("::")
 }
 
 /// Strip nested `Expr::Paren` to find the inner expression. Port of v5
