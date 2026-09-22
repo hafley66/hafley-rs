@@ -136,8 +136,6 @@ enum LibraryCapability {
     Phase1Flatten,
     /// `FamilyMask` selection of a family subset.
     Phase1FamilyMask,
-    /// `query_patterns`: batched ast-grep patterns over one parse.
-    PatternQuery,
     /// `Resolve<CallF>`: resolved caller-to-callee edges.
     ResolveCall,
     /// `Resolve<TypeF>`: resolved type reference edges.
@@ -170,7 +168,6 @@ enum LibraryCapability {
 const ALL: &[LibraryCapability] = &[
     LibraryCapability::Phase1Flatten,
     LibraryCapability::Phase1FamilyMask,
-    LibraryCapability::PatternQuery,
     LibraryCapability::ResolveCall,
     LibraryCapability::ResolveType,
     LibraryCapability::ScipIndexLoad,
@@ -184,7 +181,7 @@ const ALL: &[LibraryCapability] = &[
     LibraryCapability::DietFileUnresolved,
     LibraryCapability::PackageEdges,
 ];
-const DECLARED_CAPABILITIES: usize = 15;
+const DECLARED_CAPABILITIES: usize = 14;
 
 /// How the binary reaches one library capability.
 enum CliReach {
@@ -248,18 +245,6 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
             // appear anyway; the mask's effect is proven by the roster leg's
             // whole-stream equality and by 2_df_aux_cli.rs.
             absent_without: None,
-        },
-        PatternQuery => CliReach::Emits {
-            args: strings(&[
-                "--ast-pattern",
-                "call=$FN($$$ARGS)",
-                "--ast-capture",
-                "call=FN",
-                "tests/fixtures/ts/sample.ts",
-            ]),
-            field: None,
-            record: "capture",
-            absent_without: Some(strings(&["tests/fixtures/ts/sample.ts"])),
         },
         ResolveCall => CliReach::Emits {
             args: strings(&[

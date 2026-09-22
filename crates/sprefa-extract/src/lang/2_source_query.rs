@@ -1,14 +1,13 @@
-//! One library entrypoint for source queries backed by tree-sitter or ast-grep.
+//! One library entrypoint for source queries backed by tree-sitter.
 //!
-//! The tree-sitter arm compiles and runs through the shared `hafley_scm`
-//! engine: native tree-sitter text predicates (`eq?`, `not-eq?`, `match?`,
-//! `not-match?`, `any-of?`, and their `any-`/`not-any-` forms) evaluate on the
-//! cursor, host predicates (`has-ancestor?`, `has-parent?`, `has?`,
-//! `contains?`, and the generic `not-` forms) evaluate in the arena fill, and
-//! unknown predicates are build errors. This facade preserves each engine's
-//! current result shape. Canonical source occurrence, match, and capture
-//! facts belong to the later normalization boundary and are intentionally
-//! absent here.
+//! The query compiles and runs through the shared `hafley_scm` engine: native
+//! tree-sitter text predicates (`eq?`, `not-eq?`, `match?`, `not-match?`,
+//! `any-of?`, and their `any-`/`not-any-` forms) evaluate on the cursor, host
+//! predicates (`has-ancestor?`, `has-parent?`, `has?`, `contains?`, and the
+//! generic `not-` forms) evaluate in the arena fill, and unknown predicates
+//! are build errors. Canonical source occurrence, match, and capture facts
+//! belong to the later normalization boundary and are intentionally absent
+//! here.
 
 use std::collections::BTreeMap;
 
@@ -17,11 +16,6 @@ use serde::Serialize;
 use serde_json::Value;
 use tree_sitter::Parser as TreeParser;
 
-use super::{
-    query_ast_rule, query_patterns, AstCaptureFact, AstPatternQuery, AstRuleError, AstRuleMatch,
-    AstRuleRequest,
-};
-use crate::seams::ParseError;
 
 /// A tree-sitter query keeps the native S-expression and explicit grammar name.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -35,8 +29,6 @@ pub struct TreeSitterQuery {
 #[serde(tag = "engine", content = "specification", rename_all = "snake_case")]
 pub enum SourceQuery {
     TreeSitter(TreeSitterQuery),
-    AstPatterns(Vec<AstPatternQuery>),
-    AstRule(AstRuleRequest),
 }
 
 /// The existing tree-sitter CLI row: capture names map to captured text, with
@@ -69,15 +61,10 @@ pub struct TreeSitterSpannedMatch {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SourceQueryOutput {
     TreeSitter(Vec<TreeSitterQueryMatch>),
-    AstPatterns(Vec<AstCaptureFact>),
-    AstRule(Vec<AstRuleMatch>),
 }
-
 #[derive(Debug)]
 pub enum SourceQueryError {
     TreeSitter(String),
-    AstPatterns(ParseError),
-    AstRule(AstRuleError),
     Projection(String),
 }
 
@@ -85,8 +72,6 @@ impl std::fmt::Display for SourceQueryError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TreeSitter(error) => formatter.write_str(error),
-            Self::AstPatterns(error) => std::fmt::Display::fmt(error, formatter),
-            Self::AstRule(error) => std::fmt::Display::fmt(error, formatter),
             Self::Projection(error) => formatter.write_str(error),
         }
     }
@@ -96,7 +81,6 @@ impl std::error::Error for SourceQueryError {}
 
 /// Dispatch one query against caller-owned source bytes.
 pub fn query_source(
-    path: &str,
     content: &[u8],
     query: &SourceQuery,
 ) -> Result<SourceQueryOutput, SourceQueryError> {
@@ -104,12 +88,6 @@ pub fn query_source(
         SourceQuery::TreeSitter(query) => query_tree_sitter(content, query)
             .map(SourceQueryOutput::TreeSitter)
             .map_err(SourceQueryError::TreeSitter),
-        SourceQuery::AstPatterns(queries) => query_patterns(path, content, queries)
-            .map(SourceQueryOutput::AstPatterns)
-            .map_err(SourceQueryError::AstPatterns),
-        SourceQuery::AstRule(request) => query_ast_rule(path, content, request)
-            .map(SourceQueryOutput::AstRule)
-            .map_err(SourceQueryError::AstRule),
     }
 }
 
@@ -178,8 +156,7 @@ fn project_match_arena(
     content: &[u8],
 ) -> Result<Vec<TreeSitterSpannedMatch>, String> {
     let starts = line_starts(content);
-    let line_of =
-        |offset: u32| starts.partition_point(|&line_start| line_start <= offset) as u32;
+    let line_of = |offset: u32| starts.partition_point(|&line_start| line_start <= offset) as u32;
     let mut rows = Vec::with_capacity(arena.rows.len());
     for row in &arena.rows {
         let spans = &arena.spans[row.spans.start as usize..row.spans.end as usize];
@@ -232,7 +209,10 @@ fn line_starts(content: &[u8]) -> Vec<u32> {
 fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
     match error {
         hafley_scm::QueryExtError::Parse(error) => {
-            format!("invalid query at row {}: {error}", error.row.saturating_add(1))
+            format!(
+                "invalid query at row {}: {error}",
+                error.row.saturating_add(1)
+            )
         }
         hafley_scm::QueryExtError::UnknownOperator(operator) => {
             format!("invalid query: predicate #{operator} is not allowed")

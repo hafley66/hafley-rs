@@ -174,12 +174,6 @@ FILE FACT
   --file-fact prepends one `file` record per input: path, content digest, byte
   count, line count. Rides the same read; costs no second pass.
 
-PATTERN MODE
-  Repeat --ast-pattern ID=PATTERN to run ast-grep patterns over one parsed
-  source root; --ast-selector ID=KIND makes a pattern contextual;
-  --ast-capture ID=NAME emits a metavariable. Rows carry capture and
-  whole-match byte spans. Pattern text is a CLI input, never DL syntax.
-
 OUTPUT
   Each line is one fact tagged by `record` (run `ryi --schema` for every
   shape, its fields, and the per-kind vocabularies). Spans are half-open byte
@@ -454,7 +448,7 @@ charges 4.5 s to 7.0 s per family to the parse against 4 ms to 225 ms of row
 flattening. No ts/js corpus file and no fixture in this crate reaches it.
 
 The decision is made on file size before any parse, so it covers the normal
-family stream, --bench and --ast-pattern alike. --file-fact still prepends its
+family stream and --bench alike. --file-fact still prepends its
 identity row: a digest and a line count over bytes already read is not the cost
 being bounded. A whole-project mode (--resolve, --deps, --scip-*) takes
 directories and path sets and is not covered.";

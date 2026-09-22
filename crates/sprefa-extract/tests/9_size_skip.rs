@@ -139,23 +139,6 @@ fn under_ceiling_is_unchanged() {
     assert!(!rows.iter().any(|row| row.contains("size_skip")));
 }
 
-/// The ceiling is decided before the parse, so it also covers the pattern-query
-/// mode, which pays the same parse.
-#[test]
-fn ast_pattern_mode_skips_too() {
-    let path = scratch("over_ast.rs", &filler(OVER_CEILING));
-    let path = path.to_string_lossy().to_string();
-    let (code, rows) = run(&[
-        "--ast-pattern",
-        "k=pub const $NAME: u32 = $V;",
-        "--ast-capture",
-        "k=NAME",
-        &path,
-    ]);
-    assert_eq!(code, 0);
-    assert_eq!(one_row(&rows)["record"], "size_skip");
-}
-
 /// `--schema` is the contract a consumer reads; a record absent from it is a
 /// record nothing can declare a column for.
 #[test]

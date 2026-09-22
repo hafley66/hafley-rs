@@ -466,13 +466,6 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
             "tests/fixtures/ts/scip/alpha.ts",
             "tests/fixtures/ts/scip/gamma.ts",
         ],
-        vec![
-            "--ast-pattern",
-            "create=createApi($CONFIG)",
-            "--ast-capture",
-            "create=CONFIG",
-            "tests/fixtures/ast_pattern/0_rtkq.ts",
-        ],
     ]
     .into_iter()
     .enumerate()
@@ -490,18 +483,6 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
             .collect();
         assert!(!expected.is_empty(), "Empty test input: {args:?}");
         let retains_raw = args.first() == Some(&"fast") || args.contains(&"--resolve");
-        if args.contains(&"--ast-pattern") {
-            assert!(expected.iter().any(|v| v["record"] == "capture"));
-            let source = args.last().unwrap();
-            expected.insert(
-                0,
-                serde_json::to_value(sprefa_extract::file_fact(
-                    source,
-                    &std::fs::read(source).unwrap(),
-                ))
-                .unwrap(),
-            );
-        }
         let path = scratch.path().join(format!("project-{i}.db"));
         let mut sql_args = args.clone();
         sql_args.extend(["--sqlite", path.to_str().unwrap()]);

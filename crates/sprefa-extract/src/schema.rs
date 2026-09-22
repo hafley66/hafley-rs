@@ -363,7 +363,7 @@ TSI ENVELOPE (--witness)
   run 0; a semantic run claims none, because the checker answers per site
   instead of enumerating a relation.
   --witness conflicts with the single-purpose modes (--deps, --package-deps,
-  --scip-facts, --scip-deps, --bench, --ast-pattern, --file-fact) and with
+  --scip-facts, --scip-deps, --bench, --file-fact) and with
   --family cfg: their rows come from other flattens, and the protocol row must
   be the first row of a witnessed stream with every later row numbered.
 
@@ -372,7 +372,7 @@ SIZE CEILING (--max-bytes)
   naming the path, the byte count and the ceiling, and exits 0. The default is
   16777216; --max-bytes N sets it, --max-bytes 0 removes it. The decision is
   made on the file size before any parse, so it covers the normal family
-  stream, --bench, and --ast-pattern alike, and --file-fact still prepends its
+  stream and --bench alike, and --file-fact still prepends its
   identity row (a digest over bytes already read, not the cost being bounded).
   A whole-project mode (--resolve, --deps, --scip-*) takes directories and sets
   and is not covered.

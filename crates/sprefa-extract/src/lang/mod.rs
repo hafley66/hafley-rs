@@ -8,8 +8,6 @@
 //! type/call/df via oxc); anything else with an ast-grep grammar falls to
 //! `AstgrepSource` (cst-only).
 
-#[path = "1_ast_rule.rs"]
-pub mod ast_rule;
 pub mod astgrep;
 #[path = "0_call_kinds.rs"]
 pub mod call_kinds;
@@ -39,7 +37,8 @@ pub mod rust_checker;
 mod rust_checker_ra;
 pub mod rust_docs;
 pub mod rust_modules;
-#[path = "rust/cleave.rs"] pub mod rust_mutate;
+#[path = "rust/cleave.rs"]
+pub mod rust_mutate;
 pub mod rust_receivers;
 pub mod rust_rehome;
 pub mod rust_rename;
@@ -58,21 +57,15 @@ pub mod source_facts;
 pub mod source_query;
 pub mod ts;
 pub mod ts_checker;
-#[path = "ts/cleave.rs"] pub mod ts_mutate;
+#[path = "ts/cleave.rs"]
+pub mod ts_mutate;
 pub mod ts_paths;
 pub mod ts_receivers;
 pub mod ts_rehome;
 pub mod ts_rename;
 pub mod ts_resolve;
 
-pub use ast_rule::{
-    decode_ast_rule_yaml, query_ast_rule, query_ast_rule_with_content, AstRule, AstRuleCapture,
-    AstRuleError, AstRuleMatch, AstRuleMutationProposal, AstRuleRequest, NamedAstRule, StopBy,
-};
-pub use astgrep::{
-    query_patterns, AstCaptureFact, AstGrepParser, AstPatternQuery, AstgrepSource, CstProjector,
-    SgRoot,
-};
+pub use astgrep::{AstGrepParser, AstgrepSource, CstProjector, SgRoot};
 pub use commonlisp::CommonlispSource;
 pub use data::DataSource;
 pub use extract_lang::RyiLang;

@@ -4,17 +4,10 @@
 //! content span. DL7 derives located occurrences by pairing those spans with
 //! the envelope's source value.
 
-use std::collections::BTreeMap;
-
+use super::{query_tree_sitter_spans, SourceQuery, SourceQueryError};
+use crate::shape::content_id_of;
 use serde::Serialize;
 use serde_json::Value;
-
-use super::{
-    query_ast_rule, query_patterns, query_tree_sitter_spans, AstRuleCapture,
-    AstRuleMutationProposal, SourceQuery, SourceQueryError,
-};
-use crate::lang::RyiLang;
-use crate::shape::content_id_of;
 
 pub const SOURCE_FACT_PROTOCOL: u32 = 1;
 
@@ -148,7 +141,6 @@ pub struct SourceQueryFacts {
 pub fn query_source_facts(
     source: &soopy::ActionSource,
     observed_content: &soopy::ContentId,
-    path: &str,
     content: &[u8],
     query: &SourceQuery,
 ) -> Result<SourceQueryFacts, SourceQueryError> {
@@ -161,7 +153,7 @@ pub fn query_source_facts(
     let content_name = canonical.to_string();
     let source_place = SourcePlace::from(source);
     let git_blobs = git_blob_facts(source, observed_content)?;
-    let (engine, grammar, matches) = normalized_matches(path, content, query)?;
+    let (engine, grammar, matches) = normalized_matches(content, query)?;
     let specification = query_specification(query)?;
     Ok(SourceQueryFacts {
         protocol: SOURCE_FACT_PROTOCOL,
@@ -204,7 +196,6 @@ fn git_blob_facts(
 }
 
 fn normalized_matches(
-    path: &str,
     content: &[u8],
     query: &SourceQuery,
 ) -> Result<(String, String, Vec<SourceMatchFact>), SourceQueryError> {
@@ -235,91 +226,7 @@ fn normalized_matches(
                 .collect();
             Ok(("tree_sitter".to_string(), request.language.clone(), matches))
         }
-        SourceQuery::AstPatterns(requests) => {
-            let found =
-                query_patterns(path, content, requests).map_err(SourceQueryError::AstPatterns)?;
-            let mut grouped = BTreeMap::<(String, u32, u32), Vec<_>>::new();
-            for capture in found {
-                grouped
-                    .entry((capture.query, capture.match_start, capture.match_end))
-                    .or_default()
-                    .push((capture.capture, capture.start, capture.end));
-            }
-            let matches = grouped
-                .into_iter()
-                .enumerate()
-                .map(
-                    |(position, ((branch, start, end), captures))| SourceMatchFact {
-                        position: position as u32,
-                        branch,
-                        pattern: 0,
-                        range: byte_range(start, end),
-                        captures: captures
-                            .into_iter()
-                            .enumerate()
-                            .map(|(position, (label, start, end))| SourceCaptureFact {
-                                position: position as u32,
-                                label,
-                                range: byte_range(start, end),
-                            })
-                            .collect(),
-                        replacement: None,
-                    },
-                )
-                .collect();
-            Ok((
-                "ast_grep_patterns".to_string(),
-                grammar_for_path(path)?,
-                matches,
-            ))
-        }
-        SourceQuery::AstRule(request) => {
-            let found =
-                query_ast_rule(path, content, request).map_err(SourceQueryError::AstRule)?;
-            let matches = found
-                .into_iter()
-                .enumerate()
-                .map(|(position, found)| SourceMatchFact {
-                    position: position as u32,
-                    branch: found.query,
-                    pattern: 0,
-                    range: byte_range(found.span.start, found.span.end()),
-                    captures: normalize_rule_captures(found.captures),
-                    replacement: found.proposal.map(normalize_replacement),
-                })
-                .collect();
-            Ok((
-                "ast_grep_rule".to_string(),
-                grammar_for_path(path)?,
-                matches,
-            ))
-        }
     }
-}
-
-fn normalize_rule_captures(captures: Vec<AstRuleCapture>) -> Vec<SourceCaptureFact> {
-    captures
-        .into_iter()
-        .enumerate()
-        .map(|(position, capture)| SourceCaptureFact {
-            position: position as u32,
-            label: capture.name,
-            range: byte_range(capture.span.start, capture.span.end()),
-        })
-        .collect()
-}
-
-fn normalize_replacement(proposal: AstRuleMutationProposal) -> SourceReplacementFact {
-    SourceReplacementFact {
-        replacement: proposal.replacement,
-        producer: proposal.query,
-    }
-}
-
-fn grammar_for_path(path: &str) -> Result<String, SourceQueryError> {
-    RyiLang::from_path(path)
-        .map(|language| language.name().to_lowercase())
-        .ok_or_else(|| SourceQueryError::Projection(format!("no grammar for {path}")))
 }
 
 fn byte_range(start: u32, end: u32) -> ByteRange {
@@ -329,8 +236,6 @@ fn byte_range(start: u32, end: u32) -> ByteRange {
 fn query_specification(query: &SourceQuery) -> Result<Value, SourceQueryError> {
     let result = match query {
         SourceQuery::TreeSitter(value) => serde_json::to_value(value),
-        SourceQuery::AstPatterns(value) => serde_json::to_value(value),
-        SourceQuery::AstRule(value) => serde_json::to_value(value),
     };
     result.map_err(|error| SourceQueryError::Projection(error.to_string()))
 }

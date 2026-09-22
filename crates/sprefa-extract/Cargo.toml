@@ -164,7 +164,6 @@ hafley_scm = { path = "../hafley_scm" }
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
 # basic-toml reads Cargo.toml for the package_edge arm. Candidates measured into
 # THIS lock: basic-toml +1 crate (serde only, already here), toml 1.1 +4
 # (toml_datetime/toml_parser/toml_writer/serde_spanned), cargo-manifest +14.

@@ -26,7 +26,7 @@ where
         language: cli.lang,
         query: cli.query,
     });
-    let output = query_source(cli.path.to_string_lossy().as_ref(), &bytes, &request)
+    let output = query_source(&bytes, &request)
         .map_err(|error| error.to_string())?;
     let SourceQueryOutput::TreeSitter(rows) = output else {
         unreachable!("tree-sitter request returns tree-sitter rows")
