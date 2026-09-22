@@ -6,9 +6,9 @@
 //! tree-sitter-kotlin); a `.py`/`.pyi` hits `PythonSource` (cst via ast-grep +
 //! type/call/df via tree-sitter-python); a `.ts` hits `TsSource` (cst via ast-grep +
 //! type/call/df via oxc); anything else with an ast-grep grammar falls to
-//! `AstgrepSource` (cst-only).
+//! `FallbackSource` (cst-only).
 
-pub mod astgrep;
+pub mod fallback;
 #[path = "0_call_kinds.rs"]
 pub mod call_kinds;
 pub mod commonlisp;
@@ -65,12 +65,12 @@ pub mod ts_rehome;
 pub mod ts_rename;
 pub mod ts_resolve;
 
-pub use astgrep::{AstGrepParser, AstgrepSource, CstProjector, SgRoot};
+pub use fallback::{call_bundle, call_drops, cst_bundle, FallbackSource};
 pub use commonlisp::CommonlispSource;
 pub use data::DataSource;
 pub use extract_lang::RyiLang;
 pub use fact::{
-    dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactMatcher, FactSet,
+    dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactSet,
     DL6_DB_RELATIVE_PATH,
 };
 pub use gdscript::GdscriptSource;
@@ -105,18 +105,17 @@ use crate::source::Source;
 use crate::types::{Cleave, RehomeArm, Rename};
 
 /// The first-match roster. Order matters: the lang-specific `Source`s precede the
-/// ast-grep CST fallback (v5 `type_langs()` convention). RustSource is first so a
-/// `.rs` routes to it, not the cst-only AstgrepSource; GoSource precedes
-/// AstgrepSource so a `.go` routes to it, not the cst-only fallback.
+/// linked-grammar CST fallback (v5 `type_langs()` convention). RustSource is first so a
+/// `.rs` routes to it, not the cst-only FallbackSource; GoSource precedes
+/// FallbackSource so a `.go` routes to it, not the cst-only fallback.
 /// KotlinSource precedes TsSource because `"x.kts".ends_with(".ts")` is true -
 /// a `.kts` must route to kotlin, not ts (v5 `type_langs()` makes the same
 /// order-dependent call, typegraph/mod.rs:488).
-/// DataSource precedes AstgrepSource so a `.json`/`.yaml` reaches the data plane;
-/// it delegates its own cst plane back to AstgrepSource, so no row is lost.
-/// GdscriptSource/CommonlispSource precede AstgrepSource for the same reason
-/// RustSource does: their grammars are not in ast-grep's `SupportLang`, so only
-/// these rows can route a `.gd`/`.lisp` at all. Neither claims a suffix an
-/// earlier row owns (`.gd`, `.lisp`, `.lsp`, `.cl`, `.asd` are unclaimed above).
+/// DataSource precedes FallbackSource so a `.json`/`.yaml` reaches the data plane;
+/// it delegates its own cst plane back to FallbackSource, so no row is lost.
+/// GdscriptSource/CommonlispSource precede FallbackSource so their rows route a
+/// `.gd`/`.lisp` at all. Neither claims a suffix an earlier row owns
+/// (`.gd`, `.lisp`, `.lsp`, `.cl`, `.asd` are unclaimed above).
 pub fn sources() -> &'static [&'static dyn Source] {
     &[
         &RustSource,
@@ -129,7 +128,7 @@ pub fn sources() -> &'static [&'static dyn Source] {
         &TsSource,
         &GdscriptSource,
         &CommonlispSource,
-        &AstgrepSource,
+        &FallbackSource,
     ]
 }
 
@@ -160,7 +159,8 @@ pub fn rehomes() -> &'static [RehomeArm] {
         RehomeArm {
             core: &PrologSource,
             manifests: None,
-            shim: Some(&PrologSource),
+            // Disabled: the shim leg rode the ast-grep YAML rule engine.
+            shim: None,
             text_spellings: None,
             plan_check: None,
         },

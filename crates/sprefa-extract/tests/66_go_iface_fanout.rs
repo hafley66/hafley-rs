@@ -74,7 +74,7 @@ fn two_implementers_fan_out_per_site() {
     let at_site: BTreeSet<(String, String)> = edges
         .iter()
         .filter(|(_, _, _, s)| *s == site)
-        .map(|(caller, callee, kind, _)| (callee.clone(), kind.clone()))
+        .map(|(_caller, callee, kind, _)| (callee.clone(), kind.clone()))
         .collect();
     assert_eq!(
         at_site,

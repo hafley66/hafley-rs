@@ -11,7 +11,7 @@
 //! mind is `v6/sprefa-seed/src/_3_extract/_7_tasks.rs`.
 //!
 //! Commit 1 (this crate's first commit) is the PIPING PROOF: one Parser
-//! (`AstGrepParser`, ast-grep grammars cover rust/ts/go) + `Project<CstF>` (the
+//! (`RyiLang::tree_sitter_language`, linked grammars) + `Project<CstF>` (the
 //! lossless named-node tree) + the flat wire + a clap bin streaming JSONL +
 //! `--bench`. Proves bin -> seams -> flat wire -> stdout end to end.
 #![allow(dead_code)]
@@ -61,8 +61,8 @@ pub use cpg_types::{
 pub use deps::{resolve_specifier, Policy, TsconfigPaths};
 pub use dispatch::dispatch;
 pub use drain::{
-    bind_action, directory_path, directory_source, drain_edits, replace_action, source_rel,
-    stage_edits, BoundEdit, PendingReplaceDoc,
+    bind_action, directory_path, directory_source, replace_action, source_rel,
+    stage_edits,
 };
 pub use family::{
     flow_edges, CallEdgeKind, CallF, CallKind, CallSite, CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF,
@@ -75,8 +75,8 @@ pub use lang::{
     open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_source,
     query_source_facts, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
     rename_for, renames, respell, scm_edges, scm_facts, source_for, sources, ts_specifiers,
-    AstgrepSource, BuildPaths, ByteRange, CommonlispSource, DataSource, FactError, FactMatcher,
-    FactSet, GdscriptSource, GitBlobFact, GoSource, KotlinSource, MarkdownSource, OwnedRegion,
+    BuildPaths, ByteRange, CommonlispSource, DataSource, FactError, FactSet,
+    FallbackSource, GdscriptSource, GitBlobFact, GoSource, KotlinSource, MarkdownSource, OwnedRegion,
     OwnedRegionError, OwnedRegionProposal, PrologSource, PythonSource, RustSource, RyiLang,
     ScmEdge, SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError,
     SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact,

@@ -41,28 +41,38 @@ pub fn kind_id(language: &tree_sitter::Language, kind: &str) -> u16 {
     language.id_for_node_kind(kind, true)
 }
 
-/// Pre-order named-node walk with nearest-named-ancestor links. Iterative on an
-/// explicit stack — recursion would die on deep trees. Children are pushed in
-/// reverse so they pop in source order.
-pub fn walk_named(tree: &Tree) -> Vec<CstRow> {
-    let mut out = Vec::new();
+/// Pre-order named-node walk with nearest-named-ancestor links, handed to
+/// `sink` row by row: `(ordinal, parent ordinal, kind id, start, end, name
+/// span, named-children count)`. Ordinals are assigned in emission order and
+/// `parent` indexes the nearest NAMED ancestor (`None` at roots); unnamed
+/// nodes emit nothing but hand their named descendants to that ancestor.
+/// Streaming keeps the caller from materializing the whole walk beside its
+/// own rows. Iterative on an explicit stack — recursion would die on deep
+/// trees. Children are pushed in reverse so they pop in source order.
+pub fn walk_named_streaming(
+    tree: &Tree,
+    mut sink: impl FnMut(u32, Option<u32>, u16, u32, u32, Option<(u32, u32)>, u16),
+) {
     let root = tree.root_node();
     let mut cursor = tree.walk();
     let mut stack: Vec<(tree_sitter::Node<'_>, Option<u32>)> = vec![(root, None)];
+    let mut ordinal: u32 = 0;
     while let Some((node, nearest_named)) = stack.pop() {
         let my_ix = if node.is_named() {
-            let ix = out.len() as u32;
+            let ix = ordinal;
+            ordinal += 1;
             let name = node
                 .child_by_field_name("name")
                 .map(|field| (field.start_byte() as u32, field.end_byte() as u32));
-            out.push(CstRow {
-                kind_id: node.kind_id(),
-                start: node.start_byte() as u32,
-                end: node.end_byte() as u32,
+            sink(
+                ix,
+                nearest_named,
+                node.kind_id(),
+                node.start_byte() as u32,
+                node.end_byte() as u32,
                 name,
-                named_children: node.named_child_count() as u16,
-                parent: nearest_named,
-            });
+                node.named_child_count() as u16,
+            );
             Some(ix)
         } else {
             nearest_named
@@ -73,6 +83,24 @@ pub fn walk_named(tree: &Tree) -> Vec<CstRow> {
         }
         stack[mark..].reverse();
     }
+}
+
+/// The whole walk as a `Vec` — the convenience shape. Production callers
+/// should prefer [`walk_named_streaming`], which never holds two copies of
+/// the tree's rows at once.
+pub fn walk_named(tree: &Tree) -> Vec<CstRow> {
+    let mut out = Vec::new();
+    walk_named_streaming(tree, |ix, parent, kind_id, start, end, name, named_children| {
+        out.push(CstRow {
+            kind_id,
+            start,
+            end,
+            name,
+            named_children,
+            parent,
+        });
+        let _ = ix;
+    });
     out
 }
 

@@ -3614,6 +3614,7 @@ dependencies = [
  "tree-sitter-gdscript",
  "tree-sitter-go",
  "tree-sitter-html",
+ "tree-sitter-javascript",
  "tree-sitter-json",
  "tree-sitter-kotlin-sg",
  "tree-sitter-md",
@@ -3621,6 +3622,7 @@ dependencies = [
  "tree-sitter-python",
  "tree-sitter-rust",
  "tree-sitter-toml-ng",
+ "tree-sitter-typescript",
  "tree-sitter-yaml",
 ]
 

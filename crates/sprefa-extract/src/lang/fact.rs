@@ -1,22 +1,18 @@
-//! `FactMatcher`: an ast-grep `Matcher` (core matcher.rs:27-48) whose predicate
-//! is a row in a dl6 store, so a rule can say "this node names something the
-//! database already knows" and compose that with `ops::All`/`Any`/`Not`
-//! (core ops.rs:45, 107, 197) beside any pattern or kind matcher.
+//! dl6 fact reads: a stored rel's column values, loaded once per run into a
+//! [`FactSet`] so a rule can ask "is this string a value the database already
+//! knows" as set membership, never a query.
 //!
 //! A stored rel keys on INTEGER surrogates and its TEXT columns are `__str`
 //! references, so reading a column's values is a dictionary join, never a
 //! column read (`.claude/skills/sql-relational-design`). The join runs ONCE per
-//! (rel, column) per run into a [`FactSet`]; the per-node predicate is set
-//! membership, never a query.
+//! (rel, column) per run into a [`FactSet`]; membership is a set test,
+//! never a query.
 //! @comment-ok: module header, the shape every lang/*.rs opens with
 
-use std::borrow::Cow;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use ast_grep_core::meta_var::MetaVarEnv;
-use ast_grep_core::{Doc, Matcher, Node};
 use rusqlite::{Connection, OpenFlags};
 
 /// `~/.agent/dl6.db` relative to `$HOME`. One server, one db: every dl6 program
@@ -202,60 +198,6 @@ impl FactSet {
         self.values.iter().map(String::as_str)
     }
 
-    /// One matcher over this set. Presence is decided here, so the per-node
-    /// predicate stays a string compare.
-    pub fn matcher(self: &Arc<Self>, value: impl Into<String>) -> FactMatcher {
-        FactMatcher::new(Arc::clone(self), value)
-    }
-}
-
-/// A node matches when its text equals `value` and `value` is a value of
-/// `rel`.`column`. Cheap to clone: the set is shared, never copied.
-#[derive(Clone, Debug)]
-pub struct FactMatcher {
-    set: Arc<FactSet>,
-    value: String,
-    present: bool,
-}
-
-impl FactMatcher {
-    pub fn new(set: Arc<FactSet>, value: impl Into<String>) -> Self {
-        let value = value.into();
-        let present = set.contains(&value);
-        Self {
-            set,
-            value,
-            present,
-        }
-    }
-
-    pub fn rel(&self) -> &str {
-        self.set.rel()
-    }
-
-    pub fn column(&self) -> &str {
-        self.set.column()
-    }
-
-    pub fn value(&self) -> &str {
-        &self.value
-    }
-
-    /// Whether the store carries this value at all. A false here makes the
-    /// matcher match nothing, whatever the tree holds.
-    pub fn present(&self) -> bool {
-        self.present
-    }
-}
-
-impl Matcher for FactMatcher {
-    fn match_node_with_env<'tree, D: Doc>(
-        &self,
-        node: Node<'tree, D>,
-        _env: &mut Cow<MetaVarEnv<'tree, D>>,
-    ) -> Option<Node<'tree, D>> {
-        (self.present && node.text() == self.value).then_some(node)
-    }
 }
 
 /// dl6 rel and column names are `[A-Za-z0-9_]`; anything else is rejected

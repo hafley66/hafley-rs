@@ -1,159 +1,105 @@
-//! `RyiLang`: the one ast-grep `Language` the extractor speaks. `StrDoc<L>`
-//! needs `L: LanguageExt` (core tree_sitter/mod.rs:46), so one enum keeps one
-//! `SgRoot` alias: `Sg` delegates to `SupportLang` (ast-grep-language
-//! lib.rs:431-458), the rest carry grammars this crate already links.
+//! `RyiLang`: the one language roster the extractor speaks. Every variant
+//! names a grammar this crate links directly (`tree_sitter_language`); none is
+//! delegated to a third-party language registry. `from_path` routes through the
+//! `Source` roster, the rest are plain lookups.
 //! @comment-ok: module header, the shape every lang/*.rs opens with
 
 use std::borrow::Cow;
-use std::path::Path;
-use std::str::FromStr;
-
-use ast_grep_core::matcher::{Pattern, PatternBuilder, PatternError};
-use ast_grep_core::tree_sitter::{LanguageExt, StrDoc, TSLanguage};
-use ast_grep_core::Language;
-use ast_grep_language::SupportLang;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
 
 /// `MarkdownInline` is never routed from a path (a `.md` routes to the block
 /// grammar); a caller names it directly to reach the inline plane.
-/// `Gdscript`/`Commonlisp` are the two syntax-only front-ends: their grammars
-/// are not in ast-grep's `SupportLang`, so `get_ts_language` names them here and
-/// a `.gd`/`.lisp` routes to the `Source` that owns the parse.
+/// `Gdscript`/`Commonlisp` are the two syntax-only front-ends: a `.gd`/`.lisp`
+/// routes to the `Source` that owns the parse, and the grammar table here
+/// names their linked crates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
 pub enum RyiLang {
-    Sg(SupportLang),
+    Rust,
+    TypeScript,
+    Tsx,
+    JavaScript,
+    Go,
+    Kotlin,
+    Python,
     Prolog,
     Markdown,
     MarkdownInline,
     Gdscript,
     Commonlisp,
+    Html,
+    /// The data family's two cst-delegated grammars: `.json`/`.yaml` carry
+    /// ast-era cst rows through the data Source, so their grammars stay on
+    /// this roster even though no Source row is named after them.
+    Json,
+    Yaml,
 }
 
 impl RyiLang {
     /// Routed through the `Source` roster: each `Source` answers
-    /// `extract_lang(path)`; the ast-grep shim is the roster's default. No
+    /// `extract_lang(path)`; the linked-grammar shim is the roster's default. No
     /// path-suffix switch lives here.
     pub fn from_path(path: &str) -> Option<Self> {
         crate::lang::source_for(path).and_then(|source| source.extract_lang(path))
     }
 
-    /// The ast-grep YAML `language:` field's spelling; inverse of `parse_name`.
+    /// The YAML `language:` field's spelling; inverse of `parse_name`.
     pub fn name(&self) -> Cow<'static, str> {
-        match self {
-            Self::Sg(sg) => Cow::Owned(sg.to_string()),
-            Self::Prolog => Cow::Borrowed("prolog"),
-            Self::Markdown => Cow::Borrowed("markdown"),
-            Self::MarkdownInline => Cow::Borrowed("markdown_inline"),
-            Self::Gdscript => Cow::Borrowed("gdscript"),
-            Self::Commonlisp => Cow::Borrowed("commonlisp"),
-        }
+        Cow::Borrowed(match self {
+            Self::Rust => "rust",
+            Self::TypeScript => "typescript",
+            Self::Tsx => "tsx",
+            Self::JavaScript => "javascript",
+            Self::Go => "go",
+            Self::Kotlin => "kotlin",
+            Self::Python => "python",
+            Self::Prolog => "prolog",
+            Self::Markdown => "markdown",
+            Self::MarkdownInline => "markdown_inline",
+            Self::Gdscript => "gdscript",
+            Self::Commonlisp => "commonlisp",
+            Self::Html => "html",
+            Self::Json => "json",
+            Self::Yaml => "yaml",
+        })
     }
 
-    /// `SupportLang::from_str` is case-insensitive over its alias table
-    /// (ast-grep-language lib.rs:378-389), so either spelling of `Sg` resolves.
+    /// Case-sensitive over this crate's alias table; the `--lang` flag and the
+    /// YAML `language:` field both arrive here.
     pub fn parse_name(name: &str) -> Option<Self> {
         match name {
+            "rust" | "rs" => Some(Self::Rust),
+            "typescript" | "ts" => Some(Self::TypeScript),
+            "tsx" => Some(Self::Tsx),
+            "javascript" | "js" => Some(Self::JavaScript),
+            "go" | "golang" => Some(Self::Go),
+            "kotlin" | "kt" => Some(Self::Kotlin),
+            "python" | "py" => Some(Self::Python),
             "prolog" => Some(Self::Prolog),
             "markdown" | "md" => Some(Self::Markdown),
             "markdown_inline" | "md_inline" => Some(Self::MarkdownInline),
             "gdscript" | "gd" => Some(Self::Gdscript),
             "commonlisp" | "lisp" | "cl" => Some(Self::Commonlisp),
-            _ => SupportLang::from_str(name).ok().map(Self::Sg),
-        }
-    }
-}
-
-/// Verbatim copy of the private `pre_process_pattern` (ast-grep-language
-/// lib.rs:88-97); the crate exports the macro that calls it, never the fn.
-fn rewrite_dollar(expando: char, query: &str) -> Cow<'_, str> {
-    let mut out = Vec::with_capacity(query.len());
-    let mut dollar_count = 0;
-    for char in query.chars() {
-        if char == '$' {
-            dollar_count += 1;
-            continue;
-        }
-        let need_replace = matches!(char, 'A'..='Z' | '_') || dollar_count == 3;
-        let sigil = if need_replace { expando } else { '$' };
-        out.extend(std::iter::repeat_n(sigil, dollar_count));
-        dollar_count = 0;
-        out.push(char);
-    }
-    let sigil = if dollar_count == 3 { expando } else { '$' };
-    out.extend(std::iter::repeat_n(sigil, dollar_count));
-    Cow::Owned(out.into_iter().collect())
-}
-
-impl Language for RyiLang {
-    fn meta_var_char(&self) -> char {
-        match self {
-            Self::Sg(sg) => sg.meta_var_char(),
-            _ => '$',
+            "html" | "htm" => Some(Self::Html),
+            "json" => Some(Self::Json),
+            "yaml" | "yml" => Some(Self::Yaml),
+            _ => None,
         }
     }
 
-    /// prolog has no lexer rule whose charset holds `µ` (`variable` =
-    /// `[A-Z]...`, `identifier` = `_*[a-z]...`), so `µT` parses to
-    /// `(ERROR (UNEXPECTED 181))` under it, while `_T` is a plain `variable`.
-    /// That is the C/C++/CSS sigil
-    /// (ast-grep-language lib.rs:186-190), not the `µ` of lib.rs:196-211.
-    /// Markdown keeps `µ` because `_` is emphasis syntax there.
-    /// GDScript and Common Lisp take `_` for the opposite reason: a GDScript
-    /// identifier is `[A-Za-z_][A-Za-z0-9_]*` and a Lisp symbol absorbs any
-    /// constituent character, so `_T` lexes as ONE identifier token under both
-    /// (the C/C++/CSS sigil of ast-grep-language lib.rs:186-190).
-    /// Pattern side only: a PATTERN variable spelled `_ALLCAPS` is read as a
-    /// metavar; `_Mixed` stays literal, and SOURCE text is never rewritten.
-    /// @comment-ok: the sigil per grammar is the one fact the code cannot show
-    fn expando_char(&self) -> char {
-        match self {
-            Self::Sg(sg) => sg.expando_char(),
-            Self::Prolog | Self::Gdscript | Self::Commonlisp => '_',
-            Self::Markdown | Self::MarkdownInline => 'µ',
-        }
-    }
-
-    fn pre_process_pattern<'q>(&self, query: &'q str) -> Cow<'q, str> {
-        match self {
-            Self::Sg(sg) => sg.pre_process_pattern(query),
-            _ => rewrite_dollar(self.expando_char(), query),
-        }
-    }
-
-    fn from_path<P: AsRef<Path>>(path: P) -> Option<Self> {
-        RyiLang::from_path(path.as_ref().to_str()?)
-    }
-
-    fn kind_to_id(&self, kind: &str) -> u16 {
-        match self {
-            Self::Sg(sg) => sg.kind_to_id(kind),
-            _ => self.get_ts_language().id_for_node_kind(kind, true),
-        }
-    }
-
-    fn field_to_id(&self, field: &str) -> Option<u16> {
-        match self {
-            Self::Sg(sg) => sg.field_to_id(field),
-            _ => self
-                .get_ts_language()
-                .field_id_for_name(field)
-                .map(|id| id.get()),
-        }
-    }
-
-    /// The pattern doc carries `RyiLang`, never the inner `SupportLang`:
-    /// pattern and candidate have to share one `Doc` type.
-    fn build_pattern(&self, builder: &PatternBuilder) -> Result<Pattern, PatternError> {
-        builder.build(|src| StrDoc::try_new(src, *self))
-    }
-}
-
-impl LanguageExt for RyiLang {
+    /// The linked grammar a tree-sitter `Parser` takes, one row per variant.
     /// The same `LANGUAGE` constants the raw extractors parse with
     /// (prolog/_0_source.rs:25, markdown/_0_source.rs:86).
-    fn get_ts_language(&self) -> TSLanguage {
+    pub fn tree_sitter_language(&self) -> tree_sitter::Language {
         match self {
-            Self::Sg(sg) => sg.get_ts_language(),
+            Self::Rust => tree_sitter::Language::new(tree_sitter_rust::LANGUAGE),
+            Self::TypeScript => {
+                tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
+            }
+            Self::Tsx => tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX),
+            Self::JavaScript => tree_sitter::Language::new(tree_sitter_javascript::LANGUAGE),
+            Self::Go => tree_sitter::Language::new(tree_sitter_go::LANGUAGE),
+            Self::Kotlin => tree_sitter::Language::new(tree_sitter_kotlin_sg::LANGUAGE),
+            Self::Python => tree_sitter::Language::new(tree_sitter_python::LANGUAGE),
             Self::Prolog => tree_sitter::Language::new(tree_sitter_prolog::LANGUAGE),
             Self::Markdown => tree_sitter::Language::new(tree_sitter_md::LANGUAGE),
             Self::MarkdownInline => tree_sitter::Language::new(tree_sitter_md::INLINE_LANGUAGE),
@@ -161,7 +107,24 @@ impl LanguageExt for RyiLang {
             Self::Commonlisp => {
                 tree_sitter::Language::new(tree_sitter_commonlisp::LANGUAGE_COMMONLISP)
             }
+            Self::Html => tree_sitter::Language::new(tree_sitter_html::LANGUAGE),
+            Self::Json => tree_sitter::Language::new(tree_sitter_json::LANGUAGE),
+            Self::Yaml => tree_sitter::Language::new(tree_sitter_yaml::LANGUAGE),
         }
+    }
+
+    /// The kind id a grammar spells `kind` with, or `0` — the absent mark. Lets
+    /// a caller resolve its kind tables once per file, never per node.
+    pub fn kind_to_id(&self, kind: &str) -> u16 {
+        self.tree_sitter_language().id_for_node_kind(kind, true)
+    }
+
+    /// The grammar's field id for `field`, or None when the kind has no such
+    /// field.
+    pub fn field_to_id(&self, field: &str) -> Option<u16> {
+        self.tree_sitter_language()
+            .field_id_for_name(field)
+            .map(|id| id.get())
     }
 }
 

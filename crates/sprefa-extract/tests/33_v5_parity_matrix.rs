@@ -254,7 +254,7 @@ const V6_ONLY_LANGS: &[(&str, &str)] = &[
         "v5 answered json/yaml/toml through the `json`/`jsonp` OPS, not a language",
     ),
     (
-        "astgrep",
+        "fallback",
         "the cst-only fallback; v5's `sg` roster has no per-language oracle",
     ),
     (

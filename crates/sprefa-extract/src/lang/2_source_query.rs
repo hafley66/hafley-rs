@@ -11,7 +11,6 @@
 
 use std::collections::BTreeMap;
 
-use ast_grep_language::LanguageExt;
 use serde::Serialize;
 use serde_json::Value;
 use tree_sitter::Parser as TreeParser;
@@ -142,7 +141,7 @@ pub fn query_tree_sitter_spans(
 /// `RyiLang::parse_name` owns. A name this rejects reaches no grammar at all.
 fn query_language(name: &str) -> Result<tree_sitter::Language, String> {
     crate::lang::extract_lang::RyiLang::parse_name(name)
-        .map(|lang| lang.get_ts_language())
+        .map(|lang| lang.tree_sitter_language())
         .ok_or_else(|| format!("unknown lang '{name}'"))
 }
 

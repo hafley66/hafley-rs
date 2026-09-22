@@ -22,10 +22,10 @@ use oxc_ast::ast::Program;
 use oxc_ast_visit::Visit as OxcVisit;
 use oxc_span::{GetSpan, SourceType};
 
-use super::astgrep::{AstGrepParser, CstProjector};
+use super::fallback::cst_bundle;
 use super::ts_resolve::{ImportedName, ResolvedImport, TsModuleIndex};
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, CstF, DfArg, DfEdgeKind, DfF,
+    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, DocFact, DocTag, ProjectEdge, ResolutionOrigin, SigSlot,
     Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF,
 };
@@ -4072,20 +4072,15 @@ impl Source for TsSource {
         // cst via ast-grep (masked). Owns its () arena; dropped at block end. A
         // failed ast-grep parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("ts", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("ts", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("ts", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("ts", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };

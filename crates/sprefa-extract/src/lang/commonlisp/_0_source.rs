@@ -1,8 +1,8 @@
 //! Common Lisp extraction over the tree-sitter-commonlisp grammar.
 //!
-//! One plane: CstF, the same shape html/css take through `AstgrepSource`, and the
+//! One plane: CstF, the same shape html takes through `FallbackSource`, and the
 //! same walk `gdscript/_0_source.rs` runs. The grammar is not in ast-grep's
-//! `SupportLang` roster, so the parse is this source's. A Lisp's whole syntax is
+//! dedicated grammar crates, so the parse is this source's. A Lisp's whole syntax is
 //! s-expressions, so the cst plane is the honest surface: no type/call/df/data
 //! plane is claimed, and no phase-2 leg (`Resolve`/`Rehome`/`Rename`/cfg roles) is
 //! wired — each of those rosters names this language by absence.

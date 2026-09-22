@@ -1,11 +1,9 @@
-//! RyiLang routing, naming, and metavariable-sigil behavior — the language
-//! layer the parser seams share.
-use ast_grep_core::Language as _;
-use ast_grep_language::{LanguageExt as _, SupportLang};
+//! `RyiLang` routing and naming — the language layer the parser seams share,
+//! one linked grammar per variant.
 use sprefa_extract::RyiLang;
 
 #[test]
-fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
+fn from_path_routes_the_roster_grammars_and_delegates_the_rest() {
     assert_eq!(RyiLang::from_path("go.pl"), Some(RyiLang::Prolog));
     assert_eq!(RyiLang::from_path("t.plt"), Some(RyiLang::Prolog));
     assert_eq!(RyiLang::from_path("r.horn"), Some(RyiLang::Prolog));
@@ -15,87 +13,115 @@ fn from_path_routes_the_extract_grammars_and_delegates_the_rest() {
     for lisp in ["l.lisp", "l.lsp", "l.cl", "l.asd"] {
         assert_eq!(RyiLang::from_path(lisp), Some(RyiLang::Commonlisp), "{lisp}");
     }
-    for (path, sg) in [
-        ("a.rs", SupportLang::Rust),
-        ("a.ts", SupportLang::TypeScript),
-        ("a.tsx", SupportLang::Tsx),
-        ("a.js", SupportLang::JavaScript),
-        ("a.go", SupportLang::Go),
-        ("a.kt", SupportLang::Kotlin),
+    for (path, lang) in [
+        ("a.rs", RyiLang::Rust),
+        ("a.ts", RyiLang::TypeScript),
+        ("a.tsx", RyiLang::Tsx),
+        ("a.js", RyiLang::JavaScript),
+        ("a.jsx", RyiLang::JavaScript),
+        ("a.go", RyiLang::Go),
+        ("a.kt", RyiLang::Kotlin),
+        ("a.py", RyiLang::Python),
+        ("a.html", RyiLang::Html),
     ] {
-        assert_eq!(RyiLang::from_path(path), Some(RyiLang::Sg(sg)));
+        assert_eq!(RyiLang::from_path(path), Some(lang), "{path}");
     }
     assert_eq!(RyiLang::from_path("README"), None);
     assert_eq!(RyiLang::from_path("a.unknownext"), None);
+    // Coverage that died with the removed registry: no linked grammar, no lang.
+    assert_eq!(RyiLang::from_path("a.css"), None);
+    assert_eq!(RyiLang::from_path("a.java"), None);
 }
 
 #[test]
 fn every_lang_name_round_trips_through_the_yaml_spelling() {
-    let mut langs = vec![
+    let langs = [
+        RyiLang::Rust,
+        RyiLang::TypeScript,
+        RyiLang::Tsx,
+        RyiLang::JavaScript,
+        RyiLang::Go,
+        RyiLang::Kotlin,
+        RyiLang::Python,
         RyiLang::Prolog,
         RyiLang::Markdown,
         RyiLang::MarkdownInline,
         RyiLang::Gdscript,
         RyiLang::Commonlisp,
+        RyiLang::Html,
+        RyiLang::Json,
+        RyiLang::Yaml,
     ];
-    langs.extend(
-        SupportLang::all_langs()
-            .iter()
-            .copied()
-            .map(RyiLang::Sg),
-    );
     for lang in langs {
-        assert_eq!(RyiLang::parse_name(&lang.name()), Some(lang));
+        assert_eq!(RyiLang::parse_name(&lang.name()), Some(lang), "{}", lang.name());
     }
     assert_eq!(RyiLang::parse_name("not-a-grammar"), None);
 }
 
-/// `µ` is what ast-grep-language picks for every grammar whose identifiers take
-/// Unicode letters (lib.rs:196-211). prolog is not such a grammar: `variable` is
-/// `[A-Z]...` and `identifier` is `_*[a-z]...`, so `µT` parses to
-/// `(ERROR (UNEXPECTED 181))` under it and `_T` is a plain variable. `_` is the
-/// C/C++/CSS choice (ast-grep-language lib.rs:186-190).
-/// @comment-ok: fail-first receipt, the sigil is why the two parse at all
 #[test]
-fn expando_char_is_underscore_for_prolog_and_mu_for_markdown() {
-    assert_eq!(RyiLang::Prolog.expando_char(), '_');
-    assert_eq!(RyiLang::Gdscript.expando_char(), '_');
-    assert_eq!(RyiLang::Commonlisp.expando_char(), '_');
-    assert_eq!(RyiLang::Markdown.expando_char(), 'µ');
-    assert_eq!(RyiLang::MarkdownInline.expando_char(), 'µ');
-    assert_eq!(
-        RyiLang::Sg(SupportLang::Rust).expando_char(),
-        SupportLang::Rust.expando_char()
-    );
-    assert_eq!(
-        RyiLang::Sg(SupportLang::C).expando_char(),
-        SupportLang::C.expando_char()
-    );
-    for lang in [
-        RyiLang::Prolog,
-        RyiLang::Markdown,
-        RyiLang::Gdscript,
-        RyiLang::Commonlisp,
-    ] {
-        assert_eq!(lang.meta_var_char(), '$');
+fn parse_name_answers_the_alias_table() {
+    assert_eq!(RyiLang::parse_name("rs"), Some(RyiLang::Rust));
+    assert_eq!(RyiLang::parse_name("ts"), Some(RyiLang::TypeScript));
+    assert_eq!(RyiLang::parse_name("js"), Some(RyiLang::JavaScript));
+    assert_eq!(RyiLang::parse_name("golang"), Some(RyiLang::Go));
+    assert_eq!(RyiLang::parse_name("kt"), Some(RyiLang::Kotlin));
+    assert_eq!(RyiLang::parse_name("py"), Some(RyiLang::Python));
+    assert_eq!(RyiLang::parse_name("md"), Some(RyiLang::Markdown));
+    assert_eq!(RyiLang::parse_name("md_inline"), Some(RyiLang::MarkdownInline));
+    assert_eq!(RyiLang::parse_name("gd"), Some(RyiLang::Gdscript));
+    for lisp in ["lisp", "cl"] {
+        assert_eq!(RyiLang::parse_name(lisp), Some(RyiLang::Commonlisp), "{lisp}");
     }
+    assert_eq!(RyiLang::parse_name("html"), Some(RyiLang::Html));
+    assert_eq!(RyiLang::parse_name("htm"), Some(RyiLang::Html));
 }
 
-/// The vendored `rewrite_dollar` has to stay the ast-grep-language rewrite
-/// (lib.rs:88-97): same input, same output, sigil aside.
+/// Every variant names a grammar this workspace links: the table loads for all
+/// of them, and each grammar knows its own name spellings.
 #[test]
-fn pre_process_pattern_matches_the_ast_grep_rewrite() {
-    for query in [
-        "seen($T) <- $BODY.",
-        "f($$$ARGS)",
-        "f($$$)",
-        "$$X",
-        "$lowercase",
-        "no metavar here",
-        "$$$",
+fn every_variant_carries_a_linked_grammar() {
+    for lang in [
+        RyiLang::Rust,
+        RyiLang::TypeScript,
+        RyiLang::Tsx,
+        RyiLang::JavaScript,
+        RyiLang::Go,
+        RyiLang::Kotlin,
+        RyiLang::Python,
+        RyiLang::Prolog,
+        RyiLang::Markdown,
+        RyiLang::MarkdownInline,
+        RyiLang::Gdscript,
+        RyiLang::Commonlisp,
+        RyiLang::Html,
+        RyiLang::Json,
+        RyiLang::Yaml,
     ] {
-        let ours = RyiLang::Sg(SupportLang::Rust).pre_process_pattern(query);
-        assert_eq!(ours, SupportLang::Rust.pre_process_pattern(query), "{query}");
+        let ts = lang.tree_sitter_language();
+        let (lo, hi) = (
+            tree_sitter::MIN_COMPATIBLE_LANGUAGE_VERSION,
+            tree_sitter::LANGUAGE_VERSION,
+        );
+        assert!(
+            (lo..=hi).contains(&ts.version()),
+            "{lang}: ABI {} outside {lo}..={hi}",
+            ts.version()
+        );
     }
-    assert_eq!(RyiLang::Markdown.pre_process_pattern("# $T"), "# µT");
+    // A kind the grammar declares resolves; one it does not resolves to 0,
+    // the absent mark.
+    assert_ne!(RyiLang::Rust.kind_to_id("function_item"), 0);
+    assert_eq!(RyiLang::Rust.kind_to_id("no_such_kind_anywhere"), 0);
+    assert_ne!(RyiLang::Rust.field_to_id("name"), None);
+    assert_eq!(RyiLang::Rust.field_to_id("no_such_field"), None);
+}
+
+#[test]
+fn serde_round_trips_through_the_yaml_spelling() {
+    let lang = RyiLang::MarkdownInline;
+    let text = serde_json::to_string(&lang).expect("serializes");
+    assert_eq!(text, "\"markdown_inline\"");
+    let back: RyiLang = serde_json::from_str(&text).expect("deserializes");
+    assert_eq!(back, lang);
+    assert!(serde_json::from_str::<RyiLang>("\"nope\"").is_err());
 }

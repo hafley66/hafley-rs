@@ -1,7 +1,7 @@
 //! GDScript extraction over the tree-sitter-gdscript grammar.
 //!
-//! One plane: CstF, the same shape html/css take through `AstgrepSource`. Godot's
-//! grammar is not in ast-grep's `SupportLang` roster, so this source owns the
+//! One plane: CstF, the same shape html takes through `FallbackSource`. Godot's
+//! grammar has no roster row of its own, so this source owns the
 //! parse: one `Node` per named node, one `Child` edge to the nearest named
 //! ancestor, spans file-relative. No type/call/df/data plane exists for GDScript
 //! here, and no phase-2 leg is claimed (no `Resolve`, `Rehome`, `Rename`, or cfg
@@ -34,7 +34,7 @@ fn span(node: tree_sitter::Node) -> Span {
 
 /// Pre-order, named nodes only: unnamed punctuation passes its nearest named
 /// ancestor through, so every edge lands parent-adjacent. The same walk
-/// `AstgrepSource`'s `CstProjector` runs over an ast-grep doc.
+/// `hafley_scm::cst::walk_named` runs over any grammar's tree.
 fn project_cst(root: tree_sitter::Node, strings: &mut Strings, sink: &mut FamilyBundle<CstF>) {
     let mut stack = vec![(root, None)];
     while let Some((node, parent)) = stack.pop() {

@@ -18,17 +18,17 @@
 use std::collections::BTreeSet;
 
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
+    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
     DfParam, DocFact, DocTag, ProjectEdge, PyBind, PyCallArg, PyDecor, PyDefault, PyParam,
     PyRetCall, PyReturn, PySubCall, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
     TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
-use crate::lang::{AstGrepParser, CstProjector};
+use crate::lang::fallback::cst_bundle;
 use crate::lang::call_kinds::MODULE_CALLER;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Parser, Project,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex,
     Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
@@ -2492,7 +2492,7 @@ fn py_flow_expr(
 
 // ── PythonSource: cst via ast-grep + type/call/df via tree-sitter-python ────
 
-/// `matches` = `.py`/`.pyi` (SupportLang maps both to Python). cst via ast-grep;
+/// `matches` = `.py`/`.pyi`. cst via the linked tree-sitter grammar;
 /// type/call/df via one tree-sitter-python parse.
 #[derive(Default)]
 pub struct PythonSource;
@@ -2509,22 +2509,18 @@ impl Source for PythonSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). A failed ast-grep parse leaves cst None.
+        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
+        // A refused parse leaves cst None.
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("python", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("python", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("python", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("python", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };

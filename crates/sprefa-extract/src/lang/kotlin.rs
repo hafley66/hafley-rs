@@ -36,15 +36,15 @@
 
 use std::collections::BTreeSet;
 
-use super::astgrep::{AstGrepParser, CstProjector};
+use super::fallback::cst_bundle;
 use crate::family::{
-    CallEdgeKind, CallF, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
+    CallEdgeKind, CallF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
     DfParam, DocFact, DocTag, ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier,
     SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::seams::{
-    corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Parser, Project, Resolve,
+    corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
@@ -1329,25 +1329,18 @@ impl Source for KotlinSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). ast-grep's SupportLang has a kotlin
-        // grammar (the same tree-sitter-kotlin-sg crate), so a .kt parses
-        // losslessly. Owns its () arena; dropped at block end. A failed
-        // ast-grep parse leaves cst None (no panic).
+        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
+        // A refused parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("kotlin", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("kotlin", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("kotlin", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("kotlin", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };

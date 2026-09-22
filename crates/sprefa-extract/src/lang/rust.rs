@@ -24,13 +24,13 @@ use hafley_scm::lang::rust::{
 use syn::spanned::Spanned;
 use syn::ReturnType;
 
-use super::astgrep::{AstGrepParser, CstProjector};
+use super::fallback::cst_bundle;
 use super::rust_checker::CheckerAnswer;
 use super::rust_docs::doc_facts;
 use super::rust_type_edges::{edge_candidates, strip_type};
 use super::rust_type_refs::{primary_type, type_refs};
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, CstF, DfArg, DfEdgeKind, DfF,
+    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, MethodOwner, ProjectEdge, ResolutionOrigin, SigSlot,
     Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
@@ -38,7 +38,7 @@ use crate::project::ResolveDrop;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Parser, Project,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex,
     Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
@@ -3187,24 +3187,18 @@ impl Source for RustSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). ast-grep's SupportLang has a rust grammar, so
-        // a .rs parses losslessly. Owns its () arena; dropped at block end. A failed
-        // ast-grep parse leaves cst None (no panic).
+        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
+        // A refused parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("rust", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("rust", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("rust", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("rust", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };

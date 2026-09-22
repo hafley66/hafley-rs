@@ -6,7 +6,7 @@
 
 use serde_json::{Map, Value};
 
-use crate::lang::astgrep::AstgrepSource;
+use crate::lang::fallback::FallbackSource;
 use crate::rows::FamilyBundle;
 use crate::shape::{Span, Strings};
 use crate::source::{RyiOutput, FamilyMask, Source};
@@ -30,7 +30,7 @@ impl Source for DataSource {
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut out = if mask.cst {
-            AstgrepSource.extract(
+            FallbackSource.extract(
                 path,
                 content,
                 FamilyMask {

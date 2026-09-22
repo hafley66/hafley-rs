@@ -4,7 +4,6 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use ast_grep_core::tree_sitter::LanguageExt;
 use tree_sitter::Parser;
 
 use super::extract_lang::RyiLang;
@@ -357,7 +356,7 @@ fn arena_captures(
     query_text: &str,
     source: &[u8],
 ) -> Result<BTreeSet<Capture>, ScmError> {
-    let language = lang.get_ts_language();
+    let language = lang.tree_sitter_language();
     let mut parser = Parser::new();
     parser
         .set_language(&language)

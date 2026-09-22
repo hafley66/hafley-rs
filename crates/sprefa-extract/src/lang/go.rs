@@ -26,10 +26,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
-use super::astgrep::{AstGrepParser, CstProjector};
+use super::fallback::cst_bundle;
 use super::go_modules::{is_exported, GoModuleIndex};
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
+    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
     DfParam, DocFact, DocTag, MethodOwner, ProjectEdge, ReceiverBinding, ReceiverOutcome,
     ResolutionOrigin, SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind,
     TypeEntityKind, TypeF, TypeSig,
@@ -38,8 +38,7 @@ use crate::project::ResolveDrop;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Parser,
-    Project, Resolve,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
@@ -2740,24 +2739,18 @@ impl Source for GoSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). ast-grep's SupportLang has a go grammar, so
-        // a .go parses losslessly. Owns its () arena; dropped at block end. A
-        // failed ast-grep parse leaves cst None (no panic).
+        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
+        // A refused parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("go", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("go", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("go", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("go", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };

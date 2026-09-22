@@ -476,7 +476,7 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
             "{args:?}: {}",
             String::from_utf8_lossy(&plain.stderr)
         );
-        let mut expected: Vec<Value> = String::from_utf8(plain.stdout)
+        let expected: Vec<Value> = String::from_utf8(plain.stdout)
             .unwrap()
             .lines()
             .map(|s| serde_json::from_str(s).unwrap())

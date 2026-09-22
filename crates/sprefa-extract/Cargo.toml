@@ -157,6 +157,11 @@ tree-sitter-commonlisp = "0.4"
 # tree-sitter-rust 0.24.2 is ALREADY in this lock as an ast-grep-language
 # transitive, so the direct pin unifies to one copy and adds no grammar.
 tree-sitter-rust = "0.24"
+# tree-sitter-typescript ships BOTH the typescript and tsx grammars
+# (LANGUAGE_TYPESCRIPT / LANGUAGE_TSX); tree-sitter-javascript covers .js/.jsx.
+# They replace the ast-grep-language grammars the ts front-end rode.
+tree-sitter-typescript = "0.23"
+tree-sitter-javascript = "0.23"
 # The `.scm` engine the Rust CallF defs run through: `#has-ancestor?`/`#has?`
 # over a native tree-sitter query, one MatchArena per run.
 hafley_scm = { path = "../hafley_scm" }

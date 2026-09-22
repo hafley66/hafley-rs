@@ -69,7 +69,7 @@ const ROSTER_FIXTURES: &[(&str, &str)] = &[
     ("gdscript", "tests/fixtures/gdscript/sample.gd"),
     ("commonlisp", "tests/fixtures/commonlisp/sample.lisp"),
     ("data", "tests/fixtures/data/nested.json"),
-    ("astgrep", "tests/fixtures/astgrep/sample.html"),
+    ("fallback", "tests/fixtures/astgrep/sample.html"),
 ];
 
 /// Every `Source` in the live roster produces the same facts through the binary
