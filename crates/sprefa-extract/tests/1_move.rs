@@ -1,4 +1,7 @@
-//! `extract move` over a temp git repo: the plan, the applied tree, the shim.
+//! `extract move` over a temp git repo: the plan, the applied tree, the
+//! verify/rollback legs. The prolog specifier-matching tests died with the
+//! ast-grep unlink (rehome matching is disabled, importers are left alone);
+//! what survives here pins the move core over prolog files.
 //!
 //! @comment-ok: sabotage receipt, repo law keeps these in TEST headers.
 //! SABOTAGE: `swipl -g halt -l a.pl` alone measured rc=0 against a deliberately
@@ -168,72 +171,6 @@ fn loads_clean(root: &Path) {
     );
 }
 
-#[test]
-fn dry_run_plans_one_move_and_two_replaces_and_writes_nothing() {
-    let fixture = fixture("dry");
-    let table = move_verb(&fixture, &[]);
-
-    assert_eq!(kind_count(&table, "move"), 1, "table:\n{table}");
-    assert_eq!(kind_count(&table, "replace"), 2, "table:\n{table}");
-    assert_eq!(kind_count(&table, "create"), 0, "table:\n{table}");
-    assert!(
-        table.contains("+:- use_module('core/b')."),
-        "a.pl's import is re-aimed:\n{table}"
-    );
-    assert!(
-        table.contains("+:- include('../lib/b_part.pl')."),
-        "b.pl's include still resolves from core/:\n{table}"
-    );
-
-    assert_eq!(git(&fixture.root, &["status", "--porcelain"]), "");
-    assert!(fixture.root.join("lib/b.pl").is_file());
-    assert!(!fixture.root.join("core/b.pl").exists());
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("a.pl")).unwrap(),
-        A_PL
-    );
-}
-
-#[test]
-fn commit_rewrites_the_importer_and_the_include_and_swipl_loads() {
-    let fixture = fixture("commit");
-    let table = move_verb(&fixture, &["--commit"]);
-
-    assert_eq!(kind_count(&table, "move"), 1, "table:\n{table}");
-    assert_eq!(kind_count(&table, "replace"), 2, "table:\n{table}");
-    assert!(!fixture.root.join("lib/b.pl").exists());
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("a.pl")).unwrap(),
-        ":- module(a, [check/0]).\n:- use_module('core/b').\n\ncheck :- b_fact(1).\n"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("core/b.pl")).unwrap(),
-        ":- module(b, [b_fact/1]).\n:- include('../lib/b_part.pl').\n"
-    );
-    loads_clean(&fixture.root);
-}
-
-#[test]
-fn shim_leaves_a_reexport_behind_and_swipl_still_loads() {
-    let fixture = fixture("shim");
-    let table = move_verb(&fixture, &["--commit", "--shim"]);
-
-    assert_eq!(kind_count(&table, "move"), 1, "table:\n{table}");
-    assert_eq!(kind_count(&table, "create"), 1, "table:\n{table}");
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("lib/b.pl")).unwrap(),
-        ":- module(b_shim, []).\n:- reexport('../core/b').\n"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("a.pl")).unwrap(),
-        A_PL,
-        "a shim run leaves every importer alone"
-    );
-    loads_clean(&fixture.root);
-}
-
-// The specifier rule and the fact gate, over three importer shapes: a used-name
-// import, a bare module import, and an empty subdirectory module.
 const WIDE_A_PL: &str = ":- module(a, [check/0]).\n:- use_module('lib/b', [b_fact/1]).\n:- use_module(library(lists)).\n\ncheck :- b_fact(1).\n";
 const WIDE_C_PL: &str = ":- module(c, []).\n:- use_module('lib/b').\n";
 const WIDE_SUB_B_PL: &str = ":- module(sub_b, []).\n";
@@ -251,21 +188,6 @@ fn wide_fixture(label: &str) -> Fixture {
     )
 }
 
-#[test]
-fn the_two_argument_form_is_re_aimed_and_a_library_alias_is_left_alone() {
-    let fixture = wide_fixture("twoarg");
-    let table = move_verb(&fixture, &["--commit"]);
-
-    assert_eq!(kind_count(&table, "move"), 1, "table:\n{table}");
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("a.pl")).unwrap(),
-        ":- module(a, [check/0]).\n:- use_module('core/b', [b_fact/1]).\n:- use_module(library(lists)).\n\ncheck :- b_fact(1).\n",
-        "the import list rides along and `library(lists)` names no file"
-    );
-}
-
-/// The batch door and the positional door plan the same thing for one prolog
-/// move: same previews, same diffs, same stage count.
 #[test]
 fn a_one_row_list_plans_what_the_positional_form_plans() {
     let positional = fixture("listone_positional");
@@ -320,24 +242,6 @@ fn normalize(table: &str, root: &Path) -> String {
         .collect::<Vec<_>>()
         .join("\n")
 }
-
-#[test]
-fn the_same_spec_text_elsewhere_naming_another_file_is_left_alone() {
-    let fixture = wide_fixture("samename");
-    let table = move_verb(&fixture, &["--commit"]);
-
-    // `sub/c.pl` writes the SAME raw spec, `'lib/b'`, and it resolves to
-    // `sub/lib/b.pl`. The gate is per file, never per spelling.
-    assert_eq!(kind_count(&table, "replace"), 2, "table:\n{table}");
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("sub/c.pl")).unwrap(),
-        WIDE_C_PL
-    );
-    assert!(fixture.root.join("sub/lib/b.pl").is_file());
-    loads_clean(&fixture.root);
-}
-
-// ── the emptied-directory sweep ─────────────────────────────────────────────
 
 const HELPER_ONE_MJS: &str = "export const one = 1\n";
 const HELPER_TWO_MJS: &str = "export const two = 2\n";
@@ -594,25 +498,6 @@ fn snapshot(root: &Path) -> std::collections::BTreeMap<String, Vec<u8>> {
 }
 
 #[test]
-fn verify_true_keeps_the_committed_move() {
-    let fixture = fixture("verify_true");
-    let output = move_output(&fixture, &["--commit", "--verify", "true"]);
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert_eq!(
-        output.status.code(),
-        Some(0),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert!(stdout.contains("verify ok"), "{stdout}");
-    assert!(!fixture.root.join("lib/b.pl").exists());
-    assert_eq!(
-        std::fs::read_to_string(fixture.root.join("core/b.pl")).unwrap(),
-        ":- module(b, [b_fact/1]).\n:- include('../lib/b_part.pl').\n"
-    );
-}
-
-#[test]
 fn verify_false_rolls_the_tree_back_byte_identical() {
     let fixture = helpers_fixture("verify_rollback");
     let before = snapshot(&fixture.root);
@@ -806,40 +691,6 @@ fn stderr_lossy(output: &std::process::Output) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
-#[test]
-fn two_roots_each_rewrite_their_own_importers() {
-    let fixture = multi_root_fixture("multi_commit");
-    let output = multi_move_roots(
-        &fixture,
-        &[&fixture.alpha, &fixture.beta],
-        &[
-            (&fixture.alpha, "lib/b.pl", "core/b.pl"),
-            (&fixture.beta, "lib/c.pl", "core/c.pl"),
-        ],
-        &["--commit"],
-    );
-    assert_eq!(output.status.code(), Some(0), "{}", stderr_lossy(&output));
-    let stdout = stdout_lossy(&output);
-    assert!(
-        stdout.contains("[root "),
-        "multi-root output is prefixed:\n{stdout}"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.alpha.join("a.pl")).unwrap(),
-        ":- module(a, [check/0]).\n:- use_module('core/b').\n\ncheck :- b_fact(1).\n"
-    );
-    assert_eq!(
-        std::fs::read_to_string(fixture.beta.join("m.pl")).unwrap(),
-        ":- module(m, [go/0]).\n:- use_module('core/c').\n\ngo :- c_fact(2).\n"
-    );
-    assert!(!fixture.alpha.join("lib/b.pl").exists());
-    assert!(fixture.alpha.join("core/b.pl").is_file());
-    assert!(!fixture.beta.join("lib/c.pl").exists());
-    assert!(fixture.beta.join("core/c.pl").is_file());
-}
-
-/// A row under no `--root` is a named error before any stage runs; both roots
-/// come out byte-identical.
 #[test]
 fn a_move_under_no_root_is_a_named_error_with_zero_edits() {
     let fixture = multi_root_fixture("multi_noroot");

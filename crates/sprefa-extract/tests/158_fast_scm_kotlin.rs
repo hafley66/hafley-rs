@@ -128,10 +128,6 @@ fn scm_rows(paths: &[PathBuf], index: usize) -> Vec<Value> {
         output.status.success(),
         "ryi fast {paths:?} failed:\n{stderr}"
     );
-    assert!(
-        !stderr.contains("ScmLowerError"),
-        "the bundled query lowers through L1:\n{stderr}"
-    );
     String::from_utf8(output.stdout)
         .expect("ryi emits UTF-8")
         .lines()

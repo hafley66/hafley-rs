@@ -241,7 +241,7 @@ fn flatten_data<E>(
 }
 
 /// Convenience: flatten to sorted JSONL lines. The sort makes the snapshot
-/// deterministic across ast-grep/tree-sitter/oxc traversal-order shifts; the store
+/// deterministic across tree-sitter/oxc traversal-order shifts; the store
 /// seam and parity normalize use the unsorted `flatten` then their own ordering.
 pub fn flatten_jsonl(out: &RyiOutput) -> Vec<String> {
     let mut lines: Vec<String> = flatten(out)

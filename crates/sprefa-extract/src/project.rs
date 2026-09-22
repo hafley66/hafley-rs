@@ -32,7 +32,7 @@ use crate::lang::python::{py_module_facts, PyModuleFacts, PyModuleIndex};
 use crate::lang::rust_modules::{RustModuleFacts, RustModuleIndex};
 use crate::lang::ts_resolve::{ModuleFacts, TsModuleIndex};
 use crate::lang::{
-    source_for, AstgrepSource, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource,
+    source_for, FallbackSource, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource,
     RustSource, TsSource,
 };
 use crate::rows::FamilyBundle;
@@ -1787,14 +1787,14 @@ pub static RESOLVE_ARMS: &[ResolveArm] = &[
         drops: None,
         type_plane: TypePlane::Nodes,
     },
-    // The ast-grep fallback resolves GUESSED calls by the kotlin name-match
-    // law: a unique corpus blob binds CorpusUnique, everything else lands in
-    // the unresolved channel with the def-count reason.
+    // The fallback resolves GUESSED calls by the kotlin name-match law: a
+    // unique corpus blob binds CorpusUnique, everything else lands in the
+    // unresolved channel with the def-count reason.
     ResolveArm {
-        name: "astgrep",
-        call: Some(|out, cx| Resolve::<CallF>::resolve(&AstgrepSource, out, cx)),
+        name: "fallback",
+        call: Some(|out, cx| Resolve::<CallF>::resolve(&FallbackSource, out, cx)),
         types: None,
-        drops: Some(crate::lang::astgrep::call_drops),
+        drops: Some(crate::lang::fallback::call_drops),
         type_plane: TypePlane::Nodes,
     },
 ];

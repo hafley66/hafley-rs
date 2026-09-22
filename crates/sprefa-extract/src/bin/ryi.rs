@@ -3,7 +3,7 @@
 //! content, mask)` -> `flatten_each` -> stdout. `--family` selects the mask (default
 //! ALL); `--bench` times extract + flatten and reports per-family counts to stderr;
 //! `--schema` prints the JSONL output contract and exits. The bin names no
-//! ast-grep/oxc type outside the `Source` impls (the uniform-surface law).
+//! tree-sitter/oxc type outside the `Source` impls (the uniform-surface law).
 //!
 //! THE BIN OWNS NO EXTRACTION LOGIC. Argument parsing, one library call, print.
 //! Phase 2 used to be assembled here, in a private adapter that reached only the
@@ -27,12 +27,12 @@ use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, diet_scip_with_raw,
-    dispatch, file_fact, file_fact_with_content_id, flatten_cfg_each, flatten_each,
-    line_start_fact_with_content_id, newline_offsets, package_edges_jsonl, query_patterns,
+    dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
+    line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
     scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
-    size_skip_fact, source_for, AstPatternQuery, FamilyMask, FlatFact, IndexBudget, ResolveArms,
-    ResolveRequest, ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
+    size_skip_fact, source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest,
+    ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
 #[path = "ryi/help.rs"]
@@ -103,7 +103,7 @@ struct Cli {
     /// Resolve cross-file edges across all supplied paths (see --family).
     #[arg(
         long,
-        conflicts_with_all = ["bench", "ast_pattern", "ast_selector", "ast_capture"]
+        conflicts_with_all = ["bench"]
     )]
     resolve: bool,
 
@@ -159,7 +159,7 @@ struct Cli {
     #[arg(
         long,
         requires = "project_root",
-        conflicts_with_all = ["bench", "ast_pattern", "resolve", "scip_facts", "file_fact"],
+        conflicts_with_all = ["bench", "resolve", "scip_facts", "file_fact"],
         long_help = SCIP_DEPS_LONG,
     )]
     scip_deps: bool,
@@ -168,7 +168,7 @@ struct Cli {
     #[arg(
         long,
         requires = "project_root",
-        conflicts_with_all = ["bench", "ast_pattern", "resolve"],
+        conflicts_with_all = ["bench", "resolve"],
         long_help = SCIP_FACTS_LONG,
     )]
     scip_facts: bool,
@@ -194,7 +194,7 @@ struct Cli {
     #[arg(
         long,
         requires = "project_root",
-        conflicts_with_all = ["bench", "ast_pattern", "resolve", "scip_facts", "scip_deps", "file_fact"],
+        conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "file_fact"],
         long_help = DEPS_LONG,
     )]
     deps: bool,
@@ -203,13 +203,13 @@ struct Cli {
     #[arg(
         long = "package-deps",
         requires = "project_root",
-        conflicts_with_all = ["bench", "ast_pattern", "resolve", "scip_facts", "scip_deps", "deps", "file_fact"],
+        conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "deps", "file_fact"],
         long_help = PACKAGE_DEPS_LONG,
     )]
     package_deps: bool,
 
     /// Prepend one `file` record: path, content digest, byte count, line count.
-    #[arg(long, conflicts_with_all = ["resolve", "scip_facts", "ast_pattern"], long_help = FILE_FACT_LONG)]
+    #[arg(long, conflicts_with_all = ["resolve", "scip_facts"], long_help = FILE_FACT_LONG)]
     file_fact: bool,
 
     /// Decorate stdout: 1-based line and col beside every start/end span.
@@ -221,7 +221,7 @@ struct Cli {
     #[arg(
         long,
         conflicts_with_all = [
-            "bench", "ast_pattern", "deps", "package_deps",
+            "bench", "deps", "package_deps",
             "scip_facts", "scip_deps", "file_fact",
         ],
     )]
@@ -234,7 +234,7 @@ struct Cli {
         value_name = "PATH",
         num_args = 1..,
         conflicts_with_all = [
-            "paths", "family", "bench", "resolve", "ast_pattern", "deps",
+            "paths", "family", "bench", "resolve", "deps",
             "package_deps", "scip_facts", "scip_deps", "file_fact", "witness",
         ],
     )]
@@ -243,35 +243,6 @@ struct Cli {
     /// Byte ceiling for one input; over it emits `size_skip` and exits 0. 0 = none.
     #[arg(long = "max-bytes", value_name = "BYTES", long_help = MAX_BYTES_LONG)]
     max_bytes: Option<u64>,
-
-    /// Ast-grep pattern in ID=PATTERN form. Repeat to batch patterns over one parse.
-    #[arg(
-        long = "ast-pattern",
-        value_name = "ID=PATTERN",
-        action = clap::ArgAction::Append,
-        conflicts_with_all = ["family", "bench", "resolve"]
-    )]
-    ast_pattern: Vec<String>,
-
-    /// Contextual pattern selector in ID=KIND form. Repeat at most once per query.
-    #[arg(
-        long = "ast-selector",
-        value_name = "ID=KIND",
-        action = clap::ArgAction::Append,
-        requires = "ast_pattern",
-        conflicts_with_all = ["family", "bench", "resolve"]
-    )]
-    ast_selector: Vec<String>,
-
-    /// Single-node metavariable to emit in ID=NAME form. Repeat per query.
-    #[arg(
-        long = "ast-capture",
-        value_name = "ID=NAME",
-        action = clap::ArgAction::Append,
-        requires = "ast_pattern",
-        conflicts_with_all = ["family", "bench", "resolve"]
-    )]
-    ast_capture: Vec<String>,
 
     /// Where `--family scip` places and finds its index cache.
     #[arg(long, value_name = "DIR", long_help = SCIP_CACHE_LONG)]
@@ -297,7 +268,7 @@ struct Cli {
         num_args = 0..=1,
         default_missing_value = "5",
         conflicts_with_all = [
-            "paths", "family", "bench", "resolve", "ast_pattern", "deps",
+            "paths", "family", "bench", "resolve", "deps",
             "package_deps", "scip_facts", "scip_deps", "file_fact", "witness",
             "ingest", "schema", "scip_build", "scip_index",
         ],
@@ -848,11 +819,6 @@ fn extract_file(
         output.fact(&size_skip_fact(&path_str, bytes, limit))?;
         return Ok(());
     }
-    if !cli.ast_pattern.is_empty() {
-        let queries = parse_ast_queries(&cli.ast_pattern, &cli.ast_selector, &cli.ast_capture)?;
-        stream_ast_queries(&path_str, &content, &queries, output)?;
-        return Ok(());
-    }
     let mask = match cli.family.as_deref() {
         Some(families) => parse_mask(families)?,
         None => FamilyMask::DEFAULT,
@@ -906,82 +872,6 @@ fn scip_request(cli: &Cli) -> Result<ResolveRequest<'_>, String> {
             .flatten(),
         witness: cli.witness,
     })
-}
-
-fn split_assignment<'a>(flag: &str, value: &'a str) -> Result<(&'a str, &'a str), String> {
-    let Some((id, body)) = value.split_once('=') else {
-        return Err(format!("{flag} expects ID=VALUE, got '{value}'"));
-    };
-    if id.is_empty() || body.is_empty() {
-        return Err(format!(
-            "{flag} expects non-empty ID and VALUE, got '{value}'"
-        ));
-    }
-    Ok((id, body))
-}
-
-fn parse_ast_queries(
-    patterns: &[String],
-    selectors: &[String],
-    captures: &[String],
-) -> Result<Vec<AstPatternQuery>, String> {
-    let mut queries = Vec::with_capacity(patterns.len());
-    for spec in patterns {
-        let (id, pattern) = split_assignment("--ast-pattern", spec)?;
-        if queries.iter().any(|query: &AstPatternQuery| query.id == id) {
-            return Err(format!("duplicate --ast-pattern id '{id}'"));
-        }
-        queries.push(AstPatternQuery {
-            id: id.to_string(),
-            pattern: pattern.to_string(),
-            selector: None,
-            captures: Vec::new(),
-        });
-    }
-    for spec in selectors {
-        let (id, selector) = split_assignment("--ast-selector", spec)?;
-        let Some(query) = queries.iter_mut().find(|query| query.id == id) else {
-            return Err(format!(
-                "--ast-selector id '{id}' has no matching --ast-pattern"
-            ));
-        };
-        if query.selector.is_some() {
-            return Err(format!("duplicate --ast-selector id '{id}'"));
-        }
-        query.selector = Some(selector.to_string());
-    }
-    for spec in captures {
-        let (id, capture) = split_assignment("--ast-capture", spec)?;
-        let Some(query) = queries.iter_mut().find(|query| query.id == id) else {
-            return Err(format!(
-                "--ast-capture id '{id}' has no matching --ast-pattern"
-            ));
-        };
-        if !query.captures.iter().any(|existing| existing == capture) {
-            query.captures.push(capture.to_string());
-        }
-    }
-    for query in &queries {
-        if query.captures.is_empty() {
-            return Err(format!(
-                "--ast-pattern id '{}' has no --ast-capture",
-                query.id
-            ));
-        }
-    }
-    Ok(queries)
-}
-
-fn stream_ast_queries(
-    path: &str,
-    content: &[u8],
-    queries: &[AstPatternQuery],
-    output: &mut sqlite::Output,
-) -> Result<(), Box<dyn std::error::Error>> {
-    for fact in query_patterns(path, content, queries)? {
-        output.fact(&fact)?;
-    }
-    Ok(())
 }
 
 /// Project mode: translate flags to a `ResolveRequest`, call the library, print.

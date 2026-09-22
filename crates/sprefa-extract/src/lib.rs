@@ -11,7 +11,7 @@
 //! mind is `v6/sprefa-seed/src/_3_extract/_7_tasks.rs`.
 //!
 //! Commit 1 (this crate's first commit) is the PIPING PROOF: one Parser
-//! (`AstGrepParser`, ast-grep grammars cover rust/ts/go) + `Project<CstF>` (the
+//! (`RyiLang::tree_sitter_language`, linked grammars) + `Project<CstF>` (the
 //! lossless named-node tree) + the flat wire + a clap bin streaming JSONL +
 //! `--bench`. Proves bin -> seams -> flat wire -> stdout end to end.
 #![allow(dead_code)]
@@ -61,8 +61,8 @@ pub use cpg_types::{
 pub use deps::{resolve_specifier, Policy, TsconfigPaths};
 pub use dispatch::dispatch;
 pub use drain::{
-    bind_action, directory_path, directory_source, drain_edits, replace_action, source_rel,
-    stage_edits, BoundEdit, PendingReplaceDoc,
+    bind_action, directory_path, directory_source, replace_action, source_rel,
+    stage_edits,
 };
 pub use family::{
     flow_edges, CallEdgeKind, CallF, CallKind, CallSite, CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF,
@@ -71,22 +71,18 @@ pub use family::{
     TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeFAux, TypeSig,
 };
 pub use lang::{
-    build_paths, compiled_spellings, decode_ast_rule_yaml, dl6_db_path, find_owned_region,
-    open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_ast_rule,
-    query_ast_rule_with_content, query_patterns, query_source, query_source_facts,
-    cleave_for, cleaves, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
-    rename_for, renames, respell,
-    scm_edges, scm_facts, source_for, sources, ts_specifiers, AstCaptureFact,
-    AstPatternQuery, AstRule, AstRuleCapture,
-    AstRuleError, AstRuleMatch, AstRuleMutationProposal, AstRuleRequest, AstgrepSource, BuildPaths,
-    ByteRange, CommonlispSource, DataSource, RyiLang, FactError, FactMatcher, FactSet,
-    GdscriptSource, GitBlobFact,
-    GoSource, KotlinSource, MarkdownSource, NamedAstRule, OwnedRegion, OwnedRegionError,
-    OwnedRegionProposal, PrologSource, PythonSource, RustSource, SourceCaptureFact,
-    SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError, SourceQueryFact, SourceQueryFacts,
-    ScmEdge, SourceQueryOutput, SourceReplacementFact, SourceRevisionFact, StopBy, TreeSitterQuery,
-    TreeSitterQueryMatch, TreeSitterSpannedCapture, TreeSitterSpannedMatch, TsResolver, TsSource,
-    TsSpecifier, DL6_DB_RELATIVE_PATH, SOURCE_FACT_PROTOCOL,
+    build_paths, cleave_for, cleaves, compiled_spellings, dl6_db_path, find_owned_region,
+    open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_source,
+    query_source_facts, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
+    rename_for, renames, respell, scm_edges, scm_facts, source_for, sources, ts_specifiers,
+    BuildPaths, ByteRange, CommonlispSource, DataSource, FactError, FactSet,
+    FallbackSource, GdscriptSource, GitBlobFact, GoSource, KotlinSource, MarkdownSource, OwnedRegion,
+    OwnedRegionError, OwnedRegionProposal, PrologSource, PythonSource, RustSource, RyiLang,
+    ScmEdge, SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError,
+    SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact,
+    SourceRevisionFact, TreeSitterQuery, TreeSitterQueryMatch, TreeSitterSpannedCapture,
+    TreeSitterSpannedMatch, TsResolver, TsSource, TsSpecifier, DL6_DB_RELATIVE_PATH,
+    SOURCE_FACT_PROTOCOL,
 };
 pub use manifests::{
     fold_package_edges, package_edges, package_edges_jsonl, Manifest, ManifestKind,
@@ -134,15 +130,14 @@ pub use soopy::{
     RepositoryId as SourceRepositoryId, Revision as SourceRevision, RevisionId as SourceRevisionId,
     SourceEntry, SourceRef,
 };
-pub use source::{RyiOutput, FamilyMask, Source};
+pub use source::{FamilyMask, RyiOutput, Source};
 pub use types::{
-    CfgEdgeKind, CfgF, CfgNodeKind, Edit, ImportRef, ImportRefKind, Cleave, RefRole, Rehome, RehomeArm,
-    RehomeManifests, RehomePlanCheck, RehomeShim, RehomeTextSpellings, Rename, RenameStop, Respell,
-    SymbolId, SymbolInterner, SymbolRef, SymbolSeat,
+    CfgEdgeKind, CfgF, CfgNodeKind, Cleave, Edit, ImportRef, ImportRefKind, RefRole, Rehome,
+    RehomeArm, RehomeManifests, RehomePlanCheck, RehomeShim, RehomeTextSpellings, Rename,
+    RenameStop, Respell, SymbolId, SymbolInterner, SymbolRef, SymbolSeat,
 };
 pub use wire::{
     file_fact, file_fact_with_content_id, flatten, flatten_cfg, flatten_cfg_each, flatten_each,
     flatten_flow, flatten_jsonl, flatten_scip, line_start_fact_with_content_id, newline_offsets,
-    scip_file_edges,
-    size_skip_fact, FlatFact, SpanOut, DEFAULT_MAX_BYTES, SCHEMA,
+    scip_file_edges, size_skip_fact, FlatFact, SpanOut, DEFAULT_MAX_BYTES, SCHEMA,
 };

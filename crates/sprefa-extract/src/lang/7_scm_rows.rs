@@ -1,28 +1,14 @@
 //! `ryi fast`'s symbol / occurrence / local rows, from a per-language `.scm`
-//! query lowered through L1 and executed natively, plus the file's scope tree.
+//! query run through the shared `hafley_scm` engine, plus the file's scope tree.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use ast_grep_core::tree_sitter::LanguageExt;
-use tree_sitter::{Parser, Query, QueryCursor, StreamingIterator};
+use tree_sitter::Parser;
 
-use super::ast_rule::{query_ast_rule, AstRule, AstRuleRequest};
 use super::extract_lang::RyiLang;
 use super::scm_store::{NodeKind, Store};
-use super::scm_lower::{lower_scm, ScmLowerError};
 use crate::types::FlatFact;
-
-/// The outer captures L1 selects. Everything else is read off the native
-/// match that carries one of them.
-const SPAN_LABELS: [&str; 6] = [
-    "local.scope",
-    "local.def.span",
-    "local.site.span",
-    "local.import",
-    "local.export.package",
-    "local.reference",
-];
 
 const ROOT: usize = 0;
 
@@ -30,9 +16,7 @@ const ROOT: usize = 0;
 pub enum ScmError {
     /// A supplied path could not be read.
     Io { path: String, detail: String },
-    /// The bundled query did not lower through L1.
-    Lower { path: String, error: ScmLowerError },
-    /// L1 or the native engine refused the bundled query.
+    /// The engine refused the bundled query.
     Query { path: String, detail: String },
     /// tree-sitter stopped enumerating matches, so the captures are partial.
     MatchLimit { path: String },
@@ -44,7 +28,6 @@ impl std::fmt::Display for ScmError {
     fn fmt(&self, out: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Io { path, detail } => write!(out, "{path}: {detail}"),
-            Self::Lower { path, error } => write!(out, "{path}: ScmLowerError: {error}"),
             Self::Query { path, detail } => write!(out, "{path}: {detail}"),
             Self::MatchLimit { path } => write!(
                 out,
@@ -350,8 +333,8 @@ fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScmError> {
     Ok(rows(&name, end, captured))
 }
 
-/// One file's two-step pass: L1 selects the spans, the native run groups the
-/// captures. Every later projection reads this and nothing else.
+/// One file's pass: the engine builds the bundled query once and runs it
+/// natively; the arena's captures are every later projection's input.
 fn file_captures(path: &Path) -> Result<Option<(String, u32, BTreeSet<Capture>)>, ScmError> {
     let name = path.to_string_lossy().to_string();
     let Some((lang, query_text)) = query_for(&name) else {
@@ -361,55 +344,19 @@ fn file_captures(path: &Path) -> Result<Option<(String, u32, BTreeSet<Capture>)>
         path: name.clone(),
         detail: error.to_string(),
     })?;
-    let selected = lowered_spans(&name, &source, query_text)?;
-    let captured = native_captures(&name, lang, query_text, &source, &selected)?;
+    let captured = arena_captures(&name, lang, query_text, &source)?;
     Ok(Some((name, source.len() as u32, captured)))
 }
 
-/// L1 supplies the candidate spans. Native execution retains the capture
-/// grouping the AstRule representation does not store.
-fn lowered_spans(
-    path: &str,
-    source: &[u8],
-    query_text: &str,
-) -> Result<BTreeSet<(u32, u32)>, ScmError> {
-    let program = lower_scm(query_text).map_err(|error| ScmError::Lower {
-        path: path.to_string(),
-        error,
-    })?;
-    let rule = AstRule::Any(
-        SPAN_LABELS
-            .into_iter()
-            .map(|name| AstRule::Matches(name.to_string()))
-            .collect(),
-    );
-    let request = AstRuleRequest {
-        id: "scip-scm".into(),
-        rule,
-        utils: program.utils,
-        constraints: program.constraints,
-        fix: None,
-    };
-    let matches = query_ast_rule(path, source, &request).map_err(|error| ScmError::Query {
-        path: path.to_string(),
-        detail: error.to_string(),
-    })?;
-    Ok(matches
-        .into_iter()
-        .map(|row| (row.span.start, row.span.end()))
-        .collect())
-}
-
-/// One native run, grouped: a capture is kept when the match's own span
-/// capture is one L1 selected.
-fn native_captures(
+/// One build and one native run: the engine applies the query's own
+/// predicates and appends every kept match's captures to the arena.
+fn arena_captures(
     path: &str,
     lang: RyiLang,
     query_text: &str,
     source: &[u8],
-    selected: &BTreeSet<(u32, u32)>,
 ) -> Result<BTreeSet<Capture>, ScmError> {
-    let language = lang.get_ts_language();
+    let language = lang.tree_sitter_language();
     let mut parser = Parser::new();
     parser
         .set_language(&language)
@@ -417,48 +364,64 @@ fn native_captures(
             path: path.to_string(),
             detail: format!("set language: {error}"),
         })?;
-    let tree = parser
-        .parse(source, None)
-        .ok_or_else(|| ScmError::Query {
-            path: path.to_string(),
-            detail: "parse returned no tree".into(),
-        })?;
-    let query = Query::new(&language, query_text).map_err(|error| ScmError::Query {
+    let tree = parser.parse(source, None).ok_or_else(|| ScmError::Query {
         path: path.to_string(),
-        detail: format!("query row {}: {error}", error.row + 1),
+        detail: "parse returned no tree".into(),
     })?;
-    let names = query.capture_names();
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(&query, tree.root_node(), source);
+    let query = hafley_scm::build(&language, query_text).map_err(|error| scm_error(path, error))?;
+    let mut arena = hafley_scm::MatchArena::default();
+    // The fresh-cursor default the direct run always had; the engine's limit
+    // check cannot fire at u32::MAX.
+    hafley_scm::run(&query, path, source, &tree, u32::MAX, &mut arena)
+        .map_err(|error| scm_error(path, error))?;
+    Ok(kept_captures(&query, &arena, source))
+}
+
+/// MatchArena rows -> the `Capture` set every later projection reads: one
+/// entry per kept capture, deduped and ordered by label, text, then span.
+fn kept_captures(
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
+    source: &[u8],
+) -> BTreeSet<Capture> {
     let mut kept = BTreeSet::new();
-    while let Some(found) = matches.next() {
-        let mut captures = Vec::new();
-        let mut span = None;
-        for capture in found.captures {
-            let node = capture.node;
-            let label = names[capture.index as usize];
-            let taken = Capture {
-                label: label.to_string(),
-                text: node.utf8_text(source).unwrap_or("").to_string(),
-                start: node.start_byte() as u32,
-                end: node.end_byte() as u32,
-            };
-            if SPAN_LABELS.contains(&label) {
-                span = Some((taken.start, taken.end));
-            }
-            captures.push(taken);
-        }
-        if span.is_some_and(|span| selected.contains(&span)) {
-            kept.extend(captures);
+    for row in &arena.rows {
+        for span in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
+            let text = source
+                .get(span.bytes.start as usize..span.bytes.end as usize)
+                .and_then(|bytes| std::str::from_utf8(bytes).ok())
+                .unwrap_or("")
+                .to_string();
+            kept.insert(Capture {
+                label: query.names[span.name as usize].to_string(),
+                text,
+                start: span.bytes.start,
+                end: span.bytes.end,
+            });
         }
     }
-    drop(matches);
-    if cursor.did_exceed_match_limit() {
-        return Err(ScmError::MatchLimit {
+    kept
+}
+
+/// The engine's error shape onto this module's path-qualified one.
+fn scm_error(path: &str, error: hafley_scm::QueryExtError) -> ScmError {
+    match error {
+        hafley_scm::QueryExtError::Parse(error) => ScmError::Query {
             path: path.to_string(),
-        });
+            detail: format!("query row {}: {error}", error.row + 1),
+        },
+        hafley_scm::QueryExtError::UnknownOperator(operator) => ScmError::Query {
+            path: path.to_string(),
+            detail: format!("predicate #{operator} is not allowed"),
+        },
+        hafley_scm::QueryExtError::Arity { operator, got } => ScmError::Query {
+            path: path.to_string(),
+            detail: format!("predicate #{operator} got {got} arguments"),
+        },
+        hafley_scm::QueryExtError::MatchLimit { .. } => ScmError::MatchLimit {
+            path: path.to_string(),
+        },
     }
-    Ok(kept)
 }
 
 /// The scope tree, the definitions it owns, and the references it resolves,

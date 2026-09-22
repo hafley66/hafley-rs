@@ -1,6 +1,6 @@
-//! The Go extractor arm: tree-sitter-go front-end for type/call/df, ast-grep for
-//! cst. Mirrors RustSource/TsSource (same shape, different front-end): cst via
-//! ast-grep's go grammar + one tree-sitter-go parse feeding the type/call/df
+//! The Go extractor arm: tree-sitter-go front-end for type/call/df, the shared
+//! tree-sitter walk for cst. Mirrors RustSource/TsSource (same shape, different front-end): cst via
+//! walk + one tree-sitter-go parse feeding the type/call/df
 //! projections.
 //!
 //! Span bridge: NONE needed (unlike rust.rs's syn line/col -> byte table).
@@ -8,7 +8,7 @@
 //! `Span { start: node.start_byte(), len: node.end_byte() - node.start_byte() }`
 //! is the whole story. This is simpler than the rust port.
 //!
-//! GoSource wires cst via ast-grep + a tree-sitter-go parse feeding the type/call/df
+//! GoSource wires cst via the shared walk + a tree-sitter-go parse feeding the type/call/df
 //! projections: `walk_go_entities` (TypeF nodes + arrow-type sigs), `go_walk_call_defs`
 //! + `go_walk_call_sites` (CallF), `go_dataflow_from` (DfF nodes + Direct edges),
 //! `go_type_spec_edges` (type-edge candidates) + `Resolve<TypeF>` / `Resolve<CallF>` (the
@@ -26,10 +26,10 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
-use super::astgrep::{AstGrepParser, CstProjector};
+use super::fallback::cst_bundle;
 use super::go_modules::{is_exported, GoModuleIndex};
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, CstF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
+    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
     DfParam, DocFact, DocTag, MethodOwner, ProjectEdge, ReceiverBinding, ReceiverOutcome,
     ResolutionOrigin, SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind,
     TypeEntityKind, TypeF, TypeSig,
@@ -38,8 +38,7 @@ use crate::project::ResolveDrop;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Parser,
-    Project, Resolve,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
@@ -51,7 +50,7 @@ use crate::types::{PathIndex, ScipIndex, UnresolvedReason};
 /// Parse Go source via tree-sitter-go. Port of v5 `go_parse`
 /// (src/graph/typegraph/go.rs:41). tree-sitter 0.25's `Language::new` wraps the
 /// `LanguageFn` tree-sitter-go 0.23 exports as `LANGUAGE`; the versions unify
-/// with what ast-grep-language already transitively pulls.
+/// with what the lock already carried.
 pub(crate) fn go_parse(content: &str) -> Option<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     let lang = tree_sitter::Language::new(tree_sitter_go::LANGUAGE);
@@ -2715,15 +2714,15 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GoSource: the Go Source (cst via ast-grep + type/call/df via tree-sitter-go).
+// GoSource: the Go Source (cst via the shared walk + type/call/df via tree-sitter-go).
 //
 // The two-parser, masked shape (mirrors RustSource/TsSource). cst runs through
-// ast-grep (one dep = the CST floor for every lang); type/call/df run through
+// the shared walk (one parse = the CST floor); type/call/df run through
 // ONE tree-sitter-go parse (three masked projections over the same tree). ONE
 // shared `Strings` across all four families.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// The Go `Source`. `matches` = the path ends in `.go`. cst via ast-grep's go
+/// The Go `Source`. `matches` = the path ends in `.go`. cst via the shared
 /// grammar; type/call/df via one tree-sitter-go parse.
 #[derive(Default)]
 pub struct GoSource;
@@ -2740,24 +2739,18 @@ impl Source for GoSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). ast-grep's SupportLang has a go grammar, so
-        // a .go parses losslessly. Owns its () arena; dropped at block end. A
-        // failed ast-grep parse leaves cst None (no panic).
+        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
+        // A refused parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("go", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("go", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("go", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("go", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };

@@ -107,8 +107,8 @@ FIELDS
                inherent impl).
   field        dotted path into an object const, or an enum member (else null).
   text         the resolved string value of a const.
-  query        caller-supplied identity for one batched ast-grep pattern.
-  capture      one requested single-node ast-grep metavariable.
+  query        caller-supplied identity for one batched pattern.
+  capture      one requested single-node metavariable.
   start/end    capture's half-open byte span in pattern mode.
   match_start/match_end  whole pattern match's half-open byte span.
   caller_site_start  start byte of the call site that produced a resolved edge.
@@ -158,7 +158,7 @@ KIND VOCABULARIES (the `kind` field)
   df node     param let_bind var_read var_write lit call_res new member ret
               borrow binop unop loop if match block closure try break expr
               cond logic concat template
-  cst node    the grammar node type as named by ast-grep / tree-sitter (open set)
+  cst node    the grammar node type as named by tree-sitter (open set)
   cst edge    child
   df edge     direct
   df lit kind  lit (cooked literal) | template | concat (raw source slice)
@@ -363,7 +363,7 @@ TSI ENVELOPE (--witness)
   run 0; a semantic run claims none, because the checker answers per site
   instead of enumerating a relation.
   --witness conflicts with the single-purpose modes (--deps, --package-deps,
-  --scip-facts, --scip-deps, --bench, --ast-pattern, --file-fact) and with
+  --scip-facts, --scip-deps, --bench, --file-fact) and with
   --family cfg: their rows come from other flattens, and the protocol row must
   be the first row of a witnessed stream with every later row numbered.
 
@@ -372,7 +372,7 @@ SIZE CEILING (--max-bytes)
   naming the path, the byte count and the ceiling, and exits 0. The default is
   16777216; --max-bytes N sets it, --max-bytes 0 removes it. The decision is
   made on the file size before any parse, so it covers the normal family
-  stream, --bench, and --ast-pattern alike, and --file-fact still prepends its
+  stream and --bench alike, and --file-fact still prepends its
   identity row (a digest over bytes already read, not the cost being bounded).
   A whole-project mode (--resolve, --deps, --scip-*) takes directories and sets
   and is not covered.

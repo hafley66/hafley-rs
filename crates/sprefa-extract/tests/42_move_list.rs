@@ -202,11 +202,10 @@ fn a_mixed_list_picks_an_arm_per_row_by_extension() {
     let table = planned(&fixture, &list, &["--commit"]);
 
     assert_eq!(kind_count(&table, "move"), 2, "table:\n{table}");
-    assert_eq!(kind_count(&table, "replace"), 2, "table:\n{table}");
-    assert_eq!(
-        read(&fixture.root, "a.pl"),
-        ":- module(a, [check/0]).\n:- use_module('core/b').\n\ncheck :- true.\n"
-    );
+    // The ts arm respells its importer; the prolog specifier matcher is
+    // disabled with the ast-grep unlink, so a.pl rides along untouched.
+    assert_eq!(kind_count(&table, "replace"), 1, "table:\n{table}");
+    assert_eq!(read(&fixture.root, "a.pl"), MIXED_A_PL);
     assert_eq!(
         read(&fixture.root, "src/user.ts"),
         "import { x } from './deep/x';\n\nexport const user = x;\n"

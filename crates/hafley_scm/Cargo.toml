@@ -5,6 +5,29 @@ edition = "2021"
 
 [dependencies]
 tree-sitter = "0.25"
+syn = { version = "2", features = ["full", "visit", "parsing", "extra-traits"], optional = true }
+proc-macro2 = { version = "1", features = ["span-locations"], optional = true }
+ra_ap_syntax = { version = "0.0.349", optional = true }
+ra_ap_mbe = { version = "0.0.349", optional = true }
+ra_ap_tt = { version = "0.0.349", optional = true }
+ra_ap_parser = { version = "0.0.349", optional = true }
+ra_ap_span = { version = "0.0.349", optional = true }
+ra_ap_syntax-bridge = { version = "0.0.349", optional = true }
+salsa = { version = "=0.28.2", default-features = false, features = ["macros", "rayon"], optional = true }
+
+[features]
+default = ["rust_syn"]
+rust_syn = [
+    "dep:syn",
+    "dep:proc-macro2",
+    "dep:ra_ap_syntax",
+    "dep:ra_ap_mbe",
+    "dep:ra_ap_tt",
+    "dep:ra_ap_parser",
+    "dep:ra_ap_span",
+    "dep:ra_ap_syntax-bridge",
+    "dep:salsa",
+]
 
 [dev-dependencies]
 tree-sitter-rust = "0.24"

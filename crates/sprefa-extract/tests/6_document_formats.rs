@@ -1,7 +1,7 @@
 //! WHICH DOCUMENT FORMATS THE EXTRACTOR ACTUALLY HANDLES, pinned.
 //!
 //! Each row names the FAMILY the format's facts must carry. json/yaml/toml ride
-//! the `data` family; html/css ride the ast-grep cst fallback; md rides
+//! the `data` family; html rides the linked-grammar cst fallback; md rides
 //! tree-sitter-md; xml has no grammar in tree and produces nothing.
 //!
 //! Adding or losing a grammar flips a row here, which is the point: a dependency
@@ -14,13 +14,13 @@ use std::process::Command;
 /// real absence and costs a new grammar dependency plus a `Source`, so it is a
 /// build-vs-buy decision rather than a cleanup.
 const FORMATS: &[(&str, &str, &str)] = &[
-    ("html", "cst", "ast-grep-language ships the html grammar"),
+    ("html", "cst", "tree-sitter-html is linked for the fallback"),
     ("yaml", "data", "the data family, tree-sitter-yaml"),
     ("json", "data", "the data family, tree-sitter-json"),
-    ("css", "cst", "ast-grep-language ships the css grammar"),
+    ("css", "", "no css grammar linked since the ast-grep unlink"),
     ("md", "cst", "tree-sitter-md block and inline grammars"),
     ("toml", "data", "the data family, tree-sitter-toml-ng"),
-    ("xml", "", "no xml grammar in ast-grep-language"),
+    ("xml", "", "no xml grammar linked"),
 ];
 
 /// Bodies that exercise each format's own syntax, so a covered row proves the

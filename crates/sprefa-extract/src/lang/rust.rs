@@ -1,5 +1,5 @@
-//! The Rust extractor arm: syn front-end for type/call/df/const, ast-grep for cst.
-//! Mirrors TsSource (same shape, different front-end): cst via ast-grep's rust
+//! The Rust extractor arm: syn front-end for type/call/df/const, the shared
+//! tree-sitter walk for cst. Mirrors TsSource (same shape, different front-end): cst via the shared walk
 //! grammar + one `syn::parse_file` feeding the type/call/df/const projections.
 //! Type edges ride `TypeFAux` candidates out of the one parse (port of v5
 //! `edges_from`: field/variant/generic/impl — v5 rust emits NO param/returns
@@ -15,17 +15,22 @@
 //! col`, which is exactly `line_col_to_byte`.
 
 use std::collections::BTreeSet;
+use std::sync::LazyLock;
 
+use hafley_scm::lang::rust::{
+    call_definition_rows, call_metadata_rows, cfg_test_predicate, item_attrs, line_col_to_byte,
+    path_string, CallDefinitionKind, RUST_CALL_QUERY,
+};
 use syn::spanned::Spanned;
 use syn::ReturnType;
 
-use super::astgrep::{AstGrepParser, CstProjector};
+use super::fallback::cst_bundle;
 use super::rust_checker::CheckerAnswer;
 use super::rust_docs::doc_facts;
 use super::rust_type_edges::{edge_candidates, strip_type};
 use super::rust_type_refs::{primary_type, type_refs};
 use crate::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, CstF, DfArg, DfEdgeKind, DfF,
+    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, MethodOwner, ProjectEdge, ResolutionOrigin, SigSlot,
     Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
@@ -33,14 +38,14 @@ use crate::project::ResolveDrop;
 use crate::rows::{Edge, FamilyBundle, Node};
 use crate::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Parser, Project,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex,
     Resolve,
 };
 use crate::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+use crate::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 
-/// Rust's own `.scm`: the scope/definition/call captures fast lowers through
-/// L1. Owned here, read through `Source::scm_query`.
+/// Rust's own `.scm` (scope/definition captures), read through
+/// `Source::scm_query`; the CallF query is crate-owned in `hafley_scm`.
 const RUST_SCM: &str = include_str!("../../queries/rust/scip.scm");
 use crate::trace;
 use crate::types::LangKind;
@@ -51,30 +56,7 @@ use crate::types::{
 };
 
 // ── span bridge: proc_macro2 line/col -> v6 byte Span ───────────────────────
-
-/// Byte offset of the start of each 1-based line: line N starts at `out[N-1]`.
-/// Mirrors v5_normalize's `line_starts`; built once per file in `extract`.
-pub(crate) fn build_line_starts(src: &str) -> Vec<u32> {
-    let mut out = vec![0u32];
-    for (byte_off, byte) in src.bytes().enumerate() {
-        if byte == b'\n' {
-            out.push((byte_off + 1) as u32);
-        }
-    }
-    out
-}
-
-/// Convert a syn (1-based line, 0-based column) coordinate to a byte offset.
-/// `column` is proc_macro2's char column; for ASCII source it equals the byte
-/// column (v5's `rust_line`/`ts_push` make the same char-as-byte approximation,
-/// and the parity oracle reconstructs bytes the same way).
-fn line_col_to_byte(line_starts: &[u32], line: u32, col: u32) -> u32 {
-    line_starts
-        .get((line as usize).saturating_sub(1))
-        .copied()
-        .unwrap_or(0)
-        .saturating_add(col)
-}
+pub(crate) use hafley_scm::lang::rust::{build_line_starts, variant_def_range};
 
 /// A proc_macro2 span -> v6 byte Span. Used for entity/def spans where a real
 /// length is kept (joins + future resolution); df nodes use start-only anchors.
@@ -1399,8 +1381,9 @@ pub fn call_drops(
             ReceiverOutcome::Inferred | ReceiverOutcome::Shadowed => true,
             // Two conflicting declarations traced: the def counts below tell
             // the story.
-            ReceiverOutcome::Named(ty) => !modules
-                .is_some_and(|m| m.is_impl_known(output.strings.lookup(*ty))),
+            ReceiverOutcome::Named(ty) => {
+                !modules.is_some_and(|m| m.is_impl_known(output.strings.lookup(*ty)))
+            }
             ReceiverOutcome::Ambiguous => false,
         })
         .map(|r| (r.call_site.start, r.call_site.end()))
@@ -1518,295 +1501,96 @@ pub(crate) fn def_span(
     }
 }
 
-/// One enum variant's def span, the ident alone. None unless the span covers
-/// exactly the ident: wider is an mbe-expanded variant reporting the macro call.
-pub(crate) fn variant_def_span(line_starts: &[u32], variant: &syn::Variant) -> Option<Span> {
-    let span = syn_span(line_starts, variant.ident.span());
-    (span.len as usize == variant.ident.to_string().len()).then_some(span)
-}
-
 /// Descends inline `mod name { .. }`: the SITE half walks the whole file, so a
 /// callable declared in one needs a def or the file reports uses without them.
-fn call_defs_in_items(
-    items: &[syn::Item],
-    line_starts: &[u32],
-    defs: &mut RustCallDefs,
-    owners: &mut Vec<CollectedOwner>,
-    scopes: &mut Vec<(Span, String)>,
-    under_cfg: Option<&str>,
+fn scm_call_defs(
+    query: &hafley_scm::QueryExt,
+    src: &[u8],
+    tree: &tree_sitter::Tree,
+    strings: &mut Strings,
+    sink: &mut FamilyBundle<CallF>,
 ) {
-    for item in items {
-        // An item inherits its enclosing module's predicate: `#[cfg(test)] mod
-        // tests` guards every def beneath it, however deeply nested, and the
-        // outermost predicate is the one that decides.
-        let own = cfg_test_predicate(item_attrs(item));
-        let active: Option<&str> = under_cfg.or(own.as_deref());
-        let note = |span: Span, scopes: &mut Vec<(Span, String)>| {
-            if let Some(predicate) = active {
-                scopes.push((span, predicate.to_string()));
-            }
-        };
-        match item {
-            syn::Item::Fn(f) => {
-                let span = def_span(line_starts, f.sig.ident.span(), f.block.span());
-                defs.push(span, Some(f.sig.ident.to_string()), CallKind::Free);
-                note(span, scopes);
-                syn::visit::visit_block(defs, &f.block);
-            }
-            syn::Item::Impl(i) => {
-                let self_type = primary_type(&i.self_ty);
-                let trait_name = i.trait_.as_ref().map(|(_, path, _)| path_string(path));
-                for ii in &i.items {
-                    if let syn::ImplItem::Fn(m) = ii {
-                        let span = def_span(line_starts, m.sig.ident.span(), m.block.span());
-                        defs.push(span, Some(m.sig.ident.to_string()), CallKind::Method);
-                        note(span, scopes);
-                        owners.push(CollectedOwner {
-                            span,
-                            self_type: self_type.clone(),
-                            trait_name: trait_name.clone(),
-                        });
-                        syn::visit::visit_block(defs, &m.block);
-                    }
-                }
-            }
-            // A trait fn: a signature-only declaration OR a default body, both
-            // Method-owned by the trait, so a call through the trait has a target.
-            syn::Item::Trait(t) => {
-                for ti in &t.items {
-                    if let syn::TraitItem::Fn(m) = ti {
-                        let name = m.sig.ident.to_string();
-                        let span = match &m.default {
-                            Some(block) => def_span(line_starts, m.sig.ident.span(), block.span()),
-                            None => def_span(line_starts, m.sig.ident.span(), m.sig.span()),
-                        };
-                        defs.push(span, Some(name), CallKind::Method);
-                        note(span, scopes);
-                        owners.push(CollectedOwner {
-                            span,
-                            self_type: None,
-                            trait_name: Some(t.ident.to_string()),
-                        });
-                        if let Some(block) = &m.default {
-                            syn::visit::visit_block(defs, block);
-                        }
-                    }
-                }
-            }
-            // A variant constructor is a call target in every rust call oracle:
-            // `Alpha::First(3)` names `First`, never `Alpha`.
-            syn::Item::Enum(e) => {
-                for variant in &e.variants {
-                    let Some(span) = variant_def_span(line_starts, variant) else {
-                        continue;
-                    };
-                    defs.push(span, Some(variant.ident.to_string()), CallKind::Free);
-                    note(span, scopes);
-                }
-            }
-            syn::Item::Mod(m) => {
-                if let Some((_, inner)) = &m.content {
-                    call_defs_in_items(inner, line_starts, defs, owners, scopes, active);
-                }
-            }
-            syn::Item::Const(c) => {
-                let span = def_span(line_starts, c.ident.span(), c.expr.span());
-                if initializer_defs(
-                    span,
-                    &c.ident,
-                    &c.expr,
-                    line_starts,
-                    defs,
-                    owners,
-                    scopes,
-                    active,
-                ) {
-                    note(span, scopes);
-                }
-            }
-            syn::Item::Static(s) => {
-                let span = def_span(line_starts, s.ident.span(), s.expr.span());
-                if initializer_defs(
-                    span,
-                    &s.ident,
-                    &s.expr,
-                    line_starts,
-                    defs,
-                    owners,
-                    scopes,
-                    active,
-                ) {
-                    note(span, scopes);
-                }
-            }
-            _ => {}
+    for row in call_definition_rows(query, "rust-call", src, tree) {
+        let mut node = Node::new(
+            Span {
+                start: row.range.start,
+                len: row.range.end - row.range.start,
+            },
+            match row.kind {
+                CallDefinitionKind::Free => CallKind::Free,
+                CallDefinitionKind::Method => CallKind::Method,
+                CallDefinitionKind::Lambda => CallKind::Lambda,
+            },
+        );
+        if let Some(name) = row.name {
+            node = node.with_name(strings.intern(&name));
         }
+        sink.nodes.push(node);
     }
 }
 
-/// Defs under a `const`/`static` initializer, plus the item as a def when the
-/// initializer holds a call no inner def covers. Returns whether it minted one.
-#[allow(clippy::too_many_arguments)]
-fn initializer_defs(
-    item_span: Span,
-    ident: &syn::Ident,
-    expr: &syn::Expr,
+/// The crate's metadata rows, interned and appended onto the CallF aux.
+fn syn_call_metadata(
+    parsed: &syn::File,
     line_starts: &[u32],
-    defs: &mut RustCallDefs,
-    owners: &mut Vec<CollectedOwner>,
-    scopes: &mut Vec<(Span, String)>,
-    under_cfg: Option<&str>,
-) -> bool {
-    let mark = defs.out.len();
-    match expr {
-        // The block form is the derive-macro shape: its statement items carry
-        // impl blocks and trait impls, which only `call_defs_in_items` reads.
-        syn::Expr::Block(block) => {
-            let items: Vec<syn::Item> = block
-                .block
-                .stmts
-                .iter()
-                .filter_map(|stmt| match stmt {
-                    syn::Stmt::Item(item) => Some(item.clone()),
-                    _ => None,
-                })
-                .collect();
-            call_defs_in_items(&items, line_starts, defs, owners, scopes, under_cfg);
-            for stmt in &block.block.stmts {
-                if !matches!(stmt, syn::Stmt::Item(_)) {
-                    syn::visit::Visit::visit_stmt(defs, stmt);
-                }
-            }
-        }
-        // The METHOD, never `syn::visit::visit_expr`: the free fn dispatches
-        // past the override, so a top-level `f()` or `|| ..` is not seen.
-        _ => syn::visit::Visit::visit_expr(defs, expr),
+    strings: &mut Strings,
+    sink: &mut FamilyBundle<CallF>,
+) {
+    let defs: BTreeSet<(u32, u32)> = sink
+        .nodes
+        .iter()
+        .map(|node| (node.span.start, node.span.end()))
+        .collect();
+    let (cfg, owners) = call_metadata_rows(parsed, line_starts, &defs);
+    for row in cfg {
+        sink.aux.cfg_scopes.push(CfgScope {
+            span: Span {
+                start: row.start,
+                len: row.end - row.start,
+            },
+            cfg: strings.intern(&row.predicate),
+        });
     }
-    let covered: Vec<Span> = defs.out[mark..].iter().map(|def| def.span).collect();
-    let mut sites = CallCollector {
-        line_starts,
-        sites: Vec::new(),
-        under_cfg: None,
-    };
-    syn::visit::Visit::visit_expr(&mut sites, expr);
-    let uncovered = sites.sites.iter().any(|site| {
-        !covered
-            .iter()
-            .any(|span| span.start <= site.span.start && site.span.end() <= span.end())
-    });
-    if uncovered {
-        defs.push(item_span, Some(ident.to_string()), CONST_INIT);
-    }
-    uncovered
-}
-
-/// One method's declaration before it is interned into the aux. `self_type` is
-/// `None` for a trait's own items; `trait_name` is `None` for an inherent impl.
-struct CollectedOwner {
-    span: Span,
-    self_type: Option<String>,
-    trait_name: Option<String>,
-}
-
-/// Every syn item form that can carry attributes, so a cfg predicate on any of
-/// them is seen. The forms with no attributes yield an empty slice rather than
-/// being skipped, which keeps the match total and the default safe.
-fn item_attrs(item: &syn::Item) -> &[syn::Attribute] {
-    match item {
-        syn::Item::Fn(i) => &i.attrs,
-        syn::Item::Impl(i) => &i.attrs,
-        syn::Item::Trait(i) => &i.attrs,
-        syn::Item::Mod(i) => &i.attrs,
-        syn::Item::Struct(i) => &i.attrs,
-        syn::Item::Enum(i) => &i.attrs,
-        syn::Item::Const(i) => &i.attrs,
-        syn::Item::Static(i) => &i.attrs,
-        syn::Item::Type(i) => &i.attrs,
-        syn::Item::Use(i) => &i.attrs,
-        syn::Item::Macro(i) => &i.attrs,
-        syn::Item::TraitAlias(i) => &i.attrs,
-        syn::Item::Union(i) => &i.attrs,
-        syn::Item::ExternCrate(i) => &i.attrs,
-        syn::Item::ForeignMod(i) => &i.attrs,
-        _ => &[],
+    for row in owners {
+        sink.aux.method_owners.push(MethodOwner {
+            span: Span {
+                start: row.start,
+                len: row.end - row.start,
+            },
+            self_type: row.self_type.map(|name| strings.intern(&name)),
+            trait_name: row.trait_name.map(|name| strings.intern(&name)),
+        });
     }
 }
-
-/// The `cfg` predicate as written, when it names `test` anywhere inside it.
-/// `#[cfg(test)]`, `#[cfg(any(test, feature = "x"))]` and `#[cfg(all(test,
-/// unix))]` all qualify; `#[cfg(feature = "testing")]` does not, because the
-/// token is matched as a whole word and not as a substring.
-fn cfg_test_predicate(attrs: &[syn::Attribute]) -> Option<String> {
-    for attr in attrs {
-        if !attr.path().is_ident("cfg") {
-            continue;
-        }
-        let syn::Meta::List(list) = &attr.meta else {
-            continue;
-        };
-        let text = list.tokens.to_string();
-        let names_test = text
-            .split(|c: char| !c.is_alphanumeric() && c != '_')
-            .any(|word| word == "test");
-        if names_test {
-            return Some(text);
-        }
-    }
-    None
-}
-
-/// Project the CallF family: one def node per callable (Free / Method / Lambda)
-/// + one site per call expression. Port of v5 `rust_call_{defs,sites}_from`.
+/// Project the CallF family: one def node per callable (Free / Method / Lambda
+/// / ConstInit) + one site per call expression. Port of v5
+/// `rust_call_{defs,sites}_from` + `CallCollector`.
 fn project_call(
     parsed: &syn::File,
     line_starts: &[u32],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    let mut defs = RustCallDefs {
-        line_starts,
-        out: Vec::new(),
-    };
-    let mut owners = Vec::new();
-    let mut scopes: Vec<(Span, String)> = Vec::new();
-    call_defs_in_items(
-        &parsed.items,
-        line_starts,
-        &mut defs,
-        &mut owners,
-        &mut scopes,
-        None,
-    );
-    for def in defs.out {
-        let mut node = Node::new(def.span, def.kind);
-        if let Some(name) = def.name {
-            node = node.with_name(strings.intern(&name));
-        }
-        sink.nodes.push(node);
-    }
-    for (span, predicate) in scopes {
-        sink.aux.cfg_scopes.push(CfgScope {
-            span,
-            cfg: strings.intern(&predicate),
-        });
-    }
-    for owner in owners {
-        sink.aux.method_owners.push(MethodOwner {
-            span: owner.span,
-            self_type: owner.self_type.map(|name| strings.intern(&name)),
-            trait_name: owner.trait_name.map(|name| strings.intern(&name)),
-        });
-    }
-
-    // Sites: one walk over the whole file for every call/method-call/struct-literal
-    // expression. The callee is the trailing name as written (unresolved in phase
-    // 1). Port of v5's CallCollector.
+    // Defs snapshot before the walk: a CONST_INIT is minted only when its
+    // initializer's calls escape the engine's own def spans.
+    let defs: Vec<Span> = sink.nodes.iter().map(|node| node.span).collect();
     let mut collector = CallCollector {
         line_starts,
         sites: Vec::new(),
         under_cfg: None,
+        defs: &defs,
+        const_inits: Vec::new(),
+        in_block: false,
     };
     syn::visit::visit_file(&mut collector, parsed);
+    // Mint the CONST_INIT defs in walk order, before metadata reads the node
+    // set: a gated const's cfg row is admitted by its own CONST_INIT node.
+    for (span, name) in collector.const_inits.drain(..) {
+        sink.nodes
+            .push(Node::new(span, CONST_INIT).with_name(strings.intern(&name)));
+    }
+    syn_call_metadata(parsed, line_starts, strings, sink);
+
     for (callee, predicate) in test_only_calls(&collector.sites) {
         sink.aux.test_only_calls.push(TestOnlyCall {
             callee: strings.intern(&callee),
@@ -2002,49 +1786,6 @@ pub(crate) fn mod_path_attr(attrs: &[syn::Attribute]) -> Option<String> {
     })
 }
 
-/// One collected def before it is interned into the bundle.
-struct CollectedDef {
-    span: Span,
-    name: Option<String>,
-    kind: CallKind,
-}
-
-/// Walks callable bodies for the callables the top-level driver misses: nested
-/// named fns (Free) and closures (Lambda). Port of v5 `RustCallDefs` (the sym
-/// stack is dropped: v6 needs no enclosing sym for a lambda def).
-struct RustCallDefs<'a> {
-    line_starts: &'a [u32],
-    out: Vec<CollectedDef>,
-}
-
-impl<'a> RustCallDefs<'a> {
-    fn push(&mut self, span: Span, name: Option<String>, kind: CallKind) {
-        self.out.push(CollectedDef { span, name, kind });
-    }
-}
-
-impl<'ast, 'a> syn::visit::Visit<'ast> for RustCallDefs<'a> {
-    // A nested named fn (`fn helper() {}` inside a body). File-level identity
-    // (df does not lift nested-fn bodies, so no owner-scoped sym to match). Port
-    // of v5 visit_item_fn.
-    fn visit_item_fn(&mut self, function: &'ast syn::ItemFn) {
-        let span = def_span(
-            self.line_starts,
-            function.sig.ident.span(),
-            function.block.span(),
-        );
-        self.push(span, Some(function.sig.ident.to_string()), CallKind::Free);
-        syn::visit::visit_item_fn(self, function);
-    }
-    // A closure (`|x| ...`). The def span covers the closure body so a call inside
-    // it binds to this lambda by containment. Port of v5 visit_expr_closure.
-    fn visit_expr_closure(&mut self, closure: &'ast syn::ExprClosure) {
-        let span = def_span(self.line_starts, closure.span(), closure.body.span());
-        self.push(span, None, CallKind::Lambda);
-        syn::visit::visit_expr_closure(self, closure);
-    }
-}
-
 /// One collected call site before it is interned into the aux. `cfg` is the
 /// enclosing cfg predicate naming `test`, at any item depth above the call.
 struct CollectedSite {
@@ -2072,13 +1813,22 @@ fn test_only_calls(sites: &[CollectedSite]) -> Vec<(String, String)> {
         .collect()
 }
 
-/// Walks the whole file for call expressions (`f(x)`, `recv.m(x)`, `Foo { .. }`).
-/// Port of v5 `CallCollector`.
+/// Walks the whole file for call expressions (`f(x)`, `recv.m(x)`, `Foo { .. }`)
+/// and mints a CONST_INIT def for every file- or mod-scope const/static whose
+/// initializer calls escape the engine's def spans. Port of v5 `CallCollector`
+/// plus v5's const-init supplement.
 struct CallCollector<'a> {
     line_starts: &'a [u32],
     sites: Vec<CollectedSite>,
     /// The cfg predicate the walk currently sits under, restored on the way out.
     under_cfg: Option<String>,
+    /// Engine def spans snapshotted before the walk: a site inside one is owned.
+    defs: &'a [Span],
+    /// CONST_INIT candidates in walk order: the def span and the ident text.
+    const_inits: Vec<(Span, String)>,
+    /// True inside any block, so only file- and inline-mod-scope items mint
+    /// CONST_INIT (a const in a fn body never did).
+    in_block: bool,
 }
 
 impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
@@ -2088,8 +1838,44 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
         let outer = self.under_cfg.take();
         let own = cfg_test_predicate(item_attrs(item));
         self.under_cfg = outer.clone().or(own);
+        // Sites pushed while the item's subtree is walked are exactly its
+        // initializer's calls; the expr filter drops any type-position ones
+        // (e.g. an array length) the old expr-only walk never saw.
+        let candidate = match item {
+            syn::Item::Const(item) if !self.in_block => {
+                Some((item.ident.span(), &item.expr, item.ident.to_string()))
+            }
+            syn::Item::Static(item) if !self.in_block => {
+                Some((item.ident.span(), &item.expr, item.ident.to_string()))
+            }
+            _ => None,
+        };
+        let mark = self.sites.len();
         syn::visit::visit_item(self, item);
+        if let Some((ident, expr, name)) = candidate {
+            let init = syn_span(self.line_starts, expr.span());
+            if self.sites[mark..]
+                .iter()
+                .filter(|site| init.start <= site.span.start && site.span.end() <= init.end())
+                .any(|site| {
+                    !self
+                        .defs
+                        .iter()
+                        .any(|span| span.start <= site.span.start && site.span.end() <= span.end())
+                })
+            {
+                self.const_inits
+                    .push((def_span(self.line_starts, ident, expr.span()), name));
+            }
+        }
         self.under_cfg = outer;
+    }
+
+    fn visit_block(&mut self, block: &'ast syn::Block) {
+        let outer = self.in_block;
+        self.in_block = true;
+        syn::visit::visit_block(self, block);
+        self.in_block = outer;
     }
 
     fn visit_expr(&mut self, expr: &'ast syn::Expr) {
@@ -2157,15 +1943,6 @@ fn is_variant_literal_path(path: &syn::Path) -> bool {
             .chars()
             .next()
             .is_some_and(char::is_uppercase)
-}
-
-/// Render a syn::Path as `a::b::c`. Port of v5 `path_string`.
-fn path_string(path: &syn::Path) -> String {
-    path.segments
-        .iter()
-        .map(|segment| segment.ident.to_string())
-        .collect::<Vec<_>>()
-        .join("::")
 }
 
 /// Strip nested `Expr::Paren` to find the inner expression. Port of v5
@@ -3275,18 +3052,26 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// RustSource: the Rust Source (cst via ast-grep + type/call/df via syn).
+// RustSource: the Rust Source (cst via the shared tree-sitter walk + type/call/df via syn).
 //
-// The two-parser, masked shape (mirrors TsSource). cst runs through ast-grep
+// The two-parser, masked shape (mirrors TsSource). cst runs through the shared
 // (one dep = the CST floor for every lang); type/call/df run through ONE syn
 // parse (three masked projections over the same tree). ONE shared `Strings`
 // across all four families.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// Re-runs `project_call` over `rust_mbe::expand_file`'s spliced text, folding
+fn rust_call_query() -> &'static hafley_scm::QueryExt {
+    static QUERY: LazyLock<hafley_scm::QueryExt> = LazyLock::new(|| {
+        let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+        hafley_scm::build(&language, RUST_CALL_QUERY).expect("rust call query builds")
+    });
+    &QUERY
+}
+
+/// Re-runs `project_call` over `hafley_scm::lang::rust::expand_file`'s spliced text, folding
 /// in only the defs/sites born inside a macro expansion, span-mapped back.
 fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut FamilyBundle<CallF>) {
-    let Some(expanded) = super::rust_mbe::expand_file(src) else {
+    let Some(expanded) = hafley_scm::lang::rust::expand_file(src) else {
         return;
     };
     let Ok(expanded_parsed) = syn::parse_file(&expanded.text) else {
@@ -3294,6 +3079,20 @@ fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut Family
     };
     let expanded_line_starts = build_line_starts(&expanded.text);
     let mut expanded_bundle = FamilyBundle::<CallF>::default();
+    let mut parser = tree_sitter::Parser::new();
+    parser
+        .set_language(&tree_sitter::Language::new(tree_sitter_rust::LANGUAGE))
+        .expect("rust grammar");
+    let Some(tree) = parser.parse(expanded.text.as_bytes(), None) else {
+        return;
+    };
+    scm_call_defs(
+        rust_call_query(),
+        expanded.text.as_bytes(),
+        &tree,
+        strings,
+        &mut expanded_bundle,
+    );
     project_call(
         &expanded_parsed,
         &expanded_line_starts,
@@ -3307,7 +3106,10 @@ fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut Family
             continue;
         }
         if let Some(mapped) = expanded.map_span(range) {
-            node.span = mapped;
+            node.span = Span {
+                start: mapped.start,
+                len: mapped.end - mapped.start,
+            };
             bundle.nodes.push(node);
         }
     }
@@ -3317,20 +3119,26 @@ fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut Family
             continue;
         }
         if let Some(mapped) = expanded.map_span(range) {
-            site.span = mapped;
+            site.span = Span {
+                start: mapped.start,
+                len: mapped.end - mapped.start,
+            };
             bundle.aux.sites.push(site);
         }
     }
     for (span, name) in expanded.macro_sites() {
         bundle.aux.macro_sites.push(MacroSite {
-            span,
+            span: Span {
+                start: span.start,
+                len: span.end - span.start,
+            },
             macro_name: strings.intern(name),
             source: MacroSiteSource::Mbe,
         });
     }
 }
 
-/// The Rust `Source`. `matches` = the path ends in `.rs`. cst via ast-grep's rust
+/// The Rust `Source`. `matches` = the path ends in `.rs`. cst via the shared
 /// grammar; type/call/df/const via one `syn::parse_file`.
 #[derive(Default)]
 pub struct RustSource;
@@ -3379,24 +3187,18 @@ impl Source for RustSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). ast-grep's SupportLang has a rust grammar, so
-        // a .rs parses losslessly. Owns its () arena; dropped at block end. A failed
-        // ast-grep parse leaves cst None (no panic).
+        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
+        // A refused parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let arena = AstGrepParser.make_arena();
-            let parsed = {
-                let span = trace::parse_span("rust", "astgrep");
-                let _entered = span.enter();
-                AstGrepParser.parse(&arena, path, content).ok()
-            };
-            parsed.map(|parsed| {
-                let span = trace::family_span("rust", "cst");
-                let _entered = span.enter();
-                let mut bundle = FamilyBundle::<CstF>::default();
-                CstProjector.project(&parsed, &mut strings, &mut bundle);
-                trace::record_bundle(&span, &bundle, 0);
-                bundle
-            })
+            let parse_span = trace::parse_span("rust", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            let span = trace::family_span("rust", "cst");
+            let _entered = span.enter();
+            let bundle = cst_bundle(path, content, &mut strings);
+            if let Some(bundle) = &bundle {
+                trace::record_bundle(&span, bundle, 0);
+            }
+            bundle
         } else {
             None
         };
@@ -3429,6 +3231,12 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "call");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<CallF>::default();
+                        let mut parser = tree_sitter::Parser::new();
+                        parser
+                            .set_language(&tree_sitter::Language::new(tree_sitter_rust::LANGUAGE))
+                            .expect("rust grammar");
+                        let tree = parser.parse(content, None).expect("rust tree");
+                        scm_call_defs(rust_call_query(), content, &tree, &mut strings, &mut bundle);
                         project_call(&parsed, &line_starts, &mut strings, &mut bundle);
                         splice_macro_expansions(src, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());

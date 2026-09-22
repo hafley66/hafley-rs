@@ -21,7 +21,7 @@ use crate::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
 use super::rust::{
     build_line_starts, def_span, mod_path_attr, module_segments, module_target, syn_span,
-    variant_def_span,
+    variant_def_range,
 };
 use super::rust_receivers::{impl_facts, ImplEntry};
 
@@ -196,8 +196,15 @@ fn collect(items: &[syn::Item], line_starts: &[u32], facts: &mut RustModuleFacts
                     .variants
                     .iter()
                     .filter_map(|variant| {
-                        variant_def_span(line_starts, variant)
-                            .map(|span| (variant.ident.to_string(), span))
+                        variant_def_range(line_starts, variant).map(|(start, end)| {
+                            (
+                                variant.ident.to_string(),
+                                Span {
+                                    start,
+                                    len: end - start,
+                                },
+                            )
+                        })
                     })
                     .collect();
                 facts.enums.push((enum_item.ident.to_string(), variants));

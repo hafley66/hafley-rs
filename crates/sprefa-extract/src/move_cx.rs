@@ -2,7 +2,7 @@
 //! the batch every `Rehome` impl answers against. No language is named here.
 //! @comment-ok: module header, the seam list every move file opens with
 //!
-//! BUY NOTE. `ignore` 0.4.33 is already in this lock (an ast-grep transitive)
+//! BUY NOTE. `ignore` 0.4.33 is already in this lock
 //! and its `WalkBuilder` is the walker soopy itself uses
 //! (`soopy/src/_3a_files.rs:6`). soopy's own `DirectoryRoot::snapshot` hashes
 //! every file it visits (`soopy/src/_3a_files.rs:29-80`), which a path-only

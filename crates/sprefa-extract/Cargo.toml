@@ -33,17 +33,11 @@ mimalloc = { version = "0.1", optional = true }
 
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The directory walker soopy itself uses (`soopy/src/_3a_files.rs:6`), already in
-# this lock as an ast-grep transitive, so the pin adds no copy. soopy's own
+# this lock, so the pin adds no copy. soopy's own
 # `DirectoryRoot::snapshot` hashes every file it visits, which a path-only move
 # corpus scan must not pay; `walkdir` is `ignore`'s own dependency with no
 # filter_entry-by-name convenience. The move corpus walk is the one caller.
 ignore = "0.4"
-# ast-grep-language ships the tree-sitter grammars for rust/ts/tsx/js/go in ONE
-# dep; ast-grep-core is the parse + Node API. v5 carried these v0 -> v6 (src/sg.rs).
-# Ported verbatim, not relitigated.
-ast-grep-core = "0.38"
-ast-grep-language = "0.38"
-ast-grep-config = "0.38"
 # oxc arena AST front-end for TS/JS (v5 carried these; src/graph/typegraph/ts).
 # The Program<'a> borrows the Allocator + source text, so parse ties content to
 # 'a (the GAT seam). Commit 2b: TypeF entities; commit 2c: the arrow-type sigs
@@ -74,15 +68,8 @@ oxc_resolver = "11.24"
 # in lang/rust.rs.
 syn = { version = "2", features = ["full", "visit", "parsing", "extra-traits"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
-# In-process macro_rules expander, plans/extract-macro-lab-2026-08-29/PLAN.md
-# Option 1. Versions pinned to the lab's, commit dae353d75.
+# ra_ap_syntax and salsa remain for the optional rust checker tier.
 ra_ap_syntax = "0.0.349"
-ra_ap_mbe = "0.0.349"
-ra_ap_tt = "0.0.349"
-ra_ap_parser = "0.0.349"
-ra_ap_span = "0.0.349"
-ra_ap_syntax-bridge = "0.0.349"
-ra_ap_intern = "0.0.349"
 salsa = { version = "0.28.2", default-features = false, features = ["macros", "rayon"] }
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The rust CHECKER tier: rust-analyzer's own name resolution and type inference,
@@ -101,21 +88,22 @@ ra_ap_load-cargo = { version = "0.0.349", optional = true }
 ra_ap_project_model = { version = "0.0.349", optional = true }
 ra_ap_vfs = { version = "0.0.349", optional = true }
 # tree-sitter is the Go AST front-end v5 carried (src/graph/typegraph/go.rs).
-# These versions match what ast-grep-language already transitively pulls
-# (tree-sitter 0.25.10 + tree-sitter-go 0.23.4), so cargo UNIFIES them: one copy
-# each, no dupes. tree-sitter-go 0.23 exports `LANGUAGE: LanguageFn`, which
+# Byte-identical with the versions this lock already carried when they became
+# direct, so the lock did not move: one copy each. The same story holds for the
+# other grammar crates below. tree-sitter-go 0.23 exports `LANGUAGE: LanguageFn`,
+# which
 # tree-sitter 0.25's `Language::new` wraps (v5's exact `go_parse` shape). Byte
 # spans come straight off the nodes (`start_byte`/`end_byte`); no line/col bridge.
 tree-sitter = "0.25"
 tree-sitter-go = "0.23"
-# tree-sitter-python is the Python front-end v5 carried; already a strict
-# ast-grep-language transitive (0.23.6), so cargo unifies it: one copy, no dupe.
+# tree-sitter-python is the Python front-end v5 carried; already in the lock
+# when it became direct, so cargo unifies it: one copy, no dupe.
 tree-sitter-python = "0.23"
 # tree-sitter-kotlin-sg is the Kotlin AST front-end v5 carried
 # (src/graph/typegraph/kotlin.rs; root Cargo.toml pins the same crate, so the v6
 # parse is byte-identical to the v5 oracle's). It is ALREADY in this lock as an
-# ast-grep-language transitive (0.4.1), exports `LANGUAGE: LanguageFn` like
-# tree-sitter-go 0.23, and deps only `tree-sitter-language` + `cc` (no
+# (0.4.1), exports `LANGUAGE: LanguageFn` like tree-sitter-go 0.23, and deps
+# only `tree-sitter-language` + `cc` (no
 # tree-sitter core): cargo UNIFIES it, one copy, no dupes.
 tree-sitter-kotlin-sg = "0.4"
 # MIT superset grammar for ISO Prolog plus the SWI/DCG/ProbLog syntax used by
@@ -123,8 +111,8 @@ tree-sitter-kotlin-sg = "0.4"
 tree-sitter-prolog = "0.1"
 # The `data` family's three grammars, v5's `src/datapath.rs` plane ported.
 # yaml/toml-ng match v5's own pins (root Cargo.toml:129-130). json is 0.23, NOT
-# v5's 0.24 (root Cargo.toml:108): 0.23.0 is already an ast-grep-language
-# transitive here, and `cargo tree -d` on a 0.24 pin listed tree-sitter-json
+# v5's 0.24 (root Cargo.toml:108): 0.23.0 was already in the lock when it
+# became direct, and `cargo tree -d` on a 0.24 pin listed tree-sitter-json
 # TWICE (0.23.0 + 0.24.8) against zero copies on 0.23. JSON's node vocabulary
 # (object/pair/array/string/number/true/false/null) is identical across the two,
 # and no v5 oracle facet judges this plane.
@@ -139,15 +127,14 @@ tree-sitter-toml-ng = "0.7"
 
 # `md` exposes LANGUAGE, `md_inline` INLINE_LANGUAGE; both drop in unchanged.
 tree-sitter-md = "0.5"
-# tree-sitter-html is the html front-end; already a strict transitive of
-# ast-grep-language at 0.23.2, so cargo UNIFIES one copy, no new tree-sitter.
+# tree-sitter-html is the html front-end (the FallbackSource grammar); already
+# in the lock when it became direct, so cargo UNIFIES one copy, no new
+# tree-sitter.
 tree-sitter-html = "0.23"
 # tree-sitter-gdscript is the GDScript front-end (Godot's `.gd`). Adjudication
 # against THIS lock: tree-sitter-gdscript 6.1.0, +1 crate, deps only
 # tree-sitter-language + cc (no tree-sitter core). Nothing cheaper exists:
-# ast-grep-language 0.38.7's SupportLang carries no gdscript variant
-# (lib.rs:240-263), so the cst-only AstgrepSource fallback cannot take the
-# extension. ABI 14, inside the 13..=15 window tree-sitter 0.25.10 accepts
+# (lib.rs:240-263), so the cst-only FallbackSource cannot take the extension. ABI 14, inside the 13..=15 window tree-sitter 0.25.10 accepts
 # (lib.rs:663-668), and it exports `LANGUAGE: LanguageFn` like tree-sitter-go.
 tree-sitter-gdscript = "6"
 # tree-sitter-commonlisp is the Lisp front-end. Candidates measured against this
@@ -161,25 +148,22 @@ tree-sitter-gdscript = "6"
 # not to `LANGUAGE`), ABI 14. SupportLang has no lisp variant, so no fallback
 # route exists here either.
 tree-sitter-commonlisp = "0.4"
-# @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
-# tree-sitter-tsquery is the grammar for the `.scm` query surface itself, the
-# parse side of lang/5_scm_lower.rs. Candidates measured against THIS lock:
-# tree-sitter-tsquery 0.8.0 (tree-sitter-grammars/tree-sitter-query, published
-# 2025-11-27), +1 crate, deps only tree-sitter-language + cc, with tree-sitter
-# 0.25.3 dev-only: the same shape tree-sitter-gdscript and tree-sitter-commonlisp
-# already hold here. REJECTED: tree-sitter-query 0.1.0, which carries a normal
-# `tree-sitter ^0.20.9` edge, i.e. a SECOND core copy, the criterion line 157
-# used to reject tree-sitter-clojure; tree-sitter-tsq 0.19.0, abandoned upstream.
-# A hand-written S-expression reader is the third candidate and loses to both:
-# the query surface has quantifiers, predicates, anchors, and negated fields that
-# a paren reader would re-derive. ABI is railed by tests/144_scm_lower.rs against
-# the 13..=15 window tree-sitter 0.25.10 accepts (lib.rs:663-668).
-tree-sitter-tsquery = "0.8"
+# tree-sitter-rust 0.24.2 is ALREADY in this lock
+# transitive, so the direct pin unifies to one copy and adds no grammar.
+tree-sitter-rust = "0.24"
+# tree-sitter-typescript ships BOTH the typescript and tsx grammars
+# (LANGUAGE_TYPESCRIPT / LANGUAGE_TSX); tree-sitter-javascript covers .js/.jsx.
+# One dep each for BOTH ts grammars; the plain-javascript grammar covers
+# .js/.jsx.
+tree-sitter-typescript = "0.23"
+tree-sitter-javascript = "0.23"
+# The `.scm` engine the Rust CallF defs run through: `#has-ancestor?`/`#has?`
+# over a native tree-sitter query, one MatchArena per run.
+hafley_scm = { path = "../hafley_scm" }
 # serde on the FLAT wire envelope only (never on the generic Node<F>). The store
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-serde_yaml = "0.9"
 # basic-toml reads Cargo.toml for the package_edge arm. Candidates measured into
 # THIS lock: basic-toml +1 crate (serde only, already here), toml 1.1 +4
 # (toml_datetime/toml_parser/toml_writer/serde_spanned), cargo-manifest +14.
@@ -208,7 +192,7 @@ soopy = { path = "../soopy" }
 prost = "0.13"
 # @comment-ok: build-vs-buy candidate table, the law this file's every dep
 # comment already carries.
-# The read side of the dl6 store, behind `FactMatcher`. Same 0.40 pin and
+# The read side of the dl6 store, behind `FactSet`. Same 0.40 pin and
 # `bundled` build sprefa-engine-rs carries (its Cargo.toml:13), so one process
 # linking both gets one SQLite. REJECTED: that crate's own `SqliteSeam`
 # (run.rs:289) - it already depends on this one (its Cargo.toml:31), so reuse is
@@ -290,4 +274,3 @@ rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
 [profile.dist]
 inherits = "release"
 lto = "thin"
-

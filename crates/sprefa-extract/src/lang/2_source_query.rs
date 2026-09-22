@@ -1,23 +1,20 @@
-//! One library entrypoint for source queries backed by tree-sitter or ast-grep.
+//! One library entrypoint for source queries backed by tree-sitter.
 //!
-//! This facade preserves each engine's current result shape. Canonical source
-//! occurrence, match, and capture facts belong to the later normalization
-//! boundary and are intentionally absent here.
+//! The query compiles and runs through the shared `hafley_scm` engine: native
+//! tree-sitter text predicates (`eq?`, `not-eq?`, `match?`, `not-match?`,
+//! `any-of?`, and their `any-`/`not-any-` forms) evaluate on the cursor, host
+//! predicates (`has-ancestor?`, `has-parent?`, `has?`, `contains?`, and the
+//! generic `not-` forms) evaluate in the arena fill, and unknown predicates
+//! are build errors. Canonical source occurrence, match, and capture facts
+//! belong to the later normalization boundary and are intentionally absent
+//! here.
 
 use std::collections::BTreeMap;
 
-use ast_grep_language::LanguageExt;
 use serde::Serialize;
 use serde_json::Value;
-use tree_sitter::{
-    Parser as TreeParser, Query, QueryCursor, QueryPredicate, QueryPredicateArg, StreamingIterator,
-};
+use tree_sitter::Parser as TreeParser;
 
-use super::{
-    query_ast_rule, query_patterns, AstCaptureFact, AstPatternQuery, AstRuleError, AstRuleMatch,
-    AstRuleRequest,
-};
-use crate::seams::ParseError;
 
 /// A tree-sitter query keeps the native S-expression and explicit grammar name.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
@@ -31,8 +28,6 @@ pub struct TreeSitterQuery {
 #[serde(tag = "engine", content = "specification", rename_all = "snake_case")]
 pub enum SourceQuery {
     TreeSitter(TreeSitterQuery),
-    AstPatterns(Vec<AstPatternQuery>),
-    AstRule(AstRuleRequest),
 }
 
 /// The existing tree-sitter CLI row: capture names map to captured text, with
@@ -65,15 +60,10 @@ pub struct TreeSitterSpannedMatch {
 #[derive(Clone, Debug, PartialEq)]
 pub enum SourceQueryOutput {
     TreeSitter(Vec<TreeSitterQueryMatch>),
-    AstPatterns(Vec<AstCaptureFact>),
-    AstRule(Vec<AstRuleMatch>),
 }
-
 #[derive(Debug)]
 pub enum SourceQueryError {
     TreeSitter(String),
-    AstPatterns(ParseError),
-    AstRule(AstRuleError),
     Projection(String),
 }
 
@@ -81,8 +71,6 @@ impl std::fmt::Display for SourceQueryError {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::TreeSitter(error) => formatter.write_str(error),
-            Self::AstPatterns(error) => std::fmt::Display::fmt(error, formatter),
-            Self::AstRule(error) => std::fmt::Display::fmt(error, formatter),
             Self::Projection(error) => formatter.write_str(error),
         }
     }
@@ -92,7 +80,6 @@ impl std::error::Error for SourceQueryError {}
 
 /// Dispatch one query against caller-owned source bytes.
 pub fn query_source(
-    path: &str,
     content: &[u8],
     query: &SourceQuery,
 ) -> Result<SourceQueryOutput, SourceQueryError> {
@@ -100,12 +87,6 @@ pub fn query_source(
         SourceQuery::TreeSitter(query) => query_tree_sitter(content, query)
             .map(SourceQueryOutput::TreeSitter)
             .map_err(SourceQueryError::TreeSitter),
-        SourceQuery::AstPatterns(queries) => query_patterns(path, content, queries)
-            .map(SourceQueryOutput::AstPatterns)
-            .map_err(SourceQueryError::AstPatterns),
-        SourceQuery::AstRule(request) => query_ast_rule(path, content, request)
-            .map(SourceQueryOutput::AstRule)
-            .map_err(SourceQueryError::AstRule),
     }
 }
 
@@ -129,229 +110,119 @@ pub fn query_tree_sitter(
     })
 }
 
-/// Run a native tree-sitter query while retaining the spans and ordering that
-/// the shared source-fact projection needs.
+/// Run a native tree-sitter query through the shared `hafley_scm` engine,
+/// retaining the spans and ordering that the shared source-fact projection
+/// needs. One `QueryExt` per request, one `MatchArena` per run.
 pub fn query_tree_sitter_spans(
     content: &[u8],
     request: &TreeSitterQuery,
 ) -> Result<Vec<TreeSitterSpannedMatch>, String> {
     let language = query_language(&request.language)?;
-    let source = std::str::from_utf8(content)
+    std::str::from_utf8(content)
         .map_err(|error| format!("query input is not valid UTF-8: {error}"))?;
     let mut parser = TreeParser::new();
     parser
         .set_language(&language)
         .map_err(|error| format!("invalid language '{}': {error:?}", request.language))?;
     let tree = parser
-        .parse(source, None)
+        .parse(content, None)
         .ok_or_else(|| "query parse failed: source tree was not produced".to_string())?;
-    let query_text = rewrite_predicates(&request.query);
-    let query = Query::new(&language, &query_text).map_err(|error| {
-        one_line_text(format!(
-            "invalid query at row {}: {error}",
-            error.row.saturating_add(1)
-        ))
-    })?;
-    validate_predicates(&query)?;
-    collect_spanned_matches(&query, tree.root_node(), source.as_bytes())
+    let query = hafley_scm::build(&language, &request.query)
+        .map_err(|error| one_line_text(query_error_text(&error)))?;
+    let mut arena = hafley_scm::MatchArena::default();
+    // The fresh-cursor default this facade always ran with; the engine's
+    // limit check cannot fire at u32::MAX.
+    hafley_scm::run(&query, "", content, &tree, u32::MAX, &mut arena)
+        .map_err(|error| one_line_text(query_error_text(&error)))?;
+    project_match_arena(&query, &arena, content)
 }
 
 /// Every language the `Source` roster can parse, through the one name table
 /// `RyiLang::parse_name` owns. A name this rejects reaches no grammar at all.
 fn query_language(name: &str) -> Result<tree_sitter::Language, String> {
     crate::lang::extract_lang::RyiLang::parse_name(name)
-        .map(|lang| lang.get_ts_language())
+        .map(|lang| lang.tree_sitter_language())
         .ok_or_else(|| format!("unknown lang '{name}'"))
 }
 
-fn validate_predicates(query: &Query) -> Result<(), String> {
-    for pattern in 0..query.pattern_count() {
-        for predicate in query.general_predicates(pattern) {
-            match predicate.operator.as_ref() {
-                "sprefa-match?" | "sprefa-not-match?" => validate_match_predicate(predicate)?,
-                "sprefa-eq?" => validate_eq_predicate(predicate)?,
-                operator => {
-                    return Err(format!(
-                        "invalid query: predicate #{operator} is not allowed"
-                    ));
-                }
-            }
-        }
-    }
-    Ok(())
-}
-
-fn validate_match_predicate(predicate: &QueryPredicate) -> Result<(), String> {
-    let [QueryPredicateArg::Capture(_), QueryPredicateArg::String(pattern)] = &*predicate.args
-    else {
-        return Err(format!(
-            "invalid query: predicate #{} expects a capture and a string",
-            predicate.operator
-        ));
-    };
-    regex::bytes::Regex::new(pattern)
-        .map(|_| ())
-        .map_err(|error| format!("invalid query: regex: {error}"))
-}
-
-fn validate_eq_predicate(predicate: &QueryPredicate) -> Result<(), String> {
-    match &*predicate.args {
-        [QueryPredicateArg::Capture(_), QueryPredicateArg::Capture(_)]
-        | [QueryPredicateArg::Capture(_), QueryPredicateArg::String(_)] => Ok(()),
-        _ => Err(format!(
-            "invalid query: predicate #{} expects two arguments",
-            predicate.operator
-        )),
-    }
-}
-
-fn collect_spanned_matches(
-    query: &Query,
-    root: tree_sitter::Node<'_>,
-    source: &[u8],
+/// Project one arena of native SCM matches into the legacy spanned rows.
+/// The arena retains no tree nodes, only capture byte ranges and name
+/// indices, so one-based lines come from one line-start table over the
+/// source bytes instead of node positions.
+fn project_match_arena(
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
+    content: &[u8],
 ) -> Result<Vec<TreeSitterSpannedMatch>, String> {
-    let names = query.capture_names();
-    let mut cursor = QueryCursor::new();
-    let mut matches = cursor.matches(query, root, source);
-    let mut rows = Vec::new();
-    while let Some(found) = matches.next() {
-        if found.captures.is_empty() || !matches_predicates(query, found, source)? {
+    let starts = line_starts(content);
+    let line_of = |offset: u32| starts.partition_point(|&line_start| line_start <= offset) as u32;
+    let mut rows = Vec::with_capacity(arena.rows.len());
+    for row in &arena.rows {
+        let spans = &arena.spans[row.spans.start as usize..row.spans.end as usize];
+        if spans.is_empty() {
+            // The legacy cursor loop dropped matches whose pattern captured
+            // nothing; the arena keeps every engine match, so the projection
+            // keeps dropping them.
             continue;
         }
-        let mut captures = Vec::with_capacity(found.captures.len());
+        let mut captures = Vec::with_capacity(spans.len());
         let mut start = u32::MAX;
         let mut end = 0;
-        let mut line = u32::MAX;
-        let mut end_line = 1;
-        for capture in found.captures {
-            let node = capture.node;
-            let name = names[capture.index as usize];
-            let text = node
-                .utf8_text(source)
-                .map_err(|error| format!("query capture text: {error}"))?;
-            let capture_start = u32::try_from(node.start_byte())
-                .map_err(|_| "query capture start exceeds u32".to_string())?;
-            let capture_end = u32::try_from(node.end_byte())
-                .map_err(|_| "query capture end exceeds u32".to_string())?;
+        for span in spans {
+            let text = std::str::from_utf8(
+                content
+                    .get(span.bytes.start as usize..span.bytes.end as usize)
+                    .ok_or("query capture range is out of bounds")?,
+            )
+            .map_err(|error| format!("query capture text: {error}"))?;
             captures.push(TreeSitterSpannedCapture {
-                label: name.to_string(),
+                label: query.names[span.name as usize].to_string(),
                 text: text.to_string(),
-                start: capture_start,
-                end: capture_end,
+                start: span.bytes.start,
+                end: span.bytes.end,
             });
-            start = start.min(capture_start);
-            end = end.max(capture_end);
-            line = line.min(node.start_position().row as u32 + 1);
-            end_line = end_line.max(node.end_position().row as u32 + 1);
+            start = start.min(span.bytes.start);
+            end = end.max(span.bytes.end);
         }
         rows.push(TreeSitterSpannedMatch {
-            pattern: found.pattern_index as u32,
-            start: if start == u32::MAX { 0 } else { start },
+            pattern: u32::from(row.pattern),
+            start,
             end,
-            line: if line == u32::MAX { 1 } else { line },
-            end_line,
+            line: line_of(start),
+            end_line: line_of(end),
             captures,
         });
     }
     Ok(rows)
 }
 
-/// A match is gated by its OWN pattern's predicates. A predicate-free pattern
-/// has an empty slice here, which folds to true.
-fn matches_predicates(
-    query: &Query,
-    found: &tree_sitter::QueryMatch<'_, '_>,
-    source: &[u8],
-) -> Result<bool, String> {
-    query
-        .general_predicates(found.pattern_index)
-        .iter()
-        .try_fold(true, |matched, predicate| {
-            Ok(matched && predicate_matches(predicate, found, source)?)
-        })
+/// One line-start offset per line, built in one pass; `line_of` bisects it.
+fn line_starts(content: &[u8]) -> Vec<u32> {
+    let mut starts = vec![0u32];
+    starts.extend(memchr::memchr_iter(b'\n', content).map(|newline| newline as u32 + 1));
+    starts
 }
 
-fn predicate_matches(
-    predicate: &QueryPredicate,
-    found: &tree_sitter::QueryMatch<'_, '_>,
-    source: &[u8],
-) -> Result<bool, String> {
-    let capture_texts = |index: u32| {
-        found
-            .captures
-            .iter()
-            .filter(|capture| capture.index == index)
-            .map(|capture| capture.node.utf8_text(source).unwrap_or("").as_bytes())
-            .collect::<Vec<_>>()
-    };
-    match predicate.operator.as_ref() {
-        "sprefa-match?" | "sprefa-not-match?" => {
-            let [QueryPredicateArg::Capture(index), QueryPredicateArg::String(pattern)] =
-                &*predicate.args
-            else {
-                return Ok(false);
-            };
-            let regex = regex::bytes::Regex::new(pattern)
-                .map_err(|error| format!("invalid query: regex: {error}"))?;
-            let matches = capture_texts(*index)
-                .iter()
-                .all(|text| regex.is_match(text));
-            Ok(if predicate.operator.as_ref() == "sprefa-match?" {
-                matches
-            } else {
-                !matches
-            })
+/// One-line text for the engine's error shape, preserving the facade's
+/// historical wording where one exists.
+fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
+    match error {
+        hafley_scm::QueryExtError::Parse(error) => {
+            format!(
+                "invalid query at row {}: {error}",
+                error.row.saturating_add(1)
+            )
         }
-        "sprefa-eq?" => {
-            let [QueryPredicateArg::Capture(left), right] = &*predicate.args else {
-                return Ok(false);
-            };
-            let left = capture_texts(*left);
-            let right = match right {
-                QueryPredicateArg::Capture(index) => capture_texts(*index),
-                QueryPredicateArg::String(value) => vec![value.as_bytes()],
-            };
-            Ok(left.len() == right.len() && left.iter().zip(right).all(|(a, b)| *a == b))
+        hafley_scm::QueryExtError::UnknownOperator(operator) => {
+            format!("invalid query: predicate #{operator} is not allowed")
         }
-        _ => Ok(false),
-    }
-}
-
-fn rewrite_predicates(query: &str) -> String {
-    let mut output = String::with_capacity(query.len());
-    let mut index = 0;
-    let mut quoted = false;
-    let mut escaped = false;
-    while index < query.len() {
-        let rest = &query[index..];
-        if !quoted {
-            if let Some((from, to)) = [
-                ("#not-match?", "#sprefa-not-match?"),
-                ("#match?", "#sprefa-match?"),
-                ("#eq?", "#sprefa-eq?"),
-            ]
-            .into_iter()
-            .find(|(from, _)| rest.starts_with(from))
-            {
-                output.push_str(to);
-                index += from.len();
-                continue;
-            }
+        hafley_scm::QueryExtError::Arity { operator, got } => {
+            format!("invalid query: predicate #{operator} got {got} arguments")
         }
-        let character = rest.chars().next().unwrap();
-        output.push(character);
-        index += character.len_utf8();
-        if quoted && character == '"' && !escaped {
-            quoted = false;
-        } else if !quoted && character == '"' {
-            quoted = true;
-        }
-        escaped = quoted && character == '\\' && !escaped;
-        if character != '\\' {
-            escaped = false;
+        hafley_scm::QueryExtError::MatchLimit { file } => {
+            format!("query match limit exceeded on '{file}'")
         }
     }
-    output
 }
 
 fn one_line_text(text: String) -> String {

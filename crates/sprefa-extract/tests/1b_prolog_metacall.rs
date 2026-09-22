@@ -64,7 +64,7 @@ fn closure_slots_mint_sites_and_closure_references_in_clause_order() {
     let stdout = run(&["--family", "call", FIXTURE]);
     let sites = rows(&stdout, "site", "callee", "double/2");
     assert_eq!(sites.len(), 4, "all four meta slots mint a double/2 site");
-    let mut starts: Vec<u64> = sites.iter().map(|(_, s)| s.parse().unwrap()).collect();
+    let starts: Vec<u64> = sites.iter().map(|(_, s)| s.parse().unwrap()).collect();
     assert!(
         starts.windows(2).all(|w| w[0] < w[1]),
         "distinct spans in clause order: {starts:?}"

@@ -1,12 +1,13 @@
-//! The ast-grep -> soopy edit drain: byte spans, the one Replace per file, and
-//! the expected-hash precondition soopy checks before it derives any output.
+//! The soopy edit fold: byte spans into the ONE Replace per file, and the
+//! expected-hash precondition soopy checks before it derives any output.
 //!
 //! @comment-ok: sabotage receipt, repo law keeps these in TEST headers.
-//! SABOTAGE: `From<BoundEdit>` rewritten to `end: start` (deleted_length
-//! dropped, every edit a pure insertion) measured 4 failed / 4 passed, and
-//! `stage_edits_reaches_soopy_with_the_drained_spans` was one of the GREEN ones:
-//! reaching soopy judges nothing about span width, so the (start, end, bytes)
-//! assertions are what catch it.
+//! SABOTAGE (when the fold was `From<BoundEdit>`): the conversion rewritten to
+//! `end: start` (deleted_length dropped, every edit a pure insertion) measured
+//! 4 failed / 4 passed, and `stage_edits_reaches_soopy_with_the_folded_spans`
+//! was one of the GREEN ones: reaching soopy judges nothing about span width,
+//! so the (start, end, bytes) assertions are what catch it. The conversion is
+//! gone (the ast-grep drain it served is gone); the fold + stage receipts stay.
 //! FAIL-FIRST: `stale_expected_is_refused_by_stage` with `expected` hashed from
 //! the real on-disk bytes measured `Ok` at its `expect_err`, so it fails only
 //! on the wrong hash, which is the precondition the whole drain rests on.
@@ -14,13 +15,7 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
-use ast_grep_core::source::Edit;
-use ast_grep_core::tree_sitter::LanguageExt;
-use ast_grep_core::AstGrep;
-use ast_grep_language::SupportLang;
-use sprefa_extract::{
-    directory_source, drain_edits, replace_action, stage_edits, BoundEdit, PendingReplaceDoc,
-};
+use sprefa_extract::{directory_source, replace_action, stage_edits};
 
 const SRC: &str = "fn main() { foo(); foo(); }\n";
 const REL: &str = "src/main.rs";
@@ -33,18 +28,18 @@ fn detached_identity() -> soopy::DirectoryId {
     soopy::DirectoryId(Arc::from("test-directory"))
 }
 
-fn bind(source: &soopy::ActionSource, edits: Vec<Edit<String>>) -> Vec<soopy::TextEdit> {
-    edits
-        .into_iter()
-        .map(|edit| {
-            BoundEdit {
-                source: source.clone(),
-                producer: producer(),
-                edit,
-            }
-            .into()
-        })
-        .collect()
+/// The old drain's edit shape, built directly: (12, 17) and (19, 24) are the
+/// two `foo()` call spans in `SRC`.
+fn edit_at(source: &soopy::ActionSource, start: u64, replacement: &[u8]) -> soopy::TextEdit {
+    soopy::TextEdit {
+        range: soopy::ActionSpan {
+            source: source.clone(),
+            start,
+            end: start + 5,
+        },
+        replacement: replacement.to_vec(),
+        producer: producer(),
+    }
 }
 
 fn spans(action: &soopy::SourceAction) -> Vec<(u64, u64, String)> {
@@ -86,37 +81,15 @@ fn identity_of(root: &Path) -> soopy::DirectoryId {
 }
 
 #[test]
-fn bound_edit_maps_position_deleted_length_and_bytes() {
-    let source = directory_source(&detached_identity(), REL);
-    let edit: soopy::TextEdit = BoundEdit {
-        source: source.clone(),
-        producer: producer(),
-        edit: Edit {
-            position: 12,
-            deleted_length: 5,
-            inserted_text: b"bar()".to_vec(),
-        },
-    }
-    .into();
-
-    assert_eq!(edit.range.start, 12);
-    assert_eq!(edit.range.end, 17);
-    assert_eq!(edit.range.source, source);
-    assert_eq!(edit.replacement, b"bar()");
-    assert_eq!(edit.producer, producer());
-}
-
-#[test]
-fn replace_all_drains_into_one_replace_action_per_file() {
-    let grep = SupportLang::Rust.ast_grep(SRC);
-    let edits = grep.root().replace_all("foo()", "bar()");
-    assert_eq!(edits.len(), 2, "two call sites: {edits:?}");
-
+fn edits_fold_into_one_replace_action_per_file() {
     let source = directory_source(&detached_identity(), REL);
     let action = replace_action(
         source.clone(),
         soopy::ContentId::blake3(SRC.as_bytes()),
-        bind(&source, edits),
+        vec![
+            edit_at(&source, 12, b"bar()"),
+            edit_at(&source, 19, b"bar()"),
+        ],
     );
 
     let soopy::SourceAction::Replace {
@@ -139,86 +112,27 @@ fn replace_all_drains_into_one_replace_action_per_file() {
 #[test]
 fn duplicate_spans_collapse_to_one_edit() {
     let source = directory_source(&detached_identity(), REL);
-    let twice = vec![
-        Edit {
-            position: 12,
-            deleted_length: 5,
-            inserted_text: b"bar()".to_vec(),
-        },
-        Edit {
-            position: 12,
-            deleted_length: 5,
-            inserted_text: b"bar()".to_vec(),
-        },
-    ];
     let action = replace_action(
         source.clone(),
         soopy::ContentId::blake3(SRC.as_bytes()),
-        bind(&source, twice),
+        vec![edit_at(&source, 12, b"bar()"), edit_at(&source, 12, b"bar()")],
     );
 
     assert_eq!(spans(&action), vec![(12, 17, "bar()".to_string())]);
 }
 
 #[test]
-fn drain_edits_matches_replace_all_and_skips_nested_matches() {
-    let grep = SupportLang::Rust.ast_grep(SRC);
-    let drained = drain_edits(&grep.root(), &"foo()", &"bar()");
-    let by_replace_all = grep.root().replace_all("foo()", "bar()");
-
-    let key = |edits: &[Edit<String>]| -> Vec<(usize, usize)> {
-        edits
-            .iter()
-            .map(|edit| (edit.position, edit.deleted_length))
-            .collect()
-    };
-    assert_eq!(key(&drained), key(&by_replace_all));
-
-    let nested = SupportLang::Rust.ast_grep("fn main() { foo(foo()); }\n");
-    let inner = drain_edits(&nested.root(), &"foo($A)", &"bar($A)");
-    assert_eq!(inner.len(), 1, "the nested call is inside the outer match");
-}
-
-#[test]
-fn pending_doc_appends_edits_without_mutating_the_source() {
-    let source = directory_source(&detached_identity(), REL);
-    let pending =
-        PendingReplaceDoc::open(SRC, SupportLang::Rust, source.clone(), producer()).unwrap();
-    assert_eq!(
-        pending.expected(),
-        &soopy::ContentId::blake3(SRC.as_bytes())
-    );
-
-    let mut root = AstGrep::doc(pending);
-    assert!(root.replace("foo()", "bar()").unwrap());
-
-    let doc = root.root().get_doc();
-    assert_eq!(doc.source_text(), SRC, "do_edit never rewrites the string");
-    assert_eq!(doc.edits().len(), 1);
-    assert_eq!(doc.edits()[0].range.start, 12);
-    assert_eq!(doc.edits()[0].range.end, 17);
-
-    let action = root.root().get_doc().clone().into_action().unwrap();
-    assert_eq!(spans(&action), vec![(12, 17, "bar()".to_string())]);
-}
-
-#[test]
-fn pending_doc_with_no_match_stages_nothing() {
-    let source = directory_source(&detached_identity(), REL);
-    let pending = PendingReplaceDoc::open(SRC, SupportLang::Rust, source, producer()).unwrap();
-    assert!(pending.into_action().is_none());
-}
-
-#[test]
-fn stage_edits_reaches_soopy_with_the_drained_spans() {
+fn stage_edits_reaches_soopy_with_the_folded_spans() {
     let root = temp_root("stage");
     let identity = identity_of(&root);
     let source = directory_source(&identity, REL);
-    let grep = SupportLang::Rust.ast_grep(SRC);
     let request = stage_edits(
         source.clone(),
         soopy::ContentId::blake3(SRC.as_bytes()),
-        bind(&source, grep.root().replace_all("foo()", "bar()")),
+        vec![
+            edit_at(&source, 12, b"bar()"),
+            edit_at(&source, 19, b"bar()"),
+        ],
         soopy::SourceRootId::Directory {
             directory: identity,
         },
@@ -238,12 +152,14 @@ fn stale_expected_is_refused_by_stage() {
     let root = temp_root("stale");
     let identity = identity_of(&root);
     let source = directory_source(&identity, REL);
-    let grep = SupportLang::Rust.ast_grep(SRC);
     let stale = soopy::ContentId::blake3(b"not what is on disk");
     let request = stage_edits(
         source.clone(),
         stale.clone(),
-        bind(&source, grep.root().replace_all("foo()", "bar()")),
+        vec![
+            edit_at(&source, 12, b"bar()"),
+            edit_at(&source, 19, b"bar()"),
+        ],
         soopy::SourceRootId::Directory {
             directory: identity,
         },

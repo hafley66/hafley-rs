@@ -1,5 +1,5 @@
 //! The call-kind table: the tree-sitter node kinds that denote a call site in
-//! the grammars the ast-grep fallback actually loads. Collected the only
+//! the grammars the fallback actually loads. Collected the only
 //! trustworthy way, one `ryi --family cst <fixture>` dump per language (issue
 //! default-families-no-conditional), so a kind no loaded grammar emits is
 //! absent and a call kind one does emit is present. This file is DATA, not
