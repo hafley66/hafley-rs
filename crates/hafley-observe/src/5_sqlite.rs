@@ -2,8 +2,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use rusqlite::trace::{TraceEvent, TraceEventCodes};
+use rusqlite::ffi;
 use rusqlite::{Connection, StatementStatus};
+use std::ffi::{c_void, CStr};
 use tracing::Subscriber;
 use tracing_subscriber::registry::LookupSpan;
 use tracing_subscriber::Layer;
@@ -69,6 +70,22 @@ impl StatementCounters {
         }
     }
 
+    /// PROFILE observes one finished execution. SQLite counters otherwise
+    /// accumulate across executions of a cached sqlite3_stmt.
+    unsafe fn take(statement: *mut ffi::sqlite3_stmt) -> Self {
+        let counter = |op| ffi::sqlite3_stmt_status(statement, op, 1);
+        StatementCounters {
+            vm_step: counter(ffi::SQLITE_STMTSTATUS_VM_STEP),
+            fullscan_step: counter(ffi::SQLITE_STMTSTATUS_FULLSCAN_STEP),
+            sort: counter(ffi::SQLITE_STMTSTATUS_SORT),
+            autoindex: counter(ffi::SQLITE_STMTSTATUS_AUTOINDEX),
+            reprepare: counter(ffi::SQLITE_STMTSTATUS_REPREPARE),
+            run: counter(ffi::SQLITE_STMTSTATUS_RUN),
+            // MEMUSED is a gauge; SQLite ignores resetFlg for it.
+            mem_used: counter(ffi::SQLITE_STMTSTATUS_MEMUSED),
+        }
+    }
+
     pub fn findings(&self) -> Vec<StatementFinding> {
         let mut findings = Vec::new();
         if self.fullscan_step > 0 {
@@ -89,23 +106,30 @@ impl StatementCounters {
 
 /// `vm_step` is the deterministic cost of a statement: the same input yields
 /// the same count on every machine, unlike elapsed time.
-fn emit(event: TraceEvent<'_>) {
+unsafe fn emit(event: u32, statement: *mut ffi::sqlite3_stmt, extra: *mut c_void) {
     match event {
-        TraceEvent::Stmt(statement, expanded) => {
+        ffi::SQLITE_TRACE_STMT => {
+            let sql = CStr::from_ptr(ffi::sqlite3_sql(statement)).to_string_lossy();
+            let expanded = ffi::sqlite3_expanded_sql(statement);
+            let expanded_text = if expanded.is_null() { String::new() }
+                else { CStr::from_ptr(expanded).to_string_lossy().into_owned() };
+            if !expanded.is_null() { ffi::sqlite3_free(expanded.cast()); }
             tracing::trace!(
                 target: SQLITE_TARGET,
-                sql = %statement.sql(),
-                expanded = %expanded,
+                sql = %sql,
+                expanded = %expanded_text,
                 "statement begins"
             );
         }
-        TraceEvent::Profile(statement, elapsed) => {
-            let counters = StatementCounters::read(&statement);
+        ffi::SQLITE_TRACE_PROFILE => {
+            let sql = CStr::from_ptr(ffi::sqlite3_sql(statement)).to_string_lossy();
+            let nanos = *(extra as *const u64);
+            let counters = StatementCounters::take(statement);
             let findings = counters.findings();
             tracing::debug!(
                 target: SQLITE_TARGET,
-                sql = %statement.sql(),
-                nanos = elapsed.as_nanos() as u64,
+                sql = %sql,
+                nanos,
                 vm_step = counters.vm_step,
                 fullscan_step = counters.fullscan_step,
                 sort = counters.sort,
@@ -118,7 +142,7 @@ fn emit(event: TraceEvent<'_>) {
             for finding in findings {
                 tracing::warn!(
                     target: SQLITE_TARGET,
-                    sql = %statement.sql(),
+                    sql = %sql,
                     vm_step = counters.vm_step,
                     "{}",
                     finding.as_str()
@@ -129,15 +153,28 @@ fn emit(event: TraceEvent<'_>) {
     }
 }
 
+unsafe extern "C" fn trace_callback(event: u32, _: *mut c_void, statement: *mut c_void, extra: *mut c_void) -> i32 {
+    // A panic must never unwind through SQLite's C callback boundary.
+    let _ = std::panic::catch_unwind(|| emit(event, statement.cast(), extra));
+    0
+}
+
 pub fn instrument(connection: &Connection) {
-    connection.trace_v2(
-        TraceEventCodes::SQLITE_TRACE_STMT | TraceEventCodes::SQLITE_TRACE_PROFILE,
-        Some(emit),
-    );
+    unsafe {
+        let handle = connection.handle();
+        // Existing cached statements may have completed before tracing began.
+        let mut statement = ffi::sqlite3_next_stmt(handle, std::ptr::null_mut());
+        while !statement.is_null() {
+            StatementCounters::take(statement);
+            statement = ffi::sqlite3_next_stmt(handle, statement);
+        }
+        ffi::sqlite3_trace_v2(handle, ffi::SQLITE_TRACE_STMT | ffi::SQLITE_TRACE_PROFILE,
+            Some(trace_callback), std::ptr::null_mut());
+    }
 }
 
 pub fn silence(connection: &Connection) {
-    connection.trace_v2(TraceEventCodes::empty(), None);
+    unsafe { ffi::sqlite3_trace_v2(connection.handle(), 0, None, std::ptr::null_mut()); }
 }
 
 /// The planner's own account of a statement, one row per plan node.
