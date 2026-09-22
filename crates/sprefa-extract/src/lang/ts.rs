@@ -4014,9 +4014,9 @@ pub(crate) fn collect_const_facts(
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// TsSource: the TS/JS Source (cst via ast-grep + type/call/df via oxc). Epic U.
+// TsSource: the TS/JS Source (cst via the shared walk + type/call/df via oxc). Epic U.
 //
-// The two-parser, masked shape. cst runs through ast-grep (one dep = the CST
+// The two-parser, masked shape. cst runs through the shared walk (one parse = the CST
 // floor for every lang); type/call/df run through ONE oxc parse (three masked
 // projections over the same tree). ONE shared `Strings` across all four families.
 // A .ts/.tsx/.js/... file with all families masked = 2 parses; the masked
@@ -4069,8 +4069,8 @@ impl Source for TsSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // cst via ast-grep (masked). Owns its () arena; dropped at block end. A
-        // failed ast-grep parse leaves cst None (no panic).
+        // cst via the shared walk (masked). Owns its () arena; dropped at block
+        // end. A failed parse leaves cst None (no panic).
         let cst = if mask.cst {
             let parse_span = trace::parse_span("ts", "tree-sitter");
             let _parse_guard = parse_span.enter();

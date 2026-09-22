@@ -3,7 +3,7 @@
 //! content, mask)` -> `flatten_each` -> stdout. `--family` selects the mask (default
 //! ALL); `--bench` times extract + flatten and reports per-family counts to stderr;
 //! `--schema` prints the JSONL output contract and exits. The bin names no
-//! ast-grep/oxc type outside the `Source` impls (the uniform-surface law).
+//! tree-sitter/oxc type outside the `Source` impls (the uniform-surface law).
 //!
 //! THE BIN OWNS NO EXTRACTION LOGIC. Argument parsing, one library call, print.
 //! Phase 2 used to be assembled here, in a private adapter that reached only the

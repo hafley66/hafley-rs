@@ -1,5 +1,5 @@
-//! The Rust extractor arm: syn front-end for type/call/df/const, ast-grep for cst.
-//! Mirrors TsSource (same shape, different front-end): cst via ast-grep's rust
+//! The Rust extractor arm: syn front-end for type/call/df/const, the shared
+//! tree-sitter walk for cst. Mirrors TsSource (same shape, different front-end): cst via the shared walk
 //! grammar + one `syn::parse_file` feeding the type/call/df/const projections.
 //! Type edges ride `TypeFAux` candidates out of the one parse (port of v5
 //! `edges_from`: field/variant/generic/impl — v5 rust emits NO param/returns
@@ -3052,9 +3052,9 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// RustSource: the Rust Source (cst via ast-grep + type/call/df via syn).
+// RustSource: the Rust Source (cst via the shared tree-sitter walk + type/call/df via syn).
 //
-// The two-parser, masked shape (mirrors TsSource). cst runs through ast-grep
+// The two-parser, masked shape (mirrors TsSource). cst runs through the shared
 // (one dep = the CST floor for every lang); type/call/df run through ONE syn
 // parse (three masked projections over the same tree). ONE shared `Strings`
 // across all four families.
@@ -3138,7 +3138,7 @@ fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut Family
     }
 }
 
-/// The Rust `Source`. `matches` = the path ends in `.rs`. cst via ast-grep's rust
+/// The Rust `Source`. `matches` = the path ends in `.rs`. cst via the shared
 /// grammar; type/call/df/const via one `syn::parse_file`.
 #[derive(Default)]
 pub struct RustSource;

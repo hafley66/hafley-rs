@@ -50,7 +50,7 @@ pub fn call_bundle(
     Some(call_rows(&lang, &tree, content, strings))
 }
 
-/// The UTF-8 gate the ast-grep parse held (a non-UTF-8 file failed with
+/// The UTF-8 gate the old parse held (a non-UTF-8 file failed with
 /// `Utf8`, and the callers' `.ok()` made it `None`), then the plain
 /// tree-sitter parse.
 fn parse_tree(lang: &RyiLang, content: &[u8]) -> Option<tree_sitter::Tree> {
@@ -242,7 +242,7 @@ fn head_leaf<'a>(node: tree_sitter::Node<'a>) -> tree_sitter::Node<'a> {
     }
 }
 
-/// The node's own text, the shape the old ast-grep `text()` answered.
+/// The node's own text.
 fn node_text<'a>(node: &tree_sitter::Node<'a>, src: &'a [u8]) -> &'a str {
     std::str::from_utf8(&src[node.start_byte()..node.end_byte()]).unwrap_or("")
 }

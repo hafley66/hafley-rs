@@ -147,7 +147,7 @@ pub const KOTLIN_ROLES: &[(&str, RoleRule)] = &[
     ("jump_expression", LeadingKeyword),
 ];
 
-/// tree-sitter-python 0.23 node kinds (ast-grep's grammar). `elif_clause` is a
+/// tree-sitter-python 0.23 node kinds. `elif_clause` is a
 /// Branch of its own: it carries its own condition, unlike `else_clause`.
 pub const PYTHON_ROLES: &[(&str, RoleRule)] = &[
     ("function_definition", Fixed(Callable)),

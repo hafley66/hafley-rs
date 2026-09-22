@@ -191,9 +191,9 @@ LANGUAGE COVERAGE (first-match, by extension)
   md/markdown                      cst only (tree-sitter-md block + inline grammars)
   gd                               cst only (tree-sitter-gdscript grammar)
   lisp/lsp/cl/asd                  cst only (tree-sitter-commonlisp grammar)
-  json/jsonl/ndjson/yaml/yml/toml  data     kinds: data (+ cst where ast-grep has
+  json/jsonl/ndjson/yaml/yml/toml  data     kinds: data (+ cst where a grammar is
                                             the grammar: json, yaml)
-  html/css                         cst only (ast-grep grammar, no native front-end)
+  html                             cst only (linked grammar, no native front-end)
   python/java/c/cpp/cs/rb/php/sh/lua/scala/swift/ex/hs   cst only, same route
   any other extension              no output, exit 0 (not an error)
 

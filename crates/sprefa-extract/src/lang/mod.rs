@@ -1,12 +1,12 @@
 //! The language roster. First-match (v5 `type_langs()`, typegraph/mod.rs:491):
-//! the lang-specific `Source` precedes the ast-grep CST fallback. A `.rs` hits
-//! `RustSource` (cst via ast-grep + type/call/df via syn); a `.go` hits
-//! `GoSource` (cst via ast-grep + type/call/df via tree-sitter-go); a `.kt`/
-//! `.kts` hits `KotlinSource` (cst via ast-grep + type/call/df via
-//! tree-sitter-kotlin); a `.py`/`.pyi` hits `PythonSource` (cst via ast-grep +
-//! type/call/df via tree-sitter-python); a `.ts` hits `TsSource` (cst via ast-grep +
-//! type/call/df via oxc); anything else with an ast-grep grammar falls to
-//! `FallbackSource` (cst-only).
+//! the lang-specific `Source` precedes the shared tree-sitter fallback. A `.rs`
+//! hits `RustSource` (cst via the shared tree-sitter walk + type/call/df via
+//! syn); a `.go` hits `GoSource` (cst likewise + type/call/df via
+//! tree-sitter-go); a `.kt`/`.kts` hits `KotlinSource` (cst likewise +
+//! type/call/df via tree-sitter-kotlin); a `.py`/`.pyi` hits `PythonSource`
+//! (cst likewise + type/call/df via tree-sitter-python); a `.ts` hits `TsSource`
+//! (cst likewise + type/call/df via oxc); anything else with a linked grammar
+//! falls to `FallbackSource` (cst-only).
 
 pub mod fallback;
 #[path = "0_call_kinds.rs"]
@@ -159,7 +159,7 @@ pub fn rehomes() -> &'static [RehomeArm] {
         RehomeArm {
             core: &PrologSource,
             manifests: None,
-            // Disabled: the shim leg rode the ast-grep YAML rule engine.
+            // Disabled: the shim leg rode the YAML rule engine.
             shim: None,
             text_spellings: None,
             plan_check: None,

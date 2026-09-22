@@ -1,6 +1,6 @@
 //! The Python extractor arm: tree-sitter-python front-end for type/call/df,
-//! ast-grep for cst. Mirrors GoSource (same shape, different front-end): cst via
-//! ast-grep's python grammar + one tree-sitter-python parse feeding the
+//! the shared walk for cst. Mirrors GoSource (same shape, different front-end):
+//! cst via the shared walk + one tree-sitter-python parse feeding the
 //! type/call/df projections, then `Resolve<TypeF>` and `Resolve<CallF>`.
 //!
 //! Span bridge: NONE needed (like go.rs, unlike rust.rs's syn line/col -> byte
@@ -2490,7 +2490,7 @@ fn py_flow_expr(
     }
 }
 
-// ── PythonSource: cst via ast-grep + type/call/df via tree-sitter-python ────
+// ── PythonSource: cst via the shared walk + type/call/df via tree-sitter-python ────
 
 /// `matches` = `.py`/`.pyi`. cst via the linked tree-sitter grammar;
 /// type/call/df via one tree-sitter-python parse.

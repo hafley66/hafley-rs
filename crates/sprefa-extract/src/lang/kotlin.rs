@@ -1,13 +1,13 @@
 //! The Kotlin extractor arm: tree-sitter-kotlin front-end for type/call/df,
-//! ast-grep for cst. Mirrors GoSource (the "floor as the only tier" shape -
-//! kotlin has no syn/oxc analog either): cst via ast-grep's kotlin grammar +
+//! the shared walk for cst. Mirrors GoSource (the "floor as the only tier" shape
+//! - kotlin has no syn/oxc analog either): cst via the shared walk +
 //! one tree-sitter-kotlin parse feeding the type/call/df projections.
 //!
-//! The grammar crate is `tree-sitter-kotlin-sg` (the ast-grep fork), NOT
+//! The grammar crate is `tree-sitter-kotlin-sg`, NOT
 //! `tree-sitter-kotlin`: it is the exact crate v5's kotlin front-end carries
 //! (root Cargo.toml: `tree-sitter-kotlin-sg = "0.4"`, so the v6 parse is
 //! byte-identical to the oracle's), it is already in this workspace's lock as
-//! an ast-grep-language transitive (0.4.1, one copy), and it exports
+//! already in the lock (0.4.1, one copy), and it exports
 //! `LANGUAGE: LanguageFn` the way tree-sitter-go 0.23 does, which tree-sitter
 //! 0.25's `Language::new` wraps. Zero new dup risk (it deps only
 //! `tree-sitter-language` + `cc`, no tree-sitter core).
@@ -17,7 +17,7 @@
 //! (`start_byte`/`end_byte`), so `Span { start: node.start_byte(), len:
 //! node.end_byte() - node.start_byte() }` is the whole story.
 //!
-//! KotlinSource wires cst via ast-grep + a
+//! KotlinSource wires cst via the shared walk + a
 //! tree-sitter-kotlin parse; type/call/df projections are stubbed empty.
 //! `walk_kotlin_entities` + `kotlin_fn_type` cover TypeF (nodes +
 //! arrow-type sigs); `queries/kotlin/call.scm` covers CallF;
@@ -62,7 +62,7 @@ pub(crate) const KOTLIN_SCM: &str = include_str!("../../queries/kotlin/scip.scm"
 /// Parse Kotlin source via tree-sitter-kotlin-sg. Port of v5's inline parse in
 /// `KotlinTypes::extract` (src/graph/typegraph/kotlin.rs:13). tree-sitter
 /// 0.25's `Language::new` wraps the `LanguageFn` tree-sitter-kotlin-sg 0.4
-/// exports as `LANGUAGE`; the versions unify with what ast-grep-language
+/// exports as `LANGUAGE`; the versions unify with what the lock
 /// already transitively pulls (one copy, 0.4.1).
 pub(crate) fn kt_parse(content: &str) -> Option<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
@@ -1296,17 +1296,17 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// KotlinSource: the Kotlin Source (cst via ast-grep + type/call/df via
+// KotlinSource: the Kotlin Source (cst via the shared walk + type/call/df via
 // tree-sitter-kotlin).
 //
 // The two-parser, masked shape (mirrors GoSource/RustSource/TsSource). cst runs
-// through ast-grep (one dep = the CST floor for every lang); type/call/df run
+// through the shared walk (one parse = the CST floor); type/call/df run
 // through ONE tree-sitter-kotlin parse (three masked projections over the same
 // tree). ONE shared `Strings` across all four families.
 // ════════════════════════════════════════════════════════════════════════════
 
 /// The Kotlin `Source`. `matches` = the path ends in `.kt` or `.kts` (v5
-/// `KotlinTypes::matches`). cst via ast-grep's kotlin grammar; type/call/df via
+/// `KotlinTypes::matches`). cst via the shared walk; type/call/df via
 /// one tree-sitter-kotlin parse.
 #[derive(Default)]
 pub struct KotlinSource;

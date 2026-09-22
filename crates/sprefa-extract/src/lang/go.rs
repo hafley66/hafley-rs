@@ -1,6 +1,6 @@
-//! The Go extractor arm: tree-sitter-go front-end for type/call/df, ast-grep for
-//! cst. Mirrors RustSource/TsSource (same shape, different front-end): cst via
-//! ast-grep's go grammar + one tree-sitter-go parse feeding the type/call/df
+//! The Go extractor arm: tree-sitter-go front-end for type/call/df, the shared
+//! tree-sitter walk for cst. Mirrors RustSource/TsSource (same shape, different front-end): cst via
+//! walk + one tree-sitter-go parse feeding the type/call/df
 //! projections.
 //!
 //! Span bridge: NONE needed (unlike rust.rs's syn line/col -> byte table).
@@ -8,7 +8,7 @@
 //! `Span { start: node.start_byte(), len: node.end_byte() - node.start_byte() }`
 //! is the whole story. This is simpler than the rust port.
 //!
-//! GoSource wires cst via ast-grep + a tree-sitter-go parse feeding the type/call/df
+//! GoSource wires cst via the shared walk + a tree-sitter-go parse feeding the type/call/df
 //! projections: `walk_go_entities` (TypeF nodes + arrow-type sigs), `go_walk_call_defs`
 //! + `go_walk_call_sites` (CallF), `go_dataflow_from` (DfF nodes + Direct edges),
 //! `go_type_spec_edges` (type-edge candidates) + `Resolve<TypeF>` / `Resolve<CallF>` (the
@@ -50,7 +50,7 @@ use crate::types::{PathIndex, ScipIndex, UnresolvedReason};
 /// Parse Go source via tree-sitter-go. Port of v5 `go_parse`
 /// (src/graph/typegraph/go.rs:41). tree-sitter 0.25's `Language::new` wraps the
 /// `LanguageFn` tree-sitter-go 0.23 exports as `LANGUAGE`; the versions unify
-/// with what ast-grep-language already transitively pulls.
+/// with what the lock already carried.
 pub(crate) fn go_parse(content: &str) -> Option<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     let lang = tree_sitter::Language::new(tree_sitter_go::LANGUAGE);
@@ -2714,15 +2714,15 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// GoSource: the Go Source (cst via ast-grep + type/call/df via tree-sitter-go).
+// GoSource: the Go Source (cst via the shared walk + type/call/df via tree-sitter-go).
 //
 // The two-parser, masked shape (mirrors RustSource/TsSource). cst runs through
-// ast-grep (one dep = the CST floor for every lang); type/call/df run through
+// the shared walk (one parse = the CST floor); type/call/df run through
 // ONE tree-sitter-go parse (three masked projections over the same tree). ONE
 // shared `Strings` across all four families.
 // ════════════════════════════════════════════════════════════════════════════
 
-/// The Go `Source`. `matches` = the path ends in `.go`. cst via ast-grep's go
+/// The Go `Source`. `matches` = the path ends in `.go`. cst via the shared
 /// grammar; type/call/df via one tree-sitter-go parse.
 #[derive(Default)]
 pub struct GoSource;

@@ -176,7 +176,7 @@ pub trait Family {
 
 // ── STRUCTURE plane: CstF ───────────────────────────────────────────────────
 
-/// The lossless named-node tree (the tree-sitter CST, via ast-grep's grammars).
+/// The lossless named-node tree (the tree-sitter CST, via the linked grammars).
 /// `NodeKind` is an OPEN grammar vocabulary interned as a NameId
 /// (`function_declaration`, ...); not a closed enum. The single edge kind is Child.
 #[derive(Default, Copy, Clone, Debug)]
@@ -1841,7 +1841,7 @@ impl std::error::Error for ParseError {}
 
 /// content -> parsed CST handle. One impl per backing engine. The arena is
 /// caller-owned (lent to parse) because some engines borrow their backing store
-/// (oxc's Program<'a> borrows its Allocator; ast-grep sets Arena = ()).
+/// (oxc's Program<'a> borrows its Allocator; the cst walk sets Arena = ()).
 pub trait Parser: Sync + Send {
     type Arena;
     type Parsed<'a>
@@ -3997,7 +3997,7 @@ impl FlatFact {
 // ════════════════════════════════════════════════════════════════════════════
 //
 //                          TS (oxc)   Rust (syn)   Go (tree-sitter-go)   Kotlin (ts-kotlin-sg)
-//   cst (ast-grep)           [x]         [x]            [x]                 [x]
+//   cst (tree-sitter)       [x]         [x]            [x]                 [x]
 //   type entities + sigs     [x]         [x]            [x]                 [x]
 //   const facet              [x]         [x]            [-] n/a (v5 go emits none)   [-] n/a (v5 kotlin emits none)
 //   call defs + sites        [x]         [x]            [x]                 [x]

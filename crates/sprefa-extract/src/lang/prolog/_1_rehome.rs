@@ -1,6 +1,6 @@
 //! `impl Rehome for PrologSource`: DISABLED.
 //!
-//! The load-directive specifier matcher rode the ast-grep YAML rule engine
+//! The load-directive specifier matcher rode a YAML rule engine
 //! (`rules/move_specifier.yml` + the dl6 `move_candidate` gate). That engine
 //! is gone, so rehome answers empty: no import refs, no respells. A prolog
 //! move plans without a specifier leg instead of matching through a removed
