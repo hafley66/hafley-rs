@@ -13,6 +13,7 @@ use crate::shape::{Span, Strings};
 struct SiteCapture {
     callee: Option<(String, Span)>,
     receiver: Option<Span>,
+    operator: Option<(String, Span)>,
 }
 
 /// Build the bundled query once, run it through the shared engine, then map
@@ -44,8 +45,26 @@ pub(crate) fn project_kotlin_call(
         let mut site_span = None;
         let mut site_callee = None;
         let mut site_receiver = None;
+        let mut site_operator = None;
         for span in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
             let label = names[span.name as usize].as_ref();
+            if label == "site.operator" {
+                let callee = query
+                    .user
+                    .property_settings(row.pattern as usize)
+                    .iter()
+                    .find(|property| property.key.as_ref() == "call.callee")
+                    .and_then(|property| property.value.as_deref())
+                    .expect("a Kotlin operator capture names its call.callee");
+                site_operator = Some((
+                    callee.to_string(),
+                    Span {
+                        start: span.bytes.start,
+                        len: span.bytes.end - span.bytes.start,
+                    },
+                ));
+                continue;
+            }
             let node = captured_node(root, (span.bytes.start, span.bytes.end), label);
             match label {
                 "def.span" => def_span = Some(node),
@@ -77,6 +96,9 @@ pub(crate) fn project_kotlin_call(
             }
             if let Some(receiver) = site_receiver {
                 entry.1.receiver = Some(node_span(receiver));
+            }
+            if let Some(operator) = site_operator {
+                entry.1.operator = Some(operator);
             }
         }
     }
@@ -186,6 +208,9 @@ fn map_site(
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
+    if let Some((callee, span)) = captures.operator {
+        push_site(span, &callee, strings, sink);
+    }
     match node.kind() {
         "call_expression" => {
             if let Some((callee, callee_span)) = captures.callee {
@@ -211,22 +236,6 @@ fn map_site(
                 }
             };
         }
-        "additive_expression"
-        | "multiplicative_expression"
-        | "range_expression"
-        | "comparison_expression"
-        | "equality_expression" => {
-            if let Some(operator) = anonymous_token(node, src) {
-                if let Some(callee) = binary_name(operator) {
-                    push_site(
-                        anonymous_span(node).unwrap_or_else(|| node_span(node)),
-                        callee,
-                        strings,
-                        sink,
-                    );
-                }
-            }
-        }
         "check_expression" => {
             let mut cursor = node.walk();
             if let Some(operator) = node
@@ -236,40 +245,12 @@ fn map_site(
                 push_site(node_span(operator), "contains", strings, sink);
             };
         }
-        "prefix_expression" => {
-            if let Some(callee) = anonymous_token(node, src).and_then(prefix_name) {
-                push_site(
-                    anonymous_span(node).unwrap_or_else(|| node_span(node)),
-                    callee,
-                    strings,
-                    sink,
-                );
-            }
-        }
-        "postfix_expression" => {
-            if let Some(callee) = anonymous_token(node, src).and_then(postfix_name) {
-                push_site(
-                    anonymous_span(node).unwrap_or_else(|| node_span(node)),
-                    callee,
-                    strings,
-                    sink,
-                );
-            }
-        }
         "indexing_expression" => {
             if let Some(suffix) = kt_first_child(node, "indexing_suffix") {
                 push_site(node_span(suffix), "get", strings, sink);
             }
         }
         "assignment" => {
-            if let Some(callee) = anonymous_token(node, src).and_then(assignment_name) {
-                push_site(
-                    anonymous_span(node).unwrap_or_else(|| node_span(node)),
-                    callee,
-                    strings,
-                    sink,
-                );
-            }
             if let Some(lhs) = kt_first_child(node, "directly_assignable_expression") {
                 if let Some(suffix) = kt_child_kind(lhs, "indexing_suffix") {
                     push_site(node_span(suffix), "set", strings, sink);
@@ -278,65 +259,4 @@ fn map_site(
         }
         _ => {}
     }
-}
-
-fn anonymous_span(node: TsNode<'_>) -> Option<Span> {
-    let mut cursor = node.walk();
-    let span = node.children(&mut cursor)
-        .find(|child| !child.is_named())
-        .map(node_span);
-    span
-}
-
-fn anonymous_token<'a>(node: TsNode<'_>, src: &'a [u8]) -> Option<&'a str> {
-    let mut cursor = node.walk();
-    let token = node.children(&mut cursor)
-        .find(|child| !child.is_named())
-        .map(|child| kt_text(child, src));
-    token
-}
-
-fn binary_name(operator: &str) -> Option<&'static str> {
-    Some(match operator {
-        "+" => "plus",
-        "-" => "minus",
-        "*" => "times",
-        "/" => "div",
-        "%" => "rem",
-        ".." => "rangeTo",
-        "..<" => "rangeUntil",
-        "==" | "!=" => "equals",
-        "<" | ">" | "<=" | ">=" => "compareTo",
-        _ => return None,
-    })
-}
-
-fn prefix_name(operator: &str) -> Option<&'static str> {
-    Some(match operator {
-        "-" => "unaryMinus",
-        "+" => "unaryPlus",
-        "!" => "not",
-        "++" => "inc",
-        "--" => "dec",
-        _ => return None,
-    })
-}
-
-fn postfix_name(operator: &str) -> Option<&'static str> {
-    match operator {
-        "++" => Some("inc"),
-        "--" => Some("dec"),
-        _ => None,
-    }
-}
-
-fn assignment_name(operator: &str) -> Option<&'static str> {
-    Some(match operator {
-        "+=" => "plusAssign",
-        "-=" => "minusAssign",
-        "*=" => "timesAssign",
-        "/=" => "divAssign",
-        "%=" => "remAssign",
-        _ => return None,
-    })
 }
