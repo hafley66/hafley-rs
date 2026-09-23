@@ -64,6 +64,7 @@
 ] @local.site.span
 
 (package_header) @local.export.package
+(package_header (identifier) @module.package)
 (import_header) @local.import
 
 ; Import spellings consumed by CallF, module resolution, and rehome.

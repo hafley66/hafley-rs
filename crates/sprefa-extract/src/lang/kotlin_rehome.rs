@@ -1,7 +1,7 @@
 //! `impl Rehome for KotlinSource`: every question `extract move` asks a
 //! language, answered for Kotlin. Import headers come off the same
 //! tree-sitter-kotlin query `lang/kotlin.rs` already carries
-//! (`kt_import_specifiers`), and the `package` declaration off the same parse.
+//! (`kt_header_facts`), including the package declaration.
 //! @comment-ok: module header, the seam list every lang file opens with
 //!
 //! A Kotlin import is `package.Decl` and the `package` declaration is truth
@@ -27,7 +27,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rayon::prelude::*;
 
-use super::kotlin::{kt_child_kind, kt_first_child, kt_import_specifiers, kt_parse, kt_text};
+use super::kotlin::{kt_first_child, kt_header_facts, kt_parse, kt_text};
 use super::KotlinSource;
 use crate::family::SpecifierKind;
 use crate::move_cx::{dirname, owned_by, MoveCx};
@@ -292,7 +292,7 @@ fn scan_file(text: String) -> Option<FileScan> {
     let source = text.as_bytes();
     let mut strings = Strings::new();
     let mut rows = Vec::new();
-    kt_import_specifiers(&tree, source, &mut strings, &mut rows);
+    let package = kt_header_facts(&tree, source, &mut strings, &mut rows);
     let imports = rows
         .into_iter()
         .filter_map(|row| {
@@ -305,35 +305,11 @@ fn scan_file(text: String) -> Option<FileScan> {
         })
         .collect();
     Some(FileScan {
-        package: package_decl(root, source),
+        package,
         imports,
         decls: top_level_decls(root, source),
         text,
     })
-}
-
-fn package_decl(root: tree_sitter::Node, source: &[u8]) -> Option<(Span, String)> {
-    let header = find_kind(root, "package_header")?;
-    let identifier = kt_child_kind(header, "identifier")?;
-    let start = identifier.start_byte() as u32;
-    Some((
-        Span {
-            start,
-            len: identifier.end_byte() as u32 - start,
-        },
-        kt_text(identifier, source).to_string(),
-    ))
-}
-
-fn find_kind<'a>(node: tree_sitter::Node<'a>, kind: &str) -> Option<tree_sitter::Node<'a>> {
-    if node.kind() == kind {
-        return Some(node);
-    }
-    let mut cursor = node.walk();
-    let children: Vec<tree_sitter::Node<'a>> = node.named_children(&mut cursor).collect();
-    children
-        .into_iter()
-        .find_map(|child| find_kind(child, kind))
 }
 
 /// Every name an importer can spell after the package: the DIRECT children of

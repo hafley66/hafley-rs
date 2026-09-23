@@ -696,13 +696,13 @@ fn kt_import_specifiers_from_arena(
     }
 }
 
-/// The module and rehome consumers run the same import query over their parse.
-pub(crate) fn kt_import_specifiers(
+/// The module and rehome consumers read package and import facts from one run.
+pub(crate) fn kt_header_facts(
     tree: &tree_sitter::Tree,
     src: &[u8],
     strings: &mut Strings,
     rows: &mut Vec<Specifier>,
-) {
+) -> Option<(Span, String)> {
     let root = tree.root_node();
     let language = root.language();
     let query = KOTLIN_FAMILY_QUERY.get_or_init(|| {
@@ -710,9 +710,18 @@ pub(crate) fn kt_import_specifiers(
             .expect("the bundled Kotlin family query compiles")
     });
     let mut arena = hafley_scm::MatchArena::default();
-    hafley_scm::run(query, "kotlin-imports", src, tree, u32::MAX, &mut arena)
-        .expect("the Kotlin import query never exceeds the engine match limit");
+    hafley_scm::run(query, "kotlin-headers", src, tree, u32::MAX, &mut arena)
+        .expect("the Kotlin header query never exceeds the engine match limit");
     kt_import_specifiers_from_arena(src, query, &arena, strings, rows);
+    arena.spans.iter().find_map(|capture| {
+        (query.names[capture.name as usize].as_ref() == "module.package").then(|| {
+            let range = capture.bytes.start as usize..capture.bytes.end as usize;
+            let name = std::str::from_utf8(&src[range.clone()])
+                .expect("Kotlin package identifier is utf8")
+                .to_string();
+            (Span { start: capture.bytes.start, len: capture.bytes.end - capture.bytes.start }, name)
+        })
+    })
 }
 
 /// The first named child of `node` with `kind`.
