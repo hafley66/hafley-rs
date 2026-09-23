@@ -208,7 +208,8 @@ The marked block below is regenerated from ryi's real TypeF nodes and
 cargo run --example typegraph_d2 -- --root src --entry src/types.rs::RyiOutput --out /tmp/ryi-typegraph --markdown-into plans/0_ryi_end_state_mission.md
 ```
 
-The current example's bands are BFS distance, not SCC/topological layers.
+The example retains BFS hop distance in each node label; board placement uses
+SCC condensation and topological layers of the SCC DAG.
 The end-state export adds snapshot, evidence tiers, and coverage to the summary.
 [Example implementation](../examples/typegraph_d2.rs) ·
 [Layout test](../tests/15_typegraph_d2.rs)
@@ -216,68 +217,96 @@ The end-state export adds snapshot, evidence tiers, and coverage to the summary.
 <!-- ryi:typegraph-d2:start -->
 
 <details>
-<summary>Ryi type graph: src/types.rs::RyiOutput, board 1/3</summary>
+<summary>Ryi type graph: src/types.rs::RyiOutput, board 1/4, topological layer 0</summary>
 
 ```d2
 direction: down
 
-src_types_rs__CallF: CallF { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__CstF: CstF { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__DataF: DataF { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__DfF: DfF { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__FamilyBundle: FamilyBundle { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__RyiOutput: RyiOutput { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__Strings: Strings { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__TypeF: TypeF { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__RyiOutput: RyiOutput (hop 0) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
 
-src_types_rs__Strings -> src_types_rs__Strings: uses
-src_types_rs__CstF -> src_types_rs__CstF: uses
-src_types_rs__TypeF -> src_types_rs__TypeF: uses
-src_types_rs__CallF -> src_types_rs__CallF: uses
-src_types_rs__DfF -> src_types_rs__DfF: uses
-src_types_rs__DataF -> src_types_rs__DataF: uses
-src_types_rs__FamilyBundle -> src_types_rs__FamilyBundle: uses
-src_types_rs__RyiOutput -> src_types_rs__Strings: field
-src_types_rs__RyiOutput -> src_types_rs__CstF: field
-src_types_rs__RyiOutput -> src_types_rs__TypeF: field
-src_types_rs__RyiOutput -> src_types_rs__CallF: field
-src_types_rs__RyiOutput -> src_types_rs__DfF: field
-src_types_rs__RyiOutput -> src_types_rs__FamilyBundle: field
-src_types_rs__RyiOutput -> src_types_rs__DataF: field
+ryi_boundary_stub_1: boundary stub { shape: rectangle; style.fill: "#59636e"; style.font-color: "#ffffff" }
+
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to CallF at src/types.rs (board 2)
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to CstF at src/types.rs (board 2)
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to DataF at src/types.rs (board 2)
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to DfF at src/types.rs (board 2)
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to FamilyBundle at src/types.rs (board 2)
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to Strings at src/types.rs (board 2)
+src_types_rs__RyiOutput -> ryi_boundary_stub_1: field to TypeF at src/types.rs (board 2)
 ```
 
 </details>
 
 <details>
-<summary>Ryi type graph: src/types.rs::RyiOutput, board 2/3</summary>
+<summary>Ryi type graph: src/types.rs::RyiOutput, board 2/4, topological layer 1</summary>
 
 ```d2
 direction: down
 
-src_types_rs__Edge: Edge { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__Family: Family { shape: rectangle; style.fill: "#4b2e83"; style.font-color: "#ffffff" }
-src_types_rs__NameId: NameId { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__Node: Node { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__CallF: CallF (hop 1, SCC 1 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__CstF: CstF (hop 1, SCC 2 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__DataF: DataF (hop 1, SCC 3 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__DfF: DfF (hop 1, SCC 4 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__FamilyBundle: FamilyBundle (hop 1, SCC 7 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__Strings: Strings (hop 1, SCC 13 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__TypeF: TypeF (hop 1, SCC 14 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+
+ryi_boundary_stub_2: boundary stub { shape: rectangle; style.fill: "#59636e"; style.font-color: "#ffffff" }
+
+src_types_rs__CallF -> src_types_rs__CallF: uses
+src_types_rs__CallF -> ryi_boundary_stub_2: impl to Family at src/types.rs (board 4)
+src_types_rs__CstF -> src_types_rs__CstF: uses
+src_types_rs__CstF -> ryi_boundary_stub_2: impl to Family at src/types.rs (board 4)
+src_types_rs__DataF -> src_types_rs__DataF: uses
+src_types_rs__DataF -> ryi_boundary_stub_2: impl to Family at src/types.rs (board 4)
+src_types_rs__DfF -> src_types_rs__DfF: uses
+src_types_rs__DfF -> ryi_boundary_stub_2: impl to Family at src/types.rs (board 4)
+src_types_rs__FamilyBundle -> ryi_boundary_stub_2: field to Edge at src/types.rs (board 3)
+src_types_rs__FamilyBundle -> ryi_boundary_stub_2: generic to Family at src/types.rs (board 4)
+src_types_rs__FamilyBundle -> src_types_rs__FamilyBundle: uses
+src_types_rs__FamilyBundle -> ryi_boundary_stub_2: field to Node at src/types.rs (board 3)
+src_types_rs__Strings -> ryi_boundary_stub_2: field to NameId at src/types.rs (board 4)
+src_types_rs__Strings -> src_types_rs__Strings: uses
+src_types_rs__TypeF -> ryi_boundary_stub_2: impl to Family at src/types.rs (board 4)
+src_types_rs__TypeF -> src_types_rs__TypeF: uses
+```
+
+</details>
+
+<details>
+<summary>Ryi type graph: src/types.rs::RyiOutput, board 3/4, topological layer 2</summary>
+
+```d2
+direction: down
+
+src_types_rs__Edge: Edge (hop 2, SCC 5 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__Node: Node (hop 2, SCC 9 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+
+ryi_boundary_stub_3: boundary stub { shape: rectangle; style.fill: "#59636e"; style.font-color: "#ffffff" }
+
+src_types_rs__Edge -> src_types_rs__Edge: uses
+src_types_rs__Edge -> ryi_boundary_stub_3: generic to Family at src/types.rs (board 4)
+src_types_rs__Edge -> ryi_boundary_stub_3: field to NodeRef at src/types.rs (board 4)
+src_types_rs__Node -> ryi_boundary_stub_3: generic to Family at src/types.rs (board 4)
+src_types_rs__Node -> ryi_boundary_stub_3: field to NameId at src/types.rs (board 4)
+src_types_rs__Node -> src_types_rs__Node: uses
+src_types_rs__Node -> ryi_boundary_stub_3: field to Span at src/types.rs (board 4)
+```
+
+</details>
+
+<details>
+<summary>Ryi type graph: src/types.rs::RyiOutput, board 4/4, topological layer 3</summary>
+
+```d2
+direction: down
+
+src_types_rs__Family: Family (hop 2) { shape: rectangle; style.fill: "#4b2e83"; style.font-color: "#ffffff" }
+src_types_rs__NameId: NameId (hop 2, SCC 8 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__NodeRef: NodeRef (hop 3) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
+src_types_rs__Span: Span (hop 3, SCC 12 cycle) { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
 
 src_types_rs__NameId -> src_types_rs__NameId: uses
-src_types_rs__Node -> src_types_rs__NameId: field
-src_types_rs__Node -> src_types_rs__Family: generic
-src_types_rs__Node -> src_types_rs__Node: uses
-src_types_rs__Edge -> src_types_rs__Family: generic
-src_types_rs__Edge -> src_types_rs__Edge: uses
-```
-
-</details>
-
-<details>
-<summary>Ryi type graph: src/types.rs::RyiOutput, board 3/3</summary>
-
-```d2
-direction: down
-
-src_types_rs__NodeRef: NodeRef { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-src_types_rs__Span: Span { shape: rectangle; style.fill: "#1f4e79"; style.font-color: "#ffffff" }
-
 src_types_rs__Span -> src_types_rs__Span: uses
 ```
 
@@ -287,9 +316,10 @@ src_types_rs__Span -> src_types_rs__Span: uses
 
 For an actual type board, node identity must include path and declaration
 coordinate or canonical symbol identity. The current example keys by
-`(path, name)`, uses BFS distance bands, and scans every Rust file twice through
-`node_kinds` and `resolve_project`. Its rendered D2 receipt proves the export
-path exists, not the finished topology algorithm.
+`(path, name)`, retains BFS distance in node labels, assigns boards by SCC DAG
+topological layer, and scans every Rust file twice through `node_kinds` and
+`resolve_project`. Its rendered D2 receipt proves the export path exists, not
+the end-state topology algorithm.
 [Current identity and traversal](../examples/typegraph_d2.rs#L14) ·
 [Current test limits](../tests/15_typegraph_d2.rs#L75)
 
