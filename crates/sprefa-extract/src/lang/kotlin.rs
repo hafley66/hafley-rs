@@ -626,8 +626,8 @@ fn is_noise_kotlin(name: &str) -> bool {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// CallF defs and sites: `queries/kotlin/call.scm` via `6_scm_family.rs`.
-// NOT YET SCM: the module specifiers and receiver bindings below.
+// CallF definitions, sites, and imports: `queries/kotlin/scip.scm`.
+// Receiver bindings remain a separate Kotlin projection.
 // ════════════════════════════════════════════════════════════════════════════
 
 // ── module specifiers (CallFAux.specifiers) ─────────────────────────────────
@@ -645,59 +645,74 @@ fn is_noise_kotlin(name: &str) -> bool {
 // full path as written (`src/graph/modgraph/kotlin.rs:203-207`). The alias
 // overrides the bound name; a wildcard binds the last dotted segment.
 
-/// Kotlin module specifiers: one row per `import_header`. Rides the one
-/// tree-sitter parse the `extract` arm already holds. v5 reads the same facts
-/// with a regex over stripped text (`src/graph/modgraph/kotlin.rs:19-26`).
-fn kt_module_specifiers(
-    root: tree_sitter::Node,
+/// Lower the query's import captures into the CallF specifier rows. v5 reads
+/// the same facts with a regex (`src/graph/modgraph/kotlin.rs:19-26`).
+fn kt_import_specifiers_from_arena(
     src: &[u8],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<CallF>,
-) {
-    let mut rows = Vec::new();
-    kt_walk_import_headers(root, src, strings, &mut rows);
-    sink.aux.specifiers.extend(rows);
-}
-
-/// Recurse the tree for every `import_header` node, appending one row each.
-pub(crate) fn kt_walk_import_headers(
-    node: tree_sitter::Node,
-    src: &[u8],
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
     strings: &mut Strings,
     rows: &mut Vec<Specifier>,
 ) {
-    if node.kind() == "import_header" {
-        let identifier = kt_child_kind(node, "identifier");
-        let path = identifier.map(|child| kt_text(child, src)).unwrap_or("");
-        let span = match identifier {
-            Some(identifier) => Span {
-                start: identifier.start_byte() as u32,
-                len: (node.end_byte() - identifier.start_byte()) as u32,
-            },
-            None => node_span(node),
+    for row in &arena.rows {
+        let mut header = None;
+        let mut path = None;
+        let mut alias = None;
+        let mut wildcard = false;
+        for capture in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
+            match query.names[capture.name as usize].as_ref() {
+                "import.span" => header = Some(Span {
+                    start: capture.bytes.start,
+                    len: capture.bytes.end - capture.bytes.start,
+                }),
+                "import.path" => path = Some(capture.bytes.start..capture.bytes.end),
+                "import.alias" => alias = Some(capture.bytes.start..capture.bytes.end),
+                "import.wildcard" => wildcard = true,
+                _ => {}
+            }
+        }
+        let Some(header) = header else { continue };
+        let (start, path) = match path {
+            Some(range) => (
+                range.start,
+                std::str::from_utf8(&src[range.start as usize..range.end as usize])
+                    .expect("Kotlin import path is utf8"),
+            ),
+            None => (header.start, ""),
         };
-        let (kind, name) = if let Some(alias) = kt_child_kind(node, "import_alias") {
-            let alias_text = kt_child_kind(alias, "type_identifier")
-                .map(|child| kt_text(child, src))
-                .unwrap_or("");
-            (SpecifierKind::Named, alias_text)
-        } else if kt_child_kind(node, "wildcard_import").is_some() {
-            (SpecifierKind::Namespace, last_segment(path))
-        } else {
-            (SpecifierKind::Named, last_segment(path))
-        };
+        let name = alias
+            .map(|range| {
+                std::str::from_utf8(&src[range.start as usize..range.end as usize])
+                    .expect("Kotlin import alias is utf8")
+            })
+            .unwrap_or_else(|| last_segment(path));
         rows.push(Specifier {
-            span,
+            span: Span { start, len: header.end() - start },
             name: strings.intern(name),
-            kind,
+            kind: if wildcard { SpecifierKind::Namespace } else { SpecifierKind::Named },
             module: Some(strings.intern(path)),
             imported: None,
         });
     }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        kt_walk_import_headers(child, src, strings, rows);
-    }
+}
+
+/// The module and rehome consumers run the same import query over their parse.
+pub(crate) fn kt_import_specifiers(
+    tree: &tree_sitter::Tree,
+    src: &[u8],
+    strings: &mut Strings,
+    rows: &mut Vec<Specifier>,
+) {
+    let root = tree.root_node();
+    let language = root.language();
+    let query = KOTLIN_FAMILY_QUERY.get_or_init(|| {
+        hafley_scm::build(&language, KOTLIN_SCM)
+            .expect("the bundled Kotlin family query compiles")
+    });
+    let mut arena = hafley_scm::MatchArena::default();
+    hafley_scm::run(query, "kotlin-imports", src, tree, u32::MAX, &mut arena)
+        .expect("the Kotlin import query never exceeds the engine match limit");
+    kt_import_specifiers_from_arena(src, query, &arena, strings, rows);
 }
 
 /// The first named child of `node` with `kind`.
@@ -1417,7 +1432,7 @@ impl Source for KotlinSource {
                             &mut strings,
                             &mut bundle,
                         );
-                        kt_module_specifiers(root, src_bytes, &mut strings, &mut bundle);
+                        kt_import_specifiers_from_arena(src_bytes, query, arena, &mut strings, &mut bundle.aux.specifiers);
                         super::kotlin_receivers::collect_receivers(
                             root,
                             src_bytes,
