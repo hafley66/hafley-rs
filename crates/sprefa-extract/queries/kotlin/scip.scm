@@ -66,6 +66,12 @@
 (package_header) @local.export.package
 (import_header) @local.import
 
+; Import spellings consumed by CallF, module resolution, and rehome.
+(import_header
+  (identifier)? @import.path
+  (wildcard_import)? @import.wildcard
+  (import_alias (type_identifier) @import.alias)?) @import.span
+
 ; ── TypeF entities ──────────────────────────────────────────────────────────
 ; The generic class match also sees interfaces and enums. Their more specific
 ; matches override its kind for the same declaration span.

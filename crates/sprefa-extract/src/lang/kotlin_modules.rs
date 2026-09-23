@@ -18,7 +18,7 @@ use crate::family::SpecifierKind;
 use crate::lang::ts_resolve::{ImportRow, ResolvedImportKind};
 use crate::shape::Strings;
 
-use super::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text, kt_walk_import_headers};
+use super::kotlin::{kt_child_kind, kt_first_child, kt_import_specifiers, kt_parse, kt_text};
 
 // ── phase-2 facts: one dedicated parse per file ─────────────────────────────
 
@@ -55,7 +55,7 @@ pub fn kt_module_facts(path: &str, content: &[u8]) -> Option<KtModuleFacts> {
         .map(|identifier| kt_text(identifier, src).to_string());
     let mut strings = Strings::new();
     let mut raw = Vec::new();
-    kt_walk_import_headers(root, src, &mut strings, &mut raw);
+    kt_import_specifiers(&tree, src, &mut strings, &mut raw);
     let imports = raw
         .into_iter()
         .filter_map(|spec| {

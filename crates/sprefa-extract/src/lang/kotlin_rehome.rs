@@ -1,7 +1,7 @@
 //! `impl Rehome for KotlinSource`: every question `extract move` asks a
 //! language, answered for Kotlin. Import headers come off the same
-//! tree-sitter-kotlin walk `lang/kotlin.rs` already carries
-//! (`kt_walk_import_headers`), and the `package` declaration off the same parse.
+//! tree-sitter-kotlin query `lang/kotlin.rs` already carries
+//! (`kt_import_specifiers`), and the `package` declaration off the same parse.
 //! @comment-ok: module header, the seam list every lang file opens with
 //!
 //! A Kotlin import is `package.Decl` and the `package` declaration is truth
@@ -27,7 +27,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rayon::prelude::*;
 
-use super::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text, kt_walk_import_headers};
+use super::kotlin::{kt_child_kind, kt_first_child, kt_import_specifiers, kt_parse, kt_text};
 use super::KotlinSource;
 use crate::family::SpecifierKind;
 use crate::move_cx::{dirname, owned_by, MoveCx};
@@ -292,7 +292,7 @@ fn scan_file(text: String) -> Option<FileScan> {
     let source = text.as_bytes();
     let mut strings = Strings::new();
     let mut rows = Vec::new();
-    kt_walk_import_headers(root, source, &mut strings, &mut rows);
+    kt_import_specifiers(&tree, source, &mut strings, &mut rows);
     let imports = rows
         .into_iter()
         .filter_map(|row| {
