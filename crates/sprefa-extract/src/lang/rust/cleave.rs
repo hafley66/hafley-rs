@@ -22,24 +22,23 @@ const DIRECTORY_STEMS: [&str; 3] = ["mod", "lib", "main"];
 impl Cleave for RustSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
         let at = decl.start as usize;
-        let head = text.get(..at)?;
-        let carried = head.trim_end_matches([' ', '\t']).ends_with("pub")
-            || head.trim_end_matches([' ', '\t']).ends_with(')');
-        match (on, carried) {
-            (true, false) => Some(Edit {
+        let tail = text.get(at..)?;
+        let visibility_len = if tail.starts_with("pub ") {
+            Some(4)
+        } else if let Some(rest) = tail.strip_prefix("pub(") {
+            rest.find(')').map(|end| 4 + end + 1)
+        } else {
+            None
+        };
+        match (on, visibility_len) {
+            (true, None) => Some(Edit {
                 span: Span::anchor(decl.start),
                 text: "pub ".to_string(),
             }),
-            (false, true) => {
-                let cut = head.rfind("pub")? as u32;
-                Some(Edit {
-                    span: Span {
-                        start: cut,
-                        len: decl.start - cut,
-                    },
-                    text: String::new(),
-                })
-            }
+            (false, Some(len)) => Some(Edit {
+                span: Span { start: decl.start, len: len as u32 },
+                text: String::new(),
+            }),
             _ => None,
         }
     }

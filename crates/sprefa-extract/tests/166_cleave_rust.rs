@@ -145,6 +145,31 @@ fn field(plan: &serde_json::Value, key: &str, column: &str) -> Vec<String> {
 }
 
 #[test]
+fn body_locals_never_enter_the_drag_set_or_gain_visibility() {
+    let fixture = fixture("basic", "body-locals");
+    std::fs::write(
+        fixture.root.join("src/util.rs"),
+        r#"pub fn target(value: i32) -> i32 {
+    let start = helper(value);
+    start
+}
+pub(crate) fn helper(value: i32) -> i32 { value + 1 }
+pub fn other(value: i32) -> i32 { helper(value) }
+"#,
+    )
+    .unwrap();
+    let stdout = cleave(
+        &fixture,
+        &["src/util.rs#target", "src/config.rs", "--drag", "--json"],
+    );
+    let plan = plan_of(&stdout);
+    assert_eq!(names(&plan, "dragged"), ["helper"]);
+    assert_eq!(field(&plan, "dragged", "action"), ["exported"]);
+    assert!(!stdout.contains("pub let start"));
+    assert!(!stdout.contains("pub pub(crate)"));
+}
+
+#[test]
 fn the_plan_partitions_the_same_three_file_trace_the_ts_fixture_states() {
     let fixture = fixture("basic", "plan");
     let plan = plan_of(&cleave(

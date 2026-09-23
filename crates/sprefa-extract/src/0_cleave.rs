@@ -1014,6 +1014,7 @@ fn scope_rows(
     let path = cx.abs(rel);
     let facts =
         scm_facts(&[path]).map_err(|error| format!("scope rows for {rel}: {error}"))?;
+    let top_level = root_item_spans(rel, text)?;
     let mut decls: Vec<Decl> = Vec::new();
     let mut free = Vec::new();
     let file = Span {
@@ -1031,7 +1032,7 @@ fn scope_rows(
                 ..
             } if role == "def" => {
                 let span = line_span(text, span_of(*decl_start, *decl_end));
-                if span == file || !top_level(text, span) {
+                if span == file || !top_level.contains(&(*decl_start, *decl_end)) {
                     continue;
                 }
                 let name = declared(symbol);
@@ -1054,11 +1055,50 @@ fn scope_rows(
     Ok((decls, free))
 }
 
-/// Whether the declaration under `span` starts its own line, which is what
-/// makes it a top-level item rather than a parameter or a nested binding.
-fn top_level(text: &str, span: Span) -> bool {
-    let end = span.end() as usize;
-    span.start == 0 || text.as_bytes().get(end.saturating_sub(1)) == Some(&b'\n')
+/// Declaration spans at the CST root, including declarations wrapped by a TS
+/// `export_statement`. A line-aligned local still belongs to its function.
+fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String> {
+    let mask = FamilyMask {
+        cst: true,
+        ..FamilyMask::NONE
+    };
+    let out = dispatch(rel, text.as_bytes(), mask)
+        .ok_or_else(|| format!("no CST fact arm owns {rel}"))?;
+    let mut exports = BTreeSet::new();
+    let mut children = Vec::new();
+    flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
+        match fact {
+            FlatFact::Node {
+                family: sprefa_extract::FamilyTag::Cst,
+                kind,
+                span,
+                ..
+            } if kind == "export_statement" => {
+                exports.insert((span.start, span.end));
+            }
+            FlatFact::Edge {
+                family: sprefa_extract::FamilyTag::Cst,
+                kind,
+                from,
+                to,
+                ..
+            } if kind == "child" => children.push(((from.start, from.end), (to.start, to.end))),
+            _ => {}
+        }
+        Ok(())
+    })
+    .map_err(|_| format!("flatten CST {rel}"))?;
+    let root = (0, text.len() as u32);
+    let direct: BTreeSet<(u32, u32)> = children
+        .iter()
+        .filter(|(from, _)| *from == root)
+        .map(|(_, to)| *to)
+        .collect();
+    let mut items = direct.clone();
+    items.extend(children.into_iter().filter_map(|(from, to)| {
+        (direct.contains(&from) && exports.contains(&from)).then_some(to)
+    }));
+    Ok(items)
 }
 
 /// The declared name inside a `scm` symbol spelling.
