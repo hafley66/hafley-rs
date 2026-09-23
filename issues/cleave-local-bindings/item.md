@@ -2,9 +2,13 @@
 created: 2026-09-23
 updated: 2026-09-23
 type: bug
-status: open
+status: fixed
 priority: high
 related: ['@item-move-import-closure']
+closed: 2026-09-23
+commits:
+- hash: 1e57ae06
+  summary: Bound cleave declarations to CST roots
 ---
 
 # ryi cleave exports body-local bindings
@@ -12,3 +16,9 @@ related: ['@item-move-import-closure']
 ## Description
 
 Repro: from crates/sprefa-extract, run RUST_LOG=sprefa_extract=warn target/debug/ryi cleave src/lang/rust/lib.rs#project_df src/lang/rust/3_df.rs --root . --state /private/tmp/ryi-scm-cleave-state --drag --json. Dry-run only; no files were changed by cleave. Actual plan lists body locals start, end, index, item, sig, ident, inner, types, and tail as dragged/exported declarations. The preview inserts pub before let bindings inside functions, pub pub(crate) before def_span, and stray let fragments into the destination. The same false body-local exports appear without --drag. Expected: classify free names at item/module scope only; never export or move a local binding; preview parses before commit. Add a focused regression fixture, then typecheck the project_df cleave output.
+
+## Resolution
+
+### 2026-09-23T23:26:15Z · @issuectl
+
+CST-root declaration filtering excludes body locals, Rust visibility insertion avoids duplicate pub, and a focused regression passes. The original project_df preview was split manually before this fix; generic preview-parse verification remains under @item-move-import-closure.
