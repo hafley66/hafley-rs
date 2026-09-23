@@ -712,6 +712,16 @@ pub(crate) fn kt_header_facts(
     let mut arena = hafley_scm::MatchArena::default();
     hafley_scm::run(query, "kotlin-headers", src, tree, u32::MAX, &mut arena)
         .expect("the Kotlin header query never exceeds the engine match limit");
+    kt_header_facts_from_arena(src, query, &arena, strings, rows)
+}
+
+pub(crate) fn kt_header_facts_from_arena(
+    src: &[u8],
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
+    strings: &mut Strings,
+    rows: &mut Vec<Specifier>,
+) -> Option<(Span, String)> {
     kt_import_specifiers_from_arena(src, query, &arena, strings, rows);
     arena.spans.iter().find_map(|capture| {
         (query.names[capture.name as usize].as_ref() == "module.package").then(|| {
@@ -1395,6 +1405,8 @@ impl Source for KotlinSource {
         let mut types = None;
         let mut call = None;
         let mut df = None;
+        let mut scm_captures = None;
+        let mut kotlin_module = None;
         if mask.types || mask.call || mask.df {
             if let Ok(src) = std::str::from_utf8(content) {
                 let tree = {
@@ -1418,6 +1430,14 @@ impl Source for KotlinSource {
                     } else {
                         None
                     };
+                    if let Some((query, arena)) = &scm {
+                        scm_captures = Some(super::scm_rows::ScmCaptures::from_arena(
+                            query, arena, src_bytes,
+                        ));
+                        kotlin_module = Some(super::kotlin_modules::kt_module_facts_from_arena(
+                            root, src_bytes, query, arena,
+                        ));
+                    }
                     if mask.types {
                         let span = trace::family_span("kotlin", "type");
                         let _entered = span.enter();
@@ -1471,6 +1491,8 @@ impl Source for KotlinSource {
             call,
             df,
             data: None,
+            scm_captures,
+            kotlin_module,
         }
     }
 }

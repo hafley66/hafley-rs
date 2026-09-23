@@ -361,6 +361,8 @@ impl Source for FallbackSource {
             call,
             df: None,
             data: None,
+            scm_captures: None,
+            kotlin_module: None,
         }
     }
 }

@@ -1,8 +1,8 @@
 //! @comment-ok: module header, the seam list every lang file opens with
 //! The kotlin module plane: `import` headers resolved against the supplied
 //! file set only, so `import_facts` writes `resolved_import` rows for kotlin
-//! the way `ts_resolve.rs` does for ts. A dedicated second parse, gated
-//! behind `--resolve` like `go_modules.rs`.
+//! the way `ts_resolve.rs` does for ts. Project extraction reuses Kotlin's
+//! family tree and query arena; the standalone door parses its own tree.
 //!
 //! A kotlin package maps to a directory by convention only, so the plane
 //! indexes the supplied files' own `package` headers: `import a.b.C` binds
@@ -18,9 +18,9 @@ use crate::family::SpecifierKind;
 use crate::lang::ts_resolve::{ImportRow, ResolvedImportKind};
 use crate::shape::Strings;
 
-use super::kotlin::{kt_first_child, kt_header_facts, kt_parse, kt_text};
+use super::kotlin::{kt_first_child, kt_header_facts, kt_header_facts_from_arena, kt_parse, kt_text};
 
-// ── phase-2 facts: one dedicated parse per file ─────────────────────────────
+// ── phase-2 facts ────────────────────────────────────────────────────────────
 
 /// One `import` header, `Specifier`'s NameIds resolved to owned text.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -53,6 +53,29 @@ pub fn kt_module_facts(path: &str, content: &[u8]) -> Option<KtModuleFacts> {
     let mut strings = Strings::new();
     let mut raw = Vec::new();
     let package = kt_header_facts(&tree, src, &mut strings, &mut raw).map(|(_, name)| name);
+    Some(kt_module_facts_from_parts(root, src, &strings, raw, package))
+}
+
+pub(crate) fn kt_module_facts_from_arena(
+    root: tree_sitter::Node,
+    src: &[u8],
+    query: &hafley_scm::QueryExt,
+    arena: &hafley_scm::MatchArena,
+) -> KtModuleFacts {
+    let mut strings = Strings::new();
+    let mut raw = Vec::new();
+    let package = kt_header_facts_from_arena(src, query, arena, &mut strings, &mut raw)
+        .map(|(_, name)| name);
+    kt_module_facts_from_parts(root, src, &strings, raw, package)
+}
+
+fn kt_module_facts_from_parts(
+    root: tree_sitter::Node,
+    src: &[u8],
+    strings: &Strings,
+    raw: Vec<crate::family::Specifier>,
+    package: Option<String>,
+) -> KtModuleFacts {
     let imports = raw
         .into_iter()
         .filter_map(|spec| {
@@ -71,11 +94,11 @@ pub fn kt_module_facts(path: &str, content: &[u8]) -> Option<KtModuleFacts> {
             top_level.insert(name);
         }
     }
-    Some(KtModuleFacts {
+    KtModuleFacts {
         package,
         imports,
         top_level,
-    })
+    }
 }
 
 /// The name a top-level declaration binds, backticks stripped.

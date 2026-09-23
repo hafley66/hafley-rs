@@ -51,6 +51,31 @@ struct Capture {
     end: u32,
 }
 
+/// Path-free query captures retained past the Kotlin parser arena lifetime.
+/// The path is supplied when fast emits rows, since dispatch caches by blob.
+#[derive(Default)]
+pub(crate) struct ScmCaptures {
+    end: u32,
+    captures: BTreeSet<Capture>,
+}
+
+impl ScmCaptures {
+    pub(crate) fn from_arena(
+        query: &hafley_scm::QueryExt,
+        arena: &hafley_scm::MatchArena,
+        source: &[u8],
+    ) -> Self {
+        Self {
+            end: source.len() as u32,
+            captures: kept_captures(query, arena, source),
+        }
+    }
+
+    pub(crate) fn facts(&self, path: &str) -> Vec<FlatFact> {
+        rows(path, self.end, self.captures.clone())
+    }
+}
+
 struct Scope {
     start: u32,
     end: u32,

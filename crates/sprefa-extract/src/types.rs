@@ -2718,6 +2718,8 @@ pub struct RyiOutput {
     pub call: Option<FamilyBundle<CallF>>,
     pub df: Option<FamilyBundle<DfF>>,
     pub data: Option<FamilyBundle<DataF>>,
+    pub(crate) scm_captures: Option<crate::lang::scm_rows::ScmCaptures>,
+    pub(crate) kotlin_module: Option<crate::lang::kotlin_modules::KtModuleFacts>,
 }
 
 /// One language binding: a Parser + its per-family Project<F>s behind one masked

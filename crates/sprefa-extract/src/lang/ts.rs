@@ -4150,6 +4150,8 @@ impl Source for TsSource {
             call,
             df,
             data: None,
+            scm_captures: None,
+            kotlin_module: None,
         }
     }
 }

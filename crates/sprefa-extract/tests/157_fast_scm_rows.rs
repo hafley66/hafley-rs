@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use serde_json::Value;
-use sprefa_extract::FlatFact;
+use sprefa_extract::{diet_scip, diet_scip_with_raw, scm_facts, FlatFact};
 
 const CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -153,6 +153,34 @@ fn fast_streams_the_rows_in_their_pinned_shape() {
         shapes.keys().map(|k| (*k).to_string()).collect(),
         "fast streams every scm row over {KOTLIN_FILES:?}"
     );
+}
+
+#[test]
+fn kotlin_fast_rows_match_the_file_query_for_identical_blobs_at_distinct_paths() {
+    let root = std::env::temp_dir().join(format!("ryi-157-owned-{}", std::process::id()));
+    std::fs::create_dir_all(&root).unwrap();
+    let paths: Vec<PathBuf> = ["0_copy.kt", "1_copy.kt"]
+        .into_iter()
+        .map(|name| root.join(name))
+        .collect();
+    let source = include_bytes!("fixtures/kotlin_receivers/lib.kt");
+    for path in &paths {
+        std::fs::write(path, source).unwrap();
+    }
+    let row_shapes = wire_shapes();
+    let only_scm = |facts: Vec<FlatFact>| {
+        facts
+            .into_iter()
+            .map(|fact| serde_json::to_value(fact).unwrap())
+            .filter(|fact| row_shapes.contains_key(fact["record"].as_str().unwrap()))
+            .collect::<Vec<_>>()
+    };
+    let expected = only_scm(scm_facts(&paths).unwrap());
+    let actual = only_scm(diet_scip(&paths).unwrap());
+    assert_eq!(actual, expected);
+    let with_raw = diet_scip_with_raw(&paths, &mut |_| Ok::<_, ()>(())).unwrap();
+    assert_eq!(only_scm(with_raw), expected);
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

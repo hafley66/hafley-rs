@@ -2807,6 +2807,8 @@ impl Source for GoSource {
             call,
             df,
             data: None,
+            scm_captures: None,
+            kotlin_module: None,
         }
     }
 }

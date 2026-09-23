@@ -276,8 +276,17 @@ pub fn resolve_project_with_raw<E>(
     request: &ResolveRequest,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let mut inputs =
+    let inputs =
         read_inputs_with_modules(request.paths).map_err(ResolveWithRawError::Project)?;
+    resolve_project_with_raw_inputs(request, inputs, push_raw, None)
+}
+
+fn resolve_project_with_raw_inputs<E>(
+    request: &ResolveRequest,
+    mut inputs: Vec<ProjectInput>,
+    push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
+    scm_paths: Option<&[PathBuf]>,
+) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     for input in &mut inputs {
         push_raw(RawProjectFact {
             path: &input.path,
@@ -304,7 +313,12 @@ pub fn resolve_project_with_raw<E>(
         })
         .map_err(ResolveWithRawError::RawSink)?;
     }
-    resolve_project_inputs(request, inputs).map_err(ResolveWithRawError::Project)
+    let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
+    let mut facts = resolve_project_inputs(request, inputs).map_err(ResolveWithRawError::Project)?;
+    if let Some(scm) = scm {
+        facts.extend(scm.map_err(ResolveWithRawError::Project)?);
+    }
+    Ok(facts)
 }
 
 fn resolve_project_inputs(
@@ -1275,15 +1289,33 @@ pub fn scip_family_from_index_jsonl(
 /// default; this family is the labelled entry, not a replacement.
 // @comment-ok: one pre-existing diet_scip design note, edited by one line.
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    let mut facts = resolve_project(&diet_scip_request(paths))?;
-    facts.extend(scm_rows(paths)?);
+    let inputs = read_inputs_with_modules(paths)?;
+    let scm = scm_rows(paths, &inputs);
+    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs)?;
+    facts.extend(scm?);
     Ok(facts)
 }
 
 /// The `symbol`/`occurrence`/`local` rows fast reads straight out of
 /// `queries/<lang>/scip.scm`. A language with no query yet contributes none.
-fn scm_rows(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    crate::scm_facts(paths).map_err(|error| ProjectError::Scm(error.to_string()))
+fn scm_rows(paths: &[PathBuf], inputs: &[ProjectInput]) -> Result<Vec<FlatFact>, ProjectError> {
+    let mut rows = Vec::new();
+    let captured: std::collections::HashMap<&str, &crate::lang::scm_rows::ScmCaptures> = inputs
+        .iter()
+        .filter_map(|input| Some((input.path.as_str(), input.output.scm_captures.as_ref()?)))
+        .collect();
+    for path in paths {
+        let name = path.to_string_lossy();
+        if let Some(captures) = captured.get(name.as_ref()) {
+            rows.extend(captures.facts(&name));
+        } else {
+            rows.extend(
+                crate::scm_facts(std::slice::from_ref(path))
+                    .map_err(|error| ProjectError::Scm(error.to_string()))?,
+            );
+        }
+    }
+    Ok(rows)
 }
 
 /// The diet/fast family with the phase-1 rows retained through the same sink
@@ -1292,9 +1324,8 @@ pub fn diet_scip_with_raw<E>(
     paths: &[PathBuf],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let mut facts = resolve_project_with_raw(&diet_scip_request(paths), push_raw)?;
-    facts.extend(scm_rows(paths).map_err(ResolveWithRawError::Project)?);
-    Ok(facts)
+    let inputs = read_inputs_with_modules(paths).map_err(ResolveWithRawError::Project)?;
+    resolve_project_with_raw_inputs(&diet_scip_request(paths), inputs, push_raw, Some(paths))
 }
 
 fn diet_scip_request(paths: &[PathBuf]) -> ResolveRequest<'_> {
@@ -1380,8 +1411,17 @@ fn py_module_facts_of(path: &str, content: &[u8], wanted: bool) -> Option<PyModu
 }
 
 /// The kotlin module plane's own facts, same discipline as `module_facts_of`.
-fn kt_module_facts_of(path: &str, content: &[u8], wanted: bool) -> Option<KtModuleFacts> {
-    wanted.then(|| kt_module_facts(path, content))?
+fn kt_module_facts_of(
+    path: &str,
+    content: &[u8],
+    wanted: bool,
+    output: Option<&RyiOutput>,
+) -> Option<KtModuleFacts> {
+    wanted.then(|| {
+        output
+            .and_then(|output| output.kotlin_module.clone())
+            .or_else(|| kt_module_facts(path, content))
+    })?
 }
 
 /// Extraction thread budget. One worker is held back below the clamp so the
@@ -1450,7 +1490,7 @@ fn read_inputs_plain(paths: &[PathBuf], modules: bool) -> Result<Vec<ProjectInpu
                 let rust_module = rust_module_facts_of(&path, &content, modules);
                 let go_module = go_module_facts_of(&path, &content, modules);
                 let py_module = py_module_facts_of(&path, &content, modules);
-                let kt_module = kt_module_facts_of(&path, &content, modules);
+                let kt_module = kt_module_facts_of(&path, &content, modules, output.as_deref());
                 Ok(output.map(|output| {
                     let blob = content_id_of(&content);
                     ProjectInput {
@@ -1510,7 +1550,7 @@ fn read_inputs_batched(
                 let rust_module = rust_module_facts_of(&path, content, modules);
                 let go_module = go_module_facts_of(&path, content, modules);
                 let py_module = py_module_facts_of(&path, content, modules);
-                let kt_module = kt_module_facts_of(&path, content, modules);
+                let kt_module = kt_module_facts_of(&path, content, modules, output.as_deref());
                 Ok(output.map(|output| {
                     let blob = content_id_of(content);
                     ProjectInput {
