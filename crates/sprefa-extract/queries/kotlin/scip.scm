@@ -66,20 +66,60 @@
 (package_header) @local.export.package
 (import_header) @local.import
 
+; ── TypeF entities ──────────────────────────────────────────────────────────
+; The generic class match also sees interfaces and enums. Their more specific
+; matches override its kind for the same declaration span.
+((class_declaration
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "class")
+  (#set! "type.form" "declaration"))
+((class_declaration
+    "interface"
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "interface")
+  (#set! "type.form" "declaration"))
+((class_declaration
+    "enum"
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "enum")
+  (#set! "type.form" "declaration"))
+((object_declaration
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "class")
+  (#set! "type.form" "declaration"))
+((companion_object
+    (type_identifier) @type.name) @type.span
+  (#set! "type.kind" "class")
+  (#set! "type.form" "companion"))
+((function_declaration
+    (simple_identifier) @type.name) @type.span
+  (#set! "type.kind" "function")
+  (#set! "type.form" "function"))
+
 ; ── CallF ───────────────────────────────────────────────────────────────────
 ; Hand-written, not vendored: the vendored helix captures end above.
 ; 6_scm_family.rs reads only these labels, 7_scm_rows.rs only the local.* ones.
 
-[
-  (function_declaration
-    (simple_identifier) @def.name)
-  (primary_constructor)
-  (secondary_constructor)
-  (lambda_literal)
-] @def.span
+((function_declaration
+    (simple_identifier) @def.name) @def.span @def.scope
+  (#set! "call.def" "function")
+  (#set! "call.scope" "free"))
+((function_declaration
+    (function_body) @def.body) @def.span
+  (#set! "call.def" "function"))
+((primary_constructor) @def.span
+  (#set! "call.def" "constructor"))
+((secondary_constructor) @def.span
+  (#set! "call.def" "constructor"))
+((lambda_literal) @def.span
+  (#has-ancestor? @def.span "function_declaration")
+  (#set! "call.def" "lambda"))
 
-(class_declaration
-  (type_identifier) @def.name)
+((class_declaration
+    (type_identifier) @def.name) @def.scope
+  (#set! "call.scope" "method"))
+((object_declaration) @def.scope
+  (#set! "call.scope" "method"))
 
 [
   (call_expression
@@ -88,16 +128,74 @@
     (navigation_expression
       (navigation_suffix
         (simple_identifier) @site.callee)) @site.receiver)
-  (call_expression)
-  (infix_expression)
-  (additive_expression)
-  (multiplicative_expression)
-  (range_expression)
-  (comparison_expression)
-  (equality_expression)
-  (check_expression)
-  (prefix_expression)
-  (postfix_expression)
-  (indexing_expression)
-  (assignment)
+  (infix_expression
+    (simple_identifier) @site.callee)
 ] @site.span
+
+((call_expression
+    (call_expression)
+    (call_suffix) @site.operator) @site.span
+  (#set! "call.callee" "invoke"))
+((indexing_expression
+    (indexing_suffix) @site.operator) @site.span
+  (#set! "call.callee" "get"))
+((assignment
+    (directly_assignable_expression
+      (indexing_suffix) @site.operator)) @site.span
+  (#set! "call.callee" "set"))
+
+; Operator spellings are Kotlin's call-site names. The match keeps the
+; expression span for the existing ordered CallF projection; the token is the
+; emitted site's span. #set! is tree-sitter's per-pattern metadata.
+((additive_expression "+" @site.operator) @site.span
+  (#set! "call.callee" "plus"))
+((additive_expression "-" @site.operator) @site.span
+  (#set! "call.callee" "minus"))
+((multiplicative_expression "*" @site.operator) @site.span
+  (#set! "call.callee" "times"))
+((multiplicative_expression "/" @site.operator) @site.span
+  (#set! "call.callee" "div"))
+((multiplicative_expression "%" @site.operator) @site.span
+  (#set! "call.callee" "rem"))
+((range_expression ".." @site.operator) @site.span
+  (#set! "call.callee" "rangeTo"))
+((range_expression "..<" @site.operator) @site.span
+  (#set! "call.callee" "rangeUntil"))
+((equality_expression "==" @site.operator) @site.span
+  (#set! "call.callee" "equals"))
+((equality_expression "!=" @site.operator) @site.span
+  (#set! "call.callee" "equals"))
+((comparison_expression "<" @site.operator) @site.span
+  (#set! "call.callee" "compareTo"))
+((comparison_expression ">" @site.operator) @site.span
+  (#set! "call.callee" "compareTo"))
+((comparison_expression "<=" @site.operator) @site.span
+  (#set! "call.callee" "compareTo"))
+((comparison_expression ">=" @site.operator) @site.span
+  (#set! "call.callee" "compareTo"))
+((check_expression "in" @site.operator) @site.span
+  (#set! "call.callee" "contains"))
+((prefix_expression "-" @site.operator) @site.span
+  (#set! "call.callee" "unaryMinus"))
+((prefix_expression "+" @site.operator) @site.span
+  (#set! "call.callee" "unaryPlus"))
+((prefix_expression "!" @site.operator) @site.span
+  (#set! "call.callee" "not"))
+((prefix_expression "++" @site.operator) @site.span
+  (#set! "call.callee" "inc"))
+((prefix_expression "--" @site.operator) @site.span
+  (#set! "call.callee" "dec"))
+((postfix_expression "++" @site.operator) @site.span
+  (#set! "call.callee" "inc"))
+((postfix_expression "--" @site.operator) @site.span
+  (#set! "call.callee" "dec"))
+((assignment "+=" @site.operator) @site.span
+  (#set! "call.callee" "plusAssign"))
+((assignment "-=" @site.operator) @site.span
+  (#set! "call.callee" "minusAssign"))
+((assignment "*=" @site.operator) @site.span
+  (#set! "call.callee" "timesAssign"))
+((assignment "/=" @site.operator) @site.span
+  (#set! "call.callee" "divAssign"))
+((assignment "%=" @site.operator) @site.span
+  (#set! "call.callee" "remAssign"))

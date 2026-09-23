@@ -1,8 +1,9 @@
 //! `ryi fast`'s symbol / occurrence / local rows, from a per-language `.scm`
 //! query run through the shared `hafley_scm` engine, plus the file's scope tree.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, OnceLock};
 
 use tree_sitter::Parser;
 
@@ -11,6 +12,8 @@ use super::scm_store::{NodeKind, Store};
 use crate::types::FlatFact;
 
 const ROOT: usize = 0;
+static BUNDLED_QUERIES: OnceLock<Mutex<HashMap<(RyiLang, &'static str), Arc<hafley_scm::QueryExt>>>> =
+    OnceLock::new();
 
 #[derive(Debug)]
 pub enum ScmError {
@@ -333,8 +336,8 @@ fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScmError> {
     Ok(rows(&name, end, captured))
 }
 
-/// One file's pass: the engine builds the bundled query once and runs it
-/// natively; the arena's captures are every later projection's input.
+/// One file's pass: the engine runs the cached bundled query; the arena's
+/// captures are every later projection's input.
 fn file_captures(path: &Path) -> Result<Option<(String, u32, BTreeSet<Capture>)>, ScmError> {
     let name = path.to_string_lossy().to_string();
     let Some((lang, query_text)) = query_for(&name) else {
@@ -348,12 +351,12 @@ fn file_captures(path: &Path) -> Result<Option<(String, u32, BTreeSet<Capture>)>
     Ok(Some((name, source.len() as u32, captured)))
 }
 
-/// One build and one native run: the engine applies the query's own
-/// predicates and appends every kept match's captures to the arena.
+/// One cached build per grammar/query and one native run per file. The engine
+/// applies predicates and appends kept captures to the arena.
 fn arena_captures(
     path: &str,
     lang: RyiLang,
-    query_text: &str,
+    query_text: &'static str,
     source: &[u8],
 ) -> Result<BTreeSet<Capture>, ScmError> {
     let language = lang.tree_sitter_language();
@@ -368,7 +371,21 @@ fn arena_captures(
         path: path.to_string(),
         detail: "parse returned no tree".into(),
     })?;
-    let query = hafley_scm::build(&language, query_text).map_err(|error| scm_error(path, error))?;
+    let mut queries = BUNDLED_QUERIES
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("bundled query cache is not poisoned");
+    let query = if let Some(query) = queries.get(&(lang, query_text)) {
+        Arc::clone(query)
+    } else {
+        let query = Arc::new(
+            hafley_scm::build(&language, query_text)
+                .map_err(|error| scm_error(path, error))?,
+        );
+        queries.insert((lang, query_text), Arc::clone(&query));
+        query
+    };
+    drop(queries);
     let mut arena = hafley_scm::MatchArena::default();
     // The fresh-cursor default the direct run always had; the engine's limit
     // check cannot fire at u32::MAX.
