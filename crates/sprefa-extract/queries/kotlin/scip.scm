@@ -105,7 +105,7 @@
 
 ; ── CallF ───────────────────────────────────────────────────────────────────
 ; Hand-written, not vendored: the vendored helix captures end above.
-; 6_scm_family.rs reads only these labels, 7_scm_rows.rs only the local.* ones.
+; 6_scm_family.rs reads def.* and emitted sites; 7_scm_rows.rs reads local.*.
 
 ((function_declaration
     (simple_identifier) @def.name) @def.span @def.scope
@@ -128,81 +128,82 @@
 ((object_declaration) @def.scope
   (#set! "call.scope" "method"))
 
-[
-  (call_expression
-    (simple_identifier) @site.callee)
-  (call_expression
+((call_expression
+    (simple_identifier) @site.callee) @site.span
+  (#emit-call-site! @site.span @site.callee @site.callee))
+((call_expression
     (navigation_expression
       (navigation_suffix
-        (simple_identifier) @site.callee)) @site.receiver)
-  (infix_expression
-    (simple_identifier) @site.callee)
-] @site.span
+        (simple_identifier) @site.callee)) @site.receiver) @site.span
+  (#emit-call-site! @site.span @site.receiver @site.callee))
+((infix_expression
+    (simple_identifier) @site.callee) @site.span
+  (#emit-call-site! @site.span @site.callee @site.callee))
 
 ((call_expression
     (call_expression)
     (call_suffix) @site.operator) @site.span
-  (#set! "call.callee" "invoke"))
+  (#emit-call-site! @site.span @site.operator "invoke"))
 ((indexing_expression
     (indexing_suffix) @site.operator) @site.span
-  (#set! "call.callee" "get"))
+  (#emit-call-site! @site.span @site.operator "get"))
 ((assignment
     (directly_assignable_expression
       (indexing_suffix) @site.operator)) @site.span
-  (#set! "call.callee" "set"))
+  (#emit-call-site! @site.span @site.operator "set"))
 
 ; Operator spellings are Kotlin's call-site names. The match keeps the
 ; expression span for the existing ordered CallF projection; the token is the
-; emitted site's span. #set! is tree-sitter's per-pattern metadata.
+; emitted site's span. The host emission keeps these rows in the match arena.
 ((additive_expression "+" @site.operator) @site.span
-  (#set! "call.callee" "plus"))
+  (#emit-call-site! @site.span @site.operator "plus"))
 ((additive_expression "-" @site.operator) @site.span
-  (#set! "call.callee" "minus"))
+  (#emit-call-site! @site.span @site.operator "minus"))
 ((multiplicative_expression "*" @site.operator) @site.span
-  (#set! "call.callee" "times"))
+  (#emit-call-site! @site.span @site.operator "times"))
 ((multiplicative_expression "/" @site.operator) @site.span
-  (#set! "call.callee" "div"))
+  (#emit-call-site! @site.span @site.operator "div"))
 ((multiplicative_expression "%" @site.operator) @site.span
-  (#set! "call.callee" "rem"))
+  (#emit-call-site! @site.span @site.operator "rem"))
 ((range_expression ".." @site.operator) @site.span
-  (#set! "call.callee" "rangeTo"))
+  (#emit-call-site! @site.span @site.operator "rangeTo"))
 ((range_expression "..<" @site.operator) @site.span
-  (#set! "call.callee" "rangeUntil"))
+  (#emit-call-site! @site.span @site.operator "rangeUntil"))
 ((equality_expression "==" @site.operator) @site.span
-  (#set! "call.callee" "equals"))
+  (#emit-call-site! @site.span @site.operator "equals"))
 ((equality_expression "!=" @site.operator) @site.span
-  (#set! "call.callee" "equals"))
+  (#emit-call-site! @site.span @site.operator "equals"))
 ((comparison_expression "<" @site.operator) @site.span
-  (#set! "call.callee" "compareTo"))
+  (#emit-call-site! @site.span @site.operator "compareTo"))
 ((comparison_expression ">" @site.operator) @site.span
-  (#set! "call.callee" "compareTo"))
+  (#emit-call-site! @site.span @site.operator "compareTo"))
 ((comparison_expression "<=" @site.operator) @site.span
-  (#set! "call.callee" "compareTo"))
+  (#emit-call-site! @site.span @site.operator "compareTo"))
 ((comparison_expression ">=" @site.operator) @site.span
-  (#set! "call.callee" "compareTo"))
+  (#emit-call-site! @site.span @site.operator "compareTo"))
 ((check_expression "in" @site.operator) @site.span
-  (#set! "call.callee" "contains"))
+  (#emit-call-site! @site.span @site.operator "contains"))
 ((prefix_expression "-" @site.operator) @site.span
-  (#set! "call.callee" "unaryMinus"))
+  (#emit-call-site! @site.span @site.operator "unaryMinus"))
 ((prefix_expression "+" @site.operator) @site.span
-  (#set! "call.callee" "unaryPlus"))
+  (#emit-call-site! @site.span @site.operator "unaryPlus"))
 ((prefix_expression "!" @site.operator) @site.span
-  (#set! "call.callee" "not"))
+  (#emit-call-site! @site.span @site.operator "not"))
 ((prefix_expression "++" @site.operator) @site.span
-  (#set! "call.callee" "inc"))
+  (#emit-call-site! @site.span @site.operator "inc"))
 ((prefix_expression "--" @site.operator) @site.span
-  (#set! "call.callee" "dec"))
+  (#emit-call-site! @site.span @site.operator "dec"))
 ((postfix_expression "++" @site.operator) @site.span
-  (#set! "call.callee" "inc"))
+  (#emit-call-site! @site.span @site.operator "inc"))
 ((postfix_expression "--" @site.operator) @site.span
-  (#set! "call.callee" "dec"))
+  (#emit-call-site! @site.span @site.operator "dec"))
 ((assignment "+=" @site.operator) @site.span
-  (#set! "call.callee" "plusAssign"))
+  (#emit-call-site! @site.span @site.operator "plusAssign"))
 ((assignment "-=" @site.operator) @site.span
-  (#set! "call.callee" "minusAssign"))
+  (#emit-call-site! @site.span @site.operator "minusAssign"))
 ((assignment "*=" @site.operator) @site.span
-  (#set! "call.callee" "timesAssign"))
+  (#emit-call-site! @site.span @site.operator "timesAssign"))
 ((assignment "/=" @site.operator) @site.span
-  (#set! "call.callee" "divAssign"))
+  (#emit-call-site! @site.span @site.operator "divAssign"))
 ((assignment "%=" @site.operator) @site.span
-  (#set! "call.callee" "remAssign"))
+  (#emit-call-site! @site.span @site.operator "remAssign"))

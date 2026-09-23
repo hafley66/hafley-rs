@@ -1,4 +1,4 @@
-//! Kotlin CallF projection from the CallF captures in `queries/kotlin/scip.scm`.
+//! Kotlin CallF definitions from captures and sites from typed SCM emissions.
 
 use std::collections::BTreeMap;
 
@@ -8,8 +8,7 @@ use crate::shape::{Span, Strings};
 
 #[derive(Default)]
 struct SiteCapture {
-    callee: Option<(String, Span)>,
-    receiver: Option<Span>,
+    direct: Option<(String, Span)>,
     operators: Vec<(String, Span)>,
 }
 
@@ -20,7 +19,7 @@ struct DefCapture {
     body_end: Option<u32>,
 }
 
-/// Map the shared query arena's grouped captures onto CallF rows.
+/// Map definition captures and emitted call sites onto CallF rows.
 pub(crate) fn project_kotlin_call(
     src: &[u8],
     query: &hafley_scm::QueryExt,
@@ -38,29 +37,8 @@ pub(crate) fn project_kotlin_call(
         let mut def_name = None;
         let mut def_body = None;
         let mut def_scope = None;
-        let mut site_span = None;
-        let mut site_callee = None;
-        let mut site_receiver = None;
-        let mut site_operators = Vec::new();
         for span in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
             let label = names[span.name as usize].as_ref();
-            if label == "site.operator" {
-                let callee = query
-                    .user
-                    .property_settings(row.pattern as usize)
-                    .iter()
-                    .find(|property| property.key.as_ref() == "call.callee")
-                    .and_then(|property| property.value.as_deref())
-                    .expect("a Kotlin operator capture names its call.callee");
-                site_operators.push((
-                    callee.to_string(),
-                    Span {
-                        start: span.bytes.start,
-                        len: span.bytes.end - span.bytes.start,
-                    },
-                ));
-                continue;
-            }
             match label {
                 "def.span" => def_span = Some(capture_span(span.bytes.start, span.bytes.end)),
                 "def.name" => {
@@ -74,31 +52,6 @@ pub(crate) fn project_kotlin_call(
                 }
                 "def.body" => def_body = Some(span.bytes.end),
                 "def.scope" => def_scope = Some(capture_span(span.bytes.start, span.bytes.end)),
-                "site.span" => {
-                    site_span = Some(Span {
-                        start: span.bytes.start,
-                        len: span.bytes.end - span.bytes.start,
-                    })
-                }
-                "site.callee" => {
-                    let text = std::str::from_utf8(
-                        &src[span.bytes.start as usize..span.bytes.end as usize],
-                    )
-                    .expect("Kotlin identifier capture is utf8");
-                    site_callee = Some((
-                        text.to_string(),
-                        Span {
-                            start: span.bytes.start,
-                            len: span.bytes.end - span.bytes.start,
-                        },
-                    ));
-                }
-                "site.receiver" => {
-                    site_receiver = Some(Span {
-                        start: span.bytes.start,
-                        len: span.bytes.end - span.bytes.start,
-                    })
-                }
                 _ => {}
             }
         }
@@ -119,15 +72,18 @@ pub(crate) fn project_kotlin_call(
                 .or_insert_with(|| (kind.to_string(), None));
             scope.1 = scope.1.take().or(def_name);
         }
-        if let Some(span) = site_span {
-            let entry = sites.entry(span).or_default();
-            if let Some(callee) = site_callee {
-                entry.callee = Some(callee);
-            }
-            if let Some(receiver) = site_receiver {
-                entry.receiver = Some(receiver);
-            }
-            entry.operators.extend(site_operators);
+    }
+
+    for emitted in &arena.call_sites {
+        let group = capture_span(emitted.group.start, emitted.group.end);
+        let span = capture_span(emitted.span.start, emitted.span.end);
+        let entry = sites.entry(group).or_default();
+        if let Some(bytes) = &emitted.callee_bytes {
+            let callee = std::str::from_utf8(&src[bytes.start as usize..bytes.end as usize])
+                .expect("Kotlin call name is utf8");
+            entry.direct = Some((callee.to_string(), span));
+        } else if let Some(index) = emitted.callee_literal {
+            entry.operators.push((query.call_site_literals[index as usize].to_string(), span));
         }
     }
 
@@ -166,13 +122,8 @@ pub(crate) fn project_kotlin_call(
     }
 
     for (_, captures) in sites {
-        if let Some((callee, callee_span)) = captures.callee {
-            push_site(
-                captures.receiver.unwrap_or(callee_span),
-                &callee,
-                strings,
-                sink,
-            );
+        if let Some((callee, span)) = captures.direct {
+            push_site(span, &callee, strings, sink);
         } else {
             for (callee, span) in captures.operators {
                 push_site(span, &callee, strings, sink);

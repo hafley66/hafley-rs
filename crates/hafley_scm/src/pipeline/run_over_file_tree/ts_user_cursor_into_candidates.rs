@@ -20,7 +20,7 @@ pub fn user_cursor_into_arena(
     let mut found = cursor.matches(&q.user, tree.root_node(), src);
     while let Some(one) = found.next() {
         if holds_for_candidate(q, one, src, kind_ids) {
-            append_match(one, file, arena);
+            append_match(q, one, file, arena);
         }
     }
     drop(found);

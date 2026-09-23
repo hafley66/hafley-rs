@@ -4,4 +4,5 @@ pub struct MatchArena {
     pub files: Vec<Box<str>>,
     pub spans: Vec<super::CapturedSpan>,
     pub rows: Vec<super::MatchRow>,
+    pub call_sites: Vec<super::EmittedCallSite>,
 }
