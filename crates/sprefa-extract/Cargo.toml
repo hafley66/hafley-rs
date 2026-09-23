@@ -22,6 +22,11 @@ features = ["cli"]
 # walks up past the parent's `exclude` and fails to resolve. Railed by tests/112_build_metadata.rs.
 [workspace]
 
+[build-dependencies]
+hafley_scm = { path = "../hafley_scm", default-features = false }
+tree-sitter = "0.25"
+tree-sitter-kotlin-sg = "0.4"
+
 [dependencies]
 # The newline scan behind the per-document line table. Already unified in the
 # workspace lock through regex/aho-corasick, so this pins no new copy.

@@ -105,28 +105,28 @@
 
 ; ── CallF ───────────────────────────────────────────────────────────────────
 ; Hand-written, not vendored: the vendored helix captures end above.
-; 6_scm_family.rs reads def.* and emitted sites; 7_scm_rows.rs reads local.*.
+; 6_scm_family.rs reads emitted call rows; 7_scm_rows.rs reads local.*.
 
 ((function_declaration
     (simple_identifier) @def.name) @def.span @def.scope
-  (#set! "call.def" "function")
-  (#set! "call.scope" "free"))
+  (#emit! "call.def" "span" @def.span "name" @def.name "kind" "function")
+  (#emit! "call.scope" "span" @def.scope "kind" "free"))
 ((function_declaration
     (function_body) @def.body) @def.span
-  (#set! "call.def" "function"))
+  (#emit! "call.def" "span" @def.span "body" @def.body "kind" "function"))
 ((primary_constructor) @def.span
-  (#set! "call.def" "constructor"))
+  (#emit! "call.def" "span" @def.span "kind" "constructor"))
 ((secondary_constructor) @def.span
-  (#set! "call.def" "constructor"))
+  (#emit! "call.def" "span" @def.span "kind" "constructor"))
 ((lambda_literal) @def.span
   (#has-ancestor? @def.span "function_declaration")
-  (#set! "call.def" "lambda"))
+  (#emit! "call.def" "span" @def.span "kind" "lambda"))
 
 ((class_declaration
     (type_identifier) @def.name) @def.scope
-  (#set! "call.scope" "method"))
+  (#emit! "call.scope" "span" @def.scope "name" @def.name "kind" "method"))
 ((object_declaration) @def.scope
-  (#set! "call.scope" "method"))
+  (#emit! "call.scope" "span" @def.scope "kind" "method"))
 
 ((call_expression
     (simple_identifier) @site.callee) @site.span
