@@ -99,15 +99,10 @@ impl<'a> Watch<'a> {
     /// Registers the module, creates the collector table, its shadow table and
     /// three triggers per watched table, then zeroes the callback counts.
     pub fn install<T: BulkTrigger>(self, db: &Connection, trigger: T) -> Result<()> {
-        const MODULE: Module<Table> = unsafe {
-            let mut raw: ffi::sqlite3_module =
-                std::mem::transmute(Module::<Table>::update_module_with_tx());
-            raw.iVersion = 2;
-            raw.xSavepoint = Some(savepoint);
-            raw.xRelease = Some(release);
-            raw.xRollbackTo = Some(rollback_to);
-            std::mem::transmute(raw)
-        };
+        const MODULE: Module<Table> = crate::vtab_module!(
+            Table,
+            crate::VtabCallbacks::savepoints(savepoint, release, rollback_to)
+        );
         schema::check_identifier(self.name)?;
         if self.tables.is_empty() {
             return Err(error("a collector needs at least one watched table"));
@@ -361,42 +356,27 @@ impl<'vtab> TransactionVTab<'vtab> for Table {
     }
 }
 
-fn dispatch(
-    raw: *mut ffi::sqlite3_vtab,
-    what: &'static str,
-    body: impl FnOnce(&mut Table) -> Result<()>,
-) -> c_int {
-    let outcome = guarded(what, || {
-        let table = unsafe { &mut *raw.cast::<Table>() };
-        body(table)
-    });
-    match outcome {
-        Ok(()) => ffi::SQLITE_OK,
-        Err(reason) => unsafe { rusqlite::to_sqlite_error(&reason, &mut (*raw).zErrMsg) },
-    }
-}
-
 unsafe extern "C" fn savepoint(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
-    dispatch(raw, "xSavepoint", |table| {
+    unsafe { crate::vtab_callback(raw, "xSavepoint", |table: &mut Table| {
         state_mut(&table.state)?.collector.savepoint(index);
         Ok(())
-    })
+    }) }
 }
 
 unsafe extern "C" fn release(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
-    dispatch(raw, "xRelease", |table| {
+    unsafe { crate::vtab_callback(raw, "xRelease", |table: &mut Table| {
         state_mut(&table.state)?.collector.release(index);
         Ok(())
-    })
+    }) }
 }
 
 /// The rows this rewinds past are inside SQLite's own transaction, so the pager
 /// already removed the spilled ones before this callback ran.
 unsafe extern "C" fn rollback_to(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
-    dispatch(raw, "xRollbackTo", |table| {
+    unsafe { crate::vtab_callback(raw, "xRollbackTo", |table: &mut Table| {
         state_mut(&table.state)?.collector.rollback_to(index);
         Ok(())
-    })
+    }) }
 }
 
 #[repr(C)]

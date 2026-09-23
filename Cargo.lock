@@ -1989,6 +1989,9 @@ checksum = "f1d20bef17f513b9b3004532233187769cd072d790971f4e4da0e346eb6401e8"
 dependencies = [
  "cc",
  "pkg-config",
+ "prettyplease",
+ "quote",
+ "syn 2.0.119",
  "vcpkg",
 ]
 
@@ -2637,6 +2640,16 @@ name = "predicates-core"
 version = "1.0.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cad38746f3166b4031b1a0d39ad9f954dd291e7854fcc0eed52ee41a0b50d144"
+
+[[package]]
+name = "prettyplease"
+version = "0.2.37"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "479ca8adacdd7ce8f1fb39ce9ecccbfe93a3f1344b3d0d97f20bc0196208f62b"
+dependencies = [
+ "proc-macro2",
+ "syn 2.0.119",
+]
 
 [[package]]
 name = "proc-macro2"
@@ -3618,11 +3631,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "sqlite-bulk-trigger"
+name = "sqlite-ext"
 version = "0.1.0"
 dependencies = [
+ "hafley-observe",
  "rusqlite",
  "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]

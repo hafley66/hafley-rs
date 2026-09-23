@@ -1,0 +1,11 @@
+[package]
+name = "sqlite-ext-slow-fixture"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+sqlite-ext = { path = "../../..", features = ["loadable"] }

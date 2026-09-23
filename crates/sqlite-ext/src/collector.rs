@@ -190,6 +190,7 @@ impl Collector {
     }
 
     pub fn begin(&mut self) {
+        tracing::debug!(collector = %self.name, "collector_begin");
         self.counts.begin += 1;
         self.reset();
     }
@@ -197,6 +198,13 @@ impl Collector {
     /// Numbers the change and either stages it or writes it to the shadow
     /// table. The `sequence` the caller supplied is overwritten.
     pub fn update(&mut self, db: &Connection, change: RowChange) -> Result<()> {
+        let _span = tracing::trace_span!(
+            "collector_update",
+            collector = %self.name,
+            source = %change.table,
+            sign = change.sign.as_integer(),
+            columns = change.values.len(),
+        ).entered();
         self.counts.update += 1;
         if change.values.len() > self.width {
             return Err(schema::error(format!(
@@ -214,13 +222,16 @@ impl Collector {
         if room {
             self.staged_bytes += bytes;
             self.staged.push(change);
+            tracing::trace!(staged = self.staged.len(), staged_bytes = self.staged_bytes, "collector_staged");
             return Ok(());
         }
         self.spilled_rows += 1;
+        tracing::debug!(spilled = self.spilled_rows, bytes, "collector_spill");
         self.write_shadow(db, &change)
     }
 
     pub fn savepoint(&mut self, savepoint: i32) {
+        tracing::debug!(collector = %self.name, savepoint, "collector_savepoint");
         self.counts.savepoint += 1;
         // SQLite numbers savepoints as a stack, so a repeat of an index retires
         // the older mark at that index.
@@ -235,6 +246,7 @@ impl Collector {
 
     /// RELEASE invalidates the named savepoint and everything inside it.
     pub fn release(&mut self, savepoint: i32) {
+        tracing::debug!(collector = %self.name, savepoint, "collector_release");
         self.counts.release += 1;
         self.marks.retain(|mark| mark.savepoint < savepoint);
         if self.marks.is_empty() {
@@ -247,6 +259,7 @@ impl Collector {
     /// Memory rows a later drain wrote return to `staged`; the shadow table
     /// unwinds with the page on its own.
     pub fn rollback_to(&mut self, savepoint: i32) {
+        tracing::debug!(collector = %self.name, savepoint, "collector_rollback_to");
         self.counts.rollback_to += 1;
         let restored = self
             .marks
@@ -281,6 +294,12 @@ impl Collector {
     /// shadow table's. The shadow table is emptied. Open savepoints stay open;
     /// a later ROLLBACK TO can hand the memory rows back to `staged`.
     pub fn drain(&mut self, db: &Connection) -> Result<Vec<RowChange>> {
+        let _span = tracing::debug_span!(
+            "collector_drain",
+            collector = %self.name,
+            staged = self.staged.len(),
+            spilled = self.spilled_rows,
+        ).entered();
         self.counts.sync += 1;
         let staged = std::mem::take(&mut self.staged);
         let spilled = self.spilled_rows;
@@ -293,17 +312,20 @@ impl Collector {
         }
         self.drains += 1;
         if spilled == 0 {
+            tracing::debug!(rows = staged.len(), "collector_drain_end");
             return Ok(staged);
         }
         let batch = merge(staged, self.read_shadow(db)?);
         db.prepare_cached(&schema::delete_delta(&self.name))?
             .execute([])?;
+        tracing::debug!(rows = batch.len(), "collector_drain_end");
         Ok(batch)
     }
 
     /// SQLite discards xCommit's return code, so a leftover batch is reported
     /// and never raised.
     pub fn commit(&mut self) {
+        tracing::debug!(collector = %self.name, "collector_commit");
         self.counts.commit += 1;
         let (staged, spilled) = (self.staged.len(), self.spilled_rows);
         if staged != 0 || spilled != 0 {
@@ -312,6 +334,7 @@ impl Collector {
     }
 
     pub fn rollback(&mut self) {
+        tracing::debug!(collector = %self.name, "collector_rollback");
         self.counts.rollback += 1;
         self.reset();
     }
