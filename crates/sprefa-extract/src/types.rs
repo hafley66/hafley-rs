@@ -3589,6 +3589,16 @@ pub enum FlatFact {
         def_file: String,
         repo: String,
     },
+    /// A reference to a symbol declared external by the SCIP index. `symbol`
+    /// is the complete target identity; `origin` is its SCIP scheme, package
+    /// manager, package, and version prefix.
+    #[serde(rename = "scip_external_ref")]
+    ScipExternalRefRow {
+        file: String,
+        symbol: String,
+        origin: String,
+        repo: String,
+    },
     /// v5 `scip_edge(src, dst, repo)`: file-to-file dependency, one row per
     /// distinct pair. The same graph `--scip-deps` folds, in v5's column names.
     #[serde(rename = "scip_edge")]

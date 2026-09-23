@@ -70,6 +70,12 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
     // Pass two: references, file edges, call edges, locals.
     let display = display_names(index);
     let mut refs: BTreeSet<(&str, &str, &str, String)> = BTreeSet::new();
+    let external_symbols: BTreeSet<&str> = index
+        .external_symbols
+        .iter()
+        .map(|info| index.symbol(info.symbol))
+        .collect();
+    let mut external_refs: BTreeSet<(&str, &str, String, String)> = BTreeSet::new();
     let mut edges: BTreeSet<(&str, &str, String)> = BTreeSet::new();
     let mut fn_edges: BTreeSet<(&str, &str)> = BTreeSet::new();
     let mut locals: BTreeSet<(&str, &str)> = BTreeSet::new();
@@ -105,6 +111,11 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
                 continue;
             }
             let Some(defined_in) = def_file.get(symbol).copied() else {
+                if external_symbols.contains(symbol) {
+                    if let Some(origin) = scip_origin(symbol) {
+                        external_refs.insert((path, symbol, origin.to_string(), repos.of(path)));
+                    }
+                }
                 continue;
             };
             let repo = repos.of(path);
@@ -178,6 +189,7 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
         defs.len()
             + names.len()
             + refs.len()
+            + external_refs.len()
             + edges.len()
             + fn_edges.len()
             + callee_types.len()
@@ -209,6 +221,18 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
                 def_file: def_file.to_string(),
                 repo,
             }),
+    );
+    out.extend(
+        external_refs
+            .into_iter()
+            .map(
+                |(file, symbol, origin, repo)| FlatFact::ScipExternalRefRow {
+                    file: file.to_string(),
+                    symbol: symbol.to_string(),
+                    origin,
+                    repo,
+                },
+            ),
     );
     out.extend(
         edges
@@ -271,6 +295,22 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
         },
     ));
     out
+}
+
+/// SCIP global symbols begin with scheme, manager, package, and version.
+/// Keep the descriptor in `symbol`; the prefix alone cannot identify a target.
+fn scip_origin(symbol: &str) -> Option<&str> {
+    let mut words = symbol.splitn(5, ' ');
+    for _ in 0..4 {
+        if words.next()?.is_empty() {
+            return None;
+        }
+    }
+    let descriptor = words.next()?;
+    if descriptor.is_empty() {
+        return None;
+    }
+    Some(&symbol[..symbol.len() - descriptor.len() - 1])
 }
 
 /// Per-document repo id, computed once per path. v5 keys every def/ref/edge by

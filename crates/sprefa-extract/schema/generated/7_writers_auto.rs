@@ -815,6 +815,15 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct ScipExternalRef {
+        pub file: String,
+        pub symbol: String,
+        pub origin: String,
+        pub repo: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct ScipEdge {
         pub src: String,
         pub dst: String,
@@ -1150,6 +1159,9 @@ pub enum Fact {
     #[serde(rename = "scip_ref")]
     ScipRef(models::ScipRef),
 
+    #[serde(rename = "scip_external_ref")]
+    ScipExternalRef(models::ScipExternalRef),
+
     #[serde(rename = "scip_edge")]
     ScipEdge(models::ScipEdge),
 
@@ -1313,6 +1325,8 @@ impl Fact {
 
             Self::ScipRef(row) => row.insert(conn, source),
 
+            Self::ScipExternalRef(row) => row.insert(conn, source),
+
             Self::ScipEdge(row) => row.insert(conn, source),
 
             Self::ScipFnEdge(row) => row.insert(conn, source),
@@ -1353,7 +1367,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 69;
+pub const TABLE_COUNT: usize = 70;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1505,6 +1519,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let mut scip_ref: Vec<(usize, &models::ScipRef)> = Vec::new();
 
+    let mut scip_external_ref: Vec<(usize, &models::ScipExternalRef)> = Vec::new();
+
     let mut scip_edge: Vec<(usize, &models::ScipEdge)> = Vec::new();
 
     let mut scip_fn_edge: Vec<(usize, &models::ScipFnEdge)> = Vec::new();
@@ -1647,6 +1663,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::ScipRef(value) => scip_ref.push((index, value)),
 
+            Fact::ScipExternalRef(value) => scip_external_ref.push((index, value)),
+
             Fact::ScipEdge(value) => scip_edge.push((index, value)),
 
             Fact::ScipFnEdge(value) => scip_fn_edge.push((index, value)),
@@ -1788,6 +1806,8 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let scip_name_capacity = if scip_name.is_empty() { 1 } else { statement_capacity(conn, 6, "INSERT INTO \"scip_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?)")? };
 
     let scip_ref_capacity = if scip_ref.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let scip_external_ref_capacity = if scip_external_ref.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let scip_edge_capacity = if scip_edge.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"scip_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src\", \"dst\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2388,6 +2408,17 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in scip_ref.chunks(scip_ref_capacity) {
         let sql = multi_row_sql("INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in scip_external_ref.chunks(scip_external_ref_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -4163,6 +4194,33 @@ impl models::ScipRef {
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::ScipExternalRef {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "scip_external_ref")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.file.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.symbol.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.origin.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.repo.as_str())?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

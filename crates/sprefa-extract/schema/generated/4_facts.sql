@@ -657,6 +657,17 @@ CREATE TABLE IF NOT EXISTS "scip_ref" (
     "repo" TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "scip_external_ref" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "file" TEXT NOT NULL,
+    "symbol" TEXT NOT NULL,
+    "origin" TEXT NOT NULL,
+    "repo" TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "scip_edge" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

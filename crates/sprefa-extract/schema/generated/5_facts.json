@@ -5328,6 +5328,85 @@
     ]
   },
   {
+    "record": "scip_external_ref",
+    "table": "scip_external_ref",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "scip_external_ref"
+      },
+      {
+        "name": "file",
+        "path": [
+          "file"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "symbol",
+        "path": [
+          "symbol"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "origin",
+        "path": [
+          "origin"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "repo",
+        "path": [
+          "repo"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
     "record": "scip_edge",
     "table": "scip_edge",
     "columns": [

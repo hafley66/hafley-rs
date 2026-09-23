@@ -93,6 +93,7 @@ model Local { ...ExportRow; record: "local"; `fn`: string; name: string; path: s
 model ScipDef { ...ExportRow; record: "scip_def"; symbol: string; file: string; repo: string; }
 model ScipName { ...ExportRow; record: "scip_name"; symbol: string; name: string; }
 model ScipRef { ...ExportRow; record: "scip_ref"; file: string; symbol: string; def_file: string; repo: string; }
+model ScipExternalRef { ...ExportRow; record: "scip_external_ref"; file: string; symbol: string; origin: string; repo: string; }
 model ScipEdge { ...ExportRow; record: "scip_edge"; src: string; dst: string; repo: string; }
 model ScipFnEdge { ...ExportRow; record: "scip_fn_edge"; caller: string; callee: string; }
 model ScipCalleeType { ...ExportRow; record: "scip_callee_type"; sym: string; type: string; }

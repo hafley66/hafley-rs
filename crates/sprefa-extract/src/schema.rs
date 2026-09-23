@@ -75,6 +75,7 @@ RECORD SHAPES
   record=scip_def  symbol=<string>  file=<string>  repo=<string>
   record=scip_name  symbol=<string>  name=<string>
   record=scip_ref  file=<string>  symbol=<string>  def_file=<string>  repo=<string>
+  record=scip_external_ref  file=<string>  symbol=<string>  origin=<string>  repo=<string>
   record=scip_edge  src=<string>  dst=<string>  repo=<string>
   record=scip_fn_edge  caller=<string>  callee=<string>
   record=scip_callee_type  sym=<string>  type=<string>
@@ -388,7 +389,7 @@ THE TWO NAMED FAMILIES (--family scip | --family diet_scip)
   --family scip ROOT ensures the root's SCIP index (an existing index wins; else
   the indexer its marker files name runs once under a wall budget, its whole
   process group killed on the deadline) and streams v5's scip_* relation shapes:
-  scip_def, scip_name, scip_ref, scip_edge, scip_fn_edge, scip_callee_type,
+  scip_def, scip_name, scip_ref, scip_external_ref, scip_edge, scip_fn_edge, scip_callee_type,
   scip_local, scip_impl, behind one scip_index header row. Compiler-resolved.
   index_mtime_unix_ms is the index file mtime in milliseconds since Unix epoch.
   staleness=stale means a readable indexed document has a later mtime than the

@@ -90,7 +90,7 @@ EXACT MODE: --family scip ROOT
   Detects the project kind from marker files (Cargo.toml -> rust-analyzer,
   tsconfig.json or package.json -> scip-typescript, go.mod -> scip-go), builds
   or reuses the compiler's index, and streams it as scip_* relations: scip_def,
-  scip_name, scip_ref, scip_edge, scip_fn_edge, scip_callee_type, scip_local,
+  scip_name, scip_ref, scip_external_ref, scip_edge, scip_fn_edge, scip_callee_type, scip_local,
   scip_impl, plus one scip_index header row. Every fact is compiler-resolved.
   An index already on disk is reused untouched; a fresh build runs once under a
   time budget (the indexer's whole process group is killed at the deadline) and
