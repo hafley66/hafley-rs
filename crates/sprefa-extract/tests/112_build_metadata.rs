@@ -71,7 +71,11 @@ fn build_metadata_tracks_source_and_checked_out_branch() {
         "[package]\nname = \"build-metadata-probe\"\nversion = \"0.0.0\"\nedition = \"2021\"\nbuild = \"build.rs\"\n",
     )
     .expect("manifest");
-    std::fs::write(root.join("build.rs"), include_str!("../build.rs")).expect("build script");
+    std::fs::write(
+        root.join("build.rs"),
+        format!("{}\nfn main() {{ run(); }}\n", include_str!("../build/0_metadata.rs")),
+    )
+    .expect("build script");
     std::fs::write(
         root.join("src/main.rs"),
         "fn main() { println!(\"{} {}\", env!(\"SPREFA_BUILD_GIT_HASH\"), env!(\"SPREFA_BUILD_DATETIME\")); }\n",
