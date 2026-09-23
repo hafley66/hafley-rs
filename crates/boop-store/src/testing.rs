@@ -25,6 +25,7 @@ impl BoopCommandExt for Command {
                         name.as_ref(),
                         "TMUX"
                             | "TMUX_PANE"
+                            | "PI_CODING_AGENT_DIR"
                             | "CODEX_THREAD_ID"
                             | "CLAUDE_SESSION_ID"
                             | "CLAUDE_CODE_SESSION_ID"
@@ -37,10 +38,51 @@ impl BoopCommandExt for Command {
         }
         let root = root.as_ref();
         self.env("BOOP_READER_HOME", root);
+        if !explicit.contains(std::ffi::OsStr::new("PI_CODING_AGENT_DIR")) {
+            self.env("PI_CODING_AGENT_DIR", root.join(".omp/agent"));
+        }
         if !explicit.contains(std::ffi::OsStr::new("BOOP_CONFIG")) {
             self.env("BOOP_CONFIG", root.join("config/boop/config.json"));
         }
         self
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::BoopCommandExt;
+    use std::ffi::OsStr;
+    use std::path::Path;
+    use std::process::Command;
+
+    fn env_value<'a>(command: &'a Command, name: &OsStr) -> Option<Option<&'a OsStr>> {
+        command
+            .get_envs()
+            .find_map(|(key, value)| (key == name).then_some(value))
+    }
+
+    #[test]
+    fn boop_test_root_pins_the_omp_session_directory() {
+        let root = Path::new("fixture-home");
+        let mut command = Command::new("boop");
+        command.boop_test_root(root);
+
+        assert_eq!(
+            env_value(&command, OsStr::new("PI_CODING_AGENT_DIR")),
+            Some(Some(root.join(".omp/agent").as_os_str()))
+        );
+    }
+
+    #[test]
+    fn boop_test_root_preserves_an_explicit_omp_session_directory() {
+        let mut command = Command::new("boop");
+        command.env("PI_CODING_AGENT_DIR", "explicit-agent-dir");
+        command.boop_test_root("fixture-home");
+
+        assert_eq!(
+            env_value(&command, OsStr::new("PI_CODING_AGENT_DIR")),
+            Some(Some(OsStr::new("explicit-agent-dir")))
+        );
     }
 }
 
