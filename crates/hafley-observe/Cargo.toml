@@ -1,6 +1,6 @@
 [package]
 name = "hafley-observe"
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -8,6 +8,9 @@ homepage.workspace = true
 description = "Shared executable-owned tracing configuration for hafley-rs binaries"
 
 [features]
+# Compatibility names used by local consumers of the sibling checkout.
+otlp = ["otlp-trace"]
+sqlite = ["sqlite-sink"]
 # The four shipped layers stay default so an existing host (boop, soopy,
 # sprefa-extract) builds the subscriber it has today. Every layer this lab
 # prices is one feature, enabled alone by the bench.
