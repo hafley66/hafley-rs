@@ -435,6 +435,10 @@ fn scm_error(path: &str, error: hafley_scm::QueryExtError) -> ScmError {
             path: path.to_string(),
             detail: format!("predicate #{operator} got {got} arguments"),
         },
+        hafley_scm::QueryExtError::DuplicateField(key) => ScmError::Query {
+            path: path.to_string(),
+            detail: format!("emission repeats field {key}"),
+        },
         hafley_scm::QueryExtError::MatchLimit { .. } => ScmError::MatchLimit {
             path: path.to_string(),
         },

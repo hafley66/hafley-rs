@@ -1,4 +1,4 @@
-//! Kotlin CallF definitions from captures and sites from typed SCM emissions.
+//! Kotlin CallF definitions from captures and sites from SCM emissions.
 
 use std::collections::BTreeMap;
 
@@ -74,16 +74,23 @@ pub(crate) fn project_kotlin_call(
         }
     }
 
-    for emitted in &arena.call_sites {
-        let group = capture_span(emitted.group.start, emitted.group.end);
-        let span = capture_span(emitted.span.start, emitted.span.end);
+    let site_relation = query.relation_id("call.site").expect("Kotlin query emits call.site");
+    let group_key = query.field_id("group").expect("call.site has group");
+    let span_key = query.field_id("span").expect("call.site has span");
+    let callee_key = query.field_id("callee").expect("call.site has callee");
+    for emitted in arena.emitted.iter().filter(|fact| fact.relation == site_relation) {
+        let group_bytes = emitted.get(arena, group_key).and_then(hafley_scm::EmittedValue::bytes)
+            .expect("call.site group is a source span");
+        let span_bytes = emitted.get(arena, span_key).and_then(hafley_scm::EmittedValue::bytes)
+            .expect("call.site span is a source span");
+        let group = capture_span(group_bytes.start, group_bytes.end);
+        let span = capture_span(span_bytes.start, span_bytes.end);
         let entry = sites.entry(group).or_default();
-        if let Some(bytes) = &emitted.callee_bytes {
-            let callee = std::str::from_utf8(&src[bytes.start as usize..bytes.end as usize])
-                .expect("Kotlin call name is utf8");
-            entry.direct = Some((callee.to_string(), span));
-        } else if let Some(index) = emitted.callee_literal {
-            entry.operators.push((query.call_site_literals[index as usize].to_string(), span));
+        let callee = emitted.get(arena, callee_key).expect("call.site has callee");
+        let text = callee.text(src, query).expect("Kotlin call name is utf8");
+        match callee {
+            hafley_scm::EmittedValue::Bytes(_) => entry.direct = Some((text.to_string(), span)),
+            hafley_scm::EmittedValue::Literal(_) => entry.operators.push((text.to_string(), span)),
         }
     }
 

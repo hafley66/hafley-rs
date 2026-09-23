@@ -1,14 +1,16 @@
 use tree_sitter::{Query, QueryPredicate, QueryPredicateArg};
 
 use super::parse_into_predicate::parse_into_predicate;
-use crate::types::{CallSiteEmit, Predicate, QueryExtError};
+use crate::types::{EmitFieldSpec, EmitSource, EmitSpec, Predicate, QueryExtError};
 
 type ParsedPredicates = (
     Vec<Predicate>,
     Vec<Box<str>>,
     Vec<u16>,
     Vec<Box<[u8]>>,
-    Vec<CallSiteEmit>,
+    Vec<EmitSpec>,
+    Vec<Box<str>>,
+    Vec<Box<str>>,
     Vec<Box<str>>,
 );
 
@@ -20,15 +22,19 @@ pub fn read_and_parse_predicates(
     let mut kinds = Vec::new();
     let mut predicate_kinds = Vec::new();
     let mut literals = Vec::new();
-    let mut call_site_emits = Vec::new();
-    let mut call_site_literals = Vec::new();
+    let mut emits = Vec::new();
+    let mut relations = Vec::new();
+    let mut fields = Vec::new();
+    let mut emit_literals = Vec::new();
     for pattern in 0..user.pattern_count() {
         for found in user.general_predicates(pattern) {
-            if found.operator.as_ref() == "emit-call-site!" {
-                call_site_emits.push(parse_call_site_emit(
+            if found.operator.as_ref() == "emit!" {
+                emits.push(parse_emit(
                     pattern as u16,
                     found,
-                    &mut call_site_literals,
+                    &mut relations,
+                    &mut fields,
+                    &mut emit_literals,
                 )?);
                 continue;
             }
@@ -41,36 +47,56 @@ pub fn read_and_parse_predicates(
             )?);
         }
     }
-    Ok((predicates, kinds, predicate_kinds, literals, call_site_emits, call_site_literals))
+    Ok((predicates, kinds, predicate_kinds, literals, emits, relations, fields, emit_literals))
 }
 
-fn parse_call_site_emit(
+fn intern(value: &str, names: &mut Vec<Box<str>>) -> u16 {
+    if let Some(index) = names.iter().position(|name| name.as_ref() == value) {
+        return index as u16;
+    }
+    let index = names.len() as u16;
+    names.push(value.into());
+    index
+}
+
+fn parse_emit(
     pattern: u16,
     found: &QueryPredicate,
+    relations: &mut Vec<Box<str>>,
+    fields: &mut Vec<Box<str>>,
     literals: &mut Vec<Box<str>>,
-) -> Result<CallSiteEmit, QueryExtError> {
+) -> Result<EmitSpec, QueryExtError> {
     let bad_args = || QueryExtError::Arity {
         operator: found.operator.to_string(),
         got: found.args.len(),
     };
-    let [QueryPredicateArg::Capture(group), QueryPredicateArg::Capture(span), callee] =
-        found.args.as_ref()
-    else {
+    if found.args.len() < 3 || found.args.len() % 2 == 0 {
+        return Err(bad_args());
+    }
+    let QueryPredicateArg::String(relation) = &found.args[0] else {
         return Err(bad_args());
     };
-    let (callee_capture, callee_literal) = match callee {
-        QueryPredicateArg::Capture(capture) => (Some(*capture as u16), None),
-        QueryPredicateArg::String(text) => {
-            let index = literals.len() as u16;
-            literals.push(text.clone());
-            (None, Some(index))
+    let mut emitted_fields = Vec::new();
+    for pair in found.args[1..].chunks_exact(2) {
+        let QueryPredicateArg::String(key) = &pair[0] else {
+            return Err(bad_args());
+        };
+        let source = match &pair[1] {
+            QueryPredicateArg::Capture(capture) => EmitSource::Capture(*capture as u16),
+            QueryPredicateArg::String(text) => {
+                let index = intern(text, literals);
+                EmitSource::Literal(index)
+            }
+        };
+        let key = intern(key, fields);
+        if emitted_fields.iter().any(|field: &EmitFieldSpec| field.key == key) {
+            return Err(QueryExtError::DuplicateField(key.to_string()));
         }
-    };
-    Ok(CallSiteEmit {
+        emitted_fields.push(EmitFieldSpec { key, source });
+    }
+    Ok(EmitSpec {
         pattern,
-        group: *group as u16,
-        span: *span as u16,
-        callee_capture,
-        callee_literal,
+        relation: intern(relation, relations),
+        fields: emitted_fields,
     })
 }

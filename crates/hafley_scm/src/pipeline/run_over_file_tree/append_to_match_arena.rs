@@ -1,6 +1,6 @@
 use tree_sitter::QueryMatch;
 
-use crate::types::{CapturedSpan, EmittedCallSite, MatchArena, MatchRow, QueryExt};
+use crate::types::{CapturedSpan, EmitSource, EmittedFact, EmittedField, EmittedValue, MatchArena, MatchRow, QueryExt};
 
 /// One kept match: its spans in capture order, then the row that ranges over them.
 pub fn append_match(q: &QueryExt, found: &QueryMatch, file: u16, arena: &mut MatchArena) {
@@ -16,8 +16,8 @@ pub fn append_match(q: &QueryExt, found: &QueryMatch, file: u16, arena: &mut Mat
         pattern: found.pattern_index as u16,
         spans: start..arena.spans.len() as u32,
     });
-    let first_emit = q.call_site_emits.partition_point(|emit| (emit.pattern as usize) < found.pattern_index);
-    for emit in q.call_site_emits[first_emit..]
+    let first_emit = q.emits.partition_point(|emit| (emit.pattern as usize) < found.pattern_index);
+    for emit in q.emits[first_emit..]
         .iter()
         .take_while(|emit| emit.pattern as usize == found.pattern_index)
     {
@@ -25,19 +25,25 @@ pub fn append_match(q: &QueryExt, found: &QueryMatch, file: u16, arena: &mut Mat
             found.captures.iter().find(|capture| capture.index as u16 == name)
                 .map(|capture| capture.node.start_byte() as u32..capture.node.end_byte() as u32)
         };
-        let (Some(group), Some(span)) = (capture(emit.group), capture(emit.span)) else {
-            continue;
-        };
-        let callee_bytes = emit.callee_capture.and_then(capture);
-        if emit.callee_capture.is_some() && callee_bytes.is_none() {
+        let mut fields = Vec::with_capacity(emit.fields.len());
+        for field in &emit.fields {
+            let value = match field.source {
+                EmitSource::Capture(name) => capture(name).map(EmittedValue::Bytes),
+                EmitSource::Literal(index) => Some(EmittedValue::Literal(index)),
+            };
+            if let Some(value) = value {
+                fields.push(EmittedField { key: field.key, value });
+            }
+        }
+        if fields.len() != emit.fields.len() {
             continue;
         }
-        arena.call_sites.push(EmittedCallSite {
+        let start = arena.emitted_fields.len() as u32;
+        arena.emitted_fields.extend(fields);
+        arena.emitted.push(EmittedFact {
             file,
-            group,
-            span,
-            callee_bytes,
-            callee_literal: emit.callee_literal,
+            relation: emit.relation,
+            fields: start..arena.emitted_fields.len() as u32,
         });
     }
 }

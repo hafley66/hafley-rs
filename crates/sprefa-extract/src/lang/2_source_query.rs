@@ -219,6 +219,9 @@ fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
         hafley_scm::QueryExtError::Arity { operator, got } => {
             format!("invalid query: predicate #{operator} got {got} arguments")
         }
+        hafley_scm::QueryExtError::DuplicateField(key) => {
+            format!("invalid query: emission repeats field {key}")
+        }
         hafley_scm::QueryExtError::MatchLimit { file } => {
             format!("query match limit exceeded on '{file}'")
         }

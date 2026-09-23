@@ -1,7 +1,7 @@
-#[path = "0_call_site_emit.rs"]
-mod call_site_emit;
-#[path = "1_emitted_call_site.rs"]
-mod emitted_call_site;
+#[path = "0_emit_spec.rs"]
+mod emit_spec;
+#[path = "1_emitted_fact.rs"]
+mod emitted_fact;
 mod captured_span;
 mod match_arena;
 mod match_row;
@@ -19,5 +19,5 @@ pub use query_ext::QueryExt;
 pub use query_ext_error::QueryExtError;
 pub use stop::Stop;
 pub use walk::Walk;
-pub use call_site_emit::CallSiteEmit;
-pub use emitted_call_site::EmittedCallSite;
+pub use emit_spec::{EmitFieldSpec, EmitSource, EmitSpec};
+pub use emitted_fact::{EmittedFact, EmittedField, EmittedValue};
