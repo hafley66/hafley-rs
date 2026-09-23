@@ -290,7 +290,7 @@ impl Plan {
 
         let mut travelling = Vec::new();
         let mut orphans = Vec::new();
-        for row in &source.specifiers {
+        for row in source.specifiers.iter().filter(|row| !row.glob) {
             let dest_module = match imports.target(&src, &row.name) {
                 Some(target) => arm.spell_module(&dest, target),
                 None => row.module.clone(),
@@ -315,6 +315,38 @@ impl Plan {
             }
             if source.refs_outside(&row.name, &moving) == 0 {
                 orphans.push(plan_row);
+            }
+        }
+        for glob in source.specifiers.iter().filter(|row| row.glob) {
+            let Some(parent) = glob_parent(&cx, &src, &glob.module) else {
+                continue;
+            };
+            let provider = FileFacts::open(&cx, &parent, false)?;
+            for row in provider.specifiers.iter().filter(|row| !row.glob) {
+                if source.refs_in(&row.name, &moving) == 0
+                    || travelling.iter().any(|held| held.name == row.name)
+                {
+                    continue;
+                }
+                let target = imports.target(&parent, &row.name);
+                let dest_module = target
+                    .map(|path| arm.spell_module(&dest, path))
+                    .unwrap_or_else(|| row.module.clone());
+                let kind = match (
+                    carried.contains(&(row.name.clone(), dest_module.clone())),
+                    target.is_some(),
+                ) {
+                    (true, _) => "carried",
+                    (false, true) => "relative",
+                    (false, false) => "package",
+                };
+                travelling.push(CleaveSpecifier {
+                    name: row.name.clone(),
+                    module: row.module.clone(),
+                    dest_module,
+                    span: row.span,
+                    kind,
+                });
             }
         }
 
@@ -391,10 +423,17 @@ impl Plan {
             views.push(facts);
         }
         moving.sort_by_key(|span| span.start);
-        let moving_text = moving
+        let mut moving_text: Vec<String> = moving
             .iter()
             .map(|span| source.slice(*span).to_string())
             .collect();
+        if source.refs_outside(&item, &moving) > 0 || !callers.is_empty() {
+            if let Some(first) = moving_text.first_mut() {
+                if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
+                    *first = apply(first, &edit);
+                }
+            }
+        }
         Ok(Plan {
             root,
             cx,
@@ -445,6 +484,7 @@ impl Plan {
                 .filter(|row| row.action == "moved")
                 .map(|row| row.span),
         );
+        let moving = cuts.clone();
         let orphaned: BTreeSet<&str> = self
             .rows
             .orphans
@@ -483,6 +523,24 @@ impl Plan {
                     text: edit.text,
                     receipt: None,
                 }),
+            }
+        }
+        if self.source.refs_outside(&self.rows.item, &moving) > 0 {
+            let module = self.arm.spell_module(&self.rows.src, &self.rows.dest);
+            if let Some(edit) = self.arm.edit_import(
+                &self.source.text,
+                std::slice::from_ref(&self.rows.item),
+                &module,
+            ) {
+                edits.push(Respell {
+                    file: self.rows.src.clone(),
+                    span: edit.span,
+                    text: edit.text,
+                    receipt: Some(format!(
+                        "source {} keeps {} via {module}",
+                        self.rows.src, self.rows.item
+                    )),
+                });
             }
         }
         let mut out: Vec<Respell> = absorb(&self.source.text, cuts)
@@ -794,6 +852,18 @@ fn rel_of(root: &Path, path: &str) -> Option<String> {
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
 }
 
+/// The file supplying a Rust child module's `use super::*` binding.
+fn glob_parent(cx: &MoveCx, src: &str, module: &str) -> Option<String> {
+    if module != "super" || !src.ends_with(".rs") {
+        return None;
+    }
+    let dir = Path::new(src).parent()?;
+    ["lib.rs", "mod.rs"]
+        .iter()
+        .map(|stem| dir.join(stem).to_string_lossy().replace('\\', "/"))
+        .find(|path| path != src && cx.contains(path))
+}
+
 // ── the file read ───────────────────────────────────────────────────────────
 
 /// One import specifier the file writes, as a fact row carries it.
@@ -801,6 +871,7 @@ struct SpecifierRow {
     name: String,
     module: String,
     span: Span,
+    glob: bool,
 }
 
 /// One top-level declaration, line aligned so a cut takes whole lines.
@@ -844,11 +915,14 @@ impl FileFacts {
                     span,
                     name,
                     module: Some(module),
+                    kind,
                     ..
                 } => specifiers.push(SpecifierRow {
                     name,
                     module,
                     span: span_of(span.start, span.end),
+                    glob: kind == "namespace"
+                        && text.get(span.start as usize..span.end as usize) == Some("*"),
                 }),
                 FlatFact::Site {
                     span,
@@ -881,7 +955,7 @@ impl FileFacts {
     /// The names the file binds per module, in byte order.
     fn modules(&self) -> Vec<(String, Vec<String>)> {
         let mut out: Vec<(String, Vec<String>)> = Vec::new();
-        for row in &self.specifiers {
+        for row in self.specifiers.iter().filter(|row| !row.glob) {
             match out.iter_mut().find(|(held, _)| *held == row.module) {
                 Some((_, names)) => names.push(row.name.clone()),
                 None => out.push((row.module.clone(), vec![row.name.clone()])),

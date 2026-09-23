@@ -8,6 +8,7 @@ use syn::{
 // The name-text helpers moved to `hafley_scm::lang::rust`; re-exported so the
 // downstream imports here stay one path.
 pub use hafley_scm::lang::rust::{path_name, primary_type};
+use crate::types::TypeEdgeKind;
 
 // ── type-reference collection (the arrow-type payload) ──────────────────────
 //
@@ -108,5 +109,14 @@ pub(crate) fn collect_path_args(path: &Path, out: &mut Vec<String>) {
             }
             PathArguments::None => {}
         }
+    }
+}
+
+pub fn type_probe_key(name: &str, kind: TypeEdgeKind) -> (Option<&str>, &str) {
+    // A Variant candidate's `to` is v5's synthetic `Enum::Variant` text, not a
+    // path: text dsts stay text.
+    match name.rsplit_once("::") {
+        Some((qualifier, trailing)) if kind != TypeEdgeKind::Variant => (Some(qualifier), trailing),
+        _ => (None, name),
     }
 }

@@ -1,4 +1,5 @@
 use super::*;
+use crate::lang::rust_type_refs::type_probe_key;
 
 // ════════════════════════════════════════════════════════════════════════════
 // TypeF: entity nodes + arrow-type sigs + the const facet.
@@ -326,15 +327,6 @@ impl RustSource {
 
 /// A candidate is interned AS WRITTEN (`hir::Struct`) and every index keys on a
 /// bare declaration name, so the trailing segment is the key.
-fn type_probe_key(name: &str, kind: TypeEdgeKind) -> (Option<&str>, &str) {
-    // A Variant candidate's `to` is v5's synthetic `Enum::Variant` text, not a
-    // path: text dsts stay text.
-    match name.rsplit_once("::") {
-        Some((qualifier, trailing)) if kind != TypeEdgeKind::Variant => (Some(qualifier), trailing),
-        _ => (None, name),
-    }
-}
-
 /// The SYNTAX dst leg of one candidate: same-file entity, else a unique corpus
 /// site, else None. The checker tier answers ahead of it, at the caller.
 #[allow(clippy::too_many_arguments)]
