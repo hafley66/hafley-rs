@@ -24,7 +24,7 @@ use hafley_scm::lang::rust::{
 use syn::spanned::Spanned;
 use syn::ReturnType;
 
-use super::fallback::cst_bundle;
+use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
 use super::rust_docs::doc_facts;
 use super::rust_type_edges::{edge_candidates, strip_type};
@@ -46,7 +46,7 @@ use crate::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 
 /// Rust's own `.scm` (scope/definition captures), read through
 /// `Source::scm_query`; the CallF query is crate-owned in `hafley_scm`.
-const RUST_SCM: &str = include_str!("../../queries/rust/scip.scm");
+const RUST_SCM: &str = include_str!("../../../queries/rust/scip.scm");
 use crate::trace;
 use crate::types::LangKind;
 use crate::types::ScipIndex;
@@ -3068,6 +3068,14 @@ fn rust_call_query() -> &'static hafley_scm::QueryExt {
     &QUERY
 }
 
+fn rust_fast_query() -> &'static hafley_scm::QueryExt {
+    static QUERY: LazyLock<hafley_scm::QueryExt> = LazyLock::new(|| {
+        let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+        hafley_scm::build(&language, RUST_SCM).expect("rust fast query builds")
+    });
+    &QUERY
+}
+
 /// Re-runs `project_call` over `hafley_scm::lang::rust::expand_file`'s spliced text, folding
 /// in only the defs/sites born inside a macro expansion, span-mapped back.
 fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut FamilyBundle<CallF>) {
@@ -3187,14 +3195,27 @@ impl Source for RustSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
+        // One tree backs the named CST walk, call definitions, and fast rows.
+        // The syn projections below retain their existing separate parse.
+        let tree = if mask.cst || mask.types || mask.call || mask.df {
+            let parse_span = trace::parse_span("rust", "tree-sitter");
+            let _parse_guard = parse_span.enter();
+            std::str::from_utf8(content).ok().and_then(|_| {
+                let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+                hafley_scm::cst::parse(&language, content)
+            })
+        } else {
+            None
+        };
+
         // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
         // A refused parse leaves cst None (no panic).
         let cst = if mask.cst {
-            let parse_span = trace::parse_span("rust", "tree-sitter");
-            let _parse_guard = parse_span.enter();
             let span = trace::family_span("rust", "cst");
             let _entered = span.enter();
-            let bundle = cst_bundle(path, content, &mut strings);
+            let bundle = tree.as_ref().and_then(|tree| {
+                cst_bundle_from_tree(path, content, tree, &mut strings)
+            });
             if let Some(bundle) = &bundle {
                 trace::record_bundle(&span, bundle, 0);
             }
@@ -3231,12 +3252,15 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "call");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<CallF>::default();
-                        let mut parser = tree_sitter::Parser::new();
-                        parser
-                            .set_language(&tree_sitter::Language::new(tree_sitter_rust::LANGUAGE))
-                            .expect("rust grammar");
-                        let tree = parser.parse(content, None).expect("rust tree");
-                        scm_call_defs(rust_call_query(), content, &tree, &mut strings, &mut bundle);
+                        if let Some(tree) = tree.as_ref() {
+                            scm_call_defs(
+                                rust_call_query(),
+                                content,
+                                tree,
+                                &mut strings,
+                                &mut bundle,
+                            );
+                        }
                         project_call(&parsed, &line_starts, &mut strings, &mut bundle);
                         splice_macro_expansions(src, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
@@ -3254,6 +3278,14 @@ impl Source for RustSource {
             }
         }
 
+        let scm_captures = tree.as_ref().map(|tree| {
+            let query = rust_fast_query();
+            let mut arena = hafley_scm::MatchArena::default();
+            hafley_scm::run(query, path, content, tree, u32::MAX, &mut arena)
+                .expect("rust fast query stays within the engine match limit");
+            super::scm_rows::ScmCaptures::from_arena(query, &arena, content)
+        });
+
         RyiOutput {
             strings,
             cst,
@@ -3261,7 +3293,7 @@ impl Source for RustSource {
             call,
             df,
             data: None,
-            scm_captures: None,
+            scm_captures,
             kotlin_module: None,
         }
     }

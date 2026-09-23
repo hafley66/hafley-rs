@@ -31,7 +31,7 @@ pub mod markdown;
 pub mod owned_region;
 pub mod prolog;
 pub mod python;
-pub mod rust;
+#[path = "rust/lib.rs"] pub mod rust;
 pub mod rust_checker;
 #[cfg(feature = "rust-checker")]
 mod rust_checker_ra;

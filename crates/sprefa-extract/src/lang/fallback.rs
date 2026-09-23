@@ -37,6 +37,19 @@ pub fn cst_bundle(path: &str, content: &[u8], strings: &mut Strings) -> Option<F
     Some(cst_rows(&lang, &tree, content, strings))
 }
 
+/// Project a tree already owned by a language arm, retaining the same UTF-8
+/// gate and row ordering as `cst_bundle`.
+pub(crate) fn cst_bundle_from_tree(
+    path: &str,
+    content: &[u8],
+    tree: &tree_sitter::Tree,
+    strings: &mut Strings,
+) -> Option<FamilyBundle<CstF>> {
+    std::str::from_utf8(content).ok()?;
+    let lang = RyiLang::from_path(path)?;
+    Some(cst_rows(&lang, tree, content, strings))
+}
+
 /// The guessed-call bundle for one file: one site per node whose kind is in
 /// the call-kind table, plus the file-covering MODULE_CALLER def the resolver
 /// joins against. `None` under the same conditions as `cst_bundle`.
