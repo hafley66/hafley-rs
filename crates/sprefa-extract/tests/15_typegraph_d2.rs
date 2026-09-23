@@ -19,6 +19,12 @@ fn scratch(name: &str) -> PathBuf {
 }
 
 fn run_example(root: &str, entry: &str, out: &Path) -> String {
+    let markdown = out.join("typegraph.md");
+    std::fs::write(
+        &markdown,
+        "before\n<!-- ryi:typegraph-d2:start -->\n<!-- ryi:typegraph-d2:end -->\nafter\n",
+    )
+    .expect("markdown template");
     let output = Command::new(env!("CARGO"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
@@ -33,6 +39,8 @@ fn run_example(root: &str, entry: &str, out: &Path) -> String {
             entry,
             "--out",
             &out.to_string_lossy(),
+            "--markdown-into",
+            &markdown.to_string_lossy(),
         ])
         .output()
         .expect("cargo run");
@@ -100,8 +108,18 @@ fn every_emitted_board_compiles_and_reads_wide() {
         first.contains(": RyiOutput {"),
         "the entrypoint must be on the first board:\n{first}"
     );
+    let markdown = std::fs::read_to_string(out.join("typegraph.md")).expect("generated markdown");
+    assert!(markdown.starts_with("before\n<!-- ryi:typegraph-d2:start -->"));
+    assert!(markdown.ends_with("<!-- ryi:typegraph-d2:end -->\nafter\n"));
+    assert_eq!(markdown.matches("<details>").count(), files.len());
 
     for board in &files {
+        let source = std::fs::read_to_string(board).expect("D2 source");
+        assert!(
+            markdown.contains(&format!("```d2\n{source}```")),
+            "{} differs from the embedded board",
+            board.display()
+        );
         let svg = board.with_extension("svg");
         let render = Command::new("d2")
             .arg(board)

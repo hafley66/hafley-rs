@@ -11,6 +11,8 @@ use sprefa_extract::{
 
 /// At most this many shapes on one board. Over budget splits, never crams.
 const SHAPE_BUDGET: usize = 24;
+const MARKDOWN_START: &str = "<!-- ryi:typegraph-d2:start -->";
+const MARKDOWN_END: &str = "<!-- ryi:typegraph-d2:end -->";
 
 /// A node key. `path` is as the resolve was invoked with it.
 type Key = (String, String);
@@ -19,18 +21,21 @@ struct Args {
     root: PathBuf,
     entry: String,
     out: PathBuf,
+    markdown_into: Option<PathBuf>,
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut root = None;
     let mut entry = None;
     let mut out = None;
+    let mut markdown_into = None;
     let mut argv = std::env::args().skip(1);
     while let Some(flag) = argv.next() {
         match flag.as_str() {
             "--root" => root = Some(PathBuf::from(argv_next(&mut argv, &flag)?)),
             "--entry" => entry = Some(argv_next(&mut argv, &flag)?),
             "--out" => out = Some(PathBuf::from(argv_next(&mut argv, &flag)?)),
+            "--markdown-into" => markdown_into = Some(PathBuf::from(argv_next(&mut argv, &flag)?)),
             other => return Err(format!("unknown flag {other}")),
         }
     }
@@ -38,6 +43,7 @@ fn parse_args() -> Result<Args, String> {
         root: root.ok_or("--root DIR is required")?,
         entry: entry.ok_or("--entry PATH::NAME is required")?,
         out: out.ok_or("--out DIR is required")?,
+        markdown_into,
     })
 }
 
@@ -240,6 +246,42 @@ fn boards(hops: &BTreeMap<Key, usize>, kinds: &BTreeMap<Key, String>) -> Vec<Vec
     out
 }
 
+/// Replace only the marked block, keeping the surrounding document unchanged.
+fn regenerate_markdown(path: &Path, entry: &str, boards: &[String]) -> Result<(), String> {
+    let original = std::fs::read_to_string(path).map_err(|err| err.to_string())?;
+    let start = original
+        .find(MARKDOWN_START)
+        .ok_or_else(|| format!("{} has no {MARKDOWN_START}", path.display()))?;
+    let body_start = start + MARKDOWN_START.len();
+    let end = original[body_start..]
+        .find(MARKDOWN_END)
+        .map(|offset| body_start + offset)
+        .ok_or_else(|| format!("{} has no {MARKDOWN_END}", path.display()))?;
+    if original[body_start..].contains(MARKDOWN_START)
+        || original[end + MARKDOWN_END.len()..].contains(MARKDOWN_END)
+    {
+        return Err(format!(
+            "{} has duplicate typegraph markers",
+            path.display()
+        ));
+    }
+    let mut generated = String::new();
+    for (index, board) in boards.iter().enumerate() {
+        generated.push_str(&format!(
+            "<details>\n<summary>Ryi type graph: {entry}, board {}/{}</summary>\n\n```d2\n{board}```\n\n</details>\n\n",
+            index + 1,
+            boards.len()
+        ));
+    }
+    let updated = format!(
+        "{}\n\n{}{}",
+        &original[..body_start],
+        generated,
+        &original[end..]
+    );
+    std::fs::write(path, updated).map_err(|err| err.to_string())
+}
+
 fn run() -> Result<(), String> {
     let args = parse_args()?;
     let (entry_path, entry_name) = args
@@ -270,12 +312,17 @@ fn run() -> Result<(), String> {
 
     std::fs::create_dir_all(&args.out).map_err(|err| err.to_string())?;
     let edge_refs: Vec<&TypeEdge> = edges.iter().collect();
+    let mut markdown_boards = Vec::new();
     for (index, nodes) in boards(&hops, &kinds).into_iter().enumerate() {
         let text = board(&nodes, &edge_refs);
         let drawn = text.lines().filter(|line| line.contains(" -> ")).count();
         let path = args.out.join(format!("typegraph.{index}.d2"));
-        std::fs::write(&path, text).map_err(|err| err.to_string())?;
+        std::fs::write(&path, &text).map_err(|err| err.to_string())?;
         println!("{} shapes={} edges={}", path.display(), nodes.len(), drawn);
+        markdown_boards.push(text);
+    }
+    if let Some(path) = args.markdown_into.as_deref() {
+        regenerate_markdown(path, &args.entry, &markdown_boards)?;
     }
     Ok(())
 }
