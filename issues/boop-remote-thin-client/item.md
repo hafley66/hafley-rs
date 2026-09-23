@@ -59,7 +59,13 @@ launcher. Moving those to the server is the win; the Mac-side client only has to
 | `tmux -CC` / iTerm2 integration | native tabs over ssh | measure | iTerm already running |
 | `ssh host boop ...` | verb forwarding | ~ssh | zero new code |
 | tiny-serve (Rust, ~/projects/tiny-serve) | socket verb server | measure | smol + rusqlite |
-| Go single binary | verb forwarder / supervisor | measure | user suggests Go may be smallest; compare RSS and binary size vs Rust release |
+| Go single binary | verb forwarder / supervisor | measure | compare RSS and binary size vs Rust release |
+| bash + ssh + sqlite3 CLI | verb forwarder | measure | no binary at all; forwarding may not need more |
+| C (static) | supervisor | measure | smallest RSS floor; cost is safety and effort |
+
+The wire and message shapes come from one TypeSpec contract (see the typespec skill) so a Go,
+Rust, bash or C client reads and writes the same frontmatter / SQLite rows / socket messages
+without hand-kept copies.
 
 ## Regression tests
 
