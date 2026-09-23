@@ -33,10 +33,10 @@ pub mod usage;
 
 #[cfg(feature = "agent-read")]
 pub use _0_session_graph::{
-    load_agent_session_graph, load_agent_session_graph_with_runtime, AgentSessionEdge,
-    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
-    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, SessionGraphReader,
-    AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+    load_agent_session_graph, load_agent_session_graph_stored,
+    load_agent_session_graph_with_runtime, AgentSessionEdge, AgentSessionGraph,
+    AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity, AgentSessionNode,
+    AgentShellNode, LoadAgentSessionGraph, SessionGraphReader, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
@@ -53,14 +53,14 @@ pub use rows::{
     TurnRow, UsageRow,
 };
 pub use runtime::{
-    runtime_snapshot, runtime_snapshot_now, AgentRuntimeRow, CompletionRecord, LaneRuntime,
-    MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute, RuntimeDiagnostic,
-    RuntimeLiveness, RuntimeSnapshotInput, TmuxLiveness, WorktreeCoordinates,
+    runtime_snapshot, runtime_snapshot_live, runtime_snapshot_live_now, AgentRuntimeRow,
+    CompletionRecord, LaneRuntime, MailboxCounts, ProcessIdentity, ProcessLiveness, ResolvedRoute,
+    RuntimeDiagnostic, RuntimeLiveness, RuntimeSnapshotInput, TmuxLiveness, WorktreeCoordinates,
 };
 #[cfg(feature = "agent-read")]
 pub use summary::{
-    agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
-    AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
+    agent_summary_live, agent_summary_live_now, agent_summary_stored, AgentSummary,
+    AgentSummaryActivity, AgentSummaryAgent, AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
 pub use tags::{normalize_tag, tags_in, Tag};
 #[cfg(feature = "agent-read")]

@@ -723,10 +723,6 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 ..
             }
             | SubCmd::Db {
-                cmd: Some(DbCmd::Sessions { .. }),
-                ..
-            }
-            | SubCmd::Db {
                 cmd: Some(DbCmd::Lanes { .. }),
                 ..
             }
@@ -782,11 +778,6 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 cmd: Some(DbCmd::Span { .. }),
                 ..
             }
-            | SubCmd::Db {
-                cmd: Some(DbCmd::AgentSummary { .. }),
-                ..
-            }
-            | SubCmd::Agent { .. }
             | SubCmd::Me { .. }
             | SubCmd::Remind { .. }
             | SubCmd::Debug { .. }
@@ -2197,7 +2188,6 @@ mod tests {
             );
         }
         let transcript_readers = [
-            vec!["boop", "agent", "summary"],
             vec!["boop", "db", "turn", "list"],
             vec!["boop", "db", "status"],
             vec!["boop", "remind", "2"],

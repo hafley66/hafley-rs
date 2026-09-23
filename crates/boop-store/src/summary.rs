@@ -12,7 +12,9 @@ use serde::Serialize;
 use crate::activity::ToolResultAvailability;
 use crate::bus::{Message, Route};
 use crate::proc::{ProcReader, SysinfoSnapshot};
-use crate::runtime::{runtime_snapshot, AgentRuntimeRow, RuntimeSnapshotInput};
+use crate::runtime::{
+    runtime_snapshot, runtime_snapshot_live, AgentRuntimeRow, RuntimeSnapshotInput,
+};
 use crate::tmux::Multiplexer;
 use crate::Store;
 
@@ -90,8 +92,8 @@ impl Default for AgentSummaryActivity {
 }
 
 /// Join lane activity counts to a single bounded runtime observation.
-pub fn agent_summary(query: AgentSummaryQuery<'_>) -> Result<AgentSummary> {
-    let runtime = runtime_snapshot(RuntimeSnapshotInput {
+pub fn agent_summary_live(query: AgentSummaryQuery<'_>) -> Result<AgentSummary> {
+    let runtime = runtime_snapshot_live(RuntimeSnapshotInput {
         store: query.store,
         routes: query.routes,
         messages: query.messages,
@@ -164,19 +166,84 @@ pub fn agent_summary(query: AgentSummaryQuery<'_>) -> Result<AgentSummary> {
 
 /// Production summary acquisition: capture the process table once, list tmux
 /// sessions once, then join both observations across all lanes.
-pub fn agent_summary_now(
+pub fn agent_summary_live_now(
     store: &Store,
     routes: &BTreeMap<String, Route>,
     messages: &[Message],
 ) -> Result<AgentSummary> {
     let processes = SysinfoSnapshot::capture()?;
-    agent_summary(AgentSummaryQuery {
+    agent_summary_live(AgentSummaryQuery {
         store,
         routes,
         messages,
         multiplexer: crate::tmux::mux(),
         tmux_socket: None,
         processes: &processes,
+    })
+}
+
+/// Build the agent summary from stored SQLite projections only.
+pub fn agent_summary_stored(store: &Store) -> Result<AgentSummary> {
+    let runtime = runtime_snapshot(store)?;
+    let selected_traces = runtime
+        .iter()
+        .filter_map(|row| row.trace.clone())
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    let activity = store
+        .activity_counts_for_traces(&selected_traces)?
+        .into_iter()
+        .map(|row| {
+            (
+                row.identity,
+                AgentSummaryActivity {
+                    user: row.user,
+                    assistant: row.assistant,
+                    tool_call: row.tool_call,
+                    total: row.total,
+                    calls: row.calls,
+                    input_tokens: row.input_tokens,
+                    output_tokens: row.output_tokens,
+                    cache_create_5m_tokens: row.cache_create_5m_tokens,
+                    cache_create_1h_tokens: row.cache_create_1h_tokens,
+                    cache_read_tokens: row.cache_read_tokens,
+                    first_activity_ts: row.first_activity_ts,
+                    last_activity_ts: row.last_activity_ts,
+                    tool_result_availability: row.tool_result_availability,
+                },
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut agents = runtime
+        .into_iter()
+        .map(|row| AgentSummaryAgent {
+            activity: row
+                .trace
+                .as_ref()
+                .and_then(|trace| activity.get(trace))
+                .cloned()
+                .unwrap_or_default(),
+            runtime: row,
+        })
+        .collect::<Vec<_>>();
+    agents.sort_by(|left, right| left.runtime.lane.cmp(&right.runtime.lane));
+    let active_agents = agents
+        .iter()
+        .filter(|agent| {
+            matches!(
+                agent.runtime.liveness.tmux,
+                crate::runtime::TmuxLiveness::Live
+            ) || matches!(
+                agent.runtime.liveness.process,
+                crate::runtime::ProcessLiveness::Live
+            )
+        })
+        .count() as u64;
+    Ok(AgentSummary {
+        schema_version: AGENT_SUMMARY_SCHEMA_VERSION,
+        active_agents,
+        agents,
     })
 }
 
@@ -193,7 +260,7 @@ mod tests {
     use crate::testing::FakeMux;
     use crate::Store;
 
-    use super::{agent_summary, AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION};
+    use super::{agent_summary_live, AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION};
 
     #[derive(Default)]
     struct FixedProcesses {
@@ -301,7 +368,7 @@ mod tests {
         }];
         let mux = FakeMux::available(&["lane-a"]);
         let processes = FixedProcesses::default();
-        let summary = agent_summary(AgentSummaryQuery {
+        let summary = agent_summary_live(AgentSummaryQuery {
             store: &store,
             routes: &routes,
             messages: &messages,
@@ -426,7 +493,7 @@ mod tests {
         }
         let mux = FakeMux::available(&[]);
         let processes = FixedProcesses::default();
-        let summary = agent_summary(AgentSummaryQuery {
+        let summary = agent_summary_live(AgentSummaryQuery {
             store: &store,
             routes: &routes,
             messages: &[],
@@ -469,7 +536,7 @@ mod tests {
         }
         let mux = FakeMux::available(&[]);
         let processes = FixedProcesses::default();
-        let summary = agent_summary(AgentSummaryQuery {
+        let summary = agent_summary_live(AgentSummaryQuery {
             store: &store,
             routes: &BTreeMap::new(),
             messages: &[],
