@@ -60,7 +60,7 @@ pub struct Store {
 /// MAX(ts) activity aggregate reads the index alone, not the wide turn body.
 /// 33 = historical peer messages (`said LIKE 'Another Claude session sent a
 /// message:%'`) stored as `user` are reclassified to `meta`.
-pub const SCHEMA_VERSION: i64 = 33;
+pub const SCHEMA_VERSION: i64 = 34;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -763,6 +763,9 @@ impl Store {
                 .with_context(|| format!("initialise cost views at {}", path.display()))?;
             self.seed_moods()?;
             if self.schema_version()? == 0 {
+                self.connection.execute_batch(
+                    "CREATE INDEX IF NOT EXISTS idx_live_last_seen ON agent_live(last_seen_ts);",
+                )?;
                 self.stamp_version()?;
                 return Ok(());
             }
@@ -1020,6 +1023,51 @@ impl Store {
             if self.schema_version()? < 33 {
                 self.backfill_peer_turn_role()?;
                 self.connection.execute_batch("PRAGMA user_version = 33;")?;
+            }
+            if self.schema_version()? < 34 {
+                for (column, kind) in [
+                    ("last_seen_ts", "INTEGER"),
+                    ("pane_alive", "INTEGER"),
+                    ("pid_alive", "INTEGER"),
+                    ("tmux_session", "TEXT"),
+                ] {
+                    let present = self.connection.query_row(
+                        "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agent_live') WHERE name = ?1)",
+                        params![column],
+                        |row| row.get::<_, bool>(0),
+                    )?;
+                    if !present {
+                        self.connection.execute_batch(&format!(
+                            "ALTER TABLE agent_live ADD COLUMN {column} {kind};"
+                        ))?;
+                    }
+                }
+                self.connection.execute_batch(
+                    "UPDATE agent_live
+                        SET last_seen_ts = COALESCE(last_seen_ts, (
+                              SELECT MAX(COALESCE(span.to_ts, span.from_ts))
+                                FROM agent_live_span span
+                               WHERE span.session_id = agent_live.session_id)),
+                            pane_alive = COALESCE(pane_alive, CASE
+                              WHEN tmux_pane_id IS NULL THEN NULL
+                              WHEN status_id IN (SELECT id FROM dict_status WHERE value IN ('live','idle')) THEN 1
+                              WHEN status_id IN (SELECT id FROM dict_status WHERE value IN ('dead','closed','detached')) THEN 0
+                              ELSE NULL END),
+                            pid_alive = COALESCE(pid_alive, CASE
+                              WHEN pid IS NULL THEN NULL
+                              WHEN status_id IN (SELECT id FROM dict_status WHERE value IN ('live','idle')) THEN 1
+                              WHEN status_id IN (SELECT id FROM dict_status WHERE value IN ('dead','closed','detached')) THEN 0
+                              ELSE NULL END),
+                            tmux_session = COALESCE(tmux_session, (
+                              SELECT CASE WHEN instr(route.tmux, ':') > 0
+                                          THEN substr(route.tmux, 1, instr(route.tmux, ':') - 1)
+                                          ELSE route.tmux END
+                                FROM agent_route route
+                                JOIN dict_session session ON session.value = route.session_id
+                               WHERE session.id = agent_live.session_id LIMIT 1));
+                     CREATE INDEX IF NOT EXISTS idx_live_last_seen ON agent_live(last_seen_ts);
+                     PRAGMA user_version = 34;",
+                )?;
             }
             self.stamp_version()?;
             Ok(())
@@ -2751,6 +2799,26 @@ impl Store {
                 Some(pane) => Some(self.intern("dict_pane", pane)?),
                 None => None,
             };
+            let alive = match status {
+                "live" | "idle" => Some(1_i64),
+                "dead" | "closed" | "detached" => Some(0_i64),
+                _ => None,
+            };
+            let route_tmux: Option<String> = self
+                .connection
+                .query_row(
+                    "SELECT tmux FROM agent_route
+                  WHERE session_id = ?1 OR route = ?1
+                  ORDER BY CASE WHEN session_id = ?1 THEN 0 ELSE 1 END LIMIT 1",
+                    params![session],
+                    |row| row.get(0),
+                )
+                .optional()?
+                .flatten();
+            let tmux_session = route_tmux
+                .as_deref()
+                .filter(|target| !target.starts_with('%'))
+                .map(|target| target.split(':').next().unwrap_or(target).to_owned());
             let open: Option<(i64, i64, Option<i64>, Option<i64>)> = self
                 .connection
                 .query_row(
@@ -2769,13 +2837,28 @@ impl Store {
                 return Ok(());
             }
             self.connection.execute(
-                "INSERT INTO agent_live (session_id, pid, tmux_pane_id, status_id)
-                 VALUES (?1, ?2, ?3, ?4)
+                "INSERT INTO agent_live
+                   (session_id, pid, tmux_pane_id, status_id, last_seen_ts,
+                    pane_alive, pid_alive, tmux_session)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                  ON CONFLICT(session_id) DO UPDATE SET
                    pid = excluded.pid,
                    tmux_pane_id = excluded.tmux_pane_id,
-                   status_id = excluded.status_id",
-                params![sid, pid, pane_id, status_id],
+                   status_id = excluded.status_id,
+                   last_seen_ts = excluded.last_seen_ts,
+                   pane_alive = excluded.pane_alive,
+                   pid_alive = excluded.pid_alive,
+                   tmux_session = COALESCE(excluded.tmux_session, agent_live.tmux_session)",
+                params![
+                    sid,
+                    pid,
+                    pane_id,
+                    status_id,
+                    ts as i64,
+                    tmux_pane.and(alive),
+                    pid.and(alive),
+                    tmux_session
+                ],
             )?;
             let unchanged = open
                 .as_ref()
@@ -2828,6 +2911,27 @@ impl Store {
                door_kind = excluded.door_kind,
                door_addr = excluded.door_addr",
             params![sid, door_kind, door_addr],
+        )?;
+        Ok(())
+    }
+
+    /// Persist the tmux session that owns an observed pane. Pane ids alone do
+    /// not encode their session, so a liveness writer supplies this fact from
+    /// its explicit multiplexer observation.
+    pub fn record_tmux_session(
+        &self,
+        session: &str,
+        ts: u64,
+        tmux_session: &str,
+    ) -> Result<()> {
+        let sid = self.session_id(session)?;
+        self.connection.execute(
+            "INSERT INTO agent_live(session_id, last_seen_ts, tmux_session)
+             VALUES (?1, ?2, ?3)
+             ON CONFLICT(session_id) DO UPDATE SET
+               last_seen_ts = excluded.last_seen_ts,
+               tmux_session = excluded.tmux_session",
+            params![sid, ts as i64, tmux_session],
         )?;
         Ok(())
     }
@@ -3851,7 +3955,10 @@ fn classify_user_role<'a>(
     if has_tool_result {
         return "user";
     }
-    let system = object.get("promptSource").and_then(serde_json::Value::as_str) == Some("system");
+    let system = object
+        .get("promptSource")
+        .and_then(serde_json::Value::as_str)
+        == Some("system");
     let meta = object
         .get("isMeta")
         .and_then(serde_json::Value::as_bool)
@@ -4526,7 +4633,11 @@ CREATE TABLE IF NOT EXISTS agent_live (
   tmux_pane_id INTEGER,
   status_id INTEGER,
   door_kind TEXT,
-  door_addr TEXT
+  door_addr TEXT,
+  last_seen_ts INTEGER,
+  pane_alive INTEGER,
+  pid_alive INTEGER,
+  tmux_session TEXT
 );
 
 -- One row per hail put in front of a recipient: what the door answered, keyed
@@ -7608,6 +7719,27 @@ mod tests {
             ),
             (Some(2), Some("%2"), Some("live"))
         );
+    }
+
+    #[test]
+    fn pane_death_flips_the_stored_runtime_liveness_row() {
+        let store = Store::open(":memory:".into()).unwrap();
+        store
+            .record_status("lane-death", 100, "live", Some(77), Some("%77"))
+            .unwrap();
+        store
+            .record_status("lane-death", 120, "dead", Some(77), Some("%77"))
+            .unwrap();
+        let facts: (Option<i64>, Option<i64>, Option<i64>) = store
+            .connection()
+            .query_row(
+                "SELECT last_seen_ts, pane_alive, pid_alive FROM agent_live
+              WHERE session_id = (SELECT id FROM dict_session WHERE value = 'lane-death')",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(facts, (Some(120), Some(0), Some(0)));
     }
 
     #[test]

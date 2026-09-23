@@ -17,6 +17,8 @@ mod coordinator_ping;
 mod deliver_door;
 #[path = "door_backoff_e2e.rs"]
 mod door_backoff_e2e;
+#[path = "graph_read_spawns_nothing.rs"]
+mod graph_read_spawns_nothing;
 #[path = "inbox_hooks.rs"]
 mod inbox_hooks;
 #[path = "install_rail.rs"]

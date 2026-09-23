@@ -6,12 +6,10 @@ use tracing::info;
 
 use boop::harness::{Harness, NativeChildEvent, SessionRef};
 use boop::registry::Registry;
-use boop::{bus, ident, proc, tmux};
+use boop::{bus, ident, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
-#[cfg(feature = "agent-read")]
-use crate::cli::job::lane_state;
 use crate::cli::mail::deliver_hail;
 use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
 #[cfg(feature = "agent-read")]
@@ -1456,26 +1454,15 @@ pub(crate) fn run_status(window_minutes: u64, format: QueryFormat) -> Result<()>
     let store = open_ro_store()?;
     let now = now_ms();
     let mut rows = store.query_status(window_minutes * 60_000, now)?;
-    let dir = mail_dir(None)?;
-    let routes = bus::read_routes(&dir).unwrap_or_default();
-    let live = tmux::mux().live_sessions(None);
-    let snapshot = proc::SysinfoSnapshot::capture()?;
+    let routes = bus::routes_in(&store)?;
     for row in &mut rows {
         let session = row["session"].as_str().unwrap_or("").to_owned();
         let lane = routes.iter().find(|(_, route)| {
             route.session_id.as_deref() == Some(session.as_str())
                 || route.cwd.as_deref() == row["cwd"].as_str()
         });
-        let (lane_name, state) = match lane {
-            Some((name, route)) => (
-                Some(name.clone()),
-                lane_state(&dir, name, &live, route, &routes, &snapshot),
-            ),
-            None => (None, "unknown"),
-        };
         if let Some(object) = row.as_object_mut() {
-            object.insert("lane".into(), serde_json::json!(lane_name));
-            object.insert("state".into(), serde_json::json!(state));
+            object.insert("lane".into(), serde_json::json!(lane.map(|(name, _)| name)));
         }
     }
     emit_json_rows(&rows, format);
@@ -1488,13 +1475,8 @@ pub(crate) fn run_agent_summary(
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     let store = open_ro_store()?;
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let mut messages = Vec::new();
-    for path in bus::read_boxes(&dir)? {
-        messages.extend(bus::parse_box(&path));
-    }
-    let summary = boop::agent_summary_now(&store, &routes, &messages)?;
+    let _ = mail_dir_arg;
+    let summary = boop::agent_summary_stored(&store)?;
     match format {
         AgentSummaryFormat::Json => line(&serde_json::to_string(&summary)?),
         AgentSummaryFormat::Text => line(&agent_summary_text(&summary)),
@@ -1528,23 +1510,10 @@ pub(crate) fn run_agent_sessions(
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     let store = open_ro_store()?;
-    let dir = mail_dir(mail_dir_arg)?;
-    let routes = bus::read_routes(&dir)?;
-    let mut messages = Vec::new();
-    for path in bus::read_boxes(&dir)? {
-        messages.extend(bus::parse_box(&path));
-    }
-    let processes = boop::proc::SysinfoSnapshot::capture()?;
-    let graph = boop::load_agent_session_graph_with_runtime(
+    let _ = mail_dir_arg;
+    let graph = boop::load_agent_session_graph_stored(
         &store,
         agent_session_graph_query(cwd, include_history, tmux, history_since_ts),
-        boop::AgentSessionGraphRuntime {
-            routes: &routes,
-            messages: &messages,
-            multiplexer: boop::tmux::mux(),
-            tmux_socket: None,
-            processes: &processes,
-        },
     )?;
     line(&serde_json::to_string(&graph)?);
     Ok(())
@@ -1572,7 +1541,7 @@ pub(crate) fn agent_summary_text(summary: &boop::AgentSummary) -> String {
     use std::fmt::Write;
 
     let mut output = format!(
-        "schema_version\t{}\nactive_agents\t{}\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens",
+        "schema_version\t{}\nactive_agents\t{}\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\tlast_seen_ts\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens",
         summary.schema_version, summary.active_agents
     );
     for agent in &summary.agents {
@@ -1580,7 +1549,7 @@ pub(crate) fn agent_summary_text(summary: &boop::AgentSummary) -> String {
         output.push('\n');
         write!(
             output,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             runtime.lane,
             runtime.trace.as_deref().unwrap_or("-"),
             runtime.root_session.as_deref().unwrap_or("-"),
@@ -1592,6 +1561,7 @@ pub(crate) fn agent_summary_text(summary: &boop::AgentSummary) -> String {
             runtime.tmux_pane.as_deref().unwrap_or("-"),
             runtime.pid.map(|pid| pid.to_string()).unwrap_or_else(|| "-".into()),
             runtime.reported_status.as_deref().unwrap_or("-"),
+            runtime.last_seen_ts.map(|value| value.to_string()).unwrap_or_else(|| "-".into()),
             tmux_liveness_text(&runtime.liveness.tmux),
             process_liveness_text(&runtime.liveness.process),
             json_cell(&runtime.completion),
@@ -2719,6 +2689,8 @@ mod tests {
                     tmux_pane: None,
                     pid: None,
                     reported_status: None,
+                    last_seen_ts: None,
+                    tmux_session: None,
                     liveness: RuntimeLiveness {
                         tmux: TmuxLiveness::Live,
                         process: ProcessLiveness::Unknown,
@@ -2752,7 +2724,7 @@ mod tests {
         let rendered = agent_summary_text(&summary);
         assert_eq!(
             rendered,
-            "schema_version\t1\nactive_agents\t1\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens\nlane-a\ttrace-a\t-\tsession-a\t-\tnull\t-\t-\t-\t-\t-\tlive\tunknown\tnull\t2\t3\t1\t-\t-\t[]\t4\t5\t6\t15\t7\t8\t9\t10\t11\t12"
+            "schema_version\t1\nactive_agents\t1\nlane\ttrace\troot_session\tsession\tparent\troute\tcwd\ttmux_target\ttmux_pane\tpid\treported_status\tlast_seen_ts\ttmux_liveness\tprocess_liveness\tcompletion\tinbox\toutbox\tunacknowledged\tworktree_route_cwd\tworktree_process_cwd\tdiagnostics\tuser\tassistant\ttool_call\ttotal\tcalls\tinput_tokens\toutput_tokens\tcache_create_5m_tokens\tcache_create_1h_tokens\tcache_read_tokens\nlane-a\ttrace-a\t-\tsession-a\t-\tnull\t-\t-\t-\t-\t-\t-\tlive\tunknown\tnull\t2\t3\t1\t-\t-\t[]\t4\t5\t6\t15\t7\t8\t9\t10\t11\t12"
         );
         let mut output = Vec::new();
         write_line(&mut output, &rendered).expect("write summary output");

@@ -47,15 +47,16 @@ pub use boop_harness::Registry;
 pub use boop_store::open_default;
 #[cfg(feature = "agent-read")]
 pub use boop_store::{
-    agent_summary, agent_summary_now, AgentSummary, AgentSummaryActivity, AgentSummaryAgent,
-    AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
+    agent_summary_live, agent_summary_live_now, agent_summary_stored, AgentSummary,
+    AgentSummaryActivity, AgentSummaryAgent, AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use boop_store::{
-    load_agent_session_graph, load_agent_session_graph_with_runtime, ActivityCount, ActivityScope,
-    AgentSessionEdge, AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime,
-    AgentSessionIdentity, AgentSessionNode, AgentShellNode, FactKind, FactQuery, GroupBy,
-    LoadAgentSessionGraph, ToolResultAvailability, UsageQuery, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+    load_agent_session_graph, load_agent_session_graph_stored,
+    load_agent_session_graph_with_runtime, ActivityCount, ActivityScope, AgentSessionEdge,
+    AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
+    AgentSessionNode, AgentShellNode, FactKind, FactQuery, GroupBy, LoadAgentSessionGraph,
+    ToolResultAvailability, UsageQuery, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
 pub use boop_store::{
     AgentRuntimeRow, CommandRow, CompletionRecord, DeliveryState, EdgeRow, FactCursor, FetchRow,
