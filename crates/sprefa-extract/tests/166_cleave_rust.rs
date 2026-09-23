@@ -153,6 +153,38 @@ fn body_locals_never_enter_the_drag_set_or_gain_visibility() {
     let start = helper(value);
     start
 }
+
+#[test]
+fn source_keeps_its_same_file_caller_after_the_item_moves() {
+    let fixture = fixture("same_file", "caller");
+    cleave(
+        &fixture,
+        &["src/util.rs#target", "src/config.rs", "--commit"],
+    );
+    assert!(read(&fixture, "src/util.rs").contains("use crate::config::target;"));
+    assert!(read(&fixture, "src/config.rs").contains("use crate::util::helper;"));
+    cargo_check(&fixture);
+}
+
+#[test]
+fn rust_parent_glob_supplies_the_moved_items_type() {
+    let fixture = fixture("glob", "parent-import");
+    let plan = plan_of(&cleave(
+        &fixture,
+        &["src/parent/inner.rs#lifted", "src/target.rs", "--json"],
+    ));
+    assert_eq!(names(&plan, "travelling"), ["Kind"]);
+    assert_eq!(field(&plan, "travelling", "dest_module"), ["crate::types"]);
+    assert!(plan["orphans"].as_array().unwrap().is_empty());
+
+    cleave(
+        &fixture,
+        &["src/parent/inner.rs#lifted", "src/target.rs", "--commit"],
+    );
+    assert!(read(&fixture, "src/parent/inner.rs").contains("use crate::target::lifted;"));
+    assert!(read(&fixture, "src/target.rs").contains("use crate::types::Kind;"));
+    cargo_check(&fixture);
+}
 pub(crate) fn helper(value: i32) -> i32 { value + 1 }
 pub fn other(value: i32) -> i32 { helper(value) }
 "#,

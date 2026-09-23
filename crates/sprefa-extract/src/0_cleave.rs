@@ -290,6 +290,7 @@ impl Plan {
 
         let mut travelling = Vec::new();
         let mut orphans = Vec::new();
+        let mut glob_unresolved = BTreeSet::new();
         for row in source.specifiers.iter().filter(|row| !row.glob) {
             let dest_module = match imports.target(&src, &row.name) {
                 Some(target) => arm.spell_module(&dest, target),
@@ -321,7 +322,7 @@ impl Plan {
             let Some(parent) = glob_parent(&cx, &src, &glob.module) else {
                 continue;
             };
-            let provider = FileFacts::open(&cx, &parent, false)?;
+            let provider = FileFacts::open(&cx, &parent, true)?;
             for row in provider.specifiers.iter().filter(|row| !row.glob) {
                 if source.refs_in(&row.name, &moving) == 0
                     || travelling.iter().any(|held| held.name == row.name)
@@ -348,6 +349,30 @@ impl Plan {
                     kind,
                 });
             }
+            for decl in &provider.decls {
+                if source.refs_in(&decl.name, &moving) == 0
+                    || travelling.iter().any(|held| held.name == decl.name)
+                {
+                    continue;
+                }
+                if !decl.exported {
+                    glob_unresolved.insert(format!("{} from {parent} is private", decl.name));
+                    continue;
+                }
+                let dest_module = arm.spell_module(&dest, &parent);
+                let kind = if carried.contains(&(decl.name.clone(), dest_module.clone())) {
+                    "carried"
+                } else {
+                    "relative"
+                };
+                travelling.push(CleaveSpecifier {
+                    name: decl.name.clone(),
+                    module: parent.clone(),
+                    dest_module,
+                    span: decl.span,
+                    kind,
+                });
+            }
         }
 
         let carried_names: BTreeSet<&str> = travelling
@@ -355,7 +380,8 @@ impl Plan {
             .map(|row| row.name.as_str())
             .chain(dragged.iter().map(|row| row.name.as_str()))
             .collect();
-        let unresolved = source.ungraded(&moving, &carried_names);
+        let mut unresolved = source.ungraded(&moving, &carried_names);
+        unresolved.extend(glob_unresolved);
         if !unresolved.is_empty() {
             return Ok(Plan {
                 root,
@@ -427,7 +453,9 @@ impl Plan {
             .iter()
             .map(|span| source.slice(*span).to_string())
             .collect();
-        if source.refs_outside(&item, &moving) > 0 || !callers.is_empty() {
+        if !item_decl.exported
+            && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty())
+        {
             if let Some(first) = moving_text.first_mut() {
                 if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
                     *first = apply(first, &edit);
@@ -1139,6 +1167,7 @@ fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String
     let out = dispatch(rel, text.as_bytes(), mask)
         .ok_or_else(|| format!("no CST fact arm owns {rel}"))?;
     let mut exports = BTreeSet::new();
+    let mut variable_lists = BTreeSet::new();
     let mut children = Vec::new();
     flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
         match fact {
@@ -1149,6 +1178,14 @@ fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String
                 ..
             } if kind == "export_statement" => {
                 exports.insert((span.start, span.end));
+            }
+            FlatFact::Node {
+                family: sprefa_extract::FamilyTag::Cst,
+                kind,
+                span,
+                ..
+            } if matches!(kind.as_str(), "lexical_declaration" | "variable_declaration") => {
+                variable_lists.insert((span.start, span.end));
             }
             FlatFact::Edge {
                 family: sprefa_extract::FamilyTag::Cst,
@@ -1169,8 +1206,16 @@ fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String
         .map(|(_, to)| *to)
         .collect();
     let mut items = direct.clone();
+    items.extend(children.iter().filter_map(|(from, to)| {
+        (direct.contains(from) && exports.contains(from)).then_some(*to)
+    }));
+    let visible_lists: BTreeSet<(u32, u32)> = items
+        .iter()
+        .filter(|span| variable_lists.contains(span))
+        .copied()
+        .collect();
     items.extend(children.into_iter().filter_map(|(from, to)| {
-        (direct.contains(&from) && exports.contains(&from)).then_some(to)
+        visible_lists.contains(&from).then_some(to)
     }));
     Ok(items)
 }
