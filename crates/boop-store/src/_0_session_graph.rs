@@ -56,6 +56,49 @@ impl Default for AgentSessionGraphQuery {
 /// Function type for the pure durable graph projection.
 pub type LoadAgentSessionGraph = fn(&Store, AgentSessionGraphQuery) -> Result<AgentSessionGraph>;
 
+/// Stateful reader for the durable session graph.
+///
+/// SQLite's data version changes when another connection commits. Keeping the
+/// read connection open makes the unchanged poll a single pragma read and
+/// avoids reopening the database or running any graph, route, mailbox, or
+/// process queries. The graph is retained so a caller can use the last value
+/// while `poll` returns `None`.
+pub struct SessionGraphReader {
+    store: Store,
+    query: AgentSessionGraphQuery,
+    data_version: Option<i64>,
+    graph: Option<AgentSessionGraph>,
+}
+
+impl SessionGraphReader {
+    pub fn new(store: Store, query: AgentSessionGraphQuery) -> Self {
+        Self {
+            store,
+            query,
+            data_version: None,
+            graph: None,
+        }
+    }
+
+    pub fn graph(&self) -> Option<&AgentSessionGraph> {
+        self.graph.as_ref()
+    }
+
+    pub fn poll(&mut self) -> Result<Option<AgentSessionGraph>> {
+        let version = self
+            .store
+            .connection()
+            .query_row("PRAGMA data_version", [], |row| row.get::<_, i64>(0))?;
+        if self.graph.is_some() && self.data_version == Some(version) {
+            return Ok(None);
+        }
+        let graph = load_agent_session_graph(&self.store, self.query.clone())?;
+        self.data_version = Some(version);
+        self.graph = Some(graph.clone());
+        Ok(Some(graph))
+    }
+}
+
 /// Harness-qualified public identity. The store currently keys sessions by
 /// the bare `dict_session` value, so a collision that already merged rows in
 /// storage cannot be reconstructed by this projection.
@@ -686,6 +729,35 @@ mod tests {
     use crate::proc::SysinfoSnapshot;
     use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
     use crate::testing::FakeMux;
+
+    #[test]
+    fn session_graph_reader_returns_none_until_store_changes() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-reader-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let reader_store = Store::open(path.clone()).unwrap();
+        let mut reader = SessionGraphReader::new(reader_store, AgentSessionGraphQuery::default());
+        assert!(reader.poll().unwrap().is_some());
+        assert!(reader.poll().unwrap().is_none());
+
+        let writer = Store::open(path.clone()).unwrap();
+        let session = writer
+            .intern_public("dict_session", "reader-session")
+            .unwrap();
+        let harness = writer.intern_public("dict_harness", "codex").unwrap();
+        writer
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        let graph = reader.poll().unwrap().unwrap();
+        assert_eq!(graph.sessions[0].session.id, "reader-session");
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn graph_projects_sessions_edges_and_shells_from_setwise_relations() {
