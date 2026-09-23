@@ -44,6 +44,12 @@ on one SQLite connection. The logging fixture records each delivered batch;
 the slow fixture delays its batch callback. Their test also checks savepoint
 rollback, transaction rollback, and native hafley-observe events.
 
+SQLite exposes one `sqlite3_trace_v2` callback per connection. When independently
+loaded plugins both request SQLite statement profiling, the later registration
+replaces the earlier callback. Plugin tracing events from both libraries are
+covered by the fixture test; connection-wide PROFILE ownership remains with
+the last registered plugin until a host-level observer owns that hook.
+
 ## Why a virtual table
 
 SQLite fires triggers per row. Work placed in that landing runs once per row:
