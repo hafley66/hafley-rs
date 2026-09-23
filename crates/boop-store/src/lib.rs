@@ -35,10 +35,12 @@ pub mod usage;
 pub use _0_session_graph::{
     load_agent_session_graph, load_agent_session_graph_with_runtime, AgentSessionEdge,
     AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
-    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+    AgentSessionNode, AgentShellNode, LoadAgentSessionGraph, SessionGraphReader,
+    AGENT_SESSION_GRAPH_SCHEMA_VERSION,
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
+pub use bus::{IncrementalMailboxReader, IncrementalRouteReader};
 pub use harness_id::HarnessId;
 pub use ident::{
     DeliveryState, Store, SyncStat, TraceErrorRow, TraceEvent, TraceEventRow, RESET_ATTR_KEY,

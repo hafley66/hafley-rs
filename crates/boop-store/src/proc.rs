@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use anyhow::Result;
-use sysinfo::{Pid, ProcessesToUpdate, System};
+use sysinfo::{Pid, ProcessRefreshKind, RefreshKind, System, UpdateKind};
 
 /// A snapshot of one process.
 #[derive(Clone, Debug)]
@@ -102,8 +102,14 @@ pub struct SysinfoSnapshot {
 
 impl SysinfoSnapshot {
     pub fn capture() -> Result<Self> {
-        let mut system = System::new_all();
-        system.refresh_processes(ProcessesToUpdate::All, true);
+        let process_refresh = ProcessRefreshKind::nothing()
+            .with_cpu()
+            .with_memory()
+            .with_cwd(UpdateKind::Always)
+            .with_environ(UpdateKind::Always)
+            .with_cmd(UpdateKind::Always);
+        let system =
+            System::new_with_specifics(RefreshKind::nothing().with_processes(process_refresh));
         Ok(SysinfoSnapshot { system })
     }
 
