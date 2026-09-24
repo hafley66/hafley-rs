@@ -14,6 +14,7 @@
 
 use std::io::Write;
 use std::path::PathBuf;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 #[cfg(feature = "mimalloc")]
@@ -479,12 +480,20 @@ fn check_file_paths(paths: &[PathBuf], allow_stdin: bool) {
 
 /// Every exit path flushes the chrome timeline first; `process::exit` skips Drop.
 fn exit(code: i32) -> ! {
+    if let Some(state) = TRAIL_STATE.get() {
+        write_trail(state);
+    }
     hafley_observe::finish_trace();
     std::process::exit(code)
 }
 
+static TRAIL_STATE: OnceLock<Arc<sprefa_extract::trace::SummaryState>> = OnceLock::new();
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let summary = sprefa_extract::trace::install();
+    if let Some(state) = &summary {
+        let _ = TRAIL_STATE.set(Arc::clone(state));
+    }
     let outcome = match run() {
         Ok(()) => Ok(()),
         // A consumer closing the pipe early (`extract FILE | head -1`) is a
@@ -494,7 +503,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(error) => Err(error),
     };
     if let Some(state) = summary {
-        state.print();
+        if matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
+            || std::env::args().any(|arg| arg == "--bench")
+        {
+            state.print();
+        }
         write_trail(&state);
     }
     hafley_observe::finish_trace();
@@ -593,7 +606,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         let argv: Vec<String> = std::env::args().skip(1).collect();
         if let Err(error) = graph::run(argv) {
             eprintln!("{error}");
-            std::process::exit(2);
+            exit(2);
         }
         return Ok(());
     }

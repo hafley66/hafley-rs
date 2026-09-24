@@ -573,7 +573,8 @@ mod sink {
     pub fn install() -> Option<Arc<SummaryState>> {
         // `--bench` is read off argv because the subscriber must exist before
         // clap parses: a span opened earlier than the layer is a span lost.
-        let want_summary = matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
+        let want_summary = !matches!(std::env::var("DL_TRAIL").as_deref(), Ok("0"))
+            || matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
             || std::env::args().any(|arg| arg == "--bench");
         // `info` is one line per file with its phase timings (user-set
         // 2026-09-18). `RUST_LOG` still overrides.
