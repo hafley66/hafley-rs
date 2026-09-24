@@ -13,9 +13,9 @@ use std::time::Instant;
 use tracing_subscriber::layer::SubscriberExt as _;
 
 use hafley_observe::flush::{Flush, Writer};
-use hafley_observe::{instruments, rusage, Config, FormatConfig, OutputFormat};
 #[cfg(feature = "sqlite-sink")]
 use hafley_observe::Sink as _;
+use hafley_observe::{instruments, rusage, Config, FormatConfig, OutputFormat};
 
 // The tracked allocator is a property of the binary, so the harness installs
 // it. With the feature off the line does not exist and the default allocator
@@ -239,7 +239,8 @@ fn workload() {
         );
         let _paragraph = span.enter();
         for line in 0..LINES_PER_PARAGRAPH {
-            let span = tracing::debug_span!(target: WORKLOAD_TARGET, "line", line, width = LINE_WIDTH);
+            let span =
+                tracing::debug_span!(target: WORKLOAD_TARGET, "line", line, width = LINE_WIDTH);
             let _line = span.enter();
             for token in 0..TOKENS_PER_LINE {
                 let span = tracing::trace_span!(target: WORKLOAD_TARGET, "token", token);
@@ -267,7 +268,9 @@ fn open_log(path: &Path, choice: SinkChoice, strategy: Flush) -> Option<Arc<Writ
     };
     // @eprintln-ok: a CLI progress line, not a log.
     eprintln!("sink {} -> {}", encoding_name(encoding), path.display());
-    sqlite::open(path, encoding, strategy).ok().map(|log| log.writer)
+    sqlite::open(path, encoding, strategy)
+        .ok()
+        .map(|log| log.writer)
 }
 
 #[cfg(not(feature = "sqlite-sink"))]

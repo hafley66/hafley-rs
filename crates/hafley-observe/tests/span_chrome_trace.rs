@@ -7,7 +7,8 @@ use tracing_subscriber::prelude::*;
 
 #[test]
 fn nested_spans_land_in_chrome_trace() {
-    let trace_dir = std::env::temp_dir().join(format!("hafley-observe-chrome-{}", std::process::id()));
+    let trace_dir =
+        std::env::temp_dir().join(format!("hafley-observe-chrome-{}", std::process::id()));
     let trace_path: PathBuf = trace_dir.join("trace.json");
     fs::create_dir_all(&trace_dir).unwrap();
 
@@ -48,7 +49,11 @@ fn nested_spans_land_in_chrome_trace() {
     }
 
     let (populate_start, populate_end) = populate_bounds.expect("populate begin and end expected");
-    assert_eq!(maintain_events.len(), 6, "three maintain begin and end pairs expected");
+    assert_eq!(
+        maintain_events.len(),
+        6,
+        "three maintain begin and end pairs expected"
+    );
     for (phase, ts) in maintain_events {
         assert!(
             ts >= populate_start && ts <= populate_end,

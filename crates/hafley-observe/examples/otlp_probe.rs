@@ -10,13 +10,8 @@ fn main() {}
 #[cfg(feature = "otlp-trace")]
 fn main() {
     hafley_observe::init(
-        hafley_observe::Config::from_env(
-            "observe-lab",
-            env!("CARGO_PKG_VERSION"),
-            "info",
-            false,
-        )
-        .expect("log format"),
+        hafley_observe::Config::from_env("observe-lab", env!("CARGO_PKG_VERSION"), "info", false)
+            .expect("log format"),
     )
     .expect("observability");
 

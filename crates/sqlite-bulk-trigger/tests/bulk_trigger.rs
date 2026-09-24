@@ -1,7 +1,5 @@
 use rusqlite::{types::Value, Connection};
-use sqlite_bulk_trigger::{
-    counts, watch, BulkTrigger, Collector, Counts, RowChange, Sign, Watch,
-};
+use sqlite_bulk_trigger::{counts, watch, BulkTrigger, Collector, Counts, RowChange, Sign, Watch};
 use std::sync::{Arc, Mutex};
 
 #[derive(Clone, Default)]
@@ -64,9 +62,11 @@ fn signs(batch: &[RowChange]) -> Vec<Sign> {
 }
 
 fn delta_rows(db: &Connection, name: &str) -> i64 {
-    db.query_row(&format!("SELECT COUNT(*) FROM \"{name}_delta\""), [], |row| {
-        row.get(0)
-    })
+    db.query_row(
+        &format!("SELECT COUNT(*) FROM \"{name}_delta\""),
+        [],
+        |row| row.get(0),
+    )
     .unwrap()
 }
 
@@ -207,10 +207,7 @@ fn rows_past_the_memory_cap_come_back_in_sequence_order() {
     let batch = recorder.only();
     assert_eq!(batch.len(), 5);
     assert_eq!(sequences(&batch), vec![0, 1, 2, 3, 4]);
-    assert_eq!(
-        batch[4].values,
-        vec![Value::Integer(5), Value::Integer(50)]
-    );
+    assert_eq!(batch[4].values, vec![Value::Integer(5), Value::Integer(50)]);
     assert_eq!(delta_rows(&db, "collector"), 0);
 }
 
@@ -236,7 +233,10 @@ fn a_rollback_to_after_a_spill_keeps_only_the_surviving_rows() {
     assert_eq!(batch.len(), 3);
     assert_eq!(sequences(&batch), vec![0, 1, 2]);
     assert_eq!(
-        batch.iter().map(|c| c.values[0].clone()).collect::<Vec<_>>(),
+        batch
+            .iter()
+            .map(|c| c.values[0].clone())
+            .collect::<Vec<_>>(),
         vec![Value::Integer(1), Value::Integer(2), Value::Integer(3)]
     );
     assert_eq!(delta_rows(&db, "collector"), 0);
@@ -273,10 +273,8 @@ fn a_rows_original_types_survive_a_spill() {
         .staged_rows(1)
         .install(&db, recorder.clone())
         .unwrap();
-    db.execute_batch(
-        "INSERT INTO motley VALUES(0,0,0,0,0),(1, 1.0, NULL, x'00', 'a')",
-    )
-    .unwrap();
+    db.execute_batch("INSERT INTO motley VALUES(0,0,0,0,0),(1, 1.0, NULL, x'00', 'a')")
+        .unwrap();
     let batch = recorder.only();
     assert_eq!(batch.len(), 2);
     assert_eq!(
@@ -452,7 +450,10 @@ fn order(id: i64) -> RowChange {
 }
 
 fn ids(batch: &[RowChange]) -> Vec<Value> {
-    batch.iter().map(|change| change.values[0].clone()).collect()
+    batch
+        .iter()
+        .map(|change| change.values[0].clone())
+        .collect()
 }
 
 #[test]

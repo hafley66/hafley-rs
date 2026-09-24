@@ -140,7 +140,10 @@ pub(crate) fn drop_triggers(collector: &str, tables: &[String]) -> String {
             ["insert", "delete", "update"]
                 .into_iter()
                 .map(move |event| {
-                    format!("DROP TRIGGER IF EXISTS main.{};", trigger_name(collector, table, event))
+                    format!(
+                        "DROP TRIGGER IF EXISTS main.{};",
+                        trigger_name(collector, table, event)
+                    )
                 })
         })
         .collect()

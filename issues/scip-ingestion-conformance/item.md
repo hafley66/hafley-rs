@@ -1,12 +1,13 @@
 ---
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-23
 type: feature
 status: deferred
 priority: high
 epic: extract-parity-move-rename
 related: ['@k3-kotlin-scip-ratchet', '@fast-path-recursive-inference']
 labels: [extract, intent-correctness]
+blocked_by: ['@scm-kotlin-front-end']
 ---
 
 # prove 100% SCIP ingestion conformance per language
@@ -123,3 +124,8 @@ the same way a golden does.
 ### 2026-09-20T17:52:18Z · @chris
 
 2026-09-20: punted. Epic, needs mechanical leaf breakdown before any lane. extract-fast-slow-trait-divide is now its child.
+
+### 2026-09-23T21:14:32Z · @codex
+
+2026-09-23: Resume 100% SCIP field and instance coverage after the SCM++ Rust, TS/JS, and Kotlin per-file front ends land. The ingestion epic remains deferred and is blocked by @scm-kotlin-front-end; compiler/SCIP coverage work stays here rather than entering the SCM++ parser epic.
+

@@ -102,10 +102,7 @@ where
 #[cfg(not(feature = "rusage"))]
 pub fn layer<S>() -> Option<Box<dyn tracing_subscriber::Layer<S> + Send + Sync>>
 where
-    S: tracing::Subscriber
-        + for<'a> tracing_subscriber::registry::LookupSpan<'a>
-        + Send
-        + Sync,
+    S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a> + Send + Sync,
 {
     None
 }

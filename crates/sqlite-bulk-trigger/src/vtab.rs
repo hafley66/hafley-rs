@@ -1,9 +1,7 @@
 use crate::collector::{
     BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS,
 };
-use crate::schema::{
-    self, error, FIRST_VALUE_COLUMN, ROWID_ARGUMENTS, SIGN_COLUMN, SOURCE_COLUMN,
-};
+use crate::schema::{self, error, FIRST_VALUE_COLUMN, ROWID_ARGUMENTS, SIGN_COLUMN, SOURCE_COLUMN};
 use rusqlite::{ffi, types::Value, types::ValueRef, vtab::*, Connection, Result};
 use std::{
     borrow::Cow,
@@ -135,7 +133,10 @@ impl<'a> Watch<'a> {
             arity,
         }));
         db.create_module(self.name, &MODULE, None::<()>)?;
-        COLLECTORS.with(|map| map.borrow_mut().insert(key(handle, self.name), state.clone()));
+        COLLECTORS.with(|map| {
+            map.borrow_mut()
+                .insert(key(handle, self.name), state.clone())
+        });
         let built = self.build(db, &layout);
         if built.is_err() {
             COLLECTORS.with(|map| map.borrow_mut().remove(&key(handle, self.name)));
@@ -230,7 +231,9 @@ impl Table {
         let delivered = trigger.on_batch(&self.db, &batch);
         match state_mut(&self.state) {
             Ok(mut installed) => installed.trigger = Some(trigger),
-            Err(reason) => tracing::error!(%reason, "the collector could not take its trigger back"),
+            Err(reason) => {
+                tracing::error!(%reason, "the collector could not take its trigger back")
+            }
         }
         delivered
     }

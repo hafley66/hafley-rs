@@ -1,11 +1,13 @@
 ---
 created: 2026-09-18
-updated: 2026-09-20
+updated: 2026-09-23
 type: feature
-status: open
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
+closed: 2026-09-23
+related: ['@scm-language-frontends']
 ---
 
 # Lab: per-language .scm query files plus a scope-tree engine, isolated crate
@@ -199,3 +201,8 @@ CodeQL and Glean, and is out of scope here.
 ### 2026-09-20T17:52:18Z · @chris
 
 2026-09-20: L1 (host predicates, .scm -> AstRule) shipped, see crates/sprefa-extract/docs/2_scm-with-ast-grep-relations-20260920.md. L2-L6 (vendored helix locals.scm, scope-tree engine) untouched; no .scm file is vendored in the repo yet.
+
+### 2026-09-23T21:14:16Z · @codex
+
+2026-09-23: The isolated SCM lab crate and per-language parser cutover are superseded by @scm-language-frontends and its Rust, TS/JS, Kotlin children. Preserve this card as research. Its cross-file scope-tree and inference ideas remain separate future work under @ryi-fast-tier; no scope-graph feature is deleted by this disposition.
+

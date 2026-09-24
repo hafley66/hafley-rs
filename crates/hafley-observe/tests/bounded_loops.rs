@@ -43,7 +43,11 @@ fn first_constant(budget: &str) -> Option<String> {
 fn every_loop_names_the_constant_that_bounds_it() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
     let files = rust_files(&root);
-    assert!(!files.is_empty(), "no sources found under {}", root.display());
+    assert!(
+        !files.is_empty(),
+        "no sources found under {}",
+        root.display()
+    );
 
     let mut listing: Vec<String> = Vec::new();
     let mut unbudgeted: Vec<String> = Vec::new();
@@ -53,7 +57,11 @@ fn every_loop_names_the_constant_that_bounds_it() {
     for path in &files {
         let text = fs::read_to_string(path).expect("source file");
         let lines: Vec<&str> = text.lines().collect();
-        let relative = path.strip_prefix(&root).unwrap_or(path).display().to_string();
+        let relative = path
+            .strip_prefix(&root)
+            .unwrap_or(path)
+            .display()
+            .to_string();
         for (index, line) in lines.iter().enumerate() {
             let code = line.trim_start();
             if !(code.starts_with("loop {") || code.starts_with("while ") || code == "loop") {
@@ -72,12 +80,7 @@ fn every_loop_names_the_constant_that_bounds_it() {
                         .as_ref()
                         .is_some_and(|name| text.contains(&format!("const {name}")));
                     if !declared {
-                        unnamed.push(format!(
-                            "{}:{} {}",
-                            relative,
-                            index + 1,
-                            budget.trim()
-                        ));
+                        unnamed.push(format!("{}:{} {}", relative, index + 1, budget.trim()));
                     }
                     listing.push(format!(
                         "{}:{} {} <- {}",
@@ -103,6 +106,9 @@ fn every_loop_names_the_constant_that_bounds_it() {
         "budget lines that name no declared constant:\n{}\n\nbudgeted:\n{receipt}",
         unnamed.join("\n")
     );
-    assert!(loops > 0, "the scanner found no loops, so it proves nothing");
+    assert!(
+        loops > 0,
+        "the scanner found no loops, so it proves nothing"
+    );
     println!("{loops} bounded loops:\n{receipt}");
 }

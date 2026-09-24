@@ -111,9 +111,14 @@ unsafe fn emit(event: u32, statement: *mut ffi::sqlite3_stmt, extra: *mut c_void
         ffi::SQLITE_TRACE_STMT => {
             let sql = CStr::from_ptr(ffi::sqlite3_sql(statement)).to_string_lossy();
             let expanded = ffi::sqlite3_expanded_sql(statement);
-            let expanded_text = if expanded.is_null() { String::new() }
-                else { CStr::from_ptr(expanded).to_string_lossy().into_owned() };
-            if !expanded.is_null() { ffi::sqlite3_free(expanded.cast()); }
+            let expanded_text = if expanded.is_null() {
+                String::new()
+            } else {
+                CStr::from_ptr(expanded).to_string_lossy().into_owned()
+            };
+            if !expanded.is_null() {
+                ffi::sqlite3_free(expanded.cast());
+            }
             tracing::trace!(
                 target: SQLITE_TARGET,
                 sql = %sql,
@@ -153,7 +158,12 @@ unsafe fn emit(event: u32, statement: *mut ffi::sqlite3_stmt, extra: *mut c_void
     }
 }
 
-unsafe extern "C" fn trace_callback(event: u32, _: *mut c_void, statement: *mut c_void, extra: *mut c_void) -> i32 {
+unsafe extern "C" fn trace_callback(
+    event: u32,
+    _: *mut c_void,
+    statement: *mut c_void,
+    extra: *mut c_void,
+) -> i32 {
     // A panic must never unwind through SQLite's C callback boundary.
     let _ = std::panic::catch_unwind(|| emit(event, statement.cast(), extra));
     0
@@ -168,13 +178,19 @@ pub fn instrument(connection: &Connection) {
             StatementCounters::take(statement);
             statement = ffi::sqlite3_next_stmt(handle, statement);
         }
-        ffi::sqlite3_trace_v2(handle, ffi::SQLITE_TRACE_STMT | ffi::SQLITE_TRACE_PROFILE,
-            Some(trace_callback), std::ptr::null_mut());
+        ffi::sqlite3_trace_v2(
+            handle,
+            ffi::SQLITE_TRACE_STMT | ffi::SQLITE_TRACE_PROFILE,
+            Some(trace_callback),
+            std::ptr::null_mut(),
+        );
     }
 }
 
 pub fn silence(connection: &Connection) {
-    unsafe { ffi::sqlite3_trace_v2(connection.handle(), 0, None, std::ptr::null_mut()); }
+    unsafe {
+        ffi::sqlite3_trace_v2(connection.handle(), 0, None, std::ptr::null_mut());
+    }
 }
 
 /// The planner's own account of a statement, one row per plan node.
@@ -257,10 +273,15 @@ impl LogSink {
 
     /// Rows in the two log tables, for the receipts.
     pub fn rows(&self) -> i64 {
-        let connection = self.connection.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let connection = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let count = |table: &str| -> i64 {
             connection
-                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| row.get(0))
+                .query_row(&format!("SELECT count(*) FROM {table}"), [], |row| {
+                    row.get(0)
+                })
                 .unwrap_or_default()
         };
         count("log_event") + count("log_value")
@@ -268,7 +289,10 @@ impl LogSink {
 
     /// Bytes the database occupies, for the receipts.
     pub fn bytes(&self) -> i64 {
-        let connection = self.connection.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let connection = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let page_count: i64 = connection
             .query_row("PRAGMA page_count", [], |row| row.get(0))
             .unwrap_or_default();
@@ -287,8 +311,8 @@ impl LogSink {
             "INSERT INTO log_event(ts_ns, span_id, target_id, file_id, line, level_id) \
              VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
         )?;
-        let mut value =
-            connection.prepare("INSERT INTO log_value(event_id, field_id, value) VALUES(?1, ?2, ?3)")?;
+        let mut value = connection
+            .prepare("INSERT INTO log_value(event_id, field_id, value) VALUES(?1, ?2, ?3)")?;
         for row in rows {
             let span_id = interners[0].id(&row.name)?;
             let target_id = interners[1].id(&row.target)?;
@@ -311,16 +335,11 @@ impl LogSink {
             "INSERT INTO log_event(ts_ns, span, target, file, line, level) \
              VALUES(?1, ?2, ?3, ?4, ?5, ?6)",
         )?;
-        let mut value =
-            connection.prepare("INSERT INTO log_value(event_id, field, value) VALUES(?1, ?2, ?3)")?;
+        let mut value = connection
+            .prepare("INSERT INTO log_value(event_id, field, value) VALUES(?1, ?2, ?3)")?;
         for row in rows {
             event.execute(rusqlite::params![
-                row.ts_ns,
-                row.name,
-                row.target,
-                row.file,
-                row.line,
-                row.level
+                row.ts_ns, row.name, row.target, row.file, row.line, row.level
             ])?;
             let event_id = connection.last_insert_rowid();
             for (field, text) in &row.fields {
@@ -340,7 +359,10 @@ impl Sink for LogSink {
     }
 
     fn write(&self, rows: &[Row]) {
-        let connection = self.connection.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let connection = self
+            .connection
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let result = connection
             .execute_batch("BEGIN")
             .and_then(|()| match self.encoding {
@@ -414,8 +436,9 @@ impl<'conn, 'cache> Interner<'conn, 'cache> {
         column: &'static str,
     ) -> rusqlite::Result<Self> {
         Ok(Self {
-            insert: connection
-                .prepare(&format!("INSERT OR IGNORE INTO {table}({column}) VALUES(?1)"))?,
+            insert: connection.prepare(&format!(
+                "INSERT OR IGNORE INTO {table}({column}) VALUES(?1)"
+            ))?,
             select: connection.prepare(&format!("SELECT id FROM {table} WHERE {column} = ?1"))?,
             table,
             cache,
@@ -426,19 +449,28 @@ impl<'conn, 'cache> Interner<'conn, 'cache> {
     /// miss costs one insert plus one select. UNIQUE is the dedup.
     fn id(&mut self, key: &str) -> rusqlite::Result<i64> {
         {
-            let cache = self.cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let cache = self
+                .cache
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Some(id) = cache.get(self.table).and_then(|ids| ids.get(key)) {
                 return Ok(*id);
             }
         }
         self.insert.execute([key])?;
         let id = self.select.query_row([key], |row| row.get::<_, i64>(0))?;
-        let mut cache = self.cache.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+        let mut cache = self
+            .cache
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let entries: usize = cache.values().map(HashMap::len).sum();
         if entries >= crate::flush::DICTIONARY_CACHE_BOUND {
             cache.clear();
         }
-        cache.entry(self.table).or_default().insert(key.to_owned(), id);
+        cache
+            .entry(self.table)
+            .or_default()
+            .insert(key.to_owned(), id);
         Ok(id)
     }
 }

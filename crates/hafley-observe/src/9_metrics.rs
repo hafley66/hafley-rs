@@ -35,7 +35,9 @@ mod pipeline {
     use std::sync::{Arc, Mutex, OnceLock};
     use std::time::Instant;
 
-    use metrics::{CounterFn, GaugeFn, HistogramFn, Key, KeyName, Metadata, Recorder, SharedString, Unit};
+    use metrics::{
+        CounterFn, GaugeFn, HistogramFn, Key, KeyName, Metadata, Recorder, SharedString, Unit,
+    };
     #[cfg(feature = "metrics-ctx")]
     use metrics_util::layers::Layer as RecorderLayer;
     use opentelemetry::metrics::{Counter, Gauge, Histogram, Meter, MeterProvider as _};
@@ -47,7 +49,10 @@ mod pipeline {
     use tracing_subscriber::layer::{Context, Layer};
     use tracing_subscriber::registry::LookupSpan;
 
-    use super::{Config, INSTRUMENT_CARDINALITY_BOUND, METRICS_ENDPOINT_VARIABLE, SPAN_COUNT_METRIC, SPAN_DURATION_METRIC};
+    use super::{
+        Config, INSTRUMENT_CARDINALITY_BOUND, METRICS_ENDPOINT_VARIABLE, SPAN_COUNT_METRIC,
+        SPAN_DURATION_METRIC,
+    };
 
     static PROVIDER: OnceLock<SdkMeterProvider> = OnceLock::new();
 
@@ -278,14 +283,24 @@ mod pipeline {
     }
 
     impl Recorder for Bridge {
-        fn describe_counter(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {}
+        fn describe_counter(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {
+        }
         fn describe_gauge(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {}
-        fn describe_histogram(&self, _key: KeyName, _unit: Option<Unit>, _description: SharedString) {}
+        fn describe_histogram(
+            &self,
+            _key: KeyName,
+            _unit: Option<Unit>,
+            _description: SharedString,
+        ) {
+        }
 
         fn register_counter(&self, key: &Key, _metadata: &Metadata<'_>) -> metrics::Counter {
             let name = key.name().to_string();
             let (label, attributes) = attributes(key);
-            let mut entries = self.counters.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut entries = self
+                .counters
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Some(counter) = cached(&entries, &name, &label) {
                 return metrics::Counter::from_arc(counter);
             }
@@ -303,7 +318,10 @@ mod pipeline {
         fn register_gauge(&self, key: &Key, _metadata: &Metadata<'_>) -> metrics::Gauge {
             let name = key.name().to_string();
             let (label, attributes) = attributes(key);
-            let mut entries = self.gauges.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut entries = self
+                .gauges
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Some(gauge) = cached(&entries, &name, &label) {
                 return metrics::Gauge::from_arc(gauge);
             }
@@ -321,7 +339,10 @@ mod pipeline {
         fn register_histogram(&self, key: &Key, _metadata: &Metadata<'_>) -> metrics::Histogram {
             let name = key.name().to_string();
             let (label, attributes) = attributes(key);
-            let mut entries = self.histograms.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut entries = self
+                .histograms
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
             if let Some(histogram) = cached(&entries, &name, &label) {
                 return metrics::Histogram::from_arc(histogram);
             }
@@ -430,7 +451,10 @@ mod pipeline {
         let thread = std::thread::Builder::new()
             .name("hafley-observe-sysmetrics".to_owned())
             .spawn(move || {
-                let Ok(runtime) = tokio::runtime::Builder::new_current_thread().enable_time().build() else {
+                let Ok(runtime) = tokio::runtime::Builder::new_current_thread()
+                    .enable_time()
+                    .build()
+                else {
                     return;
                 };
                 // budget: OBSERVER_SAMPLES passes, OBSERVER_INTERVAL apart
@@ -438,9 +462,9 @@ mod pipeline {
                     if halt.load(Ordering::Acquire) {
                         break;
                     }
-                    let _ = runtime.block_on(opentelemetry_system_metrics::init_process_observer_once(
-                        meter.clone(),
-                    ));
+                    let _ = runtime.block_on(
+                        opentelemetry_system_metrics::init_process_observer_once(meter.clone()),
+                    );
                     std::thread::sleep(super::OBSERVER_INTERVAL);
                 }
             })
@@ -453,9 +477,7 @@ mod pipeline {
 }
 
 #[cfg(feature = "otlp-metrics")]
-pub use pipeline::{
-    context_layer, install_recorder, meter, provider, shutdown, SpanMetricsLayer,
-};
+pub use pipeline::{context_layer, install_recorder, meter, provider, shutdown, SpanMetricsLayer};
 
 #[cfg(feature = "sysmetrics")]
 pub use pipeline::{start_observer, Observer};
@@ -468,9 +490,7 @@ pub fn shutdown() {}
 
 /// The span metrics layer, or `None` when the endpoint is unset.
 #[cfg(feature = "otlp-metrics")]
-pub fn span_layer<S>(
-    config: &Config,
-) -> Option<Box<dyn Layer<S> + Send + Sync>>
+pub fn span_layer<S>(config: &Config) -> Option<Box<dyn Layer<S> + Send + Sync>>
 where
     S: Subscriber + for<'a> LookupSpan<'a> + Send + Sync,
 {

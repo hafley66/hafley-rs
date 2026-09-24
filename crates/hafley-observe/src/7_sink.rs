@@ -58,7 +58,12 @@ where
         self.writer.write(row_for(event, &ctx));
     }
 
-    fn on_new_span(&self, attrs: &tracing::span::Attributes<'_>, id: &tracing::Id, ctx: Context<'_, S>) {
+    fn on_new_span(
+        &self,
+        attrs: &tracing::span::Attributes<'_>,
+        id: &tracing::Id,
+        ctx: Context<'_, S>,
+    ) {
         if !self.span_events {
             return;
         }
