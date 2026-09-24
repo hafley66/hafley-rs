@@ -1,6 +1,6 @@
 //! The Rust extractor arm: syn front-end for type/call/df/const, the shared
 //! tree-sitter walk for cst. Mirrors TsSource (same shape, different front-end): cst via the shared walk
-//! grammar + one `syn::parse_file` feeding the type/call/df/const projections.
+//! grammar + one SCM-owned `syn` parse feeding the type/call/df/const projections.
 //! Type edges ride `TypeFAux` candidates out of the one parse (port of v5
 //! `edges_from`: field/variant/generic/impl — v5 rust emits NO param/returns
 //! and NO uses). Resolve<CallF> is NameResolve primary, ScipOverride on scip
@@ -105,10 +105,9 @@ fn rust_combined_query_ext() -> &'static hafley_scm::QueryExt {
     &QUERY
 }
 
-/// Re-runs `project_call` over `hafley_scm::lang::rust::expand_file`'s spliced text, folding
-/// in only the defs/sites born inside a macro expansion, span-mapped back.
-/// The Rust `Source`. `matches` = the path ends in `.rs`. cst via the shared
-/// grammar; type/call/df/const via one `syn::parse_file`.
+/// The Rust `Source`. `matches` = the path ends in `.rs`. CST uses the shared
+/// grammar; type/call/df/const reuse one SCM-owned `syn` parse. Expanded-call
+/// rows are produced by SCM and mapped back to source bytes.
 #[derive(Default)]
 pub struct RustSource;
 
