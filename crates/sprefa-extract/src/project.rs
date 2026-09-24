@@ -1396,8 +1396,17 @@ fn module_facts_of(path: &str, content: &[u8], wanted: bool) -> Option<ModuleFac
 }
 
 /// The rust module plane's own facts, same discipline as `module_facts_of`.
-fn rust_module_facts_of(path: &str, content: &[u8], wanted: bool) -> Option<RustModuleFacts> {
-    wanted.then(|| crate::lang::rust_modules::rust_module_facts(path, content))?
+fn rust_module_facts_of(
+    path: &str,
+    content: &[u8],
+    wanted: bool,
+    output: Option<&RyiOutput>,
+) -> Option<RustModuleFacts> {
+    wanted.then(|| {
+        output
+            .and_then(|output| output.rust_module.clone())
+            .or_else(|| crate::lang::rust_modules::rust_module_facts(path, content))
+    })?
 }
 
 /// The go module plane's own facts, same discipline as `module_facts_of`.
@@ -1487,7 +1496,7 @@ fn read_inputs_plain(paths: &[PathBuf], modules: bool) -> Result<Vec<ProjectInpu
                 let path = path.to_string_lossy().to_string();
                 let output = crate::dispatch(&path, &content, resolve_mask(&path));
                 let module = module_facts_of(&path, &content, modules);
-                let rust_module = rust_module_facts_of(&path, &content, modules);
+                let rust_module = rust_module_facts_of(&path, &content, modules, output.as_deref());
                 let go_module = go_module_facts_of(&path, &content, modules);
                 let py_module = py_module_facts_of(&path, &content, modules);
                 let kt_module = kt_module_facts_of(&path, &content, modules, output.as_deref());
@@ -1547,7 +1556,7 @@ fn read_inputs_batched(
                 let path = path.to_string_lossy().to_string();
                 let output = crate::dispatch(&path, content, resolve_mask(&path));
                 let module = module_facts_of(&path, content, modules);
-                let rust_module = rust_module_facts_of(&path, content, modules);
+                let rust_module = rust_module_facts_of(&path, content, modules, output.as_deref());
                 let go_module = go_module_facts_of(&path, content, modules);
                 let py_module = py_module_facts_of(&path, content, modules);
                 let kt_module = kt_module_facts_of(&path, content, modules, output.as_deref());

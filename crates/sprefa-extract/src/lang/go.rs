@@ -2809,6 +2809,7 @@ impl Source for GoSource {
             data: None,
             scm_captures: None,
             kotlin_module: None,
+            rust_module: None,
         }
     }
 }

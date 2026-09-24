@@ -4,8 +4,8 @@
 //! bind an imported name through it instead of a corpus-wide name guess.
 //! Mirrors `ts_resolve.rs`'s ECMAScript ResolveExport plane.
 //!
-//! A dedicated second parse, gated behind `--resolve` like ts's
-//! `module_facts`: phase 1's flat `Specifier` rows (`rust.rs:1642`) collapse
+//! The phase-1 Rust output carries these module facts into project resolve.
+//! Its flat `Specifier` rows (`rust.rs:1642`) collapse
 //! `use a::b::{self}` and `use a::b::*` onto one (name, module,
 //! kind=Reexport) shape, and an inline `mod x { .. }` mints NO row at all
 //! (`rust.rs:1690`, documented `NO ROW`). This file re-walks the AST once and
@@ -47,8 +47,7 @@ struct StarImport {
     reexport: bool,
 }
 
-/// One file's `use`/`mod` facts off a dedicated parse; phase 1's syn arena is
-/// gone by the time the module plane builds.
+/// One file's `use`/`mod` facts, carried from phase 1 into project resolve.
 #[derive(Clone, Debug, Default)]
 pub struct RustModuleFacts {
     uses: Vec<UseBinding>,
@@ -87,16 +86,10 @@ pub(crate) struct TraitFn {
     pub(crate) default: bool,
 }
 
-/// `None` for a non-`.rs` path or a parse that fails: the plane then simply
-/// carries no facts for that file. Consumes the handoff the rust extract pass
-/// stashed for these exact bytes (`rust_stash_module_facts`), so one syn
-/// parse serves both.
+/// Standalone fallback for callers without a phase-1 Rust output.
 pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> {
     if !path.ends_with(".rs") {
         return None;
-    }
-    if let Some(stashed) = take_rust_module_facts(path, content) {
-        return Some(stashed);
     }
     let text = std::str::from_utf8(content).ok()?;
     let parsed = syn::parse_file(text).ok()?;
@@ -110,36 +103,6 @@ pub(crate) fn rust_module_facts_from_parsed(text: &str, parsed: &syn::File) -> R
     facts.impls = impl_facts(parsed, &line_starts);
     collect(&parsed.items, &line_starts, &mut facts);
     facts
-}
-
-/// The extract pass's handoff slot: dispatch parses, the module plane
-/// consumes on the same worker thread. Single entry, consumed on read.
-static RUST_MODULE_FACTS_HANDOFF: std::sync::Mutex<
-    Option<(String, crate::shape::ContentId, RustModuleFacts)>,
-> = std::sync::Mutex::new(None);
-
-/// Stash the module facts computed off the extract parse. The next
-/// `rust_module_facts` call for the same content consumes it.
-pub(crate) fn rust_stash_module_facts(path: &str, content: &[u8], facts: RustModuleFacts) {
-    let mut slot = RUST_MODULE_FACTS_HANDOFF
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    *slot = Some((
-        path.to_string(),
-        crate::shape::content_id_of(content),
-        facts,
-    ));
-}
-
-fn take_rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> {
-    let mut slot = RUST_MODULE_FACTS_HANDOFF
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    slot.take()
-        .filter(|(stashed_path, id, _)| {
-            stashed_path == path && *id == crate::shape::content_id_of(content)
-        })
-        .map(|(_, _, facts)| facts)
 }
 
 fn collect(items: &[syn::Item], line_starts: &[u32], facts: &mut RustModuleFacts) {

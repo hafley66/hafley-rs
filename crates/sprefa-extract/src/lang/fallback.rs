@@ -376,6 +376,7 @@ impl Source for FallbackSource {
             data: None,
             scm_captures: None,
             kotlin_module: None,
+            rust_module: None,
         }
     }
 }

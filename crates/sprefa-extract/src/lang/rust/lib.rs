@@ -196,6 +196,7 @@ impl Source for RustSource {
         let mut types = None;
         let mut call = None;
         let mut df = None;
+        let mut rust_module = None;
         if mask.types || mask.call || mask.df {
             if let Ok(src) = std::str::from_utf8(content) {
                 let parsed = {
@@ -205,6 +206,7 @@ impl Source for RustSource {
                 };
                 if let Ok(parsed) = parsed {
                     let line_starts = build_line_starts(src);
+                    rust_module = Some(super::rust_modules::rust_module_facts_from_parsed(src, &parsed));
                     if mask.types {
                         let span = trace::family_span("rust", "type");
                         let _entered = span.enter();
@@ -260,6 +262,19 @@ impl Source for RustSource {
             data: None,
             scm_captures,
             kotlin_module: None,
+            rust_module,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parsed_rust_carries_module_facts_into_resolve() {
+        let source = "mod inner { pub fn run() {} }\nuse inner::run;\n";
+        let output = RustSource.extract("sample.rs", source.as_bytes(), FamilyMask::DEFAULT);
+        assert!(output.rust_module.is_some());
     }
 }

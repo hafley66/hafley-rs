@@ -4152,6 +4152,7 @@ impl Source for TsSource {
             data: None,
             scm_captures: None,
             kotlin_module: None,
+            rust_module: None,
         }
     }
 }

@@ -1493,6 +1493,7 @@ impl Source for KotlinSource {
             data: None,
             scm_captures,
             kotlin_module,
+            rust_module: None,
         }
     }
 }
