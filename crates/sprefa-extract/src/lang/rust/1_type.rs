@@ -24,8 +24,29 @@ pub(super) fn project_types(
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    for item in &parsed.items {
-        item_entity(item, line_starts, strings, sink);
+    for row in hafley_scm::lang::rust::type_entity_rows(parsed, line_starts) {
+        let span = Span {
+            start: row.range.start,
+            len: row.range.end - row.range.start,
+        };
+        let kind = match row.kind {
+            hafley_scm::lang::rust::TypeEntityKind::Struct => TypeEntityKind::Struct,
+            hafley_scm::lang::rust::TypeEntityKind::Enum => TypeEntityKind::Enum,
+            hafley_scm::lang::rust::TypeEntityKind::Alias => TypeEntityKind::Alias,
+            hafley_scm::lang::rust::TypeEntityKind::Trait => TRAIT,
+            hafley_scm::lang::rust::TypeEntityKind::Function => TypeEntityKind::Function,
+            hafley_scm::lang::rust::TypeEntityKind::Method => TypeEntityKind::Method,
+        };
+        push_entity_raw(sink, strings, span, &row.name, kind);
+        sink.aux.sigs.extend(row.sigs.into_iter().map(|sig| TypeSig {
+            owner: span,
+            slot: match sig.slot {
+                hafley_scm::lang::rust::SignatureSlot::Param => SigSlot::Param,
+                hafley_scm::lang::rust::SignatureSlot::Ret => SigSlot::Ret,
+            },
+            pos: sig.pos,
+            ty: strings.intern(&sig.name),
+        }));
     }
     const_values(parsed, line_starts, strings, sink);
     doc_facts(parsed, line_starts, strings, sink);
@@ -92,110 +113,6 @@ fn impl_self_type_candidates(
     }
 }
 
-/// One declared entity per item, mirroring v5 `rust_item_entity`. A callable
-/// (function/method) additionally carries its arrow-type sigs.
-fn item_entity(
-    item: &syn::Item,
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    match item {
-        syn::Item::Struct(s) => push_entity(
-            sink,
-            strings,
-            line_starts,
-            s.ident.span(),
-            &s.ident.to_string(),
-            TypeEntityKind::Struct,
-        ),
-        syn::Item::Enum(en) => push_entity(
-            sink,
-            strings,
-            line_starts,
-            en.ident.span(),
-            &en.ident.to_string(),
-            TypeEntityKind::Enum,
-        ),
-        // v5 maps Union to EntityKind::Struct (no union brand); v6 does the same.
-        syn::Item::Union(u) => push_entity(
-            sink,
-            strings,
-            line_starts,
-            u.ident.span(),
-            &u.ident.to_string(),
-            TypeEntityKind::Struct,
-        ),
-        // A `type X = ..` declaration is a type on BOTH legs: the destination a
-        // candidate names, and an owner whose right-hand side names types.
-        syn::Item::Type(a) => push_entity(
-            sink,
-            strings,
-            line_starts,
-            a.ident.span(),
-            &a.ident.to_string(),
-            TypeEntityKind::Alias,
-        ),
-        syn::Item::Trait(t) => {
-            push_entity(
-                sink,
-                strings,
-                line_starts,
-                t.ident.span(),
-                &t.ident.to_string(),
-                TRAIT,
-            );
-            // Only default methods (a body inside the trait block) get an entity
-            // row; a bare signature has no code to hang a node on. Port of v5.
-            for ti in &t.items {
-                if let syn::TraitItem::Fn(m) = ti {
-                    if m.default.is_some() {
-                        let name = m.sig.ident.to_string();
-                        let span = syn_span(line_starts, m.sig.ident.span());
-                        push_entity_raw(sink, strings, span, &name, TypeEntityKind::Method);
-                        fn_sigs(sink, strings, span, &m.sig);
-                    }
-                }
-            }
-        }
-        syn::Item::Fn(f) => {
-            let name = f.sig.ident.to_string();
-            let span = syn_span(line_starts, f.sig.ident.span());
-            push_entity_raw(sink, strings, span, &name, TypeEntityKind::Function);
-            fn_sigs(sink, strings, span, &f.sig);
-        }
-        syn::Item::Impl(i) => {
-            for ii in &i.items {
-                if let syn::ImplItem::Fn(m) = ii {
-                    let name = m.sig.ident.to_string();
-                    let span = syn_span(line_starts, m.sig.ident.span());
-                    push_entity_raw(sink, strings, span, &name, TypeEntityKind::Method);
-                    fn_sigs(sink, strings, span, &m.sig);
-                }
-            }
-        }
-        syn::Item::Mod(m) => {
-            if let Some((_, inner)) = &m.content {
-                for nested in inner {
-                    item_entity(nested, line_starts, strings, sink);
-                }
-            }
-        }
-        _ => {}
-    }
-}
-
-fn push_entity(
-    sink: &mut FamilyBundle<TypeF>,
-    strings: &mut Strings,
-    line_starts: &[u32],
-    span: proc_macro2::Span,
-    name: &str,
-    kind: TypeEntityKind,
-) {
-    push_entity_raw(sink, strings, syn_span(line_starts, span), name, kind);
-}
-
 fn push_entity_raw(
     sink: &mut FamilyBundle<TypeF>,
     strings: &mut Strings,
@@ -205,51 +122,6 @@ fn push_entity_raw(
 ) {
     sink.nodes
         .push(Node::new(span, kind).with_name(strings.intern(name)));
-}
-
-/// The arrow-type sigs of one callable: param type-refs (positional, receiver
-/// skipped) + return type-refs. Port of v5 `rust_fn_type` (the sig half; the
-/// `TypeExpr` is flattened to `TypeSig` rows here). Each named type reference
-/// under a signature annotation becomes one sig; keyword types (`String` is NOT
-/// a keyword, it's a path -> "String") are distinct path variants.
-fn fn_sigs(
-    sink: &mut FamilyBundle<TypeF>,
-    strings: &mut Strings,
-    owner: Span,
-    sig: &syn::Signature,
-) {
-    let mut pos = 0u32;
-    for arg in &sig.inputs {
-        if let syn::FnArg::Typed(pt) = arg {
-            for name in type_refs(&pt.ty) {
-                push_sig(sink, strings, owner, SigSlot::Param, pos, &name);
-            }
-            pos += 1;
-        }
-        // FnArg::Receiver (`self`) is skipped so positions align with the written
-        // argument list (port of v5 `rust_fn_type`).
-    }
-    if let ReturnType::Type(_, ty) = &sig.output {
-        for name in type_refs(ty) {
-            push_sig(sink, strings, owner, SigSlot::Ret, 0, &name);
-        }
-    }
-}
-
-fn push_sig(
-    sink: &mut FamilyBundle<TypeF>,
-    strings: &mut Strings,
-    owner: Span,
-    slot: SigSlot,
-    pos: u32,
-    name: &str,
-) {
-    sink.aux.sigs.push(TypeSig {
-        owner,
-        slot,
-        pos,
-        ty: strings.intern(name),
-    });
 }
 
 // ── const facet: Const entities + ConstValue rows ───────────────────────────

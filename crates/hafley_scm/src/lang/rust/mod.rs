@@ -12,6 +12,8 @@ mod module_specifier_rows;
 mod const_string_rows;
 #[path = "6_type_refs.rs"]
 mod type_refs;
+#[path = "7_type_entity_rows.rs"]
+mod type_entity_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -28,4 +30,7 @@ pub use module_specifier_rows::{
 };
 pub use const_string_rows::{const_string_rows, ConstStringRow};
 pub use type_refs::{collect_path_args, type_refs};
+pub use type_entity_rows::{
+    type_entity_rows, SignatureRef, SignatureSlot, TypeEntityKind, TypeEntityRow,
+};
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
