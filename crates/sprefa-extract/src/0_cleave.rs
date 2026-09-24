@@ -111,6 +111,17 @@ where
     }
 
     let stages = plan.stages()?;
+    let mirror = Mirror::build(&plan.root, &stages)?;
+    let mut dry_previews = Vec::with_capacity(stages.len());
+    for stage in &stages {
+        dry_previews.push(stage_and_commit(
+            mirror.root(),
+            &state,
+            stage,
+            soopy::Durability::DryRun,
+        )?);
+    }
+    plan.validate_preview(mirror.root())?;
     match cli.commit {
         true => {
             let journal =
@@ -124,10 +135,7 @@ where
             verify_after_commit(&plan, &state, cli.verify.as_deref(), &journal)?;
         }
         false => {
-            let mirror = Mirror::build(&plan.root, &stages)?;
-            for stage in &stages {
-                let (id, previews) =
-                    stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
+            for (id, previews) in dry_previews {
                 print_previews(&previews, "");
                 println!("stage {id} dry run, tree untouched");
             }
@@ -240,6 +248,24 @@ struct Plan {
 }
 
 impl Plan {
+    fn validate_preview(&self, root: &Path) -> Result<(), String> {
+        if !self.rows.src.ends_with(".rs") {
+            return Ok(());
+        }
+        let paths: BTreeSet<String> = self.touched().into_iter().chain(self.created()).collect();
+        for rel in paths {
+            let path = root.join(&rel);
+            if !path.exists() {
+                continue;
+            }
+            let text = std::fs::read_to_string(&path)
+                .map_err(|error| format!("read cleave preview {rel}: {error}"))?;
+            syn::parse_file(&text)
+                .map_err(|error| format!("cleave preview has invalid Rust in {rel}: {error}"))?;
+        }
+        Ok(())
+    }
+
     fn build(cli: &CleaveCli) -> Result<Self, String> {
         let (src, item) = split_target(&cli.target)?;
         let root = plan_root(cli.root.as_ref(), &src)?;
