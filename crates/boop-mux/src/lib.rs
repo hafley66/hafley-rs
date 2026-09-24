@@ -16,8 +16,7 @@ use tracing::{debug, warn};
 
 mod _0_snapshot;
 pub use _0_snapshot::{
-    rows_from_capture, History, Screen, TerminalRow, TerminalSize, TerminalSnapshot,
-    TerminalTarget,
+    rows_from_capture, History, Screen, TerminalRow, TerminalSize, TerminalSnapshot, TerminalTarget,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]

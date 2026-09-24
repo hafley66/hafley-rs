@@ -61,7 +61,7 @@ pub use _0_types::{
 pub use _1_measure::{align_rows, estimate_rows, measure, rows_of, samples_from};
 pub use _2_place::{place_window, window_of};
 pub use _3_layout::{
-    drawn_at_all, drawn_as_tool, layout, layout_pinned, recent_layout, relative_layout,
+    drawn_as_tool, drawn_at_all, layout, layout_pinned, recent_layout, relative_layout,
 };
 
 #[cfg(test)]

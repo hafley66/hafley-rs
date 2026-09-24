@@ -3851,7 +3851,10 @@ fn classify_user_role<'a>(
     if has_tool_result {
         return "user";
     }
-    let system = object.get("promptSource").and_then(serde_json::Value::as_str) == Some("system");
+    let system = object
+        .get("promptSource")
+        .and_then(serde_json::Value::as_str)
+        == Some("system");
     let meta = object
         .get("isMeta")
         .and_then(serde_json::Value::as_bool)

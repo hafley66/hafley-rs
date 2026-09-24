@@ -407,6 +407,7 @@ dependencies = [
  "anyhow",
  "boop-acp",
  "boop-store",
+ "boop-turnvis",
  "dirs 5.0.1",
  "futures-util",
  "ignore",

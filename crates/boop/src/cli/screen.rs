@@ -61,10 +61,7 @@ fn emit_text(state: &screen::ScreenState) {
     line(&format!("lane\t{}", state.lane));
     line(&format!("session\t{}", state.session));
     line(&format!("pane\t{}", state.snapshot.target.terminal));
-    line(&format!(
-        "columns\t{}",
-        state.snapshot.size.columns
-    ));
+    line(&format!("columns\t{}", state.snapshot.size.columns));
     line(&format!("rows\t{}", state.snapshot.size.rows));
     line(&format!("screen\t{:?}", state.snapshot.screen));
     line("role\tturn\tviewport_start\tviewport_end\tpreview");

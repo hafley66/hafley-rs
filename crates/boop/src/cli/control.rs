@@ -185,21 +185,58 @@ impl Drop for StopBackend {
     }
 }
 
+/// Per-wrapper observations survive a conversation close/clear, but reset
+/// when the frontend process changes. PID alone cannot identify a lifetime.
+struct NativeSessionHistory {
+    lane: String,
+    process: Option<(u32, Option<u64>)>,
+    session: Option<String>,
+    sequence: u64,
+}
+
+impl NativeSessionHistory {
+    fn new(lane: &str) -> Self {
+        Self {
+            lane: lane.into(),
+            process: None,
+            session: None,
+            sequence: 0,
+        }
+    }
+}
+
 /// One binding path for adapter-observed sessions and native control events.
 fn bind_native_session(
     store: &boop::Store,
     route: &mut Route,
     trace: &mut Option<String>,
+    history: &mut NativeSessionHistory,
     session: &str,
     pid: u32,
 ) -> anyhow::Result<()> {
+    use boop::proc::ProcReader;
     let ts = boop::live::now_ms();
-    if let Some(previous) = route
-        .session_id
+    if history.process.map(|(observed, _)| observed) != Some(pid) {
+        let started = boop::proc::SysinfoSnapshot::capture()?
+            .process(pid)
+            .map(|process| process.start_time_secs)
+            .filter(|start| *start > 0);
+        history.process = Some((pid, started));
+        history.session = None;
+        history.sequence = 0;
+    }
+    let previous = history
+        .session
         .as_deref()
-        .filter(|previous| *previous != session)
-    {
-        store.record_status(previous, ts, "detached", None, None)?;
+        .filter(|previous| *previous != session);
+    if let Some(previous) = previous {
+        store.record_status(
+            previous,
+            ts,
+            "detached",
+            Some(i64::from(pid)),
+            route.tmux.as_deref(),
+        )?;
     }
     *trace = Some(
         store
@@ -208,6 +245,38 @@ fn bind_native_session(
             .unwrap_or_else(|| format!("trace-{session}")),
     );
     store.attach_trace(session, trace.as_deref().unwrap(), "native-tui-session", ts)?;
+    store.set_session_attr(session, "process_pid", &pid.to_string(), ts)?;
+    if let Some((_, Some(started))) = history.process {
+        store.set_session_attr(session, "process_start_secs", &started.to_string(), ts)?;
+        if let Some(previous) = previous {
+            let detail = serde_json::json!({
+                "previous_session": previous, "session": session,
+                "pid": pid, "process_start_secs": started,
+                "boundary": "conversation-changed"
+            });
+            store.record_trace_event(&boop::ident::TraceEvent {
+                event_key: format!(
+                    "native-session:{}:{pid}:{started}:{}",
+                    history.lane, history.sequence
+                ),
+                lane: history.lane.clone(),
+                trace: trace.clone(),
+                session: Some(session.into()),
+                kind: "session-boundary".into(),
+                from_lane: Some(previous.into()),
+                to_lane: Some(session.into()),
+                started_ts: Some(ts),
+                finished_ts: Some(ts),
+                delivery_state: None,
+                classification: Some("same-process".into()),
+                detail: detail.to_string(),
+                created_ts: ts,
+            })?;
+            store.set_session_attr(session, "process_previous_session", previous, ts)?;
+            history.sequence += 1;
+        }
+    }
+    history.session = Some(session.into());
     route.session_id = Some(session.to_owned());
     store.record_status(
         session,
@@ -259,6 +328,7 @@ fn apply_native_event(
     store: &boop::Store,
     route: &mut Route,
     trace: &mut Option<String>,
+    history: &mut NativeSessionHistory,
     event: NativeTuiEvent,
     pid: u32,
 ) -> Result<()> {
@@ -269,7 +339,7 @@ fn apply_native_event(
             model,
             effort,
         } => {
-            bind_native_session(store, route, trace, &session_id, pid)?;
+            bind_native_session(store, route, trace, history, &session_id, pid)?;
             (session_id, model, effort)
         }
         NativeTuiEvent::Settings {
@@ -280,7 +350,13 @@ fn apply_native_event(
         NativeTuiEvent::Closed { session_id }
             if route.session_id.as_deref() == Some(&session_id) =>
         {
-            store.record_status(&session_id, ts, "closed", None, None)?;
+            store.record_status(
+                &session_id,
+                ts,
+                "closed",
+                Some(i64::from(pid)),
+                route.tmux.as_deref(),
+            )?;
             route.session_id = None;
             route.model = None;
             return Ok(());
@@ -349,8 +425,6 @@ pub(crate) fn run_native_tui(
     let name = name.unwrap_or(&default_name);
     let dir = mail_dir(mail_dir_arg)?;
     let tui_trail_root = boop::trail::lanes_root().ok();
-    let _ownership = boop::bus::try_route_lock(&boop::bus::db_path(&dir)?, name, "native-tui")?
-        .with_context(|| format!("route {name} already has a native TUI wrapper"))?;
     let store = boop::bus::open_store(&dir)?;
     let existing = boop::bus::read_routes(&dir)?.remove(name);
     if let Some(existing) = &existing {
@@ -358,18 +432,12 @@ pub(crate) fn run_native_tui(
             existing.kind != "lane",
             "route {name} belongs to a lane supervisor"
         );
-        if let Some(session) = existing.session_id.as_deref() {
-            let live_pid = store
-                .live_row(session)?
-                .and_then(|row| row.pid)
-                .and_then(|pid| u32::try_from(pid).ok())
-                .filter(|pid| boop::live::pid_alive(*pid));
-            anyhow::ensure!(
-                live_pid.is_none(),
-                "route {name} still owns live process {live_pid:?}"
-            );
+        if let Some(owner) = live_session_owner(registry, &dir, name, existing)? {
+            anyhow::bail!("route {name} is live: {owner}");
         }
     }
+    let _ownership = boop::bus::try_route_lock(&boop::bus::db_path(&dir)?, name, "native-tui")?
+        .with_context(|| format!("route {name} already has a native TUI wrapper"))?;
     let parent = existing
         .as_ref()
         .and_then(|route| route.parent.clone())
@@ -482,8 +550,16 @@ pub(crate) fn run_native_tui(
         app_server_socket: plan.app_server_socket.clone(),
     };
     let mut trace = store.trace_of(name)?;
+    let mut history = NativeSessionHistory::new(name);
     if let Some(session) = route.session_id.clone() {
-        bind_native_session(&store, &mut route, &mut trace, &session, frontend_pid)?;
+        bind_native_session(
+            &store,
+            &mut route,
+            &mut trace,
+            &mut history,
+            &session,
+            frontend_pid,
+        )?;
     }
     write_route(&dir, name, route.clone())?;
     // Child exit observation stays responsive while transcript projection is
@@ -528,7 +604,14 @@ pub(crate) fn run_native_tui(
                     if let NativeTuiEvent::Failed(error) = event {
                         observation_failure = Some(error);
                     } else {
-                        apply_native_event(&store, &mut route, &mut trace, event, frontend_pid)?;
+                        apply_native_event(
+                            &store,
+                            &mut route,
+                            &mut trace,
+                            &mut history,
+                            event,
+                            frontend_pid,
+                        )?;
                         boop::bus::update_native_route(&store, name, &mut route)?;
                     }
                 }
@@ -586,6 +669,7 @@ pub(crate) fn run_native_tui(
                         .with_context(|| format!("respawn native {} TUI", adapter.id()))?,
                 );
                 frontend_pid = next.frontend.as_ref().unwrap().id();
+                history = NativeSessionHistory::new(name);
                 spawned_at = std::time::Instant::now();
                 route.app_server_socket = next.app_server_socket.clone();
                 route.source_path = stamp_executable(next.source_path.clone(), executable);
@@ -611,6 +695,7 @@ pub(crate) fn run_native_tui(
                             &store,
                             &mut route,
                             &mut trace,
+                            &mut history,
                             &session,
                             frontend_pid,
                         )?;
@@ -648,6 +733,7 @@ pub(crate) fn run_native_tui(
                             &store,
                             &mut route,
                             &mut trace,
+                            &mut history,
                             &session.session_id,
                             frontend_pid,
                         )?;
@@ -674,6 +760,7 @@ pub(crate) fn run_native_tui(
                                 &store,
                                 &mut route,
                                 &mut trace,
+                                &mut history,
                                 NativeTuiEvent::Settings {
                                     session_id,
                                     model,
@@ -823,27 +910,43 @@ pub(crate) fn revive_command(
     command
 }
 
-/// The live process still holding this session. `boop tui` refuses to bind a
-/// second TUI to it, so a revive that spawned anyway would leave a dead pane.
-fn live_session_owner(store: &boop::Store, session: &str) -> Option<u32> {
-    store
-        .live_row(session)
-        .ok()
-        .flatten()
-        .and_then(|row| row.pid)
-        .and_then(|pid| u32::try_from(pid).ok())
-        .filter(|pid| boop::live::pid_alive(*pid))
-}
-
-/// The live tmux target a route still owns; `None` when its pane is gone.
-fn live_target(route: &Route, name: &str, socket: Option<&str>) -> Option<String> {
-    let mux = boop::tmux::mux();
-    if let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) {
-        if mux.target_alive(socket, target) {
-            return Some(target.to_owned());
+/// Wrapper locks are released by the kernel on exit and reboot. A persisted
+/// pid or tmux pane id can belong to an unrelated process after either event.
+pub(crate) fn live_session_owner(
+    registry: &Registry,
+    dir: &Path,
+    name: &str,
+    route: &Route,
+) -> Result<Option<String>> {
+    let db = boop::bus::db_path(dir)?;
+    if boop::bus::try_route_lock(&db, name, "native-tui")?.is_none() {
+        return Ok(Some("native TUI wrapper holds the route lock".into()));
+    }
+    // A conversation may have been resumed under another route name.
+    for (other_name, other) in boop::bus::read_routes(dir)? {
+        if other_name != name
+            && route.session_id.is_some()
+            && other.harness == route.harness
+            && other.session_id == route.session_id
+            && boop::bus::try_route_lock(&db, &other_name, "native-tui")?.is_none()
+        {
+            return Ok(Some(format!("native TUI wrapper holds route {other_name}")));
         }
     }
-    mux.target_alive(socket, name).then(|| name.to_owned())
+    let (Some(harness), Some(session)) = (route.harness, route.session_id.as_deref()) else {
+        return Ok(None);
+    };
+    // Native registries that supply a process can also own a conversation
+    // outside boop. Codex's historical thread rows have no pid and do not
+    // establish ownership merely by existing.
+    Ok(registry
+        .get(harness)
+        .live()
+        .live_sessions()?
+        .into_iter()
+        .find(|live| live.session_id == session && live.pid.is_some_and(boop::live::pid_alive))
+        .and_then(|live| live.pid)
+        .map(|pid| format!("harness session runs as process {pid}")))
 }
 
 /// Width of every message cell in the `--dead` table.
@@ -963,7 +1066,7 @@ fn session_digest(
 pub(crate) fn revive_candidates(
     registry: &Registry,
     dir: &Path,
-    socket: Option<&str>,
+    _socket: Option<&str>,
     since: Duration,
     report_skips: bool,
 ) -> Result<Vec<ReviveCandidate>> {
@@ -977,7 +1080,7 @@ pub(crate) fn revive_candidates(
     let mut listed: std::collections::HashMap<HarnessId, Option<Vec<boop::harness::SessionRef>>> =
         std::collections::HashMap::new();
     for (name, route) in &routes {
-        if route.kind != "coordinator" || live_target(route, name, socket).is_some() {
+        if route.kind != "coordinator" {
             continue;
         }
         if let Some(blocker) = revive_blocker(route) {
@@ -991,9 +1094,9 @@ pub(crate) fn revive_candidates(
         else {
             continue;
         };
-        if let Some(pid) = live_session_owner(&store, &session) {
+        if let Some(owner) = live_session_owner(registry, dir, name, route)? {
             if report_skips {
-                println!("skip {name}: session {session} still runs as process {pid}");
+                println!("skip {name}: {owner}");
             }
             continue;
         }
@@ -1004,14 +1107,8 @@ pub(crate) fn revive_candidates(
             &session,
             listed.entry(harness).or_default(),
         );
-        // A coordinator is a human's pane: no human message, nothing to
-        // revive. An explicit `/exit` is not a skip; the table marks it.
-        if digest.last_user.is_empty() {
-            if report_skips {
-                println!("skip {name}: no human message in session {session}");
-            }
-            continue;
-        }
+        // A registered conversation remains recoverable before its first
+        // human turn or when transcript projection has not caught up.
         let last_activity_ms = [
             route
                 .registered_at
@@ -1210,7 +1307,7 @@ pub(crate) fn run_lane_revive(
     }
     if candidates.is_empty() {
         println!(
-            "no dead coordinator route to revive (coordinator kind, harness and session and cwd set, a human message, active within {since})"
+            "no dead coordinator route to revive (coordinator kind, harness and session and cwd set, active within {since})"
         );
         return Ok(());
     }
@@ -1251,19 +1348,14 @@ fn revive_route(
     route: &Route,
     socket: Option<&str>,
 ) -> Result<()> {
-    if let Some(target) = live_target(route, name, socket) {
-        anyhow::bail!("route {name} is live at tmux target {target}; revive is for a dead pane");
-    }
     let harness = route.harness.context("route records no harness")?;
     let session = route
         .session_id
         .as_deref()
         .context("route records no session id")?;
     let cwd = route.cwd.as_deref().context("route records no cwd")?;
-    if let Some(pid) = live_session_owner(&boop::bus::open_store(dir)?, session) {
-        anyhow::bail!(
-            "route {name} session {session} still runs as process {pid}; stop it before reviving"
-        );
+    if let Some(owner) = live_session_owner(registry, dir, name, route)? {
+        anyhow::bail!("route {name} is live: {owner}; stop it before reviving");
     }
     let resume = registry
         .get(harness)
@@ -1285,8 +1377,16 @@ fn revive_route(
     wait_for_free_route_lock(dir, name)?;
     println!("revive {name} ({harness} session {session} in {cwd})");
     info!(route = name, %harness, session, command, "reviving a dead coordinator pane");
-    boop::tmux::mux().new_detached_session(socket, name, cwd, &command)?;
-    wait_for_revived_route(dir, name, session, socket)
+    // Restored shells and unrelated panes keep their names and contents.
+    let mux = boop::tmux::mux();
+    let mut target = name.to_owned();
+    let mut suffix = 0;
+    while mux.has_session(socket, &target)? {
+        suffix += 1;
+        target = format!("{name}-revived-{suffix}");
+    }
+    mux.new_detached_session(socket, &target, cwd, &command)?;
+    wait_for_revived_route(dir, name, session, &target, socket)
 }
 
 /// A wrapper killed with its tmux server drops its route lock as it exits, and
@@ -1312,9 +1412,11 @@ fn wait_for_revived_route(
     dir: &Path,
     name: &str,
     session: &str,
+    target: &str,
     socket: Option<&str>,
 ) -> Result<()> {
     let deadline = std::time::Instant::now() + REVIVE_WAIT;
+    let db = boop::bus::db_path(dir)?;
     loop {
         let pane = boop::bus::read_routes(dir)?
             .remove(name)
@@ -1322,13 +1424,15 @@ fn wait_for_revived_route(
             .and_then(|route| route.tmux)
             .filter(|pane| !pane.is_empty());
         if let Some(pane) = pane {
-            if boop::tmux::mux().target_alive(socket, &pane) {
+            if boop::tmux::mux().session_of_pane(socket, &pane).as_deref() == Some(target)
+                && boop::bus::try_route_lock(&db, name, "native-tui")?.is_none()
+            {
                 println!("revived {name} pane {pane}");
                 return Ok(());
             }
         }
         anyhow::ensure!(
-            boop::tmux::mux().target_alive(socket, name),
+            boop::tmux::mux().target_alive(socket, target),
             "revive of {name} left no live pane; `boop debug {name}`"
         );
         anyhow::ensure!(
@@ -1722,6 +1826,12 @@ mod tests {
             .unwrap();
         let mut route = crate::cli::testkit::route_with(Some("parent"));
         let mut trace = None;
+        let mut history = super::NativeSessionHistory {
+            lane: "fixture".into(),
+            process: Some((123, Some(1000))),
+            session: None,
+            sequence: 0,
+        };
         let mut timeline = Vec::new();
         for event in [
             Session {
@@ -1756,7 +1866,8 @@ mod tests {
                 effort: None,
             },
         ] {
-            super::apply_native_event(&store, &mut route, &mut trace, event, 123).unwrap();
+            super::apply_native_event(&store, &mut route, &mut trace, &mut history, event, 123)
+                .unwrap();
             timeline.push((
                 route.session_id.clone(),
                 route.model.clone(),
@@ -1794,6 +1905,130 @@ mod tests {
         assert_eq!(
             store.live_row("new").unwrap().unwrap().status.as_deref(),
             Some("detached")
+        );
+    }
+
+    #[test]
+    fn clear_boundaries_preserve_process_siblings_without_linking_a_reused_pid() {
+        use boop::harness::NativeTuiEvent::{Closed, Session};
+        let store = boop::Store::open(":memory:".into()).unwrap();
+        let mut route = crate::cli::testkit::route_with(Some("parent"));
+        route.session_id = None;
+        let mut trace = None;
+        let mut history = super::NativeSessionHistory {
+            lane: "coordinator".into(),
+            process: Some((123, Some(1000))),
+            session: None,
+            sequence: 0,
+        };
+        for event in [
+            Session {
+                session_id: "before-clear".into(),
+                model: None,
+                effort: None,
+            },
+            Closed {
+                session_id: "before-clear".into(),
+            },
+            Session {
+                session_id: "after-clear".into(),
+                model: None,
+                effort: None,
+            },
+            // Refreshes and compaction that retain the conversation id create no sibling.
+            Session {
+                session_id: "after-clear".into(),
+                model: None,
+                effort: None,
+            },
+        ] {
+            super::apply_native_event(&store, &mut route, &mut trace, &mut history, event, 123)
+                .unwrap();
+        }
+        let events = store.query_trace_events(Some("coordinator"), 100).unwrap();
+        let snapshot: Vec<_> = events
+            .iter()
+            .map(|event| {
+                serde_json::json!({
+                    "key":event.event_key, "kind":event.kind, "trace":event.trace,
+                    "from":event.from_lane, "to":event.to_lane,
+                    "detail":serde_json::from_str::<serde_json::Value>(&event.detail).unwrap()
+                })
+            })
+            .collect();
+        assert_eq!(
+            snapshot,
+            vec![serde_json::json!({
+                "key":"native-session:coordinator:123:1000:0",
+                "kind":"session-boundary", "trace":"trace-before-clear",
+                "from":"before-clear", "to":"after-clear",
+                "detail":{"previous_session":"before-clear", "session":"after-clear",
+                    "pid":123, "process_start_secs":1000, "boundary":"conversation-changed"}
+            })]
+        );
+        let siblings: Vec<_> = ["before-clear", "after-clear"]
+            .into_iter()
+            .map(|session| {
+                let live = store.live_row(session).unwrap().unwrap();
+                (
+                    live.pid,
+                    live.status,
+                    store.session_attr(session, "process_pid").unwrap(),
+                    store.session_attr(session, "process_start_secs").unwrap(),
+                    store.trace_of(session).unwrap(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            siblings,
+            vec![
+                (
+                    Some(123),
+                    Some("detached".into()),
+                    Some("123".into()),
+                    Some("1000".into()),
+                    Some("trace-before-clear".into())
+                ),
+                (
+                    Some(123),
+                    Some("live".into()),
+                    Some("123".into()),
+                    Some("1000".into()),
+                    Some("trace-before-clear".into())
+                ),
+            ]
+        );
+        // A new wrapper can observe the same PID after exit/reboot. Its
+        // process start time and history are distinct, so no boundary links it.
+        let mut history = super::NativeSessionHistory {
+            lane: "coordinator".into(),
+            process: Some((123, Some(2000))),
+            session: None,
+            sequence: 0,
+        };
+        let mut trace = None;
+        super::bind_native_session(
+            &store,
+            &mut route,
+            &mut trace,
+            &mut history,
+            "new-process",
+            123,
+        )
+        .unwrap();
+        assert_eq!(
+            store.query_trace_events(Some("coordinator"), 100).unwrap(),
+            events
+        );
+        assert_eq!(
+            store
+                .session_attr("new-process", "process_previous_session")
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            store.trace_of("new-process").unwrap(),
+            Some("trace-new-process".into())
         );
     }
 

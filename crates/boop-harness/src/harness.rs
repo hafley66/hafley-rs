@@ -7,6 +7,9 @@ use anyhow::Result;
 
 use boop_store::ident::{Store, SyncStat};
 
+#[path = "harness/1_claude_summary.rs"]
+pub mod claude_summary;
+
 pub use boop_store::harness_id::HarnessId;
 pub use boop_store::session::{
     ControlCapabilities, Ingested, KnownSession, KnownSessions, OneShotSpec, ReadChunk, SessionRef,

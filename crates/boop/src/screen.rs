@@ -7,7 +7,7 @@
 //! the turns are read, the result is returned.
 
 use boop_store::rows::TurnRow;
-use boop_turnvis::{visible_squares, BoopTurn, TurnSquare};
+use boop_turnvis::{visible_squares_with, BoopTurn, TurnSquare};
 use serde::Serialize;
 
 use crate::tmux::TerminalSnapshot;
@@ -54,7 +54,11 @@ pub fn screen_state(
     ScreenState {
         lane: lane.to_owned(),
         session: session.to_owned(),
-        squares: visible_squares(&snapshot, &turns_of(rows)),
+        squares: visible_squares_with(
+            &snapshot,
+            &turns_of(rows),
+            Some(boop_harness::harness::claude_summary::anchor),
+        ),
         snapshot,
     }
 }
@@ -110,7 +114,11 @@ mod tests {
         let state = screen_state(
             "claude-1",
             "session-a",
-            snapshot(&[("❯ hello from the human", false), ("", false), ("done", false)]),
+            snapshot(&[
+                ("❯ hello from the human", false),
+                ("", false),
+                ("done", false),
+            ]),
             &[
                 row("session-a", 1, "user", "hello from the human"),
                 row("session-a", 2, "assistant", "done"),
@@ -122,7 +130,13 @@ mod tests {
         let sides: Vec<(&str, u16, u16)> = state
             .squares
             .iter()
-            .map(|square| (square.role.as_str(), square.viewport_start, square.viewport_end))
+            .map(|square| {
+                (
+                    square.role.as_str(),
+                    square.viewport_start,
+                    square.viewport_end,
+                )
+            })
             .collect();
         assert_eq!(sides, vec![("user", 0, 0), ("assistant", 2, 2)]);
     }
@@ -135,7 +149,12 @@ mod tests {
             snapshot(&[("done", false)]),
             &[
                 row("session-a", 1, "assistant", "done"),
-                row("session-a", 2, "assistant", "a message that scrolled away entirely"),
+                row(
+                    "session-a",
+                    2,
+                    "assistant",
+                    "a message that scrolled away entirely",
+                ),
             ],
         );
         assert_eq!(

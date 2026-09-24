@@ -551,7 +551,9 @@ fn durable_session_pid(store: &Store, session: &str) -> Option<u32> {
                 WHERE d.value = ?1";
     store
         .connection()
-        .query_row(sql, rusqlite::params![session], |row| row.get::<_, Option<i64>>(0))
+        .query_row(sql, rusqlite::params![session], |row| {
+            row.get::<_, Option<i64>>(0)
+        })
         .ok()
         .flatten()
         .and_then(|pid| u32::try_from(pid).ok())
@@ -894,10 +896,9 @@ mod tests {
             .connection()
             .prepare(&plan_sql)
             .unwrap()
-            .query_map(
-                rusqlite::params![Option::<String>::None, false],
-                |row| row.get::<_, String>(3),
-            )
+            .query_map(rusqlite::params![Option::<String>::None, false], |row| {
+                row.get::<_, String>(3)
+            })
             .unwrap()
             .collect::<rusqlite::Result<Vec<_>>>()
             .unwrap()
@@ -1313,11 +1314,16 @@ mod tests {
             ("corroborated-live", std::process::id() as i64),
         ] {
             let session = store.intern_public("dict_session", name).unwrap();
-            store.connection().execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
-                rusqlite::params![session, harness],
-            ).unwrap();
-            store.record_status(name, 1, "live", Some(pid), None).unwrap();
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                    rusqlite::params![session, harness],
+                )
+                .unwrap();
+            store
+                .record_status(name, 1, "live", Some(pid), None)
+                .unwrap();
         }
         let mux = FakeMux::available(&[]);
         let processes = SysinfoSnapshot::capture().unwrap();

@@ -9,7 +9,9 @@
 use boop_mux::TerminalSnapshot;
 use serde::{Deserialize, Serialize};
 
-use crate::{locate_visible_turns, BoopTurn, Confidence, LogicalLine, VisibleTurn};
+use crate::{
+    locate_visible_turns_with, BoopTurn, Confidence, LogicalLine, SummaryAnchor, VisibleTurn,
+};
 
 /// How much of a turn's text a hover preview carries. Matches the 120-character
 /// preview Instant's mail events already expose, so the navigator and the
@@ -41,11 +43,17 @@ pub fn logical_lines(snapshot: &TerminalSnapshot) -> Vec<LogicalLine> {
 /// Match store turns against a snapshot's grid. The viewport-row spans on the
 /// result are rows in this snapshot, so they go stale on resize; turn identity
 /// is `id`, which is `"<session>:<turn>"`.
-pub fn locate_snapshot_turns(
+pub fn locate_snapshot_turns(snapshot: &TerminalSnapshot, turns: &[BoopTurn]) -> Vec<VisibleTurn> {
+    locate_snapshot_turns_with(snapshot, turns, None)
+}
+
+/// Match a snapshot with a harness adapter's transcript-shape hook.
+pub fn locate_snapshot_turns_with(
     snapshot: &TerminalSnapshot,
     turns: &[BoopTurn],
+    summary_anchor: Option<SummaryAnchor>,
 ) -> Vec<VisibleTurn> {
-    locate_visible_turns(&logical_lines(snapshot), turns)
+    locate_visible_turns_with(&logical_lines(snapshot), turns, summary_anchor)
 }
 
 /// One square in the right-margin navigator: a turn whose rows are on screen,
@@ -68,7 +76,16 @@ pub struct TurnSquare {
 /// The squares for one snapshot: every visible turn, in screen order, carrying
 /// identity, role, timestamps and a preview but none of the message body.
 pub fn visible_squares(snapshot: &TerminalSnapshot, turns: &[BoopTurn]) -> Vec<TurnSquare> {
-    locate_snapshot_turns(snapshot, turns)
+    visible_squares_with(snapshot, turns, None)
+}
+
+/// Build squares with a harness adapter's transcript-shape hook.
+pub fn visible_squares_with(
+    snapshot: &TerminalSnapshot,
+    turns: &[BoopTurn],
+    summary_anchor: Option<SummaryAnchor>,
+) -> Vec<TurnSquare> {
+    locate_snapshot_turns_with(snapshot, turns, summary_anchor)
         .into_iter()
         .map(|turn| TurnSquare {
             id: turn.id,
@@ -172,7 +189,10 @@ mod tests {
         // matcher's containment rule accepts for a source longer than the row.
         let row = "λ".repeat(20);
         let said = "λ".repeat(PREVIEW_CHARS + 40);
-        let squares = visible_squares(&snapshot(&[(row.as_str(), false)]), &[turn(1, "user", &said)]);
+        let squares = visible_squares(
+            &snapshot(&[(row.as_str(), false)]),
+            &[turn(1, "user", &said)],
+        );
         assert_eq!(squares.len(), 1, "{squares:#?}");
         assert_eq!(squares[0].preview, "λ".repeat(PREVIEW_CHARS));
     }

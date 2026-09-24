@@ -2,7 +2,8 @@
 //! blocks. Those rows have no verbatim `said` in the store. Anchor the summary
 //! to the last tool in that bounded run; its role stays `tool` and the strip
 //! uses it as a separator. No conversation square is synthesized.
-use super::{BoopTurn, Confidence, LogicalLine, VisibleTurn};
+
+use boop_turnvis::{BoopTurn, Confidence, LogicalLine, VisibleTurn};
 
 fn summary(text: &str) -> bool {
     let text = text.trim().to_ascii_lowercase();
@@ -21,7 +22,14 @@ fn summary(text: &str) -> bool {
         })
 }
 
-pub(super) fn anchor(lines: &[LogicalLine], turns: &[BoopTurn], visible: &mut Vec<VisibleTurn>) {
+/// Match rows through the generic engine with Claude's transcript-shape hook.
+/// The hook remains active for mixed-harness inputs and filters every source
+/// row by its harness.
+pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<VisibleTurn> {
+    boop_turnvis::locate_visible_turns_with(lines, turns, Some(anchor))
+}
+
+pub fn anchor(lines: &[LogicalLine], turns: &[BoopTurn], visible: &mut Vec<VisibleTurn>) {
     for line in lines.iter().filter(|line| summary(&line.text)) {
         if visible
             .iter()
@@ -92,6 +100,7 @@ pub(super) fn anchor(lines: &[LogicalLine], turns: &[BoopTurn], visible: &mut Ve
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn collapsed_tool_summary_needs_harness_and_transcript_evidence() {
         let mut turns = vec![
@@ -136,7 +145,7 @@ mod tests {
         })
         .collect();
         let shape = |turns: &[BoopTurn]| {
-            super::super::locate_visible_turns(&lines, turns)
+            locate_visible_turns(&lines, turns)
                 .into_iter()
                 .map(|turn| (turn.turn, turn.role, turn.anchor_start, turn.anchor_end))
                 .collect::<Vec<_>>()
@@ -150,7 +159,7 @@ mod tests {
             ]
         );
         assert_eq!(
-            super::super::locate_visible_turns(&lines[2..], &turns)
+            boop_turnvis::locate_visible_turns_with(&lines[2..], &turns, Some(anchor))
                 .iter()
                 .map(|turn| turn.turn)
                 .collect::<Vec<_>>(),
@@ -158,7 +167,7 @@ mod tests {
             "an open tool run has no defensible aggregate identity"
         );
         assert_eq!(
-            super::super::locate_visible_turns(&lines[..3], &turns)
+            boop_turnvis::locate_visible_turns_with(&lines[..3], &turns, Some(anchor))
                 .iter()
                 .map(|turn| turn.turn)
                 .collect::<Vec<_>>(),

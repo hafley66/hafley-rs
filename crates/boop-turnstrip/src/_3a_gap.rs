@@ -85,12 +85,7 @@ mod tests {
             // square; a relative strip draws the tool as a tiny square beside it.
             let expected: &[(&str, bool)] = match mode {
                 Mode::Recent => &[("a", true), ("b", true), ("c", true)],
-                Mode::Relative => &[
-                    ("a", true),
-                    ("tool", false),
-                    ("b", true),
-                    ("c", true),
-                ],
+                Mode::Relative => &[("a", true), ("tool", false), ("b", true), ("c", true)],
             };
             assert_eq!(
                 layout

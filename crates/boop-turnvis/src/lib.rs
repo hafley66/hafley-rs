@@ -9,10 +9,9 @@ mod boop_envelope;
 pub use boop_envelope::boop_content;
 #[path = "0_candidates.rs"]
 mod candidates;
-#[path = "1_claude_summary.rs"]
-mod claude_summary;
 pub use _1_snapshot::{
-    locate_snapshot_turns, logical_lines, visible_squares, TurnSquare, PREVIEW_CHARS,
+    locate_snapshot_turns, locate_snapshot_turns_with, logical_lines, visible_squares,
+    visible_squares_with, TurnSquare, PREVIEW_CHARS,
 };
 
 #[derive(Clone, Debug, Deserialize)]
@@ -53,6 +52,10 @@ pub struct VisibleTurn {
     pub anchor_end: usize,
     pub confidence: Confidence,
 }
+
+/// Adapter hook for transcript shapes that the generic matcher cannot recover
+/// from verbatim source rows.
+pub type SummaryAnchor = fn(&[LogicalLine], &[BoopTurn], &mut Vec<VisibleTurn>);
 
 const LEADING_MARKERS: &[char] = &[
     '│', '┃', '┆', '┊', '╎', '╏', '┌', '└', '├', '┬', '╭', '╰', '>', '*', '•', '●', '◉', '⏺', '⏵',
@@ -402,6 +405,16 @@ fn grow_anchors(visible: &mut [VisibleTurn], screen: &[ScreenRow], sources: &[So
 }
 
 pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<VisibleTurn> {
+    locate_visible_turns_with(lines, turns, None)
+}
+
+/// Match visible rows and let an adapter add bounded transcript evidence before
+/// the final non-overlapping buffer extension runs.
+pub fn locate_visible_turns_with(
+    lines: &[LogicalLine],
+    turns: &[BoopTurn],
+    summary_anchor: Option<SummaryAnchor>,
+) -> Vec<VisibleTurn> {
     let screen: Vec<ScreenRow> = lines
         .iter()
         .map(|line| ScreenRow {
@@ -488,7 +501,9 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
         });
     }
     grow_anchors(&mut visible, &screen, &sources);
-    claude_summary::anchor(lines, turns, &mut visible);
+    if let Some(summary_anchor) = summary_anchor {
+        summary_anchor(lines, turns, &mut visible);
+    }
     visible.sort_by(|a, b| {
         a.buffer_start
             .cmp(&b.buffer_start)

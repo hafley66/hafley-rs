@@ -2553,9 +2553,17 @@ pub(crate) fn run_lane_list(
         })
         .unwrap_or_default();
     for (name, route) in &routes {
-        let state = lane_state_with_pids(
-            &dir, name, &live, route, &routes, &snapshot, &pane_pids, socket,
-        );
+        let state = if route.kind == "coordinator" {
+            if crate::cli::control::live_session_owner(registry, &dir, name, route)?.is_some() {
+                "live"
+            } else {
+                "dead"
+            }
+        } else {
+            lane_state_with_pids(
+                &dir, name, &live, route, &routes, &snapshot, &pane_pids, socket,
+            )
+        };
         if let Some(want) = state_filter {
             if state != want {
                 continue;
