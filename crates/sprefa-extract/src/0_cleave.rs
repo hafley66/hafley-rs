@@ -167,7 +167,7 @@ fn verify_after_commit(
             let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
             let count = journal.restore(&plan.root, state, &[])?;
             println!("verify failed (rc={reason}): rolled back {count} files");
-            std::process::exit(3);
+            super::exit(3);
         }
     }
     Ok(())

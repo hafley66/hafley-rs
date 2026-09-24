@@ -214,7 +214,7 @@ fn verify_after_commit(
                 count += journals[index].restore(&plans[index].root, state, &swept[index])?;
             }
             println!("verify failed (rc={reason}): rolled back {count} files");
-            std::process::exit(3);
+            super::exit(3);
         }
     }
     Ok(())

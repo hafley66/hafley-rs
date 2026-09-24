@@ -364,8 +364,21 @@ fn a_failed_verify_rolls_the_rust_tree_back() {
         .arg(&fixture.state)
         .current_dir(&fixture.root)
         .env("HAFLEY_TRACE", &fixture.trace)
+        .env("HOME", fixture.root.parent().expect("fixture base"))
         .output()
         .expect("cleave binary runs");
     assert_eq!(output.status.code(), Some(3), "a failed verify exits 3");
     assert_eq!(before, read(&fixture, "src/util.rs"), "the rollback held");
+    let trail = rusqlite::Connection::open(
+        fixture.root.parent().unwrap().join(".agent/dl6.db"),
+    )
+    .expect("verify failure wrote the run trail");
+    let rows: i64 = trail
+        .query_row(
+            "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryi cleave % --commit --verify %'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("read verify-failure run");
+    assert_eq!(rows, 1);
 }
