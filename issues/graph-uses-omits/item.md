@@ -4,6 +4,9 @@ updated: 2026-09-24
 type: bug
 status: open
 priority: normal
+commits:
+- hash: 4b04e07b8c3f4ecbfbeff8f55828771e77a146ff
+  summary: 'ryi: query witnessed paths across Git revisions'
 ---
 
 # Graph uses omits Rust ResolveRequest references
