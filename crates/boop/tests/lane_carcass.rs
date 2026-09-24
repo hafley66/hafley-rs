@@ -70,6 +70,7 @@ impl Doa {
             .status()
             .unwrap();
         symlink(git, bin.join("git")).unwrap();
+        symlink(executable("nice"), bin.join("nice")).unwrap();
         boop_store::testing::write_tmux_fixture(&bin.join("tmux"), &executable("tmux"));
         symlink(env!("CARGO_BIN_EXE_boop"), bin.join("boop")).unwrap();
         Doa {
