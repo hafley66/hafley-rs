@@ -113,3 +113,7 @@ boop-start:
     cargo fetch --quiet
     cargo build -p boop --tests --quiet
     echo "boop-start: cargo fetch and boop tests into $shared, $((SECONDS - started))s"
+
+# Where were we: git head, issues, epic acceptance, briefs for a topic regex.
+wwrw +TOPIC:
+    @scripts/where-were-we.sh {{TOPIC}}
