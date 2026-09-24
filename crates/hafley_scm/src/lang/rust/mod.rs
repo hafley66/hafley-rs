@@ -31,6 +31,7 @@ pub use module_specifier_rows::{
 pub use const_string_rows::{const_string_rows, ConstStringRow};
 pub use type_refs::{collect_path_args, type_refs};
 pub use type_entity_rows::{
-    type_entity_rows, SignatureRef, SignatureSlot, TypeEntityKind, TypeEntityRow,
+    strip_type, type_entity_rows, ImplSelfHeadRow, SignatureRef, SignatureSlot, TypeEntityKind,
+    TypeEntityRow, TypeEntityRows,
 };
 pub use syn_macro_expansion_defs::{expand_file, Expanded};

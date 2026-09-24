@@ -4,6 +4,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use hafley_scm::lang::rust::strip_type;
 use syn::punctuated::Punctuated;
 use syn::{
     Fields, GenericArgument, GenericParam, Path, PathArguments, ReturnType, Type, TypeParamBound,
@@ -232,17 +233,6 @@ fn arg_candidates(owner: Span, path: &Path, strings: &mut Strings, sink: &mut Fa
     args.dedup();
     for to in args {
         push_candidate(sink, strings, owner, &to, TypeEdgeKind::Generic);
-    }
-}
-
-/// A type with its wrappers peeled: `&mut Foo<T>` and `(Foo<T>)` are `Foo<T>`.
-pub(crate) fn strip_type(ty: &Type) -> &Type {
-    match ty {
-        Type::Group(t) => strip_type(&t.elem),
-        Type::Paren(t) => strip_type(&t.elem),
-        Type::Ptr(t) => strip_type(&t.elem),
-        Type::Reference(t) => strip_type(&t.elem),
-        other => other,
     }
 }
 

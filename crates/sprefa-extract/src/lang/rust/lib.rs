@@ -26,7 +26,7 @@ use syn::spanned::Spanned;
 use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
 use super::rust_docs::doc_facts;
-use super::rust_type_edges::{edge_candidates, strip_type};
+use super::rust_type_edges::edge_candidates;
 use super::rust_type_refs::primary_type;
 use crate::family::{
     CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,

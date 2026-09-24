@@ -24,7 +24,8 @@ pub(super) fn project_types(
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    for row in hafley_scm::lang::rust::type_entity_rows(parsed, line_starts) {
+    let rows = hafley_scm::lang::rust::type_entity_rows(parsed, line_starts);
+    for row in rows.entities {
         let span = Span {
             start: row.range.start,
             len: row.range.end - row.range.start,
@@ -38,15 +39,17 @@ pub(super) fn project_types(
             hafley_scm::lang::rust::TypeEntityKind::Method => TypeEntityKind::Method,
         };
         push_entity_raw(sink, strings, span, &row.name, kind);
-        sink.aux.sigs.extend(row.sigs.into_iter().map(|sig| TypeSig {
-            owner: span,
-            slot: match sig.slot {
-                hafley_scm::lang::rust::SignatureSlot::Param => SigSlot::Param,
-                hafley_scm::lang::rust::SignatureSlot::Ret => SigSlot::Ret,
-            },
-            pos: sig.pos,
-            ty: strings.intern(&sig.name),
-        }));
+        sink.aux
+            .sigs
+            .extend(row.sigs.into_iter().map(|sig| TypeSig {
+                owner: span,
+                slot: match sig.slot {
+                    hafley_scm::lang::rust::SignatureSlot::Param => SigSlot::Param,
+                    hafley_scm::lang::rust::SignatureSlot::Ret => SigSlot::Ret,
+                },
+                pos: sig.pos,
+                ty: strings.intern(&sig.name),
+            }));
     }
     const_values(parsed, line_starts, strings, sink);
     doc_facts(parsed, line_starts, strings, sink);
@@ -54,7 +57,7 @@ pub(super) fn project_types(
     // impl-owned candidate finds its in-file self-type entity regardless of
     // item order (v5's text-keyed pass has no order sensitivity; spans do).
     edge_candidates(parsed, line_starts, strings, sink);
-    impl_self_type_candidates(&parsed.items, line_starts, strings, sink);
+    impl_self_type_candidates(rows.impl_self_heads, strings, sink);
 }
 
 /// `impl Foo` and `impl Bar for Foo` reference `Foo` from the owner `Foo`: the
@@ -63,53 +66,38 @@ pub(super) fn project_types(
 /// `edge_candidates` applies (a qualified head is owned by its qualifier); the
 /// owner is the in-file entity, else the `ImplOwner` minted at the head span.
 fn impl_self_type_candidates(
-    items: &[syn::Item],
-    line_starts: &[u32],
+    heads: Vec<hafley_scm::lang::rust::ImplSelfHeadRow>,
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    for item in items {
-        match item {
-            syn::Item::Impl(i) => {
-                let syn::Type::Path(self_path) = strip_type(&i.self_ty) else {
-                    continue;
-                };
-                if self_path.qself.is_some() || self_path.path.segments.len() != 1 {
-                    continue;
-                }
-                let Some(segment) = self_path.path.segments.first() else {
-                    continue;
-                };
-                let head = segment.ident.to_string();
-                let head_span = syn_span(line_starts, segment.ident.span());
-                let owner = sink
-                    .nodes
+    for head in heads {
+        let head_span = Span {
+            start: head.range.start,
+            len: head.range.end - head.range.start,
+        };
+        let owner = sink
+            .nodes
+            .iter()
+            .find(|node| {
+                node.name
+                    .map_or(false, |id| strings.lookup(id) == head.name)
+            })
+            .map(|node| node.span)
+            .or_else(|| {
+                sink.aux
+                    .impl_owners
                     .iter()
-                    .find(|node| node.name.map_or(false, |id| strings.lookup(id) == head))
-                    .map(|node| node.span)
-                    .or_else(|| {
-                        sink.aux
-                            .impl_owners
-                            .iter()
-                            .find(|owner| owner.span == head_span)
-                            .map(|owner| owner.span)
-                    });
-                let Some(owner) = owner else {
-                    continue;
-                };
-                sink.aux.candidates.push(TypeEdgeCandidate {
-                    owner,
-                    to: strings.intern(&head),
-                    kind: TypeEdgeKind::Uses,
-                });
-            }
-            syn::Item::Mod(m) => {
-                if let Some((_, inner)) = &m.content {
-                    impl_self_type_candidates(inner, line_starts, strings, sink);
-                }
-            }
-            _ => {}
-        }
+                    .find(|owner| owner.span == head_span)
+                    .map(|owner| owner.span)
+            });
+        let Some(owner) = owner else {
+            continue;
+        };
+        sink.aux.candidates.push(TypeEdgeCandidate {
+            owner,
+            to: strings.intern(&head.name),
+            kind: TypeEdgeKind::Uses,
+        });
     }
 }
 
