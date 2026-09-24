@@ -52,7 +52,25 @@ pub(super) fn project_types(
             }));
     }
     const_values(parsed, line_starts, strings, sink);
-    doc_facts(parsed, line_starts, strings, sink);
+    for row in rows.docs {
+        sink.aux.docs.push(DocFact {
+            owner: Span {
+                start: row.range.start,
+                len: row.range.end - row.range.start,
+            },
+            parent: row.parent.map(|name| strings.intern(&name)),
+            text: strings.intern(&row.text),
+            tags: row
+                .sections
+                .into_iter()
+                .map(|section| DocTag {
+                    tag: strings.intern("section"),
+                    arg: Some(strings.intern(&section.heading)),
+                    text: strings.intern(&section.body),
+                })
+                .collect(),
+        });
+    }
     // The candidates walk runs AFTER every entity is in the bundle so an
     // impl-owned candidate finds its in-file self-type entity regardless of
     // item order (v5's text-keyed pass has no order sensitivity; spans do).

@@ -40,10 +40,25 @@ pub struct ImplSelfHeadRow {
     pub name: String,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DocSectionRow {
+    pub heading: String,
+    pub body: String,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct DocRow {
+    pub range: std::ops::Range<u32>,
+    pub parent: Option<String>,
+    pub text: String,
+    pub sections: Vec<DocSectionRow>,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct TypeEntityRows {
     pub entities: Vec<TypeEntityRow>,
     pub impl_self_heads: Vec<ImplSelfHeadRow>,
+    pub docs: Vec<DocRow>,
 }
 
 pub fn type_entity_rows(parsed: &syn::File, line_starts: &[u32]) -> TypeEntityRows {
@@ -55,25 +70,34 @@ pub fn type_entity_rows(parsed: &syn::File, line_starts: &[u32]) -> TypeEntityRo
 fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) {
     for item in items {
         match item {
-            syn::Item::Struct(item) => rows.entities.push(named(
-                item.ident.span(),
-                item.ident.to_string(),
-                TypeEntityKind::Struct,
-                line_starts,
-            )),
-            syn::Item::Enum(item) => rows.entities.push(named(
-                item.ident.span(),
-                item.ident.to_string(),
-                TypeEntityKind::Enum,
-                line_starts,
-            )),
+            syn::Item::Struct(item) => {
+                rows.entities.push(named(
+                    item.ident.span(),
+                    item.ident.to_string(),
+                    TypeEntityKind::Struct,
+                    line_starts,
+                ));
+                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+            }
+            syn::Item::Enum(item) => {
+                rows.entities.push(named(
+                    item.ident.span(),
+                    item.ident.to_string(),
+                    TypeEntityKind::Enum,
+                    line_starts,
+                ));
+                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+            }
             // The existing TypeF vocabulary maps Rust unions onto Struct.
-            syn::Item::Union(item) => rows.entities.push(named(
-                item.ident.span(),
-                item.ident.to_string(),
-                TypeEntityKind::Struct,
-                line_starts,
-            )),
+            syn::Item::Union(item) => {
+                rows.entities.push(named(
+                    item.ident.span(),
+                    item.ident.to_string(),
+                    TypeEntityKind::Struct,
+                    line_starts,
+                ));
+                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+            }
             syn::Item::Type(item) => rows.entities.push(named(
                 item.ident.span(),
                 item.ident.to_string(),
@@ -87,6 +111,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                     TypeEntityKind::Trait,
                     line_starts,
                 ));
+                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
                 for child in &item.items {
                     if let syn::TraitItem::Fn(method) = child {
                         if method.default.is_some() {
@@ -101,9 +126,11 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
             }
             syn::Item::Fn(item) => {
                 rows.entities
-                    .push(callable(&item.sig, TypeEntityKind::Function, line_starts))
+                    .push(callable(&item.sig, TypeEntityKind::Function, line_starts));
+                push_doc(rows, item.sig.ident.span(), &item.attrs, None, line_starts);
             }
             syn::Item::Impl(item) => {
+                let parent = super::call_metadata_rows::primary_type(&item.self_ty);
                 if let syn::Type::Path(self_path) = strip_type(&item.self_ty) {
                     if self_path.qself.is_none() && self_path.path.segments.len() == 1 {
                         if let Some(segment) = self_path.path.segments.first() {
@@ -121,6 +148,13 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                             TypeEntityKind::Method,
                             line_starts,
                         ));
+                        push_doc(
+                            rows,
+                            method.sig.ident.span(),
+                            &method.attrs,
+                            parent.as_deref(),
+                            line_starts,
+                        );
                     }
                 }
             }
@@ -132,6 +166,60 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
             _ => {}
         }
     }
+}
+
+fn push_doc(
+    rows: &mut TypeEntityRows,
+    span: proc_macro2::Span,
+    attrs: &[syn::Attribute],
+    parent: Option<&str>,
+    line_starts: &[u32],
+) {
+    let lines: Vec<String> = attrs
+        .iter()
+        .filter(|attr| attr.path().is_ident("doc"))
+        .filter_map(|attr| match &attr.meta {
+            syn::Meta::NameValue(nv) => match &nv.value {
+                syn::Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(s),
+                    ..
+                }) => {
+                    let value = s.value();
+                    Some(value.strip_prefix(' ').unwrap_or(&value).to_string())
+                }
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect();
+    if lines.is_empty() {
+        return;
+    }
+    let text = lines.join("\n");
+    rows.docs.push(DocRow {
+        range: span_range(line_starts, span),
+        parent: parent.map(str::to_owned),
+        sections: doc_sections(&text),
+        text,
+    });
+}
+
+fn doc_sections(text: &str) -> Vec<DocSectionRow> {
+    let mut sections: Vec<(String, Vec<&str>)> = Vec::new();
+    for line in text.lines() {
+        if let Some(rest) = line.trim_start().strip_prefix("# ") {
+            sections.push((rest.trim().to_string(), Vec::new()));
+        } else if let Some((_, body)) = sections.last_mut() {
+            body.push(line);
+        }
+    }
+    sections
+        .into_iter()
+        .map(|(heading, body)| DocSectionRow {
+            heading,
+            body: body.join("\n").trim().to_string(),
+        })
+        .collect()
 }
 
 /// Peel syntactic wrappers to the referenced Rust type.
