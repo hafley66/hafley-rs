@@ -4,11 +4,12 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use hafley_scm::lang::rust::strip_type;
+use hafley_scm::lang::rust::{
+    bare_self_head, strip_type, type_candidate_rows, TypeCandidateKind, TypeCandidateOwner,
+};
 use syn::punctuated::Punctuated;
 use syn::{
     Fields, GenericArgument, GenericParam, Path, PathArguments, ReturnType, Type, TypeParamBound,
-    WherePredicate,
 };
 
 use crate::family::{ImplOwner, TypeEdgeCandidate, TypeEdgeKind, TypeF};
@@ -18,7 +19,7 @@ use crate::tsi::Arg;
 use crate::types::{span_arg, TsiNames};
 
 use super::rust::syn_span;
-use super::rust_type_refs::{collect_path_args, path_name, primary_type, type_refs};
+use super::rust_type_refs::path_name;
 
 // ── type-edge candidates (the Resolve<TypeF> input) ───────────────
 //
@@ -33,99 +34,49 @@ pub(crate) fn edge_candidates(
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    for item in &parsed.items {
-        item_edge_candidates(item, line_starts, strings, sink);
+    for group in type_candidate_rows(parsed, line_starts) {
+        let owner = match group.owner {
+            TypeCandidateOwner::Declared(range) => Span {
+                start: range.start,
+                len: range.end - range.start,
+            },
+            TypeCandidateOwner::Impl {
+                primary_name,
+                bare_head,
+            } => {
+                if let Some(span) = entity_span_named(sink, strings, &primary_name) {
+                    span
+                } else {
+                    let Some((range, head)) = bare_head else {
+                        continue;
+                    };
+                    impl_owner_span(
+                        sink,
+                        strings,
+                        Span {
+                            start: range.start,
+                            len: range.end - range.start,
+                        },
+                        &head,
+                    )
+                }
+            }
+        };
+        for row in group.candidates {
+            sink.aux.candidates.push(TypeEdgeCandidate {
+                owner,
+                to: strings.intern(&row.to),
+                kind: match row.kind {
+                    TypeCandidateKind::Field => TypeEdgeKind::Field,
+                    TypeCandidateKind::Variant => TypeEdgeKind::Variant,
+                    TypeCandidateKind::Generic => TypeEdgeKind::Generic,
+                    TypeCandidateKind::Impl => TypeEdgeKind::Impl,
+                    TypeCandidateKind::Uses => TypeEdgeKind::Uses,
+                },
+            });
+        }
     }
     tsi_rows(parsed, line_starts, strings, sink);
-}
-
-fn item_edge_candidates(
-    item: &syn::Item,
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    match item {
-        syn::Item::Struct(s) => {
-            let owner = syn_span(line_starts, s.ident.span());
-            generic_candidates(owner, &s.generics, strings, sink);
-            field_candidates(owner, &s.fields, strings, sink);
-        }
-        syn::Item::Enum(e) => {
-            let owner = syn_span(line_starts, e.ident.span());
-            generic_candidates(owner, &e.generics, strings, sink);
-            for variant in &e.variants {
-                // The `to` is v5's synthetic `Owner::Member` text — text dsts
-                // STAY text.
-                push_candidate(
-                    sink,
-                    strings,
-                    owner,
-                    &format!("{}::{}", e.ident, variant.ident),
-                    TypeEdgeKind::Variant,
-                );
-                field_candidates(owner, &variant.fields, strings, sink);
-            }
-        }
-        // v5 maps Union to Struct for entities and walks its fields the same way.
-        syn::Item::Union(u) => {
-            let owner = syn_span(line_starts, u.ident.span());
-            generic_candidates(owner, &u.generics, strings, sink);
-            field_candidates(owner, &Fields::Named(u.fields.clone()), strings, sink);
-        }
-        syn::Item::Trait(t) => {
-            let owner = syn_span(line_starts, t.ident.span());
-            generic_candidates(owner, &t.generics, strings, sink);
-            for bound in &t.supertraits {
-                bound_candidate(owner, bound, strings, sink);
-            }
-        }
-        // The right-hand side is walked as a field type is: head plus every
-        // generic argument, the `type_refs` recursion.
-        syn::Item::Type(a) => {
-            let owner = syn_span(line_starts, a.ident.span());
-            generic_candidates(owner, &a.generics, strings, sink);
-            for to in type_refs(&a.ty) {
-                push_candidate(sink, strings, owner, &to, TypeEdgeKind::Uses);
-            }
-        }
-        syn::Item::Impl(i) => {
-            // Port of v5: the whole impl is skipped when the self-type has no
-            // primary name (a tuple or a bare fn self type reaches no owner).
-            let Some(owner_name) = primary_type(&i.self_ty) else {
-                return;
-            };
-            let owner = match entity_span_named(sink, strings, &owner_name) {
-                Some(span) => span,
-                None => {
-                    let Some((span, head)) = self_ty_head(&i.self_ty, line_starts) else {
-                        return;
-                    };
-                    impl_owner_span(sink, strings, span, &head)
-                }
-            };
-            generic_candidates(owner, &i.generics, strings, sink);
-            if let Some((_, path, _)) = &i.trait_ {
-                if let Some(to) = path_name(path) {
-                    push_candidate(sink, strings, owner, &to, TypeEdgeKind::Impl);
-                }
-                arg_candidates(owner, path, strings, sink);
-            }
-            // The self type's own HEAD names the owner; only its arguments are
-            // references.
-            if let Type::Path(self_path) = strip_type(&i.self_ty) {
-                arg_candidates(owner, &self_path.path, strings, sink);
-            }
-        }
-        syn::Item::Mod(m) => {
-            if let Some((_, inner)) = &m.content {
-                for nested in inner {
-                    item_edge_candidates(nested, line_starts, strings, sink);
-                }
-            }
-        }
-        _ => {}
-    }
 }
 
 /// The span of the TypeF entity interned as `name` in this bundle (the owner
@@ -141,16 +92,15 @@ fn entity_span_named(sink: &FamilyBundle<TypeF>, strings: &Strings, name: &str) 
 /// The impl self type's ident and span, BARE self types only: a qualified one
 /// is owned by its qualifier (`impl T for tt::Ident` is owned by `tt`).
 fn self_ty_head(ty: &Type, line_starts: &[u32]) -> Option<(Span, String)> {
-    match strip_type(ty) {
-        Type::Path(t) if t.qself.is_none() && t.path.segments.len() == 1 => {
-            let seg = t.path.segments.first()?;
-            Some((
-                syn_span(line_starts, seg.ident.span()),
-                seg.ident.to_string(),
-            ))
-        }
-        _ => None,
-    }
+    bare_self_head(ty, line_starts).map(|(range, name)| {
+        (
+            Span {
+                start: range.start,
+                len: range.end - range.start,
+            },
+            name,
+        )
+    })
 }
 
 /// Record an owner the file declares nowhere and hand back its span. Deduped on
@@ -166,88 +116,6 @@ fn impl_owner_span(
         sink.aux.impl_owners.push(ImplOwner { span, name });
     }
     span
-}
-
-/// One field candidate per named type reference under each field's type. Port
-/// of v5 `field_edges` (`type_refs` is the shared port above).
-fn field_candidates(
-    owner: Span,
-    fields: &Fields,
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    for field in fields.iter() {
-        for to in type_refs(&field.ty) {
-            push_candidate(sink, strings, owner, &to, TypeEdgeKind::Field);
-        }
-    }
-}
-
-/// Generic-bound + where-clause candidates. Port of v5 `generic_edges`.
-fn generic_candidates(
-    owner: Span,
-    generics: &syn::Generics,
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    for param in &generics.params {
-        if let GenericParam::Type(t) = param {
-            for bound in &t.bounds {
-                bound_candidate(owner, bound, strings, sink);
-            }
-        }
-    }
-    if let Some(where_clause) = &generics.where_clause {
-        for pred in &where_clause.predicates {
-            if let WherePredicate::Type(t) = pred {
-                for bound in &t.bounds {
-                    bound_candidate(owner, bound, strings, sink);
-                }
-            }
-        }
-    }
-}
-
-/// One generic candidate per trait bound. Port of v5 `bound_edge` (the kind is
-/// always Generic here — v5 rust binds bounds under no other edge kind).
-fn bound_candidate(
-    owner: Span,
-    bound: &TypeParamBound,
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    if let TypeParamBound::Trait(t) = bound {
-        if let Some(to) = path_name(&t.path) {
-            push_candidate(sink, strings, owner, &to, TypeEdgeKind::Generic);
-        }
-        arg_candidates(owner, &t.path, strings, sink);
-    }
-}
-
-/// One candidate per named reference under a path's GENERIC ARGUMENTS, the
-/// `collect_path_args` recursion a field type already gets through `type_refs`.
-fn arg_candidates(owner: Span, path: &Path, strings: &mut Strings, sink: &mut FamilyBundle<TypeF>) {
-    let mut args = Vec::new();
-    collect_path_args(path, &mut args);
-    args.sort();
-    args.dedup();
-    for to in args {
-        push_candidate(sink, strings, owner, &to, TypeEdgeKind::Generic);
-    }
-}
-
-fn push_candidate(
-    sink: &mut FamilyBundle<TypeF>,
-    strings: &mut Strings,
-    owner: Span,
-    to: &str,
-    kind: TypeEdgeKind,
-) {
-    sink.aux.candidates.push(TypeEdgeCandidate {
-        owner,
-        to: strings.intern(to),
-        kind,
-    });
 }
 
 // ── TSI syntax rows: `rust.assoc`, `rust.lifetime` and `rust.ownership` are
