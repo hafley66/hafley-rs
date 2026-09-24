@@ -2,6 +2,7 @@
 //! transcript format per harness, its session roots, the identity ladder that
 //! names the caller, and the worktree a spawn runs in.
 
+pub mod click;
 pub mod door;
 pub mod harness;
 pub mod identity;

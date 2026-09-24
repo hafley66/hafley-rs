@@ -12,6 +12,8 @@ homepage.workspace = true
 boop-turnvis = { version = "0.1.0", path = "../boop-turnvis" }
 # The lane channel each adapter's `open_channel` mints.
 boop-acp = { version = "0.0.2", path = "../boop-acp" }
+# ⌘-click: the pane under a client cell.
+boop-mux = { version = "0.0.9", path = "../boop-mux" }
 # The database an ingest pass writes into, and the session types it shares.
 boop-store = { version = "0.0.2", path = "../boop-store", default-features = false }
 # The transcripts are JSONL; this is the credible reader.
@@ -66,6 +68,8 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 tracing.workspace = true
 wait-timeout = "0.2.1"
 tempfile = "3"
+# ⌘-click fzf rung: the matcher helix and nucleo ship, scored like fzf.
+nucleo-matcher = "0.3"
 
 [dev-dependencies]
 # The store's deterministic fixtures (throwaway git repo, fake multiplexer).

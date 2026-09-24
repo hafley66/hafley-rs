@@ -27,6 +27,7 @@ pub mod tail;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod tmux;
+pub mod touched;
 pub mod trail;
 #[cfg(feature = "agent-read")]
 pub mod usage;
@@ -63,6 +64,7 @@ pub use summary::{
     AgentSummaryActivity, AgentSummaryAgent, AgentSummaryQuery, AGENT_SUMMARY_SCHEMA_VERSION,
 };
 pub use tags::{normalize_tag, tags_in, Tag};
+pub use touched::SessionTouched;
 #[cfg(feature = "agent-read")]
 pub use usage::{GroupBy, UsageQuery};
 

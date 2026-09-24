@@ -19,6 +19,8 @@ pub use _0_snapshot::{
     rows_from_capture, History, Screen, TerminalRow, TerminalSize, TerminalSnapshot,
     TerminalTarget,
 };
+mod _1_pane_at;
+pub use _1_pane_at::{parse_pane_at, PaneHit};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pane {
@@ -126,6 +128,11 @@ pub trait Multiplexer {
     /// renderer places an overlay against; `capture_pane` is the same text with
     /// none of it. `None` means tmux is unreachable or the target is unknown.
     fn pane_snapshot(&self, _socket: Option<&str>, _target: &str) -> Option<TerminalSnapshot> {
+        None
+    }
+    /// The pane of `session`'s active window under client cell `col`,`row`
+    /// (zero-based, status line included). `None`: unreachable, unknown, or a border.
+    fn pane_at(&self, _socket: Option<&str>, _session: &str, _col: u16, _row: u16) -> Option<PaneHit> {
         None
     }
     /// Spawn a detached tmux session with a shell command.
@@ -459,6 +466,18 @@ impl Multiplexer for Tmux {
             cursor: facts.cursor,
             rows,
         })
+    }
+
+    fn pane_at(&self, socket: Option<&str>, session: &str, col: u16, row: u16) -> Option<PaneHit> {
+        let target = if session.starts_with('%') { session.to_owned() } else { exact_target(session) };
+        let output = tmux_command(socket)
+            .args(["list-panes", "-t", &target, "-F", _1_pane_at::PANE_AT_FORMAT])
+            .output()
+            .ok()?;
+        if !output.status.success() {
+            return None;
+        }
+        parse_pane_at(&String::from_utf8_lossy(&output.stdout), col, row)
     }
 
     fn new_detached_session(
@@ -1090,6 +1109,28 @@ mod tests {
                 current_command: "claude".into(),
             }]
         );
+    }
+
+    #[test]
+    fn pane_at_names_the_split_pane_under_the_cell() {
+        if !tmux_on_path() {
+            eprintln!("skipping: tmux not on PATH");
+            return;
+        }
+        let server = TestServer::new();
+        let name = session_name();
+        server.create_session(&name);
+        let tmux = |args: &[&str]| {
+            let status = Command::new("tmux").arg("-L").arg(&server.socket).args(args).status().unwrap();
+            assert!(status.success(), "tmux {args:?}");
+        };
+        tmux(&["resize-window", "-t", &format!("={name}"), "-x", "80", "-y", "24"]);
+        tmux(&["split-window", "-h", "-t", &format!("={name}:"), "-c", "/"]);
+        let left = mux().pane_at(Some(&server.socket), &name, 0, 0).expect("left pane");
+        let right = mux().pane_at(Some(&server.socket), &name, 79, 5).expect("right pane");
+        assert_ne!(left.pane, right.pane);
+        assert_eq!((right.pane_current_path.to_str(), right.pane_row), (Some("/"), 5));
+        assert_eq!(mux().pane_at(Some(&server.socket), "no-such-session", 0, 0), None);
     }
 
     #[test]
