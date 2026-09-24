@@ -10,6 +10,8 @@ mod call_metadata_rows;
 mod module_specifier_rows;
 #[path = "5_const_string_rows.rs"]
 mod const_string_rows;
+#[path = "6_type_refs.rs"]
+mod type_refs;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -25,4 +27,5 @@ pub use module_specifier_rows::{
     mod_path_attr, module_specifier_rows, ModuleSpecifierKind, ModuleSpecifierRow,
 };
 pub use const_string_rows::{const_string_rows, ConstStringRow};
+pub use type_refs::{collect_path_args, type_refs};
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
