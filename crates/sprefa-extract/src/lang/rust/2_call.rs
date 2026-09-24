@@ -942,33 +942,26 @@ pub(super) fn project_call(
 ) {
     // Defs snapshot before the walk: a CONST_INIT is minted only when its
     // initializer's calls escape the engine's own def spans.
-    let defs: Vec<Span> = sink.nodes.iter().map(|node| node.span).collect();
-    let mut collector = CallCollector {
-        line_starts,
-        sites: Vec::new(),
-        under_cfg: None,
-        defs: &defs,
-        const_inits: Vec::new(),
-        in_block: false,
-    };
-    syn::visit::visit_file(&mut collector, parsed);
+    let defs: Vec<std::ops::Range<u32>> = sink.nodes.iter().map(|node| node.span.start..node.span.end()).collect();
+    let rows = call_site_rows(parsed, line_starts, &defs);
     // Mint the CONST_INIT defs in walk order, before metadata reads the node
     // set: a gated const's cfg row is admitted by its own CONST_INIT node.
-    for (span, name) in collector.const_inits.drain(..) {
+    for row in rows.const_inits {
+        let span = Span { start: row.range.start, len: row.range.end - row.range.start };
         sink.nodes
-            .push(Node::new(span, CONST_INIT).with_name(strings.intern(&name)));
+            .push(Node::new(span, CONST_INIT).with_name(strings.intern(&row.name)));
     }
     syn_call_metadata(parsed, line_starts, strings, sink);
 
-    for (callee, predicate) in test_only_calls(&collector.sites) {
+    for (callee, predicate) in rows.test_only_calls {
         sink.aux.test_only_calls.push(TestOnlyCall {
             callee: strings.intern(&callee),
             cfg: strings.intern(&predicate),
         });
     }
-    for site in collector.sites {
+    for site in rows.sites {
         sink.aux.sites.push(CallSite {
-            span: site.span,
+            span: Span { start: site.range.start, len: site.range.end - site.range.start },
             callee: strings.intern(&site.callee),
             callee_path: site.callee_path.map(|path| strings.intern(&path)),
         });
@@ -1003,175 +996,6 @@ fn module_specifiers(
                 imported: None,
             }),
     );
-}
-
-/// One collected call site before it is interned into the aux. `cfg` is the
-/// enclosing cfg predicate naming `test`, at any item depth above the call.
-struct CollectedSite {
-    span: Span,
-    callee: String,
-    callee_path: Option<String>,
-    cfg: Option<String>,
-}
-
-/// The callees this file names ONLY from cfg-guarded sites. One unguarded site
-/// keeps a callee out: the consumer subtracts the NAME, never the site.
-fn test_only_calls(sites: &[CollectedSite]) -> Vec<(String, String)> {
-    let shipped: std::collections::HashSet<&str> = sites
-        .iter()
-        .filter(|site| site.cfg.is_none())
-        .map(|site| site.callee.as_str())
-        .collect();
-    let mut seen = std::collections::HashSet::new();
-    sites
-        .iter()
-        .filter_map(|site| site.cfg.as_ref().map(|cfg| (&site.callee, cfg)))
-        .filter(|(callee, _)| !shipped.contains(callee.as_str()))
-        .filter(|(callee, _)| seen.insert(callee.as_str()))
-        .map(|(callee, cfg)| (callee.clone(), cfg.clone()))
-        .collect()
-}
-
-/// Walks the whole file for call expressions (`f(x)`, `recv.m(x)`, `Foo { .. }`)
-/// and mints a CONST_INIT def for every file- or mod-scope const/static whose
-/// initializer calls escape the engine's def spans. Port of v5 `CallCollector`
-/// plus v5's const-init supplement.
-struct CallCollector<'a> {
-    line_starts: &'a [u32],
-    sites: Vec<CollectedSite>,
-    /// The cfg predicate the walk currently sits under, restored on the way out.
-    under_cfg: Option<String>,
-    /// Engine def spans snapshotted before the walk: a site inside one is owned.
-    defs: &'a [Span],
-    /// CONST_INIT candidates in walk order: the def span and the ident text.
-    const_inits: Vec<(Span, String)>,
-    /// True inside any block, so only file- and inline-mod-scope items mint
-    /// CONST_INIT (a const in a fn body never did).
-    in_block: bool,
-}
-
-impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
-    // Every item form reaches this, including one declared inside a fn body, so
-    // a predicate on any ancestor covers the calls beneath it.
-    fn visit_item(&mut self, item: &'ast syn::Item) {
-        let outer = self.under_cfg.take();
-        let own = cfg_test_predicate(item_attrs(item));
-        self.under_cfg = outer.clone().or(own);
-        // Sites pushed while the item's subtree is walked are exactly its
-        // initializer's calls; the expr filter drops any type-position ones
-        // (e.g. an array length) the old expr-only walk never saw.
-        let candidate = match item {
-            syn::Item::Const(item) if !self.in_block => {
-                Some((item.ident.span(), &item.expr, item.ident.to_string()))
-            }
-            syn::Item::Static(item) if !self.in_block => {
-                Some((item.ident.span(), &item.expr, item.ident.to_string()))
-            }
-            _ => None,
-        };
-        let mark = self.sites.len();
-        syn::visit::visit_item(self, item);
-        if let Some((ident, expr, name)) = candidate {
-            let init = syn_span(self.line_starts, expr.span());
-            if self.sites[mark..]
-                .iter()
-                .filter(|site| init.start <= site.span.start && site.span.end() <= init.end())
-                .any(|site| {
-                    !self
-                        .defs
-                        .iter()
-                        .any(|span| span.start <= site.span.start && site.span.end() <= span.end())
-                })
-            {
-                self.const_inits
-                    .push((def_span(self.line_starts, ident, expr.span()), name));
-            }
-        }
-        self.under_cfg = outer;
-    }
-
-    fn visit_block(&mut self, block: &'ast syn::Block) {
-        let outer = self.in_block;
-        self.in_block = true;
-        syn::visit::visit_block(self, block);
-        self.in_block = outer;
-    }
-
-    fn visit_expr(&mut self, expr: &'ast syn::Expr) {
-        match expr {
-            // `f(args)` / `Foo(args)`: callee is the path's trailing segment.
-            syn::Expr::Call(call) => {
-                let function = peel_parens(&call.func);
-                if let syn::Expr::Path(path) = function {
-                    if let Some(segment) = path.path.segments.last() {
-                        let path_str = path_string(&path.path);
-                        self.sites.push(CollectedSite {
-                            span: syn_span(self.line_starts, call.func.span()),
-                            callee: segment.ident.to_string(),
-                            callee_path: (path.path.segments.len() > 1).then_some(path_str),
-                            cfg: self.under_cfg.clone(),
-                        });
-                    }
-                }
-                syn::visit::visit_expr(self, expr);
-            }
-            // `recv.m(args)`: callee is the method ident.
-            syn::Expr::MethodCall(call) => {
-                self.sites.push(CollectedSite {
-                    span: syn_span(self.line_starts, call.method.span()),
-                    callee: call.method.to_string(),
-                    callee_path: None,
-                    cfg: self.under_cfg.clone(),
-                });
-                syn::visit::visit_expr(self, expr);
-            }
-            // `Foo { x: 1 }`: struct literal constructor; callee is the type path's
-            // trailing segment. `Enum::Variant { .. }` (an uppercase segment
-            // before the last) is a value literal no call oracle scores as a
-            // call, so no site is minted for it.
-            syn::Expr::Struct(struct_expr) => {
-                if let Some(segment) = struct_expr
-                    .path
-                    .segments
-                    .last()
-                    .filter(|_| !is_variant_literal_path(&struct_expr.path))
-                {
-                    let path_str = path_string(&struct_expr.path);
-                    self.sites.push(CollectedSite {
-                        span: syn_span(self.line_starts, struct_expr.path.span()),
-                        callee: segment.ident.to_string(),
-                        callee_path: (struct_expr.path.segments.len() > 1).then_some(path_str),
-                        cfg: self.under_cfg.clone(),
-                    });
-                }
-                syn::visit::visit_expr(self, expr);
-            }
-            _ => syn::visit::visit_expr(self, expr),
-        }
-    }
-}
-
-/// `Enum::Variant { .. }` / `Self::Variant { .. }`: the segment before the
-/// last is uppercase-leading, so the literal names a variant, never a struct.
-fn is_variant_literal_path(path: &syn::Path) -> bool {
-    let count = path.segments.len();
-    count >= 2
-        && path.segments[count - 2]
-            .ident
-            .to_string()
-            .chars()
-            .next()
-            .is_some_and(char::is_uppercase)
-}
-
-/// Strip nested `Expr::Paren` to find the inner expression. Port of v5
-/// `peel_parens`.
-fn peel_parens(expr: &syn::Expr) -> &syn::Expr {
-    let mut current = expr;
-    while let syn::Expr::Paren(paren) = current {
-        current = &paren.expr;
-    }
-    current
 }
 
 pub(super) fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut FamilyBundle<CallF>) {

@@ -14,6 +14,8 @@ mod const_string_rows;
 mod type_refs;
 #[path = "7_type_entity_rows.rs"]
 mod type_entity_rows;
+#[path = "8_call_site_rows.rs"]
+mod call_site_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -34,4 +36,5 @@ pub use type_entity_rows::{
     strip_type, type_entity_rows, DocRow, DocSectionRow, ImplSelfHeadRow, SignatureRef,
     SignatureSlot, TypeEntityKind, TypeEntityRow, TypeEntityRows,
 };
+pub use call_site_rows::{call_site_rows, CallSiteRow, CallSiteRows, ConstInitRow};
 pub use syn_macro_expansion_defs::{expand_file, Expanded};

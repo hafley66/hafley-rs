@@ -18,8 +18,8 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use hafley_scm::lang::rust::{
-    call_definition_rows, call_metadata_rows, cfg_test_predicate, item_attrs, line_col_to_byte,
-    path_string, CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
+    call_definition_rows, call_metadata_rows, call_site_rows, line_col_to_byte,
+    CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
 use syn::spanned::Spanned;
 
