@@ -10,7 +10,7 @@ pub(super) fn project_df(
     strings: &mut Strings,
     sink: &mut FamilyBundle<DfF>,
 ) {
-    let rows = df_syntax_rows(parsed, file, src, line_starts);
+    let rows = df_syntax_rows(parsed, file, line_starts);
     for row in rows.nodes {
         let kind = match row.kind {
             DfSyntaxKind::Param => DfNodeKind::Param,
@@ -78,4 +78,8 @@ pub(super) fn project_df(
         len: span.len,
     }).collect();
     sink.aux.nests = crate::types::compute_nests(&sink.nodes, &sink.aux.loops);
+    for (index, start, end) in rows.aux.loop_collection_spans {
+        sink.aux.loops[index].collection =
+            src.get(start as usize..end as usize).map(str::to_string);
+    }
 }

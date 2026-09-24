@@ -72,10 +72,10 @@ fn def_span(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Spa
     Span { start: first, len: last.saturating_sub(first) }
 }
 
-pub fn df_syntax_rows(parsed: &syn::File, file: &str, src: &str, line_starts: &[u32]) -> DfSyntaxRows {
+pub fn df_syntax_rows(parsed: &syn::File, file: &str, line_starts: &[u32]) -> DfSyntaxRows {
     let mut strings = Strings;
     let mut rows = DfSyntaxRows::default();
-    project_df(parsed, file, src, line_starts, &mut strings, &mut rows);
+    project_df(parsed, file, line_starts, &mut strings, &mut rows);
     rows
 }
 
@@ -116,16 +116,11 @@ type LoopBreaks = Vec<(Option<String>, Vec<NodeRef>)>;
 fn project_df(
     parsed: &syn::File,
     file: &str,
-    src: &str,
     line_starts: &[u32],
     strings: &mut Strings,
     sink: &mut DfSyntaxRows,
 ) {
     df_items(&parsed.items, "", file, line_starts, strings, sink);
-    for (index, start, end) in std::mem::take(&mut sink.aux.loop_collection_spans) {
-        sink.aux.loops[index].collection =
-            src.get(start as usize..end as usize).map(str::to_string);
-    }
 }
 
 /// `mod_path` is the enclosing inline-`mod` chain (`""` at the file root,
