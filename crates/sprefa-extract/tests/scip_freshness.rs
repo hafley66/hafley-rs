@@ -120,7 +120,20 @@ fn a_stale_index_makes_ensure_rebuild_rather_than_reuse() {
 }
 
 #[test]
-fn explicit_index_override_ignores_the_set() {
+fn a_replaced_index_cannot_reuse_its_old_source_sidecar() {
+    let root = temp_root("index-swapped");
+    let cache = root.join(".dl").join(".state");
+    let index = place_fake_index(&cache);
+    let set = set_of(&[("a.rs", "digest-a")]);
+    record_index_set(&index, &set);
+    assert_eq!(index_path_for_set(&root, &cache, Some(set.digest())), Some(index.clone()));
+
+    std::fs::write(&index, b"different index bytes").expect("replace index");
+    assert_eq!(index_path_for_set(&root, &cache, Some(set.digest())), None);
+}
+
+#[test]
+fn explicit_index_override_obeys_the_set() {
     let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = temp_root("override");
     let cache = root.join(".dl").join(".state");
@@ -131,11 +144,14 @@ fn explicit_index_override_ignores_the_set() {
     std::env::set_var("SPREFA_SCIP_INDEX", &explicit);
     let never_built_from = set_of(&[("nothing.rs", "nothing")]);
     let found = index_path_for_set(&root, &cache, Some(never_built_from.digest()));
+    record_index_set(&explicit, &never_built_from);
+    let matching = index_path_for_set(&root, &cache, Some(never_built_from.digest()));
     match previous {
         Some(value) => std::env::set_var("SPREFA_SCIP_INDEX", value),
         None => std::env::remove_var("SPREFA_SCIP_INDEX"),
     }
-    assert_eq!(found, Some(explicit));
+    assert_eq!(found, None);
+    assert_eq!(matching, Some(explicit));
 }
 
 #[test]

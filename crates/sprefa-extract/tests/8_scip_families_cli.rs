@@ -626,7 +626,7 @@ fn explicit_index_conflicts_with_indexer_selection_and_build() {
 }
 
 #[test]
-fn scip_index_header_reports_stale_and_missing_source_evidence() {
+fn explicit_scip_index_reports_source_timestamp_evidence() {
     const INDEX_MTIME_MS: u64 = 1_700_000_000_000;
     let root = scratch("index-staleness");
     let index = root.join("supplied.scip");
@@ -659,11 +659,11 @@ fn scip_index_header_reports_stale_and_missing_source_evidence() {
         stale.contains(&format!(
             "\"index_mtime_unix_ms\":{INDEX_MTIME_MS},\"staleness\":\"stale\""
         )),
-        "a newer readable source is stale evidence: {stale}"
+        "a newer source is recorded in the index row: {stale}"
     );
     assert!(
         stale.contains("\"record\":\"scip_relationship\""),
-        "stale explicit indexes are still used"
+        "explicit index facts remain available: {stale}"
     );
 
     std::fs::remove_file(&source).expect("remove indexed source");
@@ -674,10 +674,42 @@ fn scip_index_header_reports_stale_and_missing_source_evidence() {
         )),
         "a missing indexed source is explicit uncertainty: {uncertain}"
     );
-    assert!(
-        uncertain.contains("\"record\":\"scip_relationship\""),
-        "missing sources do not suppress explicit-index facts"
-    );
+    assert!(uncertain.contains("\"record\":\"scip_relationship\""));
+}
+
+#[test]
+fn stale_cached_index_without_an_indexer_emits_only_a_skip() {
+    const INDEX_MTIME_MS: u64 = 1_700_000_000_000;
+    let root = scratch("stale-cache-root");
+    let cache = scratch("stale-cache-index");
+    let empty_path = scratch("stale-cache-path");
+    let index = cache.join("index.scip");
+    let source = root.join("animal.ts");
+    std::fs::copy("tests/fixtures/scip_relationship/fixture.scip", &index)
+        .expect("copy cached index");
+    std::fs::copy("tests/fixtures/scip_relationship/animal.ts", &source)
+        .expect("copy indexed source");
+    std::fs::write(root.join("tsconfig.json"), "{}\n").expect("typescript marker");
+    set_mtime_unix_ms(&index, INDEX_MTIME_MS);
+    set_mtime_unix_ms(&source, INDEX_MTIME_MS + 5_000);
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .env("PATH", empty_path)
+        .args([
+            "--family",
+            "scip",
+            "--scip-cache",
+            cache.to_str().expect("utf-8 cache"),
+            root.to_str().expect("utf-8 root"),
+        ])
+        .output()
+        .expect("extract binary runs");
+    assert!(output.status.success(), "{output:?}");
+    let stream = String::from_utf8(output.stdout).expect("utf-8 output");
+    assert_eq!(records(&stream, "scip_index").len(), 0, "{stream}");
+    assert_eq!(records(&stream, "scip_relationship").len(), 0, "{stream}");
+    assert_eq!(records(&stream, "scip_skip").len(), 1, "{stream}");
+    assert!(stream.contains("\"reason\":\"not_installed\""), "{stream}");
 }
 
 /// AN EXISTING INDEX WINS UNTOUCHED (v5's first move). The second run over the

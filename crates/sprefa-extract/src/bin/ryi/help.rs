@@ -92,13 +92,15 @@ EXACT MODE: --family scip ROOT
   or reuses the compiler's index, and streams it as scip_* relations: scip_def,
   scip_name, scip_ref, scip_external_ref, scip_edge, scip_fn_edge, scip_callee_type, scip_local,
   scip_impl, plus one scip_index header row. Every fact is compiler-resolved.
-  An index already on disk is reused untouched; a fresh build runs once under a
-  time budget (the indexer's whole process group is killed at the deadline) and
-  is cached for next time.
+  A cached index with a newer indexed source is rebuilt before its facts are
+  used. A fresh build runs under a time budget (the indexer's whole process
+  group is killed at the deadline) and is cached for next time.
 
   --scip-index FILE loads that exact file directly, ahead of environment and
   cache discovery, and never starts an indexer. A missing or invalid explicit
-  file is an error. --indexer and --scip-build conflict with an explicit file.
+  file is an error. Timestamp evidence is reported in the scip_index row;
+  explicit files remain usable. --indexer and --scip-build conflict with an
+  explicit file.
 
   The scip_index row carries index_mtime_unix_ms and staleness. The timestamp is
   milliseconds since the Unix epoch. staleness=stale means a readable indexed
@@ -462,7 +464,8 @@ in a worktree.
 Point it elsewhere when the root must not be written to at all: a committed
 fixture, a read-only checkout, or a run whose cache should not outlive it. The
 reuse probe still checks <ROOT>/index.scip and <ROOT>/.dl/index.scip either way,
-and $SPREFA_SCIP_INDEX still overrides everything.";
+and $SPREFA_SCIP_INDEX takes precedence when its recorded source set matches
+the requested set.";
 
 pub const SCIP_TIMEOUT_LONG: &str = "\
 Wall budget in seconds for ONE indexer run under `--family scip`. Overrides

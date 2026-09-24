@@ -10,8 +10,9 @@
 //!   4. a root with markers and no installed toolchain is a LOUD NAMED SKIP,
 //!      never a failure — a missing indexer skips the root, it never kills the
 //!      caller.
-//! Freshness is digest-of-set, never mtime (user decision 2026-08-21); the
-//! `SPREFA_SCIP_INDEX` override is exempt from it and wins untouched.
+//! A set digest guards resolve reuse. The slow family also checks indexed
+//! document mtimes before serving a cached index; an override cannot bypass
+//! either check.
 //!
 //! WHAT CHANGED, and why.
 //!
@@ -254,6 +255,7 @@ fn hex_of(bytes: &[u8]) -> String {
 struct IndexSetSidecar {
     digest: String,
     files: Vec<String>,
+    index_digest: String,
 }
 
 /// The sidecar sits at the index path plus a suffix, so the two are found,
@@ -266,17 +268,29 @@ fn sidecar_path(index: &Path) -> PathBuf {
 
 fn recorded_digest(index: &Path) -> Option<String> {
     let text = std::fs::read_to_string(sidecar_path(index)).ok()?;
-    serde_json::from_str::<IndexSetSidecar>(&text)
-        .ok()
-        .map(|sidecar| sidecar.digest)
+    let sidecar = serde_json::from_str::<IndexSetSidecar>(&text).ok()?;
+    let bytes = std::fs::read(index).ok()?;
+    (content_digest(&bytes) == sidecar.index_digest)
+        .then_some(sidecar.digest)
+}
+
+fn content_digest(bytes: &[u8]) -> String {
+    match crate::shape::ContentId::blake3(bytes) {
+        crate::shape::ContentId::Blake3(digest) => hex_of(&digest),
+        crate::shape::ContentId::GitBlob(oid) => oid.0.to_string(),
+    }
 }
 
 /// Stamp `index` with the set it was built from, which is what later makes it
 /// reusable. Best effort: an unwritable dir costs the next run its reuse only.
 pub fn record_index_set(index: &Path, set: &IndexSet) {
+    let Ok(bytes) = std::fs::read(index) else {
+        return;
+    };
     let sidecar = IndexSetSidecar {
         digest: set.digest().to_string(),
         files: set.lines(),
+        index_digest: content_digest(&bytes),
     };
     if let Ok(text) = serde_json::to_string(&sidecar) {
         let _ = std::fs::write(sidecar_path(index), text);
@@ -331,12 +345,36 @@ pub fn ensure_index_picked(
     set: Option<&IndexSet>,
     pick: IndexerPick,
 ) -> EnsureReport {
+    ensure_index_picked_with_reuse(root, cache_dir, budget, set, pick, true)
+}
+
+/// Re-run the selected indexer after a cached index failed its source check.
+/// The old index stays on disk until a new build succeeds, but callers must
+/// never use it as a fallback when the rebuild fails.
+pub fn rebuild_index_picked(
+    root: &Path,
+    cache_dir: &Path,
+    budget: IndexBudget,
+    set: Option<&IndexSet>,
+    pick: IndexerPick,
+) -> EnsureReport {
+    ensure_index_picked_with_reuse(root, cache_dir, budget, set, pick, false)
+}
+
+fn ensure_index_picked_with_reuse(
+    root: &Path,
+    cache_dir: &Path,
+    budget: IndexBudget,
+    set: Option<&IndexSet>,
+    pick: IndexerPick,
+    allow_reuse: bool,
+) -> EnsureReport {
     let cache_dir = &pick_cache_dir(cache_dir, pick);
     let want = set.map(IndexSet::digest);
-    let reuse = match pick {
+    let reuse = allow_reuse.then(|| match pick {
         None => index_path_for_set(root, cache_dir, want),
         Some(_) => picked_index_path(cache_dir, want),
-    };
+    }).flatten();
     if let Some(path) = reuse {
         return EnsureReport {
             index: Some(path),
@@ -440,6 +478,8 @@ fn place(
     gitignore_state(cache_dir);
     if let Some(set) = set {
         record_index_set(&out, set);
+    } else {
+        let _ = std::fs::remove_file(sidecar_path(&out));
     }
     Ok(out)
 }
@@ -925,7 +965,9 @@ pub fn fresh_index_for_set(root: &Path, set_digest: &str) -> Option<PathBuf> {
 pub fn index_path_for_set(root: &Path, cache_dir: &Path, want: Option<&str>) -> Option<PathBuf> {
     if let Some(explicit) = std::env::var_os("SPREFA_SCIP_INDEX") {
         let explicit = PathBuf::from(explicit);
-        if explicit.is_file() {
+        if explicit.is_file()
+            && want.is_none_or(|digest| recorded_digest(&explicit).as_deref() == Some(digest))
+        {
             return Some(explicit);
         }
     }
