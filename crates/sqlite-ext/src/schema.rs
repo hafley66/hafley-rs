@@ -46,15 +46,29 @@ pub(crate) fn declaration(width: usize) -> String {
     format!("CREATE TABLE x(staged_rows INTEGER,__source HIDDEN,__sign HIDDEN{values})")
 }
 
-pub(crate) fn create_delta(collector: &str, width: usize) -> String {
+/// The vtab DDL in the exact shape SQLite stores in `sqlite_master`: no schema
+/// qualifier.
+pub(crate) fn persisted_vtab(name: &str) -> String {
+    format!("CREATE VIRTUAL TABLE {} USING {}", quote(name), name)
+}
+
+pub(crate) fn vtab_ddl(name: &str) -> String {
+    persisted_vtab(name).replacen("CREATE VIRTUAL TABLE ", "CREATE VIRTUAL TABLE main.", 1)
+}
+
+pub(crate) fn persisted_delta(collector: &str, width: usize) -> String {
     let values = (0..width)
         .map(|at| format!(",value{at}"))
         .collect::<String>();
     format!(
-        "CREATE TABLE main.{}(sequence INTEGER PRIMARY KEY,source TEXT NOT NULL,\
+        "CREATE TABLE {}(sequence INTEGER PRIMARY KEY,source TEXT NOT NULL,\
          sign INTEGER NOT NULL,width INTEGER NOT NULL{values})",
         quote(&delta_name(collector))
     )
+}
+
+pub(crate) fn create_delta(collector: &str, width: usize) -> String {
+    persisted_delta(collector, width).replacen("CREATE TABLE ", "CREATE TABLE main.", 1)
 }
 
 pub(crate) fn insert_delta(collector: &str, width: usize) -> String {
@@ -96,8 +110,14 @@ pub(crate) fn columns(db: &Connection, table: &str) -> Result<Vec<String>> {
     Ok(names)
 }
 
+/// The trigger's stored name, unquoted. Names under the collector prefix are
+/// reserved for these three events.
+pub(crate) fn trigger_key(collector: &str, table: &str, event: &str) -> String {
+    format!("{collector}_{table}_{event}")
+}
+
 fn trigger_name(collector: &str, table: &str, event: &str) -> String {
-    quote(&format!("{collector}_{table}_{event}"))
+    quote(&trigger_key(collector, table, event))
 }
 
 fn body(collector: &str, table: &str, columns: &[String], image: &str, sign: i64) -> String {
@@ -117,19 +137,52 @@ fn body(collector: &str, table: &str, columns: &[String], image: &str, sign: i64
 
 /// AFTER triggers only. A BEFORE trigger would stage a row that a later
 /// constraint failure removes from the source.
+///
+/// `create_triggers` writes these; `persisted_trigger` rebuilds the same
+/// statement in the exact shape SQLite stores for reattach to compare against.
 pub(crate) fn create_triggers(collector: &str, table: &str, columns: &[String]) -> String {
-    let insert = body(collector, table, columns, "NEW", 1);
-    let delete = body(collector, table, columns, "OLD", -1);
+    ["insert", "delete", "update"]
+        .map(|event| {
+            format!(
+                "{};",
+                trigger_stmt(collector, table, event, columns, "main.")
+            )
+        })
+        .join("\n")
+}
+
+/// One stored trigger statement: the `main.` qualifier and trailing `;` that
+/// SQLite strips from `sqlite_master.sql` are left off.
+pub(crate) fn persisted_trigger(
+    collector: &str,
+    table: &str,
+    event: &str,
+    columns: &[String],
+) -> String {
+    trigger_stmt(collector, table, event, columns, "")
+}
+
+fn trigger_stmt(
+    collector: &str,
+    table: &str,
+    event: &str,
+    columns: &[String],
+    qualifier: &str,
+) -> String {
+    let bodies = match event {
+        "insert" => vec![body(collector, table, columns, "NEW", 1)],
+        "delete" => vec![body(collector, table, columns, "OLD", -1)],
+        _ => vec![
+            body(collector, table, columns, "OLD", -1),
+            body(collector, table, columns, "NEW", 1),
+        ],
+    };
     format!(
-        "CREATE TRIGGER main.{} AFTER INSERT ON {} BEGIN {insert} END;\n\
-         CREATE TRIGGER main.{} AFTER DELETE ON {} BEGIN {delete} END;\n\
-         CREATE TRIGGER main.{} AFTER UPDATE ON {} BEGIN {delete} {insert} END;",
-        trigger_name(collector, table, "insert"),
+        "CREATE TRIGGER {qualifier}{} AFTER {} ON {} BEGIN {} END",
+        trigger_name(collector, table, event),
+        event.to_ascii_uppercase(),
         quote(table),
-        trigger_name(collector, table, "delete"),
-        quote(table),
-        trigger_name(collector, table, "update"),
-        quote(table),
+        bodies.join(" "),
     )
 }
 
@@ -140,7 +193,10 @@ pub(crate) fn drop_triggers(collector: &str, tables: &[String]) -> String {
             ["insert", "delete", "update"]
                 .into_iter()
                 .map(move |event| {
-                    format!("DROP TRIGGER IF EXISTS main.{};", trigger_name(collector, table, event))
+                    format!(
+                        "DROP TRIGGER IF EXISTS main.{};",
+                        trigger_name(collector, table, event)
+                    )
                 })
         })
         .collect()
