@@ -14,14 +14,17 @@ pub struct SessionTouched {
     pub cwds: Vec<String>,
 }
 
-/// `s.value = ?N OR s.value LIKE ?N || '/%'`: a session id also claims its
-/// subagent sessions, which are recorded as `<parent>/<child>`.
-fn session_filter(sessions: &[String]) -> (String, Vec<Value>) {
+/// The `ids` CTE: each session's dict id plus its subagents (`<parent>/<child>`).
+/// A range on the UNIQUE index, never `LIKE`, which scans agent_turn (11 s on a 2 GB store).
+fn session_ids(sessions: &[String]) -> (String, Vec<Value>) {
     let filter = (1..=sessions.len())
-        .map(|n| format!("(s.value = ?{n} OR s.value LIKE ?{n} || '/%')"))
+        .map(|n| format!("value = ?{n} OR (value >= ?{n} || '/' AND value < ?{n} || '0')"))
         .collect::<Vec<_>>()
         .join(" OR ");
-    (filter, sessions.iter().cloned().map(Value::Text).collect())
+    (
+        format!("WITH ids AS (SELECT id FROM dict_session WHERE {filter})"),
+        sessions.iter().cloned().map(Value::Text).collect(),
+    )
 }
 
 fn push_distinct(out: &mut Vec<String>, value: String) {
@@ -36,31 +39,28 @@ impl Store {
         if sessions.is_empty() {
             return Ok(touched);
         }
-        let (filter, params) = session_filter(sessions);
+        let (ids, params) = session_ids(sessions);
         let connection = self.connection();
         let mut statement = connection.prepare(&format!(
-            "SELECT p.value FROM agent_touch t
+            "{ids} SELECT p.value FROM agent_touch t
                JOIN dict_path p ON p.id = t.path_id
-               JOIN dict_session s ON s.id = t.session_id
-              WHERE {filter}
+              WHERE t.session_id IN ids
               ORDER BY t.ts DESC, t.turn DESC LIMIT {limit}"
         ))?;
         for path in statement.query_map(rusqlite::params_from_iter(params.iter()), |row| row.get::<_, String>(0))? {
             push_distinct(&mut touched.paths, path?);
         }
         let mut statement = connection.prepare(&format!(
-            "SELECT value FROM (
+            "{ids} SELECT value FROM (
                SELECT c.value AS value, 0 AS tier, MAX(t.ts) AS at FROM agent_turn t
                  JOIN agent_session a ON a.session_id = t.session_id
                  JOIN dict_cwd c ON c.id = COALESCE(t.cwd_id, a.cwd_id)
-                 JOIN dict_session s ON s.id = t.session_id
-                WHERE {filter}
+                WHERE t.session_id IN ids
                 GROUP BY c.value
                UNION ALL
                SELECT c.value, 1, a.started_ts FROM agent_session a
-                 JOIN dict_session s ON s.id = a.session_id
                  JOIN dict_cwd c ON c.id = a.cwd_id
-                WHERE {filter})
+                WHERE a.session_id IN ids)
              ORDER BY tier, at DESC"
         ))?;
         for cwd in statement.query_map(rusqlite::params_from_iter(params.iter()), |row| row.get::<_, String>(0))? {

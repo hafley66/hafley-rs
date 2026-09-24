@@ -1,14 +1,12 @@
 //! ⌘-click resolution for a host terminal: client cell -> tmux pane -> the
-//! boop sessions in it -> click roots -> the resolver ladder.
+//! boop sessions run in its cwd -> click roots -> the resolver ladder.
 
 pub mod _0_rungs;
 pub mod _1_roots;
 pub mod _2_ladder;
 
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use boop_mux::{Multiplexer, PaneHit, Tmux};
 use boop_store::{SessionTouched, Store};
@@ -19,7 +17,6 @@ pub use _1_roots::{click_roots, worktrees_of, Root, RootVia};
 pub use _0_rungs::{clear_index_cache, git_out, home_dir, repo_root_of};
 
 const TOUCHED_CAP: usize = 2000;
-const PANE_SESSION_TTL: Duration = Duration::from_secs(5);
 const CWD_SESSIONS: usize = 3;
 
 /// The client cell a host saw the click on, in the tmux client's own grid
@@ -41,47 +38,14 @@ pub struct ClickResolution {
     pub evidence_paths: usize,
 }
 
-type PaneSessionCache = Mutex<HashMap<(Option<String>, String), (Instant, Option<String>)>>;
-
-/// The boop session standing in `pane`, from the harness live registries.
-/// Cached briefly: each ask walks every registry and may spawn a harness probe.
-pub fn pane_session(pane: &str, socket: Option<&str>) -> Option<String> {
-    static CACHE: OnceLock<PaneSessionCache> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
-    let key = (socket.map(str::to_owned), pane.to_owned());
-    if let Some((at, session)) = cache.lock().ok().and_then(|cache| cache.get(&key).cloned()) {
-        if at.elapsed() < PANE_SESSION_TTL {
-            return session;
-        }
+/// The caller's sessions, else those most recently run in the pane cwd. Registries
+/// key panes by bare id, which collides across tmux servers.
+fn click_sessions(pane: &PaneHit, given: &[String], store: Option<&Store>) -> Vec<String> {
+    if !given.is_empty() {
+        return given.to_vec();
     }
-    let registry = crate::Registry::discover();
-    let session = boop_store::bus::default_mail_dir()
-        .ok()
-        .and_then(|mail| crate::live::session_in_pane_on_socket(&registry, pane, socket, &mail).ok().flatten());
-    if let Ok(mut cache) = cache.lock() {
-        cache.insert(key, (Instant::now(), session.clone()));
-    }
-    session
-}
-
-/// Sessions whose evidence counts: the caller's, the one live in the pane,
-/// and when neither names one, the sessions most recently run in the pane cwd.
-fn click_sessions(pane: &PaneHit, socket: Option<&str>, given: &[String], store: Option<&Store>) -> Vec<String> {
-    let mut sessions: Vec<String> = given.to_vec();
-    if !pane.pane.is_empty() {
-        if let Some(live) = pane_session(&pane.pane, socket) {
-            if !sessions.contains(&live) {
-                sessions.push(live);
-            }
-        }
-    }
-    if sessions.is_empty() {
-        if let Some(store) = store {
-            let cwd = pane.pane_current_path.to_string_lossy();
-            sessions = store.sessions_in_cwd(&cwd, CWD_SESSIONS).unwrap_or_default();
-        }
-    }
-    sessions
+    let cwd = pane.pane_current_path.to_string_lossy();
+    store.and_then(|store| store.sessions_in_cwd(&cwd, CWD_SESSIONS).ok()).unwrap_or_default()
 }
 
 /// Resolve `token` clicked at `cell`. A cell tmux cannot place (no server, a
@@ -98,7 +62,7 @@ pub fn resolve_click(token: &str, cell: Option<&ClickCell>, cwd: &str, sessions:
             pane_row: 0,
         });
     let store = Store::default_path().ok().and_then(|path| Store::open_readonly(path).ok());
-    let sessions = click_sessions(&pane, socket, sessions, store.as_ref());
+    let sessions = click_sessions(&pane, sessions, store.as_ref());
     let touched = store
         .as_ref()
         .and_then(|store| store.session_touched(&sessions, TOUCHED_CAP).ok())
