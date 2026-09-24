@@ -18,6 +18,8 @@ mod type_entity_rows;
 mod call_site_rows;
 #[path = "9_type_candidate_rows.rs"]
 mod type_candidate_rows;
+#[path = "10_module_resolution_rows.rs"]
+mod module_resolution_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -42,5 +44,9 @@ pub use call_site_rows::{call_site_rows, CallSiteRow, CallSiteRows, ConstInitRow
 pub use type_candidate_rows::{
     bare_self_head, type_candidate_rows, TypeCandidateGroup, TypeCandidateKind, TypeCandidateOwner,
     TypeCandidateRow,
+};
+pub use module_resolution_rows::{
+    module_resolution_rows, EnumVariantsRow, ModuleResolutionRows, StarImportRow, TraitMethodRow,
+    TraitMethodsRow, UseBindingRow,
 };
 pub use syn_macro_expansion_defs::{expand_file, Expanded};

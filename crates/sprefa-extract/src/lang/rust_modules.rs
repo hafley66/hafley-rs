@@ -8,10 +8,8 @@
 //! Its flat `Specifier` rows (`rust.rs:1642`) collapse
 //! `use a::b::{self}` and `use a::b::*` onto one (name, module,
 //! kind=Reexport) shape, and an inline `mod x { .. }` mints NO row at all
-//! (`rust.rs:1690`, documented `NO ROW`). This file re-walks the AST once and
-//! reuses the module-path text math from
-//! (`module_segments` / `module_target` / `crate_root_of` / `mod_path_attr`,
-//! `rust.rs`) instead of duplicating it.
+//! (`rust.rs:1690`, documented `NO ROW`). `hafley_scm` extracts the syntax
+//! rows from the phase-1 parse; this file resolves those rows across files.
 
 use std::collections::{BTreeSet, HashMap};
 use std::sync::Mutex;
@@ -19,15 +17,10 @@ use std::sync::Mutex;
 use crate::seams::DefIndex;
 use crate::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
-use super::rust::{
-    build_line_starts, def_span, mod_path_attr, module_segments, module_target, syn_span,
-    variant_def_range,
-};
+use super::rust::{build_line_starts, module_segments, module_target};
 use super::rust_receivers::{impl_facts, ImplEntry};
 
-use syn::spanned::Spanned as _;
-
-// ── phase-2 facts: one dedicated parse per file ──────────────────────────────
+// ── module facts from phase-1 syntax rows ────────────────────────────────────
 
 /// What one `use` leaf binds a local name to. `qualifier` is the source
 /// module's path as written (`crate`/`self`/`super` kept literal).
@@ -98,146 +91,42 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
 
 /// The module facts off the extract pass's own syn parse, so no second parse.
 pub(crate) fn rust_module_facts_from_parsed(text: &str, parsed: &syn::File) -> RustModuleFacts {
-    let mut facts = RustModuleFacts::default();
     let line_starts = build_line_starts(text);
-    facts.impls = impl_facts(parsed, &line_starts);
-    collect(&parsed.items, &line_starts, &mut facts);
-    facts
-}
-
-fn collect(items: &[syn::Item], line_starts: &[u32], facts: &mut RustModuleFacts) {
-    for item in items {
-        match item {
-            syn::Item::Use(use_item) => {
-                let reexport = !matches!(use_item.vis, syn::Visibility::Inherited);
-                let mut prefix = Vec::new();
-                walk_use_tree(&use_item.tree, reexport, &mut prefix, facts);
-            }
-            syn::Item::Trait(trait_item) => {
-                let fns = trait_item
-                    .items
-                    .iter()
-                    .filter_map(|item| match item {
-                        syn::TraitItem::Fn(f) => {
-                            let span = match &f.default {
-                                Some(block) => {
-                                    def_span(line_starts, f.sig.ident.span(), block.span())
-                                }
-                                // A declared fn has no block: the span must
-                                // match the call facet's def for the fn
-                                // (ident start through the signature end),
-                                // or the emitted edge reads nameless.
-                                None => def_span(line_starts, f.sig.ident.span(), f.sig.span()),
-                            };
-                            Some(TraitFn {
-                                name: f.sig.ident.to_string(),
-                                span,
-                                default: f.default.is_some(),
-                            })
-                        }
-                        _ => None,
-                    })
-                    .collect();
-                facts.traits.push(TraitEntry {
-                    name: trait_item.ident.to_string(),
-                    fns,
-                });
-            }
-            syn::Item::Mod(mod_item) => match &mod_item.content {
-                Some((_, inner)) => {
-                    facts.inline_mods.insert(mod_item.ident.to_string());
-                    collect(inner, line_starts, facts);
-                }
-                None => {
-                    let name = mod_item.ident.to_string();
-                    let path_attr = mod_path_attr(&mod_item.attrs);
-                    facts.mod_decls.push((name, path_attr));
-                }
-            },
-            syn::Item::Enum(enum_item) => {
-                let variants = enum_item
-                    .variants
-                    .iter()
-                    .filter_map(|variant| {
-                        variant_def_range(line_starts, variant).map(|(start, end)| {
-                            (
-                                variant.ident.to_string(),
-                                Span {
-                                    start,
-                                    len: end - start,
-                                },
-                            )
-                        })
-                    })
-                    .collect();
-                facts.enums.push((enum_item.ident.to_string(), variants));
-            }
-            syn::Item::Type(alias) => {
-                facts
-                    .aliases
-                    .push(syn_span(line_starts, alias.ident.span()));
-            }
-            _ => {}
-        }
+    let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, &line_starts);
+    RustModuleFacts {
+        uses: rows.uses.into_iter().map(|row| UseBinding {
+            local: row.local,
+            qualifier: row.qualifier,
+            asked: row.asked,
+            reexport: row.reexport,
+        }).collect(),
+        stars: rows.stars.into_iter().map(|row| StarImport {
+            qualifier: row.qualifier,
+            reexport: row.reexport,
+        }).collect(),
+        inline_mods: rows.inline_mods.into_iter().collect(),
+        mod_decls: rows.mod_decls,
+        impls: impl_facts(parsed, &line_starts),
+        enums: rows.enums.into_iter().map(|row| (
+            row.name,
+            row.variants.into_iter().map(|(name, range)| (
+                name,
+                Span { start: range.start, len: range.end - range.start },
+            )).collect(),
+        )).collect(),
+        traits: rows.traits.into_iter().map(|row| TraitEntry {
+            name: row.name,
+            fns: row.methods.into_iter().map(|method| TraitFn {
+                name: method.name,
+                span: Span { start: method.range.start, len: method.range.end - method.range.start },
+                default: method.default,
+            }).collect(),
+        }).collect(),
+        aliases: rows.aliases.into_iter().map(|range| Span {
+            start: range.start,
+            len: range.end - range.start,
+        }).collect(),
     }
-}
-
-fn walk_use_tree(
-    tree: &syn::UseTree,
-    reexport: bool,
-    prefix: &mut Vec<String>,
-    facts: &mut RustModuleFacts,
-) {
-    match tree {
-        syn::UseTree::Path(segment) => {
-            prefix.push(segment.ident.to_string());
-            walk_use_tree(&segment.tree, reexport, prefix, facts);
-            prefix.pop();
-        }
-        syn::UseTree::Group(group) => {
-            for member in &group.items {
-                walk_use_tree(member, reexport, prefix, facts);
-            }
-        }
-        syn::UseTree::Name(leaf) => {
-            let segment = leaf.ident.to_string();
-            push_leaf(prefix, &segment, None, reexport, facts);
-        }
-        syn::UseTree::Rename(leaf) => {
-            let segment = leaf.ident.to_string();
-            let alias = leaf.rename.to_string();
-            push_leaf(prefix, &segment, Some(alias), reexport, facts);
-        }
-        syn::UseTree::Glob(_) => facts.stars.push(StarImport {
-            qualifier: prefix.clone(),
-            reexport,
-        }),
-    }
-}
-
-/// `self` re-affirms the prefix's own last segment, so `use a::b::self;`
-/// reduces to the plain leaf case one segment shorter (qualifier `a`, name `b`).
-fn push_leaf(
-    prefix: &[String],
-    segment: &str,
-    alias: Option<String>,
-    reexport: bool,
-    facts: &mut RustModuleFacts,
-) {
-    let (qualifier, asked): (Vec<String>, String) = if segment == "self" {
-        let Some((last, rest)) = prefix.split_last() else {
-            return;
-        };
-        (rest.to_vec(), last.clone())
-    } else {
-        (prefix.to_vec(), segment.to_string())
-    };
-    facts.uses.push(UseBinding {
-        local: alias.unwrap_or_else(|| asked.clone()),
-        qualifier,
-        asked,
-        reexport,
-    });
 }
 
 fn parent_dir(path: &str) -> &str {

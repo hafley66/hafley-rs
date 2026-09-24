@@ -33,7 +33,7 @@ pub(super) fn span_range(line_starts: &[u32], span: proc_macro2::Span) -> std::o
 }
 
 /// A def's byte range over `[start.start, end.end)`, the whole callable body.
-fn def_range(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Span) -> (u32, u32) {
+pub(super) fn def_range(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Span) -> (u32, u32) {
     let start_byte = line_col_to_byte(
         line_starts,
         start.start().line as u32,

@@ -52,7 +52,7 @@ use crate::types::{
 };
 
 // ── span bridge: proc_macro2 line/col -> v6 byte Span ───────────────────────
-pub(crate) use hafley_scm::lang::rust::{build_line_starts, variant_def_range};
+pub(crate) use hafley_scm::lang::rust::build_line_starts;
 
 /// A proc_macro2 span -> v6 byte Span. Used for entity/def spans where a real
 /// length is kept (joins + future resolution); df nodes use start-only anchors.
@@ -76,7 +76,6 @@ mod call_facts;
 pub(crate) use call_facts::{
     crate_root_of, def_span, module_segments, module_target, ModuleTarget,
 };
-pub(crate) use hafley_scm::lang::rust::mod_path_attr;
 pub use call_facts::{call_drops, own_blob_probes};
 use call_facts::{project_call, scm_call_defs, splice_macro_expansions};
 
