@@ -253,13 +253,15 @@ fn create_wait_returns_the_lanes_rc() {
     let mut child = fixture
         .command("10")
         .stdout(Stdio::piped())
-        .stderr(Stdio::null())
+        .stderr(Stdio::inherit())
         .spawn()
         .unwrap();
     let stdout = child.stdout.take().unwrap();
     let mut lines = std::io::BufReader::new(stdout).lines();
     let route = lines.next().unwrap().unwrap();
-    let (_, route) = route.split_once(" -> ").unwrap();
+    let (_, route) = route
+        .split_once(" -> ")
+        .unwrap_or_else(|| panic!("expected a dispatched route, got {route:?}"));
     // The line names the spawn id this create minted; a resume is checked
     // against that id, so the coordinator is handed it here.
     let head = format!("{} (tmux {}, spawn ", fixture.lane, fixture.tmux);
