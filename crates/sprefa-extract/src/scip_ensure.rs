@@ -10,9 +10,10 @@
 //!   4. a root with markers and no installed toolchain is a LOUD NAMED SKIP,
 //!      never a failure — a missing indexer skips the root, it never kills the
 //!      caller.
-//! A set digest guards resolve reuse. The slow family also checks indexed
-//! document mtimes before serving a cached index; an override cannot bypass
-//! either check.
+//! Set digests guard resolve and slow-family cache reuse. The slow family
+//! hashes the files under its root before reuse and after a build; document
+//! mtimes remain report-only evidence. The index-byte digest in the sidecar
+//! binds each source set to the exact index it describes.
 //!
 //! WHAT CHANGED, and why.
 //!
@@ -38,6 +39,8 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 use std::process::ExitStatus;
 use std::time::{Duration, Instant};
+
+use ignore::WalkBuilder;
 
 use crate::types::{ScipError, ScipSource};
 
@@ -155,6 +158,8 @@ pub enum SkipReason {
     /// The indexer ran and failed, or could not be launched. Carries its own
     /// last stderr line.
     Failed { detail: String },
+    /// Source contents changed between the pre-build and post-build scans.
+    SourcesChanged,
 }
 
 impl SkipReason {
@@ -165,6 +170,7 @@ impl SkipReason {
             Self::NotInstalled { .. } => "not_installed",
             Self::TimedOut { .. } => "timed_out",
             Self::Failed { .. } => "failed",
+            Self::SourcesChanged => "sources_changed",
         }
     }
 
@@ -177,6 +183,7 @@ impl SkipReason {
                 format!("exceeded the {secs}s budget; process group killed")
             }
             Self::Failed { detail } => detail.clone(),
+            Self::SourcesChanged => "source set changed while the indexer ran".to_string(),
         }
     }
 }
@@ -240,6 +247,61 @@ impl IndexSet {
             .map(|(path, digest)| format!("{path} {digest}"))
             .collect()
     }
+}
+
+/// Content identities for files beneath one automatic family root. The path
+/// is part of the set, so additions and deletions change its digest as well
+/// as edits. Build outputs, caches and nested checkouts are outside this root.
+pub fn source_set_for_root(root: &Path) -> Result<IndexSet, String> {
+    source_set_for_root_excluding(root, None)
+}
+
+fn source_set_for_root_excluding(root: &Path, cache_dir: Option<&Path>) -> Result<IndexSet, String> {
+    let cache_dir = cache_dir.map(Path::to_path_buf);
+    let walk = WalkBuilder::new(root)
+        .follow_links(true)
+        .hidden(false)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .filter_entry(move |entry| {
+            if cache_dir.as_deref().is_some_and(|cache| entry.path() == cache) {
+                return false;
+            }
+            let name = entry.file_name().to_string_lossy();
+            if name == ".DS_Store" || name.starts_with("._") {
+                return false;
+            }
+            if entry.depth() == 0 || !entry.file_type().is_some_and(|kind| kind.is_dir()) {
+                return true;
+            }
+            !matches!(
+                name.as_ref(),
+                ".git" | ".dl" | ".boop-worktrees" | ".worktrees" | "target"
+                    | "node_modules" | "dist" | "out" | "build"
+            ) && !entry.path().join(".git").exists()
+        })
+        .build();
+    let mut files = Vec::new();
+    for entry in walk {
+        let entry = entry.map_err(|error| format!("walk {}: {error}", root.display()))?;
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            continue;
+        }
+        let path = entry.path();
+        if path.extension().is_some_and(|ext| ext == "scip")
+            || path.to_string_lossy().ends_with(".scip.set.json")
+        {
+            continue;
+        }
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|error| format!("relative path {}: {error}", path.display()))?;
+        let bytes = std::fs::read(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+        files.push((relative.to_string_lossy().replace('\\', "/"), content_digest(&bytes)));
+    }
+    Ok(IndexSet::new(files))
 }
 
 fn hex_of(bytes: &[u8]) -> String {
@@ -345,36 +407,50 @@ pub fn ensure_index_picked(
     set: Option<&IndexSet>,
     pick: IndexerPick,
 ) -> EnsureReport {
-    ensure_index_picked_with_reuse(root, cache_dir, budget, set, pick, true)
+    ensure_index_picked_impl(root, cache_dir, budget, set, pick, false)
 }
 
-/// Re-run the selected indexer after a cached index failed its source check.
-/// The old index stays on disk until a new build succeeds, but callers must
-/// never use it as a fallback when the rebuild fails.
-pub fn rebuild_index_picked(
+/// Automatic family mode checks the root again after indexing, before the
+/// index and its source-set sidecar can become visible in the cache.
+pub(crate) fn ensure_index_picked_for_root(
+    root: &Path,
+    cache_dir: &Path,
+    budget: IndexBudget,
+    pick: IndexerPick,
+) -> EnsureReport {
+    let set = match source_set_for_root_excluding(root, Some(cache_dir)) {
+        Ok(set) => set,
+        Err(detail) => {
+            return EnsureReport {
+                index: None,
+                reused: false,
+                ran: Vec::new(),
+                skips: vec![IndexerSkip {
+                    lang: "scip",
+                    bin: "source-set",
+                    reason: SkipReason::Failed { detail },
+                }],
+            };
+        }
+    };
+    ensure_index_picked_impl(root, cache_dir, budget, Some(&set), pick, true)
+}
+
+fn ensure_index_picked_impl(
     root: &Path,
     cache_dir: &Path,
     budget: IndexBudget,
     set: Option<&IndexSet>,
     pick: IndexerPick,
+    recheck_root: bool,
 ) -> EnsureReport {
-    ensure_index_picked_with_reuse(root, cache_dir, budget, set, pick, false)
-}
-
-fn ensure_index_picked_with_reuse(
-    root: &Path,
-    cache_dir: &Path,
-    budget: IndexBudget,
-    set: Option<&IndexSet>,
-    pick: IndexerPick,
-    allow_reuse: bool,
-) -> EnsureReport {
+    let family_cache = cache_dir;
     let cache_dir = &pick_cache_dir(cache_dir, pick);
     let want = set.map(IndexSet::digest);
-    let reuse = allow_reuse.then(|| match pick {
+    let reuse = match pick {
         None => index_path_for_set(root, cache_dir, want),
         Some(_) => picked_index_path(cache_dir, want),
-    }).flatten();
+    };
     if let Some(path) = reuse {
         return EnsureReport {
             index: Some(path),
@@ -430,6 +506,27 @@ fn ensure_index_picked_with_reuse(
             ran,
             skips,
         };
+    }
+    if recheck_root {
+        match source_set_for_root_excluding(root, Some(family_cache)) {
+            Ok(after) if set.is_some_and(|before| before.digest() == after.digest()) => {}
+            Ok(_) => {
+                skips.push(IndexerSkip {
+                    lang: "scip",
+                    bin: "source-set",
+                    reason: SkipReason::SourcesChanged,
+                });
+                return EnsureReport { index: None, reused: false, ran, skips };
+            }
+            Err(detail) => {
+                skips.push(IndexerSkip {
+                    lang: "scip",
+                    bin: "source-set",
+                    reason: SkipReason::Failed { detail },
+                });
+                return EnsureReport { index: None, reused: false, ran, skips };
+            }
+        }
     }
     match place(&parts, cache_dir, set) {
         Ok(path) => EnsureReport {

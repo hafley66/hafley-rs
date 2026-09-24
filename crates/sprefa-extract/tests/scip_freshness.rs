@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use sprefa_extract::{
-    ensure_index_for_set, index_path, index_path_for_set, record_index_set, IndexBudget, IndexSet,
-    SkipReason,
+    ensure_index_for_set, index_path, index_path_for_set, record_index_set, source_set_for_root,
+    IndexBudget, IndexSet, SkipReason,
 };
 
 // PATH and SPREFA_SCIP_INDEX are process globals, so the tests that move them
@@ -94,6 +94,57 @@ fn set_digest_is_order_insensitive_and_content_sensitive() {
     let extra_file = set_of(&[("a.rs", "one"), ("b.rs", "two"), ("c.rs", "three")]);
     assert_ne!(one_order.digest(), extra_file.digest());
     assert_eq!(extra_file.len(), 3);
+}
+
+#[test]
+fn root_source_set_tracks_content_and_path_changes_without_mtime() {
+    let root = temp_root("root-source-set");
+    let source = root.join("a.ts");
+    std::fs::write(&source, "export const a = 1;\n").expect("source");
+    let first = source_set_for_root(&root).expect("first source set");
+    assert_eq!(first.len(), 1);
+
+    let original_mtime = std::fs::metadata(&source)
+        .expect("source metadata")
+        .modified()
+        .expect("source mtime");
+    std::fs::write(&source, "export const a = 2;\n").expect("edit source");
+    std::fs::File::open(&source)
+        .expect("open source")
+        .set_times(std::fs::FileTimes::new().set_modified(original_mtime))
+        .expect("restore source mtime");
+    let edited = source_set_for_root(&root).expect("edited source set");
+    assert_ne!(first.digest(), edited.digest());
+
+    std::fs::write(root.join("b.ts"), "export const b = 3;\n").expect("add source");
+    let added = source_set_for_root(&root).expect("added source set");
+    assert_eq!(added.len(), 2);
+    assert_ne!(edited.digest(), added.digest());
+
+    std::fs::remove_file(&source).expect("remove source");
+    let removed = source_set_for_root(&root).expect("removed source set");
+    assert_eq!(removed.len(), 1);
+    assert_ne!(added.digest(), removed.digest());
+
+    std::fs::create_dir_all(root.join("target")).expect("build directory");
+    std::fs::write(root.join("target/generated.ts"), "generated").expect("build output");
+    assert_eq!(removed.digest(), source_set_for_root(&root).unwrap().digest());
+}
+
+#[cfg(unix)]
+#[test]
+fn root_source_set_tracks_a_symlinked_source_outside_the_root() {
+    let root = temp_root("linked-source");
+    let external = temp_root("linked-source-target");
+    let target = external.join("shared.ts");
+    std::fs::write(&target, "export const a = 1;\n").expect("linked source");
+    std::os::unix::fs::symlink(&target, root.join("shared.ts")).expect("source symlink");
+
+    let before = source_set_for_root(&root).expect("linked source set");
+    assert_eq!(before.len(), 1);
+    std::fs::write(&target, "export const a = 2;\n").expect("edit linked source");
+    let after = source_set_for_root(&root).expect("edited linked source set");
+    assert_ne!(before.digest(), after.digest());
 }
 
 #[test]

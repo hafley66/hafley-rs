@@ -131,7 +131,6 @@ pub struct ResolveRequest<'a> {
 pub enum ProjectError {
     Read(PathBuf, std::io::Error),
     Scip(ScipError),
-    ScipIndexNotFresh { path: PathBuf, state: &'static str },
     /// A SCIP mode was requested without `project_root`.
     ScipNeedsRoot,
     /// `ScipMode::Build` over paths spanning more than one language, or a
@@ -153,11 +152,6 @@ impl std::fmt::Display for ProjectError {
         match self {
             Self::Read(path, err) => write!(f, "read {}: {err}", path.display()),
             Self::Scip(err) => write!(f, "scip: {err:?}"),
-            Self::ScipIndexNotFresh { path, state } => write!(
-                f,
-                "SCIP index {} is {state}; rebuild it before using its facts",
-                path.display()
-            ),
             Self::ScipNeedsRoot => {
                 write!(f, "a scip mode needs --project-root: scip document paths are project-relative and the resolve arms need a reader to join them to content")
             }
@@ -1151,11 +1145,10 @@ pub fn scip_family(request: &ScipFamilyRequest) -> Result<Vec<FlatFact>, Project
         Some(dir) => dir.to_path_buf(),
         None => crate::scip_ensure::default_cache_dir(request.root),
     };
-    let report = crate::scip_ensure::ensure_index_picked(
+    let report = crate::scip_ensure::ensure_index_picked_for_root(
         request.root,
         &cache,
         request.budget,
-        None,
         request.indexer,
     );
     let mut facts: Vec<FlatFact> = report
@@ -1171,39 +1164,7 @@ pub fn scip_family(request: &ScipFamilyRequest) -> Result<Vec<FlatFact>, Project
     let Some(index_path) = report.index.as_ref() else {
         return Ok(facts);
     };
-    match scip_family_from_path(request, index_path, report.reused, true) {
-        Ok(rows) => facts.extend(rows),
-        Err(ProjectError::ScipIndexNotFresh { .. }) if report.reused => {
-            let refreshed = crate::scip_ensure::rebuild_index_picked(
-                request.root,
-                &cache,
-                request.budget,
-                None,
-                request.indexer,
-            );
-            facts.extend(refreshed.skips.iter().map(|skip| FlatFact::ScipSkipRow {
-                lang: skip.lang.to_string(),
-                bin: skip.bin.to_string(),
-                reason: skip.reason.slug().to_string(),
-                detail: skip.reason.detail(),
-            }));
-            if let Some(path) = refreshed.index.as_ref() {
-                match scip_family_from_path(request, path, false, true) {
-                    Ok(rows) => facts.extend(rows),
-                    Err(ProjectError::ScipIndexNotFresh { .. }) => {
-                        facts.push(FlatFact::ScipSkipRow {
-                            lang: "scip".to_string(),
-                            bin: "index".to_string(),
-                            reason: "failed".to_string(),
-                            detail: format!("rebuilt index remains stale: {}", path.display()),
-                        });
-                    }
-                    Err(error) => return Err(error),
-                }
-            }
-        }
-        Err(error) => return Err(error),
-    }
+    facts.extend(scip_family_from_path(request, index_path, report.reused)?);
     Ok(facts)
 }
 
@@ -1215,14 +1176,13 @@ pub fn scip_family_from_index(
     request: &ScipFamilyRequest,
     index_path: &Path,
 ) -> Result<Vec<FlatFact>, ProjectError> {
-    scip_family_from_path(request, index_path, true, false)
+    scip_family_from_path(request, index_path, true)
 }
 
 fn scip_family_from_path(
     request: &ScipFamilyRequest,
     index_path: &Path,
     reused: bool,
-    auto_cache: bool,
 ) -> Result<Vec<FlatFact>, ProjectError> {
     // The decode is indexer-agnostic (one prost decode serves every indexer),
     // so any roster entry loads any index, including a merged multi-language one.
@@ -1238,12 +1198,6 @@ fn scip_family_from_path(
             .unwrap_or_default(),
     };
     let (index_mtime_unix_ms, staleness) = scip_index_staleness(index_path, request.root, &index);
-    if auto_cache && staleness == "stale" {
-        return Err(ProjectError::ScipIndexNotFresh {
-            path: index_path.to_path_buf(),
-            state: staleness,
-        });
-    }
     let mut facts = vec![FlatFact::ScipIndexRow {
         reused,
         tool_name: index.metadata.tool_name.clone(),
