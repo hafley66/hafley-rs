@@ -18,7 +18,7 @@ use crate::seams::DefIndex;
 use crate::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
 use super::rust::{build_line_starts, module_segments, module_target};
-use super::rust_receivers::{impl_facts, ImplEntry};
+use super::rust_receivers::ImplEntry;
 
 // ── module facts from phase-1 syntax rows ────────────────────────────────────
 
@@ -106,7 +106,14 @@ pub(crate) fn rust_module_facts_from_parsed(text: &str, parsed: &syn::File) -> R
         }).collect(),
         inline_mods: rows.inline_mods.into_iter().collect(),
         mod_decls: rows.mod_decls,
-        impls: impl_facts(parsed, &line_starts),
+        impls: rows.impls.into_iter().map(|row| ImplEntry {
+            self_type: row.self_type,
+            trait_name: row.trait_name,
+            methods: row.methods.into_iter().map(|(name, range)| (
+                name,
+                Span { start: range.start, len: range.end - range.start },
+            )).collect(),
+        }).collect(),
         enums: rows.enums.into_iter().map(|row| (
             row.name,
             row.variants.into_iter().map(|(name, range)| (

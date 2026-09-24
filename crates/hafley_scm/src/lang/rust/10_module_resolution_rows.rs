@@ -40,6 +40,13 @@ pub struct EnumVariantsRow {
     pub variants: Vec<(String, Range<u32>)>,
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ImplMethodsRow {
+    pub self_type: String,
+    pub trait_name: Option<String>,
+    pub methods: Vec<(String, Range<u32>)>,
+}
+
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct ModuleResolutionRows {
     pub uses: Vec<UseBindingRow>,
@@ -49,6 +56,7 @@ pub struct ModuleResolutionRows {
     pub enums: Vec<EnumVariantsRow>,
     pub traits: Vec<TraitMethodsRow>,
     pub aliases: Vec<Range<u32>>,
+    pub impls: Vec<ImplMethodsRow>,
 }
 
 pub fn module_resolution_rows(parsed: &syn::File, line_starts: &[u32]) -> ModuleResolutionRows {
@@ -92,8 +100,59 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
                 rows.enums.push(EnumVariantsRow { name: item.ident.to_string(), variants });
             }
             syn::Item::Type(item) => rows.aliases.push(span_range(line_starts, item.ident.span())),
+            syn::Item::Impl(item) => {
+                if let Some(self_type) = principal_ty(&item.self_ty) {
+                    let trait_name = item.trait_.as_ref().and_then(|(_, path, _)| {
+                        path.segments.last().map(|segment| segment.ident.to_string())
+                    });
+                    let methods = item.items.iter().filter_map(|child| {
+                        let syn::ImplItem::Fn(method) = child else { return None };
+                        let (start, end) = def_range(line_starts, method.sig.ident.span(), method.block.span());
+                        Some((method.sig.ident.to_string(), start..end))
+                    }).collect();
+                    rows.impls.push(ImplMethodsRow { self_type, trait_name, methods });
+                }
+            }
             _ => {}
         }
+    }
+}
+
+/// Principal receiver name, peeling pointer and reference wrappers and one
+/// `Result<T, _>` or `Option<T>` layer.
+pub fn principal_ty(ty: &syn::Type) -> Option<String> {
+    match ty {
+        syn::Type::Reference(r) => principal_ty(&r.elem),
+        syn::Type::Ptr(p) => principal_ty(&p.elem),
+        syn::Type::Paren(p) => principal_ty(&p.elem),
+        syn::Type::Group(g) => principal_ty(&g.elem),
+        syn::Type::Path(p) => {
+            let segment = p.path.segments.last()?;
+            let ident = segment.ident.to_string();
+            if matches!(ident.as_str(), "Result" | "Option") {
+                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
+                    if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
+                        return principal_ty(inner);
+                    }
+                }
+            }
+            Some(ident)
+        }
+        syn::Type::TraitObject(t) => single_bound_trait(&t.bounds),
+        syn::Type::ImplTrait(t) => single_bound_trait(&t.bounds),
+        _ => None,
+    }
+}
+
+fn single_bound_trait(
+    bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Plus>,
+) -> Option<String> {
+    if bounds.len() != 1 {
+        return None;
+    }
+    match bounds.first()? {
+        syn::TypeParamBound::Trait(tb) => Some(tb.path.segments.last()?.ident.to_string()),
+        _ => None,
     }
 }
 

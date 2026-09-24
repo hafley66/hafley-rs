@@ -1,8 +1,7 @@
 //! Receiver typing for the rust call arm, the go #554/#562 twin: a method
 //! site `x.m()` binds through `x`'s declared type T when an `impl` block in
 //! the corpus defines `m` for T. The corpus-wide (T, m) -> def table is
-//! built by the module plane's second parse (`rust_modules.rs`, which calls
-//! `impl_facts` below); the per-site receiver outcome is phase 1
+//! built from `hafley_scm` impl rows; the per-site receiver outcome is phase 1
 //! (`CallFAux.receivers`), one row per method-call site: `Named(T)` when the
 //! compiler could see the type in scope, `Inferred` when it could not.
 //!
@@ -15,13 +14,10 @@
 use crate::shape::{Span, Strings};
 use crate::types::{CallF, FamilyBundle, ReceiverBinding, ReceiverOutcome};
 
-use super::rust::{def_span, syn_span};
+use super::rust::syn_span;
+use hafley_scm::lang::rust::principal_ty;
 
 use syn::spanned::Spanned as _;
-
-fn spanned<T: syn::spanned::Spanned>(t: &T) -> &T {
-    t
-}
 
 /// One impl block's contribution to the corpus (T, m) table: the self type's
 /// name (generics stripped) and every fn inside it with its def span (the
@@ -34,97 +30,6 @@ pub(crate) struct ImplEntry {
     /// inherent-before-trait tiebreak reads.
     pub(crate) trait_name: Option<String>,
     pub(crate) methods: Vec<(String, Span)>,
-}
-
-/// Every impl block in a parsed file, inline `mod x { .. }` bodies included.
-pub(crate) fn impl_facts(parsed: &syn::File, line_starts: &[u32]) -> Vec<ImplEntry> {
-    let mut out = Vec::new();
-    impls_in_items(&parsed.items, line_starts, &mut out);
-    out
-}
-
-fn impls_in_items(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<ImplEntry>) {
-    for item in items {
-        match item {
-            syn::Item::Impl(imp) => {
-                if let Some(self_type) = principal_ty(&imp.self_ty) {
-                    let trait_name = imp.trait_.as_ref().and_then(|(_, path, _)| {
-                        path.segments
-                            .last()
-                            .map(|segment| segment.ident.to_string())
-                    });
-                    let methods = imp
-                        .items
-                        .iter()
-                        .filter_map(|item| match item {
-                            syn::ImplItem::Fn(f) => Some((
-                                f.sig.ident.to_string(),
-                                def_span(
-                                    line_starts,
-                                    spanned(&f.sig.ident).span(),
-                                    spanned(&f.block).span(),
-                                ),
-                            )),
-                            _ => None,
-                        })
-                        .collect();
-                    out.push(ImplEntry {
-                        self_type,
-                        trait_name,
-                        methods,
-                    });
-                }
-            }
-            syn::Item::Mod(m) => {
-                if let Some((_, inner)) = &m.content {
-                    impls_in_items(inner, line_starts, out);
-                }
-            }
-            _ => {}
-        }
-    }
-}
-
-/// A type's principal name: the last path segment, generics stripped,
-/// `&`/`*`/parens peeled. `Result`/`Option` unwrap one level to their first
-/// type argument (`-> Result<T, _>` takes T).
-fn principal_ty(ty: &syn::Type) -> Option<String> {
-    match ty {
-        syn::Type::Reference(r) => principal_ty(&r.elem),
-        syn::Type::Ptr(p) => principal_ty(&p.elem),
-        syn::Type::Paren(p) => principal_ty(&p.elem),
-        syn::Type::Group(g) => principal_ty(&g.elem),
-        syn::Type::Path(p) => {
-            let segment = p.path.segments.last()?;
-            let ident = segment.ident.to_string();
-            if matches!(ident.as_str(), "Result" | "Option") {
-                if let syn::PathArguments::AngleBracketed(args) = &segment.arguments {
-                    if let Some(syn::GenericArgument::Type(inner)) = args.args.first() {
-                        return principal_ty(inner);
-                    }
-                }
-            }
-            Some(ident)
-        }
-        // `dyn Trait` / `impl Trait`: the receiver's type IS the trait, the
-        // trait-dispatch leg's input.
-        syn::Type::TraitObject(t) => single_bound_trait(&t.bounds),
-        syn::Type::ImplTrait(t) => single_bound_trait(&t.bounds),
-        _ => None,
-    }
-}
-
-/// The one trait a `dyn`/`impl` bound names; `A + B` multi-bounds bind none.
-fn single_bound_trait(
-    bounds: &syn::punctuated::Punctuated<syn::TypeParamBound, syn::token::Plus>,
-) -> Option<String> {
-    if bounds.len() != 1 {
-        return None;
-    }
-    match bounds.first()? {
-        syn::TypeParamBound::Trait(tb) => Some(tb.path.segments.last()?.ident.to_string()),
-        _ => None,
-    }
 }
 
 /// A fn signature's declared output type, `principal_ty` applied.

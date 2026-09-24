@@ -12,6 +12,7 @@ mod inline { type Nested = u8; }
 enum Choice { A, B(u8) }
 trait Work { fn required(&self); fn defaulted(&self) {} }
 type Alias = Choice;
+impl Work for Choice { fn required(&self) {} }
 "#;
     let parsed = syn::parse_file(source).expect("Rust parses");
     let rows = module_resolution_rows(&parsed, &build_line_starts(source));
@@ -34,4 +35,9 @@ type Alias = Choice;
     assert_eq!(&source[rows.aliases[1].start as usize..rows.aliases[1].end as usize], "Alias");
     let required = &rows.traits[0].methods[0].range;
     assert_eq!(&source[required.start as usize..required.end as usize], "required(&self)");
+    assert_eq!(rows.impls[0].self_type, "Choice");
+    assert_eq!(rows.impls[0].trait_name.as_deref(), Some("Work"));
+    assert_eq!(rows.impls[0].methods[0].0, "required");
+    let range = &rows.impls[0].methods[0].1;
+    assert_eq!(&source[range.start as usize..range.end as usize], "required(&self) {}");
 }

@@ -46,7 +46,7 @@ pub use type_candidate_rows::{
     TypeCandidateRow,
 };
 pub use module_resolution_rows::{
-    module_resolution_rows, EnumVariantsRow, ModuleResolutionRows, StarImportRow, TraitMethodRow,
-    TraitMethodsRow, UseBindingRow,
+    module_resolution_rows, principal_ty, EnumVariantsRow, ImplMethodsRow, ModuleResolutionRows,
+    StarImportRow, TraitMethodRow, TraitMethodsRow, UseBindingRow,
 };
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
