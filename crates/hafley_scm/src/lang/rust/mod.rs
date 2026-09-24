@@ -30,6 +30,8 @@ mod tsi_syntax_rows;
 mod expanded_call_rows;
 #[path = "15_syntax.rs"]
 mod syntax;
+#[path = "16_macro_invocation_rows.rs"]
+mod macro_invocation_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -68,3 +70,4 @@ pub use receiver_rows::{receiver_rows, ReceiverOutcome as RustReceiverOutcome};
 pub use tsi_syntax_rows::{tsi_syntax_rows, Arg as TsiSyntaxArg, TsiSyntaxRows};
 pub use expanded_call_rows::{expanded_call_rows, ExpandedCallKind, ExpandedCallRows};
 pub use syntax::{parse_rust_syntax, RustSyntax};
+pub use macro_invocation_rows::{macro_invocation_rows, macro_invocation_rows_from_parsed, MacroInvocationRow};

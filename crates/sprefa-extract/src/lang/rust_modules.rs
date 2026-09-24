@@ -62,6 +62,7 @@ pub struct RustModuleFacts {
     /// Every `type X = ..` def span. An alias rides the shared `DefIndex` as a
     /// type entity and is never the item a `X(..)` call constructs.
     aliases: Vec<Span>,
+    pub(crate) macro_invocations: Vec<(Span, String)>,
 }
 
 /// One trait declaration's fn set.
@@ -132,6 +133,10 @@ pub(crate) fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u
             start: range.start,
             len: range.end - range.start,
         }).collect(),
+        macro_invocations: hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts)
+            .into_iter()
+            .map(|row| (Span { start: row.range.start, len: row.range.end - row.range.start }, row.name))
+            .collect(),
     }
 }
 

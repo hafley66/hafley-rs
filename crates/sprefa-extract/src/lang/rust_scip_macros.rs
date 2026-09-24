@@ -18,10 +18,6 @@
 
 use std::collections::HashMap;
 
-use syn::spanned::Spanned;
-use syn::visit::Visit;
-
-use crate::lang::rust::{build_line_starts, syn_span};
 use crate::scip::{byte_range_at, definition_of, LineTable};
 use crate::seams::ProjectCx;
 use crate::shape::{ContentId, Span};
@@ -59,69 +55,16 @@ struct InvocationSpan {
     macro_name: String,
 }
 
-struct InvocationCollector {
-    line_starts: Vec<u32>,
-    invocations: Vec<InvocationSpan>,
-}
-
-impl<'ast> Visit<'ast> for InvocationCollector {
-    fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        let span = syn_span(&self.line_starts, mac.span());
-        let name = macro_name(mac);
-        self.invocations.push(InvocationSpan {
-            span,
-            macro_name: name,
-        });
-        // The token trees stay opaque: descending would re-find the same
-        // invocation's delimiters and nothing else, and a parse walk over
-        // unexpanded tokens is exactly the gap this pass exists to close.
-        syn::visit::visit_macro(self, mac);
-    }
-}
-
-/// The macro's name as written. `macro_rules!` definitions parse with the
-/// path `macro_rules` and the defined name as the first token; every other
-/// invocation names itself in the path's trailing segment.
-fn macro_name(mac: &syn::Macro) -> String {
-    let trailing = mac
-        .path
-        .segments
-        .last()
-        .map(|segment| segment.ident.to_string())
-        .unwrap_or_default();
-    if trailing != "macro_rules" {
-        return trailing;
-    }
-    mac.tokens
-        .clone()
-        .into_iter()
-        .find_map(|token| match token {
-            proc_macro2::TokenTree::Ident(ident) => Some(ident.to_string()),
-            _ => None,
-        })
-        .unwrap_or(trailing)
-}
-
-/// Every macro invocation span in one file's bytes, smallest-last for the
-/// innermost-containment pick. A file syn cannot parse yields none: the pass
-/// mints nothing for it rather than guessing spans from text.
 fn invocation_spans(content: &[u8]) -> Vec<InvocationSpan> {
-    let Ok(text) = std::str::from_utf8(content) else {
-        return Vec::new();
-    };
-    let Ok(file) = syn::parse_file(text) else {
-        return Vec::new();
-    };
-    let mut collector = InvocationCollector {
-        line_starts: build_line_starts(text),
-        invocations: Vec::new(),
-    };
-    collector.visit_file(&file);
-    collector
-        .invocations
-        .sort_by_key(|invocation| invocation.span.end() - invocation.span.start);
-    collector.invocations
+    hafley_scm::lang::rust::macro_invocation_rows(content)
+        .into_iter()
+        .map(|row| InvocationSpan {
+            span: Span { start: row.range.start, len: row.range.end - row.range.start },
+            macro_name: row.name,
+        })
+        .collect()
 }
+
 
 /// The identifier-shaped text at `span`, else None. A reference occurrence on
 /// something that is not a plain identifier (a path qualifier, a string) is
@@ -197,7 +140,12 @@ pub(crate) fn mint_macro_edges(
         let Some((_, content)) = joined[doc_ix].as_ref() else {
             continue;
         };
-        let invocations = invocation_spans(content);
+        let invocations = file.output.rust_module.as_ref().map(|module| {
+            module.macro_invocations.iter().map(|(span, macro_name)| InvocationSpan {
+                span: *span,
+                macro_name: macro_name.clone(),
+            }).collect()
+        }).unwrap_or_else(|| invocation_spans(content));
         if invocations.is_empty() {
             continue;
         }
