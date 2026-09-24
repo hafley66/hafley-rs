@@ -2726,6 +2726,17 @@ impl BlobSource for FsBlobSource {
 mod tests {
     use super::*;
 
+    #[test]
+    fn rust_resolve_uses_the_extract_parse_module_facts() {
+        let source = "mod inner { pub fn run() {} }\nuse inner::run;\n";
+        let output = RustSource.extract("sample.rs", source.as_bytes(), FamilyMask::DEFAULT);
+        assert!(output.rust_module.is_some());
+        // The resolve handoff must not inspect or reparse the content when an
+        // extract output exists. Without the handoff this invalid source fails.
+        assert!(rust_module_facts_of("sample.rs", b"not valid", true, Some(&output)).is_some());
+        assert!(rust_module_facts_of("sample.rs", b"not valid", true, None).is_none());
+    }
+
     struct Fixture {
         root: PathBuf,
     }
