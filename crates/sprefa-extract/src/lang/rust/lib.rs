@@ -18,7 +18,8 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use hafley_scm::lang::rust::{
-    call_definition_rows, call_metadata_rows, call_site_rows, line_col_to_byte, parse_rust_syntax,
+    call_metadata_rows, call_site_rows, line_col_to_byte, parse_rust_syntax,
+    rust_combined_query,
     CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
 
@@ -96,10 +97,10 @@ fn rust_call_query() -> &'static hafley_scm::QueryExt {
     &QUERY
 }
 
-fn rust_fast_query() -> &'static hafley_scm::QueryExt {
+fn rust_combined_query_ext() -> &'static hafley_scm::QueryExt {
     static QUERY: LazyLock<hafley_scm::QueryExt> = LazyLock::new(|| {
         let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-        hafley_scm::build(&language, RUST_FAST_QUERY).expect("rust fast query builds")
+        hafley_scm::build(&language, &rust_combined_query()).expect("rust combined query builds")
     });
     &QUERY
 }
@@ -167,6 +168,13 @@ impl Source for RustSource {
         } else {
             None
         };
+        let scm_arena = tree.as_ref().map(|tree| {
+            let query = rust_combined_query_ext();
+            let mut arena = hafley_scm::MatchArena::default();
+            hafley_scm::run(query, path, content, tree, u32::MAX, &mut arena)
+                .expect("rust combined query stays within the engine match limit");
+            arena
+        });
 
         // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
         // A refused parse leaves cst None (no panic).
@@ -214,11 +222,11 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "call");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<CallF>::default();
-                        if let Some(tree) = tree.as_ref() {
+                        if let Some(arena) = scm_arena.as_ref() {
                             scm_call_defs(
-                                rust_call_query(),
+                                rust_combined_query_ext(),
                                 content,
-                                tree,
+                                arena,
                                 &mut strings,
                                 &mut bundle,
                             );
@@ -240,12 +248,8 @@ impl Source for RustSource {
             }
         }
 
-        let scm_captures = tree.as_ref().map(|tree| {
-            let query = rust_fast_query();
-            let mut arena = hafley_scm::MatchArena::default();
-            hafley_scm::run(query, path, content, tree, u32::MAX, &mut arena)
-                .expect("rust fast query stays within the engine match limit");
-            super::scm_rows::ScmCaptures::from_arena(query, &arena, content)
+        let scm_captures = scm_arena.as_ref().map(|arena| {
+            super::scm_rows::ScmCaptures::from_arena(rust_combined_query_ext(), arena, content)
         });
 
         RyiOutput {

@@ -41,6 +41,9 @@ pub use call_metadata_rows::{
 };
 pub use call_query::RUST_CALL_QUERY;
 pub const RUST_FAST_QUERY: &str = include_str!("4_fast_query.scm");
+pub fn rust_combined_query() -> String {
+    format!("{RUST_CALL_QUERY}\n{RUST_FAST_QUERY}")
+}
 pub use module_specifier_rows::{
     mod_path_attr, module_specifier_rows, ModuleSpecifierKind, ModuleSpecifierRow,
 };

@@ -875,11 +875,11 @@ pub(crate) fn def_span(
 pub(super) fn scm_call_defs(
     query: &hafley_scm::QueryExt,
     src: &[u8],
-    tree: &tree_sitter::Tree,
+    arena: &hafley_scm::MatchArena,
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    for row in call_definition_rows(query, "rust-call", src, tree) {
+    for row in hafley_scm::lang::rust::call_definition_rows_from_arena(query, arena, src) {
         let mut node = Node::new(
             Span {
                 start: row.range.start,
