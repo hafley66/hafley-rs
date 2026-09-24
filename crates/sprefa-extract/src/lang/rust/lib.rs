@@ -78,8 +78,9 @@ use type_facts::{import_bound_target, project_types};
 #[path = "2_call.rs"]
 mod call_facts;
 pub(crate) use call_facts::{
-    crate_root_of, def_span, mod_path_attr, module_segments, module_target, ModuleTarget,
+    crate_root_of, def_span, module_segments, module_target, ModuleTarget,
 };
+pub(crate) use hafley_scm::lang::rust::mod_path_attr;
 pub use call_facts::{call_drops, own_blob_probes};
 use call_facts::{project_call, scm_call_defs, splice_macro_expansions};
 
