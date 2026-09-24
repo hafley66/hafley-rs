@@ -19,6 +19,18 @@ use crate::cli::{append_message, mail_dir};
 pub(crate) const SHOUT_BODY: &str = "stahp what ur doing please";
 /// The body a bare `scream` sends.
 pub(crate) const SCREAM_BODY: &str = "stop what ur doing check ps";
+/// A broadcast whose sender resolves to no route and carries no `--as` came
+/// from a laneless shell: the owner typing, never an agent.
+pub(crate) const HUMAN_MARK: &str =
+    "[HUMAN MESSAGE: typed by the owner from a laneless shell, not by an agent]";
+
+/// The body one broadcast row carries: a laneless sender is marked human.
+fn broadcast_body(caller: Option<&str>, body: &str) -> String {
+    match caller {
+        Some(_) => body.to_owned(),
+        None => format!("{HUMAN_MARK} {body}"),
+    }
+}
 
 /// How one route stands, measured before any row is written.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -213,7 +225,7 @@ pub(crate) fn run_broadcast(
             to_timestamp: None,
             kind: kind.into(),
             reply_to: None,
-            body: broadcast.body.to_owned(),
+            body: broadcast_body(caller.as_deref(), broadcast.body),
             r#ref: None,
             rc: None,
             detail: None,
@@ -379,6 +391,22 @@ mod tests {
     fn default_bodies_are_the_stop_gap_phrases() {
         assert_eq!(SHOUT_BODY, "stahp what ur doing please");
         assert_eq!(SCREAM_BODY, "stop what ur doing check ps");
+    }
+
+    /// RECEIPT. Only a laneless sender is marked human; sabotage: marking every
+    /// body lets an agent's broadcast read as the owner's.
+    #[test]
+    fn laneless_broadcasts_are_marked_human() {
+        assert_eq!(
+            [
+                broadcast_body(None, SCREAM_BODY),
+                broadcast_body(Some("root"), SCREAM_BODY),
+            ],
+            [
+                "[HUMAN MESSAGE: typed by the owner from a laneless shell, not by an agent] stop what ur doing check ps".to_owned(),
+                "stop what ur doing check ps".to_owned(),
+            ]
+        );
     }
 
     /// The tmux seam stays a closure, so selection needs no server.
