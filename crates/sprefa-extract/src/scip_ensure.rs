@@ -963,12 +963,12 @@ pub fn fresh_index_for_set(root: &Path, set_digest: &str) -> Option<PathBuf> {
 /// `index_path` with the freshness ask. `Some(digest)` keeps only candidates
 /// whose recorded set digest equals it; mtime then breaks the remaining tie.
 pub fn index_path_for_set(root: &Path, cache_dir: &Path, want: Option<&str>) -> Option<PathBuf> {
-    if let Some(explicit) = std::env::var_os("SPREFA_SCIP_INDEX") {
-        let explicit = PathBuf::from(explicit);
-        if explicit.is_file()
-            && want.is_none_or(|digest| recorded_digest(&explicit).as_deref() == Some(digest))
-        {
-            return Some(explicit);
+    let explicit = std::env::var_os("SPREFA_SCIP_INDEX")
+        .map(PathBuf::from)
+        .filter(|path| path.is_file());
+    if let (Some(explicit), Some(digest)) = (explicit.as_ref(), want) {
+        if recorded_digest(explicit).as_deref() == Some(digest) {
+            return Some(explicit.clone());
         }
     }
     [
@@ -977,6 +977,7 @@ pub fn index_path_for_set(root: &Path, cache_dir: &Path, want: Option<&str>) -> 
         root.join(".dl").join("index.scip"),
     ]
     .into_iter()
+    .chain(explicit.filter(|_| want.is_none()))
     .filter(|candidate| candidate.is_file())
     .filter(|candidate| match want {
         None => true,

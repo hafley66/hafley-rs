@@ -155,6 +155,35 @@ fn explicit_index_override_obeys_the_set() {
 }
 
 #[test]
+fn newer_cache_supersedes_an_older_environment_index_without_a_set() {
+    let _held = ENVIRONMENT.lock().expect("environment lock");
+    let root = temp_root("env-cache-order");
+    let cache = root.join(".dl").join(".state");
+    let explicit = root.join("elsewhere.scip");
+    std::fs::write(&explicit, b"old index").expect("environment index");
+    let cached = place_fake_index(&cache);
+    let old = std::time::UNIX_EPOCH + std::time::Duration::from_secs(1_700_000_000);
+    let newer = old + std::time::Duration::from_secs(10);
+    std::fs::File::open(&explicit)
+        .expect("open environment index")
+        .set_times(std::fs::FileTimes::new().set_modified(old))
+        .expect("set environment mtime");
+    std::fs::File::open(&cached)
+        .expect("open cached index")
+        .set_times(std::fs::FileTimes::new().set_modified(newer))
+        .expect("set cache mtime");
+
+    let previous = std::env::var_os("SPREFA_SCIP_INDEX");
+    std::env::set_var("SPREFA_SCIP_INDEX", &explicit);
+    let found = index_path_for_set(&root, &cache, None);
+    match previous {
+        Some(value) => std::env::set_var("SPREFA_SCIP_INDEX", value),
+        None => std::env::remove_var("SPREFA_SCIP_INDEX"),
+    }
+    assert_eq!(found, Some(cached));
+}
+
+#[test]
 fn slow_indexer_is_a_named_skip_not_a_wait() {
     let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = temp_root("budget");

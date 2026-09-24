@@ -1188,7 +1188,18 @@ pub fn scip_family(request: &ScipFamilyRequest) -> Result<Vec<FlatFact>, Project
                 detail: skip.reason.detail(),
             }));
             if let Some(path) = refreshed.index.as_ref() {
-                facts.extend(scip_family_from_path(request, path, false, true)?);
+                match scip_family_from_path(request, path, false, true) {
+                    Ok(rows) => facts.extend(rows),
+                    Err(ProjectError::ScipIndexNotFresh { .. }) => {
+                        facts.push(FlatFact::ScipSkipRow {
+                            lang: "scip".to_string(),
+                            bin: "index".to_string(),
+                            reason: "failed".to_string(),
+                            detail: format!("rebuilt index remains stale: {}", path.display()),
+                        });
+                    }
+                    Err(error) => return Err(error),
+                }
             }
         }
         Err(error) => return Err(error),
@@ -1650,7 +1661,7 @@ fn load_scip(
     request: &ResolveRequest,
     inputs: &[ProjectInput],
 ) -> Result<Option<ScipIndex>, ProjectError> {
-    match request.scip {
+    let source = match request.scip {
         ScipMode::Off => {
             // Informed-by-default: a resolve with no explicit SCIP flags still
             // adopts a FRESH index (one whose recorded set matches this file
@@ -1659,22 +1670,13 @@ fn load_scip(
                 if let Some(path) =
                     crate::scip_ensure::fresh_index_for_set(root, &index_set_of(inputs).digest())
                 {
-                    match load_current_scip(&path, root, true) {
-                        Ok(index) => {
-                            tracing::info!(
-                                "scip-informed resolve: fresh index {} (plain flags, adopted by freshness)",
-                                path.display()
-                            );
-                            return Ok(Some(index));
-                        }
-                        Err(ProjectError::ScipIndexNotFresh { state, .. }) => {
-                            tracing::warn!(
-                                "scip-informed resolve: index {} is {state}; plain name-match leg",
-                                path.display()
-                            );
-                        }
-                        Err(error) => return Err(error),
-                    }
+                    tracing::info!(
+                        "scip-informed resolve: fresh index {} (plain flags, adopted by freshness)",
+                        path.display()
+                    );
+                    return crate::scip_decode::load_index(&path)
+                        .map(Some)
+                        .map_err(ProjectError::Scip);
                 }
                 tracing::info!(
                     "scip-informed resolve: no fresh index under {}, plain name-match leg",
@@ -1689,12 +1691,13 @@ fn load_scip(
             };
             // `load` is indexer-agnostic (one prost decode serves every
             // indexer), so any roster entry decodes any index.
-            return load_current_scip(path, request.project_root.unwrap(), false).map(Some);
+            return ScipTypescript
+                .load(path)
+                .map(Some)
+                .map_err(ProjectError::Scip);
         }
-        ScipMode::Build => {
-            scip_source_for(inputs)?;
-        }
-    }
+        ScipMode::Build => scip_source_for(inputs)?,
+    };
     let Some(root) = request.project_root else {
         return Err(ProjectError::ScipNeedsRoot);
     };
@@ -1720,45 +1723,10 @@ fn load_scip(
                 .join("; "),
         )
     })?;
-    match load_current_scip(&index_path, root, true) {
-        Ok(index) => Ok(Some(index)),
-        Err(ProjectError::ScipIndexNotFresh { .. }) if report.reused => {
-            let refreshed = crate::scip_ensure::rebuild_index_picked(
-                root,
-                &cache,
-                IndexBudget::from_env(),
-                Some(&set),
-                None,
-            );
-            let path = refreshed.index.ok_or_else(|| {
-                ProjectError::ScipIndexerUnavailable(
-                    refreshed
-                        .skips
-                        .iter()
-                        .map(|skip| format!("{}: {}", skip.lang, skip.reason.detail()))
-                        .collect::<Vec<_>>()
-                        .join("; "),
-                )
-            })?;
-            load_current_scip(&path, root, true).map(Some)
-        }
-        Err(error) => Err(error),
-    }
-}
-
-fn load_current_scip(path: &Path, root: &Path, auto_cache: bool) -> Result<ScipIndex, ProjectError> {
-    let index = ScipTypescript.load(path).map_err(ProjectError::Scip)?;
-    if !auto_cache {
-        return Ok(index);
-    }
-    let (_, state) = scip_index_staleness(path, root, &index);
-    if state == "stale" {
-        return Err(ProjectError::ScipIndexNotFresh {
-            path: path.to_path_buf(),
-            state,
-        });
-    }
-    Ok(index)
+    source
+        .load(&index_path)
+        .map(Some)
+        .map_err(ProjectError::Scip)
 }
 
 /// The freshness set for one resolve: the supplied paths and their content ids.
