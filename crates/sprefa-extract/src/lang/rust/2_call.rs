@@ -999,68 +999,34 @@ fn module_specifiers(
 }
 
 pub(super) fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut FamilyBundle<CallF>) {
-    let Some(expanded) = hafley_scm::lang::rust::expand_file(src) else {
-        return;
-    };
-    let Ok(expanded_parsed) = syn::parse_file(&expanded.text) else {
-        return;
-    };
-    let expanded_line_starts = build_line_starts(&expanded.text);
-    let mut expanded_bundle = FamilyBundle::<CallF>::default();
-    let mut parser = tree_sitter::Parser::new();
-    parser
-        .set_language(&tree_sitter::Language::new(tree_sitter_rust::LANGUAGE))
-        .expect("rust grammar");
-    let Some(tree) = parser.parse(expanded.text.as_bytes(), None) else {
-        return;
-    };
-    scm_call_defs(
-        rust_call_query(),
-        expanded.text.as_bytes(),
-        &tree,
-        strings,
-        &mut expanded_bundle,
-    );
-    project_call(
-        &expanded_parsed,
-        &expanded_line_starts,
-        strings,
-        &mut expanded_bundle,
-    );
+    use hafley_scm::lang::rust::ExpandedCallKind;
 
-    for mut node in expanded_bundle.nodes {
-        let range = node.span.start..node.span.start + node.span.len;
-        if !expanded.is_macro_span(range.clone()) {
-            continue;
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    let rows = hafley_scm::lang::rust::expanded_call_rows(src, rust_call_query(), &language);
+    for row in rows.defs {
+        let kind = match row.kind {
+            ExpandedCallKind::Free => CallKind::Free,
+            ExpandedCallKind::Method => CallKind::Method,
+            ExpandedCallKind::Lambda => CallKind::Lambda,
+            ExpandedCallKind::ConstInit => CONST_INIT,
+        };
+        let mut node = Node::new(Span { start: row.range.start, len: row.range.end - row.range.start }, kind);
+        if let Some(name) = row.name {
+            node = node.with_name(strings.intern(&name));
         }
-        if let Some(mapped) = expanded.map_span(range) {
-            node.span = Span {
-                start: mapped.start,
-                len: mapped.end - mapped.start,
-            };
-            bundle.nodes.push(node);
-        }
+        bundle.nodes.push(node);
     }
-    for mut site in expanded_bundle.aux.sites {
-        let range = site.span.start..site.span.start + site.span.len;
-        if !expanded.is_macro_span(range.clone()) {
-            continue;
-        }
-        if let Some(mapped) = expanded.map_span(range) {
-            site.span = Span {
-                start: mapped.start,
-                len: mapped.end - mapped.start,
-            };
-            bundle.aux.sites.push(site);
-        }
+    for row in rows.sites {
+        bundle.aux.sites.push(CallSite {
+            span: Span { start: row.range.start, len: row.range.end - row.range.start },
+            callee: strings.intern(&row.callee),
+            callee_path: row.callee_path.map(|path| strings.intern(&path)),
+        });
     }
-    for (span, name) in expanded.macro_sites() {
+    for (range, name) in rows.macros {
         bundle.aux.macro_sites.push(MacroSite {
-            span: Span {
-                start: span.start,
-                len: span.end - span.start,
-            },
-            macro_name: strings.intern(name),
+            span: Span { start: range.start, len: range.end - range.start },
+            macro_name: strings.intern(&name),
             source: MacroSiteSource::Mbe,
         });
     }
