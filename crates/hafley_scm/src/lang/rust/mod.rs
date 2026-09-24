@@ -22,6 +22,8 @@ mod type_candidate_rows;
 mod module_resolution_rows;
 #[path = "11_df_syntax_rows.rs"]
 mod df_syntax_rows;
+#[path = "12_receiver_rows.rs"]
+mod receiver_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -53,3 +55,4 @@ pub use module_resolution_rows::{
 };
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
 pub use df_syntax_rows::{df_syntax_rows, DfNodeKind as DfSyntaxKind, DfSyntaxRows};
+pub use receiver_rows::{receiver_rows, ReceiverOutcome as RustReceiverOutcome};
