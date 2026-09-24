@@ -27,10 +27,13 @@ pub fn init_with_sinks(
     sinks: Vec<Arc<dyn Sink>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let flush = config.flush();
-    let host_sinks: Vec<SinkLayer> = sinks
-        .into_iter()
-        .map(|sink| SinkLayer::new(Arc::new(Writer::new(sink, flush))))
-        .collect();
+    // An empty `Vec` layer answers `Interest::never` and silences every event.
+    let host_sinks: Option<Vec<SinkLayer>> = (!sinks.is_empty()).then(|| {
+        sinks
+            .into_iter()
+            .map(|sink| SinkLayer::new(Arc::new(Writer::new(sink, flush))))
+            .collect()
+    });
     let filter = env_filter(config.default_filter);
     let format = format_layer(FormatConfig::standard(config.format, config.ansi), writer);
     crate::instruments::install(&config);
