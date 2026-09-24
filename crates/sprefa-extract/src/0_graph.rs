@@ -3,12 +3,14 @@
 //! @comment-ok: module header, the seam list every bin arm opens with
 
 use std::fs;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use clap::{ArgGroup, Parser};
 use rusqlite::Connection;
 use sprefa_extract::lang::source_for;
-use sprefa_extract::{resolve_project, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords};
+use sprefa_extract::{
+    resolve_project_with_tsi_tiers, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords,
+};
 
 use crate::sqlite::{reach_walk_sql, Database};
 
@@ -27,22 +29,22 @@ const USES_SQL: &str = "SELECT \"type_path\", \"type_name\", \"user_path\", \"us
 fn load_store(
     paths: &[PathBuf],
     arms: ResolveArms,
-    state: Option<&Path>,
+    cli: &GraphCli,
 ) -> Result<Database, Box<dyn std::error::Error>> {
     let request = ResolveRequest {
         paths,
         arms,
-        scip: ScipMode::Off,
-        project_root: None,
+        scip: ScipMode::from_flags(cli.scip_index.as_deref(), false),
+        project_root: cli.project_root.as_deref(),
         scip_records: ScipRecords::default(),
         occurrence_text: false,
-        rust_checker: None,
-        ts_checker: None,
-        go_checker: None,
-        witness: false,
+        rust_checker: cli.rust_checker.then_some(cli.project_root.as_deref()).flatten(),
+        ts_checker: cli.ts_checker.then_some(cli.project_root.as_deref()).flatten(),
+        go_checker: cli.go_checker.then_some(cli.project_root.as_deref()).flatten(),
+        witness: true,
     };
-    let facts = resolve_project(&request)?;
-    let mut database = match state {
+    let facts = resolve_project_with_tsi_tiers(&request)?;
+    let mut database = match cli.state.as_deref() {
         Some(directory) => {
             fs::create_dir_all(directory)?;
             Database::create(&directory.join(STATE_DB))?
@@ -50,11 +52,21 @@ fn load_store(
         None => Database::memory()?,
     };
     for fact in &facts {
-        // Only the two tables the views read: a record the schema has no table
-        // for would refuse the insert, and none of them answer these questions.
+        // The graph views read the resolved edges. The TSI envelope makes the
+        // syntax and checker type evidence queryable from the same store.
         if !matches!(
             fact,
-            FlatFact::ResolvedEdge { .. } | FlatFact::ResolvedTypeEdge { .. }
+            FlatFact::ResolvedEdge { .. }
+                | FlatFact::ResolvedTypeEdge { .. }
+                | FlatFact::Protocol { .. }
+                | FlatFact::Run(_)
+                | FlatFact::Fact(_)
+                | FlatFact::Witness(_)
+                | FlatFact::Coverage(_)
+                | FlatFact::Diagnostic(_)
+                | FlatFact::ResolvedImportRow { .. }
+                | FlatFact::FileUnresolvedRow { .. }
+                | FlatFact::Unresolved { .. }
         ) {
             continue;
         }
@@ -180,8 +192,9 @@ fn expand_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Box<dyn std::error::E
 const SCOPE: &str = "Every arm is a SQL view over the fact store, not a traversal in Rust. With \
                      --state DIR the store is published as DIR/graph.db (a new path each run; an \
                      existing one is refused), so the same question re-asks by hand: sqlite3 \
-                     DIR/graph.db 'SELECT * FROM callers WHERE callee_name = ''deep'''. The three \
-                     views are callers(callee_path, callee_name, caller_path, caller_name, grade, \
+                     DIR/graph.db 'SELECT * FROM callers WHERE callee_name = ''deep'''. The views \
+                     include type_evidence(type_id, name, fact, run, mode, tool, method, coverage) \
+                     over the witnessed TSI rows; callers(callee_path, callee_name, caller_path, caller_name, grade, \
                      kind) over resolved_edge, uses(type_path, type_name, user_path, user_name, \
                      grade, kind) over resolved_type_edge, and reach(src_path, src_name, \
                      dst_path, dst_name, depth), the recursive closure of resolved_edge capped at \
@@ -214,6 +227,21 @@ pub struct GraphCli {
     /// Publish the fact store as DIR/graph.db instead of keeping it in memory.
     #[arg(long, value_name = "DIR")]
     state: Option<PathBuf>,
+    /// Project root for module resolution and optional checker tiers.
+    #[arg(long, value_name = "DIR")]
+    project_root: Option<PathBuf>,
+    /// Load a SCIP index for symbol resolution over the supplied project.
+    #[arg(long, value_name = "FILE", requires = "project_root")]
+    scip_index: Option<PathBuf>,
+    /// Include rust-analyzer type evidence in the state store.
+    #[arg(long, requires = "project_root")]
+    rust_checker: bool,
+    /// Include TypeScript checker type evidence in the state store.
+    #[arg(long, requires = "project_root")]
+    ts_checker: bool,
+    /// Include go/types evidence in the state store.
+    #[arg(long, requires = "project_root")]
+    go_checker: bool,
     /// Drop the stderr summary line; stdout is JSONL either way.
     #[arg(long)]
     json: bool,
@@ -267,7 +295,7 @@ where
         _ => unreachable!("the clap ArgGroup requires one of the three"),
     };
     let paths = expand_paths(&cli.paths)?;
-    let database = load_store(&paths, arm.arms(), cli.state.as_deref())?;
+    let database = load_store(&paths, arm.arms(), &cli)?;
     let rows = arm.ask(database.connection())?;
     database.close()?;
     emit_rows(&rows)?;

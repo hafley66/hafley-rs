@@ -238,7 +238,16 @@ pub(crate) struct ProjectInput {
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths)?;
-    resolve_project_inputs(request, inputs)
+    resolve_project_inputs(request, inputs, false)
+}
+
+/// Keep syntax type rows alongside checker rows in one witnessed project run.
+/// Both tiers use disjoint ids and retain their own witnesses and coverage.
+pub fn resolve_project_with_tsi_tiers(
+    request: &ResolveRequest,
+) -> Result<Vec<FlatFact>, ProjectError> {
+    let inputs = read_inputs_with_modules(request.paths)?;
+    resolve_project_inputs(request, inputs, true)
 }
 
 /// One phase-1 fact retained beside a project resolve, with the source
@@ -314,7 +323,7 @@ fn resolve_project_with_raw_inputs<E>(
         .map_err(ResolveWithRawError::RawSink)?;
     }
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
-    let mut facts = resolve_project_inputs(request, inputs).map_err(ResolveWithRawError::Project)?;
+    let mut facts = resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
         facts.extend(scm.map_err(ResolveWithRawError::Project)?);
     }
@@ -324,6 +333,7 @@ fn resolve_project_with_raw_inputs<E>(
 fn resolve_project_inputs(
     request: &ResolveRequest,
     inputs: Vec<ProjectInput>,
+    preserve_syntax_tsi: bool,
 ) -> Result<Vec<FlatFact>, ProjectError> {
     let scip_index = load_scip(request, &inputs)?;
 
@@ -605,7 +615,7 @@ fn resolve_project_inputs(
         facts.extend(flatten_flow(&flow_edges(&pairs, &resolved_calls)));
     }
     if request.witness {
-        let mut syntax_tsi = syntax_tsi_rows(request, &inputs, &cx);
+        let mut syntax_tsi = syntax_tsi_rows(request, &inputs, &cx, preserve_syntax_tsi);
         let (conforms, next_id) = conformance_tsi_rows(&inputs, &conformances, syntax_tsi.next_id);
         syntax_tsi.rows.extend(conforms);
         syntax_tsi.next_id = next_id;
@@ -630,9 +640,14 @@ struct SyntaxTsi {
     next_id: u32,
 }
 
-/// Rides the stream for every language whose checker tier did not answer:
-/// beside a loaded tier the two id spaces name two types with one number.
-fn syntax_tsi_rows(request: &ResolveRequest, inputs: &[ProjectInput], cx: &ProjectCx) -> SyntaxTsi {
+/// The standard stream omits syntax rows for checker-answered files. The
+/// project graph keeps both tiers and rebases checker ids after syntax ids.
+fn syntax_tsi_rows(
+    request: &ResolveRequest,
+    inputs: &[ProjectInput],
+    cx: &ProjectCx,
+    preserve_syntax_tsi: bool,
+) -> SyntaxTsi {
     let mut out = SyntaxTsi {
         rows: Vec::new(),
         next_id: 0,
@@ -647,7 +662,7 @@ fn syntax_tsi_rows(request: &ResolveRequest, inputs: &[ProjectInput], cx: &Proje
             "go" => cx.indexes.go_checker.get().is_some(),
             _ => false,
         };
-        if answered {
+        if answered && !preserve_syntax_tsi {
             continue;
         }
         let Some(bundle) = input.output.types.as_ref() else {
@@ -1291,7 +1306,7 @@ pub fn scip_family_from_index_jsonl(
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(paths)?;
     let scm = scm_rows(paths, &inputs);
-    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs)?;
+    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
     facts.extend(scm?);
     Ok(facts)
 }

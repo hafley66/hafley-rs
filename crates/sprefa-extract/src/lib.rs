@@ -94,7 +94,8 @@ pub use move_scip::{
 };
 pub use project::{
     diet_scip, diet_scip_jsonl, diet_scip_with_raw, extract_pool, resolve_project,
-    resolve_project_jsonl, resolve_project_with_raw, scip_facts, scip_facts_jsonl, scip_family,
+    resolve_project_jsonl, resolve_project_with_raw, resolve_project_with_tsi_tiers, scip_facts,
+    scip_facts_jsonl, scip_family,
     scip_family_from_index, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
     scip_index_location, FsBlobSource, ProjectError, RawProjectFact, ResolveArm, ResolveArms,
     ResolveRequest, ResolveWithRawError, ScipFamilyRequest, ScipMode, SourceTreeBlobSource,

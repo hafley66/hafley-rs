@@ -120,8 +120,7 @@ pub fn reach_walk_sql(seed: &str) -> String {
 /// non-terminating closure, and 32 is past any real call depth.
 pub const REACH_DEPTH_CAP: u32 = 32;
 
-/// The three graph views, created by name so `sqlite3 <db> 'SELECT * FROM
-/// callers'` answers the same question `ryi graph --callers` does.
+/// Graph views over resolved edges and witnessed TSI type rows.
 fn graph_views_sql() -> String {
     format!(
         "CREATE VIEW \"callers\" AS SELECT \"callee_path\", \"callee_name\", \"caller_path\", \
@@ -130,7 +129,18 @@ fn graph_views_sql() -> String {
          \"target_name\" AS \"type_name\", \"owner_path\" AS \"user_path\", \
          \"owner_name\" AS \"user_name\", {uses_grade}, \"kind\" FROM \"resolved_type_edge\"; \
          CREATE VIEW \"reach\" AS {walk} SELECT \"src_path\", \"src_name\", \"dst_path\", \
-         \"dst_name\", \"depth\" FROM \"walk\";",
+         \"dst_name\", \"depth\" FROM \"walk\"; \
+         CREATE VIEW \"type_evidence\" AS SELECT \
+         json_extract(t.\"args\", '$[0].id') AS \"type_id\", \
+         json_extract(n.\"args\", '$[1].text') AS \"name\", \
+         t.\"fact\", w.\"run\", r.\"mode\", r.\"tool\", w.\"method\", c.\"coverage\" \
+         FROM \"fact\" AS t \
+         JOIN \"witness\" AS w ON w.\"fact\" = t.\"fact\" \
+         JOIN \"run\" AS r ON r.\"run\" = w.\"run\" \
+         LEFT JOIN \"fact\" AS n ON n.\"relation\" = 'tsi.name' \
+           AND json_extract(n.\"args\", '$[0].id') = json_extract(t.\"args\", '$[0].id') \
+         LEFT JOIN \"coverage\" AS c ON c.\"run\" = w.\"run\" AND c.\"relation\" = 'tsi.type' \
+         WHERE t.\"relation\" = 'tsi.type';",
         callers_grade = grade_sql("\"resolution_origin\""),
         uses_grade = grade_sql("\"resolution_origin\""),
         walk = reach_walk_sql("1")
