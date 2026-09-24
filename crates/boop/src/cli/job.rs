@@ -213,6 +213,21 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         }
     );
     std::thread::sleep(std::time::Duration::from_secs(args.resolve_wait));
+    if let Some(target) = session.tmux.as_deref() {
+        if matches!(
+            tmux::mux().has_session(session.tmux_socket.as_deref(), target),
+            Ok(false)
+        ) && bus::read_routes(&dir)?
+            .get(&args.to)
+            .is_some_and(|route| route.session_id.as_deref() == Some(&session.session_id))
+        {
+            // A dead-on-arrival pane can run its route-only epilogue before
+            // registration. Drop only the route this dispatch registered.
+            if let Err(error) = run_lane_delete(Some(&dir), &args.to, true, None) {
+                warn!(lane = args.to, %error, "dead lane route cleanup failed");
+            }
+        }
+    }
     Ok(())
 }
 
