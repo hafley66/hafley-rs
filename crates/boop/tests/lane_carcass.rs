@@ -159,9 +159,18 @@ impl Doa {
             .args(["-L", &self.socket, "capture-pane", "-p", "-t", lane])
             .output()
             .unwrap();
+        let routed = boop::bus::read_routes(&self.mail)
+            .unwrap_or_default()
+            .contains_key(lane);
+        let alive = self.session_alive(lane);
         panic!(
-            "lane {lane} never died; supervise log: {log}; pane: {}",
-            String::from_utf8_lossy(&pane.stdout)
+            "lane {lane} never died; routed={routed} session_alive={alive}; \
+             create stdout: {}; create stderr: {}; supervise log: {log}; \
+             pane stdout: {}; pane stderr: {}",
+            String::from_utf8_lossy(&created.stdout),
+            String::from_utf8_lossy(&created.stderr),
+            String::from_utf8_lossy(&pane.stdout),
+            String::from_utf8_lossy(&pane.stderr),
         );
     }
 
