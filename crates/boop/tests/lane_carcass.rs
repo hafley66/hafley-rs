@@ -13,8 +13,8 @@ use std::time::{Duration, Instant};
 /// intermittent on a loaded machine, on unmodified main as well.
 const CARCASS_DEADLINE_SECS: u64 = 20;
 
-/// A throwaway repo, mailbox, PATH and tmux socket. The harness the spawn
-/// names is absent from that PATH, which is what makes every spawn DOA.
+/// A throwaway repo, mailbox, PATH and tmux socket. The explicit harness
+/// executable exits immediately, making every spawn DOA.
 struct Doa {
     root: PathBuf,
     repo: PathBuf,
@@ -102,6 +102,7 @@ impl Doa {
             .arg("--brief")
             .arg(&self.brief)
             .args(["--harness", "codex", "--model", "gpt-test"])
+            .args(["--bin", "/bin/false"])
             .arg("--socket")
             .arg(&self.socket)
             .args(["--parent", "sprefa-coordinator"])
