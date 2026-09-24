@@ -310,21 +310,32 @@ fn bench_reports_through_the_summary_table() {
 }
 
 #[test]
-fn the_default_run_creates_no_file_under_home() {
-    let home = std::env::temp_dir().join("sprefa-extract-31-silence");
-    let _ = std::fs::remove_dir_all(&home);
-    let output = Command::new(BIN)
-        .args(["--family", "call", FIXTURE])
-        .env_remove("RUST_LOG")
-        .env_remove("DL_TRACE_SUMMARY")
-        .env_remove("DL_TRAIL")
-        .env("HOME", &home)
-        .output()
-        .expect("run extract");
-    assert!(output.status.success(), "extract failed: {output:?}");
-    assert!(
-        !home.exists(),
-        "a default run wrote under {}",
-        home.display()
-    );
+fn default_and_early_exit_runs_both_enter_the_sqlite_trail() {
+    let home = tempfile::tempdir().expect("isolated home");
+    for args in [&["--schema"][..], &["cleave"][..]] {
+        let output = Command::new(BIN)
+            .args(args)
+            .env("RUST_LOG", "error")
+            .env_remove("DL_TRACE_SUMMARY")
+            .env_remove("DL_TRAIL")
+            .env("HOME", home.path())
+            .output()
+            .expect("run ryi");
+        assert_eq!(output.status.success(), args[0] == "--schema");
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("ryi summary:"));
+    }
+    let conn = rusqlite::Connection::open(home.path().join(".agent/dl6.db"))
+        .expect("default trail database");
+    let mut statement = conn
+        .prepare("SELECT argv, wall_ms FROM extract_run ORDER BY __id")
+        .expect("run rows");
+    let rows: Vec<(String, i64)> = statement
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+        .expect("query runs")
+        .collect::<Result<_, _>>()
+        .expect("read runs");
+    assert_eq!(rows.len(), 2);
+    assert!(rows[0].0.ends_with(" --schema"));
+    assert!(rows[1].0.ends_with(" cleave"));
+    assert!(rows.iter().all(|(_, wall_ms)| *wall_ms >= 0));
 }

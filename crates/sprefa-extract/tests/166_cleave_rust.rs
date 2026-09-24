@@ -153,6 +153,21 @@ fn body_locals_never_enter_the_drag_set_or_gain_visibility() {
     let start = helper(value);
     start
 }
+pub(crate) fn helper(value: i32) -> i32 { value + 1 }
+pub fn other(value: i32) -> i32 { helper(value) }
+"#,
+    )
+    .unwrap();
+    let stdout = cleave(
+        &fixture,
+        &["src/util.rs#target", "src/config.rs", "--drag", "--json"],
+    );
+    let plan = plan_of(&stdout);
+    assert_eq!(names(&plan, "dragged"), ["helper"]);
+    assert_eq!(field(&plan, "dragged", "action"), ["exported"]);
+    assert!(!stdout.contains("pub let start"));
+    assert!(!stdout.contains("pub pub(crate)"));
+}
 
 #[test]
 fn source_keeps_its_same_file_caller_after_the_item_moves() {
@@ -185,20 +200,24 @@ fn rust_parent_glob_supplies_the_moved_items_type() {
     assert!(read(&fixture, "src/target.rs").contains("use crate::types::Kind;"));
     cargo_check(&fixture);
 }
-pub(crate) fn helper(value: i32) -> i32 { value + 1 }
-pub fn other(value: i32) -> i32 { helper(value) }
-"#,
-    )
-    .unwrap();
-    let stdout = cleave(
+
+#[test]
+fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
+    let fixture = fixture("numbered", "module-alias");
+    cleave(
         &fixture,
-        &["src/util.rs#target", "src/config.rs", "--drag", "--json"],
+        &[
+            "src/lib.rs#target",
+            "src/2_call.rs",
+            "--commit",
+            "--verify",
+            "cargo check --quiet",
+        ],
     );
-    let plan = plan_of(&stdout);
-    assert_eq!(names(&plan, "dragged"), ["helper"]);
-    assert_eq!(field(&plan, "dragged", "action"), ["exported"]);
-    assert!(!stdout.contains("pub let start"));
-    assert!(!stdout.contains("pub pub(crate)"));
+    assert!(read(&fixture, "src/lib.rs").contains("use crate::call_facts::target;"));
+    assert!(read(&fixture, "src/lib.rs").contains("use std::fmt::Debug;"));
+    assert!(read(&fixture, "src/2_call.rs").contains("pub fn target()"));
+    cargo_check(&fixture);
 }
 
 #[test]
