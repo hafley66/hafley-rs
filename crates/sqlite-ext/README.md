@@ -1,15 +1,62 @@
-# sqlite-bulk-trigger
+# sqlite-ext
 
-One Rust callback per transaction for SQLite row triggers, with savepoint
-rollback handled inside. A consumer implements one trait and never touches the
-virtual-table ABI.
+Shared rusqlite extension callbacks, statement tracing, and transaction-wide
+row collection. `sqlite_ivm` uses this crate as its SQLite-facing support.
+
+`VtabCallbacks` and `vtab_module!` attach rusqlite 0.40.2's missing savepoint,
+rename, and shadow callbacks to a module descriptor. `vtab_callback` guards
+custom C callbacks and converts Rust errors to SQLite errors. Standard virtual
+table callbacks continue to use rusqlite's implementations.
+
+`statements` contains the SQL execution wrappers lifted from `sqlite_ivm`.
+Each emits the existing `tracing` spans and events consumed by hafley-observe;
+the caller supplies its phase label. The collector emits lifecycle, spill, and
+drain events through the same subscriber. No subscriber is installed by this
+library.
+
+The row collector remains available as `watch` or as an embedded `Collector`.
+
+## Plugin entry
+
+The same `Plugin` constant drives linked registration and the exported native
+entry point. It initializes the existing hafley-observe stack, installs SQLite
+statement profiling when requested, and calls the plugin's registration body.
+
+```rust
+use sqlite_ext::{rusqlite::{Connection, Result}, Plugin};
+
+fn install(db: &Connection) -> Result<()> {
+    // Register this plugin's SQL functions and virtual-table modules.
+    Ok(())
+}
+
+const PLUGIN: Plugin = Plugin::new("example", env!("CARGO_PKG_VERSION"), "warn", install);
+
+pub fn register(db: &Connection) -> Result<()> {
+    PLUGIN.register(db)
+}
+
+sqlite_ext::sqlite_extension!(sqlite3_extension_init, PLUGIN);
+```
+
+The two loadable [fixture crates](tests/fixtures) exercise this path together
+on one SQLite connection. The logging fixture records each delivered batch;
+the slow fixture delays its batch callback. Their test also checks savepoint
+rollback, transaction rollback, and native hafley-observe events.
+
+SQLite exposes one `sqlite3_trace_v2` callback per connection. When independently
+loaded plugins both request SQLite statement profiling, the later registration
+replaces the earlier callback. Plugin tracing events from both libraries are
+covered by the fixture test; connection-wide PROFILE ownership remains with
+the last registered plugin until a host-level observer owns that hook.
 
 ## Why a virtual table
 
 SQLite fires triggers per row. Work placed in that landing runs once per row:
 200 inserted rows cost 200 rounds. A virtual table is the only SQLite object
 that receives `xSavepoint`, `xRollbackTo` and a write-capable `xSync`, so it can
-buffer a whole transaction and flush once at commit.
+buffer a whole transaction and flush at `xSync`, before commit. SQLite may
+still roll that transaction back.
 
 `sqlite3_preupdate_hook` sees every row but has no savepoint callback and cannot
 write at commit, so it cannot do this job.

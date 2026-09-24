@@ -7,7 +7,8 @@
 //! tails.
 
 use std::collections::{BTreeMap, HashMap};
-use std::fs;
+use std::fs::{self, File};
+use std::io::{Read, Seek, SeekFrom};
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
@@ -266,6 +267,40 @@ pub fn read_routes(dir: &Path) -> Result<BTreeMap<String, Route>> {
     routes_in(&open_store(dir)?)
 }
 
+/// Stateful route reader. Route rows are stored in the addressed SQLite
+/// database, so its metadata is the cheap invalidation signal before the
+/// route query opens a connection and scans the table.
+pub struct IncrementalRouteReader {
+    dir: PathBuf,
+    modified: Option<std::time::SystemTime>,
+    routes: BTreeMap<String, Route>,
+}
+
+impl IncrementalRouteReader {
+    pub fn new(dir: PathBuf) -> Self {
+        Self {
+            dir,
+            modified: None,
+            routes: BTreeMap::new(),
+        }
+    }
+
+    pub fn poll(&mut self) -> Result<bool> {
+        let path = db_path(&self.dir)?;
+        let modified = fs::metadata(path)?.modified().ok();
+        if self.modified == Some(modified.unwrap_or(std::time::UNIX_EPOCH)) {
+            return Ok(false);
+        }
+        self.routes = read_routes(&self.dir)?;
+        self.modified = Some(modified.unwrap_or(std::time::UNIX_EPOCH));
+        Ok(true)
+    }
+
+    pub fn routes(&self) -> &BTreeMap<String, Route> {
+        &self.routes
+    }
+}
+
 /// Write one registry route into the route table. The table is the store's
 /// write path; readers and writers share the same SQLite connection.
 pub fn write_route(dir: &Path, name: &str, route: &Route) -> Result<()> {
@@ -430,6 +465,94 @@ pub fn parse_box(path: &Path) -> Vec<Message> {
     crate::ident::Store::open(path.to_path_buf())
         .and_then(|store| messages_in(&store))
         .unwrap_or_default()
+}
+
+#[derive(Default)]
+struct MailboxCursor {
+    len: u64,
+    modified: Option<std::time::SystemTime>,
+    offset: u64,
+    partial: Vec<u8>,
+}
+
+/// Incremental reader for legacy newline-delimited mailbox files.
+///
+/// The database mailbox is read through its SQLite cursor. This reader keeps
+/// compatibility with old `.ndjson` fixtures and deployments: file metadata
+/// gates the read, and the byte cursor means an append only parses its tail.
+#[derive(Default)]
+pub struct IncrementalMailboxReader {
+    files: BTreeMap<PathBuf, MailboxCursor>,
+    messages: BTreeMap<String, Message>,
+    parsed_records: u64,
+}
+
+impl IncrementalMailboxReader {
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    pub fn parsed_records(&self) -> u64 {
+        self.parsed_records
+    }
+
+    /// Read changed files and return the complete accumulated mailbox only
+    /// when at least one complete or partial record changed.
+    pub fn poll(&mut self, paths: &[PathBuf]) -> Result<Option<Vec<Message>>> {
+        let mut changed = false;
+        let current = paths
+            .iter()
+            .cloned()
+            .collect::<std::collections::BTreeSet<_>>();
+        self.files.retain(|path, _| current.contains(path));
+        for path in paths {
+            let metadata =
+                fs::metadata(path).with_context(|| format!("stat mailbox {}", path.display()))?;
+            let modified = metadata.modified().ok();
+            let cursor = self.files.entry(path.clone()).or_default();
+            if cursor.len == metadata.len() && cursor.modified == modified {
+                continue;
+            }
+            changed = true;
+            if metadata.len() < cursor.offset {
+                cursor.offset = 0;
+                cursor.partial.clear();
+                self.messages.clear();
+            }
+            let mut file =
+                File::open(path).with_context(|| format!("open mailbox {}", path.display()))?;
+            file.seek(SeekFrom::Start(cursor.offset))?;
+            let mut bytes = Vec::new();
+            file.read_to_end(&mut bytes)?;
+            cursor.offset = metadata.len();
+            cursor.len = metadata.len();
+            cursor.modified = modified;
+            cursor.partial.extend(bytes);
+            let complete = cursor
+                .partial
+                .iter()
+                .rposition(|byte| *byte == b'\n')
+                .map(|index| index + 1)
+                .unwrap_or(0);
+            let tail = cursor.partial.split_off(complete);
+            let records = std::mem::replace(&mut cursor.partial, tail);
+            for line in records.split(|byte| *byte == b'\n') {
+                let line = std::str::from_utf8(line).unwrap_or_default();
+                if line.trim().is_empty() {
+                    continue;
+                }
+                self.parsed_records += 1;
+                if let Some(message) = parse_line(line) {
+                    self.messages.insert(message.id.clone(), message);
+                }
+            }
+        }
+        if changed {
+            Ok(Some(self.messages.values().cloned().collect()))
+        } else {
+            Ok(None)
+        }
+    }
 }
 
 pub fn parse_line(line: &str) -> Option<Message> {
@@ -1283,6 +1406,34 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    #[test]
+    fn incremental_mailbox_skips_unchanged_files_and_reads_only_appends() {
+        let dir = temp_dir("incremental-mailbox");
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("bus.ndjson");
+        let first = r#"{"id":"one","to":"lane","body":"first"}
+"#;
+        std::fs::write(&path, first).unwrap();
+        let mut reader = super::IncrementalMailboxReader::new();
+        let paths = vec![path.clone()];
+
+        assert_eq!(reader.poll(&paths).unwrap().unwrap().len(), 1);
+        let parsed = reader.parsed_records();
+        assert!(reader.poll(&paths).unwrap().is_none());
+        assert_eq!(reader.parsed_records(), parsed);
+
+        let second = r#"{"id":"two","to":"lane","body":"second"}
+"#;
+        use std::fs::OpenOptions;
+        use std::io::Write;
+        let mut file = OpenOptions::new().append(true).open(&path).unwrap();
+        file.write_all(second.as_bytes()).unwrap();
+        let messages = reader.poll(&paths).unwrap().unwrap();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(reader.parsed_records(), parsed + 1);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     fn route() -> super::Route {

@@ -1,4 +1,4 @@
-//! One Rust callback per transaction for SQLite row triggers.
+//! Shared rusqlite extension callbacks and transactional row collection.
 //!
 //! @comment-ok: crate documentation, and the example below is a compiled doctest.
 //!
@@ -6,11 +6,11 @@
 //! pays for it once per row. This crate collects the rows into a virtual table,
 //! the one SQLite object that receives `xSavepoint`, `xRollbackTo` and a
 //! write-capable `xSync`, and hands the whole transaction to
-//! [`BulkTrigger::on_batch`] once, at commit.
+//! [`BulkTrigger::on_batch`] once at `xSync`, before SQLite commits.
 //!
 //! ```
 //! use rusqlite::Connection;
-//! use sqlite_bulk_trigger::{watch, BulkTrigger, RowChange};
+//! use sqlite_ext::{watch, BulkTrigger, RowChange};
 //!
 //! struct Count(usize);
 //! impl BulkTrigger for Count {
@@ -27,9 +27,19 @@
 //! # Ok::<(), rusqlite::Error>(())
 //! ```
 
+#[path = "0_module.rs"]
+mod module;
+#[path = "1_statements.rs"]
+pub mod statements;
+#[path = "2_plugin.rs"]
+mod plugin;
 mod collector;
 mod schema;
 mod vtab;
 
+pub use module::{vtab_callback, VtabCallbacks};
+pub use plugin::Plugin;
+pub use rusqlite;
+pub use tracing;
 pub use collector::{BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS};
 pub use vtab::{counts, watch, Watch};

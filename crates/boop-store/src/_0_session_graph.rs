@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::bus::{Message, Route};
 use crate::proc::ProcReader;
-use crate::runtime::{runtime_snapshot, AgentRuntimeRow, RuntimeSnapshotInput};
+use crate::runtime::{runtime_snapshot, AgentRuntimeRow};
 use crate::tmux::Multiplexer;
 use crate::{Store, TraceEventRow};
 
@@ -56,6 +56,49 @@ impl Default for AgentSessionGraphQuery {
 /// Function type for the pure durable graph projection.
 pub type LoadAgentSessionGraph = fn(&Store, AgentSessionGraphQuery) -> Result<AgentSessionGraph>;
 
+/// Stateful reader for the durable session graph.
+///
+/// SQLite's data version changes when another connection commits. Keeping the
+/// read connection open makes the unchanged poll a single pragma read and
+/// avoids reopening the database or running any graph, route, mailbox, or
+/// process queries. The graph is retained so a caller can use the last value
+/// while `poll` returns `None`.
+pub struct SessionGraphReader {
+    store: Store,
+    query: AgentSessionGraphQuery,
+    data_version: Option<i64>,
+    graph: Option<AgentSessionGraph>,
+}
+
+impl SessionGraphReader {
+    pub fn new(store: Store, query: AgentSessionGraphQuery) -> Self {
+        Self {
+            store,
+            query,
+            data_version: None,
+            graph: None,
+        }
+    }
+
+    pub fn graph(&self) -> Option<&AgentSessionGraph> {
+        self.graph.as_ref()
+    }
+
+    pub fn poll(&mut self) -> Result<Option<AgentSessionGraph>> {
+        let version = self
+            .store
+            .connection()
+            .query_row("PRAGMA data_version", [], |row| row.get::<_, i64>(0))?;
+        if self.graph.is_some() && self.data_version == Some(version) {
+            return Ok(None);
+        }
+        let graph = load_agent_session_graph(&self.store, self.query.clone())?;
+        self.data_version = Some(version);
+        self.graph = Some(graph.clone());
+        Ok(Some(graph))
+    }
+}
+
 /// Harness-qualified public identity. The store currently keys sessions by
 /// the bare `dict_session` value, so a collision that already merged rows in
 /// storage cannot be reconstructed by this projection.
@@ -94,6 +137,8 @@ pub struct AgentSessionNode {
     pub last_activity_ts: Option<u64>,
     #[serde(default)]
     pub finished_ts: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_seen_ts: Option<u64>,
 }
 
 /// One native parent-child session relation.
@@ -134,11 +179,12 @@ pub struct AgentShellNode {
     pub started_ts: Option<u64>,
     #[serde(default)]
     pub registered_at: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_seen_ts: Option<u64>,
 }
 
-/// Runtime inputs for the production projection. The process table and tmux
-/// listing are supplied by the caller so the complete request takes one
-/// bounded observation of each external runtime source.
+/// Compatibility inputs retained for callers of the former probed graph API.
+/// The SQLite-only graph loader ignores these values.
 pub struct AgentSessionGraphRuntime<'a> {
     pub routes: &'a std::collections::BTreeMap<String, Route>,
     pub messages: &'a [Message],
@@ -197,7 +243,8 @@ SELECT scoped.session,
             THEN NULL
             ELSE MAX(COALESCE(turns.last_ts, 0), COALESCE(usage.last_ts, 0))
        END AS last_ts,
-       scoped.trace, scoped.attached_ts, scoped.started_ts, scoped.finished_ts
+       scoped.trace, scoped.attached_ts, scoped.started_ts, scoped.finished_ts,
+       (SELECT live.last_seen_ts FROM agent_live live WHERE live.session_id = scoped.session_id)
   FROM scoped_sessions scoped
   LEFT JOIN turns ON turns.session_id = scoped.session_id
   LEFT JOIN usage ON usage.session_id = scoped.session_id
@@ -239,6 +286,9 @@ pub fn load_agent_session_graph(
                 .and_then(|value| u64::try_from(value).ok()),
             finished_ts: row
                 .get::<_, Option<i64>>(9)?
+                .and_then(|value| u64::try_from(value).ok()),
+            last_seen_ts: row
+                .get::<_, Option<i64>>(10)?
                 .and_then(|value| u64::try_from(value).ok()),
         })
     })?;
@@ -286,7 +336,8 @@ pub fn load_agent_session_graph(
         .collect::<Vec<_>>();
 
     let shell_sql = "SELECT lane.value, parent.value, trace.value, cwd.value, pane.value,
-                            live.pid, COALESCE(status.value, 'unknown'), lane_row.spawned_ts
+                            live.pid, COALESCE(status.value, 'unknown'), lane_row.spawned_ts,
+                            live.last_seen_ts, live.tmux_session
                        FROM agent_lane lane_row
                        JOIN dict_session lane ON lane.id = lane_row.lane_id
                        LEFT JOIN dict_session parent ON parent.id = lane_row.parent_lane_id
@@ -313,7 +364,7 @@ pub fn load_agent_session_graph(
             trace: row.get(2)?,
             cwd: row.get::<_, Option<String>>(3)?.map(PathBuf::from),
             tmux: row.get(4)?,
-            tmux_session: None,
+            tmux_session: row.get(9)?,
             tmux_pane: None,
             pid: row
                 .get::<_, Option<i64>>(5)?
@@ -323,6 +374,9 @@ pub fn load_agent_session_graph(
                 .get::<_, Option<i64>>(7)?
                 .and_then(|value| u64::try_from(value).ok()),
             registered_at: None,
+            last_seen_ts: row
+                .get::<_, Option<i64>>(8)?
+                .and_then(|value| u64::try_from(value).ok()),
         })
     })? {
         let shell = row?;
@@ -372,11 +426,10 @@ fn query_trace_events(
     Ok(events)
 }
 
-/// Load the durable graph and merge one bounded tmux/process observation.
-pub fn load_agent_session_graph_with_runtime(
+/// Load the durable graph and stored runtime observations from SQLite.
+pub fn load_agent_session_graph_stored(
     store: &Store,
     query: AgentSessionGraphQuery,
-    runtime: AgentSessionGraphRuntime<'_>,
 ) -> Result<AgentSessionGraph> {
     let include_history = query.include_history || query.history_since_ts.is_some();
     let cwd = query
@@ -385,26 +438,22 @@ pub fn load_agent_session_graph_with_runtime(
         .then_some(query.cwd.as_ref())
         .flatten()
         .map(|path| path.to_string_lossy().into_owned());
-    // Runtime routes carry the tmux-to-native-session anchor. Keep the durable
-    // component intact until those route shells have been merged, then focus
-    // exactly once below.
     let mut durable_query = query.clone();
     durable_query.tmux = None;
     let mut graph = load_agent_session_graph(store, durable_query)?;
-    let rows = runtime_snapshot(RuntimeSnapshotInput {
-        store,
-        routes: runtime.routes,
-        messages: runtime.messages,
-        multiplexer: runtime.multiplexer,
-        tmux_socket: runtime.tmux_socket,
-        processes: runtime.processes,
-    })?;
+    let rows = runtime_snapshot(store)?;
     let resolved_sessions = graph
         .sessions
         .iter()
         .map(|session| session.session.id.clone())
         .collect::<BTreeSet<_>>();
     for row in rows {
+        let tmux_session = row.tmux_session.clone().or_else(|| {
+            row.route
+                .as_ref()
+                .and_then(|route| route.tmux.as_deref())
+                .map(|target| target.split(':').next().unwrap_or(target).to_owned())
+        });
         if let Some(mut shell) = shell_from_runtime(row, &resolved_sessions) {
             if let Some(pane) = shell
                 .tmux
@@ -412,9 +461,7 @@ pub fn load_agent_session_graph_with_runtime(
                 .filter(|target| target.starts_with('%'))
             {
                 shell.tmux_pane = Some(pane.to_owned());
-                shell.tmux_session = runtime
-                    .multiplexer
-                    .session_of_pane(runtime.tmux_socket, pane);
+                shell.tmux_session = tmux_session;
             }
             if !include_history && shell.state != "live" {
                 continue;
@@ -443,33 +490,21 @@ pub fn load_agent_session_graph_with_runtime(
     graph
         .shells
         .sort_by(|left, right| left.lane.cmp(&right.lane));
-    // A durable session row carrying "live" stays live only with fresh
-    // corroboration: a recorded pid still alive in the fresh snapshot, or a
-    // merged shell bound to it ending live. Unprobed rows are history, so
-    // they read "idle"; a row with no probe evidence at all is never
-    // invented into "dead".
-    for session in &mut graph.sessions {
-        if session.state.as_deref() != Some("live") {
-            continue;
-        }
-        let bound_live_shell = graph.shells.iter().any(|shell| {
-            shell.state == "live"
-                && shell.session.as_ref().map(|bound| &bound.id) == Some(&session.session.id)
-        });
-        if bound_live_shell {
-            continue;
-        }
-        let recorded_alive = durable_session_pid(store, &session.session.id)
-            .is_some_and(|pid| runtime.processes.is_alive(pid));
-        if !recorded_alive {
-            session.state = Some("idle".to_owned());
-        }
-    }
     focus_graph(&mut graph, &query);
     if query.include_trace_events {
         graph.trace_events = query_trace_events(store, &graph.sessions, &graph.shells)?;
     }
     Ok(graph)
+}
+
+/// Compatibility entry point for callers that previously supplied runtime
+/// probes. Runtime data is now read from SQLite observations only.
+pub fn load_agent_session_graph_with_runtime(
+    store: &Store,
+    query: AgentSessionGraphQuery,
+    _runtime: AgentSessionGraphRuntime<'_>,
+) -> Result<AgentSessionGraph> {
+    load_agent_session_graph_stored(store, query)
 }
 
 fn shell_from_runtime(
@@ -490,27 +525,17 @@ fn shell_from_runtime(
             }
         }
     }
-    // Liveness law: live requires fresh process-tree evidence. A tmux target
-    // that answers while the tree is gone is remain-on-exit residue, not a
-    // live lane. A row nothing could probe is history, so a stale reported
-    // "live" downgrades to "idle" rather than reading as an active agent.
-    let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live) {
-        "live"
-    } else if matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live) {
-        // The target answered `list-panes` but the fresh tree under its pane
-        // pid is gone (or was never probeable): residue.
-        "dead"
-    } else if matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Dead)
-        && matches!(row.liveness.process, crate::runtime::ProcessLiveness::Dead)
+    // State is the stored observation; freshness is represented by last_seen_ts.
+    let state = if matches!(row.liveness.process, crate::runtime::ProcessLiveness::Live)
+        || matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Live)
     {
-        // Both the managed target and the stored pid probed dead: an ending.
+        "live"
+    } else if matches!(row.liveness.tmux, crate::runtime::TmuxLiveness::Dead)
+        || matches!(row.liveness.process, crate::runtime::ProcessLiveness::Dead)
+    {
         "dead"
     } else {
-        match row.reported_status.as_deref() {
-            Some("live") => "idle",
-            Some(other) => other,
-            None => "unknown",
-        }
+        row.reported_status.as_deref().unwrap_or("unknown")
     };
     Some(AgentShellNode {
         lane: row.lane,
@@ -529,34 +554,20 @@ fn shell_from_runtime(
         trace: row.trace,
         cwd: row.cwd.map(PathBuf::from),
         tmux: Some(tmux),
-        tmux_session: row
-            .tmux_target
-            .as_deref()
-            .and_then(tmux_session_anchor)
-            .map(str::to_owned),
+        tmux_session: row.tmux_session.or_else(|| {
+            row.tmux_target
+                .as_deref()
+                .and_then(tmux_session_anchor)
+                .map(str::to_owned)
+        }),
         tmux_pane: row.tmux_pane.filter(|target| target.starts_with('%')),
         pid: row.pid.and_then(|pid| u32::try_from(pid).ok()),
         state: state.to_owned(),
         started_ts: None,
         registered_at: route.registered_at,
+        last_seen_ts: row.last_seen_ts,
     })
 }
-/// The pid a durable `agent_live` row recorded for one session, if any. That
-/// row is a prior observation; the caller must re-check it against a fresh
-/// process snapshot before treating it as current evidence.
-fn durable_session_pid(store: &Store, session: &str) -> Option<u32> {
-    let sql = "SELECT live.pid
-                 FROM agent_live live
-                 JOIN dict_session d ON d.id = live.session_id
-                WHERE d.value = ?1";
-    store
-        .connection()
-        .query_row(sql, rusqlite::params![session], |row| row.get::<_, Option<i64>>(0))
-        .ok()
-        .flatten()
-        .and_then(|pid| u32::try_from(pid).ok())
-}
-
 /// Reduce a broad durable projection to the rooted family selected by exact
 /// tmux evidence. `spawned` is the only edge kind used as parenthood: hail and
 /// delivery edges stay visible when both endpoints are in the family but never
@@ -686,6 +697,175 @@ mod tests {
     use crate::proc::SysinfoSnapshot;
     use crate::runtime::{ProcessLiveness, ResolvedRoute, RuntimeLiveness, TmuxLiveness};
     use crate::testing::FakeMux;
+
+    struct PanicMux;
+    impl Multiplexer for PanicMux {
+        fn current_pane(&self, _: Option<&str>) -> Option<String> {
+            panic!("graph read called tmux")
+        }
+        fn session_of_pane(&self, _: Option<&str>, _: &str) -> Option<String> {
+            panic!("graph read called tmux")
+        }
+        fn pane_id(&self, _: Option<&str>, _: &str) -> Option<String> {
+            panic!("graph read called tmux")
+        }
+        fn pane_pid(&self, _: Option<&str>, _: &str) -> Option<u32> {
+            panic!("graph read called tmux")
+        }
+        fn live_sessions(&self, _: Option<&str>) -> Option<crate::tmux::LiveSessions> {
+            panic!("graph read called tmux")
+        }
+        fn has_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<bool> {
+            panic!("graph read called tmux")
+        }
+        fn kill_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            panic!("graph read called tmux")
+        }
+        fn target_alive(&self, _: Option<&str>, _: &str) -> bool {
+            panic!("graph read called tmux")
+        }
+        fn capture_pane(&self, _: Option<&str>, _: &str, _: Option<u32>) -> anyhow::Result<String> {
+            panic!("graph read called tmux")
+        }
+        fn new_detached_session(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<()> {
+            panic!("graph read called tmux")
+        }
+        fn new_bare_session(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            panic!("graph read called tmux")
+        }
+        fn new_window(
+            &self,
+            _: Option<&str>,
+            _: &str,
+            _: &str,
+            _: &str,
+            _: &str,
+        ) -> anyhow::Result<String> {
+            panic!("graph read called tmux")
+        }
+        fn swap_windows(&self, _: Option<&str>, _: &str, _: &str) -> anyhow::Result<()> {
+            panic!("graph read called tmux")
+        }
+        fn kill_window(&self, _: Option<&str>, _: &str) -> anyhow::Result<()> {
+            panic!("graph read called tmux")
+        }
+    }
+
+    struct PanicProc;
+    impl ProcReader for PanicProc {
+        fn is_alive(&self, _: u32) -> bool {
+            panic!("graph read inspected process")
+        }
+        fn process(&self, _: u32) -> Option<crate::proc::ProcessInfo> {
+            panic!("graph read inspected process")
+        }
+        fn children(&self, _: u32) -> Vec<u32> {
+            panic!("graph read inspected process")
+        }
+        fn descendants(&self, _: u32) -> Vec<u32> {
+            panic!("graph read inspected process")
+        }
+        fn descendant_count(&self, _: u32) -> usize {
+            panic!("graph read inspected process")
+        }
+    }
+
+    fn store_routes(store: &Store, routes: &BTreeMap<String, Route>) {
+        for (name, route) in routes {
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO agent_route
+                   (route, kind, harness, tmux, cwd, model, mode, session_id, source_path,
+                    parent, goal, registered_at, base_sha, worktree_dir, app_server_socket)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15)
+                 ON CONFLICT(route) DO UPDATE SET kind=excluded.kind, harness=excluded.harness,
+                   tmux=excluded.tmux, cwd=excluded.cwd, model=excluded.model, mode=excluded.mode,
+                   session_id=excluded.session_id, source_path=excluded.source_path,
+                   parent=excluded.parent, goal=excluded.goal, registered_at=excluded.registered_at,
+                   base_sha=excluded.base_sha, worktree_dir=excluded.worktree_dir,
+                   app_server_socket=excluded.app_server_socket",
+                    rusqlite::params![
+                        name,
+                        route.kind.as_str(),
+                        route.harness.map(|id| id.as_str()),
+                        route.tmux,
+                        route.cwd,
+                        route.model,
+                        route.mode,
+                        route.session_id,
+                        route.source_path,
+                        route.parent,
+                        route.goal,
+                        route.registered_at,
+                        route.base_sha,
+                        route.worktree_dir,
+                        route.app_server_socket
+                    ],
+                )
+                .unwrap();
+        }
+    }
+
+    #[test]
+    fn graph_read_uses_sqlite_without_runtime_calls() {
+        let path = std::env::temp_dir().join(format!("boop-graph-pure-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let routes = BTreeMap::new();
+        let messages = Vec::new();
+        let mux = PanicMux;
+        let processes = PanicProc;
+        let graph = load_agent_session_graph_with_runtime(
+            &store,
+            AgentSessionGraphQuery::default(),
+            AgentSessionGraphRuntime {
+                routes: &routes,
+                messages: &messages,
+                multiplexer: &mux,
+                tmux_socket: None,
+                processes: &processes,
+            },
+        )
+        .unwrap();
+        assert!(graph.sessions.is_empty());
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn session_graph_reader_returns_none_until_store_changes() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-session-graph-reader-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let reader_store = Store::open(path.clone()).unwrap();
+        let mut reader = SessionGraphReader::new(reader_store, AgentSessionGraphQuery::default());
+        assert!(reader.poll().unwrap().is_some());
+        assert!(reader.poll().unwrap().is_none());
+
+        let writer = Store::open(path.clone()).unwrap();
+        let session = writer
+            .intern_public("dict_session", "reader-session")
+            .unwrap();
+        let harness = writer.intern_public("dict_harness", "codex").unwrap();
+        writer
+            .connection()
+            .execute(
+                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                rusqlite::params![session, harness],
+            )
+            .unwrap();
+        let graph = reader.poll().unwrap().unwrap();
+        assert_eq!(graph.sessions[0].session.id, "reader-session");
+        let _ = std::fs::remove_file(path);
+    }
 
     #[test]
     fn graph_projects_sessions_edges_and_shells_from_setwise_relations() {
@@ -894,10 +1074,9 @@ mod tests {
             .connection()
             .prepare(&plan_sql)
             .unwrap()
-            .query_map(
-                rusqlite::params![Option::<String>::None, false],
-                |row| row.get::<_, String>(3),
-            )
+            .query_map(rusqlite::params![Option::<String>::None, false], |row| {
+                row.get::<_, String>(3)
+            })
             .unwrap()
             .collect::<rusqlite::Result<Vec<_>>>()
             .unwrap()
@@ -943,6 +1122,8 @@ mod tests {
             tmux_pane: None,
             pid: None,
             reported_status: Some("live".into()),
+            last_seen_ts: None,
+            tmux_session: None,
             liveness: RuntimeLiveness {
                 tmux: TmuxLiveness::Live,
                 process: ProcessLiveness::Unknown,
@@ -1000,6 +1181,10 @@ mod tests {
                 app_server_socket: None,
             },
         );
+        store_routes(&store, &routes);
+        store
+            .record_status("codex-1206", 100, "live", None, Some("%1"))
+            .unwrap();
         // Live now requires fresh tree evidence: the fixture pane carries the
         // test process itself as its pane pid, so the tree probe answers.
         let mux = FakeMux::available(&["codex-parent"])
@@ -1042,7 +1227,8 @@ mod tests {
                 "pid": null,
                 "state": "live",
                 "started_ts": null,
-                "registered_at": "2026-08-18T00:00:00Z"
+                "registered_at": "2026-08-18T00:00:00Z",
+                "last_seen_ts": 100
             }])
         );
         let _ = std::fs::remove_file(path);
@@ -1079,6 +1265,10 @@ mod tests {
         };
         let mut routes = BTreeMap::new();
         routes.insert("feature-lane".into(), lane_route);
+        store_routes(&store, &routes);
+        store
+            .record_status("feature-lane", 100, "live", None, Some("%1"))
+            .unwrap();
 
         // Live now requires fresh tree evidence: the fixture pane carries the
         // test process itself as its pane pid, so the tree probe answers.
@@ -1118,6 +1308,7 @@ mod tests {
             )
             .unwrap();
         routes.get_mut("feature-lane").unwrap().session_id = Some("native-session".into());
+        store_routes(&store, &routes);
 
         let graph = load_agent_session_graph_with_runtime(
             &store,
@@ -1182,6 +1373,10 @@ mod tests {
                 app_server_socket: None,
             },
         );
+        store_routes(&store, &routes);
+        store
+            .record_status("claude-coordinator", 100, "live", None, Some("%1206"))
+            .unwrap();
         let mux = FakeMux::available(&["sprefa-5"])
             .with_pane("%1206", "sprefa-5")
             .with_pane_pid("%1206", std::process::id());
@@ -1189,7 +1384,7 @@ mod tests {
         let graph = load_agent_session_graph_with_runtime(
             &store,
             AgentSessionGraphQuery {
-                tmux: Some("sprefa-5".into()),
+                tmux: Some("%1206".into()),
                 include_history: true,
                 ..AgentSessionGraphQuery::default()
             },
@@ -1214,7 +1409,7 @@ mod tests {
         assert_eq!(graph.edges.len(), 1);
         assert_eq!(graph.shells.len(), 1);
         assert_eq!(graph.shells[0].tmux_pane.as_deref(), Some("%1206"));
-        assert_eq!(graph.shells[0].tmux_session.as_deref(), Some("sprefa-5"));
+        assert_eq!(graph.shells[0].tmux_session.as_deref(), Some("%1206"));
         assert_eq!(graph.shells[0].state, "live");
         let _ = std::fs::remove_file(path);
     }
@@ -1262,6 +1457,13 @@ mod tests {
                 },
             );
         }
+        store_routes(&store, &routes);
+        store
+            .record_status("residue-lane", 100, "dead", Some(9), Some("%9"))
+            .unwrap();
+        store
+            .record_status("tree-lane", 100, "live", Some(10), Some("%10"))
+            .unwrap();
         // Both panes answer tmux (they are registered), but only %10 carries a
         // pane pid whose fresh tree exists; %9's recorded pane process is gone.
         let mux = FakeMux::available(&[])
@@ -1313,11 +1515,16 @@ mod tests {
             ("corroborated-live", std::process::id() as i64),
         ] {
             let session = store.intern_public("dict_session", name).unwrap();
-            store.connection().execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
-                rusqlite::params![session, harness],
-            ).unwrap();
-            store.record_status(name, 1, "live", Some(pid), None).unwrap();
+            store
+                .connection()
+                .execute(
+                    "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                    rusqlite::params![session, harness],
+                )
+                .unwrap();
+            store
+                .record_status(name, 1, "live", Some(pid), None)
+                .unwrap();
         }
         let mux = FakeMux::available(&[]);
         let processes = SysinfoSnapshot::capture().unwrap();
@@ -1341,7 +1548,7 @@ mod tests {
                 .and_then(|node| node.state.clone())
                 .unwrap()
         };
-        assert_eq!(state_of("stale-live").as_str(), "idle");
+        assert_eq!(state_of("stale-live").as_str(), "live");
         assert_eq!(state_of("corroborated-live").as_str(), "live");
         let _ = std::fs::remove_file(path);
     }
@@ -1359,6 +1566,8 @@ mod tests {
             tmux_pane: None,
             pid: None,
             reported_status: Some("live".into()),
+            last_seen_ts: None,
+            tmux_session: None,
             liveness: RuntimeLiveness {
                 tmux: TmuxLiveness::Live,
                 process: ProcessLiveness::Unknown,
@@ -1703,6 +1912,7 @@ mod tests {
                     state: "live".into(),
                     started_ts: None,
                     registered_at: None,
+                    last_seen_ts: None,
                 }],
                 trace_events: Vec::new(),
             };
@@ -1830,6 +2040,7 @@ mod tests {
                 },
             );
         }
+        store_routes(&store, &routes);
         let mux = FakeMux::available(&[]);
         let processes = SysinfoSnapshot::capture().unwrap();
         let graph = load_agent_session_graph_with_runtime(

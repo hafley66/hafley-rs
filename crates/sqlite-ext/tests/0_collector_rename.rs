@@ -1,5 +1,5 @@
 use rusqlite::{types::Value, Connection, Result};
-use sqlite_bulk_trigger::{Collector, RowChange, Sign};
+use sqlite_ext::{Collector, RowChange, Sign};
 
 #[test]
 fn renamed_shadow_preserves_memory_spill_and_savepoint_replay() -> Result<()> {

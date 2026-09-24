@@ -1,5 +1,5 @@
 use rusqlite::{types::Value, Connection};
-use sqlite_bulk_trigger::{
+use sqlite_ext::{
     counts, watch, BulkTrigger, Collector, Counts, RowChange, Sign, Watch,
 };
 use std::sync::{Arc, Mutex};

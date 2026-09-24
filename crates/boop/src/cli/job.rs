@@ -423,6 +423,16 @@ pub(crate) fn run_lane_supervisor(
     );
     let adapter = registry.resolve(Some(harness_id))?;
     let dir = mail_dir(mail_dir_arg)?;
+    let liveness_store = boop::Store::open(dir.join("boop.db")).ok();
+    if let Some(store) = &liveness_store {
+        let _ = store.record_status(
+            lane,
+            boop::channel::now_ms(),
+            "live",
+            Some(i64::from(std::process::id())),
+            std::env::var("TMUX_PANE").ok().as_deref(),
+        );
+    }
     let cwd = std::env::current_dir().context("read the current directory")?;
     // A respawned lane continues its pinned conversation instead of cold-
     // starting a new one with the full brief.
@@ -464,14 +474,33 @@ pub(crate) fn run_lane_supervisor(
         Err(error) => {
             error!(lane, harness = harness_id, error = %error, "lane channel open failed");
             boop::supervise::report_open_failure(&run, &error.to_string());
+            if let Some(store) = &liveness_store {
+                let _ = store.record_status(
+                    lane,
+                    boop::channel::now_ms(),
+                    "dead",
+                    None,
+                    std::env::var("TMUX_PANE").ok().as_deref(),
+                );
+            }
             return Err(error);
         }
     };
     // Process-global, so it is armed here and not inside the library call.
     boop::supervise::arm_signal_trail(&run);
-    let code = boop::supervise::run(run, channel.as_mut()).inspect_err(|error| {
+    let outcome = boop::supervise::run(run, channel.as_mut()).inspect_err(|error| {
         error!(lane, harness = harness_id, error = %error, "lane supervisor failed");
-    })?;
+    });
+    if let Some(store) = &liveness_store {
+        let _ = store.record_status(
+            lane,
+            boop::channel::now_ms(),
+            "dead",
+            None,
+            std::env::var("TMUX_PANE").ok().as_deref(),
+        );
+    }
+    let code = outcome?;
     info!(
         lane,
         harness = harness_id,
@@ -3474,14 +3503,50 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
     let Ok(snapshot) = proc::SysinfoSnapshot::capture() else {
         return RouteLiveness::Unknown;
     };
-    match lane_state(
+    let state = lane_state(
         dir,
         lane,
         &tmux::mux().live_sessions(None),
         route,
         &routes,
         &snapshot,
-    ) {
+    );
+    if matches!(state, "live" | "idle" | "dead") {
+        if let Ok(store) = boop::Store::open(dir.join("boop.db")) {
+            let observed = route.session_id.as_deref().unwrap_or(lane);
+            let pid = store
+                .live_row(observed)
+                .ok()
+                .flatten()
+                .and_then(|row| row.pid);
+            let _ = store.record_status(
+                observed,
+                boop::channel::now_ms(),
+                state,
+                pid,
+                route.tmux.as_deref(),
+            );
+            if let Some(pane) = route.tmux.as_deref().filter(|target| target.starts_with('%')) {
+                if let Some(session) = tmux::mux().session_of_pane(None, pane) {
+                    let _ = store.record_tmux_session(
+                        observed,
+                        boop::channel::now_ms(),
+                        &session,
+                    );
+                }
+            }
+            if observed != lane {
+                let _ = store.record_status(
+                    lane,
+                    boop::channel::now_ms(),
+                    state,
+                    pid,
+                    route.tmux.as_deref(),
+                );
+            }
+        }
+    }
+    match state {
         "live" | "idle" => RouteLiveness::Live,
         "dead" => RouteLiveness::Dead,
         _ => RouteLiveness::Unknown,
