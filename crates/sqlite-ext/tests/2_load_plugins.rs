@@ -6,6 +6,11 @@ use std::{
 };
 
 fn fixture(name: &str) -> PathBuf {
+    // A lane that exports CARGO_TARGET_DIR sends the fixture build's output
+    // there, not to tests/fixtures/target where the plain path would look.
+    let target = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/target"));
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures");
     let built = Command::new("cargo")
         .args([
@@ -28,7 +33,8 @@ fn fixture(name: &str) -> PathBuf {
     } else {
         "so"
     };
-    root.join("target/debug")
+    target
+        .join("debug")
         .join(format!("libsqlite_ext_{name}_fixture.{suffix}"))
 }
 
@@ -113,4 +119,60 @@ fn both_native_plugins_emit_observe_events() {
     ] {
         assert!(events.contains(name), "missing {name} in native trace");
     }
+}
+
+/// The restart gate over a loadable plugin: the second `Connection` starts
+/// with nothing registered, so without `sqlite_ext_reattach` its first source
+/// write answers `no such module`.
+#[test]
+fn a_loadable_plugin_reattaches_a_reopened_collector() -> Result<()> {
+    let ext = fixture("reattach");
+    let path = std::env::temp_dir().join(format!(
+        "sqlite-ext-reattach-fixture-{}.sqlite",
+        std::process::id()
+    ));
+    std::fs::remove_file(&path).ok();
+    let load = |db: &Connection| -> Result<()> {
+        unsafe {
+            db.load_extension_enable()?;
+            db.load_extension(&ext, Some("sqlite3_reattach_fixture_init"))?;
+            db.load_extension_disable()?;
+        }
+        Ok(())
+    };
+
+    {
+        let first = Connection::open(&path)?;
+        load(&first)?;
+        first.execute_batch(
+            "CREATE TABLE src(id INTEGER PRIMARY KEY, v INTEGER);
+             SELECT sqlite_ext_watch('p','src');
+             INSERT INTO src VALUES(1,10),(2,20);",
+        )?;
+    }
+    let second = Connection::open(&path)?;
+    load(&second)?;
+    second.execute_batch(
+        "SELECT sqlite_ext_reattach('p','src');
+         INSERT INTO src VALUES(3,30);
+         UPDATE src SET v = 99 WHERE id = 1;
+         DELETE FROM src WHERE id = 2;",
+    )?;
+    let batches: Vec<(i64, String)> = second
+        .prepare("SELECT rows, changes FROM probe_batches ORDER BY rowid")?
+        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?
+        .collect::<Result<Vec<_>>>()?;
+    // The first row is the closed process's committed batch; the reopened
+    // collector's own sequence restarts at 0.
+    assert_eq!(
+        batches,
+        vec![
+            (2, "src|1|0;src|1|1;".into()),
+            (1, "src|1|0;".into()),
+            (2, "src|-1|0;src|1|1;".into()),
+            (1, "src|-1|0;".into()),
+        ]
+    );
+    std::fs::remove_file(&path).ok();
+    Ok(())
 }

@@ -1,9 +1,7 @@
 use crate::collector::{
     BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS,
 };
-use crate::schema::{
-    self, error, FIRST_VALUE_COLUMN, ROWID_ARGUMENTS, SIGN_COLUMN, SOURCE_COLUMN,
-};
+use crate::schema::{self, error, FIRST_VALUE_COLUMN, ROWID_ARGUMENTS, SIGN_COLUMN, SOURCE_COLUMN};
 use rusqlite::{ffi, types::Value, types::ValueRef, vtab::*, Connection, Result};
 use std::{
     borrow::Cow,
@@ -32,6 +30,15 @@ thread_local! {
         RefCell::new(HashMap::new());
 }
 
+thread_local! {
+    /// Connections carrying the close sentinel. A key in [`COLLECTORS`] is the
+    /// raw handle address, which the allocator can hand to the next
+    /// connection, so a closed connection must retire its entries and its
+    /// tracked mark together.
+    static TRACKED: RefCell<std::collections::HashSet<usize>> =
+        RefCell::new(std::collections::HashSet::new());
+}
+
 fn key(db: *mut ffi::sqlite3, name: &str) -> Key {
     (db as usize, name.to_string())
 }
@@ -53,6 +60,68 @@ fn guarded<R>(what: &'static str, body: impl FnOnce() -> Result<R>) -> Result<R>
         .unwrap_or_else(|_| Err(error(format!("panic inside the collector {what} callback"))))
 }
 
+/// The one module both install and reattach register: same table type, same
+/// savepoint trio, so a persisted collector reconnects under one behavior.
+const MODULE: Module<Table> = crate::vtab_module!(
+    Table,
+    crate::VtabCallbacks::savepoints(savepoint, release, rollback_to)
+);
+
+/// Runs inside `sqlite3_close`, when SQLite destroys the sentinel module
+/// registration. It must not call back into SQLite; retiring the thread-local
+/// state only drops Rust values and retires the address.
+///
+/// # Safety
+///
+/// `user` must be the `Box<usize>` handle address this module passed to
+/// `sqlite3_create_module_v2` and must not have been freed.
+unsafe extern "C" fn close_sentinel(user: *mut std::os::raw::c_void) {
+    let address = unsafe { *(user as *const usize) };
+    COLLECTORS.with(|map| map.borrow_mut().retain(|key, _| key.0 != address));
+    TRACKED.with(|set| set.borrow_mut().remove(&address));
+    drop(Box::from_raw(user as *mut usize));
+}
+
+/// Marks the connection so its collector state dies with it, even though the
+/// thread-local outlives the handle and a later connection can reuse the
+/// address as its key.
+///
+/// The hook is an unused module registration: no schema references it, so no
+/// vtab callback ever runs, and `sqlite3_create_module_v2` destroys the
+/// registration at close without SQLite's active-statement refusal that a
+/// redefined function meets. The name carries a colon, which
+/// [`check_identifier`](schema::check_identifier) never accepts, so no
+/// collector can collide with it.
+fn track_close(handle: *mut ffi::sqlite3) -> Result<()> {
+    let fresh = TRACKED.with(|set| set.borrow_mut().insert(handle as usize));
+    if !fresh {
+        return Ok(());
+    }
+    debug_assert_eq!(
+        std::mem::size_of::<Module<Table>>(),
+        std::mem::size_of::<ffi::sqlite3_module>()
+    );
+    let user = Box::into_raw(Box::new(handle as usize));
+    let rc = unsafe {
+        ffi::sqlite3_create_module_v2(
+            handle,
+            c"sqlite_ext:collector:close".as_ptr(),
+            &MODULE as *const Module<Table> as *const ffi::sqlite3_module,
+            user as *mut std::os::raw::c_void,
+            Some(close_sentinel),
+        )
+    };
+    if rc == ffi::SQLITE_OK {
+        return Ok(());
+    }
+    // SQLite invoked the sentinel's xDestroy for this failed call, so the
+    // box is gone and the address already left TRACKED. Nothing to free.
+    let _ = user;
+    Err(error(format!(
+        "the collector could not arm its close cleanup: sqlite3 error {rc}"
+    )))
+}
+
 /// Installs a collector named `name` over `tables` with the default caps.
 pub fn watch<T: BulkTrigger>(
     db: &Connection,
@@ -61,6 +130,18 @@ pub fn watch<T: BulkTrigger>(
     trigger: T,
 ) -> Result<()> {
     Watch::new(name).tables(tables).install(db, trigger)
+}
+
+/// Re-registers a collector named `name` over `tables` for a schema an earlier
+/// [`watch`] persisted in this database file, the restart counterpart of
+/// [`watch`]. See [`Watch::reattach`].
+pub fn reattach<T: BulkTrigger>(
+    db: &Connection,
+    name: &str,
+    tables: &[&str],
+    trigger: T,
+) -> Result<()> {
+    Watch::new(name).tables(tables).reattach(db, trigger)
 }
 
 /// Builder form of [`watch`], for tuning the two spill caps.
@@ -99,10 +180,6 @@ impl<'a> Watch<'a> {
     /// Registers the module, creates the collector table, its shadow table and
     /// three triggers per watched table, then zeroes the callback counts.
     pub fn install<T: BulkTrigger>(self, db: &Connection, trigger: T) -> Result<()> {
-        const MODULE: Module<Table> = crate::vtab_module!(
-            Table,
-            crate::VtabCallbacks::savepoints(savepoint, release, rollback_to)
-        );
         schema::check_identifier(self.name)?;
         if self.tables.is_empty() {
             return Err(error("a collector needs at least one watched table"));
@@ -129,8 +206,12 @@ impl<'a> Watch<'a> {
             trigger: Some(Box::new(trigger)),
             arity,
         }));
+        track_close(handle)?;
         db.create_module(self.name, &MODULE, None::<()>)?;
-        COLLECTORS.with(|map| map.borrow_mut().insert(key(handle, self.name), state.clone()));
+        COLLECTORS.with(|map| {
+            map.borrow_mut()
+                .insert(key(handle, self.name), state.clone())
+        });
         let built = self.build(db, &layout);
         if built.is_err() {
             COLLECTORS.with(|map| map.borrow_mut().remove(&key(handle, self.name)));
@@ -140,17 +221,143 @@ impl<'a> Watch<'a> {
         Ok(())
     }
 
+    /// Re-registers the collector over the virtual table, shadow table and
+    /// triggers an earlier [`install`](Self::install) persisted in this
+    /// database file, on a connection that has not yet touched them. Nothing is
+    /// recreated or dropped: the persisted rows and schema objects stay exactly
+    /// as the closing process left them.
+    ///
+    /// The call must land before any statement on this connection reads the
+    /// watched source tables or the collector table. Reading the persisted
+    /// schema does not connect the persisted virtual table, but the first
+    /// statement that does — an insert into a watched table, a scan of the
+    /// collector — needs this state registered first, or SQLite answers
+    /// `no such module`.
+    ///
+    /// The persisted schema is validated by exact text against what
+    /// [`install`](Self::install) writes for these `tables` as they exist right
+    /// now: the collector table, its `{name}_delta` shadow at the widest live
+    /// arity, and all three triggers per watched table. A missing object, a
+    /// drifted or hand-edited one, a live column set that no longer matches the
+    /// persisted triggers, or an unexpected trigger under the collector's
+    /// reserved `{name}_` prefix is refused before any state is registered, so
+    /// a refusal leaves nothing half-installed behind. The trigger's lifetime
+    /// is [`install`](Self::install)'s.
+    pub fn reattach<T: BulkTrigger>(self, db: &Connection, trigger: T) -> Result<()> {
+        schema::check_identifier(self.name)?;
+        if self.tables.is_empty() {
+            return Err(error("a collector needs at least one watched table"));
+        }
+        let handle = unsafe { db.handle() };
+        if lookup(handle, self.name).is_some() {
+            return Err(error(format!(
+                "collector {:?} is already installed",
+                self.name
+            )));
+        }
+        let mut arity = HashMap::new();
+        let mut layout = Vec::new();
+        for table in &self.tables {
+            let columns = schema::columns(db, table)?;
+            arity.insert((*table).to_string(), columns.len());
+            layout.push(((*table).to_string(), columns));
+        }
+        let width = arity.values().copied().max().unwrap_or(0);
+        validate_persisted(db, self.name, &layout, width)?;
+        track_close(handle)?;
+        db.create_module(self.name, &MODULE, None::<()>)?;
+        COLLECTORS.with(|map| {
+            map.borrow_mut().insert(
+                key(handle, self.name),
+                Rc::new(RefCell::new(Installed {
+                    collector: Collector::new(self.name, width)
+                        .staged_rows(self.staged_rows)
+                        .staged_bytes(self.staged_bytes),
+                    trigger: Some(Box::new(trigger)),
+                    arity,
+                })),
+            )
+        });
+        Ok(())
+    }
+
     fn build(&self, db: &Connection, layout: &[(String, Vec<String>)]) -> Result<()> {
-        db.execute_batch(&format!(
-            "CREATE VIRTUAL TABLE main.{} USING {}",
-            schema::quote(self.name),
-            self.name
-        ))?;
+        db.execute_batch(&schema::vtab_ddl(self.name))?;
         for (table, columns) in layout {
             db.execute_batch(&schema::create_triggers(self.name, table, columns))?;
         }
         Ok(())
     }
+}
+
+/// Compares the persisted schema against what [`Watch::install`] writes for
+/// these tables, by the exact text SQLite stores. Every refusal happens here,
+/// before any state is registered.
+fn validate_persisted(
+    db: &Connection,
+    name: &str,
+    layout: &[(String, Vec<String>)],
+    width: usize,
+) -> Result<()> {
+    let mut expected: HashMap<String, (String, String)> = HashMap::new();
+    expected.insert(
+        name.to_string(),
+        ("table".into(), schema::persisted_vtab(name)),
+    );
+    expected.insert(
+        schema::delta_name(name),
+        ("table".into(), schema::persisted_delta(name, width)),
+    );
+    for (table, columns) in layout {
+        for event in ["insert", "delete", "update"] {
+            expected.insert(
+                schema::trigger_key(name, table, event),
+                (
+                    "trigger".into(),
+                    schema::persisted_trigger(name, table, event, columns),
+                ),
+            );
+        }
+    }
+    let reserved = format!("{name}_");
+    let mut stored: HashMap<String, (String, String)> = HashMap::new();
+    let mut statement = db.prepare("SELECT type, name, sql FROM main.sqlite_master")?;
+    let rows = statement.query_map([], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, String>(1)?,
+            row.get::<_, Option<String>>(2)?,
+        ))
+    })?;
+    for row in rows {
+        let (kind, object, sql) = row?;
+        let Some(sql) = sql else { continue };
+        if expected.contains_key(&object) || (kind == "trigger" && object.starts_with(&reserved)) {
+            stored.insert(object, (kind, sql));
+        }
+    }
+    for (object, (kind, sql)) in &expected {
+        let Some((stored_kind, stored_sql)) = stored.get(object) else {
+            return Err(error(format!(
+                "collector {name:?} is not persisted: {object} is missing from this database"
+            )));
+        };
+        if stored_kind != kind || stored_sql != sql {
+            return Err(error(format!(
+                "collector {name:?}: the persisted {object} does not match what install \
+                 writes for these tables"
+            )));
+        }
+    }
+    for (object, _) in stored
+        .iter()
+        .filter(|(object, _)| !expected.contains_key(*object))
+    {
+        return Err(error(format!(
+            "collector {name:?}: the persisted schema carries an unexpected trigger {object:?}"
+        )));
+    }
+    Ok(())
 }
 
 /// Callback counts for the collector named `name` on this connection.
@@ -225,7 +432,9 @@ impl Table {
         let delivered = trigger.on_batch(&self.db, &batch);
         match state_mut(&self.state) {
             Ok(mut installed) => installed.trigger = Some(trigger),
-            Err(reason) => tracing::error!(%reason, "the collector could not take its trigger back"),
+            Err(reason) => {
+                tracing::error!(%reason, "the collector could not take its trigger back")
+            }
         }
         delivered
     }
@@ -357,26 +566,32 @@ impl<'vtab> TransactionVTab<'vtab> for Table {
 }
 
 unsafe extern "C" fn savepoint(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
-    unsafe { crate::vtab_callback(raw, "xSavepoint", |table: &mut Table| {
-        state_mut(&table.state)?.collector.savepoint(index);
-        Ok(())
-    }) }
+    unsafe {
+        crate::vtab_callback(raw, "xSavepoint", |table: &mut Table| {
+            state_mut(&table.state)?.collector.savepoint(index);
+            Ok(())
+        })
+    }
 }
 
 unsafe extern "C" fn release(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
-    unsafe { crate::vtab_callback(raw, "xRelease", |table: &mut Table| {
-        state_mut(&table.state)?.collector.release(index);
-        Ok(())
-    }) }
+    unsafe {
+        crate::vtab_callback(raw, "xRelease", |table: &mut Table| {
+            state_mut(&table.state)?.collector.release(index);
+            Ok(())
+        })
+    }
 }
 
 /// The rows this rewinds past are inside SQLite's own transaction, so the pager
 /// already removed the spilled ones before this callback ran.
 unsafe extern "C" fn rollback_to(raw: *mut ffi::sqlite3_vtab, index: c_int) -> c_int {
-    unsafe { crate::vtab_callback(raw, "xRollbackTo", |table: &mut Table| {
-        state_mut(&table.state)?.collector.rollback_to(index);
-        Ok(())
-    }) }
+    unsafe {
+        crate::vtab_callback(raw, "xRollbackTo", |table: &mut Table| {
+            state_mut(&table.state)?.collector.rollback_to(index);
+            Ok(())
+        })
+    }
 }
 
 #[repr(C)]

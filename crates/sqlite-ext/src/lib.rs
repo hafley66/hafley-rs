@@ -26,20 +26,24 @@
 //! db.execute_batch("INSERT INTO orders VALUES(1,10),(2,20)")?;
 //! # Ok::<(), rusqlite::Error>(())
 //! ```
+//!
+//! After a process restart, [`reattach`] re-registers a collector over the
+//! schema a previous connection persisted, so a fresh connection collects
+//! again without recreating anything.
 
+mod collector;
 #[path = "0_module.rs"]
 mod module;
-#[path = "1_statements.rs"]
-pub mod statements;
 #[path = "2_plugin.rs"]
 mod plugin;
-mod collector;
 mod schema;
+#[path = "1_statements.rs"]
+pub mod statements;
 mod vtab;
 
+pub use collector::{BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS};
 pub use module::{vtab_callback, VtabCallbacks};
 pub use plugin::Plugin;
 pub use rusqlite;
 pub use tracing;
-pub use collector::{BulkTrigger, Collector, Counts, RowChange, Sign, STAGED_BYTES, STAGED_ROWS};
-pub use vtab::{counts, watch, Watch};
+pub use vtab::{counts, reattach, watch, Watch};
