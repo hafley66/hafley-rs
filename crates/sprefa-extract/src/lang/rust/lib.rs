@@ -18,7 +18,7 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use hafley_scm::lang::rust::{
-    call_definition_rows, call_metadata_rows, call_site_rows, line_col_to_byte,
+    call_definition_rows, call_metadata_rows, call_site_rows, line_col_to_byte, parse_rust_syntax,
     CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
 
@@ -197,16 +197,16 @@ impl Source for RustSource {
                 let parsed = {
                     let span = trace::parse_span("rust", "syn");
                     let _entered = span.enter();
-                    syn::parse_file(src)
+                    parse_rust_syntax(src)
                 };
                 if let Ok(parsed) = parsed {
-                    let line_starts = build_line_starts(src);
-                    rust_module = Some(super::rust_modules::rust_module_facts_from_parsed(src, &parsed));
+                    let line_starts = &parsed.line_starts;
+                    rust_module = Some(super::rust_modules::rust_module_facts_from_parsed(&parsed.file, line_starts));
                     if mask.types {
                         let span = trace::family_span("rust", "type");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<TypeF>::default();
-                        project_types(&parsed, &line_starts, &mut strings, &mut bundle);
+                        project_types(&parsed.file, line_starts, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, 0);
                         types = Some(bundle);
                     }
@@ -223,7 +223,7 @@ impl Source for RustSource {
                                 &mut bundle,
                             );
                         }
-                        project_call(&parsed, &line_starts, &mut strings, &mut bundle);
+                        project_call(&parsed.file, line_starts, &mut strings, &mut bundle);
                         splice_macro_expansions(src, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
@@ -232,7 +232,7 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "df");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<DfF>::default();
-                        project_df(&parsed, path, src, &line_starts, &mut strings, &mut bundle);
+                        project_df(&parsed.file, path, src, line_starts, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, 0);
                         df = Some(bundle);
                     }

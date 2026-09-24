@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use crate::seams::DefIndex;
 use crate::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
-use super::rust::{build_line_starts, module_segments, module_target};
+use super::rust::{module_segments, module_target};
 use super::rust_receivers::ImplEntry;
 
 // ── module facts from phase-1 syntax rows ────────────────────────────────────
@@ -85,14 +85,13 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
         return None;
     }
     let text = std::str::from_utf8(content).ok()?;
-    let parsed = syn::parse_file(text).ok()?;
-    Some(rust_module_facts_from_parsed(text, &parsed))
+    let parsed = hafley_scm::lang::rust::parse_rust_syntax(text).ok()?;
+    Some(rust_module_facts_from_parsed(&parsed.file, &parsed.line_starts))
 }
 
 /// The module facts off the extract pass's own syn parse, so no second parse.
-pub(crate) fn rust_module_facts_from_parsed(text: &str, parsed: &syn::File) -> RustModuleFacts {
-    let line_starts = build_line_starts(text);
-    let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, &line_starts);
+pub(crate) fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
+    let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
     RustModuleFacts {
         uses: rows.uses.into_iter().map(|row| UseBinding {
             local: row.local,

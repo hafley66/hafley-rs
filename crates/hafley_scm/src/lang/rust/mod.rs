@@ -28,6 +28,8 @@ mod receiver_rows;
 mod tsi_syntax_rows;
 #[path = "14_expanded_call_rows.rs"]
 mod expanded_call_rows;
+#[path = "15_syntax.rs"]
+mod syntax;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -62,3 +64,4 @@ pub use df_syntax_rows::{df_syntax_rows, DfNodeKind as DfSyntaxKind, DfSyntaxRow
 pub use receiver_rows::{receiver_rows, ReceiverOutcome as RustReceiverOutcome};
 pub use tsi_syntax_rows::{tsi_syntax_rows, Arg as TsiSyntaxArg, TsiSyntaxRows};
 pub use expanded_call_rows::{expanded_call_rows, ExpandedCallKind, ExpandedCallRows};
+pub use syntax::{parse_rust_syntax, RustSyntax};
