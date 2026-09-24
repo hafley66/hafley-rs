@@ -21,12 +21,10 @@ use hafley_scm::lang::rust::{
     call_definition_rows, call_metadata_rows, call_site_rows, line_col_to_byte,
     CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
-use syn::spanned::Spanned;
 
 use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
 use super::rust_type_edges::edge_candidates;
-use super::rust_type_refs::primary_type;
 use crate::family::{
     CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, DocFact, DocTag, MethodOwner, ProjectEdge,
@@ -73,9 +71,7 @@ use type_facts::{import_bound_target, project_types};
 
 #[path = "2_call.rs"]
 mod call_facts;
-pub(crate) use call_facts::{
-    crate_root_of, def_span, module_segments, module_target, ModuleTarget,
-};
+pub(crate) use call_facts::{module_segments, module_target};
 pub use call_facts::{call_drops, own_blob_probes};
 use call_facts::{project_call, scm_call_defs, splice_macro_expansions};
 

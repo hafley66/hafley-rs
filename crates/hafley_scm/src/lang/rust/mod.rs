@@ -20,6 +20,8 @@ mod call_site_rows;
 mod type_candidate_rows;
 #[path = "10_module_resolution_rows.rs"]
 mod module_resolution_rows;
+#[path = "11_df_syntax_rows.rs"]
+mod df_syntax_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -50,3 +52,4 @@ pub use module_resolution_rows::{
     StarImportRow, TraitMethodRow, TraitMethodsRow, UseBindingRow,
 };
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
+pub use df_syntax_rows::{df_syntax_rows, DfNodeKind as DfSyntaxKind, DfSyntaxRows};
