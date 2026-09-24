@@ -61,6 +61,8 @@ pub(crate) fn edge_candidates(
                     TypeCandidateKind::Generic => TypeEdgeKind::Generic,
                     TypeCandidateKind::Impl => TypeEdgeKind::Impl,
                     TypeCandidateKind::Uses => TypeEdgeKind::Uses,
+                    TypeCandidateKind::Param => TypeEdgeKind::Param,
+                    TypeCandidateKind::Returns => TypeEdgeKind::Returns,
                 },
             });
         }

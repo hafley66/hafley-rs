@@ -15,6 +15,8 @@ pub enum TypeCandidateKind {
     Generic,
     Impl,
     Uses,
+    Param,
+    Returns,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -71,14 +73,6 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
                 field_candidates(&Fields::Named(item.fields.clone()), &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
             }
-            syn::Item::Trait(item) => {
-                let mut candidates = Vec::new();
-                generic_candidates(&item.generics, &mut candidates);
-                for bound in &item.supertraits {
-                    bound_candidate(bound, &mut candidates);
-                }
-                groups.push(declared(item.ident.span(), line_starts, candidates));
-            }
             syn::Item::Type(item) => {
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
@@ -87,6 +81,32 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
                     kind: TypeCandidateKind::Uses,
                 }));
                 groups.push(declared(item.ident.span(), line_starts, candidates));
+            }
+            syn::Item::Fn(item) => {
+                groups.push(declared(
+                    item.sig.ident.span(),
+                    line_starts,
+                    signature_candidates(&item.sig),
+                ));
+            }
+            syn::Item::Trait(item) => {
+                let mut candidates = Vec::new();
+                generic_candidates(&item.generics, &mut candidates);
+                for bound in &item.supertraits {
+                    bound_candidate(bound, &mut candidates);
+                }
+                groups.push(declared(item.ident.span(), line_starts, candidates));
+                for child in &item.items {
+                    if let syn::TraitItem::Fn(method) = child {
+                        if method.default.is_some() {
+                            groups.push(declared(
+                                method.sig.ident.span(),
+                                line_starts,
+                                signature_candidates(&method.sig),
+                            ));
+                        }
+                    }
+                }
             }
             syn::Item::Impl(item) => {
                 let Some(primary_name) = primary_type(&item.self_ty) else {
@@ -114,6 +134,15 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
                     },
                     candidates,
                 });
+                for child in &item.items {
+                    if let syn::ImplItem::Fn(method) = child {
+                        groups.push(declared(
+                            method.sig.ident.span(),
+                            line_starts,
+                            signature_candidates(&method.sig),
+                        ));
+                    }
+                }
             }
             syn::Item::Mod(item) => {
                 if let Some((_, inner)) = &item.content {
@@ -123,6 +152,25 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
             _ => {}
         }
     }
+}
+
+fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
+    let mut candidates = Vec::new();
+    for arg in &sig.inputs {
+        if let syn::FnArg::Typed(arg) = arg {
+            candidates.extend(type_refs(&arg.ty).into_iter().map(|to| TypeCandidateRow {
+                to,
+                kind: TypeCandidateKind::Param,
+            }));
+        }
+    }
+    if let syn::ReturnType::Type(_, ty) = &sig.output {
+        candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
+            to,
+            kind: TypeCandidateKind::Returns,
+        }));
+    }
+    candidates
 }
 
 pub fn bare_self_head(ty: &Type, line_starts: &[u32]) -> Option<(Range<u32>, String)> {

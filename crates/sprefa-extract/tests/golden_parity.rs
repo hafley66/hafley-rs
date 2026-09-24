@@ -708,9 +708,9 @@ fn type_edge_resolve_parity_python() {
 /// Rust type_edge PARITY (4d-i-rust): the ts test above, on the rust cases —
 /// `Resolve<TypeF>` over the fixture corpus, twin-normalized to the oracle's
 /// text shape via `RustSource::type_edge_candidates` (the same zip
-/// discipline). v5 rust emits field/variant/generic/impl only (no
-/// param/returns, no uses); the two fixtures exercise field + variant
-/// (sample 3 / docs 3 rows).
+/// discipline). v5 rust emits field/variant/generic/impl only; callable
+/// param/returns edges are an additive v6 plane checked by graph_uses_rust.
+/// The two fixtures exercise field + variant (sample 3 / docs 3 rows).
 #[test]
 fn type_edge_resolve_parity_rust() {
     with_resolve_cx(|cx, corpus| {
@@ -732,12 +732,13 @@ fn type_edge_resolve_parity_rust() {
                     )
                 })
                 // v6 minds an impl block's bare self-type head as a `uses`
-                // row from the owner (the typedecl oracle keys the block on
-                // it); v5 never did, so the self row is graded nowhere.
+                // row and callable signature refs as param/returns rows.
+                // Neither belongs to the v5 parity subset.
                 .filter(|row| {
                     let mut parts = row.split('\t').skip(1);
                     let (owner, to, kind) = (parts.next(), parts.next(), parts.next());
                     !(owner == to && kind == Some("uses"))
+                        && !matches!(kind, Some("param" | "returns"))
                 })
                 .collect();
             if edges.len() != candidates.len() {
