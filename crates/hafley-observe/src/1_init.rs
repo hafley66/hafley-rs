@@ -1,8 +1,11 @@
+use std::sync::Arc;
+
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
-use crate::{env_filter, format_layer, log_sink_layer, Config, FormatConfig};
+use crate::flush::{Sink, Writer};
+use crate::{env_filter, format_layer, log_sink_layer, Config, FormatConfig, SinkLayer};
 
 pub fn init(config: Config) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     init_with_writer(config, BoxMakeWriter::new(std::io::stderr))
@@ -12,7 +15,22 @@ pub fn init_with_writer(
     config: Config,
     writer: BoxMakeWriter,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
+    init_with_sinks(config, writer, Vec::new())
+}
+
+/// `init_with_writer` plus host-owned sinks. Each sink gets its own `Writer`
+/// under the configured flush strategy and sees the same filtered rows as the
+/// built-in sqlite sink.
+pub fn init_with_sinks(
+    config: Config,
+    writer: BoxMakeWriter,
+    sinks: Vec<Arc<dyn Sink>>,
+) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let flush = config.flush();
+    let host_sinks: Vec<SinkLayer> = sinks
+        .into_iter()
+        .map(|sink| SinkLayer::new(Arc::new(Writer::new(sink, flush))))
+        .collect();
     let filter = env_filter(config.default_filter);
     let format = format_layer(FormatConfig::standard(config.format, config.ansi), writer);
     crate::instruments::install(&config);
@@ -25,6 +43,7 @@ pub fn init_with_writer(
         .with(crate::tracy_layer())
         .with(crate::rusage_layer())
         .with(log_sink_layer(flush))
+        .with(host_sinks)
         .with(filter)
         .with(format);
     subscriber.with(crate::otlp_layer(&config)).try_init()?;
