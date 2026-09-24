@@ -3867,6 +3867,235 @@
     ]
   },
   {
+    "record": "graph_path",
+    "table": "graph_path",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "graph_path"
+      },
+      {
+        "name": "plane",
+        "path": [
+          "plane"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_path",
+        "path": [
+          "from_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_name",
+        "path": [
+          "from_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "to_path",
+        "path": [
+          "to_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "to_name",
+        "path": [
+          "to_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "depth",
+        "path": [
+          "depth"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "witness",
+        "path": [
+          "witness"
+        ],
+        "kind": "json",
+        "optional": false,
+        "nullable": false,
+        "json_type": {
+          "kind": "array",
+          "items": [
+            {
+              "kind": "uint64"
+            }
+          ]
+        }
+      }
+    ]
+  },
+  {
+    "record": "graph_path_change",
+    "table": "graph_path_change",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "graph_path_change"
+      },
+      {
+        "name": "change",
+        "path": [
+          "change"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "revision",
+        "path": [
+          "revision"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "plane",
+        "path": [
+          "plane"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_path",
+        "path": [
+          "from_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_name",
+        "path": [
+          "from_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "to_path",
+        "path": [
+          "to_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "to_name",
+        "path": [
+          "to_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "depth",
+        "path": [
+          "depth"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
     "record": "graph_root",
     "table": "graph_root",
     "columns": [

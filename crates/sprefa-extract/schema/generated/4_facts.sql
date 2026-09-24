@@ -458,6 +458,35 @@ CREATE TABLE IF NOT EXISTS "graph_edge" (
     "grade" TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "graph_path" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "plane" TEXT NOT NULL,
+    "from_path" TEXT NOT NULL,
+    "from_name" TEXT,
+    "to_path" TEXT NOT NULL,
+    "to_name" TEXT,
+    "depth" INTEGER NOT NULL,
+    "witness" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "graph_path_change" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "change" TEXT NOT NULL,
+    "revision" TEXT NOT NULL,
+    "plane" TEXT NOT NULL,
+    "from_path" TEXT NOT NULL,
+    "from_name" TEXT,
+    "to_path" TEXT NOT NULL,
+    "to_name" TEXT,
+    "depth" INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "graph_root" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

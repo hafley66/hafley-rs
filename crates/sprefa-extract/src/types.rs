@@ -3529,6 +3529,28 @@ pub enum FlatFact {
         kind: String,
         grade: String,
     },
+    #[serde(rename = "graph_path")]
+    GraphPath {
+        plane: String,
+        from_path: String,
+        from_name: Option<String>,
+        to_path: String,
+        to_name: Option<String>,
+        depth: u32,
+        /// Export row ids of the ordered edges that witness this path.
+        witness: Vec<u64>,
+    },
+    #[serde(rename = "graph_path_change")]
+    GraphPathChange {
+        change: String,
+        revision: String,
+        plane: String,
+        from_path: String,
+        from_name: Option<String>,
+        to_path: String,
+        to_name: Option<String>,
+        depth: u32,
+    },
     #[serde(rename = "graph_root")]
     GraphRoot {
         path: String,

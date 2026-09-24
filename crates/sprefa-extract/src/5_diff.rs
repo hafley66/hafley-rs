@@ -5,7 +5,6 @@
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use rusqlite::{params, Connection};
 use serde::Serialize;
@@ -39,14 +38,9 @@ struct Side {
 
 pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::error::Error>> {
     let options = parse(arguments)?;
-    let root = std::fs::canonicalize(&options.root)
-        .map_err(|error| format!("extract diff root {}: {error}", options.root.display()))?;
-    let repository = soopy::open(&root)?;
-    let mut tree = soopy::SourceTree::open(repository.clone());
-    let mut batch = soopy::GitBatch::open(&repository.root)?;
-    let mut blobs: BTreeMap<String, Arc<[u8]>> = BTreeMap::new();
-    let a = resolve_at(&mut tree, &mut batch, &mut blobs, &options, &options.from)?;
-    let b = resolve_at(&mut tree, &mut batch, &mut blobs, &options, &options.to)?;
+    let mut reader = crate::revision::RevisionReader::open(&options.root)?;
+    let a = resolve_at(&mut reader, &options, &options.from)?;
+    let b = resolve_at(&mut reader, &options, &options.to)?;
 
     let mut counts = Counts::default();
     let mut rows = file_rows(&a, &b, &mut counts);
@@ -80,63 +74,20 @@ pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::e
 }
 
 fn resolve_at(
-    tree: &mut soopy::SourceTree,
-    batch: &mut soopy::GitBatch,
-    blobs: &mut BTreeMap<String, Arc<[u8]>>,
+    reader: &mut crate::revision::RevisionReader,
     options: &Options,
     revision: &str,
 ) -> Result<Side, Box<dyn std::error::Error>> {
-    let resolved = tree.resolve_revision(soopy::Revision::Named(Arc::from(revision)))?;
-    let soopy::RevisionId::Commit(commit) = resolved else {
-        return Err(format!("extract diff: {revision} is not a commit").into());
-    };
-    let snapshot = tree.snapshot(&soopy::SourceQuery {
-        revision: soopy::Revision::Commit(commit.clone()),
-        patterns: options.patterns.clone(),
-    })?;
-    let mut files = BTreeMap::new();
-    for entry in &snapshot.files {
-        let soopy::ContentId::GitBlob(oid) = &entry.content else {
-            return Err(format!(
-                "extract diff: {} at {revision} carries no Git blob",
-                entry.source.path.0
-            )
-            .into());
-        };
-        files.insert(entry.source.path.0.to_string(), oid.0.to_string());
-    }
-
-    // The scratch tree is a materialization of the Git blobs, never a checkout:
-    // a dirty worktree cannot change one byte of what the resolve reads below.
-    let scratch = tempfile::Builder::new().prefix("extract-diff-").tempdir()?;
-    let mut paths = Vec::with_capacity(files.len());
-    for (path, oid) in &files {
-        let bytes = match blobs.get(oid) {
-            Some(bytes) => bytes.clone(),
-            None => {
-                let bytes = batch.read(&soopy::ObjectId(Arc::from(oid.as_str())))?;
-                blobs.insert(oid.clone(), bytes.clone());
-                bytes
-            }
-        };
-        let destination = scratch.path().join(path);
-        if let Some(parent) = destination.parent() {
-            std::fs::create_dir_all(parent)?;
-        }
-        std::fs::write(&destination, bytes.as_ref())?;
-        paths.push(PathBuf::from(path));
-    }
-
-    // The resolve records the caller's path spelling, so it runs rooted at the
-    // scratch tree to keep every row's path repo-relative.
-    let previous = std::env::current_dir()?;
-    std::env::set_current_dir(scratch.path())?;
-    let facts = resolve_project(&resolve_request(&paths, options));
-    std::env::set_current_dir(&previous)?;
+    let (snapshot, facts) = reader.with_revision(
+        revision,
+        &options.patterns,
+        None,
+        |paths, _| Ok(resolve_project(&resolve_request(paths, options))?),
+    )?;
     Ok(Side {
-        sha: commit.0.to_string(),
-        files,
-        facts: facts?,
+        sha: snapshot.sha,
+        files: snapshot.files,
+        facts,
     })
 }
 

@@ -645,6 +645,35 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct GraphPath {
+        pub plane: String,
+        pub from_path: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub from_name: Option<String>,
+        pub to_path: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub to_name: Option<String>,
+        pub depth: u32,
+        pub witness: Vec<u64>,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct GraphPathChange {
+        pub change: String,
+        pub revision: String,
+        pub plane: String,
+        pub from_path: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub from_name: Option<String>,
+        pub to_path: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub to_name: Option<String>,
+        pub depth: u32,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct GraphRoot {
         pub path: String,
         #[serde(deserialize_with = "super::required_nullable")]
@@ -1108,6 +1137,12 @@ pub enum Fact {
     #[serde(rename = "graph_edge")]
     GraphEdge(models::GraphEdge),
 
+    #[serde(rename = "graph_path")]
+    GraphPath(models::GraphPath),
+
+    #[serde(rename = "graph_path_change")]
+    GraphPathChange(models::GraphPathChange),
+
     #[serde(rename = "graph_root")]
     GraphRoot(models::GraphRoot),
 
@@ -1291,6 +1326,10 @@ impl Fact {
 
             Self::GraphEdge(row) => row.insert(conn, source),
 
+            Self::GraphPath(row) => row.insert(conn, source),
+
+            Self::GraphPathChange(row) => row.insert(conn, source),
+
             Self::GraphRoot(row) => row.insert(conn, source),
 
             Self::ResolvedTypeEdge(row) => row.insert(conn, source),
@@ -1367,7 +1406,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 70;
+pub const TABLE_COUNT: usize = 72;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1484,6 +1523,10 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut graph_node: Vec<(usize, &models::GraphNode)> = Vec::new();
 
     let mut graph_edge: Vec<(usize, &models::GraphEdge)> = Vec::new();
+
+    let mut graph_path: Vec<(usize, &models::GraphPath)> = Vec::new();
+
+    let mut graph_path_change: Vec<(usize, &models::GraphPathChange)> = Vec::new();
 
     let mut graph_root: Vec<(usize, &models::GraphRoot)> = Vec::new();
 
@@ -1629,6 +1672,10 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::GraphEdge(value) => graph_edge.push((index, value)),
 
+            Fact::GraphPath(value) => graph_path.push((index, value)),
+
+            Fact::GraphPathChange(value) => graph_path_change.push((index, value)),
+
             Fact::GraphRoot(value) => graph_root.push((index, value)),
 
             Fact::ResolvedTypeEdge(value) => resolved_type_edge.push((index, value)),
@@ -1772,6 +1819,10 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let graph_node_capacity = if graph_node.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let graph_path_change_capacity = if graph_path_change.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_root_capacity = if graph_root.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_root\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2221,6 +2272,28 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in graph_edge.chunks(graph_edge_capacity) {
         let sql = multi_row_sql("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in graph_path.chunks(graph_path_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in graph_path_change.chunks(graph_path_change_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3710,6 +3783,75 @@ impl models::GraphEdge {
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::GraphPath {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        let witness_json = serde_json::to_string(&self.witness)?;
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "graph_path")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.plane.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_name.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_name.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.depth)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, &witness_json)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::GraphPathChange {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "graph_path_change")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.change.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.revision.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.plane.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_name.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_name.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.depth)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

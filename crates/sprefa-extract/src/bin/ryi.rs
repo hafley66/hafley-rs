@@ -42,6 +42,9 @@ mod help;
 #[path = "ryi/0_sqlite.rs"]
 mod sqlite;
 
+#[path = "ryi/0_revision.rs"]
+mod revision;
+
 use help::{
     AFTER_HELP, BENCH_LONG, DEPS_LONG, FAMILY_LONG, FILE_FACT_LONG, GO_CHECKER_LONG, INDEXER_LONG,
     LINES_LONG, LONG_ABOUT, MAX_BYTES_LONG, OCCURRENCE_TEXT_LONG, PACKAGE_DEPS_LONG, PATH_LONG,
