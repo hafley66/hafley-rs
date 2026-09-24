@@ -3,6 +3,7 @@
 //! rows and asks here for the three spellings no fact carries.
 //! @comment-ok: module header, the seam list every lang arm opens with
 
+use crate::move_cx::MoveCx;
 use crate::source::{FamilyMask, Source};
 use crate::types::{Edit, FamilyTag, Cleave, Span};
 use crate::wire::{flatten_each, FlatFact};
@@ -67,9 +68,9 @@ impl Cleave for RustSource {
     /// `crate::a::b`, or `super::b` when the two files are siblings under a
     /// module rather than under the crate root. Siblings is a module question,
     /// not a directory one: `lang/mod.rs` IS `lang`, so `lang/ts.rs` is under it.
-    fn spell_module(&self, from_path: &str, to_path: &str) -> String {
-        let to = module_parts(to_path);
-        let siblings = parent_of(&module_parts(from_path)) == parent_of(&to);
+    fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String {
+        let to = module_parts(cx, to_path);
+        let siblings = parent_of(&module_parts(cx, from_path)) == parent_of(&to);
         match (siblings, to.len() > 1) {
             (true, true) => format!("super::{}", to.last().cloned().unwrap_or_default()),
             _ => match to.is_empty() {
@@ -77,6 +78,12 @@ impl Cleave for RustSource {
                 false => format!("crate::{}", to.join("::")),
             },
         }
+    }
+
+    fn imports_visible_to_children(&self, cx: &MoveCx, src: &str) -> bool {
+        cx.text(src)
+            .and_then(|text| syn::parse_file(&text).ok())
+            .is_some_and(|file| file.items.iter().any(|item| matches!(item, syn::Item::Mod(_))))
     }
 }
 
@@ -234,7 +241,7 @@ fn path_of(text: &str) -> String {
 }
 
 /// A file's module path from its crate root, by file layout alone.
-fn module_parts(rel: &str) -> Vec<String> {
+fn module_parts(cx: &MoveCx, rel: &str) -> Vec<String> {
     let tail = match rel.rfind(SOURCE_ROOT) {
         Some(at) => &rel[at + SOURCE_ROOT.len()..],
         None => rel,
@@ -245,7 +252,33 @@ fn module_parts(rel: &str) -> Vec<String> {
     };
     let stem = last.strip_suffix(".rs").unwrap_or(&last);
     if !DIRECTORY_STEMS.contains(&stem) {
-        parts.push(stem.to_string());
+        let parent = rel.rsplit_once('/').map_or("", |(parent, _)| parent);
+        let declared = ["lib.rs", "mod.rs", "main.rs"]
+            .iter()
+            .filter_map(|index| cx.text(&format!("{parent}/{index}")))
+            .filter_map(|text| syn::parse_file(&text).ok())
+            .flat_map(|file| file.items.into_iter())
+            .filter_map(|item| match item {
+                syn::Item::Mod(module) => Some(module),
+                _ => None,
+            })
+            .find(|module| {
+                module.attrs.iter().any(|attr| {
+                    matches!(
+                        &attr.meta,
+                        syn::Meta::NameValue(syn::MetaNameValue {
+                            path,
+                            value: syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Str(value),
+                                ..
+                            }),
+                            ..
+                        }) if path.is_ident("path") && value.value() == last
+                    )
+                })
+            })
+            .map(|module| module.ident.to_string());
+        parts.push(declared.unwrap_or_else(|| stem.to_string()));
     }
     parts
 }

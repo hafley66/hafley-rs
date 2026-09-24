@@ -68,7 +68,7 @@ impl Cleave for TsSource {
         })
     }
 
-    fn spell_module(&self, from_path: &str, to_path: &str) -> String {
+    fn spell_module(&self, _cx: &crate::move_cx::MoveCx, from_path: &str, to_path: &str) -> String {
         let relative = relative_between(dirname(from_path), &drop_extension(to_path));
         match relative.is_empty() {
             true => ".".to_string(),

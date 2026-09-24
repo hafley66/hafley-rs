@@ -260,8 +260,15 @@ impl Plan {
             }
             let text = std::fs::read_to_string(&path)
                 .map_err(|error| format!("read cleave preview {rel}: {error}"))?;
-            syn::parse_file(&text)
-                .map_err(|error| format!("cleave preview has invalid Rust in {rel}: {error}"))?;
+            syn::parse_file(&text).map_err(|error| {
+                let at = error.span().start();
+                let line = text.lines().nth(at.line.saturating_sub(1)).unwrap_or("");
+                format!(
+                    "cleave preview has invalid Rust in {rel}:{}:{}: {error}; line: {line}",
+                    at.line,
+                    at.column + 1
+                )
+            })?;
         }
         Ok(())
     }
@@ -305,9 +312,14 @@ impl Plan {
         );
 
         let dest_facts = match cx.contains(&dest) {
-            true => Some(FileFacts::open(&cx, &dest, false)?),
+            true => Some(FileFacts::open(&cx, &dest, true)?),
             false => None,
         };
+        let dest_bound: BTreeSet<&str> = dest_facts
+            .iter()
+            .flat_map(|facts| facts.decls.iter())
+            .map(|decl| decl.name.as_str())
+            .collect();
         let carried: BTreeSet<(String, String)> = dest_facts
             .iter()
             .flat_map(|facts| facts.specifiers.iter())
@@ -319,7 +331,7 @@ impl Plan {
         let mut glob_unresolved = BTreeSet::new();
         for row in source.specifiers.iter().filter(|row| !row.glob) {
             let dest_module = match imports.target(&src, &row.name) {
-                Some(target) => arm.spell_module(&dest, target),
+                Some(target) => arm.spell_module(&cx, &dest, target),
                 None => row.module.clone(),
             };
             let kind = match (
@@ -337,7 +349,7 @@ impl Plan {
                 span: row.span,
                 kind,
             };
-            if source.refs_in(&row.name, &moving) > 0 {
+            if source.refs_in(&row.name, &moving) > 0 && !dest_bound.contains(row.name.as_str()) {
                 travelling.push(plan_row.clone());
             }
             if source.refs_outside(&row.name, &moving) == 0 {
@@ -357,7 +369,7 @@ impl Plan {
                 }
                 let target = imports.target(&parent, &row.name);
                 let dest_module = target
-                    .map(|path| arm.spell_module(&dest, path))
+                    .map(|path| arm.spell_module(&cx, &dest, path))
                     .unwrap_or_else(|| row.module.clone());
                 let kind = match (
                     carried.contains(&(row.name.clone(), dest_module.clone())),
@@ -385,7 +397,7 @@ impl Plan {
                     glob_unresolved.insert(format!("{} from {parent} is private", decl.name));
                     continue;
                 }
-                let dest_module = arm.spell_module(&dest, &parent);
+                let dest_module = arm.spell_module(&cx, &dest, &parent);
                 let kind = if carried.contains(&(decl.name.clone(), dest_module.clone())) {
                     "carried"
                 } else {
@@ -405,6 +417,7 @@ impl Plan {
             .iter()
             .map(|row| row.name.as_str())
             .chain(dragged.iter().map(|row| row.name.as_str()))
+            .chain(dest_bound.iter().copied())
             .collect();
         let mut unresolved = source.ungraded(&moving, &carried_names);
         unresolved.extend(glob_unresolved);
@@ -431,7 +444,7 @@ impl Plan {
             });
         }
 
-        let src_module = arm.spell_module(&dest, &src);
+        let src_module = arm.spell_module(&cx, &dest, &src);
         let mut dest_imports: Vec<(String, Vec<String>)> = Vec::new();
         let wanted = travelling
             .iter()
@@ -539,12 +552,18 @@ impl Plan {
                 .map(|row| row.span),
         );
         let moving = cuts.clone();
-        let orphaned: BTreeSet<&str> = self
-            .rows
-            .orphans
-            .iter()
-            .map(|row| row.name.as_str())
-            .collect();
+        let orphaned: BTreeSet<&str> = if self
+            .arm
+            .imports_visible_to_children(&self.cx, &self.rows.src)
+        {
+            BTreeSet::new()
+        } else {
+            self.rows
+                .orphans
+                .iter()
+                .map(|row| row.name.as_str())
+                .collect()
+        };
         let mut edits: Vec<Respell> = Vec::new();
         for row in self.rows.dragged.iter().filter(|row| row.action == "exported") {
             let Some(edit) = self.arm.edit_export(&self.source.text, row.span, true) else {
@@ -580,7 +599,7 @@ impl Plan {
             }
         }
         if self.source.refs_outside(&self.rows.item, &moving) > 0 {
-            let module = self.arm.spell_module(&self.rows.src, &self.rows.dest);
+            let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);
             if let Some(edit) = self.arm.edit_import(
                 &self.source.text,
                 std::slice::from_ref(&self.rows.item),
@@ -672,7 +691,7 @@ impl Plan {
                     receipt: Some(format!("caller {rel}: {module} loses {}", self.rows.item)),
                 });
             }
-            let spelling = self.arm.spell_module(rel, &self.rows.dest);
+            let spelling = self.arm.spell_module(&self.cx, rel, &self.rows.dest);
             let mut landing: Vec<String> = facts
                 .specifiers
                 .iter()

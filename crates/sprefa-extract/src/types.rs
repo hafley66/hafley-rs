@@ -2883,8 +2883,15 @@ pub trait Cleave: Source + Sync + Send {
     /// when there is none, removed whole when `names` is empty. None: no change.
     fn edit_import(&self, text: &str, names: &[String], module: &str) -> Option<Edit>;
 
-    /// How a file at `from_path` spells `to_path` as a module.
-    fn spell_module(&self, from_path: &str, to_path: &str) -> String;
+    /// How a file at `from_path` spells `to_path` as a module. The corpus
+    /// supplies declarations such as Rust's `#[path] mod name`.
+    fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String;
+
+    /// Imports in a parent module may be consumed through a child's glob.
+    /// Such imports stay until that cross-module use is resolved explicitly.
+    fn imports_visible_to_children(&self, _cx: &MoveCx, _src: &str) -> bool {
+        false
+    }
 }
 
 /// What one language answers when a file it owns moves. Held `&'static` in the
