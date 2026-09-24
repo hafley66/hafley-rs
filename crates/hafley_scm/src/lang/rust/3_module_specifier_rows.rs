@@ -2,7 +2,7 @@
 
 use syn::spanned::Spanned;
 
-use super::call_metadata_rows::line_col_to_byte;
+use super::call_metadata_rows::span_range;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModuleSpecifierKind {
@@ -23,13 +23,6 @@ pub fn module_specifier_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<Mod
     let mut rows = Vec::new();
     collect(&parsed.items, line_starts, &mut rows);
     rows
-}
-
-fn span_range(line_starts: &[u32], span: proc_macro2::Span) -> std::ops::Range<u32> {
-    let start = span.start();
-    let end = span.end();
-    line_col_to_byte(line_starts, start.line as u32, start.column as u32)
-        ..line_col_to_byte(line_starts, end.line as u32, end.column as u32)
 }
 
 fn collect(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<ModuleSpecifierRow>) {

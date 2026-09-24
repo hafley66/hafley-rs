@@ -8,6 +8,8 @@ mod call_definition_rows;
 mod call_metadata_rows;
 #[path = "3_module_specifier_rows.rs"]
 mod module_specifier_rows;
+#[path = "5_const_string_rows.rs"]
+mod const_string_rows;
 mod syn_macro_expansion_defs;
 
 pub use call_definition_rows::{
@@ -22,4 +24,5 @@ pub const RUST_FAST_QUERY: &str = include_str!("4_fast_query.scm");
 pub use module_specifier_rows::{
     mod_path_attr, module_specifier_rows, ModuleSpecifierKind, ModuleSpecifierRow,
 };
+pub use const_string_rows::{const_string_rows, ConstStringRow};
 pub use syn_macro_expansion_defs::{expand_file, Expanded};

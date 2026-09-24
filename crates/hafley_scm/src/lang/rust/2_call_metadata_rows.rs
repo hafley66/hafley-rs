@@ -24,6 +24,14 @@ pub fn line_col_to_byte(line_starts: &[u32], line: u32, col: u32) -> u32 {
         .saturating_add(col)
 }
 
+/// Byte range of a proc-macro span under the caller's one line-start table.
+pub(super) fn span_range(line_starts: &[u32], span: proc_macro2::Span) -> std::ops::Range<u32> {
+    let start = span.start();
+    let end = span.end();
+    line_col_to_byte(line_starts, start.line as u32, start.column as u32)
+        ..line_col_to_byte(line_starts, end.line as u32, end.column as u32)
+}
+
 /// A def's byte range over `[start.start, end.end)`, the whole callable body.
 fn def_range(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Span) -> (u32, u32) {
     let start_byte = line_col_to_byte(

@@ -254,45 +254,23 @@ fn push_sig(
 
 // ── const facet: Const entities + ConstValue rows ───────────────────────────
 
-/// Item-level `const X: &str = "...";` string values, inline `mod` bodies
-/// included. Non-goals: consts inside `impl` or fn bodies, non-string consts.
+/// Intern item-level string const rows from the same syn parse as the type arm.
 fn const_values(
     parsed: &syn::File,
     line_starts: &[u32],
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    const_values_in_items(&parsed.items, line_starts, strings, sink);
-}
-
-fn const_values_in_items(
-    items: &[syn::Item],
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    for item in items {
-        if let syn::Item::Mod(m) = item {
-            if let Some((_, inner)) = &m.content {
-                const_values_in_items(inner, line_starts, strings, sink);
-            }
-            continue;
-        }
-        let syn::Item::Const(c) = item else { continue };
-        let syn::Expr::Lit(syn::ExprLit {
-            lit: syn::Lit::Str(s),
-            ..
-        }) = &*c.expr
-        else {
-            continue;
+    for row in hafley_scm::lang::rust::const_string_rows(parsed, line_starts) {
+        let span = Span {
+            start: row.range.start,
+            len: row.range.end - row.range.start,
         };
-        let span = syn_span(line_starts, c.ident.span());
-        let name = c.ident.to_string();
-        push_entity_raw(sink, strings, span, &name, TypeEntityKind::Const);
+        push_entity_raw(sink, strings, span, &row.name, TypeEntityKind::Const);
         sink.aux.consts.push(ConstValue {
             owner: span,
             field: None,
-            text: strings.intern(&s.value()),
+            text: strings.intern(&row.value),
             kind: ConstKind::Lit,
         });
     }
