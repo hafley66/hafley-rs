@@ -1,3 +1,4 @@
+use crate::cli::WatchArgs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
@@ -132,8 +133,8 @@ enum ChangeInput {
     Poll(soopy::SourceSnapshot),
 }
 
-pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::error::Error>> {
-    let options = parse(arguments)?;
+pub fn run(args: WatchArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let options = Options::from_args(args)?;
     let repository = soopy::open(&options.root)?;
     let state = options
         .state
@@ -176,7 +177,7 @@ pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::e
         Ok(watcher) => ChangeInput::Events(watcher),
         Err(error) => {
             eprintln!(
-                "extract watch: filesystem registration failed ({error:#}); polling every {}ms",
+                "ryi watch: file watcher unavailable ({error:#}); polling every {}ms",
                 options.poll_ms
             );
             ChangeInput::Poll(snapshot)
@@ -448,59 +449,22 @@ fn default_state_path(worktree: &str) -> PathBuf {
         .join(format!("extract-watch-{worktree}.sqlite3"))
 }
 
-fn parse(
-    mut arguments: impl Iterator<Item = String>,
-) -> Result<Options, Box<dyn std::error::Error>> {
-    let _command = arguments.next();
-    let root = arguments.next().ok_or(
-        "usage: extract watch ROOT [--pattern GLOB] [--family NAMES] [--state PATH] [--once]",
-    )?;
-    let mut patterns = Vec::new();
-    let mut families = Vec::new();
-    let mut state = None;
-    let mut once = false;
-    let mut poll_ms = 500;
-    while let Some(argument) = arguments.next() {
-        match argument.as_str() {
-            "--pattern" => patterns.push(soopy::Pattern(
-                arguments.next().ok_or("--pattern requires a glob")?.into(),
-            )),
-            "--family" => families.extend(
-                arguments
-                    .next()
-                    .ok_or("--family requires comma-separated names")?
-                    .split(',')
-                    .map(str::to_owned),
-            ),
-            "--state" => {
-                state = Some(PathBuf::from(
-                    arguments.next().ok_or("--state requires a path")?,
-                ))
-            }
-            "--once" => once = true,
-            "--poll-ms" => {
-                poll_ms = arguments
-                    .next()
-                    .ok_or("--poll-ms requires milliseconds")?
-                    .parse()?;
-                if poll_ms == 0 {
-                    return Err("--poll-ms must be greater than zero".into());
-                }
-            }
-            unknown => return Err(format!("unknown extract watch argument {unknown}").into()),
-        }
+impl Options {
+    fn from_args(args: WatchArgs) -> Result<Self, Box<dyn std::error::Error>> {
+        let patterns = if args.patterns.is_empty() {
+            default_patterns()
+        } else {
+            args.patterns.into_iter().map(|glob| soopy::Pattern(glob.into())).collect()
+        };
+        Ok(Options {
+            root: args.root,
+            patterns,
+            mask: parse_mask(&args.families)?,
+            state: args.state,
+            once: args.once,
+            poll_ms: args.poll_ms,
+        })
     }
-    if patterns.is_empty() {
-        patterns = default_patterns();
-    }
-    Ok(Options {
-        root: PathBuf::from(root),
-        patterns,
-        mask: parse_mask(&families)?,
-        state,
-        once,
-        poll_ms,
-    })
 }
 
 pub(crate) fn default_patterns() -> Vec<soopy::Pattern> {
@@ -526,7 +490,7 @@ fn parse_mask(families: &[String]) -> Result<FamilyMask, Box<dyn std::error::Err
             "call" => mask.call = true,
             "df" => mask.df = true,
             "data" => mask.data = true,
-            other => return Err(format!("unknown extract watch family {other}").into()),
+            other => return Err(format!("--family {other}: unknown").into()),
         }
     }
     Ok(mask)

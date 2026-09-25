@@ -141,14 +141,14 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
     let mut block = stderr.lines().filter(|line| !line.is_empty());
     assert_eq!(
         block.next(),
-        Some("0 facts. No Source matches .xyz."),
+        Some("0 facts: no extractor for .xyz"),
         "the no-Source disclosure names the extension"
     );
     assert_eq!(
         block.next().map(str::trim_end),
         Some(
             format!(
-                "  ryi --family cst {}    the parse tree, if a grammar loaded",
+                "  try: ryi --family cst {}",
                 unknown.display()
             )
             .as_str(),
@@ -156,7 +156,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
     );
     assert_eq!(
         block.next(),
-        Some("  ryi --schema               which extensions have a Source"),
+        Some("  supported extensions: ryi --schema"),
         "the schema command that would answer"
     );
 
@@ -169,7 +169,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.starts_with("0 facts. No Source matches .css."),
+        stderr.starts_with("0 facts: no extractor for .css"),
         "a grammar-less extension discloses the no-Source branch: {stderr}"
     );
 
@@ -183,7 +183,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
     assert!(output.stdout.is_empty());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.starts_with("0 facts. fallback matched "),
+        stderr.starts_with("0 facts: fallback found nothing in "),
         "the matched-but-empty disclosure names the Source: {stderr}"
     );
     assert!(

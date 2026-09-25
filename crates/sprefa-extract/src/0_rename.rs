@@ -4,12 +4,12 @@
 //! nothing in this file names one.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
+use crate::cli::RenameArgs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
 use sprefa_extract::move_stage::{
     content_id, print_previews, stage_and_commit, state_root, Mirror,
 };
@@ -61,55 +61,7 @@ fn stop_error(stop: RenameStop) -> RenameError {
     }
 }
 
-#[derive(Parser)]
-#[command(
-    name = "extract rename",
-    about = "rename a symbol and respell every occurrence bound to it",
-    after_help = "Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, \
-                  6 dynamic, 7 plan emitted with abstains (sites the arm declined to plan)"
-)]
-struct RenameCli {
-    /// `<FILE>#<OLD>`: the declaring file and the identifier as written today.
-    /// Omitted when `--list` carries the renames.
-    target: Option<String>,
-    /// What the identifier becomes.
-    new: Option<String>,
-    /// A tsv of `anchor<TAB>old<TAB>new` rows, one rename per line. Blank lines
-    /// and lines opening with `#` are skipped.
-    #[arg(long)]
-    list: Option<PathBuf>,
-    /// Corpus root. Defaults to the git root holding the first anchor.
-    #[arg(long)]
-    root: Option<PathBuf>,
-    /// Soopy state root. Must sit outside the corpus root.
-    #[arg(long)]
-    state: Option<PathBuf>,
-    /// Byte offset inside the declaration, when the anchor declares `<OLD>`
-    /// more than once. One rename only; never combined with `--list`.
-    #[arg(long)]
-    at: Option<u32>,
-    /// Apply the plan to the real tree instead of dry running it.
-    #[arg(long)]
-    commit: bool,
-    /// Report the old-name spellings this rename leaves behind in plain text.
-    #[arg(long = "text-refs")]
-    text_refs: bool,
-    /// Cross-check the plan against a prebuilt SCIP index. Reports only: the
-    /// count never changes the plan, the stages, or the exit code.
-    #[arg(long = "verify-scip", value_name = "INDEX")]
-    verify_scip: Option<PathBuf>,
-    /// Close the output with one JSON line: `{"abstains": [...]}`, one row per
-    /// site the arm declined to plan, and none of the per-abstain text lines.
-    #[arg(long)]
-    json: bool,
-}
-
-pub fn run<I>(args: I) -> Result<(), RenameError>
-where
-    I: IntoIterator,
-    I::Item: Into<std::ffi::OsString> + Clone,
-{
-    let cli = RenameCli::try_parse_from(args).map_err(|error| plan_error(error.to_string()))?;
+pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
     let plan = Plan::build(&cli)?;
     let state = state_root(cli.state.as_deref()).map_err(plan_error)?;
 
@@ -221,7 +173,7 @@ struct Plan {
 }
 
 impl Plan {
-    fn build(cli: &RenameCli) -> Result<Self, RenameError> {
+    fn build(cli: &RenameArgs) -> Result<Self, RenameError> {
         let requested = requested_renames(cli)?;
         let root = plan_root(cli.root.as_ref(), &requested[0].0)?;
         let batch = validated_batch(&root, requested, cli.at)?;
@@ -232,7 +184,7 @@ impl Plan {
         for request in cx.batch() {
             let arm = rename_for(&request.anchor).ok_or_else(|| {
                 plan_error(format!(
-                    "no rename arm for {} (extract rename renames {})",
+                    "ryi rename does not support {} (supported: {})",
                     request.anchor,
                     renames()
                         .iter()
@@ -405,12 +357,12 @@ fn respells(
 
 /// The `(anchor, old, new)` rows the invocation asks for, from the positionals
 /// or from the `--list` tsv. The two forms are exclusive.
-fn requested_renames(cli: &RenameCli) -> Result<Vec<(PathBuf, String, String)>, RenameError> {
+fn requested_renames(cli: &RenameArgs) -> Result<Vec<(PathBuf, String, String)>, RenameError> {
     match (&cli.list, &cli.target, &cli.new) {
         (Some(list), None, None) => {
             if cli.at.is_some() {
                 return Err(plan_error(
-                    "--at disambiguates one rename; drop it when --list carries the renames"
+                    "--at cannot be combined with --list"
                         .to_string(),
                 ));
             }
@@ -421,17 +373,17 @@ fn requested_renames(cli: &RenameCli) -> Result<Vec<(PathBuf, String, String)>, 
         )),
         (None, Some(target), Some(new)) => {
             let (anchor, old) = target.rsplit_once('#').ok_or_else(|| {
-                plan_error(format!("a rename target is `<FILE>#<OLD>`, not {target}"))
+                plan_error(format!("rename target must be FILE#OLD, got {target}"))
             })?;
             if anchor.is_empty() || old.is_empty() {
                 return Err(plan_error(format!(
-                    "a rename target is `<FILE>#<OLD>`, not {target}"
+                    "rename target must be FILE#OLD, got {target}"
                 )));
             }
             Ok(vec![(PathBuf::from(anchor), old.to_string(), new.clone())])
         }
         (None, _, _) => Err(plan_error(
-            "extract rename takes <FILE>#<OLD> <NEW>, or --list <tsv>".to_string(),
+            "ryi rename takes FILE#OLD NEW, or --list TSV".to_string(),
         )),
     }
 }

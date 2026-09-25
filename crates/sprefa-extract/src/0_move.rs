@@ -3,10 +3,10 @@
 //! `rehomes()` roster answers per language; nothing in this file names one.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
+use crate::cli::MoveArgs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
 use sprefa_extract::move_stage::{
     content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
     VerifyJournal,
@@ -20,66 +20,17 @@ const PRODUCER: &str = "extract-move";
 
 /// One plan per root: a single root (zero or one `--root`) keeps the one-plan
 /// shape, more than one gets a plan batch in root order.
-fn plan_of(cli: &MoveCli) -> Result<Vec<Plan>, String> {
+fn plan_of(cli: &MoveArgs) -> Result<Vec<Plan>, String> {
     match cli.root.len() {
         0 | 1 => Ok(vec![Plan::build(cli)?]),
         _ => Plan::build_multi(cli),
     }
 }
 
-#[derive(Parser)]
-#[command(
-    name = "extract move",
-    about = "move a file and repair every specifier that named it"
-)]
-struct MoveCli {
-    /// The file to rehome. Omitted when `--list` carries the moves.
-    old: Option<PathBuf>,
-    /// Where it lands.
-    new: Option<PathBuf>,
-    /// A tsv of `old<TAB>new` rows, one move per line. Blank lines and lines
-    /// opening with `#` are skipped; relative paths read against the cwd.
-    #[arg(long)]
-    list: Option<PathBuf>,
-    /// Corpus root. Repeatable: every move must sit under exactly one given
-    /// root, and each root gets its own plan and stage batch. Defaults to the
-    /// git root containing the first `old`.
-    #[arg(long)]
-    root: Vec<PathBuf>,
-    /// Directory the `--verify` command runs in. Defaults to the first root.
-    #[arg(long = "verify-cwd")]
-    verify_cwd: Option<PathBuf>,
-    /// Soopy state root. Must sit outside the corpus root.
-    #[arg(long)]
-    state: Option<PathBuf>,
-    /// Apply the plan to the real tree instead of dry running it.
-    #[arg(long)]
-    commit: bool,
-    /// Leave a reexport shim behind at `old` instead of rewriting importers.
-    #[arg(long)]
-    shim: bool,
-    /// Relocate a moved Rust module's `mod` declaration into its new parent
-    /// and respell `use` paths, instead of adding `#[path]`.
-    #[arg(long = "relocate-mod")]
-    relocate_mod: bool,
-    /// Run this shell command in the move root after `--commit`; a non-zero or
-    /// timed-out run rolls every touched path back to its pre-run state.
-    #[arg(long = "verify")]
-    verify: Option<String>,
-    /// Report the old-path spellings this move leaves behind in plain text.
-    #[arg(long = "text-refs")]
-    text_refs: bool,
-}
-
-pub fn run<I>(args: I) -> Result<(), String>
-where
-    I: IntoIterator,
-    I::Item: Into<std::ffi::OsString> + Clone,
-{
-    let cli = MoveCli::try_parse_from(args).map_err(|error| error.to_string())?;
+pub fn run(cli: MoveArgs) -> Result<(), String> {
     if cli.verify.is_some() && !cli.commit {
         return Err(
-            "--verify runs the command only after --commit; a dry run never runs it".to_string(),
+            "--verify needs --commit".to_string(),
         );
     }
     let plan = plan_of(&cli)?;
@@ -253,7 +204,7 @@ struct Plan {
 }
 
 impl Plan {
-    fn build(cli: &MoveCli) -> Result<Self, String> {
+    fn build(cli: &MoveArgs) -> Result<Self, String> {
         let requested = requested_moves(cli)?;
         let root = plan_root(cli.root.first(), &requested[0].0)?;
         Self::build_for(root, requested, cli)
@@ -261,7 +212,7 @@ impl Plan {
 
     /// One plan per requested root: every move sits under exactly one root, a
     /// row under none or under two is a named error before any stage is built.
-    fn build_multi(cli: &MoveCli) -> Result<Vec<Self>, String> {
+    fn build_multi(cli: &MoveArgs) -> Result<Vec<Self>, String> {
         let requested = requested_moves(cli)?;
         let roots = cli
             .root
@@ -312,7 +263,7 @@ impl Plan {
             }
         }
         if cli.shim && per_root.iter().map(Vec::len).sum::<usize>() > 1 {
-            return Err("--shim rehomes one file; drop --list".to_string());
+            return Err("--shim cannot be combined with --list".to_string());
         }
         roots
             .into_iter()
@@ -324,12 +275,12 @@ impl Plan {
     fn build_for(
         root: PathBuf,
         requested: Vec<(PathBuf, PathBuf)>,
-        cli: &MoveCli,
+        cli: &MoveArgs,
     ) -> Result<Self, String> {
         let cx = MoveCx::open(&root)?;
         let moves = validated_moves(&cx, &root, requested)?;
         if cli.shim && moves.len() > 1 {
-            return Err("--shim rehomes one file; drop --list".to_string());
+            return Err("--shim cannot be combined with --list".to_string());
         }
         let cx = cx
             .with_batch(moves.iter().cloned().collect(), cli.shim)
@@ -540,12 +491,12 @@ fn under(path: &str, directory: &str) -> bool {
 
 /// The `(old, new)` pairs the invocation asks for, from the positionals or from
 /// the `--list` tsv. The two forms are exclusive.
-fn requested_moves(cli: &MoveCli) -> Result<Vec<(PathBuf, PathBuf)>, String> {
+fn requested_moves(cli: &MoveArgs) -> Result<Vec<(PathBuf, PathBuf)>, String> {
     match (&cli.list, &cli.old, &cli.new) {
         (Some(list), None, None) => read_move_list(list),
-        (Some(_), _, _) => Err("--list carries the moves; drop <old> and <new>".to_string()),
+        (Some(_), _, _) => Err("--list cannot be combined with OLD NEW".to_string()),
         (None, Some(old), Some(new)) => Ok(vec![(old.clone(), new.clone())]),
-        (None, _, _) => Err("extract move takes <old> <new>, or --list <tsv>".to_string()),
+        (None, _, _) => Err("ryi move takes OLD NEW, or --list TSV".to_string()),
     }
 }
 
@@ -636,7 +587,7 @@ fn validated_moves(
         }
         let arm = rehome_for(&old_rel).ok_or_else(|| {
             format!(
-                "extract move rehomes {}: {old_rel}",
+                "ryi move does not support {old_rel} (supported: {})",
                 rehomes()
                     .iter()
                     .map(|arm| arm.name())

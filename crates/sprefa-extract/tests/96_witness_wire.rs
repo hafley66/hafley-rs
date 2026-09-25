@@ -239,7 +239,7 @@ fn cfg_under_witness_is_a_named_stop() {
     assert!(!output.status.success(), "--witness --family cfg succeeded");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("--witness does not cover --family cfg"),
+        stderr.contains("--witness does not support --family cfg"),
         "stop is unnamed: {stderr}"
     );
 }

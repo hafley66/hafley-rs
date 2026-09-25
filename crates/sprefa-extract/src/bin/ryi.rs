@@ -21,7 +21,7 @@ use std::time::Instant;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use clap::{Args, Parser, Subcommand};
+use clap::Parser as _;
 
 use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
@@ -36,8 +36,8 @@ use sprefa_extract::{
     ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
-#[path = "ryi/help.rs"]
-mod help;
+#[path = "ryi/0_cli.rs"]
+mod cli;
 
 #[path = "ryi/0_sqlite.rs"]
 mod sqlite;
@@ -45,12 +45,7 @@ mod sqlite;
 #[path = "ryi/0_revision.rs"]
 mod revision;
 
-use help::{
-    AFTER_HELP, BENCH_LONG, DEPS_LONG, FAMILY_LONG, FILE_FACT_LONG, GO_CHECKER_LONG, INDEXER_LONG,
-    LINES_LONG, LONG_ABOUT, MAX_BYTES_LONG, OCCURRENCE_TEXT_LONG, PACKAGE_DEPS_LONG, PATH_LONG,
-    PROJECT_ROOT_LONG, RUST_CHECKER_LONG, SCIP_BUILD_LONG, SCIP_CACHE_LONG, SCIP_DEPS_LONG,
-    SCIP_FACTS_LONG, SCIP_INDEX_LONG, SCIP_RECORD_LONG, SCIP_TIMEOUT_LONG, TS_CHECKER_LONG,
-};
+use cli::{Cmd, FastArgs, FileArgs, Ryi, SlowArgs};
 
 #[path = "../0_query.rs"]
 mod query;
@@ -79,92 +74,21 @@ mod source_rename;
 #[path = "../0_cleave.rs"]
 mod cleave;
 
-#[derive(Parser)]
-#[command(
-    name = "ryi",
-    version,
-    about = "sprefa-extract: one source file -> flat graph facts (JSONL to stdout)",
-    long_about = LONG_ABOUT,
-    after_help = AFTER_HELP,
-    args_conflicts_with_subcommands = true,
-    subcommand_negates_reqs = true,
-    disable_help_subcommand = true,
-)]
-struct Ryi {
-    #[command(subcommand)]
-    mode: Option<ModeCmd>,
-
-    #[command(flatten)]
-    cli: Cli,
-}
-
-#[derive(Subcommand)]
-enum ModeCmd {
-    /// Syntax-only whole-project extraction (`--family diet_scip`).
-    Fast(FastArgs),
-    /// Semantic whole-project extraction from a real SCIP index (`--family scip`).
-    Slow(SlowArgs),
-}
-
-#[derive(Args)]
-struct FastArgs {
-    #[arg(required = true, value_name = "PATH", long_help = PATH_LONG)]
-    paths: Vec<PathBuf>,
-
-    /// Write facts to a NEW SQLite database at PATH, then print schema/query commands.
-    #[arg(long, value_name = "PATH")]
-    sqlite: Option<PathBuf>,
-
-    /// Decorate stdout: 1-based line and col beside every start/end span.
-    #[arg(long, long_help = LINES_LONG)]
-    lines: bool,
-}
-
-#[derive(Args)]
-struct SlowArgs {
-    #[arg(value_name = "ROOT")]
-    root: PathBuf,
-
-    /// Write facts to a NEW SQLite database at PATH, then print schema/query commands.
-    #[arg(long, value_name = "PATH")]
-    sqlite: Option<PathBuf>,
-
-    /// Decorate stdout: 1-based line and col beside every start/end span.
-    #[arg(long, long_help = LINES_LONG)]
-    lines: bool,
-
-    /// Load this index.scip instead of finding or building one.
-    #[arg(long, value_name = "FILE", conflicts_with = "indexer", long_help = SCIP_INDEX_LONG)]
-    scip_index: Option<PathBuf>,
-
-    /// Where the index cache is placed and found.
-    #[arg(long, value_name = "DIR", long_help = SCIP_CACHE_LONG)]
-    scip_cache: Option<PathBuf>,
-
-    /// Wall budget in seconds for ONE indexer run.
-    #[arg(long, value_name = "SECS", long_help = SCIP_TIMEOUT_LONG)]
-    scip_timeout: Option<u64>,
-
-    /// Run ONE named SCIP indexer instead of every one the root's marker files match.
-    #[arg(long, value_name = "LANG", long_help = INDEXER_LONG)]
-    indexer: Option<String>,
-}
-
-impl From<FastArgs> for Cli {
+impl From<FastArgs> for FileArgs {
     fn from(fast: FastArgs) -> Self {
-        Cli {
+        FileArgs {
             paths: fast.paths,
             sqlite: fast.sqlite,
             lines: fast.lines,
             family: Some(vec!["diet_scip".to_string()]),
-            ..Cli::default()
+            ..FileArgs::default()
         }
     }
 }
 
-impl From<SlowArgs> for Cli {
+impl From<SlowArgs> for FileArgs {
     fn from(slow: SlowArgs) -> Self {
-        Cli {
+        FileArgs {
             paths: vec![slow.root],
             sqlite: slow.sqlite,
             lines: slow.lines,
@@ -173,203 +97,9 @@ impl From<SlowArgs> for Cli {
             scip_timeout: slow.scip_timeout,
             indexer: slow.indexer,
             family: Some(vec!["scip".to_string()]),
-            ..Cli::default()
+            ..FileArgs::default()
         }
     }
-}
-
-#[derive(Args, Default)]
-struct Cli {
-    #[arg(required_unless_present_any = ["schema", "ingest", "trail"], value_name = "PATH", long_help = PATH_LONG)]
-    paths: Vec<PathBuf>,
-
-    #[arg(long, value_delimiter = ',', long_help = FAMILY_LONG)]
-    family: Option<Vec<String>>,
-
-    /// Write facts to a NEW SQLite database at PATH, then print schema/query commands.
-    /// Tables and inserts are generated from TypeSpec. Fast and resolve exports retain
-    /// each input's syntax facts before their project-wide derived rows.
-    #[arg(long, value_name = "PATH", conflicts_with_all = ["bench", "schema", "trail"])]
-    sqlite: Option<PathBuf>,
-
-    /// Time extract + flatten and report per-family counts to stderr.
-    #[arg(long, long_help = BENCH_LONG)]
-    bench: bool,
-
-    /// Resolve cross-file edges across all supplied paths (see --family).
-    #[arg(
-        long,
-        conflicts_with_all = ["bench"]
-    )]
-    resolve: bool,
-
-    /// Root that SCIP document paths are relative to; also the --scip-build root.
-    #[arg(long, value_name = "DIR", long_help = PROJECT_ROOT_LONG)]
-    project_root: Option<PathBuf>,
-
-    /// Load a prebuilt index.scip into the resolve context.
-    #[arg(
-        long,
-        value_name = "FILE",
-        conflicts_with_all = ["scip_build", "indexer"],
-        long_help = SCIP_INDEX_LONG,
-    )]
-    scip_index: Option<PathBuf>,
-
-    /// Answer rust call and type destinations with rust-analyzer's own
-    /// resolution instead of the syntax leg's name match.
-    #[arg(
-        long = "rust-checker",
-        requires = "project_root",
-        long_help = RUST_CHECKER_LONG,
-    )]
-    rust_checker: bool,
-
-    /// Answer ts call and type destinations with the TypeScript compiler's own
-    /// resolution instead of the syntax leg's name match.
-    #[arg(
-        long = "ts-checker",
-        requires = "project_root",
-        long_help = TS_CHECKER_LONG,
-    )]
-    ts_checker: bool,
-
-    /// Answer go call and type destinations with go/types' own resolution
-    /// instead of the syntax leg's name match.
-    #[arg(
-        long = "go-checker",
-        requires = "project_root",
-        long_help = GO_CHECKER_LONG,
-    )]
-    go_checker: bool,
-
-    /// Build the index with the language's own indexer, then load it.
-    #[arg(
-        long,
-        requires_all = ["project_root"],
-        long_help = SCIP_BUILD_LONG,
-    )]
-    scip_build: bool,
-
-    /// Stream file-to-file dependency edges folded from a SCIP index.
-    #[arg(
-        long,
-        requires = "project_root",
-        conflicts_with_all = ["bench", "resolve", "scip_facts", "file_fact"],
-        long_help = SCIP_DEPS_LONG,
-    )]
-    scip_deps: bool,
-
-    /// Stream the whole SCIP index as facts, every field the protobuf carries.
-    #[arg(
-        long,
-        requires = "project_root",
-        conflicts_with_all = ["bench", "resolve"],
-        long_help = SCIP_FACTS_LONG,
-    )]
-    scip_facts: bool,
-
-    /// Narrow --scip-facts to a comma-separated list of record kinds.
-    #[arg(
-        long = "scip-record",
-        value_name = "KINDS",
-        requires = "scip_facts",
-        long_help = SCIP_RECORD_LONG,
-    )]
-    scip_record: Option<String>,
-
-    /// Also carry the source slice at each scip_occurrence span, as `text`.
-    #[arg(
-        long = "occurrence-text",
-        requires = "scip_facts",
-        long_help = OCCURRENCE_TEXT_LONG,
-    )]
-    occurrence_text: bool,
-
-    /// Stream file_edge rows resolved syntactically, with no SCIP index.
-    #[arg(
-        long,
-        requires = "project_root",
-        conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "file_fact"],
-        long_help = DEPS_LONG,
-    )]
-    deps: bool,
-
-    /// Stream package_edge rows: workspace-internal manifest-to-manifest edges.
-    #[arg(
-        long = "package-deps",
-        requires = "project_root",
-        conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "deps", "file_fact"],
-        long_help = PACKAGE_DEPS_LONG,
-    )]
-    package_deps: bool,
-
-    /// Prepend one `file` record: path, content digest, byte count, line count.
-    #[arg(long, conflicts_with_all = ["resolve", "scip_facts"], long_help = FILE_FACT_LONG)]
-    file_fact: bool,
-
-    /// Decorate stdout: 1-based line and col beside every start/end span.
-    #[arg(long, long_help = LINES_LONG)]
-    lines: bool,
-
-    /// Wrap the stream in the TSI envelope: protocol, one run per tier, per-row
-    /// `fact` ordinals, one witness per resolver leg, coverage per family.
-    #[arg(
-        long,
-        conflicts_with_all = [
-            "bench", "deps", "package_deps",
-            "scip_facts", "scip_deps", "file_fact",
-        ],
-    )]
-    witness: bool,
-
-    /// Read foreign TSI JSONL, validate it against the relation registry, and
-    /// re-emit it canonically. Several files are read as one stream.
-    #[arg(
-        long,
-        value_name = "PATH",
-        num_args = 1..,
-        conflicts_with_all = [
-            "paths", "family", "bench", "resolve", "deps",
-            "package_deps", "scip_facts", "scip_deps", "file_fact", "witness",
-        ],
-    )]
-    ingest: Vec<PathBuf>,
-
-    /// Byte ceiling for one input; over it emits `size_skip` and exits 0. 0 = none.
-    #[arg(long = "max-bytes", value_name = "BYTES", long_help = MAX_BYTES_LONG)]
-    max_bytes: Option<u64>,
-
-    /// Where `--family scip` places and finds its index cache.
-    #[arg(long, value_name = "DIR", long_help = SCIP_CACHE_LONG)]
-    scip_cache: Option<PathBuf>,
-
-    /// Wall budget in seconds for ONE indexer run under `--family scip`.
-    #[arg(long, value_name = "SECS", long_help = SCIP_TIMEOUT_LONG)]
-    scip_timeout: Option<u64>,
-
-    /// Run ONE named SCIP indexer under `--family scip` instead of every one
-    /// the root's marker files match.
-    #[arg(long, value_name = "LANG", long_help = INDEXER_LONG)]
-    indexer: Option<String>,
-
-    /// Print the JSONL output contract to stdout and exit (no extraction).
-    #[arg(long)]
-    schema: bool,
-
-    /// Print the last N runs of the on-disk trail and exit (no extraction).
-    #[arg(
-        long,
-        value_name = "N",
-        num_args = 0..=1,
-        default_missing_value = "5",
-        conflicts_with_all = [
-            "paths", "family", "bench", "resolve", "deps",
-            "package_deps", "scip_facts", "scip_deps", "file_fact", "witness",
-            "ingest", "schema", "scip_build", "scip_index",
-        ],
-    )]
-    trail: Option<usize>,
 }
 
 /// The two `--family` names that select a whole-project MODE rather than a
@@ -406,8 +136,7 @@ fn family_mode(families: Option<&[String]>) -> Result<Option<FamilyMode>, String
         .collect();
     if mode_names.len() > 1 {
         return Err(format!(
-            "--family named both {} and {}; scip and diet_scip are different \
-             answers to the same question and one invocation gives one of them",
+            "--family: pick {} or {}, not both",
             mode_names[0], mode_names[1]
         ));
     }
@@ -418,8 +147,7 @@ fn family_mode(families: Option<&[String]>) -> Result<Option<FamilyMode>, String
         .collect();
     if !extras.is_empty() {
         return Err(format!(
-            "--family {} is a whole-project mode and cannot combine with {:?}, \
-             which select the per-file extraction mask",
+            "--family {} is a project mode; it cannot be combined with {:?}",
             mode_names[0], extras
         ));
     }
@@ -432,7 +160,7 @@ fn family_mode(families: Option<&[String]>) -> Result<Option<FamilyMode>, String
 /// is a stderr line because it is machine-dependent and would pin a checkout
 /// path into any golden that captured stdout.
 fn stream_scip_family(
-    cli: &Cli,
+    cli: &FileArgs,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if cli.paths.len() != 1 {
@@ -441,7 +169,7 @@ fn stream_scip_family(
     if let Some(lang) = cli.indexer.as_deref() {
         if !sprefa_extract::indexer_langs().contains(&lang) {
             return Err(format!(
-                "--indexer {lang}: not a roster language. One of: {}",
+                "--indexer {lang}: unknown language; known: {}",
                 sprefa_extract::indexer_langs().join(", ")
             )
             .into());
@@ -483,7 +211,7 @@ fn stream_scip_family(
 /// `--lines` on a multi-file verb: load each supplied file's newline offsets
 /// under the path its rows will name, so a row carrying `path` decorates
 /// against its own file. Unreadable inputs simply leave their rows raw.
-fn register_line_tables(cli: &Cli, output: &mut sqlite::Output) {
+fn register_line_tables(cli: &FileArgs, output: &mut sqlite::Output) {
     for path in &cli.paths {
         let Ok(content) = std::fs::read(path) else {
             continue;
@@ -504,8 +232,7 @@ fn check_file_paths(paths: &[PathBuf], allow_stdin: bool) {
         }
         let stop = if path.is_dir() {
             format!(
-                "{} is a directory; --resolve takes files, so expand the tree \
-                 with a shell glob or find",
+                "{} is a directory; pass files",
                 path.display()
             )
         } else if !path.exists() {
@@ -632,73 +359,48 @@ fn emit(line: &str) -> Result<(), std::io::Error> {
     out.write_all(b"\n")
 }
 
+/// A subcommand's error prints and exits 2.
+fn or_exit_2<E: std::fmt::Display>(result: Result<(), E>) -> Result<(), Box<dyn std::error::Error>> {
+    if let Err(error) = result {
+        eprintln!("{error}");
+        exit(2);
+    }
+    Ok(())
+}
+
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    if std::env::args().nth(1).as_deref() == Some("watch") {
-        return watch::run(std::env::args().skip(1));
-    }
-    if std::env::args().nth(1).as_deref() == Some("diff") {
-        if let Err(error) = diff::run(std::env::args().skip(1)) {
-            eprintln!("{error}");
-            exit(2);
+    let ryi = match Ryi::try_parse() {
+        Ok(ryi) => ryi,
+        Err(error) => {
+            let _ = error.print();
+            exit(error.exit_code());
         }
-        return Ok(());
-    }
-    if std::env::args().nth(1).as_deref() == Some("graph") {
-        let argv: Vec<String> = std::env::args().skip(1).collect();
-        if let Err(error) = graph::run(argv) {
-            eprintln!("{error}");
-            exit(2);
-        }
-        return Ok(());
-    }
-    if std::env::args().nth(1).as_deref() == Some("query") {
-        if let Err(error) = query::run(std::env::args().skip(1)) {
-            eprintln!("{error}");
-            exit(2);
-        }
-        return Ok(());
-    }
-    if std::env::args().nth(1).as_deref() == Some("move") {
-        let argv: Vec<String> = std::env::args().skip(1).collect();
-        if let Err(error) = source_move::run(argv) {
-            eprintln!("{error}");
-            exit(2);
-        }
-        return Ok(());
-    }
-    if std::env::args().nth(1).as_deref() == Some("rename") {
-        let argv: Vec<String> = std::env::args().skip(1).collect();
-        if let Err(error) = source_rename::run(argv) {
-            eprintln!("{error}");
-            exit(error.exit);
-        }
-        return Ok(());
-    }
-    if std::env::args().nth(1).as_deref() == Some("cleave") {
-        let argv: Vec<String> = std::env::args().skip(1).collect();
-        if let Err(error) = cleave::run(argv) {
-            eprintln!("{error}");
-            exit(2);
-        }
-        return Ok(());
-    }
-    if std::env::args().nth(1).as_deref() == Some("region") {
-        let argv: Vec<String> = std::env::args().skip(1).collect();
-        match region_writer::run(argv) {
-            Ok(0) => {}
+    };
+    let cli = match ryi.cmd {
+        None => ryi.file,
+        Some(Cmd::Fast(fast)) => FileArgs::from(fast),
+        Some(Cmd::Slow(slow)) => FileArgs::from(slow),
+        Some(Cmd::Watch(args)) => return watch::run(args),
+        Some(Cmd::Diff(args)) => return or_exit_2(diff::run(args)),
+        Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
+        Some(Cmd::Query(args)) => return or_exit_2(query::run(args)),
+        Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args)),
+        Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args)),
+        Some(Cmd::Rename(args)) => match source_rename::run(args) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                eprintln!("{error}");
+                exit(error.exit);
+            }
+        },
+        Some(Cmd::Region(args)) => match region_writer::run(args) {
+            Ok(0) => return Ok(()),
             Ok(code) => exit(code),
             Err(error) => {
                 eprintln!("{}", error.message);
                 exit(error.exit);
             }
-        }
-        return Ok(());
-    }
-    let ryi = Ryi::parse();
-    let cli = match ryi.mode {
-        Some(ModeCmd::Fast(fast)) => Cli::from(fast),
-        Some(ModeCmd::Slow(slow)) => Cli::from(slow),
-        None => ryi.cli,
+        },
     };
 
     // `--scip-timeout` must reach the library's `ScipMode::Build` path, whose
@@ -730,7 +432,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             && cli.project_root.is_none()
             && !matches!(mode, Some(FamilyMode::Scip))
         {
-            return Err("--scip-index requires --project-root outside --family scip ROOT".into());
+            return Err("--scip-index needs --project-root (except with --family scip)".into());
         }
         if !matches!(mode, Some(FamilyMode::Scip)) && !cli.scip_facts && !cli.scip_deps {
             check_file_paths(&cli.paths, false);
@@ -741,7 +443,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     output.finish()
 }
 
-fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std::error::Error>> {
+fn extract_to(cli: &FileArgs, output: &mut sqlite::Output) -> Result<(), Box<dyn std::error::Error>> {
     if !cli.ingest.is_empty() {
         return stream_ingest(&cli.ingest, output);
     }
@@ -832,7 +534,7 @@ fn extract_to(cli: &Cli, output: &mut sqlite::Output) -> Result<(), Box<dyn std:
 }
 
 fn extract_file(
-    cli: &Cli,
+    cli: &FileArgs,
     path: &std::path::Path,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
@@ -884,8 +586,7 @@ fn extract_file(
     // the coverage rows and outside the numbering.
     if cli.witness && cfg {
         return Err(
-            "--witness does not cover --family cfg: the cfg plane is derived \
-                    after the flatten, so its rows carry no fact ordinal"
+            "--witness does not support --family cfg"
                 .into(),
         );
     }
@@ -900,7 +601,7 @@ fn extract_file(
 
 /// The SCIP-mode half of the CLI's flags, shared by `--resolve` and
 /// `--scip-facts`.
-fn scip_request(cli: &Cli) -> Result<ResolveRequest<'_>, String> {
+fn scip_request(cli: &FileArgs) -> Result<ResolveRequest<'_>, String> {
     Ok(ResolveRequest {
         paths: &cli.paths,
         arms: ResolveArms::default(),
@@ -931,7 +632,7 @@ fn scip_request(cli: &Cli) -> Result<ResolveRequest<'_>, String> {
 /// Every decision below is argument shaping; the recipe itself is
 /// `sprefa_extract::project`.
 fn stream_resolve(
-    cli: &Cli,
+    cli: &FileArgs,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
     // Under --resolve, --family names the phase-2 arms. Absent, the default is
@@ -979,14 +680,13 @@ fn parse_arms(families: &[String]) -> Result<ResolveArms, String> {
             other => {
                 tracing::warn!(family = other, "not a resolve arm");
                 return Err(format!(
-                    "--family '{other}' is not a resolve arm; under --resolve only \
-                     'call', 'type' and 'flow' are meaningful"
+                    "--family '{other}': with --resolve use call, type or flow"
                 ));
             }
         }
     }
     if !arms.call && !arms.types && !arms.flow {
-        return Err("--family selected no resolve arm; name call, type or flow".to_string());
+        return Err("--family: with --resolve use call, type or flow".to_string());
     }
     Ok(arms)
 }
@@ -1005,8 +705,7 @@ fn parse_mask(families: &[String]) -> Result<FamilyMask, String> {
             other => {
                 tracing::warn!(family = other, "not a mask family");
                 return Err(format!(
-                    "--family '{other}' is not a mask family; per-file families are \
-                     cst, type, call, df, data, cfg"
+                    "--family '{other}': unknown; use cst, type, call, df, data or cfg"
                 ));
             }
         }
@@ -1070,15 +769,15 @@ fn stream(
         match &bundle {
             None => {
                 let ext = path.rsplit_once('.').map(|(_, ext)| ext).unwrap_or(path);
-                eprintln!("0 facts. No Source matches .{ext}."); // @eprintln-ok
+                eprintln!("0 facts: no extractor for .{ext}"); // @eprintln-ok
             }
             Some(_) => {
                 let name = source_for(path).map_or("a Source", |src| src.name());
-                eprintln!("0 facts. {name} matched {path} but yielded none."); // @eprintln-ok
+                eprintln!("0 facts: {name} found nothing in {path}"); // @eprintln-ok
             }
         }
-        eprintln!("  ryi --family cst {path}    the parse tree, if a grammar loaded");
-        eprintln!("  ryi --schema               which extensions have a Source");
+        eprintln!("  try: ryi --family cst {path}");
+        eprintln!("  supported extensions: ryi --schema");
     }
     output.flush()?;
     sprefa_extract::trace::record_phase(&writing, output.stdout_bytes() - bytes_before, lines, 1);

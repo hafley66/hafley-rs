@@ -2,11 +2,11 @@
 //! question asked of it as SQL over the `callers`/`uses`/`reach` views.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
+use crate::cli::GraphArgs;
 use std::collections::BTreeSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use clap::{ArgGroup, Parser};
 use rusqlite::Connection;
 use sprefa_extract::lang::source_for;
 use sprefa_extract::{
@@ -30,7 +30,7 @@ const USES_SQL: &str = "SELECT \"type_path\", \"type_name\", \"user_path\", \"us
 fn load_store(
     paths: &[PathBuf],
     arms: ResolveArms,
-    cli: &GraphCli,
+    cli: &GraphArgs,
     revision_root: Option<&Path>,
     state: Option<&Path>,
 ) -> Result<Database, Box<dyn std::error::Error>> {
@@ -305,84 +305,6 @@ fn expand_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Box<dyn std::error::E
     Ok(files)
 }
 
-/// The views and the out-of-scope list, stated in help so a caller reads them
-/// before the run rather than after.
-const SCOPE: &str = "Every arm is SQL over the one-shot fact store. With \
-                     --state DIR the store is published as DIR/graph.db (a new path each run; an \
-                     existing one is refused), so the same question re-asks by hand: sqlite3 \
-                     DIR/graph.db 'SELECT * FROM callers WHERE callee_name = ''deep'''. The views \
-                     include type_evidence(type_id, name, fact, run, mode, tool, method, coverage) \
-                     over the witnessed TSI rows; callers(callee_path, callee_name, caller_path, caller_name, grade, \
-                     kind) over resolved_edge, uses(type_path, type_name, user_path, user_name, \
-                     grade, kind) over resolved_type_edge, and reach(src_path, src_name, \
-                     dst_path, dst_name, depth), the recursive closure of resolved_edge capped at \
-                     32 hops. --call-path, --type-path, and --flow-path return one shortest \
-                     path per destination; witness contains the ordered edge _row ids in \
-                     graph.db. Flow seeds use BLOB@START:END and traverse derived inter-procedural \
-                     flow_edge rows. --at REV reads Git blobs; --compare REV reports added and \
-                     removed path endpoints at their shortest depth.\n\nExactly one graph question is required. Out of \
-                     scope, each its own issue: a persistent cross-run graph index (dl8 owns it), \
-                     a maintained liveness or dead-code view, and grading a reach hop by anything \
-                     but the edge that discovered it.";
-
-#[derive(Parser)]
-#[command(
-    name = "ryi graph",
-    about = "ask one question of the resolved call and type graph of a corpus",
-    after_help = SCOPE
-)]
-#[command(group(ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path"])))]
-pub struct GraphCli {
-    /// Files and directories. A directory is walked; every path the language
-    /// roster claims is read, and nothing else.
-    #[arg(required = true, value_name = "PATH")]
-    paths: Vec<PathBuf>,
-    /// Who calls NAME: one row per resolved call edge landing on it.
-    #[arg(long, value_name = "NAME")]
-    callers: Option<String>,
-    /// Who references the type NAME: one row per referencing declaration.
-    #[arg(long, value_name = "NAME")]
-    uses: Option<String>,
-    /// What NAME reaches along resolved call edges, transitively.
-    #[arg(long, value_name = "NAME")]
-    from: Option<String>,
-    /// Shortest witnessed call paths from NAME.
-    #[arg(long, value_name = "NAME")]
-    call_path: Option<String>,
-    /// Shortest witnessed type-reference paths from NAME.
-    #[arg(long, value_name = "NAME")]
-    type_path: Option<String>,
-    /// Witnessed inter-procedural flow paths from BLOB@START:END.
-    #[arg(long, value_name = "BLOB@START:END")]
-    flow_path: Option<String>,
-    /// Publish the fact store as DIR/graph.db instead of keeping it in memory.
-    #[arg(long, value_name = "DIR")]
-    state: Option<PathBuf>,
-    /// Project root for module resolution and optional checker tiers.
-    #[arg(long, value_name = "DIR")]
-    project_root: Option<PathBuf>,
-    /// Query a committed revision of the project root through Git blobs.
-    #[arg(long, value_name = "REV", requires = "project_root", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index"])]
-    at: Option<String>,
-    /// Diff path answers against REV; edge-row witness ids are revision-local.
-    #[arg(long, value_name = "REV", requires = "at", conflicts_with = "state")]
-    compare: Option<String>,
-    /// Load a SCIP index for symbol resolution over the supplied project.
-    #[arg(long, value_name = "FILE", requires = "project_root")]
-    scip_index: Option<PathBuf>,
-    /// Include rust-analyzer type evidence in the state store.
-    #[arg(long, requires = "project_root")]
-    rust_checker: bool,
-    /// Include TypeScript checker type evidence in the state store.
-    #[arg(long, requires = "project_root")]
-    ts_checker: bool,
-    /// Include go/types evidence in the state store.
-    #[arg(long, requires = "project_root")]
-    go_checker: bool,
-    /// Drop the stderr summary line; stdout is JSONL either way.
-    #[arg(long)]
-    json: bool,
-}
 
 /// Which resolve arm each question needs, and which view answers it.
 enum Arm<'a> {
@@ -429,7 +351,7 @@ fn ask_at(
     reader: &mut crate::revision::RevisionReader,
     revision: &str,
     selected: &[PathBuf],
-    cli: &GraphCli,
+    cli: &GraphArgs,
     arm: &Arm<'_>,
     state: Option<&Path>,
 ) -> Result<(String, Vec<FlatFact>), Box<dyn std::error::Error>> {
@@ -501,17 +423,7 @@ fn changed_paths(
     out
 }
 
-pub fn run<I>(args: I) -> Result<(), Box<dyn std::error::Error>>
-where
-    I: IntoIterator,
-    I::Item: Into<std::ffi::OsString> + Clone,
-{
-    // `exit` rather than a returned error: `--help` is an `Err` to clap, and
-    // only clap's own exit prints it to stdout with status 0.
-    let cli = match GraphCli::try_parse_from(args) {
-        Ok(cli) => cli,
-        Err(error) => error.exit(),
-    };
+pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
     let arm = match (
         &cli.callers,
         &cli.uses,

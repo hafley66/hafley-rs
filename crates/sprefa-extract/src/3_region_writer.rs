@@ -1,9 +1,9 @@
 //! `extract region`: check or apply one generated comment region through Soopy.
 
+use crate::cli::RegionArgs;
 use std::io::Read;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
-use clap::Parser;
 use sprefa_extract::move_stage::{stage_and_commit, state_root};
 use sprefa_extract::propose_owned_region;
 
@@ -12,33 +12,7 @@ pub struct RegionError {
     pub exit: i32,
 }
 
-#[derive(Parser)]
-#[command(name = "extract region")]
-struct RegionCli {
-    /// DL7 file containing the owned comment markers.
-    target: PathBuf,
-    /// Marker identifier following `sprefa:auto-begin` and `sprefa:auto-end`.
-    id: String,
-    /// Generated body file, or `-` for stdin.
-    #[arg(long, default_value = "-")]
-    generated: PathBuf,
-    /// Commit the content-guarded replacement. Without this flag, report drift.
-    #[arg(long)]
-    apply: bool,
-    /// Soopy state root used by an applied mutation.
-    #[arg(long)]
-    state: Option<PathBuf>,
-}
-
-pub fn run<I>(args: I) -> Result<i32, RegionError>
-where
-    I: IntoIterator,
-    I::Item: Into<std::ffi::OsString> + Clone,
-{
-    let cli = RegionCli::try_parse_from(args).map_err(|error| RegionError {
-        message: error.to_string(),
-        exit: 2,
-    })?;
+pub fn run(cli: RegionArgs) -> Result<i32, RegionError> {
     let target = cli.target.canonicalize().map_err(|error| RegionError {
         message: format!("open target {}: {error}", cli.target.display()),
         exit: 2,

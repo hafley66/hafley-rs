@@ -272,7 +272,7 @@ fn the_list_and_the_positional_form_are_exclusive() {
     assert!(!output.status.success());
     let message = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(
-        message.contains("--list carries the moves"),
+        message.contains("--list cannot be combined with OLD NEW"),
         "stderr:\n{message}"
     );
 }

@@ -2,6 +2,7 @@
 //! snapshotted through soopy, every blob is read through `git cat-file` (never a
 //! checkout), and the resolved rows are set-differenced on span-free keys.
 
+use crate::cli::DiffArgs;
 use std::collections::BTreeMap;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -36,8 +37,8 @@ struct Side {
     facts: Vec<FlatFact>,
 }
 
-pub fn run(arguments: impl Iterator<Item = String>) -> Result<(), Box<dyn std::error::Error>> {
-    let options = parse(arguments)?;
+pub fn run(args: DiffArgs) -> Result<(), Box<dyn std::error::Error>> {
+    let options = Options::from_args(args)?;
     let mut reader = crate::revision::RevisionReader::open(&options.root)?;
     let a = resolve_at(&mut reader, &options, &options.from)?;
     let b = resolve_at(&mut reader, &options, &options.to)?;
@@ -106,56 +107,22 @@ fn resolve_request<'a>(paths: &'a [PathBuf], options: &Options) -> ResolveReques
     }
 }
 
-fn parse(
-    mut arguments: impl Iterator<Item = String>,
-) -> Result<Options, Box<dyn std::error::Error>> {
-    let _command = arguments.next();
-    let root = arguments.next().ok_or(
-        "usage: extract diff ROOT --from REV --to REV [--pattern GLOB] [--family call,type] \
-         [--sqlite PATH] [--json]",
-    )?;
-    let mut from = None;
-    let mut to = None;
-    let mut patterns = Vec::new();
-    let mut families = Vec::new();
-    let mut sqlite = None;
-    while let Some(argument) = arguments.next() {
-        match argument.as_str() {
-            "--from" => from = Some(arguments.next().ok_or("--from requires a revision")?),
-            "--to" => to = Some(arguments.next().ok_or("--to requires a revision")?),
-            "--pattern" => patterns.push(soopy::Pattern(
-                arguments.next().ok_or("--pattern requires a glob")?.into(),
-            )),
-            "--family" => families.extend(
-                arguments
-                    .next()
-                    .ok_or("--family requires comma-separated names")?
-                    .split(',')
-                    .map(str::to_owned),
-            ),
-            "--sqlite" => {
-                sqlite = Some(PathBuf::from(
-                    arguments.next().ok_or("--sqlite requires a path")?,
-                ))
-            }
-            // JSONL is the only wire this verb writes, so the flag is an
-            // explicit alias for the default rather than a second mode.
-            "--json" => {}
-            unknown => return Err(format!("unknown extract diff argument {unknown}").into()),
-        }
-    }
-    Ok(Options {
-        root: PathBuf::from(root),
-        from: from.ok_or("extract diff requires --from REV")?,
-        to: to.ok_or("extract diff requires --to REV")?,
-        patterns: if patterns.is_empty() {
+impl Options {
+    fn from_args(args: DiffArgs) -> Result<Self, Box<dyn std::error::Error>> {
+        let patterns = if args.patterns.is_empty() {
             crate::watch::default_patterns()
         } else {
-            patterns
-        },
-        arms: parse_arms(&families)?,
-        sqlite,
-    })
+            args.patterns.into_iter().map(|glob| soopy::Pattern(glob.into())).collect()
+        };
+        Ok(Options {
+            root: args.root,
+            from: args.from,
+            to: args.to,
+            patterns,
+            arms: parse_arms(&args.families)?,
+            sqlite: args.sqlite,
+        })
+    }
 }
 
 fn parse_arms(families: &[String]) -> Result<ResolveArms, Box<dyn std::error::Error>> {
@@ -177,7 +144,7 @@ fn parse_arms(families: &[String]) -> Result<ResolveArms, Box<dyn std::error::Er
             "type" | "types" => arms.types = true,
             unknown => {
                 return Err(
-                    format!("unknown extract diff family {unknown}: expected call or type").into(),
+                    format!("--family {unknown}: use call or type").into(),
                 )
             }
         }

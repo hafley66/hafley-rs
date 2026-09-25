@@ -79,7 +79,7 @@ fn unknown_arm_names_flow_in_its_error() {
     assert!(!output.status.success(), "a bogus arm name has to stop");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("is not a resolve arm") && stderr.contains("flow"),
+        stderr.contains("with --resolve use call, type or flow"),
         "the error text has to name the arms, flow included: {stderr}"
     );
 }

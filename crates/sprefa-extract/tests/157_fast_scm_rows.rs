@@ -194,7 +194,7 @@ fn a_mode_refuses_a_per_file_mask_beside_it() {
     assert!(!output.status.success(), "a mode and a mask cannot combine");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("whole-project mode"),
+        stderr.contains("is a project mode"),
         "the refusal names the reason: {stderr}"
     );
 }

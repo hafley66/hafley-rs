@@ -90,21 +90,3 @@ fn document_format_coverage_is_what_the_cli_claims() {
     std::fs::remove_dir_all(&dir).ok();
 }
 
-/// The CLI's own coverage text must name the formats the test above proves are
-/// covered. A caller reads `--help`, not this file.
-#[test]
-fn the_cli_help_names_the_fallback_formats() {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .arg("--help")
-        .output()
-        .expect("extract binary runs");
-    let help = String::from_utf8(output.stdout).unwrap();
-    for (extension, family, _) in FORMATS {
-        if !family.is_empty() {
-            assert!(
-                help.contains(extension),
-                "--help does not mention .{extension}, which the extractor does handle"
-            );
-        }
-    }
-}

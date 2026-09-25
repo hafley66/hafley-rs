@@ -199,7 +199,7 @@ fn an_unknown_family_name_still_stops_by_name() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("cst, type, call, df, data, cfg"),
+        stderr.contains("cst, type, call, df, data or cfg"),
         "the mask error must name the data family: {stderr}"
     );
 }

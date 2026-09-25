@@ -3,10 +3,10 @@
 //! fact rows only; the `Cleave` roster spells the three edits they cannot.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
+use crate::cli::CleaveArgs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
 use sprefa_extract::move_stage::{
     content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
     VerifyJournal,
@@ -20,58 +20,12 @@ use sprefa_extract::{
 
 const PRODUCER: &str = "extract-cleave";
 
-/// The out-of-scope list the help text states, so a caller reads it before the
-/// run rather than after.
-const SCOPE: &str = "Out of scope, each its own issue: cross-language cleave, moving a type \
-                     together with its `impl` blocks, and an item whose free names no specifier \
-                     and no declaration answer (the names and the `ryi graph --uses` command that \
-                     answers them print, exit 0).";
+const SCOPE: &str = "not supported: cross-language cleave, moving a type with its impl blocks";
 
-#[derive(Parser)]
-#[command(
-    name = "ryi cleave",
-    about = "move one item out of a file into another, with the imports it needs",
-    after_help = SCOPE
-)]
-pub struct CleaveCli {
-    /// `<SRC>#<ITEM>`: the file the item is declared in and its name.
-    target: String,
-    /// The file it lands in. Created when it does not exist.
-    dest: PathBuf,
-    /// Corpus root. Defaults to the git root holding SRC.
-    #[arg(long)]
-    root: Option<PathBuf>,
-    /// Soopy state root. Must sit outside the corpus root.
-    #[arg(long)]
-    state: Option<PathBuf>,
-    /// Move the same-file private helpers only the item uses. A shared helper
-    /// is exported and imported either way; this decides the sole-user ones.
-    #[arg(long)]
-    drag: bool,
-    /// Apply the plan to the real tree instead of dry running it.
-    #[arg(long)]
-    commit: bool,
-    /// Run this shell command in the root after `--commit`; a non-zero or
-    /// timed-out run rolls every touched file back to its pre-run state.
-    #[arg(long = "verify")]
-    verify: Option<String>,
-    /// Report the SRC spellings this cleave leaves behind in plain text.
-    #[arg(long = "text-refs")]
-    text_refs: bool,
-    /// Close the output with one JSON line carrying the whole plan.
-    #[arg(long)]
-    json: bool,
-}
-
-pub fn run<I>(args: I) -> Result<(), String>
-where
-    I: IntoIterator,
-    I::Item: Into<std::ffi::OsString> + Clone,
-{
-    let cli = CleaveCli::try_parse_from(args).map_err(|error| error.to_string())?;
+pub fn run(cli: CleaveArgs) -> Result<(), String> {
     if cli.verify.is_some() && !cli.commit {
         return Err(
-            "--verify runs the command only after --commit; a dry run never runs it".to_string(),
+            "--verify needs --commit".to_string(),
         );
     }
     let plan = Plan::build(&cli)?;
@@ -273,7 +227,7 @@ impl Plan {
         Ok(())
     }
 
-    fn build(cli: &CleaveCli) -> Result<Self, String> {
+    fn build(cli: &CleaveArgs) -> Result<Self, String> {
         let (src, item) = split_target(&cli.target)?;
         let root = plan_root(cli.root.as_ref(), &src)?;
         let cx = MoveCx::open(&root)?;
@@ -1315,9 +1269,9 @@ fn inside(inner: Span, outer: Span) -> bool {
 fn split_target(target: &str) -> Result<(PathBuf, String), String> {
     let (src, item) = target
         .rsplit_once('#')
-        .ok_or_else(|| format!("a cleave target is `<SRC>#<ITEM>`, not {target}"))?;
+        .ok_or_else(|| format!("cleave target must be SRC#ITEM, got {target}"))?;
     if src.is_empty() || item.is_empty() {
-        return Err(format!("a cleave target is `<SRC>#<ITEM>`, not {target}"));
+        return Err(format!("cleave target must be SRC#ITEM, got {target}"));
     }
     Ok((PathBuf::from(src), item.to_string()))
 }

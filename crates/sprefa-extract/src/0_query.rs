@@ -1,26 +1,9 @@
+use crate::cli::QueryArgs;
 use std::path::{Path, PathBuf};
 
-use clap::Parser;
 use sprefa_extract::{query_source, SourceQuery, SourceQueryOutput, TreeSitterQuery};
 
-#[derive(Parser)]
-#[command(name = "extract query")]
-struct QueryCli {
-    #[arg(long)]
-    lang: String,
-    #[arg(long)]
-    query: String,
-    #[arg(long)]
-    digest: Option<String>,
-    path: PathBuf,
-}
-
-pub fn run<I>(args: I) -> Result<(), String>
-where
-    I: IntoIterator,
-    I::Item: Into<std::ffi::OsString> + Clone,
-{
-    let cli = QueryCli::try_parse_from(args).map_err(one_line)?;
+pub fn run(cli: QueryArgs) -> Result<(), String> {
     let bytes = source_bytes(&cli.path, cli.digest.as_deref())?;
     let request = SourceQuery::TreeSitter(TreeSitterQuery {
         language: cli.lang,
@@ -57,10 +40,6 @@ fn cat_blob(path: &Path, oid: &str) -> Result<Vec<u8>, String> {
         .read(&soopy::ObjectId(oid.into()))
         .map_err(|error| one_line_text(format!("git cat-file blob {oid}: {error}")))?;
     Ok(bytes.to_vec())
-}
-
-fn one_line(error: clap::Error) -> String {
-    one_line_text(error.to_string())
 }
 
 fn one_line_text(text: String) -> String {
