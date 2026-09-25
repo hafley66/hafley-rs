@@ -1487,6 +1487,9 @@ fn kt_module_facts_of(
     })?
 }
 
+/// Stack per extraction worker.
+const EXTRACT_STACK_BYTES: usize = 256 * 1024 * 1024;
+
 /// Extraction thread budget: every core but one, so the machine stays usable
 /// while a corpus extracts.
 fn extract_thread_cap() -> usize {
@@ -1516,6 +1519,9 @@ static EXTRACT_POOL: LazyLock<rayon::ThreadPool> = LazyLock::new(|| {
     rayon::ThreadPoolBuilder::new()
         .num_threads(extract_thread_cap())
         .thread_name(|index| format!("extract-{index}"))
+        // syn and tree walks recurse per nesting level; a deeply nested file
+        // overflowed the 2 MiB default. Untouched stack pages cost nothing.
+        .stack_size(EXTRACT_STACK_BYTES)
         .build()
         .expect("extract thread pool builds")
 });

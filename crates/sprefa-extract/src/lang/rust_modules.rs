@@ -1085,10 +1085,10 @@ impl RustModuleIndex {
     ) -> (Resolution, bool) {
         let mut full = qualifier.to_vec();
         full.push(asked.to_string());
-        if let HomeFile::Unique(file) = self.home_file(from, &full, seen) {
+        if let HomeFile::Unique(file) = self.home_file(from, &full, seen, stack) {
             return (Resolution::Module { file, hops: 1 }, true);
         }
-        match self.home_file(from, qualifier, seen) {
+        match self.home_file(from, qualifier, seen, stack) {
             HomeFile::Unique(file) => self.resolve_in_module(&file, asked, stack),
             HomeFile::None | HomeFile::External => (Resolution::None, true),
             HomeFile::Ambiguous => (Resolution::Ambiguous, true),
@@ -1098,7 +1098,13 @@ impl RustModuleIndex {
     /// A one-segment qualifier naming THIS file's own inline `mod` is a
     /// same-blob hit; a bare declared or `use`-bound head resolves relative
     /// to the caller; else a corpus-wide suffix search on the module path.
-    fn home_file(&self, from: &str, qualifier: &[String], seen: &mut Vec<String>) -> HomeFile {
+    fn home_file(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        seen: &mut Vec<String>,
+        stack: &mut Vec<String>,
+    ) -> HomeFile {
         if qualifier.is_empty() {
             return HomeFile::None;
         }
@@ -1115,7 +1121,7 @@ impl RustModuleIndex {
             if let Some(home) = self.declared_home(from, qualifier) {
                 return home;
             }
-            if let Some(home) = self.bound_home(from, qualifier, seen) {
+            if let Some(home) = self.bound_home(from, qualifier, seen, stack) {
                 return home;
             }
             if let Some(lib) = self.crate_libs.get(&qualifier[0]) {
@@ -1190,11 +1196,14 @@ impl RustModuleIndex {
     /// naming no corpus module is External.
     /// `seen` carries the binding heads already followed on this query: a
     /// `use b::a; use a::b;` pair would otherwise recurse forever.
+    /// `stack` carries the export tables open above this query: a fresh one
+    /// here lost the re-export cycle guard (issue rust-module-export-cycle).
     fn bound_home(
         &self,
         from: &str,
         qualifier: &[String],
         seen: &mut Vec<String>,
+        stack: &mut Vec<String>,
     ) -> Option<HomeFile> {
         let facts = self.facts.get(from)?;
         let binding = facts
@@ -1208,9 +1217,8 @@ impl RustModuleIndex {
             return None;
         }
         seen.push(qualifier[0].clone());
-        let mut stack = Vec::new();
         let home = match self
-            .resolve_qualified(from, &binding.qualifier, &binding.asked, &mut stack, seen)
+            .resolve_qualified(from, &binding.qualifier, &binding.asked, stack, seen)
             .0
         {
             Resolution::Module { file, .. } => {
@@ -1266,7 +1274,7 @@ impl RustModuleIndex {
         {
             return ModuleCallTarget::External;
         }
-        match self.home_file(from, qualifier, &mut Vec::new()) {
+        match self.home_file(from, qualifier, &mut Vec::new(), &mut Vec::new()) {
             HomeFile::Unique(file) => {
                 let mut stack = Vec::new();
                 match self.resolve_in_module(&file, callee, &mut stack).0 {
@@ -1384,7 +1392,7 @@ impl RustModuleIndex {
     ) -> ExportTable {
         let mut starred = ExportTable::new();
         for star in stars {
-            let HomeFile::Unique(target) = self.home_file(file, &star.qualifier, &mut Vec::new())
+            let HomeFile::Unique(target) = self.home_file(file, &star.qualifier, &mut Vec::new(), stack)
             else {
                 continue;
             };

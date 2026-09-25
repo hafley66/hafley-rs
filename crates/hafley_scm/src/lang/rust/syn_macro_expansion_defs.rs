@@ -9,7 +9,7 @@ use ra_ap_syntax_bridge::{
     syntax_node_to_token_tree, token_tree_to_syntax_node, DocCommentDesugarMode, SpanMapper,
 };
 use ra_ap_tt::TopSubtree;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 
 // A macro that keeps minting more of itself, never a budget to raise.
@@ -140,7 +140,7 @@ fn edition(_ctx: SyntaxContext) -> Edition {
     Edition::CURRENT
 }
 
-fn collect_rules(node: &SyntaxNode, defs: &mut HashMap<String, TopSubtree>) {
+fn collect_rules(node: &SyntaxNode, defs: &mut HashMap<String, (TopSubtree, String)>) {
     for ev in node.preorder() {
         let ra_ap_syntax::WalkEvent::Enter(n) = ev else {
             continue;
@@ -158,7 +158,7 @@ fn collect_rules(node: &SyntaxNode, defs: &mut HashMap<String, TopSubtree>) {
             ra_span_at(tt.syntax().text_range()),
             DocCommentDesugarMode::Mbe,
         );
-        defs.insert(name, top);
+        defs.insert(name, (top, mr.syntax().text().to_string()));
     }
 }
 
@@ -213,7 +213,10 @@ fn spaced_text(node: SyntaxNode) -> String {
 
 /// One pass over `text`: expand every LOCAL `macro_rules!` invocation found
 /// there. A name with no local def (cross-file, builtin, derive) is untouched.
-fn expand_pass(text: &str) -> Vec<(Range<u32>, String, String)> {
+/// `failed` holds the (definition, call) texts whose expansion already erred:
+/// an unexpanded call survives into every later pass, and matching it again
+/// is deterministic and can cost hundreds of milliseconds.
+fn expand_pass(text: &str, failed: &mut HashSet<(String, String)>) -> Vec<(Range<u32>, String, String)> {
     let parsed = SourceFile::parse(text, Edition::CURRENT);
     let root = parsed.syntax_node();
     let mut defs = HashMap::new();
@@ -223,12 +226,22 @@ fn expand_pass(text: &str) -> Vec<(Range<u32>, String, String)> {
 
     let db = Db::default();
     let mut edits = Vec::new();
+    // One parse per definition per pass, however many invocations name it.
+    let mut parsed: HashMap<&str, DeclarativeMacro> = HashMap::new();
     for inv in &calls {
-        let Some(def_tt) = defs.get(&inv.name) else {
+        let Some((def_tt, def_text)) = defs.get(&inv.name) else {
             continue;
         };
-        let mac = DeclarativeMacro::parse_macro_rules(def_tt, edition);
+        let call_text = &text[u32::from(inv.range.start()) as usize..u32::from(inv.range.end()) as usize];
+        let key = (def_text.clone(), call_text.to_string());
+        if failed.contains(&key) {
+            continue;
+        }
+        let mac = parsed
+            .entry(inv.name.as_str())
+            .or_insert_with(|| DeclarativeMacro::parse_macro_rules(def_tt, edition));
         if mac.err().is_some() {
+            failed.insert(key);
             continue;
         }
         let res = mac.expand(
@@ -239,6 +252,7 @@ fn expand_pass(text: &str) -> Vec<(Range<u32>, String, String)> {
             ra_span_at(inv.range),
         );
         if res.err.is_some() {
+            failed.insert(key);
             continue;
         }
         let (top, _) = res.value;
@@ -353,7 +367,8 @@ pub fn expand_file(content: &str) -> Option<Expanded> {
     if !content.contains("macro_rules!") {
         return None;
     }
-    let first_pass = expand_pass(content);
+    let mut failed = HashSet::new();
+    let first_pass = expand_pass(content, &mut failed);
     if first_pass.is_empty() {
         return None;
     }
@@ -372,7 +387,7 @@ pub fn expand_file(content: &str) -> Option<Expanded> {
             budget_hit = true;
             break;
         }
-        let edits = expand_pass(&text);
+        let edits = expand_pass(&text, &mut failed);
         if edits.is_empty() {
             break;
         }
@@ -384,7 +399,7 @@ pub fn expand_file(content: &str) -> Option<Expanded> {
         text = next_text;
         chunks = next_chunks;
     }
-    if !budget_hit && !expand_pass(&text).is_empty() {
+    if !budget_hit && !expand_pass(&text, &mut failed).is_empty() {
         budget_hit = true;
     }
 
