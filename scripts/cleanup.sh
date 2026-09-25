@@ -26,9 +26,14 @@ if [[ -n $DRY ]]; then
   cargo sweep --recursive --dry-run --time "$sweep_days" "$P"
 else
   kondo --all --quiet --older "$age" "${worktrees[@]}"
-  cargo sweep --recursive --time "$sweep_days" "$P"
-  cargo cache --autoclean
-  pnpm store prune
+  # Sweeping a target dir mid-build leaves rlibs whose objects are gone: link fails.
+  if pgrep -x cargo >/dev/null || pgrep -x rustc >/dev/null; then
+    echo "cargo running: sweep skipped"
+  else
+    cargo sweep --recursive --time "$sweep_days" "$P"
+    cargo cache --autoclean
+  fi
+  corepack pnpm@10.12.4 store prune
 fi
 for r in "$P"/*/; do
   [[ -e $r/.git ]] && git -C "$r" worktree prune ${DRY:+--dry-run --verbose}
