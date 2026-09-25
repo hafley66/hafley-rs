@@ -92,6 +92,12 @@ pub fn record_phase(span: &Span, bytes: u64, rows: u64, calls: u64) {
     span.record("calls", calls);
 }
 
+/// One whole-project stage (expand, read, index build, resolve, emit), for the
+/// timeline; it carries no counts, so the summary tables never fold it.
+pub fn stage_span(stage: &'static str) -> Span {
+    tracing::debug_span!("stage", stage)
+}
+
 /// One backing engine's parse over one file.
 pub fn parse_span(lang: &'static str, engine: &'static str) -> Span {
     tracing::debug_span!("parse", lang, engine)
@@ -534,6 +540,9 @@ mod sink {
                 return;
             };
             drop(extensions);
+            if counts.name == "stage" {
+                return;
+            }
             if let Some(phase) = counts.phase {
                 let tallies = (counts.calls, counts.rows, counts.bytes);
                 let lang = if counts.lang == "-" {

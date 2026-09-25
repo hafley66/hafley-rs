@@ -437,6 +437,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     // Input expansion can exit with clap-style status 2. Do it before opening
     // an export so such an exit cannot strand a staging database.
+    let expanding = sprefa_extract::trace::stage_span("expand").entered();
     cli.paths = match inputs::expand(&cli.inputs) {
         Ok(paths) => paths,
         Err(error) => {
@@ -445,6 +446,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             exit(2);
         }
     };
+    drop(expanding);
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
         eprintln!("ryi: no inputs; pass files, directories, globs, - or --entry");
@@ -487,7 +489,9 @@ fn extract_to(
         if cli.lines {
             register_line_tables(cli, output);
         }
-        for line in diet_scip_jsonl(&cli.paths)? {
+        let lines = diet_scip_jsonl(&cli.paths)?;
+        let _write = sprefa_extract::trace::stage_span("write").entered();
+        for line in lines {
             output.line(&line)?;
         }
         return Ok(());

@@ -1,7 +1,7 @@
 //! `ryi fast`'s symbol / occurrence / local rows, from a per-language `.scm`
 //! query run through the shared `hafley_scm` engine, plus the file's scope tree.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
@@ -447,6 +447,105 @@ fn scm_error(path: &str, error: hafley_scm::QueryExtError) -> ScmError {
     }
 }
 
+/// Spans indexed for the innermost-holder question: which span is the smallest
+/// one holding `[start, end)`, ties to the lowest index. tree-sitter nodes nest,
+/// so the answer walks up from the last span starting at or before `start`;
+/// a set that does not nest falls back to the linear scan.
+struct Nest {
+    spans: Vec<(u32, u32)>,
+    /// Span indices by (start asc, end desc, index desc): among identical spans
+    /// the lowest index sits deepest, so it is reached first.
+    order: Vec<usize>,
+    starts: Vec<u32>,
+    up: Vec<Option<usize>>,
+    nested: bool,
+}
+
+impl Nest {
+    fn new(spans: Vec<(u32, u32)>) -> Self {
+        let mut order: Vec<usize> = (0..spans.len()).collect();
+        order.sort_by(|&a, &b| {
+            spans[a]
+                .0
+                .cmp(&spans[b].0)
+                .then(spans[b].1.cmp(&spans[a].1))
+                .then(b.cmp(&a))
+        });
+        let mut up = vec![None; spans.len()];
+        let mut stack: Vec<usize> = Vec::new();
+        let mut nested = true;
+        for &index in &order {
+            let (start, end) = spans[index];
+            while let Some(&top) = stack.last() {
+                if end <= spans[top].1 {
+                    break;
+                }
+                if start < spans[top].1 {
+                    nested = false;
+                }
+                stack.pop();
+            }
+            up[index] = stack.last().copied();
+            stack.push(index);
+        }
+        let starts = order.iter().map(|&index| spans[index].0).collect();
+        Self {
+            spans,
+            order,
+            starts,
+            up,
+            nested,
+        }
+    }
+
+    fn holds(&self, index: usize, start: u32, end: u32) -> bool {
+        let (from, to) = self.spans[index];
+        from <= start && end <= to
+    }
+
+    fn innermost(&self, start: u32, end: u32, skip: Option<usize>) -> Option<usize> {
+        if !self.nested {
+            return (0..self.spans.len())
+                .filter(|&index| skip != Some(index) && self.holds(index, start, end))
+                .min_by_key(|&index| self.spans[index].1 - self.spans[index].0);
+        }
+        let last = self.starts.partition_point(|&from| from <= start);
+        let mut at = last.checked_sub(1).map(|position| self.order[position]);
+        while let Some(index) = at {
+            if skip != Some(index) && self.holds(index, start, end) {
+                return Some(index);
+            }
+            at = self.up[index];
+        }
+        None
+    }
+}
+
+/// The file's scopes (index 0 is the file itself) and the nest that answers
+/// which scope holds a span.
+struct Scopes {
+    scopes: Vec<Scope>,
+    nest: Nest,
+}
+
+impl Scopes {
+    fn containing(&self, start: u32, end: u32, skip: Option<usize>) -> usize {
+        self.nest.innermost(start, end, skip).unwrap_or(ROOT)
+    }
+}
+
+/// The first definition each (scope, name) pair owns, in definition order:
+/// the lexical walk's per-scope question.
+type Owned<'a> = HashMap<(usize, &'a str), usize>;
+
+fn owned(definitions: &[Definition]) -> Owned<'_> {
+    let mut owned = HashMap::new();
+    for (index, def) in definitions.iter().enumerate() {
+        owned.entry((def.owner, def.name.as_str())).or_insert(index);
+    }
+    owned
+}
+
 /// The scope tree, the definitions it owns, and the references it resolves,
 /// projected onto the three pass-1 rows.
 fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact> {
@@ -454,22 +553,20 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
     let scope_spans = labelled(&captures, |label| label == "local.scope");
     let scopes = scope_tree(file_end, &scope_spans);
     let definitions = definitions(&captures, &scopes);
-    let names = scope_names(&scopes, &definitions);
+    let owned = owned(&definitions);
+    let by_start = starts_order(&definitions);
+    let names = scope_names(&scopes.scopes, &definitions, &by_start);
     let exports = labelled(&captures, |label| label == "local.export.package");
-    let declaring = exports.iter().any(|export| {
-        !definitions
-            .iter()
-            .any(|def| export.start <= def.start && def.end <= export.end)
-    });
+    let declaring = exports
+        .iter()
+        .any(|export| first_inside(&definitions, &by_start, export.start, export.end).is_none());
+    let export_nest = Nest::new(exports.iter().map(|export| (export.start, export.end)).collect());
 
     let mut facts = Vec::new();
     for def in &definitions {
         let symbol = symbol(path, &def.name);
         let exported = def.owner == ROOT
-            && (declaring
-                || exports
-                    .iter()
-                    .any(|export| export.start <= def.start && def.end <= export.end));
+            && (declaring || export_nest.innermost(def.start, def.end, None).is_some());
         facts.push(FlatFact::SymbolRow {
             symbol: symbol.clone(),
             path: path.to_string(),
@@ -499,14 +596,12 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
         }
     }
 
-    for call in labelled(&captures, |label| label == "local.call") {
-        if definitions
-            .iter()
-            .any(|def| def.start == call.start && def.end == call.end)
-        {
+    let bound: HashSet<(u32, u32)> = definitions.iter().map(|def| (def.start, def.end)).collect();
+    for call in captures.iter().filter(|capture| capture.label == "local.call") {
+        if bound.contains(&(call.start, call.end)) {
             continue;
         }
-        let Some(target) = resolve(&call, &scopes, &definitions) else {
+        let Some(target) = resolve(call, &scopes, &definitions, &owned) else {
             continue;
         };
         facts.push(FlatFact::OccurrenceRow {
@@ -520,7 +615,7 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
             decl_end: call.end,
         });
     }
-    facts.extend(free_names(path, file_end, &captures, &scopes, &definitions));
+    facts.extend(free_names(path, file_end, &captures, &scopes, &definitions, &owned, &bound));
     facts
 }
 
@@ -530,32 +625,39 @@ fn free_names(
     path: &str,
     file_end: u32,
     captures: &[Capture],
-    scopes: &[Scope],
+    scopes: &Scopes,
     definitions: &[Definition],
+    owned: &Owned<'_>,
+    bound: &HashSet<(u32, u32)>,
 ) -> Vec<FlatFact> {
-    let bound: BTreeSet<(u32, u32)> = definitions.iter().map(|def| (def.start, def.end)).collect();
-    let imports = labelled(captures, |label| label == "local.import");
+    let imports = Nest::new(
+        captures
+            .iter()
+            .filter(|capture| capture.label == "local.import")
+            .map(|capture| (capture.start, capture.end))
+            .collect(),
+    );
     let mut facts = Vec::new();
-    for name in labelled(captures, |label| label == "local.reference") {
+    for name in captures.iter().filter(|capture| capture.label == "local.reference") {
         if bound.contains(&(name.start, name.end)) {
             continue;
         }
-        if containing_span(&imports, name.start, name.end).is_some() {
+        if imports.innermost(name.start, name.end, None).is_some() {
             continue;
         }
-        if resolve(&name, scopes, definitions).is_some_and(|def| def.owner != ROOT) {
+        if resolve(name, scopes, definitions, owned).is_some_and(|def| def.owner != ROOT) {
             continue;
         }
-        let owner = top_level(scopes, containing(scopes, name.start, name.end, None));
+        let owner = top_level(&scopes.scopes, scopes.containing(name.start, name.end, None));
         facts.push(FlatFact::FreeNameRow {
             path: path.to_string(),
             owner_start: match owner {
                 ROOT => 0,
-                index => scopes[index].start,
+                index => scopes.scopes[index].start,
             },
             owner_end: match owner {
                 ROOT => file_end,
-                index => scopes[index].end,
+                index => scopes.scopes[index].end,
             },
             name: name.text.clone(),
             start: name.start,
@@ -582,18 +684,16 @@ fn top_level(scopes: &[Scope], scope: usize) -> usize {
 /// ancestors, and the first definition of the name any of them owns.
 fn resolve<'a>(
     call: &Capture,
-    scopes: &[Scope],
+    scopes: &Scopes,
     definitions: &'a [Definition],
+    owned: &Owned<'_>,
 ) -> Option<&'a Definition> {
-    let mut scope = Some(containing(scopes, call.start, call.end, None));
+    let mut scope = Some(scopes.containing(call.start, call.end, None));
     while let Some(index) = scope {
-        if let Some(found) = definitions
-            .iter()
-            .find(|def| def.owner == index && def.name == call.text)
-        {
-            return Some(found);
+        if let Some(&found) = owned.get(&(index, call.text.as_str())) {
+            return Some(&definitions[found]);
         }
-        scope = scopes[index].parent;
+        scope = scopes.scopes[index].parent;
     }
     None
 }
@@ -611,7 +711,7 @@ fn labelled(captures: &[Capture], accepts: impl Fn(&str) -> bool) -> Vec<Capture
 }
 
 /// Index 0 is the file itself, so every span has an owner.
-fn scope_tree(file_end: u32, spans: &[Capture]) -> Vec<Scope> {
+fn scope_tree(file_end: u32, spans: &[Capture]) -> Scopes {
     let mut scopes = vec![Scope {
         start: 0,
         end: file_end,
@@ -624,26 +724,33 @@ fn scope_tree(file_end: u32, spans: &[Capture]) -> Vec<Scope> {
             parent: None,
         });
     }
+    let nest = Nest::new(scopes.iter().map(|scope| (scope.start, scope.end)).collect());
     for index in 1..scopes.len() {
         let (start, end) = (scopes[index].start, scopes[index].end);
-        scopes[index].parent = Some(containing(&scopes, start, end, Some(index)));
+        scopes[index].parent = Some(nest.innermost(start, end, Some(index)).unwrap_or(ROOT));
     }
-    scopes
+    Scopes { scopes, nest }
 }
 
 /// A function or type belongs to the scope AROUND the one it opens: its own
 /// body must not be where its name resolves.
-fn definitions(captures: &[Capture], scopes: &[Scope]) -> Vec<Definition> {
-    let spans = labelled(captures, |label| label == "local.def.span");
+fn definitions(captures: &[Capture], scopes: &Scopes) -> Vec<Definition> {
+    let spans = Nest::new(
+        captures
+            .iter()
+            .filter(|capture| capture.label == "local.def.span")
+            .map(|capture| (capture.start, capture.end))
+            .collect(),
+    );
     let mut definitions = Vec::new();
     for capture in captures {
         let Some(kind) = capture.label.strip_prefix("local.definition.") else {
             continue;
         };
-        let direct = containing(scopes, capture.start, capture.end, None);
+        let direct = scopes.containing(capture.start, capture.end, None);
         let owner = if kind == "function" || kind == "type" {
-            let (start, end) = (scopes[direct].start, scopes[direct].end);
-            containing(scopes, start, end, Some(direct))
+            let (start, end) = (scopes.scopes[direct].start, scopes.scopes[direct].end);
+            scopes.containing(start, end, Some(direct))
         } else {
             direct
         };
@@ -653,37 +760,50 @@ fn definitions(captures: &[Capture], scopes: &[Scope]) -> Vec<Definition> {
             start: capture.start,
             end: capture.end,
             owner,
-            decl: containing_span(&spans, capture.start, capture.end)
-                .map_or((capture.start, capture.end), |span| (span.start, span.end)),
+            decl: spans
+                .innermost(capture.start, capture.end, None)
+                .map_or((capture.start, capture.end), |index| spans.spans[index]),
         });
     }
     definitions
 }
 
+/// Definition indices by (start, index): the order `min_by_key(start)` breaks
+/// ties in.
+fn starts_order(definitions: &[Definition]) -> Vec<usize> {
+    let mut order: Vec<usize> = (0..definitions.len()).collect();
+    order.sort_by_key(|&index| (definitions[index].start, index));
+    order
+}
+
+/// The earliest-starting definition inside `[start, end)`, ties to the lowest
+/// index.
+fn first_inside<'a>(
+    definitions: &'a [Definition],
+    by_start: &[usize],
+    start: u32,
+    end: u32,
+) -> Option<&'a Definition> {
+    let from = by_start.partition_point(|&index| definitions[index].start < start);
+    by_start[from..]
+        .iter()
+        .map(|&index| &definitions[index])
+        .take_while(|def| def.start <= end)
+        .find(|def| def.end <= end)
+}
+
 /// A scope's name is the first definition inside it, which for a function or a
 /// class scope is its own declared name.
-fn scope_names(scopes: &[Scope], definitions: &[Definition]) -> BTreeMap<usize, String> {
+fn scope_names(
+    scopes: &[Scope],
+    definitions: &[Definition],
+    by_start: &[usize],
+) -> BTreeMap<usize, String> {
     let mut names = BTreeMap::new();
     for (index, scope) in scopes.iter().enumerate() {
-        if let Some(first) = definitions
-            .iter()
-            .filter(|def| scope.start <= def.start && def.end <= scope.end)
-            .min_by_key(|def| def.start)
-        {
+        if let Some(first) = first_inside(definitions, by_start, scope.start, scope.end) {
             names.insert(index, first.name.clone());
         }
     }
     names
-}
-
-fn containing(scopes: &[Scope], start: u32, end: u32, skip: Option<usize>) -> usize {
-    scopes
-        .iter()
-        .enumerate()
-        .filter(|(index, scope)| {
-            skip != Some(*index) && scope.start <= start && end <= scope.end
-        })
-        .min_by_key(|(_, scope)| scope.end - scope.start)
-        .map(|(index, _)| index)
-        .unwrap_or(ROOT)
 }

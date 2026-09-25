@@ -49,6 +49,7 @@ use crate::types::{
     flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
     UnresolvedReason,
 };
+use crate::trace::stage_span;
 use crate::wire::{flatten_flow, FlatFact};
 
 /// Which phase-2 arms to run. All default off at the type level so a caller
@@ -335,7 +336,7 @@ fn resolve_project_inputs(
     inputs: Vec<ProjectInput>,
     preserve_syntax_tsi: bool,
 ) -> Result<Vec<FlatFact>, ProjectError> {
-    let scip_index = load_scip(request, &inputs)?;
+    let scip_index = stage_span("load_scip").in_scope(|| load_scip(request, &inputs))?;
 
     let pairs: Vec<(ContentId, &RyiOutput)> = inputs
         .iter()
@@ -385,7 +386,7 @@ fn resolve_project_inputs(
         .iter()
         .map(|input| (input.path.clone(), input.blob.clone()))
         .collect();
-    fill_indexes(&cx, &inputs, &pairs, &corpus);
+    stage_span("fill_indexes").in_scope(|| fill_indexes(&cx, &inputs, &pairs, &corpus));
 
     let mut declines: Vec<TierDecline> = Vec::new();
     if let Some(checker_root) = request.rust_checker {
@@ -438,6 +439,7 @@ fn resolve_project_inputs(
     let mut resolved_calls: Vec<(ContentId, Vec<ProjectEdge<CallF>>)> =
         if request.arms.call || request.arms.flow {
             use rayon::prelude::*;
+            let _stage = stage_span("resolve_calls").entered();
             EXTRACT_POOL.install(|| {
                 inputs
                     .par_iter()
@@ -484,6 +486,7 @@ fn resolve_project_inputs(
             crate::lang::rust_scip_macros::mint_macro_edges(&macro_files, &cx, &mut resolved_calls);
     }
 
+    let emit_stage = stage_span("project_facts").entered();
     let mut facts = Vec::new();
     let mut trail = LegTrail {
         on: request.witness,
@@ -533,6 +536,7 @@ fn resolve_project_inputs(
         Vec::new()
     };
     facts.extend(conformance_edges(&inputs, &conformances));
+    drop(emit_stage);
     if request.arms.flow {
         facts.extend(flatten_flow(&flow_edges(&pairs, &resolved_calls)));
     }
@@ -566,11 +570,11 @@ pub(crate) fn fill_indexes(
 ) {
     cx.indexes
         .def_index
-        .set(build_def_index(pairs))
+        .set(stage_span("index_def").in_scope(|| build_def_index(pairs)))
         .expect("fresh project definition index");
     cx.indexes
         .kinds
-        .set(crate::types::build_kind_index(pairs))
+        .set(stage_span("index_kind").in_scope(|| crate::types::build_kind_index(pairs)))
         .expect("fresh project kind index");
     cx.indexes
         .paths
@@ -586,11 +590,11 @@ pub(crate) fn fill_indexes(
         .collect();
     cx.indexes
         .ts_modules
-        .set(TsModuleIndex::build(
+        .set(stage_span("index_ts_modules").in_scope(|| TsModuleIndex::build(
             module_files,
             corpus,
             cx.indexes.def_index.get().expect("the def index is set"),
-        ))
+        )))
         .ok()
         .expect("fresh project module plane");
     let rust_module_files: Vec<(String, RustModuleFacts)> = inputs
@@ -599,11 +603,11 @@ pub(crate) fn fill_indexes(
         .collect();
     cx.indexes
         .rust_modules
-        .set(RustModuleIndex::build(
+        .set(stage_span("index_rust_modules").in_scope(|| RustModuleIndex::build(
             rust_module_files,
             corpus,
             cx.indexes.def_index.get().expect("the def index is set"),
-        ))
+        )))
         .ok()
         .expect("fresh project module plane (rust)");
     let go_module_files: Vec<(String, GoModuleFacts)> = inputs
@@ -1312,8 +1316,8 @@ pub fn scip_family_from_index_jsonl(
 /// default; this family is the labelled entry, not a replacement.
 // @comment-ok: one pre-existing diet_scip design note, edited by one line.
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    let inputs = read_inputs_with_modules(paths)?;
-    let scm = scm_rows(paths, &inputs);
+    let inputs = stage_span("read_inputs").in_scope(|| read_inputs_with_modules(paths))?;
+    let scm = stage_span("scm_rows").in_scope(|| scm_rows(paths, &inputs));
     let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
     facts.extend(scm?);
     Ok(facts)
@@ -1322,21 +1326,28 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
 /// The `symbol`/`occurrence`/`local` rows fast reads straight out of
 /// `queries/<lang>/scip.scm`. A language with no query yet contributes none.
 fn scm_rows(paths: &[PathBuf], inputs: &[ProjectInput]) -> Result<Vec<FlatFact>, ProjectError> {
-    let mut rows = Vec::new();
     let captured: std::collections::HashMap<&str, &crate::lang::scm_rows::ScmCaptures> = inputs
         .iter()
         .filter_map(|input| Some((input.path.as_str(), input.output.scm_captures.as_ref()?)))
         .collect();
-    for path in paths {
-        let name = path.to_string_lossy();
-        if let Some(captures) = captured.get(name.as_ref()) {
-            rows.extend(captures.facts(&name));
-        } else {
-            rows.extend(
-                crate::scm_facts(std::slice::from_ref(path))
-                    .map_err(|error| ProjectError::Scm(error.to_string()))?,
-            );
-        }
+    // One file's rows are a function of that file alone, so the files run on
+    // the extraction pool and land back in path order.
+    let per_file: Vec<Result<Vec<FlatFact>, ProjectError>> = EXTRACT_POOL.install(|| {
+        paths
+            .par_iter()
+            .map(|path| {
+                let name = path.to_string_lossy();
+                match captured.get(name.as_ref()) {
+                    Some(captures) => Ok(captures.facts(&name)),
+                    None => crate::scm_facts(std::slice::from_ref(path))
+                        .map_err(|error| ProjectError::Scm(error.to_string())),
+                }
+            })
+            .collect()
+    });
+    let mut rows = Vec::new();
+    for file in per_file {
+        rows.extend(file?);
     }
     Ok(rows)
 }
@@ -1376,12 +1387,15 @@ pub fn diet_scip_jsonl(paths: &[PathBuf]) -> Result<Vec<String>, ProjectError> {
 }
 
 pub fn sorted_lines(facts: Vec<FlatFact>) -> Vec<String> {
-    let mut lines: Vec<String> = facts
-        .iter()
-        .map(|fact| serde_json::to_string(fact).expect("flat fact is serializable"))
-        .collect();
-    lines.sort();
-    lines
+    let _stage = stage_span("sorted_lines").entered();
+    EXTRACT_POOL.install(|| {
+        let mut lines: Vec<String> = facts
+            .par_iter()
+            .map(|fact| serde_json::to_string(fact).expect("flat fact is serializable"))
+            .collect();
+        lines.par_sort_unstable();
+        lines
+    })
 }
 
 pub(crate) fn read_inputs(paths: &[PathBuf]) -> Result<Vec<ProjectInput>, ProjectError> {
