@@ -1,0 +1,8 @@
+{
+  "name": "@ws/b",
+  "version": "0.0.0",
+  "exports": {
+    ".": "./src/index.ts",
+    "./shape": "./src/shape.ts"
+  }
+}

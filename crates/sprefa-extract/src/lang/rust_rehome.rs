@@ -36,6 +36,10 @@ use crate::types::{
     ImportRef, ImportRefKind, LangKind, Rehome, RehomeManifests, RehomePlanCheck, Respell, Span,
 };
 
+mod cross;
+
+pub use cross::cargo_package;
+
 /// The macros whose first argument names a file, resolved against the directory
 /// of the file that writes them.
 const INCLUDE_MACROS: [&str; 3] = ["include", "include_str", "include_bytes"];
@@ -191,7 +195,7 @@ impl Rehome for RustSource {
             // arm keeps that tree by writing `#[path]`, never by re-parenting.
             USE_PATH => return None,
             ImportRefKind::ManifestTarget => manifest_respell(cx, reference)?,
-            MOD_RELOCATE_OUT | MOD_RELOCATE_IN | MOD_PATH | WIDEN_VIS => {
+            MOD_RELOCATE_OUT | MOD_RELOCATE_IN | MOD_PATH | WIDEN_VIS | cross::CARGO_DEP => {
                 let edit = relocate_plan(cx)
                     .edits
                     .get(&(reference.importer.clone(), reference.literal.start))?;
@@ -888,6 +892,9 @@ fn relocate_plan(cx: &MoveCx) -> &'static RelocatePlan {
 }
 
 fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
+    if cross::active(cx) {
+        return cross::build(cx);
+    }
     let mut plan = RelocatePlan::default();
     if !cx.relocate_mod() {
         return plan;

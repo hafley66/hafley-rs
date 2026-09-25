@@ -2898,6 +2898,12 @@ pub trait Cleave: Source + Sync + Send {
     fn imports_visible_to_children(&self, _cx: &MoveCx, _src: &str) -> bool {
         false
     }
+
+    /// The edit that declares a DEST this cleave creates, in the file that must
+    /// name it (Rust's parent `mod`), as (file, edit). None: nothing declares files.
+    fn declare_new_file(&self, _cx: &MoveCx, _src: &str, _dest: &str) -> Option<(String, Edit)> {
+        None
+    }
 }
 
 /// What one language answers when a file it owns moves. Held `&'static` in the

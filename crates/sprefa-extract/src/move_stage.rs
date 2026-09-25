@@ -192,7 +192,14 @@ impl VerifyJournal {
         }
         let producer = soopy::ActionProducer::unordered("extract-move");
         for (rel, pre) in &self.existing {
-            let Ok(current) = std::fs::read(root.join(rel)) else {
+            // A moved file is still at its new path while this stage is built;
+            // the move-back above lands those bytes at `rel` before this runs.
+            let lives_at = self
+                .moves
+                .iter()
+                .find(|(old, new)| old == rel && root.join(new).is_file())
+                .map_or(rel, |(_, new)| new);
+            let Ok(current) = std::fs::read(root.join(lives_at)) else {
                 continue;
             };
             if current == *pre {

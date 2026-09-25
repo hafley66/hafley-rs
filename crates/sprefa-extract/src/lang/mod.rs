@@ -168,7 +168,7 @@ pub fn rehomes() -> &'static [RehomeArm] {
             manifests: Some(&TsSource),
             shim: None,
             text_spellings: Some(&TsSource),
-            plan_check: None,
+            plan_check: Some(&TsSource),
         },
     ];
     &ROSTER

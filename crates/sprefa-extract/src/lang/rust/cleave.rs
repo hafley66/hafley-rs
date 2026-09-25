@@ -70,6 +70,9 @@ impl Cleave for RustSource {
     /// not a directory one: `lang/mod.rs` IS `lang`, so `lang/ts.rs` is under it.
     fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String {
         let to = module_parts(cx, to_path);
+        if let Some(ident) = foreign_crate(cx, from_path, to_path) {
+            return std::iter::once(ident).chain(to).collect::<Vec<_>>().join("::");
+        }
         let siblings = parent_of(&module_parts(cx, from_path)) == parent_of(&to);
         match (siblings, to.len() > 1) {
             (true, true) => format!("super::{}", to.last().cloned().unwrap_or_default()),
@@ -80,11 +83,95 @@ impl Cleave for RustSource {
         }
     }
 
+    fn declare_new_file(&self, cx: &MoveCx, src: &str, dest: &str) -> Option<(String, Edit)> {
+        let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
+        let file = dest.rsplit('/').next().unwrap_or(dest);
+        let parent = parent_candidates(dir)
+            .into_iter()
+            .find(|candidate| cx.contains(candidate))?;
+        let text = cx.text(&parent)?;
+        let parsed = syn::parse_file(&text).ok()?;
+        let (name, numbered) = module_name(file);
+        let aim = match numbered {
+            true => format!(
+                "#[path = \"{}\"] ",
+                crate::move_cx::relative_between(
+                    parent.rsplit_once('/').map_or("", |(dir, _)| dir),
+                    dest
+                )
+            ),
+            false => String::new(),
+        };
+        let foreign = foreign_crate(cx, src, dest).is_some();
+        let vis = if foreign { "pub " } else { "pub(crate) " };
+        let line_starts = super::rust::build_line_starts(&text);
+        let last_mod = parsed
+            .items
+            .iter()
+            .filter(|item| matches!(item, syn::Item::Mod(module) if module.content.is_none()))
+            .last()
+            .map(|item| super::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).end());
+        let at = match last_mod {
+            Some(end) => text[end as usize..]
+                .find('\n')
+                .map_or(text.len(), |found| end as usize + found + 1),
+            None => parsed
+                .items
+                .first()
+                .map(|item| {
+                    let start = super::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).start as usize;
+                    text[..start].rfind('\n').map_or(0, |found| found + 1)
+                })
+                .unwrap_or(text.len()),
+        };
+        let lead = if at == text.len() && !text.is_empty() && !text.ends_with('\n') { "\n" } else { "" };
+        Some((
+            parent,
+            Edit {
+                span: Span::anchor(at as u32),
+                text: format!("{lead}{aim}{vis}mod {name};\n"),
+            },
+        ))
+    }
+
     fn imports_visible_to_children(&self, cx: &MoveCx, src: &str) -> bool {
         cx.text(src)
             .and_then(|text| syn::parse_file(&text).ok())
             .is_some_and(|file| file.items.iter().any(|item| matches!(item, syn::Item::Mod(_))))
     }
+}
+
+/// The crate ident `to_path` answers to when it sits in another Cargo package.
+fn foreign_crate(cx: &MoveCx, from_path: &str, to_path: &str) -> Option<String> {
+    let from = crate::lang::rust_rehome::cargo_package(cx, from_path)?;
+    let to = crate::lang::rust_rehome::cargo_package(cx, to_path)?;
+    (from.0 != to.0).then_some(to.2)
+}
+
+/// The files that can own `dir`'s child modules, in rustc's probe order.
+fn parent_candidates(dir: &str) -> Vec<String> {
+    let join = |name: &str| match dir.is_empty() {
+        true => name.to_string(),
+        false => format!("{dir}/{name}"),
+    };
+    let mut out = vec![join("mod.rs"), join("lib.rs"), join("main.rs")];
+    if !dir.is_empty() {
+        out.push(format!("{dir}.rs"));
+    }
+    out
+}
+
+/// A new file's module name: its stem, minus a `3_` / `3a_` ordering prefix,
+/// which a `#[path]` then carries.
+fn module_name(file: &str) -> (String, bool) {
+    let stem = file.strip_suffix(".rs").unwrap_or(file);
+    if let Some((head, tail)) = stem.split_once('_') {
+        let digits = head.trim_end_matches(|ch: char| ch.is_ascii_lowercase());
+        if !digits.is_empty() && digits.chars().all(|ch| ch.is_ascii_digit()) && !tail.is_empty() {
+            return (tail.to_string(), true);
+        }
+    }
+    (stem.to_string(), false)
 }
 
 /// A module path without its own last segment.
@@ -278,7 +365,7 @@ fn module_parts(cx: &MoveCx, rel: &str) -> Vec<String> {
                 })
             })
             .map(|module| module.ident.to_string());
-        parts.push(declared.unwrap_or_else(|| stem.to_string()));
+        parts.push(declared.unwrap_or_else(|| module_name(&last).0));
     }
     parts
 }
