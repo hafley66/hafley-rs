@@ -375,95 +375,17 @@ fn resolve_project_inputs(
         indexes: IndexBag::default(),
         witness: request.witness,
     };
-    cx.indexes
-        .def_index
-        .set(build_def_index(&pairs))
-        .expect("fresh project definition index");
-    cx.indexes
-        .kinds
-        .set(crate::types::build_kind_index(&pairs))
-        .expect("fresh project kind index");
-    cx.indexes
-        .paths
-        .set(crate::types::build_path_index(
-            inputs
-                .iter()
-                .map(|input| (input.blob.clone(), input.path.as_str())),
-        ))
-        .expect("fresh project path index");
     if let Some(index) = scip_index {
         cx.indexes
             .scip_index
             .set(index)
             .expect("fresh project scip index");
     }
-    // The module plane reads the def index (an export's identifier span joins
-    // to the def node containing it), so it is built after it, never beside it.
     let corpus: Vec<(String, ContentId)> = inputs
         .iter()
         .map(|input| (input.path.clone(), input.blob.clone()))
         .collect();
-    let module_files: Vec<(String, ModuleFacts)> = inputs
-        .iter()
-        .filter_map(|input| Some((input.path.clone(), input.module.clone()?)))
-        .collect();
-    cx.indexes
-        .ts_modules
-        .set(TsModuleIndex::build(
-            module_files,
-            &corpus,
-            cx.indexes.def_index.get().expect("the def index is set"),
-        ))
-        .ok()
-        .expect("fresh project module plane");
-    let rust_module_files: Vec<(String, RustModuleFacts)> = inputs
-        .iter()
-        .filter_map(|input| Some((input.path.clone(), input.rust_module.clone()?)))
-        .collect();
-    cx.indexes
-        .rust_modules
-        .set(RustModuleIndex::build(
-            rust_module_files,
-            &corpus,
-            cx.indexes.def_index.get().expect("the def index is set"),
-        ))
-        .ok()
-        .expect("fresh project module plane (rust)");
-    let go_module_files: Vec<(String, GoModuleFacts)> = inputs
-        .iter()
-        .filter_map(|input| Some((input.path.clone(), input.go_module.clone()?)))
-        .collect();
-    // The go resolve arms read their per-file facts from this publish step
-    // (computed in the module plane's shared parse); the parse fallback in
-    // go.rs only serves library/test paths with no module plane.
-    for input in inputs.iter() {
-        if let Some(facts) = input.go_module.as_ref().and_then(GoModuleFacts::file_facts) {
-            crate::lang::go::go_publish_file_facts(&input.path, Some(&input.blob), facts.clone());
-        }
-    }
-    cx.indexes
-        .go_modules
-        .set(GoModuleIndex::build(go_module_files))
-        .ok()
-        .expect("fresh project module plane (go)");
-    let py_module_files: Vec<(String, PyModuleFacts)> = inputs
-        .iter()
-        .filter_map(|input| Some((input.path.clone(), input.py_module.clone()?)))
-        .collect();
-    cx.indexes
-        .py_modules
-        .set(PyModuleIndex::build(py_module_files))
-        .ok()
-        .expect("fresh project module plane (python)");
-    let kt_module_files: Vec<(String, KtModuleFacts)> = inputs
-        .iter()
-        .filter_map(|input| Some((input.path.clone(), input.kt_module.clone()?)))
-        .collect();
-    cx.indexes
-        .kt_modules
-        .set(KtModuleIndex::build(kt_module_files))
-        .ok()
-        .expect("fresh project module plane (kotlin)");
+    fill_indexes(&cx, &inputs, &pairs, &corpus);
 
     let mut declines: Vec<TierDecline> = Vec::new();
     if let Some(checker_root) = request.rust_checker {
@@ -632,6 +554,186 @@ fn resolve_project_inputs(
         }));
     }
     Ok(facts)
+}
+
+/// The def, kind and path indexes plus every language's module plane, over one
+/// input set. The module plane reads the def index, so it is built after it.
+fn fill_indexes(
+    cx: &ProjectCx,
+    inputs: &[ProjectInput],
+    pairs: &[(ContentId, &RyiOutput)],
+    corpus: &[(String, ContentId)],
+) {
+    cx.indexes
+        .def_index
+        .set(build_def_index(pairs))
+        .expect("fresh project definition index");
+    cx.indexes
+        .kinds
+        .set(crate::types::build_kind_index(pairs))
+        .expect("fresh project kind index");
+    cx.indexes
+        .paths
+        .set(crate::types::build_path_index(
+            inputs
+                .iter()
+                .map(|input| (input.blob.clone(), input.path.as_str())),
+        ))
+        .expect("fresh project path index");
+    let module_files: Vec<(String, ModuleFacts)> = inputs
+        .iter()
+        .filter_map(|input| Some((input.path.clone(), input.module.clone()?)))
+        .collect();
+    cx.indexes
+        .ts_modules
+        .set(TsModuleIndex::build(
+            module_files,
+            corpus,
+            cx.indexes.def_index.get().expect("the def index is set"),
+        ))
+        .ok()
+        .expect("fresh project module plane");
+    let rust_module_files: Vec<(String, RustModuleFacts)> = inputs
+        .iter()
+        .filter_map(|input| Some((input.path.clone(), input.rust_module.clone()?)))
+        .collect();
+    cx.indexes
+        .rust_modules
+        .set(RustModuleIndex::build(
+            rust_module_files,
+            corpus,
+            cx.indexes.def_index.get().expect("the def index is set"),
+        ))
+        .ok()
+        .expect("fresh project module plane (rust)");
+    let go_module_files: Vec<(String, GoModuleFacts)> = inputs
+        .iter()
+        .filter_map(|input| Some((input.path.clone(), input.go_module.clone()?)))
+        .collect();
+    // The go resolve arms read their per-file facts from this publish step
+    // (computed in the module plane's shared parse); the parse fallback in
+    // go.rs only serves library/test paths with no module plane.
+    for input in inputs.iter() {
+        if let Some(facts) = input.go_module.as_ref().and_then(GoModuleFacts::file_facts) {
+            crate::lang::go::go_publish_file_facts(&input.path, Some(&input.blob), facts.clone());
+        }
+    }
+    cx.indexes
+        .go_modules
+        .set(GoModuleIndex::build(go_module_files))
+        .ok()
+        .expect("fresh project module plane (go)");
+    let py_module_files: Vec<(String, PyModuleFacts)> = inputs
+        .iter()
+        .filter_map(|input| Some((input.path.clone(), input.py_module.clone()?)))
+        .collect();
+    cx.indexes
+        .py_modules
+        .set(PyModuleIndex::build(py_module_files))
+        .ok()
+        .expect("fresh project module plane (python)");
+    let kt_module_files: Vec<(String, KtModuleFacts)> = inputs
+        .iter()
+        .filter_map(|input| Some((input.path.clone(), input.kt_module.clone()?)))
+        .collect();
+    cx.indexes
+        .kt_modules
+        .set(KtModuleIndex::build(kt_module_files))
+        .ok()
+        .expect("fresh project module plane (kotlin)");
+}
+
+/// STUB (fork inputs-cli; the modrows fork replaces it): every file of
+/// `universe` that an `entry` reaches over `resolved_import` targets.
+pub fn reach_files(
+    root: &Path,
+    universe: &[PathBuf],
+    entry: &[PathBuf],
+    depth: Option<u32>,
+) -> Result<Vec<PathBuf>, ProjectError> {
+    let _ = root;
+    let inputs = read_inputs_with_modules(universe)?;
+    let pairs: Vec<(ContentId, &RyiOutput)> = inputs
+        .iter()
+        .map(|input| (input.blob.clone(), input.output.as_ref()))
+        .collect();
+    let corpus: Vec<(String, ContentId)> = inputs
+        .iter()
+        .map(|input| (input.path.clone(), input.blob.clone()))
+        .collect();
+    let files = FileSet;
+    let manifests = ManifestMap;
+    let cx = ProjectCx {
+        files: &files,
+        manifests: &manifests,
+        reader: None,
+        digest: ProjectDigest::default(),
+        indexes: IndexBag::default(),
+        witness: false,
+    };
+    fill_indexes(&cx, &inputs, &pairs, &corpus);
+    let canonical = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let by_canonical: std::collections::HashMap<PathBuf, usize> = universe
+        .iter()
+        .enumerate()
+        .map(|(index, path)| (canonical(path), index))
+        .collect();
+    let index_of = |spelled: &str| by_canonical.get(&canonical(Path::new(spelled))).copied();
+    let mut next: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
+    for input in &inputs {
+        let Some(from) = index_of(&input.path) else { continue };
+        crate::types::set_own(Some(input.blob.clone()));
+        for fact in import_facts(input, &cx) {
+            let FlatFact::ResolvedImportRow { target_path, .. } = fact else { continue };
+            let target = Path::new(&target_path);
+            if let Some(to) = index_of(&target_path) {
+                next.entry(from).or_default().push(to);
+            } else if target.is_dir() {
+                let dir = canonical(target);
+                next.entry(from).or_default().extend(
+                    universe
+                        .iter()
+                        .enumerate()
+                        .filter(|(_, path)| canonical(path).parent() == Some(dir.as_path()))
+                        .map(|(index, _)| index),
+                );
+            }
+        }
+        crate::types::set_own(None);
+    }
+    let mut reached = vec![false; universe.len()];
+    let mut frontier = Vec::new();
+    for path in entry {
+        let Some(index) = by_canonical.get(&canonical(path)).copied() else {
+            return Err(ProjectError::Read(
+                path.clone(),
+                std::io::Error::new(std::io::ErrorKind::NotFound, "entry is not in the input set"),
+            ));
+        };
+        if !reached[index] {
+            reached[index] = true;
+            frontier.push(index);
+        }
+    }
+    let mut hop = 0;
+    while !frontier.is_empty() && depth.is_none_or(|limit| hop < limit) {
+        let mut following = Vec::new();
+        for from in frontier {
+            for &to in next.get(&from).into_iter().flatten() {
+                if !reached[to] {
+                    reached[to] = true;
+                    following.push(to);
+                }
+            }
+        }
+        frontier = following;
+        hop += 1;
+    }
+    Ok(universe
+        .iter()
+        .zip(reached)
+        .filter_map(|(path, hit)| hit.then(|| path.clone()))
+        .collect())
 }
 
 /// The syntax tier's TSI rows for one resolve, and the first id free after them.

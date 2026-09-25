@@ -314,37 +314,14 @@ pub fn scm_facts(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ScmError> {
     Ok(facts)
 }
 
-/// Every supplied path, filtered to the files a bundled query covers: a
-/// language with no `.scm` yet contributes no rows to fast.
+/// The supplied files a bundled query covers: a language with no `.scm` yet
+/// contributes no rows to fast. Directories are the caller's to expand.
 fn expand(paths: &[PathBuf]) -> Result<Vec<PathBuf>, ScmError> {
-    let mut files = Vec::new();
-    for path in paths {
-        if path.is_dir() {
-            let mut covered = Vec::new();
-            walk(path, &mut covered)?;
-            covered.sort();
-            files.extend(covered);
-        } else if query_for(&path.to_string_lossy()).is_some() {
-            files.push(path.clone());
-        }
-    }
-    Ok(files)
-}
-
-fn walk(dir: &Path, files: &mut Vec<PathBuf>) -> Result<(), ScmError> {
-    let entries = std::fs::read_dir(dir).map_err(|error| ScmError::Io {
-        path: dir.to_string_lossy().to_string(),
-        detail: error.to_string(),
-    })?;
-    for entry in entries.filter_map(Result::ok) {
-        let path = entry.path();
-        if path.is_dir() {
-            walk(&path, files)?;
-        } else if query_for(&path.to_string_lossy()).is_some() {
-            files.push(path);
-        }
-    }
-    Ok(())
+    Ok(paths
+        .iter()
+        .filter(|path| query_for(&path.to_string_lossy()).is_some())
+        .cloned()
+        .collect())
 }
 
 /// The bundled query for a path's language, with the grammar it executes on.

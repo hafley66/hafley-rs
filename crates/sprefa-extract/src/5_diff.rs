@@ -115,11 +115,11 @@ impl Options {
             args.patterns.into_iter().map(|glob| soopy::Pattern(glob.into())).collect()
         };
         Ok(Options {
-            root: args.root,
+            root: args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
             from: args.from,
             to: args.to,
             patterns,
-            arms: parse_arms(&args.families)?,
+            arms: parse_arms(&args.arms)?,
             sqlite: args.sqlite,
         })
     }
@@ -144,7 +144,7 @@ fn parse_arms(families: &[String]) -> Result<ResolveArms, Box<dyn std::error::Er
             "type" | "types" => arms.types = true,
             unknown => {
                 return Err(
-                    format!("--family {unknown}: use call or type").into(),
+                    format!("--arms {unknown}: use call or type").into(),
                 )
             }
         }

@@ -42,7 +42,7 @@ pub enum Cmd {
     Move(MoveArgs),
     /// Rename a symbol and every occurrence bound to it
     Rename(RenameArgs),
-    /// Run a tree-sitter query over one file
+    /// Run a tree-sitter query over files
     Query(QueryArgs),
     /// Replace a generated region between sprefa markers
     Region(RegionArgs),
@@ -50,21 +50,58 @@ pub enum Cmd {
     Watch(WatchArgs),
     /// Fact delta between two commits
     Diff(DiffArgs),
+    /// Validate and re-emit foreign TSI JSONL
+    Ingest(IngestArgs),
+    /// Print the output record schema
+    Schema,
+    /// Print the last N runs from the trail
+    Trail(TrailArgs),
+}
+
+/// Every file-taking verb flattens this.
+#[derive(Args, Default, Clone)]
+pub struct Inputs {
+    /// Files, directories, or globs; - reads a path list from stdin
+    #[arg(value_name = "PATH")]
+    pub paths: Vec<String>,
+
+    /// Keep files matching GLOB under each directory input; repeatable
+    #[arg(long = "pattern", value_name = "GLOB")]
+    pub patterns: Vec<String>,
+
+    /// Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+    #[arg(long, value_name = "FILE")]
+    pub entry: Vec<PathBuf>,
+
+    /// Import hops from --entry
+    #[arg(long, value_name = "N", requires = "entry")]
+    pub depth: Option<u32>,
+
+    /// Corpus root
+    #[arg(long, value_name = "DIR")]
+    pub root: Option<PathBuf>,
 }
 
 /// `ryi PATH...`: per-file extraction and the flag-selected project modes.
 #[derive(Args, Default)]
 pub struct FileArgs {
-    /// Files to extract
-    #[arg(required_unless_present_any = ["schema", "ingest", "trail"], value_name = "PATH")]
+    #[command(flatten)]
+    pub inputs: Inputs,
+
+    /// `inputs` expanded, filled after parsing.
+    #[arg(skip)]
     pub paths: Vec<PathBuf>,
 
-    /// Fact kinds (cst,type,call,df) or a project mode (scip, diet_scip)
-    #[arg(long, value_delimiter = ',')]
-    pub family: Option<Vec<String>>,
+    /// Fact kinds per file (cst,type,call,df,data,cfg)
+    #[arg(long, value_delimiter = ',', value_name = "KINDS")]
+    pub kinds: Option<Vec<String>>,
+
+    /// Resolve arms under --resolve (call,type,flow)
+    #[arg(long, value_delimiter = ',', value_name = "ARMS", requires = "resolve")]
+    pub arms: Option<Vec<String>>,
 
     /// Write to a new SQLite database instead of stdout
-    #[arg(long, value_name = "PATH", conflicts_with_all = ["bench", "schema", "trail"])]
+    #[arg(long, value_name = "PATH", conflicts_with = "bench")]
     pub sqlite: Option<PathBuf>,
 
     /// Time extraction and print per-family counts to stderr
@@ -75,36 +112,32 @@ pub struct FileArgs {
     #[arg(long, conflicts_with = "bench")]
     pub resolve: bool,
 
-    /// Root that SCIP document paths are relative to
-    #[arg(long, value_name = "DIR")]
-    pub project_root: Option<PathBuf>,
-
     /// Load this index.scip
-    #[arg(long, value_name = "FILE", conflicts_with_all = ["scip_build", "indexer"])]
+    #[arg(long, value_name = "FILE", conflicts_with = "scip_build")]
     pub scip_index: Option<PathBuf>,
 
     /// Use rust-analyzer for Rust call/type targets
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub rust_checker: bool,
 
     /// Use the TypeScript compiler for TS call/type targets
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub ts_checker: bool,
 
     /// Use go/types for Go call/type targets
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub go_checker: bool,
 
     /// Build the index with the language's indexer, then load it
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub scip_build: bool,
 
     /// File-to-file edges folded from a SCIP index
-    #[arg(long, requires = "project_root", conflicts_with_all = ["bench", "resolve", "scip_facts", "file_fact"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "file_fact"])]
     pub scip_deps: bool,
 
     /// Stream the whole SCIP index as flat facts
-    #[arg(long, requires = "project_root", conflicts_with_all = ["bench", "resolve"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve"])]
     pub scip_facts: bool,
 
     /// Only these --scip-facts record kinds (comma-separated)
@@ -116,11 +149,11 @@ pub struct FileArgs {
     pub occurrence_text: bool,
 
     /// File-to-file edges resolved from syntax, no index
-    #[arg(long, requires = "project_root", conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "file_fact"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "file_fact"])]
     pub deps: bool,
 
     /// Manifest-to-manifest workspace edges
-    #[arg(long, requires = "project_root", conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "deps", "file_fact"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "deps", "file_fact"])]
     pub package_deps: bool,
 
     /// Prepend one file record: path, digest, bytes, lines
@@ -135,51 +168,15 @@ pub struct FileArgs {
     #[arg(long, conflicts_with_all = ["bench", "deps", "package_deps", "scip_facts", "scip_deps", "file_fact"])]
     pub witness: bool,
 
-    /// Validate and re-emit foreign TSI JSONL
-    #[arg(
-        long,
-        value_name = "PATH",
-        num_args = 1..,
-        conflicts_with_all = ["paths", "family", "bench", "resolve", "deps", "package_deps", "scip_facts", "scip_deps", "file_fact", "witness"]
-    )]
-    pub ingest: Vec<PathBuf>,
-
     /// Skip inputs over this many bytes (0 = no limit)
     #[arg(long, value_name = "BYTES")]
     pub max_bytes: Option<u64>,
-
-    /// SCIP index cache directory
-    #[arg(long, value_name = "DIR")]
-    pub scip_cache: Option<PathBuf>,
-
-    /// Seconds allowed for one indexer run
-    #[arg(long, value_name = "SECS")]
-    pub scip_timeout: Option<u64>,
-
-    /// Run only this language's SCIP indexer
-    #[arg(long, value_name = "LANG")]
-    pub indexer: Option<String>,
-
-    /// Print the output record schema and exit
-    #[arg(long)]
-    pub schema: bool,
-
-    /// Print the last N runs from the trail and exit
-    #[arg(
-        long,
-        value_name = "N",
-        num_args = 0..=1,
-        default_missing_value = "5",
-        conflicts_with_all = ["paths", "family", "bench", "resolve", "deps", "package_deps", "scip_facts", "scip_deps", "file_fact", "witness", "ingest", "schema", "scip_build", "scip_index"]
-    )]
-    pub trail: Option<usize>,
 }
 
 #[derive(Args)]
 pub struct FastArgs {
-    /// Files to extract
-    #[arg(required = true, value_name = "PATH")]
-    pub paths: Vec<PathBuf>,
+    #[command(flatten)]
+    pub inputs: Inputs,
 
     /// Write to a new SQLite database instead of stdout
     #[arg(long, value_name = "PATH")]
@@ -192,9 +189,8 @@ pub struct FastArgs {
 
 #[derive(Args)]
 pub struct SlowArgs {
-    /// Project root
-    #[arg(value_name = "ROOT")]
-    pub root: PathBuf,
+    #[command(flatten)]
+    pub inputs: Inputs,
 
     /// Write to a new SQLite database instead of stdout
     #[arg(long, value_name = "PATH")]
@@ -224,9 +220,8 @@ pub struct SlowArgs {
 #[derive(Args)]
 #[command(group(ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path"])))]
 pub struct GraphArgs {
-    /// Files and directories to read
-    #[arg(required = true, value_name = "PATH")]
-    pub paths: Vec<PathBuf>,
+    #[command(flatten)]
+    pub inputs: Inputs,
 
     /// Resolved call edges landing on NAME
     #[arg(long, value_name = "NAME")]
@@ -252,41 +247,33 @@ pub struct GraphArgs {
     #[arg(long, value_name = "BLOB@START:END")]
     pub flow_path: Option<String>,
 
-    /// Keep the fact store at DIR/graph.db
-    #[arg(long, value_name = "DIR")]
-    pub state: Option<PathBuf>,
-
-    /// Project root for module resolution and checkers
-    #[arg(long, value_name = "DIR")]
-    pub project_root: Option<PathBuf>,
+    /// Keep the fact store in a new SQLite database at PATH
+    #[arg(long, value_name = "PATH")]
+    pub sqlite: Option<PathBuf>,
 
     /// Query a committed revision
-    #[arg(long, value_name = "REV", requires = "project_root", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index", "state"])]
+    #[arg(long, value_name = "REV", requires = "root", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"])]
     pub at: Option<String>,
 
     /// Diff the answers against REV
-    #[arg(long, value_name = "REV", requires = "at", conflicts_with = "state")]
+    #[arg(long, value_name = "REV", requires = "at", conflicts_with = "sqlite")]
     pub compare: Option<String>,
 
     /// Load this index.scip
-    #[arg(long, value_name = "FILE", requires = "project_root")]
+    #[arg(long, value_name = "FILE", requires = "root")]
     pub scip_index: Option<PathBuf>,
 
     /// Add rust-analyzer type evidence
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub rust_checker: bool,
 
     /// Add TypeScript checker type evidence
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub ts_checker: bool,
 
     /// Add go/types type evidence
-    #[arg(long, requires = "project_root")]
+    #[arg(long, requires = "root")]
     pub go_checker: bool,
-
-    /// No stderr summary line
-    #[arg(long)]
-    pub json: bool,
 }
 
 #[derive(Args)]
@@ -415,20 +402,24 @@ pub struct RenameArgs {
 
 #[derive(Args)]
 pub struct QueryArgs {
-    /// Language name
+    #[command(flatten)]
+    pub inputs: Inputs,
+
+    /// Language name (default: from each file's extension)
     #[arg(long)]
-    pub lang: String,
+    pub lang: Option<String>,
 
     /// Tree-sitter query text
     #[arg(long)]
     pub query: String,
 
-    /// Expected content digest
+    /// Expected content digest (one input only)
     #[arg(long)]
     pub digest: Option<String>,
 
-    /// File to query
-    pub path: PathBuf,
+    /// Write to a new SQLite database instead of stdout
+    #[arg(long, value_name = "PATH")]
+    pub sqlite: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -454,20 +445,21 @@ pub struct RegionArgs {
 
 #[derive(Args)]
 pub struct WatchArgs {
-    /// Repository root
-    pub root: PathBuf,
+    /// Repository root (default: git root of the working directory)
+    #[arg(long, value_name = "DIR")]
+    pub root: Option<PathBuf>,
 
     /// Glob to watch; repeatable (default: every roster extension)
     #[arg(long = "pattern", value_name = "GLOB")]
     pub patterns: Vec<String>,
 
-    /// Fact kinds (comma-separated)
-    #[arg(long = "family", value_delimiter = ',')]
-    pub families: Vec<String>,
+    /// Fact kinds (cst,type,call,df,data)
+    #[arg(long, value_delimiter = ',', value_name = "KINDS")]
+    pub kinds: Vec<String>,
 
     /// Receipt store path
-    #[arg(long)]
-    pub state: Option<PathBuf>,
+    #[arg(long, value_name = "PATH")]
+    pub receipts: Option<PathBuf>,
 
     /// Emit one snapshot and exit
     #[arg(long)]
@@ -480,8 +472,9 @@ pub struct WatchArgs {
 
 #[derive(Args)]
 pub struct DiffArgs {
-    /// Repository root
-    pub root: PathBuf,
+    /// Repository root (default: git root of the working directory)
+    #[arg(long, value_name = "DIR")]
+    pub root: Option<PathBuf>,
 
     /// Base revision
     #[arg(long, value_name = "REV")]
@@ -495,15 +488,29 @@ pub struct DiffArgs {
     #[arg(long = "pattern", value_name = "GLOB")]
     pub patterns: Vec<String>,
 
-    /// Fact kinds to resolve (call,type)
-    #[arg(long = "family", value_delimiter = ',')]
-    pub families: Vec<String>,
+    /// Resolve arms (call,type)
+    #[arg(long, value_delimiter = ',', value_name = "ARMS")]
+    pub arms: Vec<String>,
 
     /// Write to a new SQLite database instead of stdout
     #[arg(long, value_name = "PATH")]
     pub sqlite: Option<PathBuf>,
+}
 
-    /// JSONL output (the default)
-    #[arg(long)]
-    pub json: bool,
+#[derive(Args)]
+pub struct IngestArgs {
+    /// TSI JSONL files (/dev/stdin reads standard input)
+    #[arg(required = true, value_name = "PATH")]
+    pub paths: Vec<PathBuf>,
+
+    /// Write to a new SQLite database instead of stdout
+    #[arg(long, value_name = "PATH")]
+    pub sqlite: Option<PathBuf>,
+}
+
+#[derive(Args)]
+pub struct TrailArgs {
+    /// Runs to print
+    #[arg(value_name = "N", default_value_t = 5)]
+    pub runs: usize,
 }

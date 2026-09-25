@@ -93,7 +93,7 @@ pub use move_scip::{
     UNKNOWN_TO_SCIP,
 };
 pub use project::{
-    diet_scip, diet_scip_jsonl, diet_scip_with_raw, extract_pool, resolve_project,
+    diet_scip, diet_scip_jsonl, diet_scip_with_raw, extract_pool, reach_files, resolve_project,
     resolve_project_jsonl, resolve_project_with_raw, resolve_project_with_tsi_tiers, scip_facts,
     scip_facts_jsonl, scip_family,
     scip_family_from_index, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,

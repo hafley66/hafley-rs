@@ -5,18 +5,15 @@
 use crate::cli::GraphArgs;
 use std::collections::BTreeSet;
 use std::fs;
+use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
-use sprefa_extract::lang::source_for;
 use sprefa_extract::{
     resolve_project_with_tsi_tiers, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords,
 };
 
 use crate::sqlite::{reach_walk_sql, Database};
-
-/// The file `--state DIR` leaves behind, the one a caller opens by hand.
-const STATE_DB: &str = "graph.db";
 
 const CALLERS_SQL: &str = "SELECT \"callee_path\", \"callee_name\", \"caller_path\", \
                            \"caller_name\", \"grade\", \"kind\" FROM \"callers\" \
@@ -25,33 +22,30 @@ const CALLERS_SQL: &str = "SELECT \"callee_path\", \"callee_name\", \"caller_pat
 const USES_SQL: &str = "SELECT \"type_path\", \"type_name\", \"user_path\", \"user_name\", \
                         \"grade\", \"kind\" FROM \"uses\" WHERE \"type_name\" IS ?1";
 
-/// One resolve pass, landed in the store the views read. `--state` publishes
+/// One resolve pass, landed in the store the views read. `--sqlite` publishes
 /// the store; without it the whole thing lives and dies in memory.
 fn load_store(
     paths: &[PathBuf],
     arms: ResolveArms,
     cli: &GraphArgs,
     revision_root: Option<&Path>,
-    state: Option<&Path>,
+    sqlite: Option<&Path>,
 ) -> Result<Database, Box<dyn std::error::Error>> {
     let request = ResolveRequest {
         paths,
         arms,
         scip: ScipMode::from_flags(cli.scip_index.as_deref(), false),
-        project_root: revision_root.or(cli.project_root.as_deref()),
+        project_root: revision_root.or(cli.inputs.root.as_deref()),
         scip_records: ScipRecords::default(),
         occurrence_text: false,
-        rust_checker: cli.rust_checker.then_some(cli.project_root.as_deref()).flatten(),
-        ts_checker: cli.ts_checker.then_some(cli.project_root.as_deref()).flatten(),
-        go_checker: cli.go_checker.then_some(cli.project_root.as_deref()).flatten(),
+        rust_checker: cli.rust_checker.then_some(cli.inputs.root.as_deref()).flatten(),
+        ts_checker: cli.ts_checker.then_some(cli.inputs.root.as_deref()).flatten(),
+        go_checker: cli.go_checker.then_some(cli.inputs.root.as_deref()).flatten(),
         witness: true,
     };
     let facts = resolve_project_with_tsi_tiers(&request)?;
-    let mut database = match state {
-        Some(directory) => {
-            fs::create_dir_all(directory)?;
-            Database::create(&directory.join(STATE_DB))?
-        }
+    let mut database = match sqlite {
+        Some(path) => Database::create(path)?,
         None => Database::memory()?,
     };
     for fact in &facts {
@@ -287,25 +281,6 @@ fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
     );
 }
 
-/// Every file under `paths` the roster claims. No suffix is spelled here, so a
-/// language the roster gains is walked by this verb the same day.
-fn expand_paths(paths: &[PathBuf]) -> Result<Vec<PathBuf>, Box<dyn std::error::Error>> {
-    let mut files = Vec::new();
-    let mut pending = paths.to_vec();
-    while let Some(path) = pending.pop() {
-        if path.is_dir() {
-            for entry in fs::read_dir(path)? {
-                pending.push(entry?.path());
-            }
-        } else if source_for(&path.to_string_lossy()).is_some() {
-            files.push(path);
-        }
-    }
-    files.sort();
-    Ok(files)
-}
-
-
 /// Which resolve arm each question needs, and which view answers it.
 enum Arm<'a> {
     Callers(&'a str),
@@ -353,14 +328,14 @@ fn ask_at(
     selected: &[PathBuf],
     cli: &GraphArgs,
     arm: &Arm<'_>,
-    state: Option<&Path>,
+    sqlite: Option<&Path>,
 ) -> Result<(String, Vec<FlatFact>), Box<dyn std::error::Error>> {
     let (snapshot, rows) = reader.with_revision(
         revision,
         &crate::watch::default_patterns(),
         Some(selected),
         |paths, scratch| {
-            let database = load_store(paths, arm.arms(), cli, Some(scratch), state)?;
+            let database = load_store(paths, arm.arms(), cli, Some(scratch), sqlite)?;
             let rows = arm.ask(database.connection())?;
             database.close()?;
             Ok(rows)
@@ -442,11 +417,13 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
     };
     let rows = if let Some(revision) = &cli.at {
         let root = fs::canonicalize(
-            cli.project_root.as_ref().expect("clap requires the project root"),
+            cli.inputs.root.as_ref().expect("clap requires the root"),
         )?;
         let selected: Vec<PathBuf> = cli
+            .inputs
             .paths
             .iter()
+            .map(PathBuf::from)
             .map(|path| {
                 if path.is_absolute() {
                     path.strip_prefix(&root).map(Path::to_path_buf).map_err(|_| {
@@ -455,20 +432,12 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
                 } else if path == Path::new(".") {
                     Ok(PathBuf::new())
                 } else {
-                    Ok(path.clone())
+                    Ok(path)
                 }
             })
             .collect::<Result<_, _>>()?;
-        let state = cli.state.as_ref().map(std::path::absolute).transpose()?;
         let mut reader = crate::revision::RevisionReader::open(&root)?;
-        let (sha, before) = ask_at(
-            &mut reader,
-            revision,
-            &selected,
-            &cli,
-            &arm,
-            state.as_deref(),
-        )?;
+        let (sha, before) = ask_at(&mut reader, revision, &selected, &cli, &arm, None)?;
         match &cli.compare {
             Some(other) => {
                 if !matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_)) {
@@ -481,14 +450,14 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
             None => before,
         }
     } else {
-        let paths = expand_paths(&cli.paths)?;
-        let database = load_store(&paths, arm.arms(), &cli, None, cli.state.as_deref())?;
+        let paths = crate::inputs::expand(&cli.inputs)?;
+        let database = load_store(&paths, arm.arms(), &cli, None, cli.sqlite.as_deref())?;
         let rows = arm.ask(database.connection())?;
         database.close()?;
         rows
     };
     emit_rows(&rows)?;
-    if !cli.json {
+    if std::io::stderr().is_terminal() {
         emit_summary_line(&rows, &arm, cli.compare.is_some());
     }
     Ok(())

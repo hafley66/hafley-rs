@@ -457,10 +457,10 @@ impl Options {
             args.patterns.into_iter().map(|glob| soopy::Pattern(glob.into())).collect()
         };
         Ok(Options {
-            root: args.root,
+            root: args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
             patterns,
-            mask: parse_mask(&args.families)?,
-            state: args.state,
+            mask: parse_mask(&args.kinds)?,
+            state: args.receipts,
             once: args.once,
             poll_ms: args.poll_ms,
         })
@@ -490,7 +490,7 @@ fn parse_mask(families: &[String]) -> Result<FamilyMask, Box<dyn std::error::Err
             "call" => mask.call = true,
             "df" => mask.df = true,
             "data" => mask.data = true,
-            other => return Err(format!("--family {other}: unknown").into()),
+            other => return Err(format!("--kinds {other}: unknown").into()),
         }
     }
     Ok(mask)
