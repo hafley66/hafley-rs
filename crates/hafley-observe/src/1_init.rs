@@ -1,10 +1,14 @@
 use std::sync::Arc;
 
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
+use tracing_subscriber::layer::Layered;
+use tracing_subscriber::{EnvFilter, Layer, Registry};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
 
 use crate::flush::{Sink, Writer};
+
+type Base = Layered<EnvFilter, Registry>;
 use crate::{env_filter, format_layer, log_sink_layer, Config, FormatConfig, SinkLayer};
 
 pub fn init(config: Config) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
@@ -27,29 +31,27 @@ pub fn init_with_sinks(
     sinks: Vec<Arc<dyn Sink>>,
 ) -> Result<(), Box<dyn std::error::Error + Send + Sync>> {
     let flush = config.flush();
-    // An empty `Vec` layer answers `Interest::never` and silences every event.
-    let host_sinks: Option<Vec<SinkLayer>> = (!sinks.is_empty()).then(|| {
-        sinks
-            .into_iter()
-            .map(|sink| SinkLayer::new(Arc::new(Writer::new(sink, flush))))
-            .collect()
-    });
-    let filter = env_filter(config.default_filter);
-    let format = format_layer(FormatConfig::standard(config.format, config.ansi), writer);
+    // Every layer is boxed over one small subscriber type. Stacking them with
+    // nested `.with` monomorphized each layer per `Layered<..>` depth: 4 GB rlibs.
+    let mut layers: Vec<Box<dyn Layer<Base> + Send + Sync>> = Vec::new();
+    layers.extend(crate::chrome_layer());
+    layers.extend(crate::instruments::context_layer());
+    layers.extend(crate::instruments::span_layer(&config));
+    layers.extend(crate::instruments::proc_layer());
+    layers.extend(crate::tracy_layer());
+    layers.extend(crate::rusage_layer());
+    layers.extend(log_sink_layer(flush));
+    layers.extend(sinks.into_iter().map(|sink| {
+        Box::new(SinkLayer::new(Arc::new(Writer::new(sink, flush)))) as Box<dyn Layer<Base> + Send + Sync>
+    }));
+    layers.push(format_layer(FormatConfig::standard(config.format, config.ansi), writer));
+    layers.extend(crate::otlp_layer(&config));
     crate::instruments::install(&config);
     crate::instruments::start(&config);
-    let subscriber = tracing_subscriber::registry()
-        .with(crate::chrome_layer())
-        .with(crate::instruments::context_layer())
-        .with(crate::instruments::span_layer(&config))
-        .with(crate::instruments::proc_layer())
-        .with(crate::tracy_layer())
-        .with(crate::rusage_layer())
-        .with(log_sink_layer(flush))
-        .with(host_sinks)
-        .with(filter)
-        .with(format);
-    subscriber.with(crate::otlp_layer(&config)).try_init()?;
+    tracing_subscriber::registry()
+        .with(env_filter(config.default_filter))
+        .with(layers)
+        .try_init()?;
     startup(&config);
     Ok(())
 }
