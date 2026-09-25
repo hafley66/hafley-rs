@@ -76,7 +76,7 @@ fn cleave(fixture: &Fixture, args: &[&str]) -> String {
         .arg(&fixture.state)
         .current_dir(&fixture.root)
         .env("HAFLEY_TRACE", &fixture.trace)
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("cleave binary runs");
     let stdout = String::from_utf8(output.stdout).expect("cleave stdout is UTF-8");

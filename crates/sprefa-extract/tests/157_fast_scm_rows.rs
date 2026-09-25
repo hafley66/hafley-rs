@@ -207,7 +207,7 @@ fn fast(paths: &[&str], index: usize) -> String {
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace_path(index))
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("ryi runs");
     assert!(

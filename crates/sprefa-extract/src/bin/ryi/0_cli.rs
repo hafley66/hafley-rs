@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use clap::{ArgGroup, Args, Parser, Subcommand};
 
 pub const AFTER_HELP: &str = concat!(
-    "Logging: RUST_LOG (default sprefa_extract=info), HAFLEY_LOG_FORMAT=json|text\n",
+    "Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\n",
     "Build: git hash: ",
     env!("SPREFA_BUILD_GIT_HASH"),
     ", datetime: ",

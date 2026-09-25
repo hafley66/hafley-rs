@@ -166,7 +166,7 @@ fn assert_uncoordinated_rows(db: &Connection, expected: &[Value]) {
 
 #[test]
 fn every_flat_fact_variant_and_field_has_a_typespec_table() {
-    let source = syn::parse_file(include_str!("../src/types.rs")).unwrap();
+    let source = syn::parse_file(include_str!("../../hafley_scm/src/read/types.rs")).unwrap();
     let flat = source
         .items
         .iter()
@@ -221,7 +221,7 @@ fn every_flat_fact_variant_and_field_has_a_typespec_table() {
         .filter(|t| !covered.contains(t))
         .collect();
     assert_eq!(extras, BTreeSet::from(["capture".to_owned()]));
-    let tsi = syn::parse_file(include_str!("../src/tsi/types.rs")).unwrap();
+    let tsi = syn::parse_file(include_str!("../../hafley_scm/src/read/tsi/types.rs")).unwrap();
     let atoms = syn::parse_file(include_str!("../../hafley_scm/src/atoms.rs")).unwrap();
     for (file, enum_name, table_name, column_name, snake_case) in [
         (&atoms, "FamilyTag", "node", "family", false),

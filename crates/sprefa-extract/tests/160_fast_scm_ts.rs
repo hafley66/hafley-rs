@@ -111,7 +111,7 @@ fn fast(paths: &[PathBuf], index: usize) -> (Vec<Value>, Duration) {
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("ryi runs");
     let elapsed = started.elapsed();

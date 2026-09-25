@@ -21,7 +21,7 @@ fn callers_rows_are_graded_and_sorted() {
         .args(["graph", "--callers", "deep"])
         .arg(fixture)
         .env("HAFLEY_TRACE", trace_path())
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("graph binary runs");
     assert!(

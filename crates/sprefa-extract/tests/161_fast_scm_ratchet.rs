@@ -132,7 +132,7 @@ fn fast_edges(paths: &[PathBuf]) -> BTreeMap<Key, String> {
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("ryi runs");
     assert!(

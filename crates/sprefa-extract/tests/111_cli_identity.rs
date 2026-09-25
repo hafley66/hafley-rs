@@ -83,3 +83,8 @@ fn slow_reads_a_named_indexer_from_its_separate_cache() {
         "slow must decode the picked indexer's saved index"
     );
 }
+
+#[test]
+fn ryi_version_is_this_package_version() {
+    assert_eq!(sprefa_extract::RYI_VERSION, env!("CARGO_PKG_VERSION"));
+}

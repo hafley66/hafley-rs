@@ -120,7 +120,7 @@ fn scm_rows(paths: &[PathBuf], index: usize) -> Vec<Value> {
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("ryi runs");
     let stderr = String::from_utf8_lossy(&output.stderr);

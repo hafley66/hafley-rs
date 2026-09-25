@@ -1,5 +1,7 @@
 pub mod kotlin_rehome;
 pub mod kotlin_rename;
+pub mod prolog_rehome;
+pub mod prolog_rename;
 pub mod rust_mutate;
 pub mod rust_rehome;
 pub mod rust_rename;

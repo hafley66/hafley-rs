@@ -164,7 +164,7 @@ tree-sitter-typescript = "0.23"
 tree-sitter-javascript = "0.23"
 # The `.scm` engine the Rust CallF defs run through: `#has-ancestor?`/`#has?`
 # over a native tree-sitter query, one MatchArena per run.
-hafley_scm = { path = "../hafley_scm" }
+hafley_scm = { path = "../hafley_scm", features = ["read"] }
 # serde on the FLAT wire envelope only (never on the generic Node<F>). The store
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }
@@ -237,12 +237,13 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-cli = ["dep:clap", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+cli = ["hafley_scm/cli", "dep:clap", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out
 # of `cli`: it pulls the whole rust-analyzer crate graph (380s cold build).
 rust-checker = [
+    "hafley_scm/rust-checker",
     "dep:ra_ap_hir",
     "dep:ra_ap_ide",
     "dep:ra_ap_ide_db",
@@ -252,11 +253,11 @@ rust-checker = [
 ]
 # The ts checker tier, `--features cli,ts-checker`. Off by default and out of
 # `cli`: it pulls no crate, but it makes every ts resolve able to spawn `node`.
-ts-checker = []
+ts-checker = ["hafley_scm/ts-checker"]
 # The go checker tier, `--features cli,go-checker`. Off by default and out of
 # `cli` for the same reason as its ts twin: it pulls no crate, and it makes
 # every go resolve able to spawn the `go` toolchain.
-go-checker = []
+go-checker = ["hafley_scm/go-checker"]
 
 [[bin]]
 name = "ryi"

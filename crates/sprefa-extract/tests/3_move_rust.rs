@@ -468,7 +468,7 @@ fn moving_this_crates_own_module_leaves_it_compiling() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
         .arg(root.join("src/edit/ts_rehome.rs"))
-        .arg(root.join("src/lang/ts/rehome.rs"))
+        .arg(root.join("src/edit/ts/rehome.rs"))
         .arg("--root")
         .arg(&root)
         .arg("--state")
@@ -483,9 +483,9 @@ fn moving_this_crates_own_module_leaves_it_compiling() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(
-        read(&root, "src/lang/mod.rs").contains("#[path = \"ts/rehome.rs\"] pub mod ts_rehome;"),
+        read(&root, "src/edit.rs").contains("#[path = \"ts/rehome.rs\"] pub mod ts_rehome;"),
         "the roster's decl re-aims:\n{}",
-        read(&root, "src/lang/mod.rs")
+        read(&root, "src/edit.rs")
     );
 
     let check = Command::new("cargo")

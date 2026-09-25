@@ -129,8 +129,8 @@ fn as_str_is_byte_stable_for_every_kind() {
 fn a_single_language_kind_lives_in_its_language_file() {
     let manifest = env!("CARGO_MANIFEST_DIR");
     let types_rs =
-        std::fs::read_to_string(format!("{manifest}/src/types.rs")).expect("types.rs readable");
-    let lang_files = walk_rs_files(&format!("{manifest}/src/lang"));
+        std::fs::read_to_string(format!("{manifest}/../hafley_scm/src/read/types.rs")).expect("types.rs readable");
+    let lang_files = walk_rs_files(&format!("{manifest}/../hafley_scm/src/read/lang"));
     assert!(lang_files.len() > 5, "lang/ files found: {lang_files:?}");
 
     for (enum_name, kinds_prefix) in [
@@ -193,7 +193,7 @@ fn enum_variants(types_rs: &str, name: &str) -> Option<Vec<String>> {
 #[test]
 fn extract_lang_has_no_path_switch() {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let source = std::fs::read_to_string(format!("{manifest}/src/lang/extract_lang.rs"))
+    let source = std::fs::read_to_string(format!("{manifest}/../hafley_scm/src/read/lang/extract_lang.rs"))
         .expect("extract_lang.rs readable");
     assert!(
         source.contains("source_for"),

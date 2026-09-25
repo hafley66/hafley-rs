@@ -362,7 +362,7 @@ fn probe(witness: bool) -> Probe {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         // A bare `info` turns on rust-analyzer's own span close events, whose
         // formatting cost lands inside the very phase this reads.
-        .env("RUST_LOG", "sprefa_extract=info")
+        .env("RUST_LOG", "sprefa_extract=info,hafley_scm=info")
         .args(&args)
         .output()
         .expect("extract binary runs");

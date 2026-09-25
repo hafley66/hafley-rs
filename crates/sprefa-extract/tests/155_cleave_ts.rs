@@ -96,7 +96,7 @@ fn run_cleave(fixture: &Fixture, args: &[&str]) -> (Option<i32>, String) {
         .arg(&fixture.state)
         .current_dir(&fixture.root)
         .env("HAFLEY_TRACE", &fixture.trace)
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("cleave binary runs");
     (

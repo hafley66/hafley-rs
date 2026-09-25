@@ -26,7 +26,7 @@ fn the_demo_plays_four_cleaves_and_ends_green() {
         .arg(demo.join("play.sh"))
         .current_dir(&demo)
         .env("RYI", env!("CARGO_BIN_EXE_ryi"))
-        .env("RUST_LOG", "sprefa_extract=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("play.sh runs");
     let stdout = String::from_utf8_lossy(&output.stdout).into_owned();

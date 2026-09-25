@@ -1,3 +1,5 @@
+extern crate self as hafley_scm;
+
 mod pipeline;
 mod types;
 mod walk;
@@ -8,6 +10,8 @@ pub mod lang;
 pub mod cst;
 pub mod span;
 pub mod atoms;
+#[cfg(feature = "read")]
+pub mod read;
 pub use types::*;
 
 use tree_sitter::{Language, Query, Tree};

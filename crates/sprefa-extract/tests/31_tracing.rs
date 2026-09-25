@@ -103,7 +103,7 @@ fn the_info_default_narrates_an_ordinary_run_on_stderr() {
 fn json_format_emits_service_version_and_process_identity() {
     let output = Command::new(BIN)
         .args(["--kinds", "call", FIXTURE])
-        .env("RUST_LOG", "sprefa_extract=debug,hafley_observe=debug")
+        .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug,hafley_observe=debug")
         .env("HAFLEY_LOG_FORMAT", "json")
         .env_remove("DL_TRACE_SUMMARY")
         .output()

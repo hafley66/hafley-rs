@@ -95,7 +95,7 @@ fn shape_count(board: &Path) -> usize {
 #[test]
 fn every_emitted_board_compiles_and_reads_wide() {
     let out = scratch("src");
-    let stdout = run_example("src", "src/types.rs::RyiOutput", &out);
+    let stdout = run_example("../hafley_scm/src/read", "../hafley_scm/src/read/types.rs::RyiOutput", &out);
 
     let files = boards(&out);
     assert!(
@@ -283,9 +283,9 @@ fn an_unknown_entrypoint_exits_nonzero() {
             "typegraph_d2",
             "--",
             "--root",
-            "src",
+            "../hafley_scm/src/read",
             "--entry",
-            "src/types.rs::NoSuchTypeAnywhere",
+            "../hafley_scm/src/read/types.rs::NoSuchTypeAnywhere",
             "--out",
             &out.to_string_lossy(),
         ])

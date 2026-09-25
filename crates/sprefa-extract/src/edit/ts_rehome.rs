@@ -57,7 +57,7 @@ impl Rehome for TsSource {
                 receipt: Some(receipt.clone()),
             });
         }
-        self.respell_spec(cx, reference)
+        respell_spec(cx, reference)
     }
 }
 
@@ -90,33 +90,31 @@ fn specifier_refs(cx: &MoveCx) -> Vec<ImportRef> {
     refs
 }
 
-impl TsSource {
-    fn respell_spec(&self, cx: &MoveCx, reference: &ImportRef) -> Option<Respell> {
-        let text = match reference.kind {
-            ImportRefKind::Import => import_respell(cx, reference)?,
-            ImportRefKind::PathLiteral => literal_respell(cx, reference)?,
-            ImportRefKind::ManifestTarget => manifest_respell(cx, reference)?,
-            _ => return None,
-        };
-        if text == reference.text {
-            return None;
-        }
-        let receipt = (reference.kind == ImportRefKind::ManifestTarget).then(|| {
-            format!(
-                "manifest {}: {} {} -> {}",
-                reference.importer,
-                reference.target,
-                bare(&reference.text),
-                bare(&text)
-            )
-        });
-        Some(Respell {
-            file: reference.importer.clone(),
-            span: reference.literal,
-            text,
-            receipt,
-        })
+fn respell_spec(cx: &MoveCx, reference: &ImportRef) -> Option<Respell> {
+    let text = match reference.kind {
+        ImportRefKind::Import => import_respell(cx, reference)?,
+        ImportRefKind::PathLiteral => literal_respell(cx, reference)?,
+        ImportRefKind::ManifestTarget => manifest_respell(cx, reference)?,
+        _ => return None,
+    };
+    if text == reference.text {
+        return None;
     }
+    let receipt = (reference.kind == ImportRefKind::ManifestTarget).then(|| {
+        format!(
+            "manifest {}: {} {} -> {}",
+            reference.importer,
+            reference.target,
+            bare(&reference.text),
+            bare(&text)
+        )
+    });
+    Some(Respell {
+        file: reference.importer.clone(),
+        span: reference.literal,
+        text,
+        receipt,
+    })
 }
 
 impl RehomeManifests for TsSource {
