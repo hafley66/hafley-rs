@@ -176,6 +176,62 @@ mod tests {
         );
     }
 
+    /// RECEIPT. The captured click: the pane sits in one repository and the
+    /// agent printed a lab directory relative to a neighbouring repository,
+    /// trailing slash included. The token lands in the sibling repository.
+    #[test]
+    fn a_directory_relative_to_a_sibling_repository_resolves_there() {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let lab = "labs/20260924.0.the-gang-runs-a-program-as-data-through-differential-dataflow/";
+        let projects = base.join("projects");
+        std::fs::create_dir_all(projects.join("hafley-rs/crates")).unwrap();
+        std::fs::create_dir_all(projects.join("sqlite_ivm").join(lab)).unwrap();
+        std::fs::write(projects.join("sqlite_ivm").join(lab).join("README.md"), "lab").unwrap();
+        std::fs::create_dir_all(projects.join("notes")).unwrap();
+        git(&projects.join("hafley-rs"), &["init", "-q", "-b", "main"]);
+        git(&projects.join("sqlite_ivm"), &["init", "-q", "-b", "main"]);
+        let home = base.to_string_lossy().into_owned();
+        clear_index_cache();
+
+        let roots = click_roots(&pane(&projects.join("hafley-rs/crates")), &SessionTouched::default());
+        assert_eq!(
+            rel(&base, resolve(lab, &roots, &home, &AgentEvidence::default())),
+            ResolveResult::Hit {
+                reference: ResolvedRef { path: format!("projects/sqlite_ivm/{lab}"), line: None, source: "sibling" }
+            }
+        );
+    }
+
+    /// RECEIPT. The same token under two neighbouring repositories is a
+    /// choice tagged by repository name, in name order.
+    #[test]
+    fn a_token_under_several_sibling_repositories_is_a_tagged_choice() {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let lab = "labs/20260924.0.the-gang-runs-a-program-as-data-through-differential-dataflow/";
+        let projects = base.join("projects");
+        std::fs::create_dir_all(projects.join("hafley-rs")).unwrap();
+        for repo in ["sqlite_ivm", "sqlite_ivm-fork"] {
+            std::fs::create_dir_all(projects.join(repo).join(lab)).unwrap();
+            git(&projects.join(repo), &["init", "-q", "-b", "main"]);
+        }
+        git(&projects.join("hafley-rs"), &["init", "-q", "-b", "main"]);
+        let home = base.to_string_lossy().into_owned();
+        clear_index_cache();
+
+        let roots = click_roots(&pane(&projects.join("hafley-rs")), &SessionTouched::default());
+        assert_eq!(
+            rel(&base, resolve(lab, &roots, &home, &AgentEvidence::default())),
+            ResolveResult::Choices {
+                paths: vec![format!("projects/sqlite_ivm/{lab}"), format!("projects/sqlite_ivm-fork/{lab}")],
+                line: None,
+                via: "sibling",
+                worktrees: vec!["sqlite_ivm".into(), "sqlite_ivm-fork".into()],
+            }
+        );
+    }
+
     /// RECEIPT. Inline code in a markdown file names paths the way the file's
     /// author sees them: beside the file, from its checkout, in another
     /// worktree of that checkout, or a bare filename found once in it. Every

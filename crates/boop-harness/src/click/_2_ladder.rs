@@ -7,7 +7,7 @@ use boop_store::SessionTouched;
 use serde::Serialize;
 
 use super::_0_rungs::*;
-use super::_1_roots::{doc_roots, Root, RootVia};
+use super::_1_roots::{doc_roots, repos_beside, Root, RootVia};
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedRef {
@@ -29,7 +29,8 @@ pub enum ResolveResult {
         #[serde(skip_serializing_if = "Option::is_none")]
         line: Option<u32>,
         via: &'static str,
-        /// Parallel to `paths` when `via` is `worktree`: the branch each path is on.
+        /// Parallel to `paths` when `via` is `worktree` (the branch each path is
+        /// on) or `sibling` (the repository directory each path is in).
         #[serde(skip_serializing_if = "Vec::is_empty")]
         worktrees: Vec<String>,
     },
@@ -184,6 +185,33 @@ fn worktree_join(rel: &str, roots: &[Root], line: Option<u32>) -> Option<Resolve
     }
 }
 
+/// The token under every git repository beside the pane's checkout (the
+/// checkout's parent's other children). One hit opens; several are a choice
+/// tagged by repository name.
+fn sibling_join(rel: &str, toplevel: Option<&str>, line: Option<u32>) -> Option<ResolveResult> {
+    let tail = rel.strip_prefix("./").unwrap_or(rel);
+    let mut paths = Vec::new();
+    let mut repos = Vec::new();
+    for repo in repos_beside(Path::new(toplevel?)) {
+        let candidate = join(&repo, tail);
+        if std::fs::symlink_metadata(&candidate).is_ok() {
+            paths.push(candidate);
+            repos.push(repo.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default());
+        }
+    }
+    match paths.len() {
+        0 => None,
+        1 => Some(ResolveResult::Hit {
+            reference: ResolvedRef { path: paths.remove(0), line, source: "sibling" },
+        }),
+        _ => {
+            paths.truncate(MAX_CHOICES);
+            repos.truncate(MAX_CHOICES);
+            Some(ResolveResult::Choices { paths, line, via: "sibling", worktrees: repos })
+        }
+    }
+}
+
 /// A token resolved against the click's roots. `roots[0]` is the pane cwd.
 pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence) -> ResolveResult {
     let clean = token.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`');
@@ -248,6 +276,9 @@ pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence
         if std::fs::symlink_metadata(&candidate).is_ok() {
             return ResolveResult::Hit { reference: ResolvedRef { path: candidate, line, source: "touched" } };
         }
+    }
+    if let Some(found) = sibling_join(&rel, repo_root.as_deref(), line) {
+        return found;
     }
 
     if search_root.is_empty() {

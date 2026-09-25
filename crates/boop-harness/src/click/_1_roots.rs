@@ -9,7 +9,7 @@ use std::time::SystemTime;
 use boop_mux::PaneHit;
 use boop_store::SessionTouched;
 
-use super::_0_rungs::repo_root_for;
+use super::_0_rungs::{repo_root_for, MAX_SIBLINGS};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RootVia {
@@ -150,6 +150,46 @@ pub fn worktrees_of(toplevel: &Path) -> Vec<(PathBuf, String)> {
         cache.insert(common, (stamp, list.clone()));
     }
     list
+}
+
+type BesideCache = Mutex<HashMap<PathBuf, (Option<SystemTime>, Vec<PathBuf>)>>;
+
+fn beside_cache() -> &'static BesideCache {
+    static CACHE: OnceLock<BesideCache> = OnceLock::new();
+    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+}
+
+/// The git repositories beside `toplevel`: immediate children of its parent
+/// that hold a `.git` (the first MAX_SIBLINGS entries read), by name,
+/// `toplevel` excluded. Cached per parent until the parent's mtime changes.
+pub fn repos_beside(toplevel: &Path) -> Vec<PathBuf> {
+    let Some(parent) = toplevel.parent() else {
+        return Vec::new();
+    };
+    let stamp = std::fs::metadata(parent).and_then(|meta| meta.modified()).ok();
+    let cached = beside_cache().lock().ok().and_then(|cache| cache.get(parent).cloned());
+    let list = match cached {
+        Some((at, list)) if at == stamp => list,
+        _ => {
+            let mut list: Vec<PathBuf> = std::fs::read_dir(parent)
+                .map(|children| {
+                    children
+                        .flatten()
+                        .take(MAX_SIBLINGS)
+                        .filter(|child| !child.file_name().to_string_lossy().starts_with('.'))
+                        .map(|child| child.path())
+                        .filter(|path| path.is_dir() && path.join(".git").exists())
+                        .collect()
+                })
+                .unwrap_or_default();
+            list.sort();
+            if let Ok(mut cache) = beside_cache().lock() {
+                cache.insert(parent.to_path_buf(), (stamp, list.clone()));
+            }
+            list
+        }
+    };
+    list.into_iter().filter(|repo| repo != toplevel).collect()
 }
 
 /// `git worktree list --porcelain`: blank-line separated records, `worktree
