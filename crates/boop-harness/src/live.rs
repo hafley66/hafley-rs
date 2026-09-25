@@ -142,6 +142,52 @@ pub fn pane_of_target(target: &str) -> Option<String> {
     pane.starts_with('%').then(|| pane.to_string())
 }
 
+/// A root session whose process runs on a real terminal no tmux pane owns.
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub struct OffTmuxSession {
+    pub session: LiveSession,
+    /// Bare device name, `ttys023`.
+    pub tty: String,
+}
+
+/// Root sessions the harness registries report on a terminal outside
+/// `pane_ttys`. `tty_of` answers only those pids' terminals (`??` is none).
+pub fn off_tmux_sessions<'a>(
+    live: impl Iterator<Item = &'a dyn LiveSessions>,
+    pane_ttys: &std::collections::HashSet<String>,
+    tty_of: impl FnOnce(&[u32]) -> std::collections::HashMap<u32, String>,
+) -> Vec<OffTmuxSession> {
+    let candidates: Vec<(LiveSession, u32)> = live
+        .flat_map(|registry| registry.live_sessions().unwrap_or_default())
+        .filter(|session| session.tmux_pane.is_none() && session.scope != LiveSessionScope::Child)
+        .filter_map(|session| session.pid.map(|pid| (session, pid)))
+        .collect();
+    let pids: Vec<u32> = candidates.iter().map(|(_, pid)| *pid).collect();
+    let ttys = if pids.is_empty() { Default::default() } else { tty_of(&pids) };
+    candidates
+        .into_iter()
+        .filter_map(|(session, pid)| {
+            let tty = ttys.get(&pid)?;
+            (tty != "??" && !pane_ttys.contains(tty)).then(|| OffTmuxSession { session, tty: tty.clone() })
+        })
+        .collect()
+}
+
+/// Terminal of each pid, one `ps` call for the whole set.
+pub fn ps_ttys(pids: &[u32]) -> std::collections::HashMap<u32, String> {
+    let list = pids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
+    let Ok(out) = std::process::Command::new("ps").args(["-o", "pid=,tty=", "-p", &list]).output() else {
+        return Default::default();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| {
+            let mut fields = line.split_whitespace();
+            Some((fields.next()?.parse().ok()?, fields.next()?.to_string()))
+        })
+        .collect()
+}
+
 /// The harness session standing in a tmux pane, answered by each harness's own
 /// live registry rather than by a transcript mtime or a tmux scrape. `pane` is
 /// the resolved pane id; `mail_dir` is the resolved mailbox for the route
@@ -331,6 +377,52 @@ mod tests {
             Ok((pane == "%7" && socket == Some("instant-fixture"))
                 .then(|| session("tty-bound", None)))
         }
+    }
+
+    struct Listed(Vec<LiveSession>);
+
+    impl LiveSessions for Listed {
+        fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+            Ok(self.0.clone())
+        }
+    }
+
+    #[test]
+    fn off_tmux_sessions_come_from_every_harness_registry_not_a_binary_list() {
+        let at = |harness, id: &str, pid: Option<u32>, pane: Option<&str>, scope| LiveSession {
+            harness,
+            pid,
+            scope,
+            ..session(id, pane)
+        };
+        let omp = Listed(vec![at(HarnessId::Omp, "omp-off", Some(10), None, LiveSessionScope::Root)]);
+        let claude = Listed(vec![
+            at(HarnessId::Claude, "in-pane", Some(11), Some("%4"), LiveSessionScope::Root),
+            at(HarnessId::Claude, "pane-tty", Some(12), None, LiveSessionScope::Unknown),
+            at(HarnessId::Claude, "no-terminal", Some(13), None, LiveSessionScope::Root),
+            at(HarnessId::Claude, "child", Some(14), None, LiveSessionScope::Child),
+            at(HarnessId::Claude, "no-pid", None, None, LiveSessionScope::Root),
+        ]);
+        let panes = std::collections::HashSet::from(["ttys002".to_string()]);
+        let mut asked = Vec::new();
+        let found = off_tmux_sessions([&omp as &dyn LiveSessions, &claude].into_iter(), &panes, |pids| {
+            asked = pids.to_vec();
+            [(10, "ttys023"), (12, "ttys002"), (13, "??")]
+                .into_iter()
+                .map(|(pid, tty)| (pid, tty.to_string()))
+                .collect()
+        });
+        assert_eq!(
+            (asked, found.iter().map(|off| (off.session.harness, off.session.session_id.as_str(), off.tty.as_str())).collect::<Vec<_>>()),
+            (vec![10, 12, 13], vec![(HarnessId::Omp, "omp-off", "ttys023")])
+        );
+    }
+
+    #[test]
+    fn ps_ttys_answers_the_asked_pids() {
+        let own = std::process::id();
+        let ttys = ps_ttys(&[own]);
+        assert_eq!(ttys.keys().copied().collect::<Vec<_>>(), vec![own]);
     }
 
     #[test]
