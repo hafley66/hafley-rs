@@ -48,9 +48,9 @@ fn the_chain_reaches_three_nodes_at_rising_depth() {
         rows,
         serde_json::from_str::<Vec<Value>>(
             r#"[
-            {"record":"graph_node","path":"tests/fixtures/graph_ts/chain_b.ts","name":"chainB","depth":1,"grade":"+","line":null},
-            {"record":"graph_node","path":"tests/fixtures/graph_ts/chain_c.ts","name":"chainC","depth":2,"grade":"+","line":null},
-            {"record":"graph_node","path":"tests/fixtures/graph_ts/chain_d.ts","name":"chainD","depth":3,"grade":"+","line":null}
+            {"record":"graph_node","path":"tests/fixtures/graph_ts/chain_b.ts","name":"chainB","depth":1,"grade":"+","line":3},
+            {"record":"graph_node","path":"tests/fixtures/graph_ts/chain_c.ts","name":"chainC","depth":2,"grade":"+","line":3},
+            {"record":"graph_node","path":"tests/fixtures/graph_ts/chain_d.ts","name":"chainD","depth":3,"grade":"+","line":2}
             ]"#,
         )
         .unwrap()

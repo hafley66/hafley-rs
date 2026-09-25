@@ -641,6 +641,10 @@ pub mod models {
         pub to_name: Option<String>,
         pub kind: String,
         pub grade: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub from_line: Option<u32>,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub to_line: Option<u32>,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1818,7 +1822,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let graph_node_capacity = if graph_node.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2271,7 +2275,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in graph_edge.chunks(graph_edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3779,10 +3783,14 @@ impl models::GraphEdge {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.grade.as_str())?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_line)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.to_line)?;
+        parameter += 1;
         Ok(parameter)
     }
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

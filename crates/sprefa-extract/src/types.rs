@@ -3528,6 +3528,10 @@ pub enum FlatFact {
         to_name: Option<String>,
         kind: String,
         grade: String,
+        /// 1-based line of the edge's source site, when its file reads.
+        from_line: Option<u32>,
+        /// 1-based line of the edge's target declaration, when a span exists.
+        to_line: Option<u32>,
     },
     #[serde(rename = "graph_path")]
     GraphPath {

@@ -287,6 +287,14 @@ pub struct GraphArgs {
     #[arg(long, value_name = "PATH")]
     pub sqlite: Option<PathBuf>,
 
+    /// Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve
+    #[arg(long, conflicts_with_all = ["rust_checker", "ts_checker", "go_checker"])]
+    pub slow: bool,
+
+    /// Seconds the question may run; past it graph exits 3
+    #[arg(long, value_name = "SECS", default_value_t = 30, value_parser = clap::value_parser!(u64).range(1..))]
+    pub timeout: u64,
+
     /// Query a committed revision
     #[arg(long, value_name = "REV", requires = "root", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"])]
     pub at: Option<String>,

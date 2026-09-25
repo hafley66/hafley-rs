@@ -3863,6 +3863,24 @@
         "kind": "string",
         "optional": false,
         "nullable": false
+      },
+      {
+        "name": "from_line",
+        "path": [
+          "from_line"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "to_line",
+        "path": [
+          "to_line"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": true
       }
     ]
   },

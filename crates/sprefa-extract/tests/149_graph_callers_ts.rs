@@ -44,7 +44,7 @@ fn callers_rows_are_graded_and_sorted() {
     assert_eq!(
         rows,
         serde_json::from_str::<Vec<serde_json::Value>>(
-            r#"[{"from_name":"deep","from_path":"tests/fixtures/ts5_findings/module_plane/two_hop_inner.ts","grade":"+","kind":"import_resolve","record":"graph_edge","to_name":"reach","to_path":"tests/fixtures/ts5_findings/module_plane/two_hop_consumer.ts"}]"#,
+            r#"[{"from_line":4,"from_name":"reach","from_path":"tests/fixtures/ts5_findings/module_plane/two_hop_consumer.ts","grade":"+","kind":"import_resolve","record":"graph_edge","to_line":2,"to_name":"deep","to_path":"tests/fixtures/ts5_findings/module_plane/two_hop_inner.ts"}]"#,
         )
         .unwrap()
     );

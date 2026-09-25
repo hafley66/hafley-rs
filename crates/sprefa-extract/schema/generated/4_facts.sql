@@ -455,7 +455,9 @@ CREATE TABLE IF NOT EXISTS "graph_edge" (
     "to_path" TEXT NOT NULL,
     "to_name" TEXT,
     "kind" TEXT NOT NULL,
-    "grade" TEXT NOT NULL
+    "grade" TEXT NOT NULL,
+    "from_line" INTEGER,
+    "to_line" INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS "graph_path" (

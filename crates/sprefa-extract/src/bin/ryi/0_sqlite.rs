@@ -89,12 +89,12 @@ fn span_lines_view_sql(connection: &Connection) -> Result<String> {
     ))
 }
 
-/// The one grade rule, as SQL over `column`. `ryi graph` reads it out of the
-/// views rather than re-deciding it in Rust.
-fn grade_sql(column: &str) -> String {
+/// The one grade rule, as SQL over `column`: `+` for the module plane and the
+/// oracles (SCIP, a compiler checker), `-` unresolved, `~` a syntax guess.
+pub fn grade_sql(column: &str) -> String {
     format!(
-        "CASE {column} WHEN 'module_plane' THEN '+' WHEN 'unresolved' THEN '-' ELSE '~' END \
-         AS \"grade\""
+        "CASE {column} WHEN 'module_plane' THEN '+' WHEN 'scip' THEN '+' \
+         WHEN 'checker' THEN '+' WHEN 'unresolved' THEN '-' ELSE '~' END AS \"grade\""
     )
 }
 
@@ -124,10 +124,12 @@ pub const REACH_DEPTH_CAP: u32 = 32;
 fn graph_views_sql() -> String {
     format!(
         "CREATE VIEW \"callers\" AS SELECT \"callee_path\", \"callee_name\", \"caller_path\", \
-         \"caller_name\", {callers_grade}, \"kind\" FROM \"resolved_edge\"; \
+         \"caller_name\", {callers_grade}, \"kind\", \"caller_site_start\", \"callee_start\" \
+         FROM \"resolved_edge\"; \
          CREATE VIEW \"uses\" AS SELECT \"target_path\" AS \"type_path\", \
          \"target_name\" AS \"type_name\", \"owner_path\" AS \"user_path\", \
-         \"owner_name\" AS \"user_name\", {uses_grade}, \"kind\" FROM \"resolved_type_edge\"; \
+         \"owner_name\" AS \"user_name\", {uses_grade}, \"kind\", \
+         \"owner_start\" AS \"user_start\" FROM \"resolved_type_edge\"; \
          CREATE VIEW \"reach\" AS {walk} SELECT \"src_path\", \"src_name\", \"dst_path\", \
          \"dst_name\", \"depth\" FROM \"walk\"; \
          CREATE VIEW \"type_evidence\" AS SELECT \
@@ -582,7 +584,7 @@ const OWNED_SPANS: [(&str, &str, &str, &str, &str); 4] = [
 
 /// 1-based (line, col) of a byte against newline offsets. Col counts BYTES
 /// from the line start, not characters, matching the spans it decorates.
-fn line_col(offsets: &[u32], start: u32) -> (u32, u32) {
+pub fn line_col(offsets: &[u32], start: u32) -> (u32, u32) {
     let line = offsets.partition_point(|offset| *offset < start);
     let line_start = line.checked_sub(1).map_or(0, |index| offsets[index] + 1);
     ((line + 1) as u32, start - line_start + 1)

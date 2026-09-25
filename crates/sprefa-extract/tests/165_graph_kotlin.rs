@@ -52,8 +52,8 @@ fn callers_answers_over_a_kotlin_corpus() {
     let rows = rows("callers", "--callers", "makeWidget");
     assert_eq!(rows.len(), 2);
     assert!(rows.iter().all(|row| {
-        field(row, "from_path").ends_with("model/Widget.kt")
-            && field(row, "to_name") == "main"
+        field(row, "to_path").ends_with("model/Widget.kt")
+            && field(row, "from_name") == "main"
             && field(row, "grade") == "+"
     }));
 }
@@ -82,5 +82,5 @@ fn uses_answers_over_a_kotlin_corpus() {
     assert_eq!(kinds, vec!["field", "impl"]);
     assert!(rows
         .iter()
-        .all(|row| field(row, "to_path").ends_with("app/Main.kt")));
+        .all(|row| field(row, "from_path").ends_with("app/Main.kt")));
 }

@@ -49,8 +49,8 @@ fn a_type_used_in_two_files_answers_with_two_rows() {
         rows,
         serde_json::from_str::<Vec<Value>>(
             r#"[
-            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget.ts","from_name":"Widget","to_path":"tests/fixtures/graph_ts/widget_reader.ts","to_name":"readWidget","kind":"param","grade":"+"},
-            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget.ts","from_name":"Widget","to_path":"tests/fixtures/graph_ts/widget_writer.ts","to_name":"makeWidget","kind":"returns","grade":"+"}
+            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget_reader.ts","from_name":"readWidget","to_path":"tests/fixtures/graph_ts/widget.ts","to_name":"Widget","kind":"param","grade":"+","from_line":3,"to_line":null},
+            {"record":"graph_edge","from_path":"tests/fixtures/graph_ts/widget_writer.ts","from_name":"makeWidget","to_path":"tests/fixtures/graph_ts/widget.ts","to_name":"Widget","kind":"returns","grade":"+","from_line":3,"to_line":null}
             ]"#,
         )
         .unwrap()

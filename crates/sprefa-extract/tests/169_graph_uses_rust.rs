@@ -31,7 +31,7 @@ fn rust_function_and_method_signatures_are_type_uses() {
         .iter()
         .map(|row| {
             (
-                row["to_name"].as_str().unwrap(),
+                row["from_name"].as_str().unwrap(),
                 row["kind"].as_str().unwrap(),
             )
         })

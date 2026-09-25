@@ -1,28 +1,34 @@
 //! `ryi graph`: one resolve pass landed in the SQLite fact store, then a
-//! question asked of it as SQL over the `callers`/`uses`/`reach` views.
+//! question asked of it: `--callers`/`--uses` as SQL over the views, the walks
+//! (`--from`, `--*-path`) as one first-discovery pass over the plane's edges.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
 use crate::cli::GraphArgs;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use sprefa_extract::{
-    resolve_project_with_tsi_tiers, FlatFact, ResolveArms, ResolveRequest, ScipMode, ScipRecords,
+    newline_offsets, resolve_project_with_tsi_tiers, slow_project, FlatFact, ResolveArms,
+    ResolveRequest, ScipMode, ScipRecords,
 };
 
-use crate::sqlite::{reach_walk_sql, Database};
+use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
 
-const CALLERS_SQL: &str = "SELECT \"callee_path\", \"callee_name\", \"caller_path\", \
-                           \"caller_name\", \"grade\", \"kind\" FROM \"callers\" \
-                           WHERE \"callee_name\" IS ?1";
+const CALLERS_SQL: &str = "SELECT \"caller_path\", \"caller_name\", \"callee_path\", \
+                           \"callee_name\", \"grade\", \"kind\", \"caller_site_start\", \
+                           \"callee_start\" FROM \"callers\" WHERE \"callee_name\" IS ?1";
 
-const USES_SQL: &str = "SELECT \"type_path\", \"type_name\", \"user_path\", \"user_name\", \
-                        \"grade\", \"kind\" FROM \"uses\" WHERE \"type_name\" IS ?1";
+const USES_SQL: &str = "SELECT \"user_path\", \"user_name\", \"type_path\", \"type_name\", \
+                        \"grade\", \"kind\", \"user_start\", NULL FROM \"uses\" \
+                        WHERE \"type_name\" IS ?1";
 
 /// One resolve pass, landed in the store the views read. `--sqlite` publishes
-/// the store; without it the whole thing lives and dies in memory.
+/// the store; without it the whole thing lives and dies in memory. `--slow`
+/// lands the SCIP oracle's projection of the same tables instead.
 fn load_store(
     paths: &[PathBuf],
     arms: ResolveArms,
@@ -30,19 +36,26 @@ fn load_store(
     revision_root: Option<&Path>,
     sqlite: Option<&Path>,
 ) -> Result<Database, Box<dyn std::error::Error>> {
-    let request = ResolveRequest {
-        paths,
-        arms,
-        scip: ScipMode::from_flags(cli.scip_index.as_deref(), false),
-        project_root: revision_root.or(cli.inputs.root.as_deref()),
-        scip_records: ScipRecords::default(),
-        occurrence_text: false,
-        rust_checker: cli.rust_checker.then_some(cli.inputs.root.as_deref()).flatten(),
-        ts_checker: cli.ts_checker.then_some(cli.inputs.root.as_deref()).flatten(),
-        go_checker: cli.go_checker.then_some(cli.inputs.root.as_deref()).flatten(),
-        witness: true,
+    let root = revision_root
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| crate::inputs::root(&cli.inputs));
+    let facts = if cli.slow {
+        slow_project(paths, &root, cli.scip_index.as_deref(), true)?
+    } else {
+        let request = ResolveRequest {
+            paths,
+            arms,
+            scip: ScipMode::from_flags(cli.scip_index.as_deref(), false),
+            project_root: revision_root.or(cli.inputs.root.as_deref()),
+            scip_records: ScipRecords::default(),
+            occurrence_text: false,
+            rust_checker: cli.rust_checker.then_some(cli.inputs.root.as_deref()).flatten(),
+            ts_checker: cli.ts_checker.then_some(cli.inputs.root.as_deref()).flatten(),
+            go_checker: cli.go_checker.then_some(cli.inputs.root.as_deref()).flatten(),
+            witness: true,
+        };
+        resolve_project_with_tsi_tiers(&request)?
     };
-    let facts = resolve_project_with_tsi_tiers(&request)?;
     let mut database = match sqlite {
         Some(path) => Database::create(path)?,
         None => Database::memory()?,
@@ -73,28 +86,218 @@ fn load_store(
     Ok(database)
 }
 
-/// `callers` and `uses` project the same six columns in the same order, so one
-/// reader serves both. NAME travels as `?1`, never spliced into the SQL.
+/// The question's wall budget. SQLite statements stop through the
+/// connection's interrupt handle; the Rust walk polls `expired`.
+struct Deadline {
+    at: Instant,
+}
+
+impl Deadline {
+    fn expired(&self) -> bool {
+        Instant::now() >= self.at
+    }
+}
+
+/// Newline offsets per file, read once. A file that does not read maps to
+/// `None`, so its rows keep `line: null` and it costs one probe.
+struct Lines {
+    root: Option<PathBuf>,
+    tables: HashMap<String, Option<Vec<u32>>>,
+}
+
+impl Lines {
+    fn line(&mut self, path: &str, byte: Option<u32>) -> Option<u32> {
+        let byte = byte?;
+        if !self.tables.contains_key(path) {
+            let content = fs::read(path).ok().or_else(|| {
+                self.root
+                    .as_ref()
+                    .and_then(|root| fs::read(root.join(path)).ok())
+            });
+            self.tables
+                .insert(path.to_string(), content.map(|bytes| newline_offsets(&bytes)));
+        }
+        self.tables[path]
+            .as_ref()
+            .map(|offsets| line_col(offsets, byte).0)
+    }
+}
+
+/// `callers` and `uses` project the same eight columns in the same order:
+/// source, target, grade, kind, source byte, target byte. NAME travels as `?1`.
 fn edges(
     connection: &Connection,
     sql: &str,
     name: &str,
+    lines: &mut Lines,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
     let mut statement = connection.prepare(sql)?;
-    let mut rows = statement
+    let raw = statement
         .query_map([name], |row| {
-            Ok(FlatFact::GraphEdge {
-                from_path: row.get(0)?,
-                from_name: row.get(1)?,
-                to_path: row.get(2)?,
-                to_name: row.get(3)?,
-                kind: row.get(5)?,
-                grade: row.get(4)?,
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, Option<String>>(1)?,
+                row.get::<_, String>(2)?,
+                row.get::<_, Option<String>>(3)?,
+                row.get::<_, String>(4)?,
+                row.get::<_, String>(5)?,
+                row.get::<_, Option<u32>>(6)?,
+                row.get::<_, Option<u32>>(7)?,
+            ))
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    let mut rows: Vec<FlatFact> = raw
+        .into_iter()
+        .map(
+            |(from_path, from_name, to_path, to_name, grade, kind, from_byte, to_byte)| {
+                FlatFact::GraphEdge {
+                    from_line: lines.line(&from_path, from_byte),
+                    to_line: lines.line(&to_path, to_byte),
+                    from_path,
+                    from_name,
+                    to_path,
+                    to_name,
+                    kind,
+                    grade,
+                }
+            },
+        )
+        .collect();
+    rows.sort_by_key(|edge| serde_json::to_string(edge).expect("graph edge serializes"));
+    Ok(rows)
+}
+
+/// A graph node: a file and the name declared there (`None` for a site with
+/// no enclosing name).
+type Node = (String, Option<String>);
+
+/// One edge of a walked plane: its export row, both ends, the grade a
+/// discovery through it reports, and the byte its target is declared at.
+struct PlaneEdge {
+    row: u64,
+    src: Node,
+    dst: Node,
+    grade: String,
+    dst_start: Option<u32>,
+}
+
+/// The first time the walk reached `node`: at the least depth, and among
+/// equal depths along the lexicographically least row-id witness.
+struct Found {
+    origin: Node,
+    node: Node,
+    depth: u32,
+    witness: Vec<u64>,
+    via: usize,
+}
+
+/// Every edge of one plane, as `(row, src_path, src_name, dst_path, dst_name,
+/// grade, dst_start)`.
+fn plane_edges(
+    connection: &Connection,
+    plane: &str,
+) -> Result<Vec<PlaneEdge>, Box<dyn std::error::Error>> {
+    let sql = match plane {
+        "call" => format!(
+            "SELECT \"_row\", \"caller_path\", \"caller_name\", \"callee_path\", \
+             \"callee_name\", {}, \"callee_start\" FROM \"resolved_edge\"",
+            grade_sql("\"resolution_origin\"")
+        ),
+        "type" => format!(
+            "SELECT \"_row\", \"owner_path\", \"owner_name\", \"target_path\", \
+             \"target_name\", {}, NULL FROM \"resolved_type_edge\"",
+            grade_sql("\"resolution_origin\"")
+        ),
+        "flow" => "SELECT \"_row\", \"from_blob\", printf('%d:%d', \"from__start\", \"from__end\"), \
+                   \"to_blob\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
+                   FROM \"flow_edge\""
+            .to_string(),
+        _ => unreachable!("only fixed graph planes reach this query"),
+    };
+    let mut statement = connection.prepare(&sql)?;
+    let rows = statement
+        .query_map([], |row| {
+            Ok(PlaneEdge {
+                row: row.get::<_, i64>(0)? as u64,
+                src: (row.get(1)?, row.get(2)?),
+                dst: (row.get(3)?, row.get(4)?),
+                grade: row.get::<_, Option<String>>(5)?.unwrap_or_default(),
+                dst_start: row.get(6)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
-    rows.sort_by_key(|edge| serde_json::to_string(edge).expect("graph edge serializes"));
     Ok(rows)
+}
+
+/// Level-by-level walk from `starts`: each node is kept the first time it is
+/// reached, so the work is bounded by the edges, never by the paths.
+fn first_discovery(
+    edges: &[PlaneEdge],
+    starts: BTreeSet<Node>,
+    deadline: &Deadline,
+) -> Result<Vec<Found>, Box<dyn std::error::Error>> {
+    let mut out_of: HashMap<&Node, Vec<usize>> = HashMap::new();
+    for (index, edge) in edges.iter().enumerate() {
+        out_of.entry(&edge.src).or_default().push(index);
+    }
+    let mut found: HashMap<Node, Found> = HashMap::new();
+    let mut expanded: HashSet<Node> = HashSet::new();
+    let mut frontier: Vec<(Node, Vec<u64>, Node)> = starts
+        .into_iter()
+        .map(|node| (node.clone(), Vec::new(), node))
+        .collect();
+    for depth in 1..=REACH_DEPTH_CAP {
+        let mut level: BTreeMap<Node, Found> = BTreeMap::new();
+        for (node, witness, origin) in &frontier {
+            if deadline.expired() {
+                return Err("graph walk passed its deadline".into());
+            }
+            if !expanded.insert(node.clone()) {
+                continue;
+            }
+            for &index in out_of.get(node).into_iter().flatten() {
+                let edge = &edges[index];
+                if found.contains_key(&edge.dst) {
+                    continue;
+                }
+                let mut path = witness.clone();
+                path.push(edge.row);
+                if level.get(&edge.dst).is_some_and(|best| best.witness <= path) {
+                    continue;
+                }
+                level.insert(
+                    edge.dst.clone(),
+                    Found {
+                        origin: origin.clone(),
+                        node: edge.dst.clone(),
+                        depth,
+                        witness: path,
+                        via: index,
+                    },
+                );
+            }
+        }
+        if level.is_empty() {
+            break;
+        }
+        frontier = level
+            .values()
+            .map(|found| (found.node.clone(), found.witness.clone(), found.origin.clone()))
+            .collect();
+        found.extend(level);
+    }
+    let mut rows: Vec<Found> = found.into_values().collect();
+    rows.sort_by(|left, right| (left.depth, &left.node).cmp(&(right.depth, &right.node)));
+    Ok(rows)
+}
+
+/// Every source node whose name is NAME: the walk's seed set.
+fn named_starts(edges: &[PlaneEdge], name: &str) -> BTreeSet<Node> {
+    edges
+        .iter()
+        .filter(|edge| edge.src.1.as_deref() == Some(name))
+        .map(|edge| edge.src.clone())
+        .collect()
 }
 
 /// The reach closure seeded at NAME: one row per node it reaches, at the
@@ -102,130 +305,57 @@ fn edges(
 fn nodes(
     connection: &Connection,
     name: &str,
+    deadline: &Deadline,
+    lines: &mut Lines,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-    let sql = format!(
-        "{} SELECT \"dst_path\", \"dst_name\", min(\"depth\"), \"grade\" FROM \"walk\" \
-         GROUP BY \"dst_path\", \"dst_name\" ORDER BY 3, 1, 2",
-        reach_walk_sql("e.\"caller_name\" IS ?1")
-    );
-    let mut statement = connection.prepare(&sql)?;
-    let rows = statement
-        .query_map([name], |row| {
-            Ok(FlatFact::GraphNode {
-                path: row.get(0)?,
-                name: row.get(1)?,
-                depth: row.get(2)?,
-                grade: row.get(3)?,
-                line: None,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
+    let edges = plane_edges(connection, "call")?;
+    let found = first_discovery(&edges, named_starts(&edges, name), deadline)?;
+    Ok(found
+        .into_iter()
+        .map(|found| {
+            let edge = &edges[found.via];
+            FlatFact::GraphNode {
+                line: lines.line(&found.node.0, edge.dst_start),
+                path: found.node.0,
+                name: found.node.1,
+                depth: found.depth,
+                grade: edge.grade.clone(),
+            }
+        })
+        .collect())
+}
+
+/// One shortest, edge-row-witnessed path per destination on `plane`.
+fn paths(
+    connection: &Connection,
+    plane: &str,
+    starts: impl FnOnce(&[PlaneEdge]) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>>,
+    deadline: &Deadline,
+) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+    let edges = plane_edges(connection, plane)?;
+    let found = first_discovery(&edges, starts(&edges)?, deadline)?;
+    Ok(found
+        .into_iter()
+        .map(|found| FlatFact::GraphPath {
+            plane: plane.to_string(),
+            from_path: found.origin.0,
+            from_name: found.origin.1,
+            to_path: found.node.0,
+            to_name: found.node.1,
+            depth: found.depth,
+            witness: found.witness,
+        })
+        .collect())
 }
 
 /// Flow identity is a content digest and byte span. The seed uses the final
 /// @ to separate the digest from START:END.
-fn flow_paths(
-    connection: &Connection,
-    seed: &str,
-) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+fn flow_seed(seed: &str) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
     let (blob, span) = seed.rsplit_once('@').ok_or("flow seed must be BLOB@START:END")?;
     let (start, end) = span.split_once(':').ok_or("flow seed must be BLOB@START:END")?;
     let start: u32 = start.parse()?;
     let end: u32 = end.parse()?;
-    let sql = "WITH RECURSIVE walk(src_path, src_name, dst_path, dst_name, depth, witness, visited) AS (
-        SELECT e.from_blob, printf('%d:%d', e.from__start, e.from__end),
-               e.to_blob, printf('%d:%d', e.to__start, e.to__end),
-               1, json_array(e._row), printf('|%d|', e._row)
-          FROM flow_edge AS e
-         WHERE e.from_blob = ?1 AND e.from__start = ?2 AND e.from__end = ?3
-        UNION ALL
-        SELECT w.src_path, w.src_name, e.to_blob,
-               printf('%d:%d', e.to__start, e.to__end),
-               w.depth + 1, json_insert(w.witness, '$[#]', e._row),
-               w.visited || e._row || '|'
-          FROM walk AS w JOIN flow_edge AS e
-            ON e.from_blob = w.dst_path
-           AND printf('%d:%d', e.from__start, e.from__end) = w.dst_name
-         WHERE w.depth < 32
-           AND instr(w.visited, printf('|%d|', e._row)) = 0
-     ), ranked AS (
-        SELECT *, row_number() OVER (
-            PARTITION BY dst_path, dst_name ORDER BY depth, witness
-        ) AS rank FROM walk
-     )
-     SELECT src_path, src_name, dst_path, dst_name, depth, witness
-       FROM ranked WHERE rank = 1 ORDER BY depth, dst_path, dst_name";
-    read_paths(connection, sql, (blob, start, end), "flow")
-}
-
-/// One shortest, edge-row-witnessed path per destination. The seed is bound;
-/// table and column names come from the two fixed graph planes below.
-fn paths(
-    connection: &Connection,
-    plane: &str,
-    name: &str,
-) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-    let (table, source_path, source_name, target_path, target_name) = match plane {
-        "call" => ("resolved_edge", "caller_path", "caller_name", "callee_path", "callee_name"),
-        "type" => ("resolved_type_edge", "owner_path", "owner_name", "target_path", "target_name"),
-        _ => unreachable!("only fixed graph planes reach this query"),
-    };
-    let sql = format!(
-        "WITH RECURSIVE walk(src_path, src_name, dst_path, dst_name, depth, witness, visited) AS (
-            SELECT e.\"{source_path}\", e.\"{source_name}\", e.\"{target_path}\",
-                   e.\"{target_name}\", 1, json_array(e.\"_row\"),
-                   printf('|%d|', e.\"_row\")
-              FROM \"{table}\" AS e WHERE e.\"{source_name}\" IS ?1
-            UNION ALL
-            SELECT w.src_path, w.src_name, e.\"{target_path}\", e.\"{target_name}\",
-                   w.depth + 1, json_insert(w.witness, '$[#]', e.\"_row\"),
-                   w.visited || e.\"_row\" || '|'
-              FROM walk AS w JOIN \"{table}\" AS e
-                ON e.\"{source_path}\" = w.dst_path
-               AND e.\"{source_name}\" IS w.dst_name
-             WHERE w.depth < 32
-               AND instr(w.visited, printf('|%d|', e.\"_row\")) = 0
-         ), ranked AS (
-            SELECT *, row_number() OVER (
-                PARTITION BY dst_path, dst_name ORDER BY depth, witness
-            ) AS rank FROM walk
-         )
-         SELECT src_path, src_name, dst_path, dst_name, depth, witness
-           FROM ranked WHERE rank = 1 ORDER BY depth, dst_path, dst_name"
-    );
-    read_paths(connection, &sql, [name], plane)
-}
-
-fn read_paths(
-    connection: &Connection,
-    sql: &str,
-    params: impl rusqlite::Params,
-    plane: &str,
-) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-    let mut statement = connection.prepare(sql)?;
-    let rows = statement
-        .query_map(params, |row| {
-            let witness: String = row.get(5)?;
-            let witness = serde_json::from_str(&witness).map_err(|error| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    5,
-                    rusqlite::types::Type::Text,
-                    Box::new(error),
-                )
-            })?;
-            Ok(FlatFact::GraphPath {
-                plane: plane.to_string(),
-                from_path: row.get(0)?,
-                from_name: row.get(1)?,
-                to_path: row.get(2)?,
-                to_name: row.get(3)?,
-                depth: row.get(4)?,
-                witness,
-            })
-        })?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    Ok(rows)
+    Ok(BTreeSet::from([(blob.to_string(), Some(format!("{start}:{end}")))]))
 }
 
 #[derive(Default)]
@@ -309,14 +439,59 @@ impl Arm<'_> {
         }
     }
 
-    fn ask(&self, connection: &Connection) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+    fn ask(
+        &self,
+        connection: &Connection,
+        deadline: &Deadline,
+        lines: &mut Lines,
+    ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
         match self {
-            Arm::Callers(name) => edges(connection, CALLERS_SQL, name),
-            Arm::Uses(name) => edges(connection, USES_SQL, name),
-            Arm::From(name) => nodes(connection, name),
-            Arm::CallPath(name) => paths(connection, "call", name),
-            Arm::TypePath(name) => paths(connection, "type", name),
-            Arm::FlowPath(seed) => flow_paths(connection, seed),
+            Arm::Callers(name) => edges(connection, CALLERS_SQL, name, lines),
+            Arm::Uses(name) => edges(connection, USES_SQL, name, lines),
+            Arm::From(name) => nodes(connection, name, deadline, lines),
+            Arm::CallPath(name) => {
+                paths(connection, "call", |edges| Ok(named_starts(edges, name)), deadline)
+            }
+            Arm::TypePath(name) => {
+                paths(connection, "type", |edges| Ok(named_starts(edges, name)), deadline)
+            }
+            Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed), deadline),
+        }
+    }
+
+    /// `ask` under `--timeout`: a timer thread interrupts SQLite at the
+    /// deadline, and an answer that ran past it exits 3.
+    fn ask_within(
+        &self,
+        connection: &Connection,
+        secs: u64,
+        root: Option<PathBuf>,
+    ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+        let budget = Duration::from_secs(secs);
+        let deadline = Deadline {
+            at: Instant::now() + budget,
+        };
+        let handle = connection.get_interrupt_handle();
+        let (done, wait) = mpsc::channel::<()>();
+        let timer = std::thread::spawn(move || {
+            if let Err(mpsc::RecvTimeoutError::Timeout) = wait.recv_timeout(budget) {
+                handle.interrupt();
+            }
+        });
+        let mut lines = Lines {
+            root,
+            tables: HashMap::new(),
+        };
+        let answer = self.ask(connection, &deadline, &mut lines);
+        let _ = done.send(());
+        let _ = timer.join();
+        match answer {
+            Err(_) if deadline.expired() => {
+                // @eprintln-ok: CLI-UX stop, off the fact stream, exit 3.
+                eprintln!("graph: query exceeded {secs}s");
+                crate::exit(3);
+            }
+            answer => answer,
         }
     }
 }
@@ -335,7 +510,7 @@ fn ask_at(
         Some(selected),
         |paths, scratch| {
             let database = load_store(paths, arm.arms(), cli, Some(scratch), sqlite)?;
-            let rows = arm.ask(database.connection())?;
+            let rows = arm.ask_within(database.connection(), cli.timeout, Some(scratch.to_path_buf()))?;
             database.close()?;
             Ok(rows)
         },
@@ -451,11 +626,88 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
     } else {
         let paths = crate::inputs::expand(&cli.inputs)?;
         let database = load_store(&paths, arm.arms(), &cli, None, cli.sqlite.as_deref())?;
-        let rows = arm.ask(database.connection())?;
+        let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone())?;
         database.close()?;
         rows
     };
     emit_rows(&rows)?;
     emit_summary_line(&rows, &arm, cli.compare.is_some());
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn node(name: &str) -> Node {
+        ("f.ts".to_string(), Some(name.to_string()))
+    }
+
+    fn edge(row: u64, src: &str, dst: &str) -> PlaneEdge {
+        PlaneEdge {
+            row,
+            src: node(src),
+            dst: node(dst),
+            grade: "~".to_string(),
+            dst_start: None,
+        }
+    }
+
+    fn walk(edges: &[PlaneEdge], seed: &str) -> Vec<(String, u32, Vec<u64>)> {
+        let open = Deadline {
+            at: Instant::now() + Duration::from_secs(60),
+        };
+        first_discovery(edges, named_starts(edges, seed), &open)
+            .unwrap()
+            .into_iter()
+            .map(|found| (found.node.1.unwrap(), found.depth, found.witness))
+            .collect()
+    }
+
+    #[test]
+    fn a_dense_cyclic_plane_keeps_one_row_per_node_at_its_least_depth() {
+        // Every shortcut of a three-node cycle: the old path enumeration grew
+        // with the paths, this walk answers each node once.
+        let edges = [
+            edge(1, "a", "b"),
+            edge(2, "b", "c"),
+            edge(3, "c", "a"),
+            edge(4, "a", "c"),
+            edge(5, "c", "b"),
+            edge(6, "b", "a"),
+        ];
+        assert_eq!(
+            walk(&edges, "a"),
+            [
+                ("b".to_string(), 1, vec![1]),
+                ("c".to_string(), 1, vec![4]),
+                ("a".to_string(), 2, vec![1, 6]),
+            ]
+        );
+    }
+
+    #[test]
+    fn equal_depth_routes_keep_the_least_row_witness() {
+        let edges = [
+            edge(9, "a", "x"),
+            edge(2, "a", "y"),
+            edge(7, "x", "z"),
+            edge(3, "y", "z"),
+        ];
+        assert_eq!(
+            walk(&edges, "a"),
+            [
+                ("x".to_string(), 1, vec![9]),
+                ("y".to_string(), 1, vec![2]),
+                ("z".to_string(), 2, vec![2, 3]),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_passed_deadline_stops_the_walk() {
+        let edges = [edge(1, "a", "b")];
+        let past = Deadline { at: Instant::now() };
+        assert!(first_discovery(&edges, named_starts(&edges, "a"), &past).is_err());
+    }
 }

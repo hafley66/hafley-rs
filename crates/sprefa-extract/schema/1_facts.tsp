@@ -70,7 +70,7 @@ model ResolvedEdge {
   kind: string; resolution_origin: string;
 }
 model GraphNode { ...ExportRow; record: "graph_node"; path: string; name: string | null; depth: uint32; grade: string; line: uint32 | null; }
-model GraphEdge { ...ExportRow; record: "graph_edge"; from_path: string; from_name: string | null; to_path: string; to_name: string | null; kind: string; grade: string; }
+model GraphEdge { ...ExportRow; record: "graph_edge"; from_path: string; from_name: string | null; to_path: string; to_name: string | null; kind: string; grade: string; from_line: uint32 | null; to_line: uint32 | null; }
 model GraphPath { ...ExportRow; record: "graph_path"; plane: string; from_path: string; from_name: string | null; to_path: string; to_name: string | null; depth: uint32; witness: uint64[]; }
 model GraphPathChange { ...ExportRow; record: "graph_path_change"; change: string; revision: string; plane: string; from_path: string; from_name: string | null; to_path: string; to_name: string | null; depth: uint32; }
 model GraphRoot { ...ExportRow; record: "graph_root"; path: string; name: string | null; span: Extract.SpanOut | null; found: boolean; }
