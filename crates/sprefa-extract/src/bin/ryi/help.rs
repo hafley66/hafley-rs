@@ -92,9 +92,11 @@ EXACT MODE: --family scip ROOT
   or reuses the compiler's index, and streams it as scip_* relations: scip_def,
   scip_name, scip_ref, scip_external_ref, scip_edge, scip_fn_edge, scip_callee_type, scip_local,
   scip_impl, plus one scip_index header row. Every fact is compiler-resolved.
-  A cached index with a newer indexed source is rebuilt before its facts are
-  used. A fresh build runs under a time budget (the indexer's whole process
-  group is killed at the deadline) and is cached for next time.
+  A cached index is reused when its recorded project-file contents still
+  match. An edit, addition or deletion rebuilds it. A fresh build runs under
+  a time budget (the indexer's whole process group is killed at the deadline)
+  and is cached for next time. A source change during the build emits
+  scip_skip without serving that build's facts.
 
   --scip-index FILE loads that exact file directly, ahead of environment and
   cache discovery, and never starts an indexer. A missing or invalid explicit
@@ -106,8 +108,8 @@ EXACT MODE: --family scip ROOT
   milliseconds since the Unix epoch. staleness=stale means a readable indexed
   document has a later mtime; uncertain means an mtime or indexed document was
   unreadable; no_newer_sources means every indexed document was readable and no
-  later mtime was observed. These are filesystem observations, not proof that
-  index contents match source contents.
+  later mtime was observed. These are filesystem observations; automatic
+  cache reuse is checked by source and index content digests.
 
   When a root cannot be indexed you get scip_skip rows saying exactly which
   root and why: not_installed comes with the install command, timed_out with

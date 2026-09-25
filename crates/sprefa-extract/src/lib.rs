@@ -111,8 +111,8 @@ pub use scip::{
 pub use scip_ensure::{
     default_cache_dir, detect, detect_picked, ensure_index, ensure_index_for_set,
     ensure_index_picked, external_cache_dir, fresh_index_for_set, index_path, index_path_for_set,
-    indexer_langs, pick_cache_dir, record_index_set, root_key, EnsureReport, IndexBudget, IndexSet,
-    Indexer, IndexerPick, IndexerSkip, SkipReason, INDEXERS,
+    indexer_langs, pick_cache_dir, record_index_set, root_key, source_set_for_root, EnsureReport,
+    IndexBudget, IndexSet, Indexer, IndexerPick, IndexerSkip, SkipReason, INDEXERS,
 };
 pub use scip_rows::{flatten_scip_records, ScipRecords, SCIP_RECORD_KINDS};
 pub use scip_v5_rels::v5_rel_rows;

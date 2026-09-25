@@ -428,13 +428,17 @@ fn stream_scip_family(
         Some(index) => scip_family_from_index_jsonl(&request, index)?,
         None => scip_family_jsonl(&request)?,
     };
+    let has_index = lines
+        .iter()
+        .any(|line| line.contains("\"record\":\"scip_index\""));
     for line in lines {
         output.line(&line)?;
     }
-    let index_location = cli
-        .scip_index
-        .clone()
-        .or_else(|| scip_index_location(&request));
+    let index_location = has_index.then(|| {
+        cli.scip_index
+            .clone()
+            .or_else(|| scip_index_location(&request))
+    }).flatten();
     if let Some(path) = index_location {
         // @eprintln-ok: CLI-UX location line, deliberately off the fact stream.
         eprintln!("ryi: scip index {}", path.display());

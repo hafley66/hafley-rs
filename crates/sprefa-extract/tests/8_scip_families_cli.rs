@@ -712,6 +712,43 @@ fn stale_cached_index_without_an_indexer_emits_only_a_skip() {
     assert!(stream.contains("\"reason\":\"not_installed\""), "{stream}");
 }
 
+#[test]
+fn family_rebuilds_for_content_edits_and_new_or_deleted_sources() {
+    let root = scratch("source-content-root");
+    let cache = root.join("cache");
+    let source = root.join("a.ts");
+    std::fs::write(root.join("tsconfig.json"), "{\"include\":[\"*.ts\"]}\n")
+        .expect("typescript marker");
+    std::fs::write(&source, "export const a = 1;\n").expect("source");
+
+    let root_arg = root.to_str().expect("utf-8 root");
+    let built = scip_family(root_arg, &cache, &[]);
+    assert!(built.contains("\"record\":\"scip_index\",\"reused\":false"), "{built}");
+    let reused = scip_family(root_arg, &cache, &[]);
+    assert!(reused.contains("\"record\":\"scip_index\",\"reused\":true"), "{reused}");
+
+    let original_mtime = std::fs::metadata(&source)
+        .expect("source metadata")
+        .modified()
+        .expect("source mtime");
+    std::fs::write(&source, "export const a = 2;\n").expect("content edit");
+    std::fs::File::open(&source)
+        .expect("open source")
+        .set_times(std::fs::FileTimes::new().set_modified(original_mtime))
+        .expect("restore source mtime");
+    let edited = scip_family(root_arg, &cache, &[]);
+    assert!(edited.contains("\"record\":\"scip_index\",\"reused\":false"), "{edited}");
+
+    let added_path = root.join("b.ts");
+    std::fs::write(&added_path, "export const b = 3;\n").expect("added source");
+    let added = scip_family(root_arg, &cache, &[]);
+    assert!(added.contains("\"record\":\"scip_index\",\"reused\":false"), "{added}");
+
+    std::fs::remove_file(&added_path).expect("removed source");
+    let removed = scip_family(root_arg, &cache, &[]);
+    assert!(removed.contains("\"record\":\"scip_index\",\"reused\":false"), "{removed}");
+}
+
 /// AN EXISTING INDEX WINS UNTOUCHED (v5's first move). The second run over the
 /// same cache reuses, and the assertion is not just the `reused` flag: the rows
 /// must be IDENTICAL, because a reuse that produced different facts would mean
