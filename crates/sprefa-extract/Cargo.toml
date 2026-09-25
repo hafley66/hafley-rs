@@ -276,6 +276,11 @@ libc = "0.2"
 rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
 
 # The profile that 'dist' will build with
+# Own workspace root, so the root dev profile does not reach here; deps
+# (including out-of-dir path deps hafley_scm, soopy) build optimized once.
+[profile.dev.package."*"]
+opt-level = 1
+
 [profile.dist]
 inherits = "release"
 lto = "thin"
