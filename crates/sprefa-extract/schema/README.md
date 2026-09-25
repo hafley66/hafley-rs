@@ -11,7 +11,7 @@ sqlite3 -header -column facts.db 'SELECT _input_path, family, kind, name FROM no
 ```
 
 `--sqlite PATH` requires a new database path. It also works with existing
-`fast`, `slow`, `--resolve`, `--scip-facts`, dependency, pattern, and ingest
+`fast`, `slow`, `scip`, `--resolve`, dependency, pattern, and ingest
 modes. Syntax/semantic computation and existing JSONL contracts are unchanged.
 Plain per-file SQLite output accepts multiple explicit source file paths.
 

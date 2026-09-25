@@ -32,7 +32,7 @@ use sprefa_extract::{
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
     scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
-    size_skip_fact, source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest,
+    size_skip_fact, slow_project, slow_project_with_raw, sorted_lines, source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest,
     ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
@@ -45,7 +45,7 @@ mod sqlite;
 #[path = "ryi/0_revision.rs"]
 mod revision;
 
-use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, SlowArgs};
+use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
 
 #[path = "ryi/1_inputs.rs"]
 mod inputs;
@@ -96,12 +96,60 @@ enum Tier {
     Fast,
 }
 
-/// `ryi slow`: ensure the root's SCIP index (existing wins, else the detected
-/// indexer runs under the budget) and stream v5's `scip_*` relation shapes.
-/// Named skips ride the stream as `scip_skip` rows; the index location is a
-/// stderr line because it is machine-dependent.
+/// `ryi slow`: the SCIP oracle over the inputs, written as fast's tables.
 fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(lang) = slow.indexer.as_deref() {
+    if let Some(secs) = slow.scip_timeout {
+        if secs == 0 {
+            return Err("--scip-timeout must be a positive number of seconds".into());
+        }
+        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
+    }
+    let root = inputs::root(&slow.inputs);
+    let mut wanted = slow.inputs.clone();
+    if wanted.paths.is_empty() && wanted.entry.is_empty() {
+        wanted.paths.push(root.to_string_lossy().into_owned());
+    }
+    let files = match inputs::expand(&wanted) {
+        Ok(files) => files,
+        Err(error) => {
+            // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
+            eprintln!("ryi: {error}");
+            exit(2);
+        }
+    };
+    let checkers = !slow.no_checker;
+    let index = slow.scip_index.as_deref();
+    let mut output = sqlite::Output::new(slow.sqlite.as_deref())?;
+    if output.database.is_some() {
+        let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
+            output
+                .source_fact(raw.path, raw.content_id, &raw.fact)
+                .map_err(|error| std::io::Error::other(error.to_string()))
+        };
+        let facts = slow_project_with_raw(&files, &root, index, checkers, &mut push_raw)?;
+        output.clear_source()?;
+        for fact in facts {
+            output.fact(&fact)?;
+        }
+        return output.finish();
+    }
+    if slow.lines {
+        for path in &files {
+            if let Ok(content) = std::fs::read(path) {
+                output.register_line_table(&path.to_string_lossy(), newline_offsets(&content));
+            }
+        }
+    }
+    for line in sorted_lines(slow_project(&files, &root, index, checkers)?) {
+        output.line(&line)?;
+    }
+    output.finish()
+}
+
+/// `ryi scip`: ensure the root's SCIP index and stream it raw: v5's `scip_*`
+/// relations, or with `--raw` the index records themselves.
+fn run_scip(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(lang) = args.indexer.as_deref() {
         if !sprefa_extract::indexer_langs().contains(&lang) {
             return Err(format!(
                 "--indexer {lang}: unknown language; known: {}",
@@ -110,26 +158,29 @@ fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
             .into());
         }
     }
-    if slow.inputs.paths.len() > 1 {
-        return Err("ryi slow takes one ROOT directory".into());
+    if args.raw {
+        return run_scip_raw(args);
     }
-    let root = inputs::root(&slow.inputs);
-    let mut output = sqlite::Output::new(slow.sqlite.as_deref())?;
-    if slow.lines {
+    if args.inputs.paths.len() > 1 {
+        return Err("ryi scip takes one ROOT directory".into());
+    }
+    let root = inputs::root(&args.inputs);
+    let mut output = sqlite::Output::new(args.sqlite.as_deref())?;
+    if args.lines {
         output.set_line_root(Some(root.clone()));
     }
     let request = ScipFamilyRequest {
         root: &root,
-        cache_dir: slow.scip_cache.as_deref(),
-        indexer: slow.indexer.as_deref(),
-        budget: match slow.scip_timeout {
+        cache_dir: args.scip_cache.as_deref(),
+        indexer: args.indexer.as_deref(),
+        budget: match args.scip_timeout {
             Some(secs) if secs > 0 => IndexBudget { secs },
             Some(_) => return Err("--scip-timeout must be a positive number of seconds".into()),
             None => IndexBudget::from_env(),
         },
         slug: None,
     };
-    let lines = match slow.scip_index.as_deref() {
+    let lines = match args.scip_index.as_deref() {
         Some(index) => scip_family_from_index_jsonl(&request, index)?,
         None => scip_family_jsonl(&request)?,
     };
@@ -140,11 +191,51 @@ fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
         output.line(&line)?;
     }
     let index_location = has_index
-        .then(|| slow.scip_index.clone().or_else(|| scip_index_location(&request)))
+        .then(|| args.scip_index.clone().or_else(|| scip_index_location(&request)))
         .flatten();
     if let Some(path) = index_location {
         // @eprintln-ok: CLI-UX location line, deliberately off the fact stream.
         eprintln!("ryi: scip index {}", path.display());
+    }
+    output.finish()
+}
+
+/// `ryi scip --raw`: every record the index carries, over `--scip-index` or an
+/// index `--scip-build` makes for the inputs' language.
+fn run_scip_raw(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(secs) = args.scip_timeout.filter(|secs| *secs > 0) {
+        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
+    }
+    let root = args.inputs.root.clone().ok_or("ryi scip --raw needs --root")?;
+    let files = match inputs::expand(&args.inputs) {
+        Ok(files) => files,
+        Err(error) => {
+            // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
+            eprintln!("ryi: {error}");
+            exit(2);
+        }
+    };
+    let request = ResolveRequest {
+        paths: &files,
+        arms: ResolveArms::default(),
+        scip: ScipMode::from_flags(args.scip_index.as_deref(), args.scip_build),
+        project_root: Some(&root),
+        scip_records: match &args.records {
+            Some(spec) => ScipRecords::parse(spec)?,
+            None => ScipRecords::all(),
+        },
+        occurrence_text: args.occurrence_text,
+        rust_checker: None,
+        ts_checker: None,
+        go_checker: None,
+        witness: false,
+    };
+    let mut output = sqlite::Output::new(args.sqlite.as_deref())?;
+    if args.lines {
+        output.set_line_root(Some(root.clone()));
+    }
+    for line in scip_facts_jsonl(&request)? {
+        output.line(&line)?;
     }
     output.finish()
 }
@@ -308,6 +399,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         None => (ryi.file, Tier::Files),
         Some(Cmd::Fast(fast)) => (FileArgs::from(fast), Tier::Fast),
         Some(Cmd::Slow(slow)) => return run_slow(slow),
+        Some(Cmd::Scip(args)) => return run_scip(args),
         Some(Cmd::Ingest(args)) => return run_ingest(args),
         Some(Cmd::Schema) => {
             print_schema();
@@ -353,7 +445,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             exit(2);
         }
     };
-    let root_only = cli.scip_facts || cli.scip_deps || cli.deps || cli.package_deps;
+    let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
         eprintln!("ryi: no inputs; pass files, directories, globs, - or --entry");
         exit(2);
@@ -425,16 +517,6 @@ fn extract_to(
 
     if cli.scip_deps {
         for line in scip_file_edges_jsonl(&scip_request(cli)?)? {
-            output.line(&line)?;
-        }
-        return Ok(());
-    }
-
-    if cli.scip_facts {
-        if cli.lines {
-            output.set_line_root(cli.inputs.root.clone());
-        }
-        for line in scip_facts_jsonl(&scip_request(cli)?)? {
             output.line(&line)?;
         }
         return Ok(());
@@ -512,19 +594,16 @@ fn extract_file(
     Ok(())
 }
 
-/// The SCIP-mode half of the CLI's flags, shared by `--resolve` and
-/// `--scip-facts`.
+/// The SCIP-mode half of the CLI's flags, shared by `--resolve` and the
+/// index-backed edge modes.
 fn scip_request(cli: &FileArgs) -> Result<ResolveRequest<'_>, String> {
     Ok(ResolveRequest {
         paths: &cli.paths,
         arms: ResolveArms::default(),
         scip: ScipMode::from_flags(cli.scip_index.as_deref(), cli.scip_build),
         project_root: cli.inputs.root.as_deref(),
-        scip_records: match &cli.scip_record {
-            Some(spec) => ScipRecords::parse(spec)?,
-            None => ScipRecords::all(),
-        },
-        occurrence_text: cli.occurrence_text,
+        scip_records: ScipRecords::all(),
+        occurrence_text: false,
         rust_checker: cli
             .rust_checker
             .then(|| cli.inputs.root.as_deref())

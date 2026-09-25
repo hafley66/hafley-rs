@@ -10,7 +10,7 @@
 //! HOW THIS RELATES TO `crate::scip_rows`. That module is PASSTHROUGH: every
 //! field scip.proto serializes, deliberately unjoined, on the grounds that
 //! v5's ten relations are each a filter or a join over those rows and joins
-//! belong in the dl layer. That grounds holds for `--scip-facts` and this
+//! belong in the dl layer. That grounds holds for `ryi scip --raw` and this
 //! module does not disturb it. What it does not answer is the demand this
 //! family exists for: a caller who wants the v5 vocabulary must otherwise
 //! reimplement seven non-obvious conventions (enclosing-fn attribution by

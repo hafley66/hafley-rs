@@ -1,4 +1,4 @@
-//! The `--scip-facts` and `--file-fact` contracts.
+//! The `ryi scip --raw` and `--file-fact` contracts.
 //!
 //! These two modes exist to close v5 relations that were inexpressible from a v6
 //! index (spelunk section 3): the ten-relation `scip_*` family, and `file_lines`
@@ -31,7 +31,7 @@ fn run(args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("stdout is UTF-8")
 }
 
-/// The whole `--scip-facts` stream over the scip.proto worked example, minus
+/// The whole `ryi scip --raw` stream over the scip.proto worked example, minus
 /// the one machine-dependent row. The golden pins the field names of every
 /// record kind the fixture produces.
 ///
@@ -127,18 +127,18 @@ fn scip_facts_carry_symbol_documentation() {
     );
 }
 
-/// `--scip-record` is the demand-side lever for the measured cost of full
+/// `--records` is the demand-side lever for the measured cost of full
 /// passthrough. It filters BEFORE the rows are built, and the assertion that
 /// matters is that asking for one kind yields only that kind.
 #[test]
 fn scip_record_narrows_the_stream_to_the_requested_kinds() {
-    let narrowed = scip_rel_facts(&["--scip-record", "scip_relationship"]);
+    let narrowed = scip_rel_facts(&["--records", "scip_relationship"]);
     assert_eq!(narrowed.lines().count(), 2, "got: {narrowed}");
     assert!(narrowed
         .lines()
         .all(|line| line.contains("\"record\":\"scip_relationship\"")));
 
-    let two = scip_rel_facts(&["--scip-record", "scip_metadata,scip_document"]);
+    let two = scip_rel_facts(&["--records", "scip_metadata,scip_document"]);
     assert_eq!(two.lines().count(), 2, "got: {two}");
 }
 
@@ -149,8 +149,8 @@ fn scip_record_narrows_the_stream_to_the_requested_kinds() {
 fn an_unknown_scip_record_kind_is_a_named_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
-            "--scip-facts",
-            "--scip-record",
+            "scip", "--raw",
+            "--records",
             "scip_occurrances",
             "--root",
             SCIP_REL_ROOT,
@@ -248,9 +248,9 @@ fn diagnostics_and_signatures_reach_the_wire() {
     }
 }
 
-/// `--scip-facts` over the relationship fixture, with extra flags appended.
+/// `ryi scip --raw` over the relationship fixture, with extra flags appended.
 fn scip_rel_facts(extra: &[&str]) -> String {
-    let mut args = vec!["--scip-facts"];
+    let mut args = vec!["scip", "--raw"];
     args.extend_from_slice(extra);
     args.extend_from_slice(&[
         "--root",
@@ -270,13 +270,13 @@ fn without_metadata(facts: &str) -> String {
         .collect()
 }
 
-/// `--scip-facts` without an index is a named error, never an empty success.
+/// `ryi scip --raw` without an index is a named error, never an empty success.
 /// An empty stream would read as "this project has no symbols".
 #[test]
 fn scip_facts_without_an_index_is_a_named_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
-            "--scip-facts",
+            "scip", "--raw",
             "--root",
             SCIP_REL_ROOT,
             SCIP_REL_SOURCE,
@@ -381,7 +381,7 @@ fn scip_deps_folds_the_index_into_file_edges() {
 #[test]
 fn scip_deps_never_joins_on_document_scoped_local_symbols() {
     let facts = run(&[
-        "--scip-facts",
+        "scip", "--raw",
         "--root",
         "tests/fixtures/ts",
         "--scip-build",

@@ -359,7 +359,7 @@ impl<W: Write> Write for CountingWriter<W> {
     /// through undecorated.
     line_offsets: Option<Arc<Vec<u32>>>,
     /// Where a row's `path` loads from when its table is not registered:
-    /// the root --scip-facts and `ryi slow` read their documents against.
+    /// `ryi scip` and `ryi slow` read their documents against.
     line_root: Option<PathBuf>,
  }
 impl Output {
@@ -390,7 +390,7 @@ impl Output {
         self.line_probed.insert(path.to_string());
         self.line_tables.insert(path.to_string(), Arc::new(offsets));
     }
-    /// Point `path`-named row lookups at a readable root: --scip-facts and
+    /// Point `path`-named row lookups at a readable root: `ryi scip` and
     /// `ryi slow` name every indexed document, not just supplied paths.
     pub fn set_line_root(&mut self, root: Option<PathBuf>) {
         self.line_root = root;

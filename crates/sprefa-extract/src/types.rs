@@ -3584,7 +3584,7 @@ pub enum FlatFact {
     // These eight rows ARE v5's `scip_*` relations (repo-root src/rels/scip.rs
     // decls), projected here rather than left as joins over the passthrough
     // rows. The passthrough rows above and these are two answers to different
-    // questions and both ship: `--scip-facts` is every field the protobuf
+    // questions and both ship: `ryi scip --raw` is every field the protobuf
     // carries, unjoined; `--family scip` is the v5 relation vocabulary a
     // program already knows how to read.
     //
@@ -3593,7 +3593,7 @@ pub enum FlatFact {
     // ALREADY a record tag on this wire (the byte-span passthrough row above),
     // with different fields. Two shapes under one tag is the silent-drift
     // hazard every golden here exists to stop. Both v5 rows are one consumer
-    // join off `--scip-facts --scip-record scip_occurrence`, which carries the
+    // join off `ryi scip --raw --records scip_occurrence`, which carries the
     // spans and every role bit; `scip_binding`'s source-slice need is answered
     // by that row's optional `text` field under --occurrence-text (issue
     // extract-scip-vocab-occurrence-binding).
@@ -3900,7 +3900,7 @@ pub enum FlatFact {
     /// v6/tsv2 (212 TypeScript files) the raw occurrence rows are 122,317 and
     /// the edges they fold to are 755. Shipping the occurrences to compute the
     /// edges above the wire is a 160x amplification of a fact one pass over a
-    /// hashmap produces here. The raw rows stay available under `--scip-facts`
+    /// hashmap produces here. The raw rows stay available under `ryi scip --raw`
     /// for every other join.
     ///
     /// It is v5's `module_edge` by another name, and it exists because v6 has no

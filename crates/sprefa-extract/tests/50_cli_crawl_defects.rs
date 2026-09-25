@@ -15,7 +15,7 @@ fn temp_root(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// Defect 1: `--scip-facts --root X --scip-index Y X` exits 2 with
+/// Defect 1: `ryi scip --raw --root X --scip-index Y X` exits 2 with
 /// "is a directory" because `check_file_paths` ran for a mode whose PATH is a
 /// root. The dir arg must reach the library (rc != 2, no "is a directory").
 #[test]
@@ -27,7 +27,7 @@ fn scip_facts_takes_a_root_directory() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
-            "--scip-facts",
+            "scip", "--raw",
             "--root",
             root.to_str().unwrap(),
             "--scip-index",
@@ -153,7 +153,7 @@ fn scip_timeout_caps_the_family_scip_build() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", fake_path(&bin))
         .args([
-            "slow",
+            "scip",
             "--scip-cache",
             cache.to_str().unwrap(),
             "--scip-timeout",
@@ -180,7 +180,7 @@ fn scip_timeout_caps_the_scip_build_flag() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", fake_path(&bin))
         .args([
-            "--scip-facts",
+            "scip", "--raw",
             "--scip-build",
             "--root",
             root.to_str().unwrap(),
@@ -273,7 +273,7 @@ fn run_failed_rust_indexer(
         .env("HAFLEY_LOG_FORMAT", log_format)
         .env("DL_TRAIL", "0")
         .args([
-            "slow",
+            "scip",
             "--scip-cache",
             root.join("cache").to_str().unwrap(),
             root.to_str().unwrap(),
@@ -326,7 +326,7 @@ fn failed_indexer_retains_bounded_root_cause_tail_status_and_telemetry() {
         .env("HAFLEY_LOG_FORMAT", "json")
         .env("DL_TRAIL", "0")
         .args([
-            "slow",
+            "scip",
             "--scip-cache",
             cache.to_str().unwrap(),
             root.to_str().unwrap(),

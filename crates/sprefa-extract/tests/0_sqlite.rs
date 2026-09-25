@@ -442,7 +442,7 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
             "tests/fixtures/ts/scip/gamma.ts",
         ],
         vec![
-            "--scip-facts",
+            "scip", "--raw",
             "--occurrence-text",
             "--scip-index",
             index,
@@ -450,7 +450,7 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
             root,
             source,
         ],
-        vec!["slow", "--scip-index", index, root],
+        vec!["scip", "--scip-index", index, root],
         vec![
             "--scip-deps",
             "--scip-index",

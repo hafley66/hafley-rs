@@ -162,6 +162,8 @@ enum LibraryCapability {
     DietFileUnresolved,
     /// `manifests::fold_package_edges`: workspace-internal manifest edges.
     PackageEdges,
+    /// `slow::slow_project`: a SCIP index projected onto fast's tables.
+    SlowProject,
 }
 
 /// Kept in step with the enum by the length assertion in the test below.
@@ -180,8 +182,9 @@ const ALL: &[LibraryCapability] = &[
     LibraryCapability::DietFileEdges,
     LibraryCapability::DietFileUnresolved,
     LibraryCapability::PackageEdges,
+    LibraryCapability::SlowProject,
 ];
-const DECLARED_CAPABILITIES: usize = 14;
+const DECLARED_CAPABILITIES: usize = 15;
 
 /// How the binary reaches one library capability.
 enum CliReach {
@@ -327,7 +330,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         // not be proving retention.
         ScipFacts => CliReach::Emits {
             args: strings(&[
-                "--scip-facts",
+                "scip", "--raw",
                 "--root",
                 "tests/fixtures/scip_rel",
                 "--scip-build",
@@ -336,6 +339,20 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
             field: None,
             record: "scip_relationship",
             absent_without: Some(strings(&["tests/fixtures/scip_rel/animal.ts"])),
+        },
+        SlowProject => CliReach::Emits {
+            args: strings(&[
+                "slow",
+                "tests/fixtures/ratchet_soopy/src",
+                "--root",
+                "tests/fixtures/ratchet_soopy",
+                "--scip-index",
+                "tests/fixtures/ratchet_soopy/index.scip",
+                "--no-checker",
+            ]),
+            field: Some("\"resolution_origin\":\"scip\""),
+            record: "resolved_edge",
+            absent_without: Some(strings(&["fast", "tests/fixtures/ratchet_soopy/src"])),
         },
         FileFact => CliReach::Emits {
             args: strings(&["--file-fact", "tests/fixtures/ts/sample.ts"]),

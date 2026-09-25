@@ -32,8 +32,10 @@ pub struct Ryi {
 pub enum Cmd {
     /// Syntax-only whole-project facts (no compiler)
     Fast(FastArgs),
-    /// Compiler facts from a real SCIP index
+    /// The SCIP oracle written as fast's tables
     Slow(SlowArgs),
+    /// Raw SCIP index rows
+    Scip(ScipArgs),
     /// Ask one question of the resolved call/type graph
     Graph(GraphArgs),
     /// Move one item into another file, with its imports
@@ -137,31 +139,19 @@ pub struct FileArgs {
     pub scip_timeout: Option<u64>,
 
     /// File-to-file edges folded from a SCIP index
-    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "file_fact"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "file_fact"])]
     pub scip_deps: bool,
 
-    /// Stream the whole SCIP index as flat facts
-    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve"])]
-    pub scip_facts: bool,
-
-    /// Only these --scip-facts record kinds (comma-separated)
-    #[arg(long, value_name = "KINDS", requires = "scip_facts")]
-    pub scip_record: Option<String>,
-
-    /// Add the source text to each scip_occurrence
-    #[arg(long, requires = "scip_facts")]
-    pub occurrence_text: bool,
-
     /// File-to-file edges resolved from syntax, no index
-    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "file_fact"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_deps", "file_fact"])]
     pub deps: bool,
 
     /// Manifest-to-manifest workspace edges
-    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "scip_deps", "deps", "file_fact"])]
+    #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_deps", "deps", "file_fact"])]
     pub package_deps: bool,
 
     /// Prepend one file record: path, digest, bytes, lines
-    #[arg(long, conflicts_with_all = ["resolve", "scip_facts"])]
+    #[arg(long, conflicts_with_all = ["resolve"])]
     pub file_fact: bool,
 
     /// Add 1-based line/col beside every span
@@ -169,7 +159,7 @@ pub struct FileArgs {
     pub lines: bool,
 
     /// Wrap output in the TSI envelope
-    #[arg(long, conflicts_with_all = ["bench", "deps", "package_deps", "scip_facts", "scip_deps", "file_fact"])]
+    #[arg(long, conflicts_with_all = ["bench", "deps", "package_deps", "scip_deps", "file_fact"])]
     pub witness: bool,
 
     /// Skip inputs over this many bytes (0 = no limit)
@@ -205,6 +195,32 @@ pub struct SlowArgs {
     pub lines: bool,
 
     /// Load this index.scip instead of finding or building one
+    #[arg(long, value_name = "FILE")]
+    pub scip_index: Option<PathBuf>,
+
+    /// Skip the compiler checkers
+    #[arg(long)]
+    pub no_checker: bool,
+
+    /// Seconds allowed for one indexer run
+    #[arg(long, value_name = "SECS")]
+    pub scip_timeout: Option<u64>,
+}
+
+#[derive(Args)]
+pub struct ScipArgs {
+    #[command(flatten)]
+    pub inputs: Inputs,
+
+    /// Write to a new SQLite database instead of stdout
+    #[arg(long, value_name = "PATH")]
+    pub sqlite: Option<PathBuf>,
+
+    /// Add 1-based line/col beside every span
+    #[arg(long)]
+    pub lines: bool,
+
+    /// Load this index.scip instead of finding or building one
     #[arg(long, value_name = "FILE", conflicts_with = "indexer")]
     pub scip_index: Option<PathBuf>,
 
@@ -219,6 +235,22 @@ pub struct SlowArgs {
     /// Run only this language's SCIP indexer
     #[arg(long, value_name = "LANG")]
     pub indexer: Option<String>,
+
+    /// Stream the index records themselves instead of the scip_* relations
+    #[arg(long)]
+    pub raw: bool,
+
+    /// Only these --raw record kinds (comma-separated)
+    #[arg(long, value_name = "KINDS", requires = "raw")]
+    pub records: Option<String>,
+
+    /// Add the source text to each scip_occurrence
+    #[arg(long, requires = "raw")]
+    pub occurrence_text: bool,
+
+    /// Build the index for --raw with the inputs' language indexer
+    #[arg(long, requires_all = ["raw", "root"], conflicts_with = "scip_index")]
+    pub scip_build: bool,
 }
 
 #[derive(Args)]

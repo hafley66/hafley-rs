@@ -88,7 +88,7 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
-            "slow",
+            "scip",
             "--scip-index",
             index_path.to_str().unwrap(),
             ROOT,
@@ -124,7 +124,7 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
     let raw_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
-            "--scip-facts",
+            "scip", "--raw",
             "--root",
             root.to_str().unwrap(),
             "--scip-index",

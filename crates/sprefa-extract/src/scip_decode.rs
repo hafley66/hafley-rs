@@ -150,6 +150,30 @@ pub fn merge_indexes(inputs: &[std::path::PathBuf], out: &Path) -> Result<usize,
     Ok(documents)
 }
 
+/// Keep the documents under `prefix`; drop external symbols and documentation
+/// text. Returns the documents kept.
+pub fn prune_index(input: &Path, out: &Path, prefix: &str) -> Result<usize, ScipError> {
+    let bytes = std::fs::read(input)
+        .map_err(|e| ScipError::Parse(format!("read {}: {e}", input.display())))?;
+    let mut index = proto::Index::decode(bytes.as_slice())
+        .map_err(|e| ScipError::Parse(format!("protobuf decode {}: {e}", input.display())))?;
+    index.documents.retain(|doc| doc.relative_path.starts_with(prefix));
+    index.external_symbols.clear();
+    for doc in &mut index.documents {
+        doc.text.clear();
+        for symbol in &mut doc.symbols {
+            symbol.documentation.clear();
+            symbol.signature_documentation = None;
+        }
+        for occurrence in &mut doc.occurrences {
+            occurrence.override_documentation.clear();
+        }
+    }
+    std::fs::write(out, index.encode_to_vec())
+        .map_err(|e| ScipError::Parse(format!("write {}: {e}", out.display())))?;
+    Ok(index.documents.len())
+}
+
 /// proto -> diet. NO LONGER A DIET IN THE ORIGINAL SENSE: every field the
 /// protobuf carries crosses into these types (scip-passthrough lane). The
 /// name stays because the target types are still v6's own flat structs, not

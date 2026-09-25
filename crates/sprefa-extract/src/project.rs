@@ -109,10 +109,10 @@ pub struct ResolveRequest<'a> {
     /// default; narrowing is the demand-side lever for its measured cost.
     pub scip_records: ScipRecords,
     /// Whether `scip_occurrence` rows also carry the source slice at their
-    /// span. Off by default so a plain `--scip-facts` run stays byte-identical.
+    /// span. Off by default so a plain `ryi scip --raw` run stays byte-identical.
     pub occurrence_text: bool,
     /// The cargo workspace root the rust CHECKER tier loads. Its own field
-    /// because `project_root` also adopts a fresh SCIP index by freshness.
+    /// because `project_root` also roots the SCIP document paths.
     pub rust_checker: Option<&'a Path>,
     /// The project root the ts CHECKER tier loads a `ts.Program` over. Its
     /// own field for the same reason `rust_checker` has one.
@@ -219,7 +219,7 @@ impl LegTrail {
 pub(crate) struct ProjectInput {
     pub(crate) path: String,
     pub(crate) blob: ContentId,
-    file: Option<FlatFact>,
+    pub(crate) file: Option<FlatFact>,
     pub(crate) output: Arc<RyiOutput>,
     /// This file's module facts, built while its bytes are in hand so the
     /// plane costs no second read. `None` outside a module-plane run.
@@ -1375,7 +1375,7 @@ pub fn diet_scip_jsonl(paths: &[PathBuf]) -> Result<Vec<String>, ProjectError> {
     Ok(sorted_lines(diet_scip(paths)?))
 }
 
-pub(crate) fn sorted_lines(facts: Vec<FlatFact>) -> Vec<String> {
+pub fn sorted_lines(facts: Vec<FlatFact>) -> Vec<String> {
     let mut lines: Vec<String> = facts
         .iter()
         .map(|fact| serde_json::to_string(fact).expect("flat fact is serializable"))
@@ -1625,29 +1625,9 @@ fn load_scip(
     inputs: &[ProjectInput],
 ) -> Result<Option<ScipIndex>, ProjectError> {
     let source = match request.scip {
-        ScipMode::Off => {
-            // Informed-by-default: a resolve with no explicit SCIP flags still
-            // adopts a FRESH index (one whose recorded set matches this file
-            // set) so the scip leg pays for itself; anything else stays plain.
-            if let Some(root) = request.project_root {
-                if let Some(path) =
-                    crate::scip_ensure::fresh_index_for_set(root, &index_set_of(inputs).digest())
-                {
-                    tracing::info!(
-                        "scip-informed resolve: fresh index {} (plain flags, adopted by freshness)",
-                        path.display()
-                    );
-                    return crate::scip_decode::load_index(&path)
-                        .map(Some)
-                        .map_err(ProjectError::Scip);
-                }
-                tracing::info!(
-                    "scip-informed resolve: no fresh index under {}, plain name-match leg",
-                    root.display()
-                );
-            }
-            return Ok(None);
-        }
+        // A syntax run never reads an index it was not handed: `ryi slow` is the
+        // SCIP tier, so a cached index cannot leak into a syntax answer.
+        ScipMode::Off => return Ok(None),
         ScipMode::Load(path) => {
             let Some(_) = request.project_root else {
                 return Err(ProjectError::ScipNeedsRoot);
@@ -2242,7 +2222,7 @@ fn inside_project(path: &str) -> bool {
 }
 
 /// One implements pair the SCIP index carries, joined to the corpus.
-struct ScipConformance {
+pub(crate) struct ScipConformance {
     /// Position in `inputs` of the file that DEFINES the implementing type.
     owner_input: usize,
     owner_name: String,
@@ -2265,7 +2245,7 @@ struct ScipConformance {
 /// type edge: an index is a whole-project artifact, and dropping the interface
 /// because this chunk does not name its file would leave the row unspellable
 /// from any chunking of the corpus.
-fn scip_conformances(
+pub(crate) fn scip_conformances(
     inputs: &[ProjectInput],
     cx: &ProjectCx,
     project_root: Option<&Path>,
@@ -2374,7 +2354,7 @@ fn scip_conformances(
 
 /// The implements pairs as `resolved_type_edge` rows, the shape the type-edge
 /// oracles are scored against.
-fn conformance_edges(inputs: &[ProjectInput], rows: &[ScipConformance]) -> Vec<FlatFact> {
+pub(crate) fn conformance_edges(inputs: &[ProjectInput], rows: &[ScipConformance]) -> Vec<FlatFact> {
     rows.iter()
         .map(|row| FlatFact::ResolvedTypeEdge {
             fact: None,

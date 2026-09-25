@@ -1,7 +1,8 @@
-//! Fast vs slow, per call site, over a frozen copy of soopy: `ryi fast` rows
-//! joined to rust-analyzer's SCIP occurrences (`fixtures/ratchet_soopy/oracle.tsv`,
-//! rebuilt by `fixtures/ratchet_soopy/regen.sh`). Totals are pinned in
-//! `tests/RATCHET_SITES.tsv`; `RATCHET_BUMP=1` moves them in the good direction only.
+//! Fast vs slow, per call site, over a frozen copy of soopy: `ryi fast` and
+//! `ryi slow` (over `fixtures/ratchet_soopy/index.scip`) each write a database
+//! and the grade is SQL over the two. Totals are pinned in `tests/RATCHET_SITES.tsv`;
+//! `RATCHET_BUMP=1` moves them in the good direction only. `regen.sh` rebuilds
+//! the corpus copy and its index.
 
 #![cfg(feature = "cli")]
 
@@ -35,12 +36,22 @@ impl Counts {
     }
 }
 
+/// `slow.resolved_edge` is the oracle's corpus class; its `unresolved` rows of
+/// reason `local` / `external` are the other two. A site slow has no row for
+/// is `no_occurrence`.
 const GRADE: &str = "
-with s as (select _input_path path, span__start st, span__end en from site),
+with s as (select _input_path path, span__start st from site),
+oracle as (
+  select caller_path path, caller_site_start st, 'corpus' class,
+         callee_path def_path, callee_start def_start
+  from slow.resolved_edge where resolution_origin = 'scip'
+  union all
+  select path, span__start, reason, null, null from slow.unresolved
+  where reason in ('local', 'external')
+),
 ref as (
   select s.*, o.class, o.def_path, o.def_start
-  from s left join oracle o
-    on '{CORPUS}/' || o.path = s.path and o.end = s.en and o.start >= s.st
+  from s left join oracle o on o.path = s.path and o.st = s.st
 ),
 fe as (
   select caller_path path, caller_site_start st, min(callee_path) cp,
@@ -53,7 +64,7 @@ select coalesce(fe.origin, 'unresolved:' || un.reason, 'none') bucket,
     when ref.class is null then 'no_occurrence'
     when ref.class = 'local' then case when fe.cp is null then 'tn' else 'overbound' end
     when ref.class = 'corpus' and fe.cp is null then 'miss'
-    when ref.class = 'corpus' and fe.cp = '{CORPUS}/' || ref.def_path
+    when ref.class = 'corpus' and fe.cp = ref.def_path
          and ref.def_start >= fe.cs and ref.def_start < fe.ce then 'tp'
     when ref.class = 'corpus' then 'wrong_target'
     when fe.cp is not null then 'overbound'
@@ -65,39 +76,54 @@ left join fe on fe.path = ref.path and fe.st = ref.st
 left join un on un.path = ref.path and un.st = ref.st
 group by 1, 2";
 
-fn grade() -> BTreeMap<String, Counts> {
-    let scratch = tempfile::tempdir().expect("scratch dir");
-    let db = scratch.path().join("fast.db");
-    let mut paths: Vec<String> = walk(Path::new(CORPUS).join("src").as_path());
-    paths.sort();
+fn ryi(args: &[&str]) {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .arg("fast")
-        .arg("--sqlite")
-        .arg(&db)
-        .args(&paths)
+        .args(args)
         .env("RUST_LOG", "off")
         .output()
-        .expect("run ryi fast");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        .expect("run ryi");
+    assert!(output.status.success(), "ryi {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+}
 
-    let conn = rusqlite::Connection::open(&db).expect("open fast.db");
-    conn.execute_batch(
-        "create table oracle(path text, start integer, end integer, class text, \
-         def_path text, def_start integer)",
-    )
-    .expect("oracle table");
-    let oracle = std::fs::read_to_string(Path::new(CORPUS).join("oracle.tsv")).expect("oracle.tsv");
-    {
-        let mut insert = conn
-            .prepare("insert into oracle values (?1, ?2, ?3, ?4, nullif(?5, ''), nullif(?6, ''))")
-            .expect("insert");
-        for line in oracle.lines() {
-            let f: Vec<&str> = line.split('\t').collect();
-            insert.execute(rusqlite::params![f[0], f[1], f[2], f[3], f[4], f[5]]).expect("row");
-        }
-    }
-    let sql = GRADE.replace("{CORPUS}", CORPUS);
-    let mut statement = conn.prepare(&sql).expect("grade sql");
+/// Type edges keyed by (owner, kind, target): both tiers, fast only, slow only.
+const TYPE_GRADE: &str = "
+with f as (select distinct owner_path, owner_start, kind, target_name, target_path
+           from resolved_type_edge),
+     s as (select distinct owner_path, owner_start, kind, target_name, target_path
+           from slow.resolved_type_edge),
+     b as (select * from f intersect select * from s)
+select (select count(*) from b),
+       (select count(*) from f) - (select count(*) from b),
+       (select count(*) from s) - (select count(*) from b)";
+
+/// Both databases over the frozen corpus, fast's opened with slow's attached.
+fn tiers() -> (tempfile::TempDir, rusqlite::Connection) {
+    let scratch = tempfile::tempdir().expect("scratch dir");
+    let fast = scratch.path().join("fast.db");
+    let slow = scratch.path().join("slow.db");
+    let src = format!("{CORPUS}/src");
+    let index = format!("{CORPUS}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast.to_string_lossy()]);
+    ryi(&[
+        "slow",
+        &src,
+        "--root",
+        CORPUS,
+        "--scip-index",
+        &index,
+        "--no-checker",
+        "--sqlite",
+        &slow.to_string_lossy(),
+    ]);
+
+    let conn = rusqlite::Connection::open(&fast).expect("open fast.db");
+    conn.execute("attach ?1 as slow", [slow.to_string_lossy()]).expect("attach slow.db");
+    (scratch, conn)
+}
+
+fn grade() -> BTreeMap<String, Counts> {
+    let (_scratch, conn) = tiers();
+    let mut statement = conn.prepare(GRADE).expect("grade sql");
     let rows = statement
         .query_map([], |row| {
             Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)? as usize))
@@ -109,19 +135,6 @@ fn grade() -> BTreeMap<String, Counts> {
         by_bucket.entry(bucket).or_default().add(&class, n);
     }
     by_bucket
-}
-
-fn walk(dir: &Path) -> Vec<String> {
-    let mut out = Vec::new();
-    for entry in std::fs::read_dir(dir).expect("read corpus dir") {
-        let path = entry.expect("dir entry").path();
-        if path.is_dir() {
-            out.extend(walk(&path));
-        } else if path.extension().is_some_and(|ext| ext == "rs") {
-            out.push(path.to_string_lossy().into_owned());
-        }
-    }
-    out
 }
 
 #[test]
@@ -173,4 +186,50 @@ fn fast_matches_slow_on_soopy_at_the_pinned_rate() {
     assert!(total.wrong_target <= *wrong, "wrong_target rose: {} > pinned {wrong}", total.wrong_target);
     assert!(total.overbound <= *over, "overbound rose: {} > pinned {over}", total.overbound);
     assert!(total.miss <= *miss, "miss rose: {} > pinned {miss}", total.miss);
+}
+
+#[test]
+fn fast_type_edges_match_slow_on_soopy_at_the_pinned_rate() {
+    let (_scratch, conn) = tiers();
+    let (both, fast_only, slow_only): (usize, usize, usize) = conn
+        .query_row(TYPE_GRADE, [], |row| {
+            Ok((row.get::<_, i64>(0)? as usize, row.get::<_, i64>(1)? as usize, row.get::<_, i64>(2)? as usize))
+        })
+        .expect("type grade");
+    eprintln!("type edges: both {both}, fast only {fast_only}, slow only {slow_only}");
+
+    let pin_path = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/RATCHET_TYPES.tsv");
+    let pinned = std::fs::read_to_string(&pin_path).unwrap_or_default();
+    let cells: Vec<usize> = pinned
+        .lines()
+        .nth(1)
+        .map(|line| line.split('\t').skip(1).map(|cell| cell.parse().expect("pin cell")).collect())
+        .unwrap_or_default();
+    if matches!(std::env::var("RATCHET_BUMP").as_deref(), Ok("1")) {
+        let [b, f, s] = match cells.as_slice() {
+            [b, f, s] => [(*b).max(both), (*f).min(fast_only), (*s).min(slow_only)],
+            _ => [both, fast_only, slow_only],
+        };
+        std::fs::write(&pin_path, format!("corpus\tboth\tfast_only\tslow_only\nsoopy\t{b}\t{f}\t{s}\n"))
+            .expect("write pin");
+        return;
+    }
+    let [b, f, s] = cells.as_slice() else {
+        panic!("tests/RATCHET_TYPES.tsv has no soopy row: run once with RATCHET_BUMP=1");
+    };
+    assert!(both >= *b, "type edges both fell: {both} < pinned {b}");
+    assert!(fast_only <= *f, "fast-only type edges rose: {fast_only} > pinned {f}");
+    assert!(slow_only <= *s, "slow-only type edges rose: {slow_only} > pinned {s}");
+}
+
+/// `regen.sh` runs this with `RATCHET_INDEX` naming a fresh rust-analyzer index
+/// of soopy: the fixture keeps only its `src/` documents, no docstrings.
+#[test]
+#[ignore]
+fn regen_fixture_index() {
+    let fresh = std::env::var("RATCHET_INDEX").expect("RATCHET_INDEX names a fresh index.scip");
+    let out = Path::new(CORPUS).join("index.scip");
+    let kept = sprefa_extract::scip_decode::prune_index(Path::new(&fresh), &out, "src/")
+        .expect("prune index");
+    eprintln!("kept {kept} documents in {}", out.display());
 }

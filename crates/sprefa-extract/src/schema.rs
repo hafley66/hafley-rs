@@ -234,7 +234,7 @@ PHASE-1 LIMITS (default mode)
   NOT emitted. `site` records carry the callee name as written; `sig` records
   carry the referenced type's bare name.
 
-SCIP FACTS MODE (--scip-facts)
+SCIP RAW MODE (ryi scip --raw)
   Streams a loaded SCIP index as raw rows, EVERY field the protobuf serializes:
   scip_metadata, scip_document, scip_occurrence, scip_occurrence_doc,
   scip_diagnostic, scip_symbol, scip_relationship, scip_documentation,
@@ -255,7 +255,7 @@ SCIP FACTS MODE (--scip-facts)
   Descriptor message family, which is never serialized into an index: those
   messages describe the grammar of the symbol STRING, which is emitted verbatim.
 
-  --scip-record KINDS narrows the stream. Full passthrough over v6/tsv2 (204
+  --records KINDS narrows the stream. Full passthrough over v6/tsv2 (204
   indexed documents) is 177,967 rows and 59.4MB, of which scip_occurrence alone
   is 123,655 rows and 48.5MB.
 
@@ -364,7 +364,7 @@ TSI ENVELOPE (--witness)
   run 0; a semantic run claims none, because the checker answers per site
   instead of enumerating a relation.
   --witness conflicts with the single-purpose modes (--deps, --package-deps,
-  --scip-facts, --scip-deps, --bench, --file-fact) and with
+  --scip-deps, --bench, --file-fact) and with
   --kinds cfg: their rows come from other flattens, and the protocol row must
   be the first row of a witnessed stream with every later row numbered.
 
@@ -384,13 +384,31 @@ SIZE CEILING (--max-bytes)
   machine-generated parser table that costs 12.55 s and 3.0 GB, all of it parse
   time), no ts/js corpus file, and no fixture in this crate.
 
-THE TWO TIERS (ryi slow | ryi fast)
-  DIET MEANS PARSE TECHNIQUE AND HEURISTICS, NEVER ACTUAL SCIP DATA.
-  `ryi slow ROOT` ensures the root's SCIP index (an existing index wins; else
-  the indexer its marker files name runs once under a wall budget, its whole
-  process group killed on the deadline) and streams v5's scip_* relation shapes:
-  scip_def, scip_name, scip_ref, scip_external_ref, scip_edge, scip_fn_edge, scip_callee_type,
-  scip_local, scip_impl, behind one scip_index header row. Compiler-resolved.
+THE TWO TIERS (ryi fast | ryi slow)
+  Both take the same inputs and write the same tables; the grade between the
+  tiers is SQL over two databases (tests/170_ratchet_sites_rust.rs).
+  `ryi fast INPUTS` runs this crate's own front-ends plus name-match resolution
+  over the supplied files, emitting resolved_edge, resolved_type_edge and
+  resolved_import. No indexer, no type checker, no index is ever read. It is
+  wrong wherever a name is ambiguous corpus-wide.
+  `ryi slow INPUTS` is the SCIP oracle written as those tables. The index is
+  --scip-index, else the root's (an existing index wins; else every indexer the
+  root's markers name runs once under a wall budget). For each phase-1 call site,
+  every reference occurrence ending at the site's end whose symbol is a callable,
+  a type or a local becomes one row: resolved_edge (resolution_origin scip) when
+  its definition is in an input, else unresolved with reason local or external;
+  a site with no such occurrence is unresolved no_occurrence. Specifier spans
+  give resolved_import (local and module rows). resolved_type_edge comes from
+  each phase-1 type-edge candidate's type reference, plus is_implementation
+  relationships; every occurrence gives occurrence/symbol rows. The
+  checkers compiled into the build add rows of origin checker; --no-checker
+  skips them. A root that cannot be indexed emits scip_skip rows and exits 0.
+
+RAW INDEX ROWS (ryi scip)
+  `ryi scip ROOT` ensures the root's SCIP index the same way and streams v5's
+  scip_* relation shapes: scip_def, scip_name, scip_ref, scip_external_ref,
+  scip_edge, scip_fn_edge, scip_callee_type, scip_local, scip_impl, behind one
+  scip_index header row.
   index_mtime_unix_ms is the index file mtime in milliseconds since Unix epoch.
   staleness=stale means a readable indexed document has a later mtime than the
   index; uncertain means the index mtime or an indexed document was unreadable;
@@ -398,18 +416,10 @@ THE TWO TIERS (ryi slow | ryi fast)
   was observed. Mtime evidence is not proof that index contents match source contents.
   v5's scip_occurrence and scip_binding are NOT in that set. scip_occurrence is
   already a record tag on this wire (the byte-span passthrough row under
-  --scip-facts) with different fields, and two shapes under one tag is exactly
-  the silent drift the goldens exist to stop. Both are one consumer join off
-  --scip-facts --scip-record scip_occurrence, which carries the spans and every
+  ryi scip --raw) with different fields. Both are one consumer join off
+  ryi scip --raw --records scip_occurrence, which carries the spans and every
   role bit; scip_binding's source-slice need is answered by that row's optional
   `text` field under --occurrence-text (issue extract-scip-vocab-occurrence-binding).
-  `ryi fast PATH...` runs this crate's own front-ends plus name-match
-  resolution over the supplied files, emitting resolved_edge and
-  resolved_type_edge. No indexer, no type checker, no index. It is wrong
-  wherever a name is ambiguous corpus-wide, which is what the other name buys.
-  A root that cannot be indexed emits scip_skip rows and exits 0: a missing
-  toolchain skips a root without killing the caller, and without the silently
-  empty stream that reads as 'this project has no symbols'.
 
 PROJECT MODE (--resolve)
   `--resolve PATH...` runs phase 2 over the supplied files as one project.

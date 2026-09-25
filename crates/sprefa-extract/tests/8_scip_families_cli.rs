@@ -106,7 +106,7 @@ fn run(args: &[&str]) -> String {
 /// `--family scip ROOT` with a private cache.
 fn scip_family(root: &str, cache: &PathBuf, extra: &[&str]) -> String {
     let cache = cache.to_string_lossy().to_string();
-    let mut args: Vec<&str> = vec!["slow", "--scip-cache", &cache];
+    let mut args: Vec<&str> = vec!["scip", "--scip-cache", &cache];
     args.extend_from_slice(extra);
     args.push(root);
     run(&args)
@@ -482,7 +482,7 @@ fn an_explicit_family_index_is_read_directly_without_spawning_an_indexer() {
         .env("PATH", &bin)
         .env("SPREFA_SCIP_INDEX", &environment_index)
         .args([
-            "slow",
+            "scip",
             "--scip-index",
             &index.to_string_lossy(),
             "--scip-cache",
@@ -528,7 +528,7 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
     let missing_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", &bin)
         .args([
-            "slow",
+            "scip",
             "--scip-index",
             &missing.to_string_lossy(),
             &root.to_string_lossy(),
@@ -546,7 +546,7 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
     let invalid_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", &bin)
         .args([
-            "slow",
+            "scip",
             "--scip-index",
             &invalid.to_string_lossy(),
             &root.to_string_lossy(),
@@ -592,7 +592,7 @@ fn explicit_index_conflicts_with_indexer_selection_and_build() {
         .expect("copy supplied index");
     for conflicting in ["--indexer"] {
         let mut args = vec![
-            "slow",
+            "scip",
             "--scip-index",
             index.to_str().expect("utf-8 temp path"),
         ];
@@ -625,7 +625,7 @@ fn explicit_scip_index_reports_source_timestamp_evidence() {
     set_mtime_unix_ms(&index, INDEX_MTIME_MS);
 
     let args = [
-        "slow",
+        "scip",
         "--scip-index",
         index.to_str().expect("utf-8 temp path"),
         root.to_str().expect("utf-8 temp root"),
@@ -682,7 +682,7 @@ fn stale_cached_index_without_an_indexer_emits_only_a_skip() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", empty_path)
         .args([
-            "slow",
+            "scip",
             "--scip-cache",
             cache.to_str().expect("utf-8 cache"),
             root.to_str().expect("utf-8 root"),
@@ -768,7 +768,7 @@ fn a_root_with_no_installed_indexer_emits_a_named_skip_and_exits_zero() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         // An empty PATH: no rust-analyzer, no scip-typescript, no npx, no go.
         .env("PATH", &empty_path)
-        .args(["slow", "--scip-cache", &cache_arg, RUST_ROOT])
+        .args(["scip", "--scip-cache", &cache_arg, RUST_ROOT])
         .output()
         .expect("extract binary runs");
 
@@ -866,7 +866,7 @@ fn an_indexer_past_its_budget_is_killed_with_its_whole_process_group() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", format!("{}:/bin:/usr/bin", bin_dir.display()))
         .args([
-            "slow",
+            "scip",
             "--scip-timeout",
             "2",
             "--scip-cache",
@@ -923,7 +923,7 @@ fn an_indexer_past_its_budget_is_killed_with_its_whole_process_group() {
 /// about the other arguments.
 #[test]
 fn the_scip_family_takes_exactly_one_root() {
-    let output = raw(&["slow", SCIP_REL_ROOT, TS_ROOT]);
+    let output = raw(&["scip", SCIP_REL_ROOT, TS_ROOT]);
     assert!(!output.status.success());
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("one ROOT"),
@@ -950,7 +950,7 @@ fn an_unknown_mask_family_is_a_named_error() {
 /// what `diet` means before they trust a diet row.
 /// v5's `scip_occurrence` and `scip_binding` are NOT in the family, and the
 /// reason is a wire collision rather than a gap: `scip_occurrence` is already a
-/// record tag on this wire, carrying byte spans under `--scip-facts`. This test
+/// record tag on this wire, carrying byte spans under `ryi scip --raw`. This test
 /// pins that the two streams do not both claim the tag, which is what would
 /// make the omission a bug instead of a decision.
 #[test]
@@ -966,8 +966,8 @@ fn the_scip_family_never_reuses_the_passthrough_occurrence_tag() {
     // The passthrough row that owns the tag is still reachable, still carrying
     // byte spans, and is what a consumer joins to rebuild either v5 row.
     let passthrough = run(&[
-        "--scip-facts",
-        "--scip-record",
+        "scip", "--raw",
+        "--records",
         "scip_occurrence",
         "--root",
         SCIP_REL_ROOT,
@@ -1044,7 +1044,7 @@ fn the_three_added_languages_detect_and_skip_by_name() {
         let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .env("PATH", &empty_path)
             .args([
-                "slow",
+                "scip",
                 "--scip-cache",
                 &cache.to_string_lossy(),
                 &root.to_string_lossy(),

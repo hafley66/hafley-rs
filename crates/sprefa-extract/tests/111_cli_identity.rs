@@ -53,7 +53,7 @@ fn slow_decodes_a_saved_index() {
     let set = sprefa_extract::source_set_for_root(std::path::Path::new(root)).expect("source set");
     sprefa_extract::record_index_set(&index, &set);
     let cache = cache.to_string_lossy();
-    let slow = extract(&["slow", "--scip-cache", &cache, root]);
+    let slow = extract(&["scip", "--scip-cache", &cache, root]);
     assert!(slow.status.success(), "{}", String::from_utf8_lossy(&slow.stderr));
     assert!(
         String::from_utf8_lossy(&slow.stdout).contains("\"record\":\"scip_def\""),
@@ -76,7 +76,7 @@ fn slow_reads_a_named_indexer_from_its_separate_cache() {
     let set = sprefa_extract::source_set_for_root(std::path::Path::new(root)).expect("source set");
     sprefa_extract::record_index_set(&index, &set);
     let cache = cache.to_string_lossy();
-    let slow = extract(&["slow", "--indexer", "typescript", "--scip-cache", &cache, root]);
+    let slow = extract(&["scip", "--indexer", "typescript", "--scip-cache", &cache, root]);
     assert!(slow.status.success(), "{}", String::from_utf8_lossy(&slow.stderr));
     assert!(
         String::from_utf8_lossy(&slow.stdout).contains("\"record\":\"scip_def\""),

@@ -366,7 +366,7 @@ fn v6_ported(path: &str, bytes: &[u8]) -> BTreeSet<String> {
             // 1_resolve_cli.rs pin their shapes.
             FlatFact::ResolvedEdge { .. } => {}
             FlatFact::ResolvedTypeEdge { .. } => {}
-            // Opt-in modes, never in `flatten`: `--scip-facts` projects a loaded
+            // Opt-in modes, never in `flatten`: `ryi scip --raw` projects a loaded
             // SCIP index and `--file-fact` the file identity row. Both are
             // pinned by 5_scip_facts_cli.rs.
             FlatFact::ScipMetadataRow { .. } => {}

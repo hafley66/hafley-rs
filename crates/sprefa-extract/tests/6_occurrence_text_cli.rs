@@ -1,4 +1,4 @@
-//! The `--occurrence-text` contract on the `--scip-facts` door.
+//! The `--occurrence-text` contract on the `ryi scip --raw` door.
 //!
 //! The scip_occurrence passthrough row grows an optional `text` field: the
 //! source slice at the occurrence's byte span, lossy-utf8. It is the v6 answer
@@ -27,7 +27,7 @@ fn run(args: &[&str]) -> String {
 }
 
 fn scip_rel_facts(extra: &[&str]) -> String {
-    let mut args = vec!["--scip-facts"];
+    let mut args = vec!["scip", "--raw"];
     args.extend_from_slice(extra);
     args.extend_from_slice(&[
         "--root",
@@ -71,7 +71,7 @@ fn occurrence_text_slices_the_corpus_at_each_span() {
 }
 
 /// Flag off, no scip_occurrence row carries a `text` key anywhere. The field
-/// must be JSON-absent (not null, not empty), so a plain `--scip-facts` run
+/// must be JSON-absent (not null, not empty), so a plain `ryi scip --raw` run
 /// stays byte-identical to before the field existed.
 #[test]
 fn occurrence_text_is_absent_without_the_flag() {

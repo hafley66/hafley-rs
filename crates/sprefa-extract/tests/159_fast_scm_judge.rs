@@ -168,10 +168,10 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 fn scip_definitions() -> BTreeMap<Key, String> {
     let rows = ryi(
         &[
-            "--scip-facts",
+            "scip", "--raw",
             "--scip-build",
             "--occurrence-text",
-            "--scip-record",
+            "--records",
             "scip_occurrence",
             "--root",
             ROOT,

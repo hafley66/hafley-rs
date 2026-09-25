@@ -81,7 +81,7 @@ impl ScipRecords {
             wanted.insert(name.to_string());
         }
         if wanted.is_empty() {
-            return Err("--scip-record selected no record kind".to_string());
+            return Err("--records selected no record kind".to_string());
         }
         Ok(Self {
             wanted: Some(wanted),
