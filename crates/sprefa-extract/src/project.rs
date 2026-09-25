@@ -502,38 +502,84 @@ fn resolve_project_inputs(
         ..LegTrail::default()
     };
     let targets = TargetIndex::build(&inputs);
+    // Each input's rows build on the extract pool; rows and trail legs land back
+    // in input order.
     if request.arms.call {
-        for ((input, (_, edges)), rows) in inputs
-            .iter()
-            .zip(resolved_calls.iter())
-            .zip(macro_rows.into_iter().chain(std::iter::repeat(Vec::new())))
-        {
-            crate::types::set_own(Some(input.blob.clone()));
-            trail.at(arm_for(&input.path).map_or("", |arm| arm.name));
-            facts.extend(call_facts(input, &targets, edges, &mut trail));
-            facts.extend(call_drop_facts(input, &cx, edges));
-            for row in rows {
-                facts.push(FlatFact::MacroSiteOut {
-                    family: crate::shape::FamilyTag::Call,
-                    span: crate::wire::SpanOut::new(row.span.start, row.span.end()),
-                    macro_name: row.macro_name,
-                    source: row.source.to_string(),
-                });
-            }
+        let mut macro_rows = macro_rows;
+        macro_rows.resize_with(inputs.len(), Vec::new);
+        let built: Vec<(Vec<FlatFact>, Vec<RowLegs>)> = EXTRACT_POOL.install(|| {
+            inputs
+                .par_iter()
+                .zip(resolved_calls.par_iter())
+                .zip(macro_rows.into_par_iter())
+                .map(|((input, (_, edges)), rows)| {
+                    crate::types::set_own(Some(input.blob.clone()));
+                    let mut local = LegTrail {
+                        on: trail.on,
+                        lang: arm_for(&input.path).map_or("", |arm| arm.name),
+                        rows: Vec::new(),
+                    };
+                    let mut out = call_facts(input, &targets, edges, &mut local);
+                    out.extend(call_drop_facts(input, &cx, edges));
+                    for row in rows {
+                        out.push(FlatFact::MacroSiteOut {
+                            family: crate::shape::FamilyTag::Call,
+                            span: crate::wire::SpanOut::new(row.span.start, row.span.end()),
+                            macro_name: row.macro_name,
+                            source: row.source.to_string(),
+                        });
+                    }
+                    crate::types::set_own(None);
+                    (out, local.rows)
+                })
+                .collect()
+        });
+        for (out, legs) in built {
+            facts.extend(out);
+            trail.rows.extend(legs);
         }
     }
 
     if request.arms.call || request.arms.types {
-        for input in &inputs {
-            crate::types::set_own(Some(input.blob.clone()));
-            facts.extend(import_facts(input, &cx));
+        let built: Vec<Vec<FlatFact>> = EXTRACT_POOL.install(|| {
+            inputs
+                .par_iter()
+                .map(|input| {
+                    crate::types::set_own(Some(input.blob.clone()));
+                    let out = import_facts(input, &cx);
+                    crate::types::set_own(None);
+                    out
+                })
+                .collect()
+        });
+        facts.extend(built.into_iter().flatten());
+    }
+    if request.arms.types {
+        let built: Vec<(Vec<FlatFact>, Vec<RowLegs>)> = EXTRACT_POOL.install(|| {
+            inputs
+                .par_iter()
+                .map(|input| {
+                    crate::types::set_own(Some(input.blob.clone()));
+                    let mut local = LegTrail {
+                        on: trail.on,
+                        lang: arm_for(&input.path).map_or("", |arm| arm.name),
+                        rows: Vec::new(),
+                    };
+                    let out = type_facts(input, &targets, &cx, &mut local);
+                    crate::types::set_own(None);
+                    (out, local.rows)
+                })
+                .collect()
+        });
+        for (out, legs) in built {
+            facts.extend(out);
+            trail.rows.extend(legs);
         }
     }
-    for input in &inputs {
-        if request.arms.types {
-            crate::types::set_own(Some(input.blob.clone()));
-            trail.at(arm_for(&input.path).map_or("", |arm| arm.name));
-            facts.extend(type_facts(input, &targets, &cx, &mut trail));
+    // The serial loops left the last input pinned; later legs keep that view.
+    if let Some(last) = inputs.last() {
+        if request.arms.call || request.arms.types {
+            crate::types::set_own(Some(last.blob.clone()));
         }
     }
     // The SCIP index's `is_implementation` relationships: occurrences never
