@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use crate::seams::DefIndex;
 use crate::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
-use super::rust::{module_segments, module_target};
+use super::rust::{crate_root_of, module_segments, module_target};
 use super::rust_receivers::ImplEntry;
 
 // ── module facts from phase-1 syntax rows ────────────────────────────────────
@@ -140,8 +140,97 @@ pub(crate) fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u
     }
 }
 
+/// The two Cargo.toml keys the module law reads: the crate's own name, and a
+/// `[lib]` that renames or relocates its root.
+#[derive(serde::Deserialize)]
+pub(crate) struct CargoManifest {
+    package: Option<CargoPackage>,
+    lib: Option<CargoLib>,
+}
+
+#[derive(serde::Deserialize)]
+struct CargoPackage {
+    name: String,
+}
+
+#[derive(serde::Deserialize)]
+struct CargoLib {
+    name: Option<String>,
+    path: Option<String>,
+}
+
+impl CargoManifest {
+    pub(crate) fn parse(text: &str) -> Option<CargoManifest> {
+        basic_toml::from_str(text).ok()
+    }
+
+    /// `[lib] name`, else the package name, `-` as `_`.
+    pub(crate) fn ident(&self) -> Option<String> {
+        self.lib
+            .as_ref()
+            .and_then(|lib| lib.name.clone())
+            .or_else(|| self.package.as_ref().map(|package| package.name.clone()))
+            .map(|name| name.replace('-', "_"))
+    }
+
+    /// A `[lib] path` override, relative to the manifest's directory.
+    pub(crate) fn explicit_lib_path(&self) -> Option<String> {
+        self.lib.as_ref().and_then(|lib| lib.path.clone())
+    }
+
+    /// The library root relative to the manifest's directory.
+    pub(crate) fn lib_path(&self) -> String {
+        self.explicit_lib_path()
+            .unwrap_or_else(|| "src/lib.rs".to_string())
+    }
+}
+
+/// Crate identifier -> corpus library root, from the Cargo.toml (read off
+/// disk) of each crate directory the corpus's `.rs` files sit in.
+fn crate_libs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
+    let roots: BTreeSet<String> = corpus
+        .iter()
+        .filter(|(path, _)| path.ends_with(".rs"))
+        .filter_map(|(path, _)| {
+            crate_root_of(path).or_else(|| path.starts_with("src/").then(String::new))
+        })
+        .collect();
+    let in_corpus: std::collections::HashSet<&str> =
+        corpus.iter().map(|(path, _)| path.as_str()).collect();
+    let mut out = HashMap::new();
+    for root in roots {
+        let Some(parsed) = std::fs::read_to_string(normalize_join(&root, "Cargo.toml"))
+            .ok()
+            .and_then(|text| CargoManifest::parse(&text))
+        else {
+            continue;
+        };
+        let lib = normalize_join(&root, &parsed.lib_path());
+        if let (Some(ident), true) = (parsed.ident(), in_corpus.contains(lib.as_str())) {
+            out.insert(ident, lib);
+        }
+    }
+    out
+}
+
 fn parent_dir(path: &str) -> &str {
     path.rsplit_once('/').map_or("", |(dir, _)| dir)
+}
+
+/// Where `mod x;` in `path` looks for `x.rs`: a mod-rs file or a crate root
+/// under `bin`/`examples`/`tests`/`benches` owns its dir, `foo.rs` owns `foo/`.
+fn mod_dir(path: &str) -> String {
+    let dir = parent_dir(path);
+    let file = path.rsplit_once('/').map_or(path, |(_, file)| file);
+    let stem = file.strip_suffix(".rs").unwrap_or(file);
+    let dir_name = dir.rsplit_once('/').map_or(dir, |(_, name)| name);
+    let mod_rs = matches!(stem, "mod" | "lib" | "main" | "build")
+        || matches!(dir_name, "bin" | "examples" | "tests" | "benches");
+    match (mod_rs, dir.is_empty()) {
+        (true, _) => dir.to_string(),
+        (false, true) => stem.to_string(),
+        (false, false) => format!("{dir}/{stem}"),
+    }
 }
 
 /// `dir` joined with a `#[path = "lit"]` literal, `.`/`..` collapsed.
@@ -196,14 +285,15 @@ const PRELUDE_TRAITS: &[&str] = &[
     "Unpin",
 ];
 
-/// How an import binding reached its target. Rust has no `default` export
-/// form, so this arm's wire vocabulary stops at four values.
+/// How an import binding reached its target; `Module` is a `mod x;` file
+/// edge. Rust has no `default` export form.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum ResolvedImportKind {
     Local,
     Indirect,
     Star,
     Namespace,
+    Module,
 }
 
 impl ResolvedImportKind {
@@ -213,6 +303,7 @@ impl ResolvedImportKind {
             ResolvedImportKind::Indirect => "indirect",
             ResolvedImportKind::Star => "star",
             ResolvedImportKind::Namespace => "namespace",
+            ResolvedImportKind::Module => "module",
         }
     }
 
@@ -347,6 +438,8 @@ pub struct RustModuleIndex {
     paths: HashMap<ContentId, String>,
     /// Corpus-relative module path per file, `#[path]` overrides applied.
     module_paths: HashMap<String, Vec<String>>,
+    /// Crate identifier -> library root file, for `own_crate::x` paths.
+    crate_libs: HashMap<String, String>,
     /// Module path's LAST segment -> candidate files, the fan-out filter
     /// before the full suffix check (`ModuleTarget::covers`).
     by_last_segment: HashMap<String, Vec<String>>,
@@ -411,7 +504,10 @@ impl RustModuleIndex {
         corpus: &[(String, ContentId)],
         def_index: &DefIndex,
     ) -> RustModuleIndex {
-        let mut index = RustModuleIndex::default();
+        let mut index = RustModuleIndex {
+            crate_libs: crate_libs(corpus),
+            ..RustModuleIndex::default()
+        };
         for (path, blob) in corpus {
             index.blobs.insert(path.clone(), blob.clone());
             index
@@ -753,13 +849,53 @@ impl RustModuleIndex {
         hit
     }
 
-    /// Every `use` binding `path` writes, resolved; an ambiguous or
+    /// The corpus file `mod name;` in `path` loads: `#[path]` against the
+    /// file's dir, else `name.rs` then `name/mod.rs` under `mod_dir`.
+    fn mod_file(&self, path: &str, name: &str, path_attr: Option<&str>) -> Option<String> {
+        if let Some(literal) = path_attr {
+            let target = normalize_join(parent_dir(path), literal);
+            return self.blobs.contains_key(&target).then_some(target);
+        }
+        let dir = mod_dir(path);
+        [format!("{name}.rs"), format!("{name}/mod.rs")]
+            .into_iter()
+            .map(|file| normalize_join(&dir, &file))
+            .find(|target| self.blobs.contains_key(target))
+    }
+
+    /// One `module` row per corpus `mod x;` and per other corpus crate a path
+    /// names, then every resolved `use` binding; an ambiguous or
     /// corpus-external binding has no row.
     pub fn bindings(&self, path: &str) -> Vec<ImportRow> {
         let Some(facts) = self.facts.get(path) else {
             return Vec::new();
         };
         let mut rows = Vec::new();
+        let module_row = |name: &str, target: String| ImportRow {
+            local: String::new(),
+            name: name.to_string(),
+            target_path: target,
+            target_name: None,
+            kind: ResolvedImportKind::Module,
+            hops: 1,
+        };
+        for (name, path_attr) in &facts.mod_decls {
+            if let Some(target) = self.mod_file(path, name, path_attr.as_deref()) {
+                rows.push(module_row(name, target));
+            }
+        }
+        let heads: BTreeSet<&str> = facts
+            .uses
+            .iter()
+            .map(|binding| binding.qualifier.first().unwrap_or(&binding.asked).as_str())
+            .chain(facts.stars.iter().filter_map(|star| star.qualifier.first().map(String::as_str)))
+            .collect();
+        for head in heads {
+            match self.crate_libs.get(head) {
+                Some(lib) if lib != path => rows.push(module_row(head, lib.clone())),
+                _ => {}
+            }
+        }
         for binding in &facts.uses {
             if let Ok(Some(found)) = self.explicit_binding(path, &binding.local) {
                 rows.push(ImportRow {
@@ -981,6 +1117,14 @@ impl RustModuleIndex {
             }
             if let Some(home) = self.bound_home(from, qualifier, seen) {
                 return home;
+            }
+            if let Some(lib) = self.crate_libs.get(&qualifier[0]) {
+                if qualifier.len() == 1 {
+                    return HomeFile::Unique(lib.clone());
+                }
+                let mut full = module_segments(lib);
+                full.extend(qualifier[1..].iter().cloned());
+                return self.exact_module(&full);
             }
         }
         let refs: Vec<&str> = qualifier.iter().map(String::as_str).collect();

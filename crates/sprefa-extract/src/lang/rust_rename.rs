@@ -23,10 +23,10 @@
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
-use serde::Deserialize;
 use syn::spanned::Spanned;
 
 use super::rust::{build_line_starts, syn_span, RustSource};
+use super::rust_modules::CargoManifest;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::types::{RefRole, Rename, RenameStop, Respell, Span, SymbolRef, SymbolSeat};
@@ -2090,7 +2090,7 @@ fn crate_roots(cx: &RenameCx) -> BTreeSet<String> {
         .collect();
     for (manifest, package) in manifests(cx) {
         let dir = dirname(&manifest);
-        if let Some(path) = package.lib.as_ref().and_then(|lib| lib.path.clone()) {
+        if let Some(path) = package.explicit_lib_path() {
             roots.insert(join_rel(dir, &path));
         }
     }
@@ -2102,51 +2102,23 @@ fn crate_roots(cx: &RenameCx) -> BTreeSet<String> {
 fn crate_idents(cx: &RenameCx) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
     for (manifest, package) in manifests(cx) {
-        let dir = dirname(&manifest);
-        let named = package
-            .lib
-            .as_ref()
-            .and_then(|lib| lib.name.clone())
-            .or_else(|| package.package.as_ref().map(|meta| meta.name.clone()));
-        let Some(named) = named else {
+        let Some(ident) = package.ident() else {
             continue;
         };
-        let root = match package.lib.as_ref().and_then(|lib| lib.path.clone()) {
-            Some(path) => join_rel(dir, &path),
-            None => join_rel(dir, "src/lib.rs"),
-        };
-        out.insert(named.replace('-', "_"), root);
+        out.insert(ident, join_rel(dirname(&manifest), &package.lib_path()));
     }
     out
 }
 
-fn manifests(cx: &RenameCx) -> Vec<(String, Manifest)> {
+fn manifests(cx: &RenameCx) -> Vec<(String, CargoManifest)> {
     cx.files()
         .iter()
         .filter(|rel| stem(rel) == "Cargo" && rel.ends_with(".toml"))
         .filter_map(|rel| {
             let text = cx.text(rel)?;
-            let parsed: Manifest = basic_toml::from_str(&text).ok()?;
+            let parsed = CargoManifest::parse(&text)?;
             Some((rel.clone(), parsed))
         })
         .collect()
 }
 
-/// The two manifest keys the module law reads: the crate's own name, and a
-/// `[lib]` that renames or relocates its root.
-#[derive(Deserialize)]
-struct Manifest {
-    package: Option<ManifestPackage>,
-    lib: Option<ManifestLib>,
-}
-
-#[derive(Deserialize)]
-struct ManifestPackage {
-    name: String,
-}
-
-#[derive(Deserialize)]
-struct ManifestLib {
-    name: Option<String>,
-    path: Option<String>,
-}

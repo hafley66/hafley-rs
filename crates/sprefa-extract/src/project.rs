@@ -218,7 +218,7 @@ impl LegTrail {
 /// One supplied file, extracted once, kept for the whole resolve.
 pub(crate) struct ProjectInput {
     pub(crate) path: String,
-    blob: ContentId,
+    pub(crate) blob: ContentId,
     file: Option<FlatFact>,
     pub(crate) output: Arc<RyiOutput>,
     /// This file's module facts, built while its bytes are in hand so the
@@ -558,7 +558,7 @@ fn resolve_project_inputs(
 
 /// The def, kind and path indexes plus every language's module plane, over one
 /// input set. The module plane reads the def index, so it is built after it.
-fn fill_indexes(
+pub(crate) fn fill_indexes(
     cx: &ProjectCx,
     inputs: &[ProjectInput],
     pairs: &[(ContentId, &RyiOutput)],
@@ -641,99 +641,6 @@ fn fill_indexes(
         .set(KtModuleIndex::build(kt_module_files))
         .ok()
         .expect("fresh project module plane (kotlin)");
-}
-
-/// STUB (fork inputs-cli; the modrows fork replaces it): every file of
-/// `universe` that an `entry` reaches over `resolved_import` targets.
-pub fn reach_files(
-    root: &Path,
-    universe: &[PathBuf],
-    entry: &[PathBuf],
-    depth: Option<u32>,
-) -> Result<Vec<PathBuf>, ProjectError> {
-    let _ = root;
-    let inputs = read_inputs_with_modules(universe)?;
-    let pairs: Vec<(ContentId, &RyiOutput)> = inputs
-        .iter()
-        .map(|input| (input.blob.clone(), input.output.as_ref()))
-        .collect();
-    let corpus: Vec<(String, ContentId)> = inputs
-        .iter()
-        .map(|input| (input.path.clone(), input.blob.clone()))
-        .collect();
-    let files = FileSet;
-    let manifests = ManifestMap;
-    let cx = ProjectCx {
-        files: &files,
-        manifests: &manifests,
-        reader: None,
-        digest: ProjectDigest::default(),
-        indexes: IndexBag::default(),
-        witness: false,
-    };
-    fill_indexes(&cx, &inputs, &pairs, &corpus);
-    let canonical = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
-    let by_canonical: std::collections::HashMap<PathBuf, usize> = universe
-        .iter()
-        .enumerate()
-        .map(|(index, path)| (canonical(path), index))
-        .collect();
-    let index_of = |spelled: &str| by_canonical.get(&canonical(Path::new(spelled))).copied();
-    let mut next: std::collections::HashMap<usize, Vec<usize>> = std::collections::HashMap::new();
-    for input in &inputs {
-        let Some(from) = index_of(&input.path) else { continue };
-        crate::types::set_own(Some(input.blob.clone()));
-        for fact in import_facts(input, &cx) {
-            let FlatFact::ResolvedImportRow { target_path, .. } = fact else { continue };
-            let target = Path::new(&target_path);
-            if let Some(to) = index_of(&target_path) {
-                next.entry(from).or_default().push(to);
-            } else if target.is_dir() {
-                let dir = canonical(target);
-                next.entry(from).or_default().extend(
-                    universe
-                        .iter()
-                        .enumerate()
-                        .filter(|(_, path)| canonical(path).parent() == Some(dir.as_path()))
-                        .map(|(index, _)| index),
-                );
-            }
-        }
-        crate::types::set_own(None);
-    }
-    let mut reached = vec![false; universe.len()];
-    let mut frontier = Vec::new();
-    for path in entry {
-        let Some(index) = by_canonical.get(&canonical(path)).copied() else {
-            return Err(ProjectError::Read(
-                path.clone(),
-                std::io::Error::new(std::io::ErrorKind::NotFound, "entry is not in the input set"),
-            ));
-        };
-        if !reached[index] {
-            reached[index] = true;
-            frontier.push(index);
-        }
-    }
-    let mut hop = 0;
-    while !frontier.is_empty() && depth.is_none_or(|limit| hop < limit) {
-        let mut following = Vec::new();
-        for from in frontier {
-            for &to in next.get(&from).into_iter().flatten() {
-                if !reached[to] {
-                    reached[to] = true;
-                    following.push(to);
-                }
-            }
-        }
-        frontier = following;
-        hop += 1;
-    }
-    Ok(universe
-        .iter()
-        .zip(reached)
-        .filter_map(|(path, hit)| hit.then(|| path.clone()))
-        .collect())
 }
 
 /// The syntax tier's TSI rows for one resolve, and the first id free after them.
@@ -2147,7 +2054,7 @@ fn call_facts(
 
 /// Every import binding one input writes. A file belongs to at most one
 /// language's plane, so only one of the two closures below yields rows.
-fn import_facts(input: &ProjectInput, cx: &ProjectCx) -> Vec<FlatFact> {
+pub(crate) fn import_facts(input: &ProjectInput, cx: &ProjectCx) -> Vec<FlatFact> {
     let ts_rows = cx.indexes.ts_modules.get().into_iter().flat_map(|modules| {
         modules
             .bindings(&input.path)

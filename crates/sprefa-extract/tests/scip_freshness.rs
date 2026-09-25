@@ -52,6 +52,7 @@ fn set_of(pairs: &[(&str, &str)]) -> IndexSet {
 
 #[test]
 fn stale_set_rebuilds_and_the_original_set_still_hits() {
+    let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = temp_root("stale");
     let cache = root.join(".dl").join(".state");
     let index = place_fake_index(&cache);
@@ -149,6 +150,7 @@ fn root_source_set_tracks_a_symlinked_source_outside_the_root() {
 
 #[test]
 fn a_stale_index_makes_ensure_rebuild_rather_than_reuse() {
+    let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = temp_root("ensure");
     let cache = root.join(".dl").join(".state");
     let index = place_fake_index(&cache);
@@ -172,6 +174,7 @@ fn a_stale_index_makes_ensure_rebuild_rather_than_reuse() {
 
 #[test]
 fn a_replaced_index_cannot_reuse_its_old_source_sidecar() {
+    let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = temp_root("index-swapped");
     let cache = root.join(".dl").join(".state");
     let index = place_fake_index(&cache);
@@ -419,6 +422,7 @@ fn a_persistent_workspace_stage_drops_a_removed_member_directory() {
 
 #[test]
 fn the_informed_default_adopts_a_fresh_index_and_a_stale_one_stays_plain() {
+    let _held = ENVIRONMENT.lock().expect("environment lock");
     let root = temp_root("informed-default");
     let cache = root.join(".dl").join(".state");
     let index = place_fake_index(&cache);

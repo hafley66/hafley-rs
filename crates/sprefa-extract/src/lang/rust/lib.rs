@@ -72,7 +72,7 @@ use type_facts::{import_bound_target, project_types};
 
 #[path = "2_call.rs"]
 mod call_facts;
-pub(crate) use call_facts::{module_segments, module_target};
+pub(crate) use call_facts::{crate_root_of, module_segments, module_target};
 pub use call_facts::{call_drops, own_blob_probes};
 use call_facts::{project_call, scm_call_defs, splice_macro_expansions};
 

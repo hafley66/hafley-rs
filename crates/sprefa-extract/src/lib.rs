@@ -30,6 +30,8 @@ pub mod move_cx;
 pub mod move_scip;
 pub mod move_stage;
 pub mod project;
+#[path = "1_reach.rs"]
+pub mod reach;
 pub mod rename_cx;
 pub mod rows;
 pub mod schema;
@@ -93,7 +95,7 @@ pub use move_scip::{
     UNKNOWN_TO_SCIP,
 };
 pub use project::{
-    diet_scip, diet_scip_jsonl, diet_scip_with_raw, extract_pool, reach_files, resolve_project,
+    diet_scip, diet_scip_jsonl, diet_scip_with_raw, extract_pool, resolve_project,
     resolve_project_jsonl, resolve_project_with_raw, resolve_project_with_tsi_tiers, scip_facts,
     scip_facts_jsonl, scip_family,
     scip_family_from_index, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
@@ -101,6 +103,7 @@ pub use project::{
     ResolveRequest, ResolveWithRawError, ScipFamilyRequest, ScipMode, SourceTreeBlobSource,
     RESOLVE_ARMS,
 };
+pub use reach::{reach_files, REACH_DEPTH_CAP};
 pub use rename_cx::{RenameCx, RenameRequest};
 pub use rows::{Edge, FamilyBundle, Node};
 pub use scip::{

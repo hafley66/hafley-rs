@@ -295,12 +295,13 @@ fn an_external_std_use_mints_no_import_row() {
         .any(|(_, local, ..)| local == "StdMapUnused"));
 }
 
-/// One `resolved_import` row per RESOLVED `use` leaf in the fixture: an
-/// ambiguous/external one has none, matching `bindings()`'s own contract.
+/// One `resolved_import` row per RESOLVED `use` leaf in the fixture (an
+/// ambiguous/external one has none), plus one `module` row per corpus `mod x;`.
 #[test]
 fn edge_count_matches_the_fixtures_written_bindings() {
-    let count = imports(FIXTURE_FILES).len();
-    assert_eq!(count, 9, "imports: {:?}", imports(FIXTURE_FILES));
+    let rows = imports(FIXTURE_FILES);
+    let modules = rows.iter().filter(|row| row.5 == "module").count();
+    assert_eq!((rows.len() - modules, modules), (9, 9), "imports: {rows:?}");
 }
 
 // ── the plane's cost ────────────────────────────────────────────────────────
