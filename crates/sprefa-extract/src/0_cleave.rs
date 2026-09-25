@@ -455,6 +455,16 @@ impl Plan {
                 }
             }
         }
+        cross_package_stop(
+            &cx,
+            arm.name(),
+            &src,
+            &dest,
+            &item,
+            &callers,
+            source.refs_outside(&item, &moving) > 0,
+            &dest_imports,
+        )?;
         Ok(Plan {
             root,
             cx,
@@ -486,6 +496,14 @@ impl Plan {
         let mut out = self.source_respells();
         out.extend(self.dest_respells());
         out.extend(self.caller_respells());
+        if let Some((file, edit)) = self.new_file_decl() {
+            out.push(Respell {
+                receipt: Some(format!("declare {}: {}", self.rows.dest, edit.text.trim())),
+                file,
+                span: edit.span,
+                text: edit.text,
+            });
+        }
         out.sort_by(|left, right| {
             left.file
                 .cmp(&right.file)
@@ -713,10 +731,23 @@ impl Plan {
         Ok(stages)
     }
 
+    /// The parent `mod` a DEST this cleave creates needs, when the arm has one.
+    fn new_file_decl(&self) -> Option<(String, sprefa_extract::Edit)> {
+        match self.dest_facts {
+            Some(_) => None,
+            None => self
+                .arm
+                .declare_new_file(&self.cx, &self.rows.src, &self.rows.dest),
+        }
+    }
+
     /// Every path a stage reads or writes, so a verify rollback can restore it.
     fn touched(&self) -> Vec<String> {
         let mut out: BTreeSet<String> = BTreeSet::new();
         out.insert(self.rows.src.clone());
+        if let Some((file, _)) = self.new_file_decl() {
+            out.insert(file);
+        }
         if self.dest_facts.is_some() {
             out.insert(self.rows.dest.clone());
         }
@@ -1341,4 +1372,80 @@ fn within_root(root: &Path, path: &Path) -> Result<String, String> {
     path.strip_prefix(root)
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
         .map_err(|_| format!("{} is outside root {}", path.display(), root.display()))
+}
+
+/// One package as a cleave judges it: directory, name, the ident a path spells
+/// it with, and the dependency keys its manifest declares.
+type PackageView = (String, String, String, BTreeSet<String>);
+
+fn package_view(cx: &MoveCx, language: &str, rel: &str) -> Option<PackageView> {
+    match language {
+        "rust" => sprefa_extract::lang::rust_rehome::cargo_package(cx, rel),
+        _ => sprefa_extract::lang::ts_rehome::cross::package_deps(cx, rel)
+            .map(|(name, deps)| (name.clone(), name.clone(), name, deps)),
+    }
+}
+
+fn depends_on(user: &PackageView, on: &PackageView) -> bool {
+    user.3
+        .iter()
+        .any(|key| *key == on.1 || key.replace('-', "_") == on.2)
+}
+
+/// A cleave into another package never edits manifests: it stops, naming the
+/// dependency the result would need, when the needed edge is missing or cycles.
+#[allow(clippy::too_many_arguments)]
+fn cross_package_stop(
+    cx: &MoveCx,
+    language: &str,
+    src: &str,
+    dest: &str,
+    item: &str,
+    callers: &[String],
+    src_uses_item: bool,
+    dest_imports: &[(String, Vec<String>)],
+) -> Result<(), String> {
+    let (Some(from), Some(to)) = (
+        package_view(cx, language, src),
+        package_view(cx, language, dest),
+    ) else {
+        return Ok(());
+    };
+    if from.0 == to.0 {
+        return Ok(());
+    }
+    let mut users: Vec<(String, PackageView)> = callers
+        .iter()
+        .filter_map(|caller| Some((caller.clone(), package_view(cx, language, caller)?)))
+        .collect();
+    if src_uses_item {
+        users.push((src.to_string(), from.clone()));
+    }
+    let back = dest_imports.iter().any(|(module, _)| {
+        module == &from.2 || module.starts_with(&format!("{}::", from.2)) || module.starts_with(&format!("{}/", from.2))
+    });
+    for (user, package) in &users {
+        if package.0 == to.0 {
+            continue;
+        }
+        if back && package.0 == from.0 {
+            return Err(format!(
+                "dependency cycle: {} -> {} -> {} ({user} uses {item}, and {dest} would import from {})",
+                from.1, to.1, from.1, from.1
+            ));
+        }
+        if !depends_on(package, &to) {
+            return Err(format!(
+                "cleave across packages: {} must depend on {} ({user} uses {item}); add the dependency, or `ryi move` the whole file (move edits manifests)",
+                package.1, to.1
+            ));
+        }
+    }
+    if back && !depends_on(&to, &from) {
+        return Err(format!(
+            "cleave across packages: {} must depend on {} ({dest} would import from it); add the dependency, or `ryi move` the whole file",
+            to.1, from.1
+        ));
+    }
+    Ok(())
 }

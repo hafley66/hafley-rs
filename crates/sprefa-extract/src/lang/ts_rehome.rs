@@ -17,8 +17,11 @@ use crate::lang::ts_resolve::{respell, TsResolver};
 use crate::move_cx::{dirname, join_rel, relative_between, MoveCx};
 use crate::project::extract_pool;
 use crate::types::{
-    ImportRef, ImportRefKind, Rehome, RehomeManifests, RehomeTextSpellings, Respell, Span,
+    ImportRef, ImportRefKind, Rehome, RehomeManifests, RehomePlanCheck, RehomeTextSpellings,
+    Respell, Span,
 };
+
+pub mod cross;
 
 /// Emitted output whose specifiers mirror the source tree's. The corpus walk
 /// keeps it (a `dist/package.json` is still a manifest); the parse does not.
@@ -33,28 +36,58 @@ impl Rehome for TsSource {
     }
 
     fn import_refs(&self, cx: &MoveCx) -> Vec<ImportRef> {
-        let Ok(resolver) = resolver(cx.root()) else {
-            return Vec::new();
-        };
-        let names = self.moved_names(cx);
-        let corpus: Vec<&str> = cx
-            .files_of(self)
-            .into_iter()
-            .filter(|rel| !emitted(rel))
-            .collect();
-        // An indexed rayon collect keeps corpus order, and corpus order is rel order.
-        let per_file: Vec<Vec<ImportRef>> = extract_pool().install(|| {
-            corpus
-                .par_iter()
-                .map(|rel| file_refs(cx, resolver, &names, rel))
-                .collect()
-        });
-        let refs: Vec<ImportRef> = per_file.into_iter().flatten().collect();
-        tracing::debug!(corpus = corpus.len(), refs = refs.len(), "move ts refs");
+        let mut refs = specifier_refs(cx);
+        refs.extend(cross::dep_refs(cross::dep_plan(cx)));
         refs
     }
 
     fn respell(&self, cx: &MoveCx, reference: &ImportRef) -> Option<Respell> {
+        if reference.kind == cross::PKG_DEP {
+            let (text, receipt) = cross::dep_plan(cx)
+                .edits
+                .get(&(reference.importer.clone(), reference.literal.start))?;
+            return Some(Respell {
+                file: reference.importer.clone(),
+                span: reference.literal,
+                text: text.clone(),
+                receipt: Some(receipt.clone()),
+            });
+        }
+        self.respell_spec(cx, reference)
+    }
+}
+
+impl RehomePlanCheck for TsSource {
+    fn plan_errors(&self, cx: &MoveCx) -> Vec<String> {
+        cross::dep_plan(cx).errors.clone()
+    }
+}
+
+/// Every specifier and path-constant ref the corpus writes toward the batch.
+fn specifier_refs(cx: &MoveCx) -> Vec<ImportRef> {
+    let Ok(resolver) = resolver(cx.root()) else {
+        return Vec::new();
+    };
+    let names = TsSource.moved_names(cx);
+    let corpus: Vec<&str> = cx
+        .files_of(&TsSource)
+        .into_iter()
+        .filter(|rel| !emitted(rel))
+        .collect();
+    // An indexed rayon collect keeps corpus order, and corpus order is rel order.
+    let per_file: Vec<Vec<ImportRef>> = extract_pool().install(|| {
+        corpus
+            .par_iter()
+            .map(|rel| file_refs(cx, resolver, &names, rel))
+            .collect()
+    });
+    let refs: Vec<ImportRef> = per_file.into_iter().flatten().collect();
+    tracing::debug!(corpus = corpus.len(), refs = refs.len(), "move ts refs");
+    refs
+}
+
+impl TsSource {
+    fn respell_spec(&self, cx: &MoveCx, reference: &ImportRef) -> Option<Respell> {
         let text = match reference.kind {
             ImportRefKind::Import => import_respell(cx, reference)?,
             ImportRefKind::PathLiteral => literal_respell(cx, reference)?,
@@ -229,6 +262,9 @@ fn import_respell(cx: &MoveCx, reference: &ImportRef) -> Option<String> {
         None if is_moved && relative_spec => reference.target.clone(),
         None => return None,
     };
+    if let Some(spelled) = cross::respell(cx, reference, module, relative_spec, &aimed) {
+        return Some(spelled);
+    }
     let quote = quote_of(&reference.text);
     let from_dir = dirname(cx.after(&reference.importer));
     if !relative_spec {

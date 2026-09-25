@@ -173,6 +173,11 @@ impl CargoManifest {
             .map(|name| name.replace('-', "_"))
     }
 
+    /// `[package] name` as written, `-` kept: the key a dependency table uses.
+    pub(crate) fn package_name(&self) -> Option<String> {
+        self.package.as_ref().map(|package| package.name.clone())
+    }
+
     /// A `[lib] path` override, relative to the manifest's directory.
     pub(crate) fn explicit_lib_path(&self) -> Option<String> {
         self.lib.as_ref().and_then(|lib| lib.path.clone())

@@ -68,7 +68,10 @@ impl Cleave for TsSource {
         })
     }
 
-    fn spell_module(&self, _cx: &crate::move_cx::MoveCx, from_path: &str, to_path: &str) -> String {
+    fn spell_module(&self, cx: &crate::move_cx::MoveCx, from_path: &str, to_path: &str) -> String {
+        if let Some(spec) = crate::lang::ts_rehome::cross::spec_across(cx, from_path, to_path) {
+            return spec;
+        }
         let relative = relative_between(dirname(from_path), &drop_extension(to_path));
         match relative.is_empty() {
             true => ".".to_string(),
