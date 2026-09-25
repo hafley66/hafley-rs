@@ -23,3 +23,9 @@ Every multi-file `ryi` run prints one `INFO extract_file{path=...}` span line pe
 
 ## Implementation Notes
 Plan step 5 of plans/2026-09-25-ryi-cli-cleanup.md. Conflict to resolve with the user first: src/trace.rs:579 records the info default as user-set 2026-09-18 ("one line per file with its phase timings"), and tests/31_tracing.rs `the_info_default_narrates_an_ordinary_run_on_stderr` pins it.
+
+## Comments
+
+### 2026-09-25T17:16:06Z · @claude-perf
+
+Measured 2026-09-25 (release, ryi fast crates/sprefa-extract/src, 110 files): default observe layers 0.14-0.16s wall vs DL_TRAIL=0 RUST_LOG=off 0.13-0.14s; earlier baseline 0.90s vs 0.87s. The per-file INFO spans cost ~3-7% of wall; the decision stays with the user.
