@@ -1923,6 +1923,11 @@ pub fn set_own(blob: Option<ContentId>) {
     OWN.with(|own| *own.borrow_mut() = blob);
 }
 
+/// The calling thread's pinned blob, if a per-file resolve set one.
+pub fn pinned_own() -> Option<ContentId> {
+    OWN.with(|own| own.borrow().clone())
+}
+
 /// The file set: project-relative paths that exist at this rev. Hollow in 4a
 /// (spec `_2_traits.rs`:56); the concrete set lands with the first Resolve impl.
 pub struct FileSet;

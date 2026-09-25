@@ -303,6 +303,11 @@ fn probe<T>(value: T) -> T {
 /// The corpus blob covering every named CallF def of `output`. One def is not
 /// a file identity: two files can hold an identical def at the same offset.
 fn own_file_blob(output: &RyiOutput, index: &DefIndex) -> Option<ContentId> {
+    // The per-file resolve pins the exact blob; the def-set join below is the
+    // fallback for hand-built contexts, and cost 1017 of a run's top samples.
+    if let Some(pinned) = crate::types::pinned_own() {
+        return Some(pinned);
+    }
     let call = output.call.as_ref()?;
     let own: Vec<(&str, Span)> = call
         .nodes

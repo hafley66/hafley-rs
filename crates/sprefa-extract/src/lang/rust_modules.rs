@@ -11,7 +11,7 @@
 //! (`rust.rs:1690`, documented `NO ROW`). `hafley_scm` extracts the syntax
 //! rows from the phase-1 parse; this file resolves those rows across files.
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use crate::seams::DefIndex;
@@ -443,6 +443,8 @@ pub struct RustModuleIndex {
     /// Module path's LAST segment -> candidate files, the fan-out filter
     /// before the full suffix check (`ModuleTarget::covers`).
     by_last_segment: HashMap<String, Vec<String>>,
+    /// Every segment of every module path: `module_call`'s external test.
+    segment_names: HashSet<String>,
     /// blob -> (span, name, family) of every def in it.
     defs: HashMap<ContentId, Vec<(Span, String, FamilyTag)>>,
     /// (blob, span) pairs several def NAMES share: one macro expansion's
@@ -533,6 +535,7 @@ impl RustModuleIndex {
             }
         }
         for (path, segments) in &index.module_paths {
+            index.segment_names.extend(segments.iter().cloned());
             if let Some(last) = segments.last() {
                 index
                     .by_last_segment
@@ -1267,10 +1270,7 @@ impl RustModuleIndex {
                         .iter()
                         .any(|binding| binding.local == qualifier[0])
             })
-            && !self
-                .module_paths
-                .values()
-                .any(|segments| segments.contains(&qualifier[0]))
+            && !self.segment_names.contains(&qualifier[0])
         {
             return ModuleCallTarget::External;
         }
