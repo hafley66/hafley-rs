@@ -52,7 +52,7 @@ fn a_module_level_call_site_is_credited_to_the_module() {
     assert_eq!(
         edges(&[
             "--resolve",
-            "--family",
+            "--arms",
             "call",
             "tests/fixtures/ts5_findings/top_level_call.ts",
             "tests/fixtures/ts5_findings/top_level_callee.ts",
@@ -72,7 +72,7 @@ fn the_module_def_is_a_node_row_spanning_the_file() {
     let source =
         std::fs::read("tests/fixtures/ts5_findings/top_level_call.ts").expect("fixture readable");
     let modules: Vec<Value> = run(&[
-        "--family",
+        "--kinds",
         "call",
         "tests/fixtures/ts5_findings/top_level_call.ts",
     ])
@@ -92,7 +92,7 @@ fn the_module_def_is_a_node_row_spanning_the_file() {
 /// `tests/golden_parity.rs`.
 #[test]
 fn a_file_with_no_module_level_call_site_mints_no_module_def() {
-    let modules = run(&["--family", "call", "tests/fixtures/ts/sample.ts"])
+    let modules = run(&["--kinds", "call", "tests/fixtures/ts/sample.ts"])
         .iter()
         .filter(|row| row["record"] == "node" && row["name"] == "<module>")
         .count();
@@ -110,7 +110,7 @@ fn an_array_push_does_not_bind_to_a_free_function_named_push() {
     assert_eq!(
         edges(&[
             "--resolve",
-            "--family",
+            "--arms",
             "call",
             "tests/fixtures/ts5_findings/receiver_blind_prototype.ts",
             "tests/fixtures/ts5_findings/tracing_like.ts",
@@ -128,7 +128,7 @@ fn an_array_push_does_not_bind_to_a_free_function_named_push() {
 fn an_array_push_still_binds_to_a_class_method_named_push() {
     let edges = edges(&[
         "--resolve",
-        "--family",
+        "--arms",
         "call",
         "tests/fixtures/ts_findings/receiver_blind_method/consumer.ts",
         "tests/fixtures/ts_findings/receiver_blind_method/writer.ts",
@@ -147,7 +147,7 @@ fn a_non_builtin_member_name_keeps_its_match() {
     assert_eq!(
         edges(&[
             "--resolve",
-            "--family",
+            "--arms",
             "call",
             "tests/fixtures/ts5_findings/user_api_receiver/consumer.ts",
             "tests/fixtures/ts5_findings/user_api_receiver/program.ts",
@@ -163,7 +163,7 @@ fn a_namespace_import_receiver_and_this_still_resolve() {
     assert_eq!(
         edges(&[
             "--resolve",
-            "--family",
+            "--arms",
             "call",
             "tests/fixtures/ts5_findings/known_receiver/consumer.ts",
             "tests/fixtures/ts5_findings/known_receiver/ns.ts",
@@ -181,7 +181,7 @@ fn a_namespace_import_receiver_and_this_still_resolve() {
 #[test]
 fn a_member_call_site_carries_its_path_as_written() {
     let paths: Vec<String> = run(&[
-        "--family",
+        "--kinds",
         "call",
         "tests/fixtures/ts5_findings/receiver_blind_prototype.ts",
     ])
@@ -201,7 +201,7 @@ fn a_member_call_site_carries_its_path_as_written() {
 #[test]
 fn a_function_named_as_a_value_mints_a_reference_row() {
     let refs: Vec<(String, String)> = run(&[
-        "--family",
+        "--kinds",
         "call",
         "tests/fixtures/ts5_findings/function_ref_as_value.ts",
     ])
@@ -218,7 +218,7 @@ fn a_function_named_as_a_value_mints_a_reference_row() {
 fn a_value_reference_resolves_to_a_value_ref_edge() {
     let rows: Vec<(String, String, String)> = run(&[
         "--resolve",
-        "--family",
+        "--arms",
         "call",
         "tests/fixtures/ts5_findings/function_ref_as_value.ts",
     ])
@@ -248,7 +248,7 @@ fn a_value_reference_resolves_to_a_value_ref_edge() {
 #[test]
 fn a_local_named_as_an_argument_mints_no_reference_row() {
     let refs = run(&[
-        "--family",
+        "--kinds",
         "call",
         "tests/fixtures/ts5_findings/known_receiver/consumer.ts",
     ])

@@ -310,7 +310,7 @@ fn callee_of(
 // FallbackSource: the floor for every linked grammar no dedicated Source
 // claimed (today: html).
 //
-// The lossless CST on `--family cst`, and under the default mask a GUESSED
+// The lossless CST on `--kinds cst`, and under the default mask a GUESSED
 // call plane minted from the call-kind table. The roster's fallback behind the
 // lang-specific Sources.
 // ════════════════════════════════════════════════════════════════════════════

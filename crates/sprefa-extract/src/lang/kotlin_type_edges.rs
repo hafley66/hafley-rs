@@ -1,4 +1,4 @@
-//! The kotlin syntax tier's TSI rows under `--witness --family type`: the
+//! The kotlin syntax tier's TSI rows under `--witness --kinds type`: the
 //! twin of `python/_1_type_edges.rs` `tsi_rows`, beside the v5 entity port in `kotlin.rs`.
 
 use std::collections::{BTreeMap, BTreeSet};

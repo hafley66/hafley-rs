@@ -66,7 +66,7 @@ fn resolve_type_arm_streams_resolved_type_edges() {
     assert_eq!(
         run(&[
             "--resolve",
-            "--family",
+            "--arms",
             "type",
             "tests/fixtures/ts/sample.ts",
             "tests/fixtures/ts/consts.ts",
@@ -83,7 +83,7 @@ fn resolve_type_arm_covers_the_go_edge_kinds() {
     assert_eq!(
         run(&[
             "--resolve",
-            "--family",
+            "--arms",
             "type",
             "tests/fixtures/go/edges.go",
             "tests/fixtures/go/sample.go",
@@ -112,7 +112,7 @@ fn resolve_default_arm_stays_call_only() {
     let default = run(&["--resolve", CALLER, CALLEE]);
     assert_eq!(
         default,
-        run(&["--resolve", "--family", "call", CALLER, CALLEE])
+        run(&["--resolve", "--arms", "call", CALLER, CALLEE])
     );
     assert!(!default.contains("resolved_type_edge"));
 }

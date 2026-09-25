@@ -1,6 +1,6 @@
 //! The call-kind table: the tree-sitter node kinds that denote a call site in
 //! the grammars the fallback actually loads. Collected the only
-//! trustworthy way, one `ryi --family cst <fixture>` dump per language (issue
+//! trustworthy way, one `ryi --kinds cst <fixture>` dump per language (issue
 //! default-families-no-conditional), so a kind no loaded grammar emits is
 //! absent and a call kind one does emit is present. This file is DATA, not
 //! code: a new language contributes a row, never a branch in the projector.
@@ -41,7 +41,7 @@ pub const CALL_KINDS: &[&str] = &[
 
 /// Leaf kinds that carry a NAME, the exact replacement for the identifier
 /// substring: every name-leaf kind the loaded grammars declare, collected
-/// the same way as CALL_KINDS, one `ryi --family cst` dump per language
+/// the same way as CALL_KINDS, one `ryi --kinds cst` dump per language
 /// (issue kind-vocab-constraint). A grammar declares a subset; the rest
 /// resolve to no id against it and match nothing there.
 ///

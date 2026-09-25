@@ -11,7 +11,6 @@ fn rust_function_and_method_signatures_are_type_uses() {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "graph",
-            "--json",
             "--uses",
             "Widget",
             "tests/fixtures/graph_rust",

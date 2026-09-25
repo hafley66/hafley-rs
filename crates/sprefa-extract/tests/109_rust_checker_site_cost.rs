@@ -47,9 +47,9 @@ fn phases_of(supplied: &str) -> String {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             ROOT,
             "--rust-checker",
             supplied,

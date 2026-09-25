@@ -46,7 +46,7 @@ impl std::fmt::Display for TrailError {
 
 impl std::error::Error for TrailError {}
 
-/// One run of the trail as `--trail` prints it. The phase tuple is
+/// One run of the trail as `ryi trail` prints it. The phase tuple is
 /// (lang, phase, files, calls, rows, bytes, micros).
 pub struct RunReport {
     pub id: u64,

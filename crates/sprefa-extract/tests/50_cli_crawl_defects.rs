@@ -15,7 +15,7 @@ fn temp_root(name: &str) -> std::path::PathBuf {
     dir
 }
 
-/// Defect 1: `--scip-facts --project-root X --scip-index Y X` exits 2 with
+/// Defect 1: `--scip-facts --root X --scip-index Y X` exits 2 with
 /// "is a directory" because `check_file_paths` ran for a mode whose PATH is a
 /// root. The dir arg must reach the library (rc != 2, no "is a directory").
 #[test]
@@ -28,7 +28,7 @@ fn scip_facts_takes_a_root_directory() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-facts",
-            "--project-root",
+            "--root",
             root.to_str().unwrap(),
             "--scip-index",
             index.to_str().unwrap(),
@@ -56,7 +56,7 @@ fn scip_deps_takes_a_root_directory() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-deps",
-            "--project-root",
+            "--root",
             root.to_str().unwrap(),
             "--scip-index",
             index.to_str().unwrap(),
@@ -153,8 +153,7 @@ fn scip_timeout_caps_the_family_scip_build() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", fake_path(&bin))
         .args([
-            "--family",
-            "scip",
+            "slow",
             "--scip-cache",
             cache.to_str().unwrap(),
             "--scip-timeout",
@@ -183,7 +182,7 @@ fn scip_timeout_caps_the_scip_build_flag() {
         .args([
             "--scip-facts",
             "--scip-build",
-            "--project-root",
+            "--root",
             root.to_str().unwrap(),
             "--scip-timeout",
             "1",

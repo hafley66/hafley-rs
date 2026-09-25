@@ -86,7 +86,7 @@ fn undecorated_stdout_is_byte_identical() {
     let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
     let path = fixture.to_string_lossy().into_owned();
     let digest = "blake3:5aaf58237f593b49a71d78bc09924050d18f011bafe1b4c396f00dc3322da450";
-    let output = ryi(&["--family", "call", "--file-fact", &path]);
+    let output = ryi(&["--kinds", "call", "--file-fact", &path]);
     assert_eq!(
         stdout_lines(&output),
         vec![
@@ -103,7 +103,7 @@ fn undecorated_stdout_is_byte_identical() {
 fn lines_decorates_every_span_and_only_spans() {
     let dir = scratch("ryi-lines-on");
     let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
-    let output = ryi(&["--family", "call", "--lines", &fixture.to_string_lossy()]);
+    let output = ryi(&["--kinds", "call", "--lines", &fixture.to_string_lossy()]);
     let lines = stdout_lines(&output);
     for line in &lines {
         let value: Value = serde_json::from_str(line).expect("each stdout row is JSON");
@@ -128,7 +128,7 @@ fn col_counts_bytes_not_characters() {
     // would say 27.
     let dir = scratch("ryi-lines-bytes");
     let fixture = write_fixture(&dir, "fixture.json", "{\"first\": \"\u{3b1}\", \"second\": \"\u{3b2}\"}\n");
-    let output = ryi(&["--family", "data", "--lines", &fixture.to_string_lossy()]);
+    let output = ryi(&["--kinds", "data", "--lines", &fixture.to_string_lossy()]);
     assert_eq!(
         stdout_lines(&output),
         vec![
@@ -290,7 +290,7 @@ fn resolve_decorates_edge_spans_by_their_owning_path() {
         ryi(&["--resolve", "--lines", &a_string, &b_string]),
         ryi(&[
             "--resolve",
-            "--family",
+            "--arms",
             "type",
             "--lines",
             &a_string,
@@ -360,8 +360,7 @@ fn diet_scip_decorates_edge_spans_by_their_owning_path() {
     let a_path = write_fixture(&dir, "a.ts", a_ts);
     let b_path = write_fixture(&dir, "b.ts", b_ts);
     let output = ryi(&[
-        "--family",
-        "diet_scip",
+        "fast",
         "--lines",
         &a_path.to_string_lossy(),
         &b_path.to_string_lossy(),

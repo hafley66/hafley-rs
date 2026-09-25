@@ -36,13 +36,9 @@ fn scip_build_honors_scip_timeout_on_the_go_arm() {
         .env("PATH", format!("{}:/bin:/usr/bin", bin_dir.display()))
         .env_remove("SPREFA_SCIP_TIMEOUT_SECS")
         .args([
-            "--family",
-            "scip",
-            "--scip-build",
+            "slow",
             "--scip-timeout",
             "2",
-            "--project-root",
-            &root.to_string_lossy(),
             &root.to_string_lossy(),
         ])
         .output()

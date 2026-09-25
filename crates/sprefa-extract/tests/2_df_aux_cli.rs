@@ -28,7 +28,7 @@ const CASES: &[Case] = &[
 fn df_aux_cli_goldens_cover_all_projectors() {
     for case in CASES {
         let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-            .args(["--family", "df", case.source])
+            .args(["--kinds", "df", case.source])
             .output()
             .expect("extract binary runs");
         assert!(

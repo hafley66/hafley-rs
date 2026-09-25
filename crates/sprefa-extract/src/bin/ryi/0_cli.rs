@@ -132,6 +132,10 @@ pub struct FileArgs {
     #[arg(long, requires = "root")]
     pub scip_build: bool,
 
+    /// Seconds allowed for one indexer run under --scip-build
+    #[arg(long, value_name = "SECS")]
+    pub scip_timeout: Option<u64>,
+
     /// File-to-file edges folded from a SCIP index
     #[arg(long, requires = "root", conflicts_with_all = ["bench", "resolve", "scip_facts", "file_fact"])]
     pub scip_deps: bool,

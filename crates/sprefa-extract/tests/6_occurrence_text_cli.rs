@@ -30,7 +30,7 @@ fn scip_rel_facts(extra: &[&str]) -> String {
     let mut args = vec!["--scip-facts"];
     args.extend_from_slice(extra);
     args.extend_from_slice(&[
-        "--project-root",
+        "--root",
         SCIP_REL_ROOT,
         "--scip-build",
         SCIP_REL_SOURCE,

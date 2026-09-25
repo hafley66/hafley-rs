@@ -49,9 +49,9 @@ fn informed(extra: &[&str]) -> Vec<FlatFact> {
     let source = format!("{dir}/shapes.go");
     let mut args = vec![
         "--resolve",
-        "--family",
+        "--arms",
         "type",
-        "--project-root",
+        "--root",
         &dir,
         "--scip-index",
         &index,
@@ -242,7 +242,7 @@ fn every_conforms_id_is_declared() {
 fn a_plain_resolve_mints_no_implements_row() {
     let dir = fixture_dir();
     let source = format!("{dir}/shapes.go");
-    let rows = extract(&["--resolve", "--family", "type", &source]);
+    let rows = extract(&["--resolve", "--arms", "type", &source]);
     assert!(edges_of_kind(&rows, "implements").is_empty());
     assert!(edges_of_kind(&rows, "overrides").is_empty());
     assert!(facts_of(&rows, "tsi.conforms").is_empty());

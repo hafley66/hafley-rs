@@ -70,7 +70,7 @@ fn record(row: &Value) -> &str {
 /// Criterion 1: a consumer learns the protocol before it reads a fact.
 #[test]
 fn protocol_is_the_first_row() {
-    let rows = rows(&["--witness", "--family", "type", FIXTURE]);
+    let rows = rows(&["--witness", "--kinds", "type", FIXTURE]);
     let first: FlatFact =
         serde_json::from_value(rows[0].clone()).expect("the first row decodes as a flat fact");
     assert!(
@@ -84,7 +84,7 @@ fn protocol_is_the_first_row() {
 /// bytes it read.
 #[test]
 fn run_is_the_second_row() {
-    let rows = rows(&["--witness", "--family", "type", FIXTURE]);
+    let rows = rows(&["--witness", "--kinds", "type", FIXTURE]);
     let second = &rows[1];
     assert_eq!(record(second), "run");
     assert_eq!(second["mode"], "syntax");
@@ -214,7 +214,7 @@ fn syntax_coverage_is_partial_and_undiagnosed() {
 /// records are spelled there exactly as the protocol spells them.
 #[test]
 fn schema_declares_the_envelope_records() {
-    let schema = run(&["--schema"]).join("\n");
+    let schema = run(&["schema"]).join("\n");
     for line in [
         "record=protocol  version=<u32>",
         "record=run       run=<u32> mode=syntax|semantic tool=<slug> version=<string> scope=[<digest>...]",
@@ -233,13 +233,13 @@ fn schema_declares_the_envelope_records() {
 fn cfg_under_witness_is_a_named_stop() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["--witness", "--family", "cfg", FIXTURE])
+        .args(["--witness", "--kinds", "cfg", FIXTURE])
         .output()
         .expect("extract binary runs");
     assert!(!output.status.success(), "--witness --family cfg succeeded");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("--witness does not support --family cfg"),
+        stderr.contains("--witness does not support --kinds cfg"),
         "stop is unnamed: {stderr}"
     );
 }

@@ -33,7 +33,7 @@ fn count(conn: &Connection, table: &str) -> i64 {
 fn bench_writes_one_run_row_and_its_phases() {
     let home = fake_home("written");
     let output = Command::new(BIN)
-        .args(["--bench", "--family", "call", FIXTURE])
+        .args(["--bench", "--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
         .env_remove("DL_TRAIL")
         .env("HOME", &home)
@@ -68,7 +68,7 @@ fn bench_writes_one_run_row_and_its_phases() {
 fn dl_trail_zero_writes_nothing() {
     let home = fake_home("off");
     let output = Command::new(BIN)
-        .args(["--bench", "--family", "call", FIXTURE])
+        .args(["--bench", "--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
         .env("DL_TRAIL", "0")
         .env("HOME", &home)
@@ -87,7 +87,7 @@ fn dl_trail_zero_writes_nothing() {
 fn trail_reads_back_the_run_it_wrote() {
     let home = fake_home("read");
     let written = Command::new(BIN)
-        .args(["--bench", "--family", "call", FIXTURE])
+        .args(["--bench", "--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
         .env_remove("DL_TRAIL")
         .env("HOME", &home)
@@ -95,7 +95,7 @@ fn trail_reads_back_the_run_it_wrote() {
         .expect("run extract");
     assert!(written.status.success(), "extract failed: {written:?}");
     let report = Command::new(BIN)
-        .args(["--trail", "1"])
+        .args(["trail", "1"])
         .env_remove("RUST_LOG")
         .env("HOME", &home)
         .output()
@@ -116,7 +116,7 @@ fn trail_reads_back_the_run_it_wrote() {
 fn trail_on_an_empty_store_says_so() {
     let home = fake_home("empty");
     let output = Command::new(BIN)
-        .arg("--trail")
+        .arg("trail")
         .env_remove("RUST_LOG")
         .env("HOME", &home)
         .output()
@@ -129,7 +129,7 @@ fn trail_on_an_empty_store_says_so() {
 #[test]
 fn trail_conflicts_with_every_extraction_flag() {
     let output = Command::new(BIN)
-        .args(["--trail", "1", FIXTURE])
+        .args(["trail", "1", FIXTURE])
         .env_remove("RUST_LOG")
         .output()
         .expect("run extract");
@@ -141,7 +141,7 @@ fn two_runs_share_one_store_and_number_in_order() {
     let home = fake_home("twice");
     for _ in 0..2 {
         let output = Command::new(BIN)
-            .args(["--bench", "--family", "call", FIXTURE])
+            .args(["--bench", "--kinds", "call", FIXTURE])
             .env_remove("RUST_LOG")
             .env_remove("DL_TRAIL")
             .env("HOME", &home)

@@ -5,7 +5,7 @@ use super::registry::check;
 use super::types::{Arg, CoverageOut, FactOut, Method, WitnessOut};
 use crate::types::FlatFact;
 
-/// Ordinals start at 0 and are run-local; `--ingest` renumbers them.
+/// Ordinals start at 0 and are run-local; `ryi ingest` renumbers them.
 pub struct TsiSink {
     ids: u32,
     facts: Vec<FactOut>,

@@ -53,9 +53,9 @@ fn typescript() -> String {
 fn run(checker: bool) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call,type".to_string(),
-        "--project-root".to_string(),
+        "--root".to_string(),
         DIR.to_string(),
     ];
     if checker {

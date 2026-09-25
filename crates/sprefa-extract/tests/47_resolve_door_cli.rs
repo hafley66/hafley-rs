@@ -98,7 +98,7 @@ fn resolve_cli_reaches_the_markdown_doc_ref_arm() {
     assert!(expected > 0, "the library oracle must have edges to match");
     let rows = stdout_of(&[
         "--resolve",
-        "--family",
+        "--arms",
         "type",
         MD,
         RUST_SAMPLE,
@@ -148,25 +148,24 @@ fn resolve_cli_names_a_class_constructor_callee() {
     );
 }
 
-/// FAIL-FIRST RECEIPT: `Error: Read("tests/fixtures/ts", Custom { kind: Other,
-/// error: "read /abs/path" })`, a Debug dump of the error type with no reading
-/// for a human.
+/// A directory input expands to the roster files under it, and a missing path
+/// is a one-line named stop, never a Debug dump of the error type.
 #[test]
-fn resolve_cli_names_a_directory_plainly() {
-    let output = extract(&["--resolve", "tests/fixtures/ts"]);
-    assert_eq!(output.status.code(), Some(2), "an argument error exits 2");
-    let stderr = String::from_utf8_lossy(&output.stderr);
+fn resolve_cli_expands_a_directory_and_names_a_missing_path() {
+    let output = extract(&["--resolve", "tests/fixtures/ts/scip"]);
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rows = String::from_utf8_lossy(&output.stdout);
     assert!(
-        stderr.contains("tests/fixtures/ts") && stderr.contains("is a directory"),
-        "the message must name the path and the cause: {stderr}"
+        rows.contains(r#""caller_path":"tests/fixtures/ts/scip/"#),
+        "the directory's files resolve under their walked spelling: {rows}"
     );
+
+    let missing = extract(&["--resolve", "tests/fixtures/ts/nope"]);
+    assert_eq!(missing.status.code(), Some(2), "an argument error exits 2");
+    let stderr = String::from_utf8_lossy(&missing.stderr);
     assert!(
-        !stderr.contains("Custom {"),
-        "no Debug dump of the error type: {stderr}"
-    );
-    assert!(
-        stderr.contains("pass files"),
-        "the message must say what to pass instead: {stderr}"
+        stderr.contains("ryi: tests/fixtures/ts/nope does not exist\n") && !stderr.contains("Custom {"),
+        "{stderr}"
     );
 }
 

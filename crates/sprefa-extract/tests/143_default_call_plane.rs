@@ -115,9 +115,9 @@ fn default_plus_cst_partitions_the_full_mask() {
     for fixture in [&py, &ts] {
         let path = fixture.to_str().expect("utf8 path");
         let mut both = stdout_lines(&ryi(&[path]));
-        both.extend(stdout_lines(&ryi(&["--family", "cst", path])));
+        both.extend(stdout_lines(&ryi(&["--kinds", "cst", path])));
         both.sort();
-        let full = stdout_lines(&ryi(&["--family", "cst,type,call,df,data", path]));
+        let full = stdout_lines(&ryi(&["--kinds", "cst,type,call,df,data", path]));
         let mut full = full;
         full.sort();
         assert_eq!(
@@ -148,7 +148,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
         block.next().map(str::trim_end),
         Some(
             format!(
-                "  try: ryi --family cst {}",
+                "  try: ryi --kinds cst {}",
                 unknown.display()
             )
             .as_str(),
@@ -156,7 +156,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
     );
     assert_eq!(
         block.next(),
-        Some("  supported extensions: ryi --schema"),
+        Some("  supported extensions: ryi schema"),
         "the schema command that would answer"
     );
 
@@ -187,7 +187,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
         "the matched-but-empty disclosure names the Source: {stderr}"
     );
     assert!(
-        stderr.contains("--family cst") && stderr.contains("--schema"),
+        stderr.contains("--kinds cst") && stderr.contains("schema"),
         "the disclosure still names the two commands: {stderr}"
     );
 }

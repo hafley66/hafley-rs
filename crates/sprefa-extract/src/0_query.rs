@@ -51,7 +51,7 @@ pub fn run(cli: QueryArgs) -> Result<(), String> {
             continue;
         }
         for found in matches {
-            let mut row = serde_json::Map::new();
+            let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
             row.insert("path".into(), name.as_ref().into());
             for capture in found.captures {
                 row.insert(capture.label, capture.text.into());

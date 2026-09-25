@@ -111,14 +111,14 @@ fn bench_facts(args: &[&str]) -> usize {
 fn assert_bounded(path: &Path, family: &str, rss_per_input_byte: u64) {
     let input = std::fs::metadata(path).expect("scratch metadata").len();
     let path = path.to_string_lossy().to_string();
-    let (rss, lines) = run_measured(&["--family", family, &path]);
+    let (rss, lines) = run_measured(&["--kinds", family, &path]);
     let budget = input * rss_per_input_byte;
     assert!(
         rss <= budget,
         "{path} --family {family}: peak RSS {rss} B over the {budget} B budget \
          ({rss_per_input_byte}x the {input} B input); {lines} rows streamed"
     );
-    let facts = bench_facts(&["--family", family, &path]);
+    let facts = bench_facts(&["--kinds", family, &path]);
     assert_eq!(
         lines, facts,
         "{path} --family {family}: streamed {lines} rows, --bench counted {facts}"

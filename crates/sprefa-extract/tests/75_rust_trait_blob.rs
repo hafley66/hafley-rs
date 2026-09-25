@@ -21,7 +21,7 @@ const FILES: &[&str] = &["{SRC}/a.rs", "{SRC}/b.rs"];
 fn run() -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(FILES.iter().map(|tpl| tpl.replace("{SRC}", SRC)));

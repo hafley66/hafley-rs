@@ -8,7 +8,7 @@ use serde_json::Value;
 fn run(arm: &str, seed: &str) -> Vec<Value> {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["graph", "--json", arm, seed, "tests/fixtures/graph_ts"])
+        .args(["graph", arm, seed, "tests/fixtures/graph_ts"])
         .output()
         .expect("graph binary runs");
     assert!(
@@ -58,7 +58,7 @@ fn flow_paths_follow_derived_interprocedural_edges() {
     ];
     let reference = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["--resolve", "--family", "flow"])
+        .args(["--resolve", "--arms", "flow"])
         .args(files)
         .output()
         .unwrap();
@@ -77,7 +77,7 @@ fn flow_paths_follow_derived_interprocedural_edges() {
     );
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["graph", "--json", "--flow-path", &seed])
+        .args(["graph", "--flow-path", &seed])
         .args(files)
         .output()
         .unwrap();

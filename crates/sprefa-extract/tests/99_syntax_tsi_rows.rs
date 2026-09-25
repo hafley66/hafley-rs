@@ -43,7 +43,7 @@ struct Probe {
 
 impl Probe {
     fn read(fixture: &str) -> Self {
-        let stream = extract(&["--witness", "--family", "type", fixture]);
+        let stream = extract(&["--witness", "--kinds", "type", fixture]);
         let mut facts = Vec::new();
         let mut coverage = BTreeMap::new();
         for line in stream.lines() {
@@ -190,7 +190,7 @@ fn as_span(arg: &Arg) -> Option<(u32, u32)> {
 #[test]
 fn flag_off_emits_no_fact_row() {
     for fixture in [TS_PROBE, RUST_PROBE, GO_PROBE] {
-        let stream = extract(&["--family", "type", fixture]);
+        let stream = extract(&["--kinds", "type", fixture]);
         assert!(!stream.is_empty(), "{fixture} produced no rows");
         for line in stream.lines() {
             let row: serde_json::Value = serde_json::from_str(line).expect("a row is JSON");
@@ -433,10 +433,10 @@ fn every_row_is_in_the_registry_and_ingests() {
                 fact.relation
             );
         }
-        let stream = extract(&["--witness", "--family", "type", fixture]);
+        let stream = extract(&["--witness", "--kinds", "type", fixture]);
         let mut door = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .args(["--ingest", "/dev/stdin"])
+            .args(["ingest", "/dev/stdin"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())

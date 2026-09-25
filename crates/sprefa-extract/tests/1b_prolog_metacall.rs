@@ -61,7 +61,7 @@ fn rows(stdout: &str, record: &str, key: &str, value: &str) -> Vec<(String, Stri
 
 #[test]
 fn closure_slots_mint_sites_and_closure_references_in_clause_order() {
-    let stdout = run(&["--family", "call", FIXTURE]);
+    let stdout = run(&["--kinds", "call", FIXTURE]);
     let sites = rows(&stdout, "site", "callee", "double/2");
     assert_eq!(sites.len(), 4, "all four meta slots mint a double/2 site");
     let starts: Vec<u64> = sites.iter().map(|(_, s)| s.parse().unwrap()).collect();
@@ -81,7 +81,7 @@ fn closure_slots_mint_sites_and_closure_references_in_clause_order() {
 
 #[test]
 fn goal_slots_recursively_emit_goal_references() {
-    let stdout = run(&["--family", "call", FIXTURE]);
+    let stdout = run(&["--kinds", "call", FIXTURE]);
     let member = rows(&stdout, "reference", "functor", "member/2");
     assert_eq!(
         member.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
@@ -123,7 +123,7 @@ fn resolve_mints_go_to_double_edges_across_files() {
 
 #[test]
 fn file_meta_predicate_directive_drives_closure_slots() {
-    let stdout = run(&["--family", "call", DIRECTIVE]);
+    let stdout = run(&["--kinds", "call", DIRECTIVE]);
     let sites = rows(&stdout, "site", "callee", "double2/2");
     assert_eq!(
         sites.len(),
@@ -140,7 +140,7 @@ fn file_meta_predicate_directive_drives_closure_slots() {
 
 #[test]
 fn caret_wrapped_setof_goals_unwrap() {
-    let stdout = run(&["--family", "call", DIRECTIVE]);
+    let stdout = run(&["--kinds", "call", DIRECTIVE]);
     let parent = rows(&stdout, "reference", "functor", "parent/2");
     assert_eq!(
         parent.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
@@ -151,7 +151,7 @@ fn caret_wrapped_setof_goals_unwrap() {
 
 #[test]
 fn setof_bagof_mint_goal_sites_and_term_arg_templates() {
-    let stdout = run(&["--family", "call", SPECS]);
+    let stdout = run(&["--kinds", "call", SPECS]);
     let q_refs = rows(&stdout, "reference", "functor", "q/1");
     assert_eq!(
         q_refs.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
@@ -169,7 +169,7 @@ fn setof_bagof_mint_goal_sites_and_term_arg_templates() {
 
 #[test]
 fn aggregate_all_count_discriminator_is_data_not_goal() {
-    let stdout = run(&["--family", "call", SPECS]);
+    let stdout = run(&["--kinds", "call", SPECS]);
     // `count` (index 0) and `X` (index 1) are data in aggregate_all/4; the only
     // goal reference from t3 is q/1 at index 2.
     let count_refs = rows(&stdout, "site", "callee", "count/0");
@@ -181,7 +181,7 @@ fn aggregate_all_count_discriminator_is_data_not_goal() {
 
 #[test]
 fn catch_with_backtrace_arity3_goals_dispatch() {
-    let stdout = run(&["--family", "call", SPECS]);
+    let stdout = run(&["--kinds", "call", SPECS]);
     let r_refs = rows(&stdout, "reference", "functor", "r/1");
     let positions: Vec<&str> = r_refs.iter().map(|(p, _)| p.as_str()).collect();
     assert_eq!(
@@ -194,7 +194,7 @@ fn catch_with_backtrace_arity3_goals_dispatch() {
 
 #[test]
 fn partition_and_include_closure_slots_add_arguments() {
-    let stdout = run(&["--family", "call", SPECS]);
+    let stdout = run(&["--kinds", "call", SPECS]);
     let p2 = rows(&stdout, "reference", "functor", "p/2");
     assert_eq!(
         p2.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),

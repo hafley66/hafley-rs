@@ -66,7 +66,7 @@ fn corpus() -> Vec<String> {
 
 fn deps_edges() -> String {
     let corpus = corpus();
-    let mut args: Vec<&str> = vec!["--deps", "--project-root", DEPS_ROOT];
+    let mut args: Vec<&str> = vec!["--deps", "--root", DEPS_ROOT];
     args.extend(corpus.iter().map(String::as_str));
     run(&args)
 }
@@ -147,7 +147,7 @@ fn diet_deps_records_every_stop() {
 /// module graph inexpressible from phase-1 facts.
 #[test]
 fn specifier_rows_carry_the_source_module() {
-    let facts = run(&["--family", "call", &format!("{DEPS_ROOT}/app.ts")]);
+    let facts = run(&["--kinds", "call", &format!("{DEPS_ROOT}/app.ts")]);
     for expected in [
         r#""name":"exact","kind":"named","module":"./lib/util.ts","imported":null"#,
         r#""name":"boxed","kind":"named","module":"./widget","imported":null"#,
@@ -165,7 +165,7 @@ fn specifier_rows_carry_the_source_module() {
 /// which export it reached, and a default import cannot say `default` at all.
 #[test]
 fn renamed_specifiers_carry_the_source_name() {
-    let facts = run(&["--family", "call", &format!("{DEPS_ROOT}/app.ts")]);
+    let facts = run(&["--kinds", "call", &format!("{DEPS_ROOT}/app.ts")]);
     for expected in [
         r#""name":"outer","kind":"named","module":"./lib/helper.js","imported":"inner""#,
         r#""name":"defaults","kind":"default","module":"./lib/util.ts","imported":"default""#,
@@ -268,7 +268,7 @@ fn the_tsconfig_reader_degrades_to_empty_never_to_wrong() {
     assert_eq!(policy, Policy::NodeModulesBoundary);
 }
 
-/// `--deps` without `--project-root` is a named error. A module graph's node
+/// `--deps` without `--root` is a named error. A module graph's node
 /// names are project-relative paths, so there is no answer without a root and
 /// guessing one would silently reshape every path in the output.
 #[test]
@@ -280,7 +280,7 @@ fn diet_deps_without_a_project_root_is_a_named_error() {
     assert!(!output.status.success());
     let message = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(
-        message.contains("project-root"),
+        message.contains("--root"),
         "the error must name what is missing, got: {message}"
     );
 }

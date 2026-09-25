@@ -71,9 +71,9 @@ fn probe_args() -> Vec<&'static str> {
     vec![
         "--witness",
         "--resolve",
-        "--family",
+        "--arms",
         "call,type",
-        "--project-root",
+        "--root",
         PROBE_ROOT,
         "--go-checker",
         PROBE_MAIN,

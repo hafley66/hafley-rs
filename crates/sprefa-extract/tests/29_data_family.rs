@@ -73,7 +73,7 @@ fn run(args: &[&str]) -> String {
 #[test]
 fn every_grammar_answers_its_golden_byte_for_byte() {
     for case in CASES {
-        let facts = run(&["--family", "data", case.source]);
+        let facts = run(&["--kinds", "data", case.source]);
         assert_eq!(facts, case.golden, "{} rows", case.source);
         assert_eq!(
             facts
@@ -107,7 +107,7 @@ fn every_asserted_span_addresses_the_value_it_claims() {
             "{} span {start}..{end}",
             case.source
         );
-        let facts = run(&["--family", "data", case.source]);
+        let facts = run(&["--kinds", "data", case.source]);
         assert!(
             facts.contains(&format!(r#""span":{{"start":{start},"end":{end}}}"#)),
             "{} emits no row at {start}..{end}",
@@ -121,7 +121,7 @@ fn every_asserted_span_addresses_the_value_it_claims() {
 /// back and the rows must be unchanged.
 #[test]
 fn taking_the_roster_slot_kept_the_cst_plane() {
-    let facts = run(&["--family", "cst", "tests/fixtures/data/nested.json"]);
+    let facts = run(&["--kinds", "cst", "tests/fixtures/data/nested.json"]);
     assert!(
         facts.lines().count() > 0 && facts.contains(r#""family":"cst""#),
         "the json cst plane went missing when the data family took the roster slot"
@@ -139,7 +139,7 @@ fn taking_the_roster_slot_kept_the_cst_plane() {
 fn the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law() {
     let source = "tests/fixtures/data/pokeapi.openapi.yml";
     let started = Instant::now();
-    let facts = run(&["--family", "data", source]);
+    let facts = run(&["--kinds", "data", source]);
     let elapsed = started.elapsed();
     assert!(
         elapsed.as_secs() < 10,
@@ -169,7 +169,7 @@ fn the_pokeapi_spec_answers_every_operation_id_under_the_ten_second_law() {
 /// the `decode/2` brace pattern reads. Nothing else in the stream does.
 #[test]
 fn the_document_row_carries_a_readable_json_value() {
-    let facts = run(&["--family", "data", "tests/fixtures/data/stream.yaml"]);
+    let facts = run(&["--kinds", "data", "tests/fixtures/data/stream.yaml"]);
     let docs: Vec<serde_json::Value> = facts
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("row is json"))
@@ -193,7 +193,7 @@ fn the_document_row_carries_a_readable_json_value() {
 #[test]
 fn an_unknown_family_name_still_stops_by_name() {
     let output = Command::new(BIN)
-        .args(["--family", "datum", "tests/fixtures/data/nested.json"])
+        .args(["--kinds", "datum", "tests/fixtures/data/nested.json"])
         .output()
         .expect("extract binary runs");
     assert!(!output.status.success());

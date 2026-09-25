@@ -35,7 +35,7 @@ fn run(args: &[&str]) -> String {
 
 #[test]
 fn flow_is_a_resolve_arm() {
-    let output = run(&["--resolve", "--family", "flow", CALLER, CALLEE]);
+    let output = run(&["--resolve", "--arms", "flow", CALLER, CALLEE]);
 
     assert!(
         output.lines().count() >= 1,
@@ -51,7 +51,7 @@ fn flow_is_a_resolve_arm() {
 
 #[test]
 fn call_and_flow_arms_emit_both_families() {
-    let output = run(&["--resolve", "--family", "call,flow", CALLER, CALLEE]);
+    let output = run(&["--resolve", "--arms", "call,flow", CALLER, CALLEE]);
 
     let flow_rows = output
         .lines()
@@ -72,14 +72,14 @@ fn call_and_flow_arms_emit_both_families() {
 #[test]
 fn unknown_arm_names_flow_in_its_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .args(["--resolve", "--family", "bogus", CALLER])
+        .args(["--resolve", "--arms", "bogus", CALLER])
         .output()
         .expect("extract binary runs");
 
     assert!(!output.status.success(), "a bogus arm name has to stop");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("with --resolve use call, type or flow"),
+        stderr.contains("use call, type or flow"),
         "the error text has to name the arms, flow included: {stderr}"
     );
 }
@@ -116,7 +116,7 @@ fn bench_runs_the_cfg_pass_when_the_family_names_it() {
             .unwrap_or_else(|| panic!("no bench event for {args:?} in: {stderr}"))
     };
 
-    let with_cfg = bench(&["--bench", "--family", "cfg", CALLER]);
+    let with_cfg = bench(&["--bench", "--kinds", "cfg", CALLER]);
     assert!(
         with_cfg["fields"]["cfg_us"].as_u64().unwrap() > 0,
         "the cfg pass was never timed: {with_cfg}"
@@ -126,7 +126,7 @@ fn bench_runs_the_cfg_pass_when_the_family_names_it() {
         "the cfg pass produced no nodes: {with_cfg}"
     );
 
-    let without_cfg = bench(&["--bench", "--family", "cst", CALLER]);
+    let without_cfg = bench(&["--bench", "--kinds", "cst", CALLER]);
     assert_eq!(
         without_cfg["fields"]["cfg_us"].as_u64().unwrap(),
         0,

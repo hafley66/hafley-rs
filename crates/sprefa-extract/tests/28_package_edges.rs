@@ -68,7 +68,7 @@ fn manifest_paths() -> Vec<String> {
 
 fn package_edges() -> Vec<String> {
     let corpus = manifest_paths();
-    let mut args: Vec<&str> = vec!["--package-deps", "--project-root", PACKAGES_ROOT];
+    let mut args: Vec<&str> = vec!["--package-deps", "--root", PACKAGES_ROOT];
     args.extend(corpus.iter().map(String::as_str));
     run(&args).lines().map(str::to_string).collect()
 }
@@ -126,7 +126,7 @@ fn a_self_dependency_is_no_edge() {
     assert!(fold_package_edges(&manifests).is_empty());
 }
 
-/// `--package-deps` without `--project-root` is a named error: a package graph's
+/// `--package-deps` without `--root` is a named error: a package graph's
 /// node names are project-relative manifest paths, so guessing a root would
 /// silently reshape every node name in the output.
 #[test]
@@ -138,7 +138,7 @@ fn package_deps_without_a_project_root_is_a_named_error() {
     assert!(!output.status.success());
     let message = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(
-        message.contains("project-root"),
+        message.contains("--root"),
         "the error must name what is missing, got: {message}"
     );
 }

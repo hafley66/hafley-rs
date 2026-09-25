@@ -62,7 +62,7 @@ fn phase_row(table: &str, lang: &str, phase: &str) -> Option<(u64, u64, u64)> {
 /// the trail off, so a fixture run never touches `~/.agent`.
 fn phases_of(path: &str) -> String {
     let output = Command::new(BIN)
-        .args(["--family", "cst,type,call", path])
+        .args(["--kinds", "cst,type,call", path])
         .env_remove("RUST_LOG")
         .env("DL_TRACE_SUMMARY", "1")
         .env("DL_TRAIL", "0")
@@ -77,7 +77,7 @@ fn phases_of(path: &str) -> String {
 #[test]
 fn the_info_default_narrates_an_ordinary_run_on_stderr() {
     let output = Command::new(BIN)
-        .args(["--family", "call", FIXTURE])
+        .args(["--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
         .env_remove("DL_TRACE_SUMMARY")
         .env_remove("HAFLEY_LOG_FORMAT")
@@ -102,7 +102,7 @@ fn the_info_default_narrates_an_ordinary_run_on_stderr() {
 #[test]
 fn json_format_emits_service_version_and_process_identity() {
     let output = Command::new(BIN)
-        .args(["--family", "call", FIXTURE])
+        .args(["--kinds", "call", FIXTURE])
         .env("RUST_LOG", "sprefa_extract=debug,hafley_observe=debug")
         .env("HAFLEY_LOG_FORMAT", "json")
         .env_remove("DL_TRACE_SUMMARY")
@@ -166,7 +166,7 @@ fn summary_layer_renders_a_row_per_lang_and_family() {
 #[test]
 fn summary_flag_prints_the_table_to_stderr() {
     let output = Command::new(BIN)
-        .args(["--family", "call", FIXTURE])
+        .args(["--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
         .env("DL_TRACE_SUMMARY", "1")
         .env("DL_TRAIL", "0")
@@ -291,7 +291,7 @@ fn the_phase_table_names_only_phases_that_ran() {
 #[test]
 fn bench_reports_through_the_summary_table() {
     let output = Command::new(BIN)
-        .args(["--bench", "--family", "call", FIXTURE])
+        .args(["--bench", "--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
         .env_remove("DL_TRACE_SUMMARY")
         .env("DL_TRAIL", "0")
@@ -312,7 +312,7 @@ fn bench_reports_through_the_summary_table() {
 #[test]
 fn default_and_early_exit_runs_both_enter_the_sqlite_trail() {
     let home = tempfile::tempdir().expect("isolated home");
-    for args in [&["--schema"][..], &["cleave"][..]] {
+    for args in [&["schema"][..], &["cleave"][..]] {
         let output = Command::new(BIN)
             .args(args)
             .env("RUST_LOG", "error")
@@ -321,7 +321,7 @@ fn default_and_early_exit_runs_both_enter_the_sqlite_trail() {
             .env("HOME", home.path())
             .output()
             .expect("run ryi");
-        assert_eq!(output.status.success(), args[0] == "--schema");
+        assert_eq!(output.status.success(), args[0] == "schema");
         assert!(!String::from_utf8_lossy(&output.stderr).contains("ryi summary:"));
     }
     let conn = rusqlite::Connection::open(home.path().join(".agent/dl6.db"))
@@ -335,7 +335,7 @@ fn default_and_early_exit_runs_both_enter_the_sqlite_trail() {
         .collect::<Result<_, _>>()
         .expect("read runs");
     assert_eq!(rows.len(), 2);
-    assert!(rows[0].0.ends_with(" --schema"));
+    assert!(rows[0].0.ends_with(" schema"));
     assert!(rows[1].0.ends_with(" cleave"));
     assert!(rows.iter().all(|(_, wall_ms)| *wall_ms >= 0));
 }

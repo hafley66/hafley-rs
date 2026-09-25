@@ -16,7 +16,7 @@ const FILES: &[&str] = &[
 ];
 
 fn rows() -> Vec<Value> {
-    let mut args: Vec<String> = vec!["--resolve".to_string(), "--family".to_string(), "call".to_string()];
+    let mut args: Vec<String> = vec!["--resolve".to_string(), "--arms".to_string(), "call".to_string()];
     args.extend(FILES.iter().map(|name| name.to_string()));
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))

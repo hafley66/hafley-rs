@@ -55,9 +55,9 @@ impl Walk {
         let stream = extract(&[
             "--witness",
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             ROOT,
             "--rust-checker",
             supplied,

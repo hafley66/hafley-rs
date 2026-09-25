@@ -329,7 +329,7 @@ fn source_families_cfg_witness_and_data_match_jsonl_column_for_column() {
         vec!["--file-fact", "tests/fixtures/data/nested.json"],
         vec![
             "--file-fact",
-            "--family",
+            "--kinds",
             "cfg",
             "tests/fixtures/rust/sample.rs",
         ],
@@ -387,7 +387,7 @@ fn multiple_files_keep_their_path_and_content_coordinates() {
     let output = run(&[
         "--sqlite",
         path.to_str().unwrap(),
-        "--family",
+        "--kinds",
         "call",
         files[0],
         files[1],
@@ -436,7 +436,7 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
         ],
         vec![
             "--resolve",
-            "--family",
+            "--arms",
             "call,type,flow",
             "tests/fixtures/ts/scip/alpha.ts",
             "tests/fixtures/ts/scip/gamma.ts",
@@ -446,22 +446,22 @@ fn project_scip_dependency_and_pattern_modes_match_their_existing_jsonl() {
             "--occurrence-text",
             "--scip-index",
             index,
-            "--project-root",
+            "--root",
             root,
             source,
         ],
-        vec!["--family", "scip", "--scip-index", index, root],
+        vec!["slow", "--scip-index", index, root],
         vec![
             "--scip-deps",
             "--scip-index",
             "tests/fixtures/scip_move/fixture.scip",
-            "--project-root",
+            "--root",
             "tests/fixtures/scip_move",
             "tests/fixtures/scip_move/src/app.ts",
         ],
         vec![
             "--deps",
-            "--project-root",
+            "--root",
             "tests/fixtures/ts/scip",
             "tests/fixtures/ts/scip/alpha.ts",
             "tests/fixtures/ts/scip/gamma.ts",
@@ -551,7 +551,7 @@ fn foreign_witness_stream_is_preserved_and_bad_ingest_is_atomic() {
     let plain = run(&["--witness", "tests/fixtures/ts/sample.ts"]);
     assert!(plain.status.success());
     std::fs::write(&stream, plain.stdout).unwrap();
-    let ingested = run(&["--ingest", stream.to_str().unwrap()]);
+    let ingested = run(&["ingest", stream.to_str().unwrap()]);
     assert!(
         ingested.status.success(),
         "{}",
@@ -564,7 +564,7 @@ fn foreign_witness_stream_is_preserved_and_bad_ingest_is_atomic() {
         .collect();
     let path = scratch.path().join("foreign.db");
     let exported = run(&[
-        "--ingest",
+        "ingest",
         stream.to_str().unwrap(),
         "--sqlite",
         path.to_str().unwrap(),
@@ -578,7 +578,7 @@ fn foreign_witness_stream_is_preserved_and_bad_ingest_is_atomic() {
     std::fs::write(&stream, "not JSON\n").unwrap();
     let bad_path = scratch.path().join("bad.db");
     let bad = run(&[
-        "--ingest",
+        "ingest",
         stream.to_str().unwrap(),
         "--sqlite",
         bad_path.to_str().unwrap(),
@@ -615,7 +615,7 @@ fn malformed_rows_failed_extraction_and_existing_paths_never_publish_or_overwrit
     let failed = run(&[
         "--sqlite",
         path.to_str().unwrap(),
-        "--family",
+        "--kinds",
         "nonsense",
         "tests/fixtures/ts/sample.ts",
     ]);

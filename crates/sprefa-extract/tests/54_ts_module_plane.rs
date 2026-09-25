@@ -23,7 +23,7 @@ const DIR: &str = "tests/fixtures/ts5_findings/module_plane";
 fn run(files: &[&str]) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(files.iter().map(|name| format!("{DIR}/{name}.ts")));
@@ -377,7 +377,7 @@ fn resolve_wall(args: &[String]) -> f64 {
     let start = Instant::now();
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
-        .arg("--family")
+        .arg("--arms")
         .arg("call")
         .args(args)
         .output()

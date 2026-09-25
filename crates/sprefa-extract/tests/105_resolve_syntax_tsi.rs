@@ -2,7 +2,7 @@
 //! `--family` stream alone.
 //!
 //! SABOTAGE RECEIPT (base sha 39a5211a1): on it, `--witness --resolve --family
-//! type --project-root tests/fixtures/tsi tests/fixtures/tsi/probe.ts` (no
+//! type --root tests/fixtures/tsi tests/fixtures/tsi/probe.ts` (no
 //! checker flag) emits ZERO `tsi.*` facts. The A4 rows were written into
 //! `bundle.aux.tsi` and read only by `flatten_type` (src/wire.rs:296), so a
 //! resolve stream with the checker tier declined carried no type graph at all.
@@ -54,9 +54,9 @@ fn resolve_args(fixture: &str) -> Vec<&str> {
     vec![
         "--witness",
         "--resolve",
-        "--family",
+        "--arms",
         "type",
-        "--project-root",
+        "--root",
         TSI_DIR,
         fixture,
     ]
@@ -68,7 +68,7 @@ fn resolved(fixture: &str) -> Vec<FlatFact> {
 
 /// The per-file door over the same file, which is where these rows already rode.
 fn per_file(fixture: &str) -> Vec<FlatFact> {
-    extract(&["--witness", "--family", "type", fixture])
+    extract(&["--witness", "--kinds", "type", fixture])
 }
 
 /// The `tsi.*` and language-native rows as a set, ordinals dropped: a fact's
@@ -186,14 +186,14 @@ fn the_resolve_stream_survives_the_reverse_door() {
         let raw = scratch.join(format!("{label}.jsonl"));
         std::fs::write(&raw, lines(&resolve_args(fixture)).join("\n") + "\n")
             .expect("write the stream");
-        let once = lines(&["--ingest", raw.to_str().expect("utf8 path")]);
+        let once = lines(&["ingest", raw.to_str().expect("utf8 path")]);
         assert!(
-            !tsi_set(&extract(&["--ingest", raw.to_str().expect("utf8 path")])).is_empty(),
+            !tsi_set(&extract(&["ingest", raw.to_str().expect("utf8 path")])).is_empty(),
             "{fixture}: the door dropped every tsi row"
         );
         let canonical = scratch.join(format!("{label}_once.jsonl"));
         std::fs::write(&canonical, once.join("\n") + "\n").expect("write the canonical form");
-        let twice = lines(&["--ingest", canonical.to_str().expect("utf8 path")]);
+        let twice = lines(&["ingest", canonical.to_str().expect("utf8 path")]);
         assert_eq!(once, twice, "{fixture}: the reverse door is not idempotent");
     }
 }
@@ -205,9 +205,9 @@ fn two_files_never_share_one_type_id() {
     let rows = extract(&[
         "--witness",
         "--resolve",
-        "--family",
+        "--arms",
         "type",
-        "--project-root",
+        "--root",
         TSI_DIR,
         TS_PROBE,
         RUST_PROBE,

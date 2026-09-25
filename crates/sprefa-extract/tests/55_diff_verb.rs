@@ -73,6 +73,7 @@ impl Repo {
     fn diff(&self, from: &str, to: &str, extra: &[&str]) -> std::process::Output {
         let mut args: Vec<String> = vec![
             "diff".to_string(),
+            "--root".to_string(),
             self.root.to_string_lossy().to_string(),
             "--from".to_string(),
             from.to_string(),

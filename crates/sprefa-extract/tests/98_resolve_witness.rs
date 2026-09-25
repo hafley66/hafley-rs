@@ -53,9 +53,9 @@ fn of_record<'a>(facts: &'a [Value], record: &str) -> Vec<&'a Value> {
 /// there, so the name-match leg is the only one that answers.
 const SYNTAX_ARGS: &[&str] = &[
     "--resolve",
-    "--family",
+    "--arms",
     "call",
-    "--project-root",
+    "--root",
     RESOLVE_DIR,
     "tests/fixtures/resolve/0_caller.ts",
     "tests/fixtures/resolve/1_callee.ts",
@@ -172,10 +172,10 @@ fn the_witnessed_stream_survives_the_reverse_door() {
         lines(&witnessed_syntax_args(), None).join("\n") + "\n",
     )
     .expect("write the stream");
-    let once = lines(&["--ingest", raw.to_str().expect("utf8 path")], None);
+    let once = lines(&["ingest", raw.to_str().expect("utf8 path")], None);
     let canonical = scratch.join("once.jsonl");
     std::fs::write(&canonical, once.join("\n") + "\n").expect("write the canonical form");
-    let twice = lines(&["--ingest", canonical.to_str().expect("utf8 path")], None);
+    let twice = lines(&["ingest", canonical.to_str().expect("utf8 path")], None);
     assert_eq!(once, twice, "the reverse door is idempotent");
 }
 
@@ -211,9 +211,9 @@ fn agree_facts() -> Vec<Value> {
             "--witness",
             "--ts-checker",
             "--resolve",
-            "--family",
+            "--arms",
             "call,type",
-            "--project-root",
+            "--root",
             TSI_DIR,
             "tests/fixtures/tsi/agree.ts",
             "tests/fixtures/tsi/agree_callee.ts",
@@ -301,9 +301,9 @@ fn a_disagreeing_leg_is_a_fact_of_its_own() {
             "--witness",
             "--ts-checker",
             "--resolve",
-            "--family",
+            "--arms",
             "call",
-            "--project-root",
+            "--root",
             TSI_DIR,
             "tests/fixtures/tsi/disagree.ts",
             "tests/fixtures/tsi/disagree_callee.ts",

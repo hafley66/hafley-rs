@@ -148,7 +148,7 @@ fn graph_views_sql() -> String {
 }
 
 impl Database {
-    /// A store with no file behind it: `ryi graph` without `--state` loads
+    /// A store with no file behind it: `ryi graph` without `--sqlite` loads
     /// facts, queries the views, and drops the lot.
     pub fn memory() -> Result<Self> {
         let connection = Connection::open_in_memory()?;
@@ -359,7 +359,7 @@ impl<W: Write> Write for CountingWriter<W> {
     /// through undecorated.
     line_offsets: Option<Arc<Vec<u32>>>,
     /// Where a row's `path` loads from when its table is not registered:
-    /// the root --scip-facts and --family scip read their documents against.
+    /// the root --scip-facts and `ryi slow` read their documents against.
     line_root: Option<PathBuf>,
  }
 impl Output {
@@ -391,7 +391,7 @@ impl Output {
         self.line_tables.insert(path.to_string(), Arc::new(offsets));
     }
     /// Point `path`-named row lookups at a readable root: --scip-facts and
-    /// --family scip name every indexed document, not just supplied paths.
+    /// `ryi slow` name every indexed document, not just supplied paths.
     pub fn set_line_root(&mut self, root: Option<PathBuf>) {
         self.line_root = root;
     }

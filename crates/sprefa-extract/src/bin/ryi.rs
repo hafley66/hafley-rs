@@ -110,6 +110,9 @@ fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
             .into());
         }
     }
+    if slow.inputs.paths.len() > 1 {
+        return Err("ryi slow takes one ROOT directory".into());
+    }
     let root = inputs::root(&slow.inputs);
     let mut output = sqlite::Output::new(slow.sqlite.as_deref())?;
     if slow.lines {
@@ -333,6 +336,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             }
         },
     };
+
+    // `--scip-timeout` reaches the library's `ScipMode::Build` budget through
+    // the variable `IndexBudget::from_env` reads (project.rs).
+    if let Some(secs) = cli.scip_timeout.filter(|secs| *secs > 0) {
+        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
+    }
 
     // Input expansion can exit with clap-style status 2. Do it before opening
     // an export so such an exit cannot strand a staging database.

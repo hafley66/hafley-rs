@@ -15,14 +15,14 @@ fn resolve(scip: bool) -> Vec<Value> {
     let mut argv = vec![
         env!("CARGO_BIN_EXE_ryi").to_string(),
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     if scip {
         argv.push("--scip-build".to_string());
         argv.push("--scip-timeout".to_string());
         argv.push("600".to_string());
-        argv.push("--project-root".to_string());
+        argv.push("--root".to_string());
         argv.push(FIXTURE.to_string());
     }
     argv.push(format!("{FIXTURE}/src/lib.rs"));

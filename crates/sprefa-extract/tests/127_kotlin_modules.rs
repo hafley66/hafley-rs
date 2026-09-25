@@ -20,7 +20,7 @@ const FILES: &[&str] = &[
 fn run() -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(

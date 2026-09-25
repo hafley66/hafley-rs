@@ -49,7 +49,7 @@ impl Run {
 fn ingest(stream: &str) -> Run {
     let mut child = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["--ingest", "/dev/stdin"])
+        .args(["ingest", "/dev/stdin"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -366,7 +366,7 @@ fn ids_are_renumbered_from_zero() {
 fn schema_prints_every_registry_row() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .arg("--schema")
+        .arg("schema")
         .output()
         .expect("extract binary runs");
     let schema = String::from_utf8(output.stdout).expect("stdout is UTF-8");
@@ -388,7 +388,7 @@ fn schema_prints_every_registry_row() {
 fn a_witnessed_extract_stream_ingests() {
     let produced = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["--witness", "--family", "type", TS_FIXTURE])
+        .args(["--witness", "--kinds", "type", TS_FIXTURE])
         .output()
         .expect("extract binary runs");
     assert!(produced.status.success());

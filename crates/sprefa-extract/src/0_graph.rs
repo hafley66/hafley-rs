@@ -5,7 +5,6 @@
 use crate::cli::GraphArgs;
 use std::collections::BTreeSet;
 use std::fs;
-use std::io::IsTerminal;
 use std::path::{Path, PathBuf};
 
 use rusqlite::Connection;
@@ -457,8 +456,6 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
         rows
     };
     emit_rows(&rows)?;
-    if std::io::stderr().is_terminal() {
-        emit_summary_line(&rows, &arm, cli.compare.is_some());
-    }
+    emit_summary_line(&rows, &arm, cli.compare.is_some());
     Ok(())
 }

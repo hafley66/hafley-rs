@@ -9,7 +9,7 @@ const SRC: &str = "tests/fixtures/ts_untyped_receiver";
 fn run(names: &[&str]) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(names.iter().map(|name| format!("{SRC}/{name}")));

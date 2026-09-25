@@ -37,7 +37,7 @@ fn run(args: &[&str]) -> String {
 }
 
 fn refs_for(functor: &str) -> Vec<(String, String)> {
-    let stdout = run(&["--family", "call", FIXTURE]);
+    let stdout = run(&["--kinds", "call", FIXTURE]);
     stdout
         .lines()
         .filter_map(|line| {
@@ -131,7 +131,7 @@ fn operator_goals_are_deliberately_emitted() {
 
 #[test]
 fn runs_are_byte_identical() {
-    let first = run(&["--family", "call", FIXTURE]);
-    let second = run(&["--family", "call", FIXTURE]);
+    let first = run(&["--kinds", "call", FIXTURE]);
+    let second = run(&["--kinds", "call", FIXTURE]);
     assert_eq!(first, second, "two runs must be byte-identical");
 }

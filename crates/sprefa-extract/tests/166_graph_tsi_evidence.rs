@@ -6,11 +6,11 @@ use std::process::Command;
 
 fn graph(path: &str, arm: (&str, &str), extra: &[&str]) -> (tempfile::TempDir, rusqlite::Connection) {
     let state = tempfile::tempdir().expect("temporary state directory");
-    let destination = state.path().join("graph");
+    let destination = state.path().join("graph.db");
     let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
     command
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["graph", "--json", arm.0, arm.1, "--state"])
+        .args(["graph", arm.0, arm.1, "--sqlite"])
         .arg(&destination)
         .args(extra)
         .arg(path);
@@ -20,7 +20,7 @@ fn graph(path: &str, arm: (&str, &str), extra: &[&str]) -> (tempfile::TempDir, r
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let connection = rusqlite::Connection::open(destination.join("graph.db"))
+    let connection = rusqlite::Connection::open(&destination)
         .expect("state store opens");
     (state, connection)
 }
@@ -44,7 +44,7 @@ fn graph_store_retains_module_bindings_and_unresolved_rows() {
     let (_state, connection) = graph(
         "tests/fixtures/ts5_findings/module_plane",
         ("--callers", "deep"),
-        &["--project-root", "tests/fixtures/ts5_findings/module_plane"],
+        &["--root", "tests/fixtures/ts5_findings/module_plane"],
     );
     let imports: i64 = connection
         .query_row("SELECT count(*) FROM resolved_import", [], |row| row.get(0))
@@ -62,7 +62,7 @@ fn scip_type_relationships_reach_the_graph_store() {
     let (_state, connection) = graph(
         "tests/fixtures/scip_relationship/shapes.go",
         ("--uses", "Speaker"),
-        &["--project-root", root, "--scip-index", "tests/fixtures/scip_relationship/index.scip"],
+        &["--root", root, "--scip-index", "tests/fixtures/scip_relationship/index.scip"],
     );
     let pairs: Vec<(String, String)> = connection
         .prepare(
@@ -84,7 +84,7 @@ fn rust_checker_and_syntax_types_coexist_in_one_store() {
     let (_state, connection) = graph(
         "tests/fixtures/tsi/rust_probe/src/lib.rs",
         ("--uses", "User"),
-        &["--project-root", root, "--rust-checker"],
+        &["--root", root, "--rust-checker"],
     );
     let modes: Vec<String> = connection
         .prepare("SELECT DISTINCT mode FROM type_evidence ORDER BY mode")

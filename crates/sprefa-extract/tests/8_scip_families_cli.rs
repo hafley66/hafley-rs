@@ -106,7 +106,7 @@ fn run(args: &[&str]) -> String {
 /// `--family scip ROOT` with a private cache.
 fn scip_family(root: &str, cache: &PathBuf, extra: &[&str]) -> String {
     let cache = cache.to_string_lossy().to_string();
-    let mut args: Vec<&str> = vec!["--family", "scip", "--scip-cache", &cache];
+    let mut args: Vec<&str> = vec!["slow", "--scip-cache", &cache];
     args.extend_from_slice(extra);
     args.push(root);
     run(&args)
@@ -173,8 +173,7 @@ fn only_real_scip_resolves_the_cross_file_call_the_heuristic_cannot() {
     // through the receiver leg; `far.probe()` stays UNBOUND (a name match
     // cannot type `far`, so the site drops reason=inferred) until scip runs.
     let heuristic = run(&[
-        "--family",
-        "diet_scip",
+        "fast",
         "tests/fixtures/ts/scip/delta.ts",
         "tests/fixtures/ts/scip/epsilon.ts",
     ]);
@@ -202,7 +201,7 @@ fn only_real_scip_resolves_the_cross_file_call_the_heuristic_cannot() {
 
     // The module plane's own half, on the neighbouring shape: an IMPORTED name
     // binds with no indexer, which is what stopped being scip's alone.
-    let mut plane: Vec<&str> = vec!["--family", "diet_scip"];
+    let mut plane: Vec<&str> = vec!["fast"];
     plane.extend_from_slice(&TS_TRIO);
     let bound = run(&plane);
     assert!(
@@ -259,7 +258,7 @@ fn the_discrimination_holds_through_rust_analyzer_too() {
     let beta = fixture.join("scip/beta.rs").to_string_lossy().to_string();
     let gamma = fixture.join("scip/gamma.rs").to_string_lossy().to_string();
 
-    let mut diet: Vec<&str> = vec!["--family", "diet_scip"];
+    let mut diet: Vec<&str> = vec!["fast"];
     let trio = [alpha.as_str(), beta.as_str(), gamma.as_str()];
     diet.extend_from_slice(&trio);
     let heuristic = run(&diet);
@@ -328,8 +327,7 @@ fn the_scip_family_stream_is_the_v5_relation_vocabulary() {
 #[test]
 fn the_diet_scip_family_stream_is_the_fast_output() {
     let stream = run(&[
-        "--family",
-        "diet_scip",
+        "fast",
         "tests/fixtures/ts/sample.ts",
         "tests/fixtures/ts/docs.ts",
         "tests/fixtures/ts/lambdas.ts",
@@ -358,9 +356,9 @@ fn is_scm_row(line: &str) -> bool {
 /// narrower `call`) was not disturbed by adding the label.
 #[test]
 fn diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows() {
-    let mut labelled: Vec<&str> = vec!["--family", "diet_scip"];
+    let mut labelled: Vec<&str> = vec!["fast"];
     labelled.extend_from_slice(&TS_TRIO);
-    let mut original: Vec<&str> = vec!["--resolve", "--family", "call,type"];
+    let mut original: Vec<&str> = vec!["--resolve", "--arms", "call,type"];
     original.extend_from_slice(&TS_TRIO);
     let fast = run(&labelled);
     let resolved: String = fast
@@ -383,7 +381,7 @@ fn diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows() {
         !call_only.contains("resolved_type_edge"),
         "--resolve's call-only default must survive: {call_only}"
     );
-    let mask = run(&["--family", "cst", "tests/fixtures/ts/scip/alpha.ts"]);
+    let mask = run(&["--kinds", "cst", "tests/fixtures/ts/scip/alpha.ts"]);
     assert!(
         mask.lines().all(|line| line.contains("\"family\":\"cst\"")),
         "--family cst is still the per-file mask: {mask}"
@@ -484,8 +482,7 @@ fn an_explicit_family_index_is_read_directly_without_spawning_an_indexer() {
         .env("PATH", &bin)
         .env("SPREFA_SCIP_INDEX", &environment_index)
         .args([
-            "--family",
-            "scip",
+            "slow",
             "--scip-index",
             &index.to_string_lossy(),
             "--scip-cache",
@@ -531,8 +528,7 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
     let missing_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", &bin)
         .args([
-            "--family",
-            "scip",
+            "slow",
             "--scip-index",
             &missing.to_string_lossy(),
             &root.to_string_lossy(),
@@ -550,8 +546,7 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
     let invalid_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", &bin)
         .args([
-            "--family",
-            "scip",
+            "slow",
             "--scip-index",
             &invalid.to_string_lossy(),
             &root.to_string_lossy(),
@@ -575,13 +570,6 @@ fn explicit_index_requires_project_root_outside_the_scip_family() {
             "tests/fixtures/scip_relationship/fixture.scip",
             TS_TRIO[0],
         ],
-        vec![
-            "--family",
-            "diet_scip",
-            "--scip-index",
-            "tests/fixtures/scip_relationship/fixture.scip",
-            TS_TRIO[0],
-        ],
     ] {
         let output = raw(&args);
         assert!(
@@ -590,7 +578,7 @@ fn explicit_index_requires_project_root_outside_the_scip_family() {
         );
         let message = String::from_utf8_lossy(&output.stderr);
         assert!(
-            message.contains("--scip-index") && message.contains("--project-root"),
+            message.contains("--scip-index") && message.contains("--root"),
             "the error must name the requirement: {message}"
         );
     }
@@ -602,10 +590,9 @@ fn explicit_index_conflicts_with_indexer_selection_and_build() {
     let index = root.join("supplied.scip");
     std::fs::copy("tests/fixtures/scip_relationship/fixture.scip", &index)
         .expect("copy supplied index");
-    for conflicting in ["--indexer", "--scip-build"] {
+    for conflicting in ["--indexer"] {
         let mut args = vec![
-            "--family",
-            "scip",
+            "slow",
             "--scip-index",
             index.to_str().expect("utf-8 temp path"),
         ];
@@ -638,8 +625,7 @@ fn explicit_scip_index_reports_source_timestamp_evidence() {
     set_mtime_unix_ms(&index, INDEX_MTIME_MS);
 
     let args = [
-        "--family",
-        "scip",
+        "slow",
         "--scip-index",
         index.to_str().expect("utf-8 temp path"),
         root.to_str().expect("utf-8 temp root"),
@@ -696,8 +682,7 @@ fn stale_cached_index_without_an_indexer_emits_only_a_skip() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", empty_path)
         .args([
-            "--family",
-            "scip",
+            "slow",
             "--scip-cache",
             cache.to_str().expect("utf-8 cache"),
             root.to_str().expect("utf-8 root"),
@@ -783,7 +768,7 @@ fn a_root_with_no_installed_indexer_emits_a_named_skip_and_exits_zero() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         // An empty PATH: no rust-analyzer, no scip-typescript, no npx, no go.
         .env("PATH", &empty_path)
-        .args(["--family", "scip", "--scip-cache", &cache_arg, RUST_ROOT])
+        .args(["slow", "--scip-cache", &cache_arg, RUST_ROOT])
         .output()
         .expect("extract binary runs");
 
@@ -881,8 +866,7 @@ fn an_indexer_past_its_budget_is_killed_with_its_whole_process_group() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .env("PATH", format!("{}:/bin:/usr/bin", bin_dir.display()))
         .args([
-            "--family",
-            "scip",
+            "slow",
             "--scip-timeout",
             "2",
             "--scip-cache",
@@ -934,35 +918,12 @@ fn an_indexer_past_its_budget_is_killed_with_its_whole_process_group() {
 // THE FAMILY VOCABULARY ITSELF
 // ════════════════════════════════════════════════════════════════════════════
 
-/// A mode name and a mask name in one `--family` has no honest reading: one
-/// selects planes of a single file's extraction, the other runs an indexer over
-/// a whole project. Picking one silently would produce a stream the caller did
-/// not ask for, so it is an error that names both halves.
-#[test]
-fn mixing_a_mode_with_the_per_file_mask_is_a_named_error() {
-    let output = raw(&["--family", "cst,scip", SCIP_REL_ROOT]);
-    assert!(!output.status.success());
-    let message = String::from_utf8_lossy(&output.stderr).to_string();
-    assert!(
-        message.contains("scip") && message.contains("cst"),
-        "the error must name the mode and the mask names it cannot join: {message}"
-    );
-
-    let both = raw(&["--family", "scip,diet_scip", SCIP_REL_ROOT]);
-    assert!(!both.status.success());
-    let message = String::from_utf8_lossy(&both.stderr).to_string();
-    assert!(
-        message.contains("scip") && message.contains("diet_scip"),
-        "asking for both answers to the same question must name both: {message}"
-    );
-}
-
-/// `--family scip` takes ONE root. Several would each need their own indexer
+/// `ryi slow` takes ONE root. Several would each need their own indexer
 /// run and their own cache, and silently indexing the first would be a lie
 /// about the other arguments.
 #[test]
 fn the_scip_family_takes_exactly_one_root() {
-    let output = raw(&["--family", "scip", SCIP_REL_ROOT, TS_ROOT]);
+    let output = raw(&["slow", SCIP_REL_ROOT, TS_ROOT]);
     assert!(!output.status.success());
     assert!(
         String::from_utf8_lossy(&output.stderr).contains("one ROOT"),
@@ -975,7 +936,7 @@ fn the_scip_family_takes_exactly_one_root() {
 /// runs, so anything unknown here is a typo.
 #[test]
 fn an_unknown_mask_family_is_a_named_error() {
-    let output = raw(&["--family", "nonsense", "tests/fixtures/ts/scip/alpha.ts"]);
+    let output = raw(&["--kinds", "nonsense", "tests/fixtures/ts/scip/alpha.ts"]);
     assert!(!output.status.success());
     let message = String::from_utf8_lossy(&output.stderr).to_string();
     assert!(
@@ -1008,7 +969,7 @@ fn the_scip_family_never_reuses_the_passthrough_occurrence_tag() {
         "--scip-facts",
         "--scip-record",
         "scip_occurrence",
-        "--project-root",
+        "--root",
         SCIP_REL_ROOT,
         "--scip-index",
         &cache.join("index.scip").to_string_lossy(),
@@ -1083,8 +1044,7 @@ fn the_three_added_languages_detect_and_skip_by_name() {
         let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .env("PATH", &empty_path)
             .args([
-                "--family",
-                "scip",
+                "slow",
                 "--scip-cache",
                 &cache.to_string_lossy(),
                 &root.to_string_lossy(),

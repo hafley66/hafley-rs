@@ -24,7 +24,7 @@ const FILES: &[&str] = &["lib.rs", "alpha.rs", "shape.rs", "user.rs"];
 fn run() -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call,type".to_string(),
     ];
     args.extend(FILES.iter().map(|name| format!("{DIR}/{name}")));

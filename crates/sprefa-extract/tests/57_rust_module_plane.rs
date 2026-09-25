@@ -36,7 +36,7 @@ const FIXTURE_FILES: &[&str] = &[
 fn run(names: &[&str]) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(names.iter().map(|name| format!("{CRATE_A}/{name}")));
@@ -346,7 +346,7 @@ fn resolve_wall(args: &[String]) -> f64 {
     let start = Instant::now();
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
-        .arg("--family")
+        .arg("--arms")
         .arg("call")
         .args(args)
         .output()

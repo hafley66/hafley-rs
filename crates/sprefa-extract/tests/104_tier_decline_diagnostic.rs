@@ -65,9 +65,9 @@ fn ts_args() -> Vec<&'static str> {
     vec![
         "--witness",
         "--resolve",
-        "--family",
+        "--arms",
         "type",
-        "--project-root",
+        "--root",
         TSI_DIR,
         "--ts-checker",
         TS_PROBE,
@@ -119,9 +119,9 @@ fn rust_tier_off_is_a_diagnostic() {
         &[
             "--witness",
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             root.to_str().expect("utf8 path"),
             "--rust-checker",
             RUST_PROBE,
@@ -179,7 +179,7 @@ fn the_declined_stream_survives_the_reverse_door() {
         .collect();
     let raw = empty_dir("ingest").join("stream.jsonl");
     std::fs::write(&raw, stream.join("\n") + "\n").expect("write the stream");
-    let landed = facts(&["--ingest", raw.to_str().expect("utf8 path")], None, None);
+    let landed = facts(&["ingest", raw.to_str().expect("utf8 path")], None, None);
     let declined = of_record(&landed, "diagnostic");
     assert_eq!(declined.len(), 1, "the door kept the decline: {declined:?}");
     assert_eq!(word(declined[0], "relation"), "tier.tsc");

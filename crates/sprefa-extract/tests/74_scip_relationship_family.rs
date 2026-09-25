@@ -22,7 +22,7 @@
 //! | scip-typescript | 0.4.0 | 2026-08-29 |
 //!
 //! The test routes the committed index through the CLI's own discovery seam:
-//! `SPREFA_SCIP_INDEX` names the file, `--family scip` reuses it and never
+//! `SPREFA_SCIP_INDEX` names the file, `ryi slow` reuses it and never
 //! shells out to an indexer, so this test is hermetic and offline.
 
 use std::path::PathBuf;
@@ -53,8 +53,7 @@ fn records<'a>(stream: &'a str, kind: &str) -> Vec<&'a str> {
 fn scip_family() -> String {
     let cache = scratch();
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .arg("--family")
-        .arg("scip")
+        .arg("slow")
         .arg("--scip-cache")
         .arg(&cache)
         .arg(ROOT)

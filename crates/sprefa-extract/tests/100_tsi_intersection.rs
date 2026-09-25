@@ -169,7 +169,7 @@ fn canonical(stream: &str, label: &str) -> String {
     std::fs::create_dir_all(&scratch).expect("scratch dir");
     let raw = scratch.join(format!("{label}.jsonl"));
     std::fs::write(&raw, stream).expect("write the stream");
-    extract(&["--ingest", raw.to_str().expect("utf8 path")])
+    extract(&["ingest", raw.to_str().expect("utf8 path")])
 }
 
 /// One adapter's canonical stream, projected to shapes.
@@ -313,9 +313,9 @@ fn sides() -> &'static (Side, Side) {
         let ts = extract(&[
             "--witness",
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             TS_ROOT,
             "--ts-checker",
             TS_PROBE,
@@ -323,9 +323,9 @@ fn sides() -> &'static (Side, Side) {
         let rust = extract(&[
             "--witness",
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             RUST_ROOT,
             "--rust-checker",
             RUST_PROBE,

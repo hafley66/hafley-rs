@@ -127,9 +127,9 @@ impl Walk {
         let mut args = vec![
             "--witness",
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             ROOT,
             "--rust-checker",
         ];
@@ -348,9 +348,9 @@ struct Probe {
 fn probe(witness: bool) -> Probe {
     let mut args = vec![
         "--resolve",
-        "--family",
+        "--arms",
         "type",
-        "--project-root",
+        "--root",
         ".",
         "--rust-checker",
     ];

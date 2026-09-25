@@ -27,7 +27,9 @@ fn jsonl(path: &std::path::Path, query: &str) -> String {
         "ryi query failed: {}",
         String::from_utf8(output.stderr).unwrap()
     );
-    String::from_utf8(output.stdout).unwrap()
+    String::from_utf8(output.stdout)
+        .unwrap()
+        .replace(&format!(",\"path\":\"{}\"", path.display()), "")
 }
 
 fn temp_file() -> std::path::PathBuf {

@@ -27,7 +27,7 @@ const FILES: &[&str] = &["a.go", "b.go", "other/c.go"];
 fn type_edges() -> Vec<(String, String, String, String)> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "type".to_string(),
     ];
     args.extend(

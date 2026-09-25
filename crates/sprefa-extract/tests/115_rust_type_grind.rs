@@ -35,7 +35,7 @@ const FILES: &[&str] = &["lib.rs", "decl.rs", "render.rs", "impls.rs"];
 fn run() -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call,type".to_string(),
     ];
     args.extend(FILES.iter().map(|name| format!("{DIR}/{name}")));
@@ -155,9 +155,9 @@ mod checker {
     fn checker_edges() -> Vec<(String, String, String, String)> {
         let mut args: Vec<String> = vec![
             "--resolve".to_string(),
-            "--family".to_string(),
+            "--arms".to_string(),
             "call,type".to_string(),
-            "--project-root".to_string(),
+            "--root".to_string(),
             DIR.to_string(),
             "--rust-checker".to_string(),
         ];

@@ -57,7 +57,7 @@ fn sites(args: &[&str]) -> Vec<(u32, u32, String)> {
 #[test]
 fn infix_operator_and_invoke_sites_are_minted() {
     assert_eq!(
-        sites(&["--family", "call", FIXTURE]),
+        sites(&["--kinds", "call", FIXTURE]),
         [
             (216, 217, "plus".to_string()), // `this + other` in the infix fun body
             (289, 292, "Box".to_string()),  // Box(value + other.value)
@@ -74,7 +74,7 @@ fn infix_operator_and_invoke_sites_are_minted() {
 
 #[test]
 fn in_and_not_in_both_mint_contains_sites() {
-    let all = sites(&["--family", "call", NOT_IN]);
+    let all = sites(&["--kinds", "call", NOT_IN]);
     let contains: Vec<(u32, u32)> = all
         .iter()
         .filter(|(_, _, callee)| callee == "contains")

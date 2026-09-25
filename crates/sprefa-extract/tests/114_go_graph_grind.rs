@@ -52,7 +52,7 @@ fn resolve() -> Vec<serde_json::Value> {
     paths.sort();
     let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
-        .arg("--family")
+        .arg("--arms")
         .arg("call,type")
         .args(&paths)
         .output()

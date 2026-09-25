@@ -56,7 +56,7 @@ fn document_format_coverage_is_what_the_cli_claims() {
         // without filtering by extension first.
         let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
         if !family.is_empty() {
-            command.args(["--family", family]);
+            command.args(["--kinds", family]);
         }
         let output = command
             .arg(&path)

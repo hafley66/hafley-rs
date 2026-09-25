@@ -31,7 +31,7 @@ const FILES: &[&str] = &["lib.rs", "decl.rs", "render.rs", "impls.rs"];
 fn run() -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call,type".to_string(),
     ];
     args.extend(FILES.iter().map(|name| format!("{DIR}/{name}")));
@@ -136,7 +136,7 @@ fn impl_owner_is_owned_by_the_impls_file() {
 fn declared_in(file: &str) -> Vec<String> {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["--family", "type", &format!("{DIR}/{file}")])
+        .args(["--kinds", "type", &format!("{DIR}/{file}")])
         .output()
         .expect("extract binary runs");
     assert!(output.status.success());

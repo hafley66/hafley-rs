@@ -19,7 +19,7 @@ const SRC: &str = "tests/fixtures/rust_findings/receivers/src";
 fn run(names: &[&str]) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(names.iter().map(|name| format!("{SRC}/{name}")));
@@ -70,7 +70,7 @@ fn edges(names: &[&str]) -> Vec<(String, String, String)> {
 fn type_edges(names: &[&str]) -> Vec<(String, String, String)> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "type".to_string(),
     ];
     args.extend(names.iter().map(|name| format!("{SRC}/{name}")));

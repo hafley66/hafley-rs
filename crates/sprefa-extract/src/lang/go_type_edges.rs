@@ -1,4 +1,4 @@
-//! The go syntax tier's TSI rows under `--witness --family type`: the twin of
+//! The go syntax tier's TSI rows under `--witness --kinds type`: the twin of
 //! `rust_type_edges.rs` `tsi_rows`, beside the v5 entity port in `go.rs`.
 
 use std::collections::{BTreeMap, BTreeSet};

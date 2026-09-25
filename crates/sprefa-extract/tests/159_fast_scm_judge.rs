@@ -166,7 +166,6 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 }
 
 fn scip_definitions() -> BTreeMap<Key, String> {
-    let cache = std::env::temp_dir().join(format!("ryi-159-scip-{}", std::process::id()));
     let rows = ryi(
         &[
             "--scip-facts",
@@ -174,10 +173,8 @@ fn scip_definitions() -> BTreeMap<Key, String> {
             "--occurrence-text",
             "--scip-record",
             "scip_occurrence",
-            "--project-root",
+            "--root",
             ROOT,
-            "--scip-cache",
-            &cache.to_string_lossy(),
             "tests/fixtures/ts/sample.ts",
         ],
         "scip",

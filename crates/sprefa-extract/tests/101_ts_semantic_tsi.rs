@@ -103,9 +103,9 @@ impl Walk {
         let stream = extract(&[
             "--witness",
             "--resolve",
-            "--family",
+            "--arms",
             "type",
-            "--project-root",
+            "--root",
             DIR,
             "--ts-checker",
             fixture,
@@ -648,10 +648,10 @@ fn every_id_is_declared_and_the_stream_survives_the_door() {
         let raw = scratch.join("stream.jsonl");
         std::fs::write(&raw, &walk.stream).expect("write the stream");
         let path = raw.to_str().expect("utf8 path");
-        let once = extract(&["--ingest", path]);
+        let once = extract(&["ingest", path]);
         let canonical = scratch.join("once.jsonl");
         std::fs::write(&canonical, &once).expect("write the canonical form");
-        let twice = extract(&["--ingest", canonical.to_str().expect("utf8 path")]);
+        let twice = extract(&["ingest", canonical.to_str().expect("utf8 path")]);
         assert_eq!(once, twice, "{fixture}: the reverse door is idempotent");
     }
 }
@@ -662,9 +662,9 @@ fn every_id_is_declared_and_the_stream_survives_the_door() {
 fn the_walk_is_off_without_witness() {
     let stream = extract(&[
         "--resolve",
-        "--family",
+        "--arms",
         "type",
-        "--project-root",
+        "--root",
         DIR,
         "--ts-checker",
         PROBE,

@@ -153,21 +153,21 @@ impl std::fmt::Display for ProjectError {
             Self::Read(path, err) => write!(f, "read {}: {err}", path.display()),
             Self::Scip(err) => write!(f, "scip: {err:?}"),
             Self::ScipNeedsRoot => {
-                write!(f, "a scip mode needs --project-root: scip document paths are project-relative and the resolve arms need a reader to join them to content")
+                write!(f, "a scip mode needs --root: scip document paths are project-relative and the resolve arms need a reader to join them to content")
             }
             Self::ScipIndexerUnavailable(detail) => write!(f, "no scip indexer: {detail}"),
             Self::DepsNeedRoot => write!(
                 f,
-                "diet module resolution needs --project-root: a module graph's node names are project-relative paths"
+                "diet module resolution needs --root: a module graph's node names are project-relative paths"
             ),
             Self::DepsPathOutsideRoot(path) => write!(
                 f,
-                "{} is outside --project-root, so it has no project-relative name",
+                "{} is outside --root, so it has no project-relative name",
                 path.display()
             ),
             Self::ManifestsNeedRoot => write!(
                 f,
-                "package edges need --project-root: a package graph's node names are project-relative manifest paths"
+                "package edges need --root: a package graph's node names are project-relative manifest paths"
             ),
             Self::Scm(detail) => write!(f, "scm: {detail}"),
         }
@@ -1001,14 +1001,14 @@ fn load_rust_checker(
     );
     if index.files_answered == 0 {
         let detail = format!(
-            "loaded a workspace containing NONE of the supplied files ({} unjoined) under {}; is --project-root the right Cargo workspace?",
+            "loaded a workspace containing NONE of the supplied files ({} unjoined) under {}; is --root the right Cargo workspace?",
             index.unjoined,
             root.display()
         );
         tracing::warn!(
             root = %root.display(),
             unjoined = index.unjoined,
-            "rust checker tier loaded a workspace containing NONE of the supplied files; every answer falls to syntax — is --project-root the right Cargo workspace?"
+            "rust checker tier loaded a workspace containing NONE of the supplied files; every answer falls to syntax — is --root the right Cargo workspace?"
         );
         return Err(detail);
     }
@@ -1207,7 +1207,7 @@ pub fn resolve_project_jsonl(request: &ResolveRequest) -> Result<Vec<String>, Pr
 // THE TWO NAMED FAMILIES
 // ════════════════════════════════════════════════════════════════════════════
 
-/// One `--family scip` request: a root, where its index cache lives, and the
+/// One `ryi slow` request: a root, where its index cache lives, and the
 /// budget one indexer run may spend.
 pub struct ScipFamilyRequest<'a> {
     /// The project root. Its marker files pick the indexer, and every document
@@ -1763,7 +1763,7 @@ fn load_scip(
     let set = index_set_of(inputs);
     // OUTSIDE the root, keyed by it: `--scip-build` resolves an arbitrary path
     // list and its roots include this crate's own committed fixture trees, which
-    // reading must never write to. `--family scip ROOT` and the engine's scip
+    // reading must never write to. `ryi slow ROOT` and the engine's scip
     // hosts are the callers that mean "index this repository" and they keep
     // `default_cache_dir`.
     let cache = crate::scip_ensure::external_cache_dir(root);

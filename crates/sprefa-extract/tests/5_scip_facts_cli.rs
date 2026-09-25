@@ -152,7 +152,7 @@ fn an_unknown_scip_record_kind_is_a_named_error() {
             "--scip-facts",
             "--scip-record",
             "scip_occurrances",
-            "--project-root",
+            "--root",
             SCIP_REL_ROOT,
             "--scip-build",
             SCIP_REL_SOURCE,
@@ -253,7 +253,7 @@ fn scip_rel_facts(extra: &[&str]) -> String {
     let mut args = vec!["--scip-facts"];
     args.extend_from_slice(extra);
     args.extend_from_slice(&[
-        "--project-root",
+        "--root",
         SCIP_REL_ROOT,
         "--scip-build",
         SCIP_REL_SOURCE,
@@ -277,7 +277,7 @@ fn scip_facts_without_an_index_is_a_named_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .args([
             "--scip-facts",
-            "--project-root",
+            "--root",
             SCIP_REL_ROOT,
             SCIP_REL_SOURCE,
         ])
@@ -329,7 +329,7 @@ fn file_fact_counts_lines_the_way_an_editor_does() {
     for (name, content, bytes, lines) in cases {
         let path = dir.join(name);
         std::fs::write(&path, content).unwrap();
-        let row = run(&["--file-fact", "--family", "cst", path.to_str().unwrap()]);
+        let row = run(&["--file-fact", "--kinds", "cst", path.to_str().unwrap()]);
         let row = row.lines().next().expect("the file row");
         assert!(
             row.contains(&format!("\"bytes\":{bytes},\"lines\":{lines}")),
@@ -356,7 +356,7 @@ fn file_fact_counts_lines_the_way_an_editor_does() {
 fn scip_deps_folds_the_index_into_file_edges() {
     let edges = run(&[
         "--scip-deps",
-        "--project-root",
+        "--root",
         "tests/fixtures/ts",
         "--scip-build",
         "tests/fixtures/ts/scip/alpha.ts",
@@ -382,7 +382,7 @@ fn scip_deps_folds_the_index_into_file_edges() {
 fn scip_deps_never_joins_on_document_scoped_local_symbols() {
     let facts = run(&[
         "--scip-facts",
-        "--project-root",
+        "--root",
         "tests/fixtures/ts",
         "--scip-build",
         "tests/fixtures/ts/scip/alpha.ts",
@@ -398,7 +398,7 @@ fn scip_deps_never_joins_on_document_scoped_local_symbols() {
 
     let edges = run(&[
         "--scip-deps",
-        "--project-root",
+        "--root",
         "tests/fixtures/ts",
         "--scip-build",
         "tests/fixtures/ts/scip/alpha.ts",

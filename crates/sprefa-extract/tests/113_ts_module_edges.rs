@@ -34,7 +34,7 @@ const ALL: &[&str] = &[
 fn run(files: &[&str]) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         "call".to_string(),
     ];
     args.extend(files.iter().map(|name| format!("{DIR}/{name}.ts")));

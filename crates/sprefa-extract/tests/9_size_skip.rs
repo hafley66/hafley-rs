@@ -75,7 +75,7 @@ fn over_ceiling_emits_one_named_row() {
 fn at_ceiling_extracts_normally() {
     let path = scratch("at.rs", &filler(4096));
     let path = path.to_string_lossy().to_string();
-    let (code, rows) = run(&["--max-bytes", "4096", "--family", "cst", &path]);
+    let (code, rows) = run(&["--max-bytes", "4096", "--kinds", "cst", &path]);
     assert_eq!(code, 0);
     assert!(!rows.is_empty(), "4096 B at a 4096 B ceiling must extract");
     assert!(
@@ -104,7 +104,7 @@ fn max_bytes_lowers_the_ceiling() {
 fn max_bytes_zero_disables_the_ceiling() {
     let path = scratch("small.rs", &filler(4096));
     let path = path.to_string_lossy().to_string();
-    let (code, rows) = run(&["--max-bytes", "0", "--family", "cst", &path]);
+    let (code, rows) = run(&["--max-bytes", "0", "--kinds", "cst", &path]);
     assert_eq!(code, 0);
     assert!(!rows.is_empty(), "no ceiling means the normal stream");
     assert!(!rows.iter().any(|row| row.contains("size_skip")));
@@ -133,7 +133,7 @@ fn file_fact_still_rides_a_skip() {
 fn under_ceiling_is_unchanged() {
     let path = scratch("under.rs", &filler(4096));
     let path = path.to_string_lossy().to_string();
-    let (code, rows) = run(&["--family", "cst", &path]);
+    let (code, rows) = run(&["--kinds", "cst", &path]);
     assert_eq!(code, 0);
     assert!(!rows.is_empty());
     assert!(!rows.iter().any(|row| row.contains("size_skip")));
@@ -144,7 +144,7 @@ fn under_ceiling_is_unchanged() {
 #[test]
 fn schema_declares_the_record() {
     let out = Command::new(EXTRACT)
-        .arg("--schema")
+        .arg("schema")
         .output()
         .expect("spawn");
     let schema = String::from_utf8(out.stdout).expect("utf8");

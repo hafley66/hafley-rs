@@ -95,7 +95,7 @@ const PY_FIXTURE: &str = "tests/fixtures/py_findings/decorators/main.py";
 #[test]
 fn ts_barrel_import_edge_says_module_plane() {
     let edges = call_edges(&[
-        "--family",
+        "--kinds",
         "call",
         &format!("{TS_DIR}/barrel_consumer.ts"),
         &format!("{TS_DIR}/index.ts"),
@@ -121,7 +121,7 @@ fn go_dot_import_edge_says_module_plane() {
     .iter()
     .map(|name| format!("{GO_DIR}/{name}"))
     .collect();
-    let mut args = vec!["--family", "call"];
+    let mut args = vec!["--kinds", "call"];
     args.extend(files.iter().map(String::as_str));
     let edges = call_edges(&args);
     assert_eq!(origins(&edges, Some("UseDot"), "Widget"), ["module_plane"]);
@@ -131,7 +131,7 @@ fn go_dot_import_edge_says_module_plane() {
 /// corpus-wide name match is allowed to guess.
 #[test]
 fn rust_same_file_edge_says_same_file() {
-    let edges = call_edges(&["--family", "call", RUST_FIXTURE, RUST_FIXTURE]);
+    let edges = call_edges(&["--kinds", "call", RUST_FIXTURE, RUST_FIXTURE]);
     assert_eq!(origins(&edges, Some("run"), "helper"), ["same_file"]);
 }
 
@@ -139,7 +139,7 @@ fn rust_same_file_edge_says_same_file() {
 /// name `func` matches a corpus def of its own.
 #[test]
 fn python_decorator_rebind_edge_says_decorator() {
-    let edges = call_edges(&["--family", "call", PY_FIXTURE, PY_FIXTURE]);
+    let edges = call_edges(&["--kinds", "call", PY_FIXTURE, PY_FIXTURE]);
     assert_eq!(origins(&edges, None, "wrapper"), ["decorator"]);
 }
 
@@ -147,7 +147,7 @@ fn python_decorator_rebind_edge_says_decorator() {
 /// origin is one of the closed variants.
 #[test]
 fn every_edge_carries_an_origin_from_the_closed_enum() {
-    let edges = call_edges(&["--family", "call", PY_FIXTURE, PY_FIXTURE, RUST_FIXTURE]);
+    let edges = call_edges(&["--kinds", "call", PY_FIXTURE, PY_FIXTURE, RUST_FIXTURE]);
     assert!(!edges.is_empty(), "fixtures emitted no edges");
     for row in &edges {
         let origin = row["resolution_origin"].as_str().unwrap_or("<absent>");

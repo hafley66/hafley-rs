@@ -44,7 +44,7 @@ impl Probe {
     fn read() -> Self {
         let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
             .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .args(["--witness", "--family", "type", FIXTURE])
+            .args(["--witness", "--kinds", "type", FIXTURE])
             .output()
             .expect("extract binary runs");
         assert!(

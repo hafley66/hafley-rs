@@ -82,7 +82,7 @@ fn stream_and_table_agree_on_phase_two_unresolved_rows() {
     let scratch = tempfile::tempdir().unwrap();
     let db = scratch.path().join("agree.db");
     sqlite_export(&db, &["fast", PHASE1, DEFS, USE]);
-    let stream = ok_stdout(&["--resolve", "--family", "call", PHASE1, DEFS, USE]);
+    let stream = ok_stdout(&["--resolve", "--arms", "call", PHASE1, DEFS, USE]);
     let stream_count = stream
         .lines()
         .filter(|line| line.contains(r#""record":"unresolved""#))

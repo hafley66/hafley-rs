@@ -53,7 +53,7 @@ fn query_emits_flat_jsonl_for_plain_and_alternating_patterns() {
     assert!(plain.status.success());
     assert_eq!(
         String::from_utf8(plain.stdout).unwrap(),
-        "{\"end_line\":17,\"item\":\"pub fn trim(value: String) -> String {\\n    value\\n}\",\"line\":15,\"name\":\"trim\"}\n{\"end_line\":23,\"item\":\"pub fn make_engine(name: String) -> Engine {\\n    let trimmed = trim(name);\\n    let engine = Engine { name: trimmed };\\n    engine\\n}\",\"line\":19,\"name\":\"make_engine\"}\n{\"end_line\":29,\"item\":\"pub fn mode(&self) -> Mode {\\n        let picked = Mode::Fast;\\n        picked\\n    }\",\"line\":26,\"name\":\"mode\"}\n{\"end_line\":35,\"item\":\"pub fn apply(value: String) -> String {\\n    let func = |text: String| text;\\n    func(value)\\n}\",\"line\":32,\"name\":\"apply\"}\n"
+        "{\"end_line\":17,\"item\":\"pub fn trim(value: String) -> String {\\n    value\\n}\",\"line\":15,\"name\":\"trim\",\"path\":\"tests/fixtures/rust/sample.rs\"}\n{\"end_line\":23,\"item\":\"pub fn make_engine(name: String) -> Engine {\\n    let trimmed = trim(name);\\n    let engine = Engine { name: trimmed };\\n    engine\\n}\",\"line\":19,\"name\":\"make_engine\",\"path\":\"tests/fixtures/rust/sample.rs\"}\n{\"end_line\":29,\"item\":\"pub fn mode(&self) -> Mode {\\n        let picked = Mode::Fast;\\n        picked\\n    }\",\"line\":26,\"name\":\"mode\",\"path\":\"tests/fixtures/rust/sample.rs\"}\n{\"end_line\":35,\"item\":\"pub fn apply(value: String) -> String {\\n    let func = |text: String| text;\\n    func(value)\\n}\",\"line\":32,\"name\":\"apply\",\"path\":\"tests/fixtures/rust/sample.rs\"}\n"
     );
 
     let alternate = run(&[
@@ -88,7 +88,7 @@ fn query_predicates_filter_matches() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "{\"end_line\":12,\"item\":\"function shift(p: Point, d: Dir): Vec2 {\\n  function clamp(n: number): number {\\n    return n;\\n  }\\n  return new Vec2(clamp(p.x), clamp(p.y));\\n}\",\"line\":7,\"name\":\"shift\"}\n"
+        "{\"end_line\":12,\"item\":\"function shift(p: Point, d: Dir): Vec2 {\\n  function clamp(n: number): number {\\n    return n;\\n  }\\n  return new Vec2(clamp(p.x), clamp(p.y));\\n}\",\"line\":7,\"name\":\"shift\",\"path\":\"tests/fixtures/ts/sample.ts\"}\n"
     );
 }
 
@@ -140,7 +140,13 @@ fn query_with_digest_reads_the_staged_blob() {
 
     assert!(via_path.status.success());
     assert!(via_digest.status.success());
-    assert_eq!(via_digest.stdout, via_path.stdout);
+    let without_path = |stdout: &[u8], path: &str| {
+        String::from_utf8_lossy(stdout).replace(&format!(",\"path\":\"{path}\""), "")
+    };
+    assert_eq!(
+        without_path(&via_digest.stdout, blob_path.to_str().unwrap()),
+        without_path(&via_path.stdout, RUST)
+    );
 }
 
 #[test]
@@ -191,7 +197,7 @@ fn query_markdown_block_grammar_emits_headings_jsonl() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "{\"end_line\":2,\"heading\":\"# Title\\n\",\"line\":1}\n"
+        format!("{{\"end_line\":2,\"heading\":\"# Title\\n\",\"line\":1,\"path\":\"{path}\"}}\n")
     );
 }
 
@@ -210,7 +216,7 @@ fn query_markdown_inline_grammar_drops_in_without_structural_change() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "{\"em\":\"*em*\",\"end_line\":1,\"line\":1}\n{\"end_line\":1,\"line\":1,\"lnk\":\"[link](url)\"}\n"
+        format!("{{\"em\":\"*em*\",\"end_line\":1,\"line\":1,\"path\":\"{path}\"}}\n{{\"end_line\":1,\"line\":1,\"lnk\":\"[link](url)\",\"path\":\"{path}\"}}\n")
     );
 }
 
@@ -229,6 +235,6 @@ fn query_html_grammar_emits_tag_names_jsonl() {
     assert!(output.status.success());
     assert_eq!(
         String::from_utf8(output.stdout).unwrap(),
-        "{\"end_line\":1,\"line\":1,\"tag\":\"div\"}\n{\"end_line\":1,\"line\":1,\"tag\":\"p\"}\n"
+        format!("{{\"end_line\":1,\"line\":1,\"path\":\"{path}\",\"tag\":\"div\"}}\n{{\"end_line\":1,\"line\":1,\"path\":\"{path}\",\"tag\":\"p\"}}\n")
     );
 }

@@ -1,5 +1,5 @@
-//! The relation table, DATA rather than code: `--schema` prints these rows and
-//! `--ingest` validates against them. A relation absent here is a named stop.
+//! The relation table, DATA rather than code: `ryi schema` prints these rows and
+//! `ryi ingest` validates against them. A relation absent here is a named stop.
 
 use super::types::Arg;
 

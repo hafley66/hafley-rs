@@ -183,22 +183,6 @@ fn kotlin_fast_rows_match_the_file_query_for_identical_blobs_at_distinct_paths()
     std::fs::remove_dir_all(root).unwrap();
 }
 
-#[test]
-fn a_mode_refuses_a_per_file_mask_beside_it() {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
-    command
-        .args(["--family", "diet_scip,cst", "tests/fixtures/kotlin_receivers/lib.kt"])
-        .env("HAFLEY_TRACE", trace_path(1))
-        .env("RUST_LOG", "sprefa_extract=debug");
-    let output = command.output().expect("ryi runs");
-    assert!(!output.status.success(), "a mode and a mask cannot combine");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("is a project mode"),
-        "the refusal names the reason: {stderr}"
-    );
-}
-
 /// A language with no bundled `.scm` is not a stop: fast still answers for it,
 /// it just contributes none of the scm rows.
 #[test]

@@ -5,14 +5,14 @@
 //! lines of prose. `wire` re-exports `SCHEMA` so no import path moved.
 //!
 //! It lives in the LIBRARY, not the binary, because it describes the library's
-//! own wire: the bin prints it under `--schema`, and any other consumer of
+//! own wire: the bin prints it under `ryi schema`, and any other consumer of
 //! `flatten` reads the same contract without shelling out.
 
 /// The JSONL contract, as one block. Keep it in sync with `FlatFact` (the source
 /// of truth); this mirrors it for human and AI readers without a doc-build step.
 ///
 /// It lives in the LIBRARY, not the binary, because it describes the library's
-/// own wire: the bin prints it under `--schema`, and any other consumer of
+/// own wire: the bin prints it under `ryi schema`, and any other consumer of
 /// `flatten` can read the same text without shelling out.
 pub const SCHEMA: &str = "\
 sprefa-extract JSONL contract: one fact per line, each a JSON object tagged by \
@@ -218,9 +218,9 @@ KIND VOCABULARIES (the `kind` field)
                     mints no row. Autolinks carry the bracketed text as both
                     name and target.
 
-CONTROL FLOW (--family cfg)
+CONTROL FLOW (--kinds cfg)
   Intra-procedural only, and DERIVED from the cst family rather than projected
-  by a language front-end: `--family cfg` turns the cst mask on and emits cfg
+  by a language front-end: `--kinds cfg` turns the cst mask on and emits cfg
   node and edge records beside it. Every callable gets an entry and an exit
   node, both carrying the callable's own span, so the `kind` field is what
   separates them. A `next` edge whose destination starts before its source is a
@@ -244,7 +244,7 @@ SCIP FACTS MODE (--scip-facts)
   is_implementation. Those filters and joins belong above this binary.
 
   The one join a RESOLVE does read is `is_implementation`: under
-  `--resolve --family type` with `--project-root` and an index, every pair whose
+  `--resolve --arms type` with `--root` and an index, every pair whose
   implementing symbol is DEFINED in a supplied file becomes a resolved_type_edge
   of kind implements or overrides, and every non-callable pair also becomes a
   `tsi.conforms(Implementor, Interface, scip)` fact under `--witness`. Nothing
@@ -348,7 +348,7 @@ TSI ENVELOPE (--witness)
   for anything but a written `Name<Args>`, and any variance at all: a parse
   reads none, so `tsi.parameter` carries the atom `unspecified`.
   Ids are file-local, so a stream over several files renumbers through
-  --ingest before its ids mean one thing.
+  `ryi ingest` before its ids mean one thing.
   NOT numbered yet: `unresolved` and `macro_site`.
 
   --witness ALSO covers --resolve, where the stream carries TWO tiers rather
@@ -365,7 +365,7 @@ TSI ENVELOPE (--witness)
   instead of enumerating a relation.
   --witness conflicts with the single-purpose modes (--deps, --package-deps,
   --scip-facts, --scip-deps, --bench, --file-fact) and with
-  --family cfg: their rows come from other flattens, and the protocol row must
+  --kinds cfg: their rows come from other flattens, and the protocol row must
   be the first row of a witnessed stream with every later row numbered.
 
 SIZE CEILING (--max-bytes)
@@ -384,9 +384,9 @@ SIZE CEILING (--max-bytes)
   machine-generated parser table that costs 12.55 s and 3.0 GB, all of it parse
   time), no ts/js corpus file, and no fixture in this crate.
 
-THE TWO NAMED FAMILIES (--family scip | --family diet_scip)
+THE TWO TIERS (ryi slow | ryi fast)
   DIET MEANS PARSE TECHNIQUE AND HEURISTICS, NEVER ACTUAL SCIP DATA.
-  --family scip ROOT ensures the root's SCIP index (an existing index wins; else
+  `ryi slow ROOT` ensures the root's SCIP index (an existing index wins; else
   the indexer its marker files name runs once under a wall budget, its whole
   process group killed on the deadline) and streams v5's scip_* relation shapes:
   scip_def, scip_name, scip_ref, scip_external_ref, scip_edge, scip_fn_edge, scip_callee_type,
@@ -403,7 +403,7 @@ THE TWO NAMED FAMILIES (--family scip | --family diet_scip)
   --scip-facts --scip-record scip_occurrence, which carries the spans and every
   role bit; scip_binding's source-slice need is answered by that row's optional
   `text` field under --occurrence-text (issue extract-scip-vocab-occurrence-binding).
-  --family diet_scip PATH... runs this crate's own front-ends plus name-match
+  `ryi fast PATH...` runs this crate's own front-ends plus name-match
   resolution over the supplied files, emitting resolved_edge and
   resolved_type_edge. No indexer, no type checker, no index. It is wrong
   wherever a name is ambiguous corpus-wide, which is what the other name buys.
@@ -413,14 +413,14 @@ THE TWO NAMED FAMILIES (--family scip | --family diet_scip)
 
 PROJECT MODE (--resolve)
   `--resolve PATH...` runs phase 2 over the supplied files as one project.
-  `--family call` (the default) emits `resolved_edge`; `--family type` emits
-  `resolved_type_edge`; `--family call,type` emits both. Adding
-  `--project-root DIR` with `--scip-index FILE` or `--scip-build` puts a SCIP
+  `--arms call` (the default) emits `resolved_edge`; `--arms type` emits
+  `resolved_type_edge`; `--arms call,type` emits both. Adding
+  `--root DIR` with `--scip-index FILE` or `--scip-build` puts a SCIP
   index in the resolve context, which lets the call arm emit `scip_override`
   rows where the indexer disagrees with the name match.
 
-REVERSE DOOR (--ingest)
-  `--ingest FILE...` reads foreign JSONL, validates every `record=fact` row
+REVERSE DOOR (ryi ingest)
+  `ryi ingest FILE...` reads foreign JSONL, validates every `record=fact` row
   against the relation registry below, checks that every `{\"id\"}` it names is
   declared by a tsi.type, tsi.edge or tsi.called row, renumbers ids and fact
   ordinals into canonical order, adds one method=foreign witness per fact, and
@@ -428,7 +428,7 @@ REVERSE DOOR (--ingest)
   ingest(ingest(x)) == ingest(x).";
 
 /// `SCHEMA` plus the relation registry. The rows are PRINTED from `REGISTRY`,
-/// never re-typed, so the contract text cannot drift from what `--ingest` runs.
+/// never re-typed, so the contract text cannot drift from what `ryi ingest` runs.
 pub fn schema_text() -> String {
     let mut text = String::from(SCHEMA);
     text.push_str("\n\nTSI RELATION REGISTRY\n");

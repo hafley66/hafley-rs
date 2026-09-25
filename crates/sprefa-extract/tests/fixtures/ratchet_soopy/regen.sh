@@ -9,7 +9,7 @@ work=$(mktemp -d)
 rm -rf "$here/src"
 cp -R "$soopy/src" "$here/src"
 rust-analyzer scip "$soopy" --output "$work/index.scip"
-ryi --scip-facts --scip-index "$work/index.scip" --project-root "$PWD/$soopy" \
+ryi --scip-facts --scip-index "$work/index.scip" --root "$PWD/$soopy" \
   --scip-record scip_occurrence --sqlite "$work/occ.db" "$soopy/src/lib.rs"
 
 sqlite3 -separator $'\t' "$work/occ.db" "

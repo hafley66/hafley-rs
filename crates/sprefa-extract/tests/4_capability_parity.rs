@@ -115,7 +115,7 @@ fn every_roster_source_is_reachable_through_the_binary() {
             "{name}'s fixture {fixture} produces no facts, so it proves nothing"
         );
 
-        let mut from_binary = run(&["--family", "cst,type,call,df,data", fixture]);
+        let mut from_binary = run(&["--kinds", "cst,type,call,df,data", fixture]);
         from_binary.sort();
         assert_eq!(
             from_binary, from_library,
@@ -238,7 +238,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
             absent_without: None,
         },
         Phase1FamilyMask => CliReach::Emits {
-            args: strings(&["--family", "df", "tests/fixtures/ts/sample.ts"]),
+            args: strings(&["--kinds", "df", "tests/fixtures/ts/sample.ts"]),
             field: None,
             record: "param",
             // Without the mask the default is every family, so `param` rows
@@ -259,7 +259,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         ResolveType => CliReach::Emits {
             args: strings(&[
                 "--resolve",
-                "--family",
+                "--arms",
                 "type",
                 "tests/fixtures/ts/sample.ts",
                 "tests/fixtures/ts/consts.ts",
@@ -277,7 +277,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         ScipIndexLoad => {
             let mut args = strings(&[
                 "--resolve",
-                "--project-root",
+                "--root",
                 &ts_scip_root().to_string_lossy(),
                 "--scip-index",
                 &scip_index.to_string_lossy(),
@@ -301,7 +301,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         ScipIndexBuild => {
             let mut args = strings(&[
                 "--resolve",
-                "--project-root",
+                "--root",
                 &ts_scip_root().to_string_lossy(),
                 "--scip-build",
             ]);
@@ -318,7 +318,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
             }
         }
         WireSchema => CliReach::Prints {
-            args: strings(&["--schema"]),
+            args: strings(&["schema"]),
             contains: "record=resolved_type_edge",
         },
         // Built over its own root rather than the shared ts index: the
@@ -328,7 +328,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         ScipFacts => CliReach::Emits {
             args: strings(&[
                 "--scip-facts",
-                "--project-root",
+                "--root",
                 "tests/fixtures/scip_rel",
                 "--scip-build",
                 "tests/fixtures/scip_rel/animal.ts",
@@ -346,7 +346,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         ScipFileEdges => CliReach::Emits {
             args: strings(&[
                 "--scip-deps",
-                "--project-root",
+                "--root",
                 "tests/fixtures/ts",
                 "--scip-build",
                 "tests/fixtures/ts/scip/alpha.ts",
@@ -358,7 +358,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         DietFileEdges => CliReach::Emits {
             args: strings(&[
                 "--deps",
-                "--project-root",
+                "--root",
                 "tests/fixtures/deps",
                 "tests/fixtures/deps/app.ts",
                 "tests/fixtures/deps/lib/util.ts",
@@ -370,7 +370,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         DietFileUnresolved => CliReach::Emits {
             args: strings(&[
                 "--deps",
-                "--project-root",
+                "--root",
                 "tests/fixtures/deps",
                 "tests/fixtures/deps/app.ts",
             ]),
@@ -381,7 +381,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         PackageEdges => CliReach::Emits {
             args: strings(&[
                 "--package-deps",
-                "--project-root",
+                "--root",
                 "tests/fixtures/packages",
                 "tests/fixtures/packages/crates/alpha/Cargo.toml",
                 "tests/fixtures/packages/crates/beta/Cargo.toml",
@@ -390,7 +390,7 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
             record: "package_edge",
             absent_without: Some(strings(&[
                 "--deps",
-                "--project-root",
+                "--root",
                 "tests/fixtures/deps",
                 "tests/fixtures/deps/app.ts",
             ])),

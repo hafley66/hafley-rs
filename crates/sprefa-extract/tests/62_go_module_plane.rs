@@ -28,7 +28,7 @@ const FILES: &[&str] = &[
 fn run(families: &str) -> Vec<Value> {
     let mut args: Vec<String> = vec![
         "--resolve".to_string(),
-        "--family".to_string(),
+        "--arms".to_string(),
         families.to_string(),
     ];
     args.extend(
@@ -514,7 +514,7 @@ fn resolve_wall(paths: &[String]) -> f64 {
     let start = Instant::now();
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
-        .arg("--family")
+        .arg("--arms")
         .arg("call")
         .args(paths)
         .output()

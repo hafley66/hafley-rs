@@ -74,7 +74,7 @@ struct Edge {
 fn resolve_facts(paths: &[&str]) -> Vec<Value> {
     let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("--resolve")
-        .args(["--family", "call"])
+        .args(["--arms", "call"])
         .args(paths)
         .output()
         .expect("extract binary runs");

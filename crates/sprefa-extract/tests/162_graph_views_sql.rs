@@ -1,4 +1,4 @@
-//! `ryi graph --state DIR` leaves a store whose three views answer by name:
+//! `ryi graph --sqlite PATH` leaves a store whose three views answer by name:
 //! the arm's own rows are one `SELECT` a caller can repeat by hand.
 #![cfg(feature = "cli")]
 
@@ -25,10 +25,10 @@ fn count(connection: &rusqlite::Connection, sql: &str) -> i64 {
 #[test]
 fn state_store_carries_the_three_graph_views() {
     let scratch = scratch("state");
-    let state = scratch.join("store");
+    let store = scratch.join("graph.db");
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .args(["graph", "--json", "--callers", "deep", "--state"])
-        .arg(&state)
+        .args(["graph", "--callers", "deep", "--sqlite"])
+        .arg(&store)
         .arg("tests/fixtures/ts5_findings/module_plane")
         .env("HAFLEY_TRACE", scratch.join("graph-views.json"))
         .env("RUST_LOG", "off")
@@ -41,7 +41,7 @@ fn state_store_carries_the_three_graph_views() {
     );
     assert_eq!(String::from_utf8(output.stdout).unwrap().lines().count(), 1);
 
-    let connection = rusqlite::Connection::open(state.join("graph.db")).unwrap();
+    let connection = rusqlite::Connection::open(&store).unwrap();
     let views: Vec<String> = connection
         .prepare("SELECT name FROM sqlite_master WHERE type = 'view' ORDER BY name")
         .unwrap()
@@ -83,7 +83,7 @@ fn state_store_carries_the_three_graph_views() {
 fn the_memory_store_leaves_no_file_behind() {
     let scratch = scratch("memory");
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .args(["graph", "--json", "--callers", "deep"])
+        .args(["graph", "--callers", "deep"])
         .arg("tests/fixtures/ts5_findings/module_plane")
         .env("HAFLEY_TRACE", scratch.join("graph-memory.json"))
         .env("RUST_LOG", "off")

@@ -24,7 +24,7 @@ fn trace_path(tag: &str) -> PathBuf {
 
 fn rows(tag: &str, arm: &str, name: &str) -> Vec<Value> {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
-        .args(["graph", "--json", arm, name, CORPUS])
+        .args(["graph", arm, name, CORPUS])
         .env("HAFLEY_TRACE", trace_path(tag))
         .env("RUST_LOG", "off")
         .output()
