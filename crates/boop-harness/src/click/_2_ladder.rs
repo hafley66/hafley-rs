@@ -7,7 +7,7 @@ use boop_store::SessionTouched;
 use serde::Serialize;
 
 use super::_0_rungs::*;
-use super::_1_roots::{Root, RootVia};
+use super::_1_roots::{doc_roots, Root, RootVia};
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedRef {
@@ -131,6 +131,7 @@ fn join(dir: &Path, tail: &str) -> String {
 /// The rung label a join onto `via` answers with.
 fn source_of(via: &RootVia) -> &'static str {
     match via {
+        RootVia::Document => "doc",
         RootVia::PaneCwd => "cwd",
         RootVia::SessionCwd => "session",
         RootVia::GitToplevel => "repo",
@@ -145,7 +146,7 @@ fn local_join(rel: &str, roots: &[Root], cwd: &str, repo_root: Option<&str>, hom
     let tail = rel.strip_prefix("./").unwrap_or(rel);
     let mut tried: Vec<(String, &'static str)> = roots
         .iter()
-        .filter(|root| matches!(root.via, RootVia::PaneCwd | RootVia::SessionCwd | RootVia::GitToplevel))
+        .filter(|root| matches!(root.via, RootVia::Document | RootVia::PaneCwd | RootVia::SessionCwd | RootVia::GitToplevel))
         .map(|root| (join(&root.dir, tail), source_of(&root.via)))
         .collect();
     for candidate in crawl_candidates(rel, cwd, repo_root, home, MAX_RUNGS) {
@@ -309,6 +310,31 @@ pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence
         via: "fuzzy",
         worktrees: Vec::new(),
     }
+}
+
+/// A token written in the markdown document at `doc`. The document's own
+/// roots answer first: a join onto its directory, then its checkout, then the
+/// token under that repository's worktrees. Anything else runs the ladder over
+/// the document's roots followed by `roots`, so the index search walks the
+/// document's checkout.
+pub fn resolve_in_doc(token: &str, doc: &Path, roots: &[Root], home: &str, evidence: &AgentEvidence) -> ResolveResult {
+    let own = doc_roots(doc, &[]);
+    let clean = token.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`');
+    let (rel, line) = split_line_ref(clean);
+    let relative = !rel.is_empty() && !rel.starts_with('/') && !rel.starts_with("~/");
+    if relative && looks_like_path(&rel) {
+        let tail = rel.strip_prefix("./").unwrap_or(&rel);
+        for root in own.iter().filter(|root| matches!(root.via, RootVia::Document | RootVia::GitToplevel)) {
+            let candidate = join(&root.dir, tail);
+            if std::fs::symlink_metadata(&candidate).is_ok() {
+                return ResolveResult::Hit { reference: ResolvedRef { path: candidate, line, source: source_of(&root.via) } };
+            }
+        }
+        if let Some(found) = worktree_join(&rel, &own, line) {
+            return found;
+        }
+    }
+    resolve(token, &doc_roots(doc, roots), home, evidence)
 }
 
 #[cfg(test)]

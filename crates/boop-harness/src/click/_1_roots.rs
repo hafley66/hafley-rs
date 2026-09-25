@@ -13,6 +13,8 @@ use super::_0_rungs::repo_root_for;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum RootVia {
+    /// The directory of the document the token was written in.
+    Document,
     PaneCwd,
     SessionCwd,
     GitToplevel,
@@ -57,6 +59,27 @@ pub fn click_roots(pane: &PaneHit, touched: &SessionTouched) -> Vec<Root> {
         let Some(parent) = parent else { continue };
         let dir = repo_root_for(&parent).unwrap_or(parent);
         roots.push(PathBuf::from(dir), RootVia::Touched);
+    }
+    roots.list
+}
+
+/// The roots of a token written in the document at `doc`, nearest first: the
+/// document's directory, its checkout, that repository's worktrees. `rest`
+/// (the click's own roots) follows, deduped against them.
+pub fn doc_roots(doc: &Path, rest: &[Root]) -> Vec<Root> {
+    let mut roots = Roots::default();
+    let dir = if doc.is_dir() { Some(doc) } else { doc.parent() };
+    if let Some(dir) = dir {
+        roots.push(dir.to_path_buf(), RootVia::Document);
+        if let Some(top) = repo_root_for(&dir.to_string_lossy()).map(PathBuf::from) {
+            roots.push(top.clone(), RootVia::GitToplevel);
+            for (worktree, name) in worktrees_of(&top) {
+                roots.push(worktree, RootVia::Worktree(name));
+            }
+        }
+    }
+    for root in rest {
+        roots.push(root.dir.clone(), root.via.clone());
     }
     roots.list
 }
@@ -235,5 +258,42 @@ mod tests {
         );
         let from_linked: Vec<PathBuf> = worktrees_of(&base.join("repo-feat")).into_iter().map(|(dir, _)| dir).collect();
         assert_eq!(from_linked, vec![repo.clone(), base.join("repo-detached"), base.join("repo-feat")]);
+    }
+
+    /// RECEIPT. A markdown file anchors its refs: its directory, its checkout,
+    /// that repository's worktrees; the click's own roots follow, deduped.
+    #[test]
+    fn a_document_roots_at_its_directory_checkout_and_worktrees() {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let repo = base.join("repo");
+        std::fs::create_dir_all(repo.join("plans")).unwrap();
+        std::fs::write(repo.join("plans/notes.md"), "n").unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["add", "-A"]);
+        git(&repo, &["commit", "-qm", "n"]);
+        git(&repo, &["worktree", "add", "-q", "-b", "feat", base.join("repo-feat").to_str().unwrap()]);
+        std::fs::create_dir_all(base.join("pane")).unwrap();
+
+        let rest = vec![
+            Root { dir: base.join("pane"), via: RootVia::PaneCwd },
+            Root { dir: repo.clone(), via: RootVia::SessionCwd },
+        ];
+        let roots = doc_roots(&repo.join("plans/notes.md"), &rest);
+        assert_eq!(
+            rel(&roots, &base),
+            vec![
+                ("repo/plans".into(), RootVia::Document),
+                ("repo".into(), RootVia::GitToplevel),
+                ("repo-feat".into(), RootVia::Worktree("feat".into())),
+                ("pane".into(), RootVia::PaneCwd),
+            ]
+        );
+        // A document at the checkout root is its own toplevel.
+        let at_root = doc_roots(&repo.join("README.md"), &[]);
+        assert_eq!(
+            rel(&at_root, &base),
+            vec![("repo".into(), RootVia::Document), ("repo-feat".into(), RootVia::Worktree("feat".into()))]
+        );
     }
 }
