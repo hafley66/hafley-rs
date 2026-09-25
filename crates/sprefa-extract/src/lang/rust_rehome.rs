@@ -563,6 +563,7 @@ fn slice(source: &str, span: Span) -> Option<String> {
 
 /// One `::`-joined run of path segments as written, `idents` and `spans` lined
 /// up. A `use` tree branch and an expression/type path both flatten to this.
+#[derive(Clone)]
 struct SegRun {
     idents: Vec<String>,
     spans: Vec<Span>,
@@ -909,9 +910,9 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
     let mut moves: BTreeMap<String, Relocation> = BTreeMap::new();
     for (rel, text, scan, _) in &scanned {
         for decl in &scan.decls {
-            // A `#[path]` decl and one inside an inline block both spell a module
-            // tree the file layout does not, and the arithmetic here reads layout.
-            if decl.attr.is_some() || !decl.chain.is_empty() {
+            // A decl inside an inline block spells a module tree the file layout
+            // does not; a `#[path]` decl keeps its name and is re-aimed.
+            if !decl.chain.is_empty() {
                 continue;
             }
             let Some(target) = resolve_decl(cx, roots, rel, decl) else {
@@ -938,13 +939,61 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
     let mut outside: BTreeSet<String> = BTreeSet::new();
     for (rel, text, _, runs) in &scanned {
         let moving = cx.destination(rel).is_some();
-        let Some((_, here)) = module_path(rel, roots) else {
+        let Some((_, laid)) = module_path(rel, roots) else {
             continue;
         };
+        let here = moves.get(rel).map_or(laid, |relocation| relocation.old_path.clone());
+        if moving {
+            let there = match moves.get(rel) {
+                Some(relocation) => Some(relocation.new_path.clone()),
+                None => here_after(cx, roots, rel),
+            };
+            for run in runs.iter().filter(|run| !run.in_block) {
+                let Some(there) = there.as_deref() else {
+                    break;
+                };
+                let Some((span, written, replacement)) = rebase_relative(&moves, &here, there, run, text)
+                else {
+                    continue;
+                };
+                plan.edits.insert(
+                    (rel.clone(), span.start),
+                    RelocateEdit {
+                        importer: rel.clone(),
+                        span,
+                        text: written,
+                        target: rel.clone(),
+                        kind: MOD_PATH,
+                        replacement,
+                        receipt: None,
+                    },
+                );
+            }
+        }
+        // A bin, test or example names its own package's lib by ident: that
+        // qualifier is as absolute as `crate` is inside the lib.
+        let lib_ident = cargo_package(cx, rel).map(|package| package.2);
         for run in runs {
-            let Some((target, span, written, replacement)) =
-                run_edit(&moves, moving, &here, run, text)
-            else {
+            let own_lib = lib_ident.as_deref().is_some_and(|ident| {
+                run.idents.first().map(String::as_str) == Some(ident)
+            });
+            let edited = match own_lib {
+                true => {
+                    let mut as_crate = run.clone();
+                    as_crate.idents[0] = "crate".to_string();
+                    run_edit(&moves, moving, &here, &as_crate, text).map(
+                        |(target, span, written, replacement)| {
+                            let respelled = match replacement.strip_prefix("crate") {
+                                Some(rest) => format!("{}{rest}", run.idents[0]),
+                                None => replacement,
+                            };
+                            (target, span, written, respelled)
+                        },
+                    )
+                }
+                false => run_edit(&moves, moving, &here, run, text),
+            };
+            let Some((target, span, written, replacement)) = edited else {
                 continue;
             };
             let relocation = &moves[&target];
@@ -983,7 +1032,60 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
     }
     widen_privates(cx, &roots, &moves, &scanned, &mut plan);
     insert_decls(cx, &moves, &outside, &mut plan);
+    publish_ancestors(cx, roots, &moves, &mut plan);
     plan
+}
+
+/// A `pub` module relocated under a narrower ancestor stays reachable as API:
+/// every ancestor `mod` on its new path is written `pub`.
+fn publish_ancestors(
+    cx: &MoveCx,
+    roots: &BTreeSet<String>,
+    moves: &BTreeMap<String, Relocation>,
+    plan: &mut RelocatePlan,
+) {
+    for relocation in moves.values().filter(|relocation| relocation.vis == "pub") {
+        let Some((root, _)) = module_path(&relocation.new_parent, roots) else {
+            continue;
+        };
+        let ancestors = &relocation.new_path[..relocation.new_path.len() - 1];
+        for depth in 1..=ancestors.len() {
+            let name = &ancestors[depth - 1];
+            let Some((file, text)) = parent_files(&root, &ancestors[..depth - 1])
+                .into_iter()
+                .find_map(|candidate| editable(cx, &candidate).and_then(|rel| Some((rel.clone(), cx.text(&rel)?))))
+            else {
+                continue;
+            };
+            let Some(scan) = scan_file(&text) else {
+                continue;
+            };
+            let Some(decl) = scan
+                .decls
+                .iter()
+                .find(|decl| &decl.name == name && decl.chain.is_empty() && decl.vis != "pub")
+            else {
+                continue;
+            };
+            let written = decl.text.clone();
+            let replacement = match decl.vis.is_empty() {
+                true => written.replacen("mod ", "pub mod ", 1),
+                false => written.replacen(&format!("{} mod ", decl.vis), "pub mod ", 1),
+            };
+            plan.edits.insert(
+                (file.clone(), decl.item.start),
+                RelocateEdit {
+                    importer: file.clone(),
+                    span: decl.item,
+                    text: written,
+                    target: file.clone(),
+                    kind: WIDEN_VIS,
+                    replacement,
+                    receipt: Some(format!("publish mod {name} in {file}")),
+                },
+            );
+        }
+    }
 }
 
 /// The private items of each relocated module that an outside reference reaches:
@@ -1008,9 +1110,13 @@ fn widen_privates(
                 .chain(item.chain.iter())
                 .cloned()
                 .collect();
+            // Only a path that goes through the module (`.., name, item`) reaches
+            // the item from outside; the same ident elsewhere names something else.
             let reached_outside = scanned.iter().any(|(rel, _, _, runs)| {
                 runs.iter().any(|run| {
-                    run.idents.iter().any(|ident| ident == &item.name)
+                    run.idents
+                        .windows(2)
+                        .any(|pair| pair[0] == relocation.name && pair[1] == item.name)
                         && !here_after(cx, roots, rel).is_some_and(|here| here.starts_with(&home))
                 })
             });
@@ -1151,12 +1257,21 @@ fn plan_relocation(
     let Some(new_target) = cx.destination(target) else {
         return Ok(None);
     };
-    let Some((_, old_path)) = module_path(target, roots) else {
+    let Some((_, mut old_path)) = module_path(target, roots) else {
         return Ok(None);
     };
-    let Some((root, new_path)) = module_path(new_target, roots) else {
+    let Some((root, mut new_path)) = module_path(new_target, roots) else {
         return Err(no_parent_module(target, new_target, &[]));
     };
+    // A `#[path]` module answers to its declared name, not its file stem.
+    if decl.attr.is_some() {
+        let Some((_, parent_path)) = module_path(parent_rel, roots) else {
+            return Ok(None);
+        };
+        old_path = parent_path.into_iter().chain([decl.name.clone()]).collect();
+        new_path.pop();
+        new_path.push(decl.name.clone());
+    }
     if old_path.is_empty() || new_path.is_empty() {
         return Ok(None);
     }
@@ -1266,6 +1381,47 @@ fn run_edit(
         return Some((target.clone(), span, written, replacement));
     }
     None
+}
+
+/// A moving file's `super::`/`self::` qualifier, spelled from `crate` when its
+/// new home no longer reaches the (batch-mapped) module. None: it still does.
+fn rebase_relative(
+    moves: &BTreeMap<String, Relocation>,
+    here: &[String],
+    there: &[String],
+    run: &SegRun,
+    source: &str,
+) -> Option<(Span, String, String)> {
+    let (steps, eaten, absolute) = qualifier_of(&run.idents);
+    if absolute || eaten == 0 {
+        return None;
+    }
+    let base = here.get(..here.len().checked_sub(steps)?)?.to_vec();
+    let mapped = moves
+        .values()
+        .filter(|relocation| base.starts_with(&relocation.old_path))
+        .max_by_key(|relocation| relocation.old_path.len())
+        .map_or(base.clone(), |relocation| {
+            relocation
+                .new_path
+                .iter()
+                .chain(base[relocation.old_path.len()..].iter())
+                .cloned()
+                .collect()
+        });
+    let new_base = there.get(..there.len().checked_sub(steps)?);
+    if new_base == Some(&mapped[..]) {
+        return None;
+    }
+    let first = run.spans.first()?;
+    let last = run.spans.get(eaten - 1)?;
+    let span = Span {
+        start: first.start,
+        len: last.start + last.len - first.start,
+    };
+    let written = slice(source, span)?;
+    let replacement = std::iter::once("crate".to_string()).chain(mapped).collect::<Vec<_>>().join("::");
+    Some((span, written, replacement))
 }
 
 /// The leading `crate` / `self` / `super`*: how many steps it climbs, how many

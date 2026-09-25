@@ -97,7 +97,7 @@ fn stem_and_moved_names_live_once() {
     }
     let unexpected: Vec<_> = owners
         .iter()
-        .filter(|path| !path.ends_with("move_cx.rs") && !path.ends_with("types.rs"))
+        .filter(|path| !path.ends_with("move_cx.rs") && !path.ends_with("0_edit_seams.rs"))
         .collect();
     assert!(
         unexpected.is_empty(),
