@@ -39,8 +39,13 @@ fn same_file_call_match(
     callee: &str,
 ) -> Option<(ContentId, Span)> {
     let call = output.call.as_ref()?;
-    let r = def_named(call, &output.strings, callee)?;
-    let span = call.node(r).span;
+    // A plain `f()` names a free fn, never a method of some impl in the file.
+    let span = call
+        .nodes
+        .iter()
+        .filter(|node| node.name.is_some_and(|id| output.strings.lookup(id) == callee))
+        .map(|node| node.span)
+        .find(|span| !call.aux.method_owners.iter().any(|owner| owner.span == *span))?;
     // Every def spliced out of one macro expansion carries the macro call's
     // span, so a span several names share cannot name one target.
     let shared = call.nodes.iter().any(|node| {
@@ -494,6 +499,9 @@ impl Resolve<CallF> for RustSource {
                         },
                     )
                 });
+            let type_path = qualifier.is_none()
+                && recv_named.is_none()
+                && assoc_path_type(site.callee_path.map(|id| output.strings.lookup(id))).is_some();
             let self_t = (qualifier.is_none()
                 && recv_named.is_none()
                 && site
@@ -504,7 +512,10 @@ impl Resolve<CallF> for RustSource {
             .and_then(|()| self_impl_type(call, &output.strings, caller))
             .and_then(|ty| {
                 modules
-                    .and_then(|m| m.impl_target(&ty, callee, own_path))
+                    .and_then(|m| {
+                        m.impl_target(&ty, callee, own_path)
+                            .or_else(|| m.variant_ctor_target(&ty, callee))
+                    })
                     .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
             });
             // Each leg names ITSELF: `kind` is `name_resolve` for nearly all
@@ -555,6 +566,9 @@ impl Resolve<CallF> for RustSource {
                             }),
                         }
                     }
+                    // `Vec::new()`: a type-qualified path whose type has no corpus
+                    // impl is external; no name match may bind it.
+                    _ if assoc_t.is_none() && self_t.is_none() && type_path => None,
                     _ => tag(assoc_t, ResolutionOrigin::SelfType)
                         .or_else(|| tag(self_t, ResolutionOrigin::SelfType))
                         .or_else(|| {
