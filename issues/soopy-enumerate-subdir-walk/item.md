@@ -2,9 +2,10 @@
 created: 2026-09-25
 updated: 2026-09-25
 type: bug
-status: open
+status: fixed
 priority: normal
 labels: [extract]
+closed: 2026-09-25
 ---
 
 # soopy worktree enumerate walks the repo root and hashes every match for a subdirectory input
