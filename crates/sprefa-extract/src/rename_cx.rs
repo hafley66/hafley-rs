@@ -16,7 +16,7 @@ use crate::edit_seams::Rename;
 
 /// Whether the roster hands `rel` to `rename`.
 pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {
-    crate::lang::rename_for(rel).is_some_and(|owner| owner.name() == rename.name())
+    crate::edit::rename_for(rel).is_some_and(|owner| owner.name() == rename.name())
 }
 
 /// One symbol this run renames. The anchor names the DECLARING file; the

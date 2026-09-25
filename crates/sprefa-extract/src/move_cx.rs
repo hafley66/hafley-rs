@@ -18,7 +18,7 @@ use crate::edit_seams::Rehome;
 
 /// Whether the roster hands `rel` to `rehome`.
 pub fn owned_by<R: Rehome + ?Sized>(rel: &str, rehome: &R) -> bool {
-    crate::lang::rehome_for(rel).is_some_and(|owner| owner.name() == rehome.name())
+    crate::edit::rehome_for(rel).is_some_and(|owner| owner.name() == rehome.name())
 }
 
 /// Directories a move never reads. Git's own store, build output that is not

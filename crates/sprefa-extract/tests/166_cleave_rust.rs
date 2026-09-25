@@ -383,6 +383,32 @@ fn a_failed_verify_rolls_the_rust_tree_back() {
     assert_eq!(rows, 1);
 }
 
+/// A call written through a module path is respelled, a `pub use` the item
+/// no longer feeds stays (it is API), and a relative `use child::X` in SRC
+/// travels spelled from DEST.
+#[test]
+fn qualified_calls_reexports_and_relative_uses_survive_a_cleave() {
+    let fixture = fixture("basic", "qualified");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod app;\npub mod config;\npub mod log;\npub mod util;\n\npub use log::log_line;\nuse log::log_line as note;\n\npub fn target(raw: &str) -> String {\n    note(raw);\n    raw.to_string()\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/app.rs"),
+        "pub fn boot(dir: &str) -> String {\n    crate::target(dir)\n}\n",
+    )
+    .unwrap();
+    git(&fixture.root, &["add", "-A"]);
+    cleave(&fixture, &["src/lib.rs#target", "src/config.rs", "--commit"]);
+    assert!(read(&fixture, "src/app.rs").contains("crate::config::target(dir)"));
+    let lib = read(&fixture, "src/lib.rs");
+    assert!(lib.contains("pub use log::log_line;"), "{lib}");
+    assert!(read(&fixture, "src/config.rs").contains("use crate::log::log_line as note;")
+        || read(&fixture, "src/config.rs").contains("crate::log"), "{}", read(&fixture, "src/config.rs"));
+    cargo_check(&fixture);
+}
+
 /// Issue `cleave-real-crate-defects`: docs, attributes and `impl` blocks travel
 /// with the type, a `pub use` stays public, and a fn-local `use` never anchors.
 #[test]

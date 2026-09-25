@@ -53,6 +53,7 @@ pub mod tsi;
 pub mod types;
 pub mod wire;
 #[path = "0_edit_seams.rs"] pub mod edit_seams;
+pub(crate) mod edit;
 
 pub use cfg::{
     build_cfg, cfg_bundle, cfg_facts, roles_for, CfgRole, RoleRule, GO_ROLES, KOTLIN_ROLES,
@@ -75,20 +76,7 @@ pub use family::{
     FlowF, MethodOwner, ProjectEdge, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
     TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeFAux, TypeSig,
 };
-pub use lang::{
-    build_paths, cleave_for, cleaves, compiled_spellings, dl6_db_path, find_owned_region,
-    open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_source,
-    query_source_facts, query_tree_sitter, query_tree_sitter_spans, rehome_for, rehomes,
-    rename_for, renames, respell, scm_edges, scm_facts, source_for, sources, ts_specifiers,
-    BuildPaths, ByteRange, CommonlispSource, DataSource, FactError, FactSet,
-    FallbackSource, GdscriptSource, GitBlobFact, GoSource, KotlinSource, MarkdownSource, OwnedRegion,
-    OwnedRegionError, OwnedRegionProposal, PrologSource, PythonSource, RustSource, RyiLang,
-    ScmEdge, SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError,
-    SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact,
-    SourceRevisionFact, TreeSitterQuery, TreeSitterQueryMatch, TreeSitterSpannedCapture,
-    TreeSitterSpannedMatch, TsResolver, TsSource, TsSpecifier, DL6_DB_RELATIVE_PATH,
-    SOURCE_FACT_PROTOCOL,
-};
+pub use lang::{build_paths, compiled_spellings, dl6_db_path, find_owned_region, open_dl6_readonly, open_readonly, owned_region_markers, propose_owned_region, query_source, query_source_facts, query_tree_sitter, query_tree_sitter_spans, respell, scm_edges, scm_facts, source_for, sources, ts_specifiers, BuildPaths, ByteRange, CommonlispSource, DataSource, FactError, FactSet, FallbackSource, GdscriptSource, GitBlobFact, GoSource, KotlinSource, MarkdownSource, OwnedRegion, OwnedRegionError, OwnedRegionProposal, PrologSource, PythonSource, RustSource, RyiLang, ScmEdge, SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError, SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact, SourceRevisionFact, TreeSitterQuery, TreeSitterQueryMatch, TreeSitterSpannedCapture, TreeSitterSpannedMatch, TsResolver, TsSource, TsSpecifier, DL6_DB_RELATIVE_PATH, SOURCE_FACT_PROTOCOL};
 pub use manifests::{
     fold_package_edges, package_edges, package_edges_jsonl, Manifest, ManifestKind,
 };
@@ -161,3 +149,9 @@ pub use crate::edit_seams::RefRole;
 pub use crate::edit_seams::SymbolSeat;
 pub use crate::edit_seams::RenameStop;
 pub use crate::edit_seams::Rename;
+pub use crate::edit::rehomes;
+pub use crate::edit::renames;
+pub use crate::edit::rehome_for;
+pub use crate::edit::rename_for;
+pub use crate::edit::cleaves;
+pub use crate::edit::cleave_for;

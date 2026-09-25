@@ -201,6 +201,8 @@ struct Plan {
     callers: Vec<FileFacts>,
     /// Each caller's module spelling for SRC, beside its own facts.
     caller_modules: Vec<String>,
+    /// Call sites naming the item through a module path, as (file, span).
+    qualified: Vec<(String, Span)>,
 }
 
 impl Plan {
@@ -305,8 +307,12 @@ impl Plan {
         let mut glob_unresolved = BTreeSet::new();
         for row in source.specifiers.iter().filter(|row| !row.glob) {
             let dest_module = match imports.target(&src, &row.name) {
-                Some(target) => arm.spell_module(&cx, &dest, target),
-                None => row.module.clone(),
+                Some(target) => arm
+                    .respell_relative(&cx, &src, &dest, &row.module)
+                    .unwrap_or_else(|| arm.spell_module(&cx, &dest, target)),
+                None => arm
+                    .respell_relative(&cx, &src, &dest, &row.module)
+                    .unwrap_or_else(|| row.module.clone()),
             };
             let kind = match (
                 carried.contains(&(row.name.clone(), module_key(&row.name, &dest_module))),
@@ -326,7 +332,7 @@ impl Plan {
             if source.refs_in(&row.name, &moving) > 0 && !dest_bound.contains(row.name.as_str()) {
                 travelling.push(plan_row.clone());
             }
-            if source.refs_outside(&row.name, &moving) == 0 {
+            if source.refs_outside(&row.name, &moving) == 0 && !source.reexports(row.span) {
                 orphans.push(plan_row);
             }
         }
@@ -415,6 +421,7 @@ impl Plan {
                 dest_imports: Vec::new(),
                 callers: Vec::new(),
                 caller_modules: Vec::new(),
+                qualified: Vec::new(),
             });
         }
 
@@ -423,7 +430,19 @@ impl Plan {
         let wanted = travelling
             .iter()
             .filter(|row| row.kind != "carried")
-            .map(|row| (row.name.clone(), row.dest_module.clone()))
+            .map(|row| {
+                // `use a::b as c` is the row (c, a::b): it lands as (a, "b as c").
+                let written = row.module.rsplit("::").next().unwrap_or(&row.module);
+                if written == row.name || !row.module.contains("::") {
+                    return (row.name.clone(), row.dest_module.clone());
+                }
+                let parent = row
+                    .dest_module
+                    .strip_suffix(written)
+                    .and_then(|head| head.strip_suffix("::"))
+                    .unwrap_or(&row.dest_module);
+                (format!("{written} as {}", row.name), parent.to_string())
+            })
             .chain(
                 dragged
                     .iter()
@@ -485,6 +504,7 @@ impl Plan {
             source.refs_outside(&item, &moving) > 0,
             &dest_imports,
         )?;
+        let qualified = imports.qualified(&cx, &src, &item);
         Ok(Plan {
             root,
             cx,
@@ -507,6 +527,7 @@ impl Plan {
             dest_imports,
             callers: views,
             caller_modules,
+            qualified,
         })
     }
 
@@ -530,6 +551,28 @@ impl Plan {
                 file,
                 span: edit.span,
                 text: edit.text,
+            });
+        }
+        for (rel, span) in &self.qualified {
+            let Some(written) = self
+                .cx
+                .text(rel)
+                .and_then(|text| text.get(span.start as usize..span.end() as usize).map(str::to_string))
+            else {
+                continue;
+            };
+            let module = written.rsplit_once("::").map_or("", |(module, _)| module);
+            let spelling = as_written(
+                &self.cx,
+                &self.rows.dest,
+                module,
+                self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+            );
+            out.push(Respell {
+                receipt: Some(format!("path {rel}: {written} -> {spelling}::{}", self.rows.item)),
+                file: rel.clone(),
+                span: *span,
+                text: format!("{spelling}::{}", self.rows.item),
             });
         }
         out.sort_by(|left, right| {
@@ -838,6 +881,7 @@ impl Plan {
             out.insert(self.rows.dest.clone());
         }
         out.extend(self.rows.callers.iter().cloned());
+        out.extend(self.qualified.iter().map(|(rel, _)| rel.clone()));
         out.into_iter().collect()
     }
 
@@ -941,6 +985,8 @@ fn merge(mut spans: Vec<Span>) -> Vec<Span> {
 struct Imports {
     /// `(importer, bound name) -> (file, declared name, through a re-export)`.
     names: Vec<(String, String, String, String, bool)>,
+    /// Resolved call sites `(caller file, site span, callee file, callee name)`.
+    calls: Vec<(String, Span, String, String)>,
 }
 
 impl Imports {
@@ -969,7 +1015,22 @@ impl Imports {
         let facts =
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
         let mut names = Vec::new();
+        let mut calls = Vec::new();
         for fact in &facts {
+            if let FlatFact::ResolvedEdge {
+                caller_path,
+                callee_path,
+                callee_name: Some(callee),
+                caller_site_start,
+                caller_site_end,
+                ..
+            } = fact
+            {
+                if let (Some(caller), Some(target)) = (rel_of(root, caller_path), rel_of(root, callee_path)) {
+                    calls.push((caller, span_of(*caller_site_start, *caller_site_end), target, callee.clone()));
+                }
+                continue;
+            }
             let FlatFact::ResolvedImportRow {
                 src_path,
                 name,
@@ -988,7 +1049,26 @@ impl Imports {
             let relayed = kind == "indirect" || kind == "star";
             names.push((importer, name.clone(), target, declared.clone(), relayed));
         }
-        Ok(Self { names })
+        Ok(Self { names, calls })
+    }
+
+    /// Call sites outside SRC that name `src#item` through a path
+    /// (`crate::lang::item(..)`), which no import row carries.
+    fn qualified(&self, cx: &MoveCx, src: &str, item: &str) -> Vec<(String, Span)> {
+        let mut out: Vec<(String, Span)> = self
+            .calls
+            .iter()
+            .filter(|(caller, _, target, callee)| target == src && callee == item && caller != src)
+            .filter(|(caller, span, _, _)| {
+                cx.text(caller)
+                    .and_then(|text| text.get(span.start as usize..span.end() as usize).map(str::to_string))
+                    .is_some_and(|written| written.contains("::") && written.ends_with(item))
+            })
+            .map(|(caller, span, _, _)| (caller.clone(), *span))
+            .collect();
+        out.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.start.cmp(&right.1.start)));
+        out.dedup();
+        out
     }
 
     /// The corpus file the specifier binding `name` in `importer` reaches. A
@@ -1143,6 +1223,19 @@ impl FileFacts {
             .map(|row| line_end(text, row.span.end()))
             .max()
             .unwrap_or(0)
+    }
+
+    /// Whether the import holding `span` hands its names out (`pub use`,
+    /// `export ... from`): a re-export is the file's API, never an orphan.
+    fn reexports(&self, span: Span) -> bool {
+        let before = &self.text[..span.start as usize];
+        let start = before.rfind([';', '}']).map_or(0, |at| at + 1);
+        let statement = before[start..]
+            .lines()
+            .map(str::trim_start)
+            .find(|line| !line.is_empty() && !line.starts_with("//") && !line.starts_with("#["))
+            .unwrap_or_default();
+        statement.starts_with("pub ") || statement.starts_with("pub(") || statement.starts_with("export ")
     }
 
     /// The file's bytes under `span`, empty when the span is off the end.

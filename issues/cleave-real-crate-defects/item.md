@@ -31,3 +31,8 @@ First real-crate cleave (M6): `ryi cleave crates/sprefa-extract/src/types.rs#Imp
 ### 2026-09-25T17:53:01Z · @claude-m6
 
 Found during batch A: when DEST already imports SRC#ITEM (DEST is a caller), the plan kept that import and added one naming DEST itself. Fixed: DEST's import block drops the item; callers skip DEST.
+
+### 2026-09-25T18:15:43Z · @claude-m6
+
+Batch A (rosters out of lang/mod.rs) found four more, all fixed: (1) qualified call sites crate::lang::rehome_for(..) were not callers (no import row); now read from resolved_edge sites and respelled. (2) pub use re-exports were planned as orphans and deleted. (3) a relative use child::X travelled as child::X, or via a private module path (prolog::_0_source); now respelled from SRC's module. (4) use a::b as c landed as use a::b::c.
+

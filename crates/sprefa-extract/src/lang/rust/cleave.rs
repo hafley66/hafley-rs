@@ -179,6 +179,19 @@ impl Cleave for RustSource {
         ))
     }
 
+    fn respell_relative(&self, cx: &MoveCx, src: &str, dest: &str, module: &str) -> Option<String> {
+        let head = module.split("::").next()?;
+        if matches!(head, "" | "crate" | "self" | "super") {
+            return None;
+        }
+        let parsed = syn::parse_file(&cx.text(src)?).ok()?;
+        let child = parsed
+            .items
+            .iter()
+            .any(|item| matches!(item, syn::Item::Mod(declared) if declared.ident == head));
+        child.then(|| format!("{}::{module}", self.spell_module(cx, dest, src)))
+    }
+
     fn publish_module(&self, cx: &MoveCx, dest: &str) -> Option<(String, Edit)> {
         let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
         let name = module_parts(cx, dest).pop()?;

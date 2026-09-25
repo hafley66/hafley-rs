@@ -164,6 +164,12 @@ pub trait Cleave: Source + Sync + Send {
     fn publish_module(&self, _cx: &MoveCx, _dest: &str) -> Option<(String, Edit)> {
         None
     }
+
+    /// `module` as SRC wrote it, respelled for DEST when it is relative to
+    /// SRC's own module (Rust `use child::X`). None: spell the target file.
+    fn respell_relative(&self, _cx: &MoveCx, _src: &str, _dest: &str, _module: &str) -> Option<String> {
+        None
+    }
 }
 
 /// What one language answers when a file it owns moves. Held `&'static` in the
