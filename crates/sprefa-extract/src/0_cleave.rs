@@ -831,7 +831,11 @@ impl Plan {
             let (_, block) = self.import_block("");
             stages.push(vec![soopy::SourceAction::Create {
                 path: directory_path(&self.rows.dest),
-                bytes: format!("{block}\n{}", self.moving_text.join("\n")).into_bytes(),
+                bytes: match block.is_empty() {
+                    true => self.moving_text.join("\n"),
+                    false => format!("{block}\n{}", self.moving_text.join("\n")),
+                }
+                .into_bytes(),
             }]);
         }
         Ok(stages)
@@ -1386,9 +1390,13 @@ fn scope_rows(
                     exported: *exported,
                 });
             }
+            // `std::collections::HashMap` names HashMap through its path, not
+            // through a `use HashMap`: only a path's first segment is free.
             FlatFact::FreeNameRow {
                 name, start, end, ..
-            } => free.push((name.clone(), span_of(*start, *end))),
+            } if !text.get(..*start as usize).is_some_and(|before| before.trim_end().ends_with("::")) => {
+                free.push((name.clone(), span_of(*start, *end)))
+            }
             _ => {}
         }
     }

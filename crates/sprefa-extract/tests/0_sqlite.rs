@@ -222,8 +222,9 @@ fn every_flat_fact_variant_and_field_has_a_typespec_table() {
         .collect();
     assert_eq!(extras, BTreeSet::from(["capture".to_owned()]));
     let tsi = syn::parse_file(include_str!("../src/tsi/types.rs")).unwrap();
+    let atoms = syn::parse_file(include_str!("../../hafley_scm/src/atoms.rs")).unwrap();
     for (file, enum_name, table_name, column_name, snake_case) in [
-        (&source, "FamilyTag", "node", "family", false),
+        (&atoms, "FamilyTag", "node", "family", false),
         (&tsi, "Mode", "run", "mode", false),
         (&tsi, "Method", "witness", "method", true),
     ] {

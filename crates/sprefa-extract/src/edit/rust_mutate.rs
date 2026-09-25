@@ -5,13 +5,13 @@
 
 use crate::move_cx::MoveCx;
 use crate::source::{FamilyMask, Source};
-use crate::types::FamilyTag;
 use crate::wire::{flatten_each, FlatFact};
 
 use crate::lang::rust::RustSource;
 use crate::edit_seams::Edit;
 use crate::edit_seams::Cleave;
 use hafley_scm::span::Span;
+use hafley_scm::atoms::FamilyTag;
 
 /// The path the parse is told it is reading. Only the extension is consulted.
 const PARSE_AS: &str = "cleave.rs";

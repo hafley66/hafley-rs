@@ -462,6 +462,29 @@ fn a_cleave_carrying_a_third_party_import_needs_it_in_dest() {
     );
 }
 
+#[test]
+fn a_name_spelled_through_its_full_path_carries_no_import() {
+    let fixture = fixture("rust_cross", "rust_cleave_qualified");
+    commit(
+        &fixture,
+        &[(
+            "alpha/src/tagged.rs",
+            "use std::collections::HashMap;\n\npub fn fresh() -> std::collections::HashMap<u8, u8> {\n    std::collections::HashMap::new()\n}\n\npub fn kept() -> HashMap<u8, u8> {\n    HashMap::new()\n}\n",
+        )],
+    );
+    let args = vec![
+        "cleave".to_string(),
+        format!("{}#fresh", fixture.root.join("alpha/src/tagged.rs").display()),
+        fixture.root.join("alpha/src/fresh.rs").display().to_string(),
+        "--commit".to_string(),
+    ];
+    stdout(&ryi(&fixture, &args));
+    assert_eq!(
+        read(&fixture, "alpha/src/fresh.rs"),
+        "pub fn fresh() -> std::collections::HashMap<u8, u8> {\n    std::collections::HashMap::new()\n}\n"
+    );
+}
+
 // ── TS ──────────────────────────────────────────────────────────────────────
 
 #[test]
