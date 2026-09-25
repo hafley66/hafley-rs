@@ -126,6 +126,15 @@ pub struct ResolveRequest<'a> {
     pub witness: bool,
 }
 
+impl ResolveRequest<'_> {
+    /// The phase-1 planes this request's arms read.
+    pub(crate) fn planes(&self) -> Planes {
+        Planes::Resolve {
+            flow: self.arms.flow,
+        }
+    }
+}
+
 /// Why a project resolve could not run. Distinct from a resolve that ran and
 /// found nothing, which is an empty fact list and a success.
 #[derive(Debug)]
@@ -238,7 +247,7 @@ pub(crate) struct ProjectInput {
 /// Run the requested arms over the whole supplied file set and return the flat
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
-    let inputs = read_inputs_with_modules(request.paths)?;
+    let inputs = read_inputs_with_modules(request.paths, request.planes())?;
     resolve_project_inputs(request, inputs, false)
 }
 
@@ -247,7 +256,7 @@ pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
 pub fn resolve_project_with_tsi_tiers(
     request: &ResolveRequest,
 ) -> Result<Vec<FlatFact>, ProjectError> {
-    let inputs = read_inputs_with_modules(request.paths)?;
+    let inputs = read_inputs_with_modules(request.paths, request.planes())?;
     resolve_project_inputs(request, inputs, true)
 }
 
@@ -287,7 +296,7 @@ pub fn resolve_project_with_raw<E>(
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let inputs =
-        read_inputs_with_modules(request.paths).map_err(ResolveWithRawError::Project)?;
+        read_inputs_with_modules(request.paths, Planes::All).map_err(ResolveWithRawError::Project)?;
     resolve_project_with_raw_inputs(request, inputs, push_raw, None)
 }
 
@@ -1316,7 +1325,8 @@ pub fn scip_family_from_index_jsonl(
 /// default; this family is the labelled entry, not a replacement.
 // @comment-ok: one pre-existing diet_scip design note, edited by one line.
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    let inputs = stage_span("read_inputs").in_scope(|| read_inputs_with_modules(paths))?;
+    let inputs = stage_span("read_inputs")
+        .in_scope(|| read_inputs_with_modules(paths, Planes::Resolve { flow: false }))?;
     let scm = stage_span("scm_rows").in_scope(|| scm_rows(paths, &inputs));
     let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
     facts.extend(scm?);
@@ -1358,7 +1368,8 @@ pub fn diet_scip_with_raw<E>(
     paths: &[PathBuf],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let inputs = read_inputs_with_modules(paths).map_err(ResolveWithRawError::Project)?;
+    let inputs =
+        read_inputs_with_modules(paths, Planes::All).map_err(ResolveWithRawError::Project)?;
     resolve_project_with_raw_inputs(&diet_scip_request(paths), inputs, push_raw, Some(paths))
 }
 
@@ -1398,33 +1409,39 @@ pub fn sorted_lines(facts: Vec<FlatFact>) -> Vec<String> {
     })
 }
 
+/// Which phase-1 planes a project read extracts: every plane, or only what the
+/// resolve arms read (df only when the flow join runs).
+#[derive(Clone, Copy)]
+pub(crate) enum Planes {
+    All,
+    Resolve { flow: bool },
+}
+
 pub(crate) fn read_inputs(paths: &[PathBuf]) -> Result<Vec<ProjectInput>, ProjectError> {
-    read_inputs_inner(paths, false)
+    read_inputs_inner(paths, false, Planes::All)
 }
 
 /// The same read, plus each ts/js input's module facts. Split off because the
 /// facts cost one extra parse per file and only `--resolve` reads them.
 pub(crate) fn read_inputs_with_modules(
     paths: &[PathBuf],
+    planes: Planes,
 ) -> Result<Vec<ProjectInput>, ProjectError> {
-    read_inputs_inner(paths, true)
+    read_inputs_inner(paths, true, planes)
 }
 
-fn read_inputs_inner(paths: &[PathBuf], modules: bool) -> Result<Vec<ProjectInput>, ProjectError> {
+fn read_inputs_inner(
+    paths: &[PathBuf],
+    modules: bool,
+    planes: Planes,
+) -> Result<Vec<ProjectInput>, ProjectError> {
     if paths.is_empty() {
         return Ok(Vec::new());
     }
-    // A corpus inside a Git repository is read in one batched read_many of the
-    // worktree (current disk, so untracked and dirty files are visible), keyed
-    // by repo-relative paths internally while ProjectInput.path keeps the
-    // caller's spelling byte-for-byte. A corpus outside any repository has no
-    // revision coordinate for soopy to enumerate, so it falls back to the plain
-    // per-path filesystem read, which is what the previous implementation did
-    // for every input.
-    match soopy::discover(&paths[0]) {
-        Ok(repository) => read_inputs_batched(&repository, paths, modules),
-        Err(_) => read_inputs_plain(paths, modules),
-    }
+    // Current disk, read in parallel beside the parse. Soopy's batched worktree
+    // read returns the same bytes but first spends git subprocesses on a
+    // revision stamp this read never uses.
+    read_inputs_plain(paths, modules, planes)
 }
 
 /// The module facts of one file, when this run wants them.
@@ -1470,8 +1487,8 @@ fn kt_module_facts_of(
     })?
 }
 
-/// Extraction thread budget. One worker is held back below the clamp so the
-/// machine stays usable while a corpus extracts.
+/// Extraction thread budget: every core but one, so the machine stays usable
+/// while a corpus extracts.
 fn extract_thread_cap() -> usize {
     let requested = std::env::var("SPREFA_EXTRACT_THREADS").ok();
     let cores = std::thread::available_parallelism()
@@ -1490,7 +1507,7 @@ fn thread_cap_from(requested: Option<&str>, cores: usize) -> usize {
             }
         }
     }
-    cores.min(8).saturating_sub(1).max(1)
+    cores.saturating_sub(1).max(1)
 }
 
 /// The dedicated extraction pool. Never rayon's global pool, so nothing else in
@@ -1523,15 +1540,29 @@ fn flatten_inputs(
     Ok(inputs)
 }
 
-fn read_inputs_plain(paths: &[PathBuf], modules: bool) -> Result<Vec<ProjectInput>, ProjectError> {
-    let results: Vec<Result<Option<ProjectInput>, ProjectError>> = EXTRACT_POOL.install(|| {
-        paths
+fn read_inputs_plain(
+    paths: &[PathBuf],
+    modules: bool,
+    planes: Planes,
+) -> Result<Vec<ProjectInput>, ProjectError> {
+    // Largest file first, so the longest parse never starts last and leaves the
+    // other workers idle; results go back to path order below.
+    let mut order: Vec<(u64, usize)> = paths
+        .iter()
+        .enumerate()
+        .map(|(index, path)| (std::fs::metadata(path).map_or(0, |meta| meta.len()), index))
+        .collect();
+    order.sort_unstable_by(|left, right| right.cmp(left));
+    let mut indexed: Vec<(usize, Result<Option<ProjectInput>, ProjectError>)> = EXTRACT_POOL.install(|| {
+        order
             .par_iter()
-            .map(|path| {
+            .with_max_len(1)
+            .map(|&(_, index)| (index, &paths[index]))
+            .map(|(index, path)| (index, (|| {
                 let content =
                     std::fs::read(path).map_err(|err| ProjectError::Read(path.clone(), err))?;
                 let path = path.to_string_lossy().to_string();
-                let output = crate::dispatch(&path, &content, resolve_mask(&path));
+                let output = crate::dispatch(&path, &content, resolve_mask(&path, planes));
                 let module = module_facts_of(&path, &content, modules);
                 let rust_module = rust_module_facts_of(&path, &content, modules, output.as_deref());
                 let go_module = go_module_facts_of(&path, &content, modules);
@@ -1553,85 +1584,11 @@ fn read_inputs_plain(paths: &[PathBuf], modules: bool) -> Result<Vec<ProjectInpu
                         kt_module,
                     }
                 }))
-            })
+            })()))
             .collect()
     });
-    flatten_inputs(results)
-}
-
-fn read_inputs_batched(
-    repository: &soopy::Repository,
-    paths: &[PathBuf],
-    modules: bool,
-) -> Result<Vec<ProjectInput>, ProjectError> {
-    let keys: Vec<String> = paths
-        .iter()
-        .map(|path| repo_relative(&repository.root, path))
-        .collect::<Result<_, _>>()?;
-    let key_refs: Vec<&str> = keys.iter().map(String::as_str).collect();
-    let source = SourceTreeBlobSource::open_files(&repository.root, &key_refs).map_err(|err| {
-        ProjectError::Read(
-            paths[0].clone(),
-            std::io::Error::new(std::io::ErrorKind::Other, err),
-        )
-    })?;
-    let answers = source.read_many(&key_refs);
-    let results: Vec<Result<Option<ProjectInput>, ProjectError>> = EXTRACT_POOL.install(|| {
-        paths
-            .par_iter()
-            .enumerate()
-            .map(|(index, path)| {
-                let Some(content) = answers[index].as_ref() else {
-                    return Err(ProjectError::Read(
-                        path.clone(),
-                        std::io::Error::new(
-                            std::io::ErrorKind::NotFound,
-                            "not in the worktree snapshot",
-                        ),
-                    ));
-                };
-                let path = path.to_string_lossy().to_string();
-                let output = crate::dispatch(&path, content, resolve_mask(&path));
-                let module = module_facts_of(&path, content, modules);
-                let rust_module = rust_module_facts_of(&path, content, modules, output.as_deref());
-                let go_module = go_module_facts_of(&path, content, modules);
-                let py_module = py_module_facts_of(&path, content, modules);
-                let kt_module = kt_module_facts_of(&path, content, modules, output.as_deref());
-                Ok(output.map(|output| {
-                    let blob = content_id_of(content);
-                    ProjectInput {
-                        file: Some(crate::wire::file_fact_with_content_id(
-                            &path, content, &blob,
-                        )),
-                        blob,
-                        path,
-                        output,
-                        module,
-                        rust_module,
-                        go_module,
-                        py_module,
-                        kt_module,
-                    }
-                }))
-            })
-            .collect()
-    });
-    flatten_inputs(results)
-}
-
-fn repo_relative(repo_root: &Path, path: &Path) -> Result<String, ProjectError> {
-    let absolute =
-        std::fs::canonicalize(path).map_err(|err| ProjectError::Read(path.to_path_buf(), err))?;
-    let relative = absolute.strip_prefix(repo_root).map_err(|_| {
-        ProjectError::Read(
-            path.to_path_buf(),
-            std::io::Error::new(
-                std::io::ErrorKind::InvalidInput,
-                format!("{} is outside the repository", path.display()),
-            ),
-        )
-    })?;
-    Ok(relative.to_string_lossy().replace('\\', "/"))
+    indexed.sort_unstable_by_key(|(index, _)| *index);
+    flatten_inputs(indexed.into_iter().map(|(_, result)| result).collect())
 }
 
 fn load_scip(
@@ -1872,8 +1829,20 @@ fn arm_for(path: &str) -> Option<&'static ResolveArm> {
 
 /// The phase-1 mask one path is extracted under for a project resolve: whatever
 /// its arm's types plane needs, and `FamilyMask::ALL` for every path with no arm.
-fn resolve_mask(path: &str) -> FamilyMask {
-    arm_for(path).map_or(FamilyMask::ALL, |arm| arm.type_plane.mask())
+fn resolve_mask(path: &str, planes: Planes) -> FamilyMask {
+    match (arm_for(path), planes) {
+        // The rust and ts arms resolve off their call and type planes alone; cst
+        // is never read and df only by the flow join.
+        (Some(arm), Planes::Resolve { flow }) if matches!(arm.name, "rust" | "ts") => FamilyMask {
+            cst: false,
+            types: true,
+            call: true,
+            df: flow,
+            data: false,
+        },
+        (Some(arm), _) => arm.type_plane.mask(),
+        (None, _) => FamilyMask::ALL,
+    }
 }
 
 fn resolve_call_edges(path: &str, output: &RyiOutput, cx: &ProjectCx) -> Vec<ProjectEdge<CallF>> {
@@ -2787,27 +2756,19 @@ mod tests {
     }
 
     /// SABOTAGE, drop the `saturating_sub(1)` from the cap: 5 passed, 1 failed,
-    /// only this test, the 12-core row reading 8 where 7 is held back.
+    /// only this test, the 12-core row reading 12 where 11 is held back.
     #[test]
     fn thread_cap_honors_the_request_then_clamps() {
         assert_eq!(thread_cap_from(Some("3"), 12), 3);
         assert_eq!(thread_cap_from(Some("  4 "), 12), 4);
-        assert_eq!(thread_cap_from(Some("0"), 12), 7, "zero falls back");
+        assert_eq!(thread_cap_from(Some("0"), 12), 11, "zero falls back");
         assert_eq!(
             thread_cap_from(Some("many"), 12),
-            7,
+            11,
             "unparseable falls back"
         );
-        assert_eq!(
-            thread_cap_from(None, 12),
-            7,
-            "12 cores clamp to 8, hold one back"
-        );
-        assert_eq!(
-            thread_cap_from(None, 64),
-            7,
-            "the clamp is 8, not the core count"
-        );
+        assert_eq!(thread_cap_from(None, 12), 11, "hold one core back");
+        assert_eq!(thread_cap_from(None, 64), 63, "no clamp below the core count");
         assert_eq!(thread_cap_from(None, 2), 1);
         assert_eq!(
             thread_cap_from(None, 1),

@@ -3,7 +3,7 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::project::{fill_indexes, import_facts, read_inputs_with_modules, ProjectError};
+use crate::project::{fill_indexes, import_facts, read_inputs_with_modules, Planes, ProjectError};
 use crate::seams::{FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest};
 use crate::shape::ContentId;
 use crate::source::RyiOutput;
@@ -20,7 +20,7 @@ pub fn reach_files(
     entry: &[PathBuf],
     depth: Option<u32>,
 ) -> Result<Vec<PathBuf>, ProjectError> {
-    let inputs = read_inputs_with_modules(universe)?;
+    let inputs = read_inputs_with_modules(universe, Planes::Resolve { flow: false })?;
     let pairs: Vec<(ContentId, &RyiOutput)> = inputs
         .iter()
         .map(|input| (input.blob.clone(), input.output.as_ref()))

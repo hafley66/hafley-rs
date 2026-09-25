@@ -96,7 +96,8 @@ pub fn git_root_of_cwd() -> Result<PathBuf, Box<dyn std::error::Error>> {
 /// Every roster-claimed file under `dir` that matches `patterns` (relative to
 /// `dir`; empty means all), spelled `dir` joined with its path below `dir`.
 fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
-    let mut found: Vec<PathBuf> = match soopy::discover(dir) {
+    let discovered = sprefa_extract::trace::stage_span("discover").in_scope(|| soopy::discover(dir));
+    let mut found: Vec<PathBuf> = match discovered {
         Ok(repository) => {
             let absolute = std::fs::canonicalize(dir)
                 .map_err(|error| format!("{}: {error}", dir.display()))?;
@@ -117,11 +118,16 @@ fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
             } else {
                 patterns.iter().map(|glob| SourcePattern(prefixed(glob))).collect()
             };
+            // Expansion keeps paths only; the worktree stamp is never read, so
+            // it costs no `git rev-parse` / `git status`.
+            let revision = soopy::RevisionId::Worktree {
+                worktree: repository.worktree.clone(),
+                head: None,
+                dirty: false,
+            };
             let mut tree = soopy::SourceTree::open(repository);
-            let revision = tree
-                .resolve_revision(soopy::Revision::Worktree)
-                .map_err(|error| format!("{}: {error:#}", dir.display()))?;
-            tree.enumerate(&revision, &globs)
+            sprefa_extract::trace::stage_span("enumerate")
+                .in_scope(|| tree.enumerate(&revision, &globs))
                 .map_err(|error| format!("{}: {error:#}", dir.display()))?
                 .into_iter()
                 .map(|entry| {

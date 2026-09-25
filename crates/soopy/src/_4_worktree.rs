@@ -33,7 +33,16 @@ pub fn enumerate(
     let matcher = compile(patterns)?;
     let mut rows = Vec::new();
     let mut seen = BTreeSet::new();
-    let mut walk = WalkBuilder::new(&repository.root);
+    // Walks start at each pattern's literal directory prefix; the walker still
+    // reads parent ignore files upward from there.
+    let mut bases = walk_bases(&repository.root, patterns).into_iter();
+    let Some(first) = bases.next() else {
+        return Ok(Vec::new());
+    };
+    let mut walk = WalkBuilder::new(&first);
+    for base in bases {
+        walk.add(base);
+    }
     walk.hidden(false).filter_entry(|entry| {
         if entry.file_name() == ".git" {
             return false;
@@ -106,4 +115,39 @@ pub fn enumerate(
         .unwrap_or(i64::MAX);
     rows.sort_by(|left, right| left.source.path.cmp(&right.source.path));
     Ok(rows)
+}
+
+/// The directories the walk must start from: each pattern's components before
+/// its first glob metacharacter, minus any base another base already covers.
+fn walk_bases(root: &std::path::Path, patterns: &[Pattern]) -> Vec<std::path::PathBuf> {
+    let mut bases: Vec<std::path::PathBuf> = patterns
+        .iter()
+        .map(|pattern| {
+            let literal: Vec<&str> = pattern
+                .0
+                .split('/')
+                .take_while(|part| !part.contains(['*', '?', '[', '{']))
+                .collect();
+            // The last literal component of a glob-free pattern names a file.
+            let dirs = if literal.len() == pattern.0.split('/').count() {
+                &literal[..literal.len().saturating_sub(1)]
+            } else {
+                &literal[..]
+            };
+            dirs.iter().fold(root.to_path_buf(), |path, part| path.join(part))
+        })
+        .collect();
+    if bases.is_empty() {
+        bases.push(root.to_path_buf());
+    }
+    bases.sort();
+    bases.dedup();
+    let mut kept: Vec<std::path::PathBuf> = Vec::new();
+    for base in bases {
+        if !kept.iter().any(|outer| base.starts_with(outer)) {
+            kept.push(base);
+        }
+    }
+    kept.retain(|base| base.is_dir());
+    kept
 }

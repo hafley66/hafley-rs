@@ -13,6 +13,9 @@ pub fn discover(start: impl AsRef<Path>) -> Result<Repository> {
     } else {
         start.parent().unwrap_or(start)
     };
+    if let Some(repository) = discover_on_disk(cwd) {
+        return Ok(repository);
+    }
     let output = Command::new("git")
         .arg("-C")
         .arg(cwd)
@@ -25,6 +28,41 @@ pub fn discover(start: impl AsRef<Path>) -> Result<Repository> {
     let root = PathBuf::from(String::from_utf8(output.stdout)?.trim());
     open(root)
 }
+/// `discover` read off `.git` / `gitdir:` / `commondir`, hashed as `open` hashes
+/// git's answers; `None` (env override, unknown layout) hands the question to git.
+fn discover_on_disk(cwd: &Path) -> Option<Repository> {
+    if ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"]
+        .iter()
+        .any(|name| std::env::var_os(name).is_some())
+    {
+        return None;
+    }
+    let cwd = std::fs::canonicalize(cwd).ok()?;
+    let root = cwd.ancestors().find(|dir| dir.join(".git").exists())?.to_path_buf();
+    let dot_git = root.join(".git");
+    let git_dir = if dot_git.is_dir() {
+        dot_git
+    } else {
+        let text = std::fs::read_to_string(&dot_git).ok()?;
+        root.join(text.trim().strip_prefix("gitdir:")?.trim())
+    };
+    let git_dir = std::fs::canonicalize(git_dir).ok()?;
+    if !git_dir.join("HEAD").is_file() {
+        return None;
+    }
+    let common_dir = match std::fs::read_to_string(git_dir.join("commondir")) {
+        Ok(text) => std::fs::canonicalize(git_dir.join(text.trim())).ok()?,
+        Err(_) => git_dir.clone(),
+    };
+    let key = blake3::hash(common_dir.as_os_str().to_string_lossy().as_bytes());
+    let worktree_key = blake3::hash(git_dir.as_os_str().to_string_lossy().as_bytes());
+    Some(Repository {
+        root,
+        identity: RepositoryId(Arc::from(key.to_hex().as_str())),
+        worktree: WorktreeId(Arc::from(worktree_key.to_hex().as_str())),
+    })
+}
+
 pub fn open(root: impl Into<PathBuf>) -> Result<Repository> {
     let root = std::fs::canonicalize(root.into()).context("canonicalize repository root")?;
     // Repository identity comes from the common Git directory, not the
@@ -67,4 +105,27 @@ pub fn open(root: impl Into<PathBuf>) -> Result<Repository> {
         identity: RepositoryId(Arc::from(key.to_hex().as_str())),
         worktree: WorktreeId(Arc::from(worktree_key.to_hex().as_str())),
     })
+}
+
+#[cfg(test)]
+mod disk_discovery {
+    use super::*;
+
+    /// The on-disk answer and git's answer agree for the checkout the tests run in.
+    #[test]
+    fn on_disk_discovery_matches_git() {
+        let here = std::env::current_dir().expect("current dir");
+        let Some(fast) = discover_on_disk(&here) else {
+            return;
+        };
+        let output = Command::new("git")
+            .arg("-C")
+            .arg(&here)
+            .args(["rev-parse", "--show-toplevel"])
+            .output()
+            .expect("git runs");
+        let slow = open(PathBuf::from(String::from_utf8(output.stdout).expect("utf8").trim()))
+            .expect("git opens the repository");
+        assert_eq!(fast, slow);
+    }
 }
