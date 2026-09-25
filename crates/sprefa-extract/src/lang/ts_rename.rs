@@ -24,10 +24,16 @@ use crate::lang::ts::{OxcParser, TsSource};
 use crate::move_cx::MoveCx;
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::seams::Parser;
-use crate::types::{
-    ImportRefKind, RefRole, Rehome, Rename, RenameAbstain, RenameStop, Respell, Span, SymbolRef,
-    SymbolSeat, UnresolvedReason,
-};
+use crate::types::{Span, UnresolvedReason};
+use crate::edit_seams::ImportRefKind;
+use crate::edit_seams::Respell;
+use crate::edit_seams::Rehome;
+use crate::edit_seams::SymbolRef;
+use crate::edit_seams::RefRole;
+use crate::edit_seams::SymbolSeat;
+use crate::edit_seams::RenameAbstain;
+use crate::edit_seams::RenameStop;
+use crate::edit_seams::Rename;
 
 impl Rename for TsSource {
     fn symbol_refs(

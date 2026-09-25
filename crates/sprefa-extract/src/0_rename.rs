@@ -13,11 +13,11 @@ use std::path::{Path, PathBuf};
 use sprefa_extract::move_stage::{
     content_id, print_previews, stage_and_commit, state_root, Mirror,
 };
-use sprefa_extract::types::RenameAbstain;
 use sprefa_extract::{
     directory_source, normalize, rename_for, renames, replace_action, RenameCx, RenameRequest,
     RenameStop, Respell, SymbolRef,
 };
+use sprefa_extract::edit_seams::RenameAbstain;
 
 #[path = "1_rename_verify.rs"]
 mod rename_verify;

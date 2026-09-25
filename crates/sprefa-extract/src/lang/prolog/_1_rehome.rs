@@ -9,7 +9,9 @@
 
 use super::PrologSource;
 use crate::move_cx::MoveCx;
-use crate::types::{ImportRef, Rehome, Respell};
+use crate::edit_seams::ImportRef;
+use crate::edit_seams::Respell;
+use crate::edit_seams::Rehome;
 
 impl Rehome for PrologSource {
     fn import_refs(&self, _cx: &MoveCx) -> Vec<ImportRef> {

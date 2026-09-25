@@ -29,7 +29,13 @@ use super::rust::{build_line_starts, syn_span, RustSource};
 use super::rust_modules::CargoManifest;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
-use crate::types::{RefRole, Rename, RenameStop, Respell, Span, SymbolRef, SymbolSeat};
+use crate::types::Span;
+use crate::edit_seams::Respell;
+use crate::edit_seams::SymbolRef;
+use crate::edit_seams::RefRole;
+use crate::edit_seams::SymbolSeat;
+use crate::edit_seams::RenameStop;
+use crate::edit_seams::Rename;
 
 impl Rename for RustSource {
     fn symbol_refs(

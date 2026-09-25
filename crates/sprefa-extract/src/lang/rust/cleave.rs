@@ -5,10 +5,12 @@
 
 use crate::move_cx::MoveCx;
 use crate::source::{FamilyMask, Source};
-use crate::types::{Edit, FamilyTag, Cleave, Span};
+use crate::types::{FamilyTag, Span};
 use crate::wire::{flatten_each, FlatFact};
 
 use super::rust::RustSource;
+use crate::edit_seams::Edit;
+use crate::edit_seams::Cleave;
 
 /// The path the parse is told it is reading. Only the extension is consulted.
 const PARSE_AS: &str = "cleave.rs";
@@ -49,8 +51,27 @@ impl Cleave for RustSource {
         let leaves = leaves(self, text);
         let wanted = wanted(names, module);
         if names.is_empty() {
-            let held = leaves.iter().find(|leaf| leaf.path == module)?;
+            let held = leaves
+                .iter()
+                .find(|leaf| leaf.path == module)
+                .or_else(|| leaves.iter().find(|leaf| leaf.prefix == module))?;
+            if held.prefix == module {
+                return Some(Edit { span: held.line, text: String::new() });
+            }
             return Some(drop_leaf(&leaves, held));
+        }
+        // A brace list under `module` that binds names outside `names` is
+        // rewritten to bind exactly `names`, keeping its visibility.
+        let listed: Vec<&Leaf> = leaves.iter().filter(|leaf| leaf.prefix == module).collect();
+        if let Some(first) = listed.first() {
+            let same_line = listed.iter().all(|leaf| leaf.line == first.line);
+            let extra = listed.iter().any(|leaf| !names.contains(&leaf.leaf));
+            if same_line && extra {
+                return Some(Edit {
+                    span: first.line,
+                    text: format!("{}{}", first.vis, use_line(names, module)),
+                });
+            }
         }
         let missing: Vec<&String> = wanted
             .iter()
@@ -124,7 +145,10 @@ impl Cleave for RustSource {
             false => String::new(),
         };
         let foreign = foreign_crate(cx, src, dest).is_some();
-        let vis = if foreign { "pub " } else { "pub(crate) " };
+        let vis = match foreign || declared_public(cx, src) {
+            true => "pub ",
+            false => "pub(crate) ",
+        };
         let line_starts = super::rust::build_line_starts(&text);
         let last_mod = parsed
             .items
@@ -155,11 +179,60 @@ impl Cleave for RustSource {
         ))
     }
 
+    fn publish_module(&self, cx: &MoveCx, dest: &str) -> Option<(String, Edit)> {
+        let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
+        let name = module_parts(cx, dest).pop()?;
+        for parent in parent_candidates(dir).into_iter().filter(|candidate| cx.contains(candidate)) {
+            let text = cx.text(&parent)?;
+            let parsed = syn::parse_file(&text).ok()?;
+            let line_starts = super::rust::build_line_starts(&text);
+            let Some(module) = parsed.items.iter().find_map(|item| match item {
+                syn::Item::Mod(module) if module.ident == name && module.content.is_none() => Some(module),
+                _ => None,
+            }) else {
+                continue;
+            };
+            let edit = match &module.vis {
+                syn::Visibility::Public(_) => return None,
+                syn::Visibility::Restricted(restricted) => Edit {
+                    span: super::rust::syn_span(&line_starts, syn::spanned::Spanned::span(restricted)),
+                    text: "pub".to_string(),
+                },
+                syn::Visibility::Inherited => Edit {
+                    span: Span::anchor(
+                        super::rust::syn_span(&line_starts, module.mod_token.span).start,
+                    ),
+                    text: "pub ".to_string(),
+                },
+            };
+            return Some((parent, edit));
+        }
+        None
+    }
+
     fn imports_visible_to_children(&self, cx: &MoveCx, src: &str) -> bool {
         cx.text(src)
             .and_then(|text| syn::parse_file(&text).ok())
             .is_some_and(|file| file.items.iter().any(|item| matches!(item, syn::Item::Mod(_))))
     }
+}
+
+/// Whether `path`'s own `mod` declaration is `pub`: a file split off a public
+/// module is declared public too, so paths through it keep resolving.
+fn declared_public(cx: &MoveCx, path: &str) -> bool {
+    let dir = path.rsplit_once('/').map_or("", |(dir, _)| dir);
+    let Some(name) = module_parts(cx, path).pop() else {
+        return false;
+    };
+    parent_candidates(dir)
+        .into_iter()
+        .filter_map(|parent| cx.text(&parent))
+        .filter_map(|text| syn::parse_file(&text).ok())
+        .flat_map(|file| file.items.into_iter())
+        .any(|item| {
+            matches!(item, syn::Item::Mod(module)
+                if module.ident == name && matches!(module.vis, syn::Visibility::Public(_)))
+        })
 }
 
 /// The first byte at or after `at` that is not whitespace, a comment or an

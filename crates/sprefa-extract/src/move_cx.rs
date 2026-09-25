@@ -14,7 +14,7 @@ use std::path::{Component, Path, PathBuf};
 
 use ignore::WalkBuilder;
 
-use crate::types::Rehome;
+use crate::edit_seams::Rehome;
 
 /// Whether the roster hands `rel` to `rehome`.
 pub fn owned_by<R: Rehome + ?Sized>(rel: &str, rehome: &R) -> bool {

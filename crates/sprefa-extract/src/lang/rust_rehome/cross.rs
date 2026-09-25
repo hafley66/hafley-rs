@@ -16,8 +16,9 @@ use super::{
 use crate::manifests::{fold_package_edges, Manifest, ManifestKind};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
-use crate::types::{ImportRefKind, LangKind, Span};
+use crate::types::{LangKind, Span};
 use crate::wire::FlatFact;
+use crate::edit_seams::ImportRefKind;
 
 /// A manifest edit: one dependency line (or table) a package gains.
 pub const CARGO_DEP: ImportRefKind = ImportRefKind::Ext(LangKind {

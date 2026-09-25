@@ -52,6 +52,7 @@ pub mod trail;
 pub mod tsi;
 pub mod types;
 pub mod wire;
+#[path = "0_edit_seams.rs"] pub mod edit_seams;
 
 pub use cfg::{
     build_cfg, cfg_bundle, cfg_facts, roles_for, CfgRole, RoleRule, GO_ROLES, KOTLIN_ROLES,
@@ -138,13 +139,25 @@ pub use soopy::{
     SourceEntry, SourceRef,
 };
 pub use source::{FamilyMask, RyiOutput, Source};
-pub use types::{
-    CfgEdgeKind, CfgF, CfgNodeKind, Cleave, Edit, ImportRef, ImportRefKind, RefRole, Rehome,
-    RehomeArm, RehomeManifests, RehomePlanCheck, RehomeShim, RehomeTextSpellings, Rename,
-    RenameStop, Respell, SymbolId, SymbolInterner, SymbolRef, SymbolSeat,
-};
+pub use types::{CfgEdgeKind, CfgF, CfgNodeKind, SymbolId, SymbolInterner};
 pub use wire::{
     file_fact, file_fact_with_content_id, flatten, flatten_cfg, flatten_cfg_each, flatten_each,
     flatten_flow, flatten_jsonl, flatten_scip, line_start_fact_with_content_id, newline_offsets,
     scip_file_edges, size_skip_fact, FlatFact, SpanOut, DEFAULT_MAX_BYTES, SCHEMA,
 };
+pub use crate::edit_seams::ImportRef;
+pub use crate::edit_seams::ImportRefKind;
+pub use crate::edit_seams::Respell;
+pub use crate::edit_seams::Edit;
+pub use crate::edit_seams::Cleave;
+pub use crate::edit_seams::Rehome;
+pub use crate::edit_seams::RehomeManifests;
+pub use crate::edit_seams::RehomeShim;
+pub use crate::edit_seams::RehomeTextSpellings;
+pub use crate::edit_seams::RehomePlanCheck;
+pub use crate::edit_seams::RehomeArm;
+pub use crate::edit_seams::SymbolRef;
+pub use crate::edit_seams::RefRole;
+pub use crate::edit_seams::SymbolSeat;
+pub use crate::edit_seams::RenameStop;
+pub use crate::edit_seams::Rename;

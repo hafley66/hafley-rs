@@ -33,7 +33,11 @@ use crate::family::SpecifierKind;
 use crate::move_cx::{dirname, owned_by, MoveCx};
 use crate::project::extract_pool;
 use crate::shape::Strings;
-use crate::types::{ImportRef, ImportRefKind, LangKind, Rehome, Respell, Span};
+use crate::types::{LangKind, Span};
+use crate::edit_seams::ImportRef;
+use crate::edit_seams::ImportRefKind;
+use crate::edit_seams::Respell;
+use crate::edit_seams::Rehome;
 
 /// The moved file's own `package a.b` declaration, a kind only Kotlin constructs.
 pub const PACKAGE_DECL: ImportRefKind = ImportRefKind::Ext(LangKind {

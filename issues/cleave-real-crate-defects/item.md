@@ -25,3 +25,9 @@ First real-crate cleave (M6): `ryi cleave crates/sprefa-extract/src/types.rs#Imp
 - [ ] import rewrites keep the declaration's visibility prefix
 - [ ] fn-local `use` items are neither anchors nor treated as file imports
 - [ ] importers reaching the item through a re-export (hops > 0) are not rewritten; integration-test/example files spell the package ident, never `crate::`
+
+## Comments
+
+### 2026-09-25T17:53:01Z · @claude-m6
+
+Found during batch A: when DEST already imports SRC#ITEM (DEST is a caller), the plan kept that import and added one naming DEST itself. Fixed: DEST's import block drops the item; callers skip DEST.

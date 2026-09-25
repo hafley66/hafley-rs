@@ -16,10 +16,14 @@ use crate::lang::ts_paths::{ts_path_literals, TsPathLiteral};
 use crate::lang::ts_resolve::{respell, TsResolver};
 use crate::move_cx::{dirname, join_rel, relative_between, MoveCx};
 use crate::project::extract_pool;
-use crate::types::{
-    ImportRef, ImportRefKind, Rehome, RehomeManifests, RehomePlanCheck, RehomeTextSpellings,
-    Respell, Span,
-};
+use crate::types::Span;
+use crate::edit_seams::ImportRef;
+use crate::edit_seams::ImportRefKind;
+use crate::edit_seams::Respell;
+use crate::edit_seams::Rehome;
+use crate::edit_seams::RehomeManifests;
+use crate::edit_seams::RehomeTextSpellings;
+use crate::edit_seams::RehomePlanCheck;
 
 pub mod cross;
 

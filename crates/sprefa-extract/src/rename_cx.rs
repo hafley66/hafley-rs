@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 use ignore::WalkBuilder;
 
 use crate::move_cx::SKIP_DIRS;
-use crate::types::Rename;
+use crate::edit_seams::Rename;
 
 /// Whether the roster hands `rel` to `rename`.
 pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {

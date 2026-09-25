@@ -101,7 +101,9 @@ pub use ts_rehome::{build_paths, compiled_spellings, BuildPaths};
 pub use ts_resolve::{respell, TsResolver};
 
 use crate::source::Source;
-use crate::types::{Cleave, RehomeArm, Rename};
+use crate::edit_seams::Cleave;
+use crate::edit_seams::RehomeArm;
+use crate::edit_seams::Rename;
 
 /// The first-match roster. Order matters: the lang-specific `Source`s precede the
 /// linked-grammar CST fallback (v5 `type_langs()` convention). RustSource is first so a

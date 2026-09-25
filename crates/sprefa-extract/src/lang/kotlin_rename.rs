@@ -29,7 +29,13 @@ use super::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
 use super::KotlinSource;
 use super::rust::build_line_starts;
 use crate::rename_cx::{RenameCx, RenameRequest};
-use crate::types::{RefRole, Rename, RenameStop, Respell, Span, SymbolRef, SymbolSeat};
+use crate::types::Span;
+use crate::edit_seams::Respell;
+use crate::edit_seams::SymbolRef;
+use crate::edit_seams::RefRole;
+use crate::edit_seams::SymbolSeat;
+use crate::edit_seams::RenameStop;
+use crate::edit_seams::Rename;
 
 impl Rename for KotlinSource {
     fn symbol_refs(

@@ -416,7 +416,8 @@ fn a_cleave_into_a_new_file_of_the_same_crate_declares_it() {
     stdout(&ryi(&fixture, &args));
     assert_eq!(
         read(&fixture, "alpha/src/lib.rs"),
-        "pub mod shapes;\npub mod util;\npub(crate) mod round;\n\npub use shapes::Circle;\n\npub const VERSION_TAG: &str = \"v1\";\n"
+        "pub mod shapes;\npub mod util;\npub mod round;\n\npub use shapes::Circle;\n\npub const VERSION_TAG: &str = \"v1\";\n",
+        "a file split off a public module is declared public"
     );
     cargo_check(&fixture);
 }

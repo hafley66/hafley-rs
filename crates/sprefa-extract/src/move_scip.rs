@@ -9,7 +9,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use crate::move_cx::MoveCx;
 use crate::scip::{byte_range_at, LineTable};
-use crate::types::{ImportRef, OccurrenceRole, ScipIndex, Span};
+use crate::types::{OccurrenceRole, ScipIndex, Span};
+use crate::edit_seams::ImportRef;
 
 /// A ref the index carries and the impl did not answer with.
 pub const MISSED_BY_IMPL: &str = "missed_by_impl";

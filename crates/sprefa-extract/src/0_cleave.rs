@@ -11,12 +11,14 @@ use sprefa_extract::move_stage::{
     content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
     VerifyJournal,
 };
-use sprefa_extract::types::{CleaveDrag, CleavePlan, CleaveSpecifier};
 use sprefa_extract::{
     directory_path, directory_source, dispatch, flatten_each, cleave_for, normalize,
     replace_action, resolve_project, scm_facts, FamilyMask, FlatFact, MoveCx, Cleave,
     ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
 };
+use sprefa_extract::edit_seams::CleavePlan;
+use sprefa_extract::edit_seams::CleaveSpecifier;
+use sprefa_extract::edit_seams::CleaveDrag;
 
 const PRODUCER: &str = "extract-cleave";
 
@@ -295,7 +297,7 @@ impl Plan {
         let carried: BTreeSet<(String, String)> = dest_facts
             .iter()
             .flat_map(|facts| facts.specifiers.iter())
-            .map(|row| (row.name.clone(), row.module.clone()))
+            .map(|row| (row.name.clone(), module_key(&row.name, &row.module)))
             .collect();
 
         let mut travelling = Vec::new();
@@ -307,7 +309,7 @@ impl Plan {
                 None => row.module.clone(),
             };
             let kind = match (
-                carried.contains(&(row.name.clone(), dest_module.clone())),
+                carried.contains(&(row.name.clone(), module_key(&row.name, &dest_module))),
                 imports.target(&src, &row.name).is_some(),
             ) {
                 (true, _) => "carried",
@@ -344,7 +346,7 @@ impl Plan {
                     .map(|path| arm.spell_module(&cx, &dest, path))
                     .unwrap_or_else(|| row.module.clone());
                 let kind = match (
-                    carried.contains(&(row.name.clone(), dest_module.clone())),
+                    carried.contains(&(row.name.clone(), module_key(&row.name, &dest_module))),
                     target.is_some(),
                 ) {
                     (true, _) => "carried",
@@ -370,7 +372,7 @@ impl Plan {
                     continue;
                 }
                 let dest_module = arm.spell_module(&cx, &dest, &parent);
-                let kind = if carried.contains(&(decl.name.clone(), dest_module.clone())) {
+                let kind = if carried.contains(&(decl.name.clone(), module_key(&decl.name, &dest_module))) {
                     "carried"
                 } else {
                     "relative"
@@ -426,7 +428,7 @@ impl Plan {
                 dragged
                     .iter()
                     .filter(|row| row.action == "exported")
-                    .filter(|row| !carried.contains(&(row.name.clone(), src_module.clone())))
+                    .filter(|row| !carried.contains(&(row.name.clone(), module_key(&row.name, &src_module))))
                     .map(|row| (row.name.clone(), src_module.clone())),
             );
         for (name, module) in wanted {
@@ -517,6 +519,14 @@ impl Plan {
         if let Some((file, edit)) = self.new_file_decl() {
             out.push(Respell {
                 receipt: Some(format!("declare {}: {}", self.rows.dest, edit.text.trim())),
+                file,
+                span: edit.span,
+                text: edit.text,
+            });
+        }
+        if let Some((file, edit)) = self.publish_decl() {
+            out.push(Respell {
+                receipt: Some(format!("publish {} for another crate", self.rows.dest)),
                 file,
                 span: edit.span,
                 text: edit.text,
@@ -671,6 +681,16 @@ impl Plan {
                 block = apply(&block, &edit);
             }
         }
+        // DEST that imported the item now declares it: that import goes.
+        for (module, names) in self.dest_facts.iter().flat_map(|facts| facts.modules()) {
+            if !names.contains(&self.rows.item) {
+                continue;
+            }
+            let kept: Vec<String> = names.into_iter().filter(|name| *name != self.rows.item).collect();
+            if let Some(edit) = self.arm.edit_import(&block, &kept, &module) {
+                block = apply(&block, &edit);
+            }
+        }
         (at, block)
     }
 
@@ -680,6 +700,9 @@ impl Plan {
         let mut out = Vec::new();
         let spellings = self.rows.callers.iter().zip(&self.callers);
         for ((rel, facts), module) in spellings.zip(&self.caller_modules) {
+            if *rel == self.rows.dest {
+                continue;
+            }
             let kept: Vec<String> = facts
                 .specifiers
                 .iter()
@@ -694,7 +717,12 @@ impl Plan {
                     receipt: Some(format!("caller {rel}: {module} loses {}", self.rows.item)),
                 });
             }
-            let spelling = self.arm.spell_module(&self.cx, rel, &self.rows.dest);
+            let spelling = as_written(
+                &self.cx,
+                &self.rows.dest,
+                module,
+                self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+            );
             let mut landing: Vec<String> = facts
                 .specifiers
                 .iter()
@@ -775,11 +803,35 @@ impl Plan {
         }
     }
 
+    /// An existing DEST whose module another crate now names must be public.
+    fn publish_decl(&self) -> Option<(String, sprefa_extract::Edit)> {
+        self.dest_facts.as_ref()?;
+        let foreign = self
+            .rows
+            .callers
+            .iter()
+            .zip(&self.caller_modules)
+            .filter(|(rel, _)| **rel != self.rows.dest)
+            .any(|(rel, module)| {
+                let spelling = as_written(
+                    &self.cx,
+                    &self.rows.dest,
+                    module,
+                    self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                );
+                !matches!(spelling.split("::").next(), Some("crate" | "self" | "super"))
+            });
+        match foreign {
+            true => self.arm.publish_module(&self.cx, &self.rows.dest),
+            false => None,
+        }
+    }
+
     /// Every path a stage reads or writes, so a verify rollback can restore it.
     fn touched(&self) -> Vec<String> {
         let mut out: BTreeSet<String> = BTreeSet::new();
         out.insert(self.rows.src.clone());
-        if let Some((file, _)) = self.new_file_decl() {
+        if let Some((file, _)) = self.new_file_decl().or_else(|| self.publish_decl()) {
             out.insert(file);
         }
         if self.dest_facts.is_some() {
@@ -795,6 +847,28 @@ impl Plan {
             true => vec![self.rows.dest.clone()],
             false => Vec::new(),
         }
+    }
+}
+
+/// One module spelling per binding: `use a::b::Name;` rows carry the whole
+/// path as their module, `use a::b::{Name}` rows carry `a::b`.
+fn module_key(name: &str, module: &str) -> String {
+    module
+        .strip_suffix(name)
+        .and_then(|head| head.strip_suffix("::"))
+        .unwrap_or(module)
+        .to_string()
+}
+
+/// A caller that named SRC through its package's crate ident (a bin reaching
+/// its own lib) keeps that ident where the arm spelled DEST with `crate::`.
+fn as_written(cx: &MoveCx, dest: &str, module: &str, spelling: String) -> String {
+    let head = module.split("::").next().unwrap_or_default();
+    let named = sprefa_extract::lang::rust_rehome::cargo_package(cx, dest)
+        .is_some_and(|package| package.2 == head);
+    match (named, spelling.strip_prefix("crate")) {
+        (true, Some(rest)) if rest.is_empty() || rest.starts_with("::") => format!("{head}{rest}"),
+        _ => spelling,
     }
 }
 
