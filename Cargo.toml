@@ -23,7 +23,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"]
 # test suite pays its unoptimized speed on every run for no edit-loop gain.
 # Workspace members stay at opt-level 0; an edit has to rebuild them.
 [profile.dev.package."*"]
-opt-level = 1
+opt-level = 3
 
 [profile.dist]
 inherits = "release"

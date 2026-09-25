@@ -279,7 +279,7 @@ rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
 # Own workspace root, so the root dev profile does not reach here; deps
 # (including out-of-dir path deps hafley_scm, soopy) build optimized once.
 [profile.dev.package."*"]
-opt-level = 1
+opt-level = 3
 
 [profile.dist]
 inherits = "release"
