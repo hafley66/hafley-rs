@@ -1,4 +1,4 @@
-"""Structure metrics for a rust tree, off `extract --family cst` node records.
+"""Structure metrics for a rust tree, off `ryi --kinds cst` node records.
 
 usage: structure.py <extract-binary> <tree-root> <label>
 prints one JSON object with per-tree totals and per-file rows.
@@ -27,7 +27,7 @@ def files():
 
 
 def nodes(path):
-    out = subprocess.run([EXTRACT, "--family", "cst", path], capture_output=True, text=True)
+    out = subprocess.run([EXTRACT, "--kinds", "cst", path], capture_output=True, text=True)
     for line in out.stdout.splitlines():
         row = json.loads(line)
         if row.get("record") == "node":

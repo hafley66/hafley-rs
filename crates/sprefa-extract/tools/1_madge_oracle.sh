@@ -134,7 +134,7 @@ if [ "$RESOLVER" = scip ] || [ "$RESOLVER" = both ]; then
   # One source path is enough to pick the indexer; --scip-deps covers every
   # document the index holds regardless of which paths are named.
   FIRST_TS="$(find "$ROOT" -name '*.ts' -not -path '*/node_modules/*' | head -1)"
-  "$EXTRACT" --scip-deps --project-root "$ROOT" --scip-build "$FIRST_TS" \
+  "$EXTRACT" --scip-deps --root "$ROOT" --scip-build "$FIRST_TS" \
     > "$WORK/scip.jsonl"
   grade scip "$WORK/scip.jsonl"
 fi
@@ -143,7 +143,7 @@ if [ "$RESOLVER" = diet ] || [ "$RESOLVER" = both ]; then
   # The diet resolver's universe IS its argument list, so every corpus file is
   # named. One process over the whole list, never one per file.
   find "$ROOT" -name '*.ts' -not -path '*/node_modules/*' -print0 \
-    | xargs -0 "$EXTRACT" --deps --project-root "$ROOT" > "$WORK/diet.jsonl"
+    | xargs -0 "$EXTRACT" --deps --root "$ROOT" > "$WORK/diet.jsonl"
   grade diet "$WORK/diet.jsonl"
 fi
 

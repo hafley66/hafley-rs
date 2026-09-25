@@ -126,7 +126,7 @@ for repo in repos:
             continue
         nbytes = len(content)
         proc = subprocess.run(
-            [extract, "--family", "df", path],
+            [extract, "--kinds", "df", path],
             capture_output=True, text=True,
         )
         facts += analyze_file(path, nbytes, proc, inv, fv)
