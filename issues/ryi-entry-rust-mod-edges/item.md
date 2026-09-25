@@ -2,9 +2,10 @@
 created: 2026-09-25
 updated: 2026-09-25
 type: bug
-status: open
+status: fixed
 priority: normal
 labels: [extract]
+closed: 2026-09-25
 ---
 
 # ryi --entry misses Rust mod edges: resolved_import carries no mod x; rows
