@@ -119,6 +119,9 @@ fn cargo_check(fixture: &Fixture) {
     let check = Command::new("cargo")
         .args(["check", "--offline", "-q"])
         .current_dir(&fixture.root)
+        // An inherited CARGO_TARGET_DIR is shared by parallel fixtures whose
+        // crates carry the same names, so their builds overwrite each other.
+        .env("CARGO_TARGET_DIR", fixture.root.join("target"))
         .output()
         .expect("cargo runs");
     assert!(
