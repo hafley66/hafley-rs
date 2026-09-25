@@ -138,11 +138,24 @@ fn aliases_reject_an_explicit_mode() {
 }
 
 #[test]
-fn aliases_reject_checker_flags_and_fast_rejects_an_indexer_pick() {
+fn slow_takes_an_explicit_index_like_family_scip() {
+    let root = "tests/fixtures/scip_rel";
+    let index = "tests/fixtures/scip_relationship/fixture.scip";
+    let alias = extract(&["slow", "--scip-index", index, root]);
+    let family = extract(&["--family", "scip", "--scip-index", index, root]);
+    assert!(alias.status.success(), "{}", String::from_utf8_lossy(&alias.stderr));
+    assert_eq!(alias.stdout, family.stdout);
+    assert_eq!(alias.stderr, family.stderr);
+}
+
+#[test]
+fn aliases_reject_checker_flags_and_fast_rejects_index_sources() {
     for (alias, flag) in [
         ("fast", "--go-checker"),
         ("slow", "--go-checker"),
         ("fast", "--indexer=go"),
+        ("fast", "--scip-index"),
+        ("fast", "--scip-build"),
     ] {
         let output = extract(&[alias, flag, "some.rs"]);
         assert_eq!(output.status.code(), Some(2));

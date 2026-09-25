@@ -303,11 +303,27 @@ impl AliasMode {
             Self::Slow => "scip",
         }
     }
+
+    /// Flags that would pick a different mode. Slow keeps the index-source
+    /// flags: they say where its SCIP index comes from, not which mode runs.
+    fn refused(self) -> &'static [&'static str] {
+        match self {
+            Self::Fast => &[
+                "--family",
+                "--rust-checker",
+                "--ts-checker",
+                "--go-checker",
+                "--scip-index",
+                "--scip-build",
+                "--indexer",
+            ],
+            Self::Slow => &["--family", "--rust-checker", "--ts-checker", "--go-checker"],
+        }
+    }
 }
 
-/// Expand the command aliases onto the existing family-mode dispatch. An alias
-/// owns the SCIP/compiler choice, so flags which could name or configure a
-/// different choice are rejected instead of being accepted and then ignored.
+/// Expand the command aliases onto the existing family-mode dispatch, refusing
+/// flags that would pick another mode instead of accepting and ignoring them.
 fn alias_args() -> Result<Vec<String>, String> {
     let mut args: Vec<String> = std::env::args().collect();
     let alias = match args.get(1).map(String::as_str) {
@@ -315,25 +331,15 @@ fn alias_args() -> Result<Vec<String>, String> {
         Some("slow") => AliasMode::Slow,
         _ => return Ok(args),
     };
-    const MODE_FLAGS: [&str; 6] = [
-        "--family",
-        "--scip-index",
-        "--scip-build",
-        "--rust-checker",
-        "--ts-checker",
-        "--go-checker",
-    ];
     if let Some(flag) = args
         .iter()
         .skip(2)
         .take_while(|arg| arg.as_str() != "--")
         .find(|arg| {
-            let conflicts_with_alias = MODE_FLAGS
+            alias
+                .refused()
                 .iter()
-                .any(|name| arg.as_str() == *name || arg.starts_with(&format!("{name}=")));
-            let conflicts_with_fast = matches!(alias, AliasMode::Fast)
-                && (arg.as_str() == "--indexer" || arg.starts_with("--indexer="));
-            conflicts_with_alias || conflicts_with_fast
+                .any(|name| arg.as_str() == *name || arg.starts_with(&format!("{name}=")))
         })
     {
         return Err(format!(
