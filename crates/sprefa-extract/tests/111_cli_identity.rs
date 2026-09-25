@@ -1,3 +1,9 @@
+// The `extract` bin carries `required-features = ["cli"]`, so without the
+// feature cargo does not rebuild it and `CARGO_BIN_EXE_extract` resolves to
+// whatever an earlier `--features cli` build left in the target directory,
+// whose `build.rs` wall-clock stamp differs from this crate's.
+#![cfg(feature = "cli")]
+
 use std::path::PathBuf;
 use std::process::Command;
 
