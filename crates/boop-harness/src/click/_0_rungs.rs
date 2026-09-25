@@ -31,21 +31,24 @@ pub struct IndexEntry {
     pub is_dir: bool,
 }
 
-/// Split a trailing `:123` line reference off a token. Drive letters and
+/// Split a trailing line reference off a token: `:123`, a span `:123-145`,
+/// or a list `:561,583`. The line is the first number. Drive letters and
 /// `host:8080` in a URL are not line refs.
 pub fn split_line_ref(token: &str) -> (String, Option<u32>) {
     let Some(colon) = token.rfind(':') else {
         return (token.to_string(), None);
     };
     let (head, tail) = token.split_at(colon);
-    let digits = &tail[1..];
-    let is_line = !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit());
+    let numbers: Vec<&str> = tail[1..].split(['-', ',']).map(str::trim).collect();
+    let spans = tail[1..].matches('-').count();
+    let is_line = numbers.iter().all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        && (spans == 0 || (spans == 1 && numbers.len() == 2));
     // `C:\src` drive letters and `http://host:8080` are not line references.
     let is_url_port = head.split("://").nth(1).is_some_and(|rest| !rest.contains('/'));
     if !is_line || head.is_empty() || head.len() == 1 || is_url_port {
         return (token.to_string(), None);
     }
-    match digits.parse::<u32>() {
+    match numbers[0].parse::<u32>() {
         Ok(line) => (head.to_string(), Some(line)),
         Err(_) => (token.to_string(), None),
     }
@@ -529,6 +532,40 @@ mod tests {
         assert_eq!(split_line_ref("main.ts"), ("main.ts".into(), None));
         assert_eq!(split_line_ref("http://host:8080"), ("http://host:8080".into(), None));
         assert_eq!(split_line_ref("C:8"), ("C:8".into(), None));
+    }
+
+    /// RECEIPT. Markdown cites a span or a list of lines; the file opens at
+    /// the first.
+    #[test]
+    fn splits_a_line_range_and_a_line_list() {
+        let forms = [
+            "src/lang/rust/2_call.rs:790-801",
+            "2_call.rs:183-198",
+            "rust_modules.rs:1105-1136",
+            "2_call.rs:561,583",
+            "2_call.rs:561, 583",
+            "hafley_scm/src/lang/rust/10_module_resolution_rows.rs:123-145",
+            "a.rs:7-",
+            "a.rs:-7",
+            "a.rs:7,,8",
+            "http://host:80-81",
+        ];
+        let split: Vec<(String, Option<u32>)> = forms.iter().map(|form| split_line_ref(form)).collect();
+        assert_eq!(
+            split,
+            vec![
+                ("src/lang/rust/2_call.rs".into(), Some(790)),
+                ("2_call.rs".into(), Some(183)),
+                ("rust_modules.rs".into(), Some(1105)),
+                ("2_call.rs".into(), Some(561)),
+                ("2_call.rs".into(), Some(561)),
+                ("hafley_scm/src/lang/rust/10_module_resolution_rows.rs".into(), Some(123)),
+                ("a.rs:7-".into(), None),
+                ("a.rs:-7".into(), None),
+                ("a.rs:7,,8".into(), None),
+                ("http://host:80-81".into(), None),
+            ]
+        );
     }
 
     #[test]

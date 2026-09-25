@@ -12,8 +12,8 @@ use boop_mux::{Multiplexer, PaneHit, Tmux};
 use boop_store::{SessionTouched, Store};
 use serde::Deserialize;
 
-pub use _2_ladder::{evidence_dirs, resolve, AgentEvidence, ResolveResult, ResolvedRef};
-pub use _1_roots::{click_roots, worktrees_of, Root, RootVia};
+pub use _2_ladder::{evidence_dirs, resolve, resolve_in_doc, AgentEvidence, ResolveResult, ResolvedRef};
+pub use _1_roots::{click_roots, doc_roots, worktrees_of, Root, RootVia};
 pub use _0_rungs::{clear_index_cache, git_out, home_dir, repo_root_of};
 
 const TOUCHED_CAP: usize = 2000;
@@ -49,8 +49,15 @@ fn click_sessions(pane: &PaneHit, given: &[String], store: Option<&Store>) -> Ve
 }
 
 /// Resolve `token` clicked at `cell`. A cell tmux cannot place (no server, a
-/// border) falls back to `cwd` as the pane cwd.
-pub fn resolve_click(token: &str, cell: Option<&ClickCell>, cwd: &str, sessions: &[String]) -> ClickResolution {
+/// border) falls back to `cwd` as the pane cwd. A token written in a document
+/// (`doc`, the markdown file's path) resolves from that document's roots first.
+pub fn resolve_click(
+    token: &str,
+    cell: Option<&ClickCell>,
+    cwd: &str,
+    sessions: &[String],
+    doc: Option<&str>,
+) -> ClickResolution {
     let started = Instant::now();
     let socket = cell.and_then(|cell| cell.socket.as_deref());
     let pane = cell
@@ -68,8 +75,18 @@ pub fn resolve_click(token: &str, cell: Option<&ClickCell>, cwd: &str, sessions:
         .and_then(|store| store.session_touched(&sessions, TOUCHED_CAP).ok())
         .unwrap_or_else(SessionTouched::default);
     let home = home_dir();
+    let evidence = AgentEvidence::from_touched(&touched, &home);
     let roots = click_roots(&pane, &touched);
-    let result = resolve(token, &roots, &home, &AgentEvidence::from_touched(&touched, &home));
+    let (roots, result) = match doc.map(std::path::Path::new) {
+        Some(doc) => {
+            let result = resolve_in_doc(token, doc, &roots, &home, &evidence);
+            (doc_roots(doc, &roots), result)
+        }
+        None => {
+            let result = resolve(token, &roots, &home, &evidence);
+            (roots, result)
+        }
+    };
     let (kind, path, source, via) = match &result {
         ResolveResult::Hit { reference } => ("hit", reference.path.clone(), reference.source, ""),
         ResolveResult::Choices { paths, via, .. } => ("choices", paths.first().cloned().unwrap_or_default(), "", *via),
@@ -78,6 +95,7 @@ pub fn resolve_click(token: &str, cell: Option<&ClickCell>, cwd: &str, sessions:
     };
     tracing::info!(
         token,
+        doc,
         pane = pane.pane,
         cwd = %pane.pane_current_path.display(),
         sessions = ?sessions,
@@ -156,6 +174,59 @@ mod tests {
             rel(&base, hit),
             ResolveResult::Hit { reference: ResolvedRef { path: format!("sqlite_ivm/{lab}"), line: None, source: "session" } }
         );
+    }
+
+    /// RECEIPT. Inline code in a markdown file names paths the way the file's
+    /// author sees them: beside the file, from its checkout, in another
+    /// worktree of that checkout, or a bare filename found once in it. Every
+    /// line form opens at its first line. The pane sits in an unrelated repo.
+    #[test]
+    fn a_ref_in_a_document_resolves_from_the_document() {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let repo = base.join("hafley");
+        for file in [
+            "crates/scm/src/lang/rust/2_call.rs",
+            "crates/scm/src/rust_modules.rs",
+            "docs/plans/notes.md",
+            "docs/plans/sibling.md",
+        ] {
+            std::fs::create_dir_all(repo.join(file).parent().unwrap()).unwrap();
+            std::fs::write(repo.join(file), "x").unwrap();
+        }
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["add", "-A"]);
+        git(&repo, &["commit", "-qm", "x"]);
+        git(&repo, &["worktree", "add", "-q", "-b", "feat", base.join("hafley-feat").to_str().unwrap()]);
+        std::fs::write(base.join("hafley-feat/only-feat.rs"), "f").unwrap();
+        std::fs::create_dir_all(base.join("elsewhere/.git")).unwrap();
+        std::fs::write(base.join("elsewhere/main.rs"), "m").unwrap();
+        let home = base.to_string_lossy().into_owned();
+        let doc = repo.join("docs/plans/notes.md");
+        let roots = click_roots(&pane(&base.join("elsewhere")), &SessionTouched::default());
+
+        let hit = |path: &str, line: Option<u32>, source: &'static str| ResolveResult::Hit {
+            reference: ResolvedRef { path: path.into(), line, source },
+        };
+        let cases = [
+            ("sibling.md", hit("hafley/docs/plans/sibling.md", None, "doc")),
+            ("crates/scm/src/lang/rust/2_call.rs:790-801", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(790), "repo")),
+            ("2_call.rs:183-198", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(183), "search")),
+            ("2_call.rs:561,583", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(561), "search")),
+            ("rust_modules.rs:1105-1136", hit("hafley/crates/scm/src/rust_modules.rs", Some(1105), "search")),
+            ("scm/src/lang/rust/2_call.rs:12", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(12), "search")),
+            ("crates/scm", hit("hafley/crates/scm", None, "repo")),
+            ("only-feat.rs:3", hit("hafley-feat/only-feat.rs", Some(3), "worktree")),
+            ("main.rs", hit("elsewhere/main.rs", None, "cwd")),
+        ];
+        for (token, want) in cases {
+            clear_index_cache();
+            let got = rel(&base, resolve_in_doc(token, &doc, &roots, &home, &AgentEvidence::default()));
+            assert_eq!(got, want, "{token}");
+        }
+        // Without the document the pane's repo is the only anchor.
+        clear_index_cache();
+        assert_eq!(resolve("sibling.md", &roots, &home, &AgentEvidence::default()), ResolveResult::Miss);
     }
 
     /// RECEIPT. A path the pane's checkout lacks, present under several other
