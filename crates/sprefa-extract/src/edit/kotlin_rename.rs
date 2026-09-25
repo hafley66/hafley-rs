@@ -25,9 +25,9 @@
 
 use std::collections::BTreeMap;
 
-use super::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
-use super::KotlinSource;
-use super::rust::build_line_starts;
+use crate::lang::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
+use crate::lang::KotlinSource;
+use crate::lang::rust::build_line_starts;
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::types::Span;
 use crate::edit_seams::Respell;

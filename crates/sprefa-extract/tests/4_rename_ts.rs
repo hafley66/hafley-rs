@@ -316,7 +316,7 @@ fn nested_only_candidates_stop_then_at_selects() {
 /// commits byte-exact against the hand-written after tree.
 #[test]
 fn inexact_is_unreachable_from_the_ts_arm() {
-    let arm = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/lang/ts_rename.rs");
+    let arm = Path::new(env!("CARGO_MANIFEST_DIR")).join("src/edit/ts_rename.rs");
     let source = std::fs::read_to_string(&arm).expect("ts_rename.rs readable");
     assert!(
         !source.contains("Inexact"),
@@ -566,7 +566,7 @@ fn tsc_is_clean_on_the_committed_tree() {
 
 /// An importer no `Rename` arm reaches: a namespace import seats the symbol at
 /// a member position, which the scope fence never rewrites and `importer_seats`
-/// (`lang/ts_rename.rs:215`) skips, while scip-typescript binds both `lib.Foo`
+/// (`edit/ts_rename.rs:215`) skips, while scip-typescript binds both `lib.Foo`
 /// seats to the anchor's own symbol. Two seats the index knows and the plan
 /// does not carry.
 const NAMESPACE_IMPORTER: &str = concat!(

@@ -216,7 +216,7 @@ pub fn verify_import_refs(
 }
 
 /// Both sides carry the SAME scope or the report is noise: a `Rehome` impl
-/// answers for the batch only (`lang/ts_rehome.rs:176` drops a relative
+/// answers for the batch only (`edit/ts_rehome.rs:176` drops a relative
 /// specifier that cannot name a moved file) while an index carries every import
 /// in the corpus.
 /// @comment-ok: the symmetry is why this exists and no signature shows it

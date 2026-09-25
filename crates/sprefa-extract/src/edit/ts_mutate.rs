@@ -8,7 +8,7 @@ use crate::source::{FamilyMask, Source};
 use crate::types::{FamilyTag, Span};
 use crate::wire::{flatten_each, FlatFact};
 
-use super::ts::TsSource;
+use crate::lang::ts::TsSource;
 use crate::edit_seams::Edit;
 use crate::edit_seams::Cleave;
 
@@ -20,7 +20,7 @@ const PARSE_AS: &str = "cleave.ts";
 
 impl Cleave for TsSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
-        let at = crate::lang::rust_mutate::past_trivia(text, decl.start as usize);
+        let at = crate::edit::rust_mutate::past_trivia(text, decl.start as usize);
         if let Some(rest) = text.get(at..).and_then(|tail| tail.strip_prefix("export")) {
             if rest.starts_with([' ', '\t']) {
                 let len = (rest.len() - rest.trim_start_matches([' ', '\t']).len() + 6) as u32;
@@ -81,7 +81,7 @@ impl Cleave for TsSource {
     }
 
     fn spell_module(&self, cx: &crate::move_cx::MoveCx, from_path: &str, to_path: &str) -> String {
-        if let Some(spec) = crate::lang::ts_rehome::cross::spec_across(cx, from_path, to_path) {
+        if let Some(spec) = crate::edit::ts_rehome::cross::spec_across(cx, from_path, to_path) {
             return spec;
         }
         let relative = relative_between(dirname(from_path), &drop_extension(to_path));

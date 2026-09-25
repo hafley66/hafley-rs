@@ -29,7 +29,7 @@ use std::sync::{Mutex, OnceLock};
 use rayon::prelude::*;
 use syn::spanned::Spanned;
 
-use super::rust::{build_line_starts, syn_span, RustSource};
+use crate::lang::rust::{build_line_starts, syn_span, RustSource};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
 use crate::types::{LangKind, Span};

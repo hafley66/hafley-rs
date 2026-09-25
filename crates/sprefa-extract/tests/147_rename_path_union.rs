@@ -2,7 +2,7 @@
 //! the UNION of both routes instead of stopping with exit 6.
 //!
 //! @comment-ok: plan header, the signatures and lifetimes the change follows.
-//! PLAN, `lang/rust_rename.rs`:
+//! PLAN, `edit/rust_rename.rs`:
 //!     homes: BTreeMap<String, Vec<ModuleId>>       appearance-ordered, never empty
 //!     fn homes_of(&self, rel: &str) -> &[ModuleId]  a file under no root is the
 //!                                                  1-element ORPHAN slice

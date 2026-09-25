@@ -8,7 +8,7 @@ use crate::source::{FamilyMask, Source};
 use crate::types::{FamilyTag, Span};
 use crate::wire::{flatten_each, FlatFact};
 
-use super::rust::RustSource;
+use crate::lang::rust::RustSource;
 use crate::edit_seams::Edit;
 use crate::edit_seams::Cleave;
 
@@ -149,13 +149,13 @@ impl Cleave for RustSource {
             true => "pub ",
             false => "pub(crate) ",
         };
-        let line_starts = super::rust::build_line_starts(&text);
+        let line_starts = crate::lang::rust::build_line_starts(&text);
         let last_mod = parsed
             .items
             .iter()
             .filter(|item| matches!(item, syn::Item::Mod(module) if module.content.is_none()))
             .last()
-            .map(|item| super::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).end());
+            .map(|item| crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).end());
         let at = match last_mod {
             Some(end) => text[end as usize..]
                 .find('\n')
@@ -164,7 +164,7 @@ impl Cleave for RustSource {
                 .items
                 .first()
                 .map(|item| {
-                    let start = super::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).start as usize;
+                    let start = crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).start as usize;
                     text[..start].rfind('\n').map_or(0, |found| found + 1)
                 })
                 .unwrap_or(text.len()),
@@ -198,7 +198,7 @@ impl Cleave for RustSource {
         for parent in parent_candidates(dir).into_iter().filter(|candidate| cx.contains(candidate)) {
             let text = cx.text(&parent)?;
             let parsed = syn::parse_file(&text).ok()?;
-            let line_starts = super::rust::build_line_starts(&text);
+            let line_starts = crate::lang::rust::build_line_starts(&text);
             let Some(module) = parsed.items.iter().find_map(|item| match item {
                 syn::Item::Mod(module) if module.ident == name && module.content.is_none() => Some(module),
                 _ => None,
@@ -208,12 +208,12 @@ impl Cleave for RustSource {
             let edit = match &module.vis {
                 syn::Visibility::Public(_) => return None,
                 syn::Visibility::Restricted(restricted) => Edit {
-                    span: super::rust::syn_span(&line_starts, syn::spanned::Spanned::span(restricted)),
+                    span: crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(restricted)),
                     text: "pub".to_string(),
                 },
                 syn::Visibility::Inherited => Edit {
                     span: Span::anchor(
-                        super::rust::syn_span(&line_starts, module.mod_token.span).start,
+                        crate::lang::rust::syn_span(&line_starts, module.mod_token.span).start,
                     ),
                     text: "pub ".to_string(),
                 },
@@ -288,8 +288,8 @@ pub(crate) fn past_trivia(text: &str, mut at: usize) -> usize {
 /// A package's `tests/`, `examples/` and `benches/` files are crates of their
 /// own that reach the library through its ident, never through `crate::`.
 fn foreign_crate(cx: &MoveCx, from_path: &str, to_path: &str) -> Option<String> {
-    let from = crate::lang::rust_rehome::cargo_package(cx, from_path)?;
-    let to = crate::lang::rust_rehome::cargo_package(cx, to_path)?;
+    let from = crate::edit::rust_rehome::cargo_package(cx, from_path)?;
+    let to = crate::edit::rust_rehome::cargo_package(cx, to_path)?;
     let own_target = ["tests/", "examples/", "benches/"].iter().any(|dir| {
         let prefix = match from.0.is_empty() {
             true => dir.to_string(),

@@ -25,8 +25,8 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 use syn::spanned::Spanned;
 
-use super::rust::{build_line_starts, syn_span, RustSource};
-use super::rust_modules::CargoManifest;
+use crate::lang::rust::{build_line_starts, syn_span, RustSource};
+use crate::lang::rust_modules::CargoManifest;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::types::Span;

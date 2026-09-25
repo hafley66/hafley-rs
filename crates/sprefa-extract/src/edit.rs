@@ -1,3 +1,11 @@
+pub mod kotlin_rehome;
+pub mod kotlin_rename;
+pub mod rust_mutate;
+pub mod rust_rehome;
+pub mod rust_rename;
+pub mod ts_mutate;
+pub mod ts_rehome;
+pub mod ts_rename;
 use crate::lang::kotlin::KotlinSource;
 use crate::lang::prolog::PrologSource;
 use crate::lang::rust::RustSource;

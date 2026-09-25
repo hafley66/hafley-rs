@@ -53,7 +53,7 @@ pub mod tsi;
 pub mod types;
 pub mod wire;
 #[path = "0_edit_seams.rs"] pub mod edit_seams;
-pub(crate) mod edit;
+pub mod edit;
 
 pub use cfg::{
     build_cfg, cfg_bundle, cfg_facts, roles_for, CfgRole, RoleRule, GO_ROLES, KOTLIN_ROLES,

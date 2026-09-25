@@ -27,8 +27,8 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use rayon::prelude::*;
 
-use super::kotlin::{kt_first_child, kt_header_facts, kt_parse, kt_text};
-use super::KotlinSource;
+use crate::lang::kotlin::{kt_first_child, kt_header_facts, kt_parse, kt_text};
+use crate::lang::KotlinSource;
 use crate::family::SpecifierKind;
 use crate::move_cx::{dirname, owned_by, MoveCx};
 use crate::project::extract_pool;

@@ -467,7 +467,7 @@ fn moving_this_crates_own_module_leaves_it_compiling() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
         .arg("move")
-        .arg(root.join("src/lang/ts_rehome.rs"))
+        .arg(root.join("src/edit/ts_rehome.rs"))
         .arg(root.join("src/lang/ts/rehome.rs"))
         .arg("--root")
         .arg(&root)

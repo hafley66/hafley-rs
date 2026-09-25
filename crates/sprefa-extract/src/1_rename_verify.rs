@@ -183,7 +183,7 @@ fn anchor_symbol(
 ///
 /// The spelling gate is the alias law: scip-typescript folds
 /// `import {OLD as local}`'s local binding into the imported symbol, and the
-/// rename leaves `local` alone by design (`lang/ts_rename.rs:277`). A seat
+/// rename leaves `local` alone by design (`edit/ts_rename.rs:277`). A seat
 /// spelling a name this run never writes is not a seat.
 /// @comment-ok: the gate encodes an indexer fact the signature cannot show
 fn anchor_sites(

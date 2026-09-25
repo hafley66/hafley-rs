@@ -6,8 +6,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use rayon::prelude::*;
 use syn::spanned::Spanned;
 
-use super::super::rust::{build_line_starts, syn_span};
-use super::super::rust_modules::CargoManifest;
+use crate::lang::rust::{build_line_starts, syn_span};
+use crate::lang::rust_modules::CargoManifest;
 use super::{
     crate_roots, insert_decls, is_manifest, line_after, natural_paths, relocate_scan, slice,
     whole_lines, FileScan, RelocateEdit, RelocatePlan, Relocation, SegRun, MOD_PATH,

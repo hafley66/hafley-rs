@@ -23,8 +23,6 @@ pub mod go_type_edges;
 pub mod kotlin;
 pub mod kotlin_modules;
 pub mod kotlin_receivers;
-pub mod kotlin_rehome;
-pub mod kotlin_rename;
 pub mod kotlin_type_edges;
 pub mod markdown;
 #[path = "4_owned_region.rs"]
@@ -36,11 +34,7 @@ pub mod rust_checker;
 #[cfg(feature = "rust-checker")]
 mod rust_checker_ra;
 pub mod rust_modules;
-#[path = "rust/cleave.rs"]
-pub mod rust_mutate;
 pub mod rust_receivers;
-pub mod rust_rehome;
-pub mod rust_rename;
 pub mod rust_scip_macros;
 pub mod rust_type_edges;
 pub mod rust_type_refs;
@@ -56,12 +50,8 @@ pub mod source_facts;
 pub mod source_query;
 pub mod ts;
 pub mod ts_checker;
-#[path = "ts/cleave.rs"]
-pub mod ts_mutate;
 pub mod ts_paths;
 pub mod ts_receivers;
-pub mod ts_rehome;
-pub mod ts_rename;
 pub mod ts_resolve;
 
 pub use fallback::{call_bundle, call_drops, cst_bundle, FallbackSource};
@@ -97,7 +87,7 @@ pub use source_query::{
 pub use ts::{
     ts_specifiers, CallProjector, DfProjector, OxcParser, TsSource, TsSpecifier, TypeProjector,
 };
-pub use ts_rehome::{build_paths, compiled_spellings, BuildPaths};
+pub use crate::edit::ts_rehome::{build_paths, compiled_spellings, BuildPaths};
 pub use ts_resolve::{respell, TsResolver};
 
 use crate::source::Source;

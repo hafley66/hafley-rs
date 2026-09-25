@@ -9,7 +9,7 @@ use std::path::Path;
 
 use sprefa_extract::lang::prolog::PrologSource;
 use sprefa_extract::lang::rust::RustSource;
-use sprefa_extract::lang::rust_rehome::{INCLUDE as RUST_INCLUDE, USE_PATH as RUST_USE_PATH};
+use sprefa_extract::edit::rust_rehome::{INCLUDE as RUST_INCLUDE, USE_PATH as RUST_USE_PATH};
 use sprefa_extract::lang::ts::TsSource;
 use sprefa_extract::{ImportRefKind, MoveCx, Rehome};
 

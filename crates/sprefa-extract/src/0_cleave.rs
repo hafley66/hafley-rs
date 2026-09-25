@@ -908,7 +908,7 @@ fn module_key(name: &str, module: &str) -> String {
 /// its own lib) keeps that ident where the arm spelled DEST with `crate::`.
 fn as_written(cx: &MoveCx, dest: &str, module: &str, spelling: String) -> String {
     let head = module.split("::").next().unwrap_or_default();
-    let named = sprefa_extract::lang::rust_rehome::cargo_package(cx, dest)
+    let named = sprefa_extract::edit::rust_rehome::cargo_package(cx, dest)
         .is_some_and(|package| package.2 == head);
     match (named, spelling.strip_prefix("crate")) {
         (true, Some(rest)) if rest.is_empty() || rest.starts_with("::") => format!("{head}{rest}"),
@@ -1687,8 +1687,8 @@ type PackageView = (String, String, String, BTreeSet<String>);
 
 fn package_view(cx: &MoveCx, language: &str, rel: &str) -> Option<PackageView> {
     match language {
-        "rust" => sprefa_extract::lang::rust_rehome::cargo_package(cx, rel),
-        _ => sprefa_extract::lang::ts_rehome::cross::package_deps(cx, rel)
+        "rust" => sprefa_extract::edit::rust_rehome::cargo_package(cx, rel),
+        _ => sprefa_extract::edit::ts_rehome::cross::package_deps(cx, rel)
             .map(|(name, deps)| (name.clone(), name.clone(), name, deps)),
     }
 }

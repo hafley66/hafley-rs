@@ -101,7 +101,7 @@ filter. `grep -rn 'extract=' src tests` found it after the test failed.
 | `src/bin/extract.rs:40` | `extract/0_sqlite.rs` | `ryi/0_sqlite.rs` |
 | `tests/0_sqlite.rs:4` | `../src/bin/extract/0_sqlite.rs` | `../src/bin/ryi/0_sqlite.rs` |
 
-`src/lang/rust_rehome.rs` is the module that repairs them.
+`src/edit/rust_rehome.rs` is the module that repairs them.
 
 ## Text-refs reported and deliberately skipped
 
