@@ -1,7 +1,7 @@
 # sprefa-extract — Agent Guidance
 
 One source file -> flat graph facts (JSONL). Phase-1 only: per-file,
-parallel, pure, cacheable. No daemon, no database, no network, no watchers.
+parallel, pure, cacheable. No daemon, no network.
 
 ## The boundary law
 
@@ -31,20 +31,25 @@ semi-naive, `sqlite_ivm`. It is the parent; this crate is its EDB producer.
 
 `Resolve<CallF>` in this crate is the hand-compiled fast path; the DL7 rule
 set is its spec. Composition with soopy (revision snapshots, blob ids) is
-this crate's to use freely. Do not build a daemon or a persistent
-cross-run index here: that is dl8's layer. A one-shot delta between two
-commits is in scope (user-set 2026-09-18: "extract on its own very
-capable"); a maintained, incremental one is not. `extract watch` emits
-blob deltas and stops there.
+this crate's to use freely. Every invocation is one process that reads and
+writes files and exits; there is no resident daemon, that is dl8's layer.
+A one-shot delta between two commits is in scope (user-set 2026-09-18:
+"extract on its own very capable"); a maintained, incremental one is not.
+`extract watch` emits blob deltas and stops there.
 
 One-shot traversal over a single resolve pass is in scope on the same
 grounds (user-set 2026-09-18: "extract must be as capable as possible ...
 we will host or re-use it in dl8 later"). That covers reachability from an
 entrypoint, reverse edges, type usage, and `--expand` closing the file set
-to a fixpoint. A persistent cross-run graph index is not in scope, and
-neither is a maintained dead-code or liveness view: those stay PROGRAMS
-under the map below. dl8 owns row storage, invalidation and eviction, so
-a handle here is a cursor (argv + input digests + offset), never a cache.
+to a fixpoint. `ryi graph` keeps its fact store at
+`<root>/.dl/.state/graph-<key>.db`, stamped with a `corpus` row (ryi build,
+tier, arms, root, HEAD, `git status --porcelain=v2` hash) and per-file
+digests. Each run compares HEAD and the status hash, re-hashes only the
+paths git lists, reports changed/moved/added/removed files, re-extracts
+when stale, answers, and exits. `--db PATH` queries a store built by
+`fast`/`slow --sqlite`. A maintained dead-code or liveness view is not in
+scope: those stay PROGRAMS under the map below, and incremental
+re-derivation across runs is dl8's.
 
 ## Analysis family map (program vs facet vs rabbit hole)
 
