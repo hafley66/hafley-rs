@@ -15,3 +15,11 @@ tmux_interface = "0.4"
 serde = { version = "1", features = ["derive"] }
 # boop owns the subscriber; this library only emits operation boundaries.
 tracing.workspace = true
+# ⌘-click index: the gitignore-aware walker ripgrep uses.
+ignore = "0.4"
+# ⌘-click fzf rung: the matcher helix and nucleo ship, scored like fzf.
+nucleo-matcher = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+serde_json = "1"

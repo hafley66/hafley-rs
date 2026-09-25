@@ -21,6 +21,18 @@ pub use _0_snapshot::{
 };
 mod _1_pane_at;
 pub use _1_pane_at::{parse_pane_at, PaneHit};
+mod _2_click_rungs;
+pub use _2_click_rungs::{
+    ancestors_of, clear_index_cache, crawl_candidates, git_absent, git_out, home_dir, looks_like_path, rank_exact,
+    rank_fuzzy, repo_root_for, repo_root_of, sibling_candidates, split_line_ref, under_indexed_dirs, unique_dir_named,
+    IndexEntry, MAX_CHOICES,
+};
+mod _3_click_roots;
+pub use _3_click_roots::{click_roots, doc_roots, parse_worktree_list, repos_beside, worktrees_of, Root, RootVia};
+mod _4_click_lookup;
+pub use _4_click_lookup::{
+    clean_token, cmd_click_lookup, doc_join, resolve_fs, resolve_fs_in_doc, FsLookup, ResolveResult, ResolvedRef,
+};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Pane {

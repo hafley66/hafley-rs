@@ -16,7 +16,7 @@ pub(crate) const MAX_RUNGS: usize = 8;
 pub(crate) const MAX_SIBLINGS: usize = 400;
 pub(crate) const MAX_GIT_REPOS: usize = 4;
 pub(crate) const MAX_GIT_REVS: usize = 20;
-pub(crate) const MAX_CHOICES: usize = 50;
+pub const MAX_CHOICES: usize = 50;
 
 // nucleo pays 16 per matched char plus boundary bonuses; under 12 per char the
 // match is a coincidental subsequence and the token belongs to ripgrep.
@@ -455,10 +455,6 @@ pub(crate) fn absolute_on_disk(rel: &str, home: &str) -> bool {
         None => std::fs::symlink_metadata(rel).is_ok(),
     }
 }
-
-/// The rung that knows what the agent did: a token the agent printed names a
-/// file it touched, or a file beside one. Exact tail on the touched paths
-/// first (newest wins when only one distinct file carries the tail), then the
 
 #[cfg(test)]
 mod tests {

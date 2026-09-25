@@ -419,7 +419,6 @@ dependencies = [
  "futures-util",
  "ignore",
  "libc",
- "nucleo-matcher",
  "peak_alloc",
  "rusqlite",
  "serde",
@@ -442,7 +441,11 @@ name = "boop-mux"
 version = "0.0.9"
 dependencies = [
  "anyhow",
+ "ignore",
+ "nucleo-matcher",
  "serde",
+ "serde_json",
+ "tempfile",
  "tmux_interface",
  "tracing",
 ]

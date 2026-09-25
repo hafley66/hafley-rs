@@ -68,8 +68,6 @@ time = { version = "0.3", features = ["parsing", "formatting"] }
 tracing.workspace = true
 wait-timeout = "0.2.1"
 tempfile = "3"
-# ⌘-click fzf rung: the matcher helix and nucleo ship, scored like fzf.
-nucleo-matcher = "0.3"
 
 [dev-dependencies]
 # The store's deterministic fixtures (throwaway git repo, fake multiplexer).

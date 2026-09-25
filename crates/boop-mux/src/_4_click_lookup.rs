@@ -1,13 +1,14 @@
-//! The ⌘-click ladder over click roots: absolute, what the agent touched, joins
-//! onto each root, worktree fan-out, the index, siblings, fzf, then git history.
+//! The filesystem ⌘-click ladder over click roots: absolute, joins onto each
+//! root, worktree fan-out, the index, siblings, fzf, then git history. A caller
+//! holding agent evidence runs its own rung in front of `resolve_fs`.
 
 use std::path::Path;
 
-use boop_store::SessionTouched;
 use serde::Serialize;
 
-use super::_0_rungs::*;
-use super::_1_roots::{doc_roots, repos_beside, Root, RootVia};
+use crate::_1_pane_at::PaneHit;
+use crate::_2_click_rungs::*;
+use crate::_3_click_roots::{click_roots, doc_roots, repos_beside, Root, RootVia};
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedRef {
@@ -43,86 +44,37 @@ pub enum ResolveResult {
     Miss,
 }
 
-/// What the pane's agent sessions touched: every path (newest first) and every
-/// directory those paths sit under, then each session cwd.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct AgentEvidence {
-    pub paths: Vec<String>,
-    pub dirs: Vec<String>,
+/// What the filesystem ladder answers for one click: the roots it searched
+/// and the result.
+#[derive(Debug, PartialEq, Eq)]
+pub struct FsLookup {
+    pub roots: Vec<Root>,
+    pub result: ResolveResult,
 }
 
-impl AgentEvidence {
-    pub fn from_touched(touched: &SessionTouched, boundary: &str) -> Self {
-        AgentEvidence { dirs: evidence_dirs(&touched.paths, &touched.cwds, boundary), paths: touched.paths.clone() }
+/// ⌘-click on `token` in the pane `hit` names, filesystem only. A token
+/// written in a markdown document (`doc`) resolves from that document's roots
+/// first. `home` bounds the ancestor walk.
+pub fn cmd_click_lookup(hit: &PaneHit, token: &str, doc: Option<&Path>, home: &str) -> FsLookup {
+    let roots = click_roots(&hit.pane_current_path, &[], &[]);
+    match doc {
+        Some(doc) => FsLookup { result: resolve_fs_in_doc(token, doc, &roots, home), roots: doc_roots(doc, &roots) },
+        None => FsLookup { result: resolve_fs(token, &roots, home), roots },
     }
 }
 
-/// Distinct directories above each touched path up to `boundary`, newest
-/// evidence first, then the session cwds. Order is the retry order.
-pub fn evidence_dirs(paths: &[String], cwds: &[String], boundary: &str) -> Vec<String> {
-    let mut dirs: Vec<String> = Vec::new();
-    let mut push = |dir: String| {
-        if !dir.is_empty() && !dirs.contains(&dir) {
-            dirs.push(dir);
-        }
-    };
-    let boundary = boundary.trim_end_matches('/');
-    for path in paths {
-        let mut current = Path::new(path).parent();
-        while let Some(dir) = current {
-            let text = dir.to_string_lossy();
-            if text.len() <= boundary.len() || !text.starts_with(boundary) {
-                break;
-            }
-            push(text.into_owned());
-            current = dir.parent();
-        }
-    }
-    for cwd in cwds {
-        push(cwd.trim_end_matches('/').to_string());
-    }
-    dirs
-}
-
-/// The rung that knows what the agent did: a token the agent printed names a
-/// file it touched, or a file beside one. Exact tail on the touched paths
-/// first (newest wins when only one distinct file carries the tail), then the
-/// token joined to every directory the evidence sits under.
-pub fn resolve_from_evidence(rel: &str, evidence: &AgentEvidence) -> Option<ResolveResult> {
-    let tail = rel.trim_start_matches("./").trim_start_matches('/');
-    if tail.is_empty() {
+/// A clicked token with its quotes stripped and its line reference split off.
+/// `None` for a token that is empty either way.
+pub fn clean_token(token: &str) -> Option<(String, Option<u32>)> {
+    let clean = token.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`');
+    if clean.is_empty() {
         return None;
     }
-    let suffix = format!("/{tail}");
-    let mut touched: Vec<String> = Vec::new();
-    for path in &evidence.paths {
-        if (path.ends_with(&suffix) || path == tail) && !touched.contains(path) {
-            touched.push(path.clone());
-        }
+    let (rel, line) = split_line_ref(clean);
+    if rel.is_empty() {
+        return None;
     }
-    touched.retain(|path| std::fs::symlink_metadata(path).is_ok());
-    if touched.len() == 1 {
-        return Some(ResolveResult::Hit {
-            reference: ResolvedRef { path: touched.remove(0), line: None, source: "touched" },
-        });
-    }
-    if touched.len() > 1 {
-        touched.truncate(MAX_CHOICES);
-        return Some(ResolveResult::Choices { paths: touched, line: None, via: "exact", worktrees: Vec::new() });
-    }
-    for dir in &evidence.dirs {
-        let candidate = Path::new(dir).join(tail);
-        if std::fs::symlink_metadata(&candidate).is_ok() {
-            return Some(ResolveResult::Hit {
-                reference: ResolvedRef {
-                    path: candidate.to_string_lossy().into_owned(),
-                    line: None,
-                    source: "touched",
-                },
-            });
-        }
-    }
-    None
+    Some((rel, line))
 }
 
 fn join(dir: &Path, tail: &str) -> String {
@@ -213,15 +165,10 @@ fn sibling_join(rel: &str, toplevel: Option<&str>, line: Option<u32>) -> Option<
 }
 
 /// A token resolved against the click's roots. `roots[0]` is the pane cwd.
-pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence) -> ResolveResult {
-    let clean = token.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`');
-    if clean.is_empty() {
+pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
+    let Some((rel, line)) = clean_token(token) else {
         return ResolveResult::Miss;
-    }
-    let (rel, line) = split_line_ref(clean);
-    if rel.is_empty() {
-        return ResolveResult::Miss;
-    }
+    };
 
     // An absolute token names exactly one path, so the ladder answers it here:
     // the rungs below join RELATIVE tokens onto directories, and answering a
@@ -234,16 +181,6 @@ pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence
         }
         return ResolveResult::Hit {
             reference: ResolvedRef { path: rel, line, source: "absolute" },
-        };
-    }
-
-    if let Some(found) = resolve_from_evidence(&rel, evidence) {
-        return match found {
-            ResolveResult::Hit { reference } => ResolveResult::Hit {
-                reference: ResolvedRef { line, ..reference },
-            },
-            ResolveResult::Choices { paths, via, worktrees, .. } => ResolveResult::Choices { paths, line, via, worktrees },
-            other => other,
         };
     }
 
@@ -343,45 +280,43 @@ pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence
     }
 }
 
-/// A token written in the markdown document at `doc`. The document's own
-/// roots answer first: a join onto its directory, then its checkout, then the
-/// token under that repository's worktrees. Anything else runs the ladder over
-/// the document's roots followed by `roots`, so the index search walks the
-/// document's checkout.
-pub fn resolve_in_doc(token: &str, doc: &Path, roots: &[Root], home: &str, evidence: &AgentEvidence) -> ResolveResult {
+/// The rung a token written in the markdown document at `doc` answers first:
+/// a join onto the document's directory, then its checkout, then the token
+/// under that repository's worktrees.
+pub fn doc_join(token: &str, doc: &Path) -> Option<ResolveResult> {
+    let (rel, line) = clean_token(token)?;
+    if rel.starts_with('/') || rel.starts_with("~/") || !looks_like_path(&rel) {
+        return None;
+    }
     let own = doc_roots(doc, &[]);
-    let clean = token.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`');
-    let (rel, line) = split_line_ref(clean);
-    let relative = !rel.is_empty() && !rel.starts_with('/') && !rel.starts_with("~/");
-    if relative && looks_like_path(&rel) {
-        let tail = rel.strip_prefix("./").unwrap_or(&rel);
-        for root in own.iter().filter(|root| matches!(root.via, RootVia::Document | RootVia::GitToplevel)) {
-            let candidate = join(&root.dir, tail);
-            if std::fs::symlink_metadata(&candidate).is_ok() {
-                return ResolveResult::Hit { reference: ResolvedRef { path: candidate, line, source: source_of(&root.via) } };
-            }
-        }
-        if let Some(found) = worktree_join(&rel, &own, line) {
-            return found;
+    let tail = rel.strip_prefix("./").unwrap_or(&rel);
+    for root in own.iter().filter(|root| matches!(root.via, RootVia::Document | RootVia::GitToplevel)) {
+        let candidate = join(&root.dir, tail);
+        if std::fs::symlink_metadata(&candidate).is_ok() {
+            return Some(ResolveResult::Hit { reference: ResolvedRef { path: candidate, line, source: source_of(&root.via) } });
         }
     }
-    resolve(token, &doc_roots(doc, roots), home, evidence)
+    worktree_join(&rel, &own, line)
+}
+
+/// A token written in the markdown document at `doc`: `doc_join`, else the
+/// ladder over the document's roots followed by `roots`, so the index search
+/// walks the document's checkout.
+pub fn resolve_fs_in_doc(token: &str, doc: &Path, roots: &[Root], home: &str) -> ResolveResult {
+    doc_join(token, doc).unwrap_or_else(|| resolve_fs(token, &doc_roots(doc, roots), home))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::click::click_roots;
-    use boop_mux::PaneHit;
     use std::path::PathBuf;
 
     fn pane(cwd: &str) -> PaneHit {
         PaneHit { pane: String::new(), pane_current_path: PathBuf::from(cwd), pane_col: 0, pane_row: 0 }
     }
 
-    fn resolve_with(token: &str, cwd: &str, home: &str, evidence: &AgentEvidence) -> ResolveResult {
-        let roots = click_roots(&pane(cwd), &SessionTouched::default());
-        super::resolve(token, &roots, home, evidence)
+    fn resolve_with(token: &str, cwd: &str, home: &str) -> ResolveResult {
+        cmd_click_lookup(&pane(cwd), token, None, home).result
     }
 
     /// RECEIPT. A repo-relative token whose file sits inside a gitignored
@@ -410,59 +345,12 @@ mod tests {
             "the walker honours .gitignore, so the file is not indexed"
         );
         let cwd = root.to_string_lossy().into_owned();
-        let result = resolve_with("out/timeline.txt", &cwd, &cwd, &AgentEvidence::default());
+        let result = resolve_with("out/timeline.txt", &cwd, &cwd);
         let expected = lab.join("out").join("timeline.txt").to_string_lossy().into_owned();
         assert_eq!(
             result,
             ResolveResult::Hit {
                 reference: ResolvedRef { path: expected, line: None, source: "ignored" }
-            }
-        );
-        let _ = std::fs::remove_dir_all(&root);
-    }
-
-    /// RECEIPT. What the agent touched outranks every filesystem guess: the
-    /// token joins to a directory above a touched file, so a file the walker
-    /// never indexes (gitignored `out/`) resolves from the ledger alone.
-    #[test]
-    fn a_token_resolves_beside_a_file_the_agent_touched() {
-        let root = std::env::temp_dir().join(format!("instant-evidence-{}", std::process::id()));
-        let _ = std::fs::remove_dir_all(&root);
-        let lab = root.join("labs").join("otel");
-        std::fs::create_dir_all(lab.join("out")).unwrap();
-        std::fs::write(lab.join("out").join("timeline.txt"), "t\n").unwrap();
-        std::fs::write(lab.join("out").join("perfetto.png"), "p\n").unwrap();
-        let touched = lab.join("out").join("perfetto.png").to_string_lossy().into_owned();
-        let boundary = root.to_string_lossy().into_owned();
-        let evidence = AgentEvidence {
-            dirs: evidence_dirs(&[touched.clone()], &[], &boundary),
-            paths: vec![touched.clone()],
-        };
-        assert_eq!(
-            evidence.dirs,
-            vec![
-                lab.join("out").to_string_lossy().into_owned(),
-                lab.to_string_lossy().into_owned(),
-                root.join("labs").to_string_lossy().into_owned(),
-            ]
-        );
-        let cwd = boundary.clone();
-        let hit = resolve_with("out/timeline.txt:3", &cwd, &boundary, &evidence);
-        assert_eq!(
-            hit,
-            ResolveResult::Hit {
-                reference: ResolvedRef {
-                    path: lab.join("out").join("timeline.txt").to_string_lossy().into_owned(),
-                    line: Some(3),
-                    source: "touched",
-                }
-            }
-        );
-        let exact = resolve_with("perfetto.png", &cwd, &boundary, &evidence);
-        assert_eq!(
-            exact,
-            ResolveResult::Hit {
-                reference: ResolvedRef { path: touched, line: None, source: "touched" }
             }
         );
         let _ = std::fs::remove_dir_all(&root);
@@ -498,7 +386,7 @@ mod tests {
 
     fn resolve(tree: &Tree, token: &str, cwd: &str) -> ResolveResult {
         clear_index_cache();
-        resolve_with(token, cwd, &tree.0.to_string_lossy(), &AgentEvidence::default())
+        resolve_with(token, cwd, &tree.0.to_string_lossy())
     }
 
     #[test]

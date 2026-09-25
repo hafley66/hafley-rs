@@ -1,9 +1,8 @@
 //! ⌘-click resolution for a host terminal: client cell -> tmux pane -> the
 //! boop sessions run in its cwd -> click roots -> the resolver ladder.
 
-pub mod _0_rungs;
-pub mod _1_roots;
-pub mod _2_ladder;
+pub mod _0_roots;
+pub mod _1_ladder;
 
 use std::path::PathBuf;
 use std::time::Instant;
@@ -12,9 +11,12 @@ use boop_mux::{Multiplexer, PaneHit, Tmux};
 use boop_store::{SessionTouched, Store};
 use serde::Deserialize;
 
-pub use _2_ladder::{evidence_dirs, resolve, resolve_in_doc, AgentEvidence, ResolveResult, ResolvedRef};
-pub use _1_roots::{click_roots, doc_roots, worktrees_of, Root, RootVia};
-pub use _0_rungs::{clear_index_cache, git_out, home_dir, repo_root_of};
+pub use _1_ladder::{evidence_dirs, resolve, resolve_from_evidence, resolve_in_doc, AgentEvidence};
+pub use _0_roots::click_roots;
+pub use boop_mux::{
+    clear_index_cache, cmd_click_lookup, doc_roots, git_out, home_dir, repo_root_of, worktrees_of, FsLookup,
+    ResolveResult, ResolvedRef, Root, RootVia,
+};
 
 const TOUCHED_CAP: usize = 2000;
 const CWD_SESSIONS: usize = 3;
