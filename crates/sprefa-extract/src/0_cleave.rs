@@ -256,7 +256,25 @@ impl Plan {
             .clone();
 
         let imports = Imports::read(&cx, &root)?;
-        let (dragged, drag_iterations) = source.drag_fixpoint(&item_decl, cli.drag);
+        let (mut dragged, drag_iterations) = source.drag_fixpoint(&item_decl, cli.drag);
+        let travelling_types: BTreeSet<String> = std::iter::once(item.clone())
+            .chain(
+                dragged
+                    .iter()
+                    .filter(|row| row.action == "moved")
+                    .map(|row| row.name.clone()),
+            )
+            .collect();
+        for (self_ty, span) in &source.impls {
+            if travelling_types.contains(self_ty) && !inside(*span, item_decl.span) {
+                dragged.push(CleaveDrag {
+                    name: format!("impl {self_ty}"),
+                    span: *span,
+                    iteration: drag_iterations,
+                    action: "moved",
+                });
+            }
+        }
         let mut moving: Vec<Span> = vec![item_decl.span];
         moving.extend(
             dragged
@@ -597,7 +615,20 @@ impl Plan {
                 receipt: None,
             })
             .collect();
-        out.extend(edits);
+        // An insert anchored inside a cut (the last `use` line was orphaned)
+        // becomes that cut's replacement, so the two never overlap.
+        for edit in edits {
+            let host = out.iter_mut().find(|cut| {
+                edit.span.len == 0 && cut.span.start <= edit.span.start && edit.span.start < cut.span.end()
+            });
+            match host {
+                Some(cut) => {
+                    cut.text.push_str(&edit.text);
+                    cut.receipt = edit.receipt.or(cut.receipt.take());
+                }
+                None => out.push(edit),
+            }
+        }
         out
     }
 
@@ -671,7 +702,10 @@ impl Plan {
                 .map(|row| row.name.clone())
                 .collect();
             landing.push(self.rows.item.clone());
-            if let Some(edit) = self.arm.edit_import(&facts.text, &landing, &spelling) {
+            if let Some(edit) =
+                self.arm
+                    .edit_import_like(&facts.text, &landing, &spelling, &self.rows.item, module)
+            {
                 out.push(Respell {
                     file: rel.clone(),
                     span: edit.span,
@@ -831,8 +865,8 @@ fn merge(mut spans: Vec<Span>) -> Vec<Span> {
 /// One resolve pass over the corpus, read as `resolved_import` rows: which
 /// bound name reaches which file, and who imports `SRC#ITEM`.
 struct Imports {
-    /// `(importer, bound name) -> (file, declared name)`.
-    names: Vec<(String, String, String, String)>,
+    /// `(importer, bound name) -> (file, declared name, through a re-export)`.
+    names: Vec<(String, String, String, String, bool)>,
 }
 
 impl Imports {
@@ -867,6 +901,7 @@ impl Imports {
                 name,
                 target_path,
                 target_name: Some(declared),
+                kind,
                 ..
             } = fact
             else {
@@ -876,7 +911,8 @@ impl Imports {
             else {
                 continue;
             };
-            names.push((importer, name.clone(), target, declared.clone()));
+            let relayed = kind == "indirect" || kind == "star";
+            names.push((importer, name.clone(), target, declared.clone(), relayed));
         }
         Ok(Self { names })
     }
@@ -886,15 +922,16 @@ impl Imports {
     fn target(&self, importer: &str, name: &str) -> Option<&str> {
         self.names
             .iter()
-            .find(|(from, bound, _, _)| from == importer && bound == name)
-            .map(|(_, _, target, _)| target.as_str())
+            .find(|(from, bound, _, _, _)| from == importer && bound == name)
+            .map(|(_, _, target, _, _)| target.as_str())
     }
 
-    /// Every file importing `src#item`, in path order.
+    /// Every file importing `src#item` directly, in path order. A re-exported
+    /// binding follows its re-export, which this plan respells.
     fn callers(&self, src: &str, item: &str) -> Vec<String> {
         let mut out: BTreeSet<String> = BTreeSet::new();
-        for (importer, _, target, declared) in &self.names {
-            if target == src && declared == item && importer != src {
+        for (importer, _, target, declared, relayed) in &self.names {
+            if target == src && declared == item && importer != src && !relayed {
                 out.insert(importer.clone());
             }
         }
@@ -950,6 +987,8 @@ struct FileFacts {
     decls: Vec<Decl>,
     /// Names the file needs from outside the item that owns them.
     free: Vec<(String, Span)>,
+    /// Rust `impl` blocks by self type; they travel with that type.
+    impls: Vec<(String, Span)>,
 }
 
 impl FileFacts {
@@ -997,8 +1036,8 @@ impl FileFacts {
             Ok(())
         })
         .map_err(|_| format!("flatten {rel}"))?;
-        let (decls, free) = match whole {
-            false => (Vec::new(), Vec::new()),
+        let (decls, free, impls) = match whole {
+            false => (Vec::new(), Vec::new(), Vec::new()),
             true => scope_rows(cx, rel, &text)?,
         };
         Ok(Self {
@@ -1007,6 +1046,7 @@ impl FileFacts {
             sites,
             decls,
             free,
+            impls,
         })
     }
 
@@ -1136,17 +1176,17 @@ impl FileFacts {
 }
 
 /// The scope rows one file contributes: its top-level declarations, line
-/// aligned, and every free name each of them carries.
+/// aligned, every free name each carries, and each Rust `impl` by self type.
 #[allow(clippy::type_complexity)]
 fn scope_rows(
     cx: &MoveCx,
     rel: &str,
     text: &str,
-) -> Result<(Vec<Decl>, Vec<(String, Span)>), String> {
+) -> Result<(Vec<Decl>, Vec<(String, Span)>, Vec<(String, Span)>), String> {
     let path = cx.abs(rel);
     let facts =
         scm_facts(&[path]).map_err(|error| format!("scope rows for {rel}: {error}"))?;
-    let top_level = root_item_spans(rel, text)?;
+    let (top_level, root_children) = root_item_spans(rel, text)?;
     let mut decls: Vec<Decl> = Vec::new();
     let mut free = Vec::new();
     let file = Span {
@@ -1163,7 +1203,8 @@ fn scope_rows(
                 symbol,
                 ..
             } if role == "def" => {
-                let span = line_span(text, span_of(*decl_start, *decl_end));
+                let start = leading_trivia_start(text, &root_children, *decl_start, *decl_end);
+                let span = line_span(text, span_of(start, *decl_end));
                 if span == file || !top_level.contains(&(*decl_start, *decl_end)) {
                     continue;
                 }
@@ -1184,12 +1225,92 @@ fn scope_rows(
         }
     }
     decls.sort_by_key(|decl| decl.span.start);
-    Ok((decls, free))
+    let impls = root_children
+        .iter()
+        .filter(|(_, _, kind)| kind == "impl_item")
+        .filter_map(|(start, end, _)| {
+            let self_ty = impl_self(text.get(*start as usize..*end as usize)?)?;
+            let from = leading_trivia_start(text, &root_children, *start, *end);
+            Some((self_ty, line_span(text, span_of(from, *end))))
+        })
+        .collect();
+    Ok((decls, free, impls))
+}
+
+/// The type a Rust `impl` block is for: `impl<T> Trait<U> for Name<T>` and
+/// `impl Name` both answer `Name`.
+fn impl_self(text: &str) -> Option<String> {
+    let head = text.split('{').next()?.trim().strip_prefix("impl")?;
+    let head = head.split(" where ").next()?.trim();
+    let mut depth = 0i32;
+    let mut generics_end = 0;
+    if head.starts_with('<') {
+        for (at, ch) in head.char_indices() {
+            match ch {
+                '<' => depth += 1,
+                '>' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        generics_end = at + 1;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    let head = head[generics_end..].trim();
+    let target = head.rsplit_once(" for ").map_or(head, |(_, ty)| ty).trim();
+    let target = target.trim_start_matches('&').trim_start_matches("mut ").trim();
+    let name: String = target
+        .rsplit("::")
+        .next()?
+        .chars()
+        .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
+        .collect();
+    (!name.is_empty()).then_some(name)
+}
+
+/// Root children a declaration carries when it moves: the doc comments,
+/// attributes and decorators written directly above it.
+const LEADING_TRIVIA: [&str; 5] = [
+    "line_comment",
+    "block_comment",
+    "attribute_item",
+    "comment",
+    "decorator",
+];
+
+/// Where a declaration's cut starts: the first trivia root child directly
+/// above the root child holding it, with no blank line between any two.
+fn leading_trivia_start(text: &str, children: &[(u32, u32, String)], start: u32, end: u32) -> u32 {
+    let Some(at) = children
+        .iter()
+        .position(|(from, to, _)| *from <= start && end <= *to)
+    else {
+        return start;
+    };
+    let mut first = children[at].0;
+    for (from, to, kind) in children[..at].iter().rev() {
+        let gap = text.get(*to as usize..first as usize).unwrap_or("x");
+        if !LEADING_TRIVIA.contains(&kind.as_str())
+            || gap.matches('\n').count() > 1
+            || !gap.trim().is_empty()
+        {
+            break;
+        }
+        first = *from;
+    }
+    first.min(start)
 }
 
 /// Declaration spans at the CST root, including declarations wrapped by a TS
-/// `export_statement`. A line-aligned local still belongs to its function.
-fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String> {
+/// `export_statement`, beside every root child and its kind in byte order.
+#[allow(clippy::type_complexity)]
+fn root_item_spans(
+    rel: &str,
+    text: &str,
+) -> Result<(BTreeSet<(u32, u32)>, Vec<(u32, u32, String)>), String> {
     let mask = FamilyMask {
         cst: true,
         ..FamilyMask::NONE
@@ -1199,7 +1320,19 @@ fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String
     let mut exports = BTreeSet::new();
     let mut variable_lists = BTreeSet::new();
     let mut children = Vec::new();
+    let mut kinds: BTreeMap<(u32, u32), String> = BTreeMap::new();
     flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
+        if let FlatFact::Node {
+            family: sprefa_extract::FamilyTag::Cst,
+            kind,
+            span,
+            ..
+        } = &fact
+        {
+            kinds
+                .entry((span.start, span.end))
+                .or_insert_with(|| kind.clone());
+        }
         match fact {
             FlatFact::Node {
                 family: sprefa_extract::FamilyTag::Cst,
@@ -1230,6 +1363,13 @@ fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String
     })
     .map_err(|_| format!("flatten CST {rel}"))?;
     let root = (0, text.len() as u32);
+    let mut root_children: Vec<(u32, u32, String)> = children
+        .iter()
+        .filter(|(from, _)| *from == root)
+        .map(|(_, to)| (to.0, to.1, kinds.get(to).cloned().unwrap_or_default()))
+        .collect();
+    root_children.sort();
+    root_children.dedup();
     let direct: BTreeSet<(u32, u32)> = children
         .iter()
         .filter(|(from, _)| *from == root)
@@ -1247,7 +1387,7 @@ fn root_item_spans(rel: &str, text: &str) -> Result<BTreeSet<(u32, u32)>, String
     items.extend(children.into_iter().filter_map(|(from, to)| {
         visible_lists.contains(&from).then_some(to)
     }));
-    Ok(items)
+    Ok((items, root_children))
 }
 
 /// The declared name inside a `scm` symbol spelling.

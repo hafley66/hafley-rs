@@ -382,3 +382,69 @@ fn a_failed_verify_rolls_the_rust_tree_back() {
         .expect("read verify-failure run");
     assert_eq!(rows, 1);
 }
+
+/// Issue `cleave-real-crate-defects`: docs, attributes and `impl` blocks travel
+/// with the type, a `pub use` stays public, and a fn-local `use` never anchors.
+#[test]
+fn a_type_travels_with_its_docs_derives_impls_and_public_reexport() {
+    let fixture = fixture("basic", "real-crate");
+    std::fs::write(
+        fixture.root.join("src/util.rs"),
+        r#"use std::fmt;
+
+/// Why a plan stops.
+#[derive(Debug, Clone)]
+pub enum Stop {
+    /// Nothing matched.
+    Missing(String),
+}
+
+impl fmt::Display for Stop {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Stop::Missing(name) => write!(formatter, "no {name}"),
+        }
+    }
+}
+
+impl std::error::Error for Stop {}
+
+pub fn describe(stop: &Stop) -> String {
+    use std::fmt::Write;
+    let mut out = String::new();
+    let _ = write!(out, "{stop}");
+    out
+}
+"#,
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod app;\npub mod config;\npub mod log;\npub mod util;\n\npub use util::{describe, Stop};\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/app.rs"),
+        "pub fn boot(dir: &str) -> String {\n    dir.to_string()\n}\n",
+    )
+    .unwrap();
+    git(&fixture.root, &["add", "-A"]);
+    cleave(&fixture, &["src/util.rs#Stop", "src/stops.rs", "--commit"]);
+
+    let stops = read(&fixture, "src/stops.rs");
+    assert!(
+        stops.contains("/// Why a plan stops.\n#[derive(Debug, Clone)]\npub enum Stop"),
+        "{stops}"
+    );
+    assert!(stops.contains("impl fmt::Display for Stop"), "{stops}");
+    assert!(stops.contains("impl std::error::Error for Stop {}"), "{stops}");
+    assert!(stops.contains("use std::fmt;"), "{stops}");
+    let util = read(&fixture, "src/util.rs");
+    assert!(!util.contains("Why a plan stops"), "{util}");
+    assert!(!util.contains("impl fmt::Display"), "{util}");
+    assert!(util.contains("    use std::fmt::Write;\n    let mut out"), "{util}");
+    let lib = read(&fixture, "src/lib.rs");
+    assert!(lib.contains("pub use util::describe;"), "{lib}");
+    assert!(lib.contains("pub use crate::stops::Stop;"), "{lib}");
+    cargo_check(&fixture);
+}

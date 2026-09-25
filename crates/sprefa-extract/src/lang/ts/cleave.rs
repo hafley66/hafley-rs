@@ -18,7 +18,17 @@ const PARSE_AS: &str = "cleave.ts";
 
 impl Cleave for TsSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
-        let at = decl.start as usize;
+        let at = crate::lang::rust_mutate::past_trivia(text, decl.start as usize);
+        if let Some(rest) = text.get(at..).and_then(|tail| tail.strip_prefix("export")) {
+            if rest.starts_with([' ', '\t']) {
+                let len = (rest.len() - rest.trim_start_matches([' ', '\t']).len() + 6) as u32;
+                return (!on).then(|| Edit {
+                    span: Span { start: at as u32, len },
+                    text: String::new(),
+                });
+            }
+        }
+        let decl = Span { start: at as u32, len: decl.end().saturating_sub(at as u32) };
         let head = text.get(..at)?;
         let carried = head.trim_end_matches([' ', '\t']).ends_with("export");
         match (on, carried) {

@@ -22,7 +22,8 @@ const DIRECTORY_STEMS: [&str; 3] = ["mod", "lib", "main"];
 
 impl Cleave for RustSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
-        let at = decl.start as usize;
+        let at = past_trivia(text, decl.start as usize);
+        let decl = Span { start: at as u32, len: decl.end().saturating_sub(at as u32) };
         let tail = text.get(at..)?;
         let visibility_len = if tail.starts_with("pub ") {
             Some(4)
@@ -63,6 +64,26 @@ impl Cleave for RustSource {
             span: Span::anchor(at),
             text: use_line(names, module),
         })
+    }
+
+    fn edit_import_like(
+        &self,
+        text: &str,
+        names: &[String],
+        module: &str,
+        like: &str,
+        like_module: &str,
+    ) -> Option<Edit> {
+        let vis = leaves(self, text)
+            .into_iter()
+            .find(|leaf| leaf.path == format!("{like_module}::{like}") || leaf.path == like_module)
+            .map(|leaf| leaf.vis)
+            .unwrap_or_default();
+        let mut edit = self.edit_import(text, names, module)?;
+        if !edit.text.is_empty() && edit.span.len == 0 {
+            edit.text = format!("{vis}{}", edit.text);
+        }
+        Some(edit)
     }
 
     /// `crate::a::b`, or `super::b` when the two files are siblings under a
@@ -141,11 +162,56 @@ impl Cleave for RustSource {
     }
 }
 
+/// The first byte at or after `at` that is not whitespace, a comment or an
+/// outer attribute: where an item's visibility is written.
+pub(crate) fn past_trivia(text: &str, mut at: usize) -> usize {
+    let bytes = text.as_bytes();
+    loop {
+        while at < bytes.len() && bytes[at].is_ascii_whitespace() {
+            at += 1;
+        }
+        let rest = &text[at..];
+        if rest.starts_with("//") {
+            at += rest.find('\n').map_or(rest.len(), |end| end + 1);
+        } else if rest.starts_with("/*") {
+            at += rest.find("*/").map_or(rest.len(), |end| end + 2);
+        } else if rest.starts_with("#[") {
+            let mut depth = 0usize;
+            let mut end = rest.len();
+            for (offset, byte) in rest.bytes().enumerate() {
+                match byte {
+                    b'[' => depth += 1,
+                    b']' => {
+                        depth -= 1;
+                        if depth == 0 {
+                            end = offset + 1;
+                            break;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            at += end;
+        } else {
+            return at;
+        }
+    }
+}
+
 /// The crate ident `to_path` answers to when it sits in another Cargo package.
+/// A package's `tests/`, `examples/` and `benches/` files are crates of their
+/// own that reach the library through its ident, never through `crate::`.
 fn foreign_crate(cx: &MoveCx, from_path: &str, to_path: &str) -> Option<String> {
     let from = crate::lang::rust_rehome::cargo_package(cx, from_path)?;
     let to = crate::lang::rust_rehome::cargo_package(cx, to_path)?;
-    (from.0 != to.0).then_some(to.2)
+    let own_target = ["tests/", "examples/", "benches/"].iter().any(|dir| {
+        let prefix = match from.0.is_empty() {
+            true => dir.to_string(),
+            false => format!("{}/{dir}", from.0),
+        };
+        from_path.starts_with(&prefix)
+    });
+    (from.0 != to.0 || own_target).then_some(to.2)
 }
 
 /// The files that can own `dir`'s child modules, in rustc's probe order.
@@ -211,6 +277,8 @@ struct Leaf {
     span: Span,
     /// The declaration's line-aligned span.
     line: Span,
+    /// What the declaration writes before `use`: `pub `, `pub(crate) `, or empty.
+    vis: String,
 }
 
 /// The file's `use` leaves, in byte order, off its own cst plane.
@@ -242,6 +310,14 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
     let mut out = Vec::new();
     for (_, span) in nodes.iter().filter(|(kind, _)| kind == "use_declaration") {
         let line = line_span(text, *span);
+        // A file's imports start a line; an indented `use` is local to a body.
+        if line.start != span.start {
+            continue;
+        }
+        let written = slice(text, *span);
+        let vis = written
+            .find("use ")
+            .map_or(String::new(), |at| written[..at].to_string());
         let listed: Vec<Span> = nodes
             .iter()
             .filter(|(kind, at)| kind == "use_list" && inside(*at, *span))
@@ -251,10 +327,11 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
             let path = path_of(slice(text, *span));
             out.push(Leaf {
                 prefix: String::new(),
-                leaf: path.clone(),
+                leaf: path.rsplit("::").next().unwrap_or(&path).to_string(),
                 path,
                 span: line,
                 line,
+                vis: vis.clone(),
             });
             continue;
         };
@@ -287,6 +364,7 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
                 leaf,
                 span: *at,
                 line,
+                vis: vis.clone(),
             });
         }
     }
@@ -302,10 +380,11 @@ fn drop_leaf(leaves: &[Leaf], held: &Leaf) -> Edit {
         .filter(|leaf| leaf.line == held.line && leaf.path != held.path)
         .map(|leaf| leaf.leaf.as_str())
         .collect();
+    let vis = &held.vis;
     let text = match kept.len() {
         0 => String::new(),
-        1 => format!("use {}::{};\n", held.prefix, kept[0]),
-        _ => format!("use {}::{{{}}};\n", held.prefix, kept.join(", ")),
+        1 => format!("{vis}use {}::{};\n", held.prefix, kept[0]),
+        _ => format!("{vis}use {}::{{{}}};\n", held.prefix, kept.join(", ")),
     };
     Edit {
         span: held.line,

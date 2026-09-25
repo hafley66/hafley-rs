@@ -2889,6 +2889,19 @@ pub trait Cleave: Source + Sync + Send {
     /// when there is none, removed whole when `names` is empty. None: no change.
     fn edit_import(&self, text: &str, names: &[String], module: &str) -> Option<Edit>;
 
+    /// `edit_import`, with an added import declared as visibly as the one
+    /// that bound `like` from `like_module` (a re-export stays a re-export).
+    fn edit_import_like(
+        &self,
+        text: &str,
+        names: &[String],
+        module: &str,
+        _like: &str,
+        _like_module: &str,
+    ) -> Option<Edit> {
+        self.edit_import(text, names, module)
+    }
+
     /// How a file at `from_path` spells `to_path` as a module. The corpus
     /// supplies declarations such as Rust's `#[path] mod name`.
     fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String;

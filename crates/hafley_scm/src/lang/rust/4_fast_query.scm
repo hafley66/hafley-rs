@@ -56,6 +56,13 @@
   (type_identifier)
 ] @local.reference
 
+; A path's leading segment names a module or type, never a local value, so
+; `fmt::Formatter` inside `fn fmt` still needs the file's `use std::fmt`.
+[
+  (scoped_identifier path: (identifier) @local.reference.path)
+  (scoped_type_identifier path: (identifier) @local.reference.path)
+]
+
 ; Call sites, under the same outer span capture as the definitions. A call
 ; through a path (`std::fs::read_to_string`) is qualified, never a free name.
 [

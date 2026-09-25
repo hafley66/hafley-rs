@@ -637,6 +637,11 @@ fn free_names(
             .map(|capture| (capture.start, capture.end))
             .collect(),
     );
+    let path_heads: HashSet<(u32, u32)> = captures
+        .iter()
+        .filter(|capture| capture.label == "local.reference.path")
+        .map(|capture| (capture.start, capture.end))
+        .collect();
     let mut facts = Vec::new();
     for name in captures.iter().filter(|capture| capture.label == "local.reference") {
         if bound.contains(&(name.start, name.end)) {
@@ -645,7 +650,8 @@ fn free_names(
         if imports.innermost(name.start, name.end, None).is_some() {
             continue;
         }
-        if resolve(name, scopes, definitions, owned).is_some_and(|def| def.owner != ROOT) {
+        let path_head = path_heads.contains(&(name.start, name.end));
+        if !path_head && resolve(name, scopes, definitions, owned).is_some_and(|def| def.owner != ROOT) {
             continue;
         }
         let owner = top_level(&scopes.scopes, scopes.containing(name.start, name.end, None));
