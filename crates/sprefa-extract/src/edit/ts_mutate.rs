@@ -5,12 +5,13 @@
 
 use crate::move_cx::{dirname, relative_between};
 use crate::source::{FamilyMask, Source};
-use crate::types::{FamilyTag, Span};
+use crate::types::FamilyTag;
 use crate::wire::{flatten_each, FlatFact};
 
 use crate::lang::ts::TsSource;
 use crate::edit_seams::Edit;
 use crate::edit_seams::Cleave;
+use hafley_scm::span::Span;
 
 /// The extensions a module spelling drops.
 const EXTENSIONS: [&str; 6] = ["ts", "tsx", "mts", "cts", "js", "mjs"];

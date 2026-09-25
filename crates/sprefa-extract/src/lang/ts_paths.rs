@@ -12,7 +12,7 @@ use oxc_ast_visit::Visit as OxcVisit;
 
 use super::ts::OxcParser;
 use crate::seams::{ParseError, Parser};
-use crate::types::Span;
+use hafley_scm::span::Span;
 
 /// The callees whose string-literal arguments name a file path. A member form
 /// (`path.resolve`) matches on the property, the way node's own API reads.

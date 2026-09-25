@@ -8,10 +8,11 @@ use std::sync::{Mutex, OnceLock};
 use super::{first_object, json_literal, node_string, quote_of, specifier_refs};
 use crate::manifests::{fold_package_edges, Manifest, ManifestKind};
 use crate::move_cx::{dirname, join_rel, relative_between, MoveCx};
-use crate::types::{LangKind, Span};
+use crate::types::LangKind;
 use crate::wire::FlatFact;
 use crate::edit_seams::ImportRef;
 use crate::edit_seams::ImportRefKind;
+use hafley_scm::span::Span;
 
 /// A manifest edit: one dependency a package.json gains.
 pub const PKG_DEP: ImportRefKind = ImportRefKind::Ext(LangKind {

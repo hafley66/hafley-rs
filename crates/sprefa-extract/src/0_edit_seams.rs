@@ -1,10 +1,10 @@
-use crate::types::Span;
 use crate::types::LangKind;
 use crate::move_cx::MoveCx;
 use crate::types::Source;
 use std::collections::BTreeSet;
 use std::fmt;
 use crate::rename_cx::{RenameCx, RenameRequest};
+use hafley_scm::span::Span;
 
 /// One import-shaped reference a move respells. `literal` and `text` cover it
 /// AS WRITTEN, quotes included: a respell reproduces the quote style.

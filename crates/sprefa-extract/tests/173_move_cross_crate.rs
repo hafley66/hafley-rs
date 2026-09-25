@@ -439,6 +439,29 @@ fn a_cleave_that_would_cycle_is_a_named_stop() {
     );
 }
 
+#[test]
+fn a_cleave_carrying_a_third_party_import_needs_it_in_dest() {
+    let fixture = fixture("rust_cross", "rust_cleave_third_party");
+    commit(
+        &fixture,
+        &[(
+            "alpha/src/tagged.rs",
+            "use serde_json::Value;\n\npub fn tagged(value: Value) -> Value {\n    value\n}\n",
+        )],
+    );
+    let args = vec![
+        "cleave".to_string(),
+        format!("{}#tagged", fixture.root.join("alpha/src/tagged.rs").display()),
+        fixture.root.join("beta/src/base.rs").display().to_string(),
+    ];
+    let output = ryi(&fixture, &args);
+    assert_eq!(output.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "cleave across packages: beta must depend on serde_json (tagged imports Value from serde_json::Value); add the dependency"
+    );
+}
+
 // ── TS ──────────────────────────────────────────────────────────────────────
 
 #[test]

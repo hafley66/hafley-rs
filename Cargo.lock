@@ -1428,6 +1428,7 @@ dependencies = [
  "ra_ap_syntax-bridge",
  "ra_ap_tt",
  "salsa",
+ "serde",
  "syn 2.0.119",
  "tree-sitter",
  "tree-sitter-rust",

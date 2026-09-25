@@ -32,7 +32,7 @@ use syn::spanned::Spanned;
 use crate::lang::rust::{build_line_starts, syn_span, RustSource};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
-use crate::types::{LangKind, Span};
+use crate::types::LangKind;
 
 mod cross;
 
@@ -43,6 +43,7 @@ use crate::edit_seams::Respell;
 use crate::edit_seams::Rehome;
 use crate::edit_seams::RehomeManifests;
 use crate::edit_seams::RehomePlanCheck;
+use hafley_scm::span::Span;
 
 /// The macros whose first argument names a file, resolved against the directory
 /// of the file that writes them.

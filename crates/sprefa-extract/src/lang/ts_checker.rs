@@ -9,7 +9,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::shape::FamilyTag;
-use crate::types::{ContentId, DefIndex, DefSite, Span};
+use crate::types::{ContentId, DefIndex, DefSite};
+use hafley_scm::span::Span;
 
 /// One resolved reference. Offsets are the UTF-8 byte offset `to_span` writes;
 /// the driver converts out of TypeScript's UTF-16 positions before emitting.

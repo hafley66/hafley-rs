@@ -6,6 +6,7 @@ mod walk;
 pub mod lang;
 
 pub mod cst;
+pub mod span;
 pub use types::*;
 
 use tree_sitter::{Language, Query, Tree};

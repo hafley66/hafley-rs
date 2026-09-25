@@ -50,7 +50,7 @@ fn document(lines: usize) -> (ScipDocument, Vec<u8>, Vec<String>) {
 fn a_call_site_reads_the_document_once_not_once_per_occurrence() {
     let lines = 4_000usize;
     let (doc, content, _symbols) = document(lines);
-    let site = sprefa_extract::Span { start: 0, len: 6 };
+    let site = hafley_scm::span::Span { start: 0, len: 6 };
     let started = std::time::Instant::now();
     let hit = sprefa_extract::site_occurrence(&doc, &content, site, "callee");
     assert!(

@@ -503,6 +503,7 @@ impl Plan {
             &callers,
             source.refs_outside(&item, &moving) > 0,
             &dest_imports,
+            &travelling,
         )?;
         let qualified = imports.qualified(&cx, &src, &item);
         Ok(Plan {
@@ -1693,6 +1694,21 @@ fn package_view(cx: &MoveCx, language: &str, rel: &str) -> Option<PackageView> {
     }
 }
 
+/// The manifest key a package specifier names: `serde` of `serde::de`, `@a/b` of
+/// `@a/b/c`, `lodash` of `lodash/fp`.
+fn package_key<'a>(language: &str, module: &'a str) -> &'a str {
+    match language {
+        "rust" => module.split("::").next().unwrap_or(module),
+        _ => {
+            let cut = match module.starts_with('@') {
+                true => module.match_indices('/').nth(1).map(|(at, _)| at),
+                false => module.find('/'),
+            };
+            &module[..cut.unwrap_or(module.len())]
+        }
+    }
+}
+
 fn depends_on(user: &PackageView, on: &PackageView) -> bool {
     user.3
         .iter()
@@ -1711,6 +1727,7 @@ fn cross_package_stop(
     callers: &[String],
     src_uses_item: bool,
     dest_imports: &[(String, Vec<String>)],
+    travelling: &[CleaveSpecifier],
 ) -> Result<(), String> {
     let (Some(from), Some(to)) = (
         package_view(cx, language, src),
@@ -1747,6 +1764,22 @@ fn cross_package_stop(
                 package.1, to.1
             ));
         }
+    }
+    // A third-party import travelling with the item needs the same key in DEST's
+    // manifest; std and the package's own ident need none.
+    for row in travelling.iter().filter(|row| row.kind == "package") {
+        let key = package_key(language, &row.dest_module);
+        let builtin = match language {
+            "rust" => matches!(key, "std" | "core" | "alloc" | "crate" | "self" | "super"),
+            _ => key.starts_with("node:") || key.starts_with('.'),
+        };
+        if builtin || key == to.2 || to.3.iter().any(|dep| dep == key || dep.replace('-', "_") == key) {
+            continue;
+        }
+        return Err(format!(
+            "cleave across packages: {} must depend on {key} ({item} imports {} from {}); add the dependency",
+            to.1, row.name, row.dest_module
+        ));
     }
     if back && !depends_on(&to, &from) {
         return Err(format!(

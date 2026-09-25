@@ -67,7 +67,7 @@ pub(super) fn py_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
 
 /// The byte span of a tree-sitter node `[start_byte, end_byte)`.
 pub(super) fn node_span(node: tree_sitter::Node) -> crate::shape::Span {
-    crate::shape::Span {
+    hafley_scm::span::Span {
         start: node.start_byte() as u32,
         len: (node.end_byte() - node.start_byte()) as u32,
     }

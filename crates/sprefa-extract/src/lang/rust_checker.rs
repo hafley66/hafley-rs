@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::shape::FamilyTag;
-use crate::types::{ContentId, DefIndex, DefSite, Span};
+use crate::types::{ContentId, DefIndex, DefSite};
+use hafley_scm::span::Span;
 
 /// One resolved reference. Offsets are the parse plane's unit (a line's start
 /// byte plus the CHARACTER column), converted by `OffsetMap`, never raw bytes.

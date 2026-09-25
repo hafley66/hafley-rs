@@ -27,29 +27,10 @@ use serde::Serialize;
 use crate::lang::extract_lang::RyiLang;
 
 pub use soopy::ContentId;
+use hafley_scm::span::Span;
 // ════════════════════════════════════════════════════════════════════════════
 // S1 ATOMS
 // ════════════════════════════════════════════════════════════════════════════
-
-/// THE one coordinate. Byte offsets into the file; line/col derived, never stored.
-#[derive(Copy, Clone, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
-pub struct Span {
-    pub start: u32,
-    pub len: u32,
-}
-
-impl Span {
-    pub const fn empty() -> Self {
-        Self { start: 0, len: 0 }
-    }
-    /// Synthetic identity for things with no real span (a whole-file module).
-    pub const fn anchor(at: u32) -> Self {
-        Self { start: at, len: 0 }
-    }
-    pub const fn end(self) -> u32 {
-        self.start + self.len
-    }
-}
 
 /// Hash file bytes to `ContentId::Blake3` through soopy's own constructor, so
 /// the corpus and soopy's enumeration cannot disagree on one file's identity.
