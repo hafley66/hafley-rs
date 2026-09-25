@@ -333,4 +333,46 @@ mod tests {
             r#"{"kind":"choices","paths":["/wt-alpha/plans/x.md","/wt-gamma/plans/x.md"],"via":"worktree","worktrees":["alpha","gamma"]}"#
         );
     }
+
+    /// RECEIPT (click-bare-name-choices). A bare filename the agent touched
+    /// opens the touched file, ahead of the filesystem's choice between every
+    /// worktree holding that name.
+    #[test]
+    fn a_touched_path_outranks_the_worktree_choices() {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let trunk = base.join("trunk");
+        std::fs::create_dir_all(trunk.join("site")).unwrap();
+        std::fs::write(trunk.join("site/index.html"), "t").unwrap();
+        std::fs::write(trunk.join(".gitignore"), ".boop-worktrees/\n").unwrap();
+        git(&trunk, &["init", "-q", "-b", "main"]);
+        git(&trunk, &["add", "-A"]);
+        git(&trunk, &["commit", "-qm", "site"]);
+        let lane = trunk.join(".boop-worktrees/chore/x");
+        git(&trunk, &["worktree", "add", "-q", "-b", "chore/x", lane.to_str().unwrap()]);
+        std::fs::create_dir_all(lane.join("plans/p")).unwrap();
+        std::fs::write(lane.join("plans/p/index.html"), "l").unwrap();
+        let home = base.to_string_lossy().into_owned();
+        clear_index_cache();
+
+        let touched = SessionTouched { paths: vec![lane.join("plans/p/index.html").display().to_string()], cwds: Vec::new() };
+        let roots = click_roots(&pane(&trunk), &touched);
+        let evidence = AgentEvidence::from_touched(&touched, &home);
+        assert_eq!(
+            rel(&base, resolve("index.html:7", &roots, &home, &evidence)),
+            ResolveResult::Hit {
+                reference: ResolvedRef { path: "trunk/.boop-worktrees/chore/x/plans/p/index.html".into(), line: Some(7), source: "touched" }
+            }
+        );
+        // Without the evidence the filesystem answers with the choice.
+        assert_eq!(
+            rel(&base, resolve("index.html", &roots, &home, &AgentEvidence::default())),
+            ResolveResult::Choices {
+                paths: vec!["trunk/site/index.html".into(), "trunk/.boop-worktrees/chore/x/plans/p/index.html".into()],
+                line: None,
+                via: "exact",
+                worktrees: vec!["trunk".into(), "worktree chore/x".into()],
+            }
+        );
+    }
 }

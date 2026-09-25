@@ -2,13 +2,13 @@
 //! root, worktree fan-out, the index, siblings, fzf, then git history. A caller
 //! holding agent evidence runs its own rung in front of `resolve_fs`.
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Serialize;
 
 use crate::_1_pane_at::PaneHit;
 use crate::_2_click_rungs::*;
-use crate::_3_click_roots::{click_roots, doc_roots, repos_beside, Root, RootVia};
+use crate::_3_click_roots::{click_roots, doc_roots, repos_beside, worktrees_of, Root, RootVia};
 
 #[derive(Serialize, Debug, PartialEq, Eq, Clone)]
 pub struct ResolvedRef {
@@ -164,6 +164,113 @@ fn sibling_join(rel: &str, toplevel: Option<&str>, line: Option<u32>) -> Option<
     }
 }
 
+/// A checkout the exact rung ranks, the label its rows carry in a choice, and
+/// the source a single hit in it answers with.
+struct ExactGroup {
+    dir: PathBuf,
+    label: String,
+    source: &'static str,
+}
+
+/// The checkouts the exact rung ranks, in answer order: the pane's own
+/// (`search_root`) first, then every other worktree among `roots`, then the
+/// repositories beside the trunk. The repository's main worktree is `trunk`.
+fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
+    let canonical = |dir: &Path| std::fs::canonicalize(dir).unwrap_or_else(|_| dir.to_path_buf());
+    let own = PathBuf::from(search_root);
+    let worktrees = worktrees_of(&own);
+    let trunk = worktrees.first().map(|(dir, _)| canonical(dir));
+    let label = |dir: &Path, fallback: &str| {
+        let dir = canonical(dir);
+        if trunk.as_ref() == Some(&dir) {
+            return "trunk".to_owned();
+        }
+        match worktrees.iter().find(|(wt, _)| canonical(wt) == dir) {
+            Some((_, name)) => format!("worktree {name}"),
+            None => fallback.to_owned(),
+        }
+    };
+    let mut groups = vec![ExactGroup { label: label(&own, "cwd"), dir: own.clone(), source: "search" }];
+    for root in roots {
+        let RootVia::Worktree(name) = &root.via else { continue };
+        groups.push(ExactGroup { label: label(&root.dir, &format!("worktree {name}")), dir: root.dir.clone(), source: "worktree" });
+    }
+    let mut seen: Vec<PathBuf> = groups.iter().map(|group| canonical(&group.dir)).collect();
+    seen.extend(worktrees.iter().map(|(dir, _)| canonical(dir)));
+    let beside = worktrees.first().map_or(own, |(dir, _)| dir.clone());
+    for repo in repos_beside(&beside) {
+        if seen.contains(&canonical(&repo)) {
+            continue;
+        }
+        let name = repo.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
+        groups.push(ExactGroup { label: format!("sibling {name}"), dir: repo, source: "sibling" });
+    }
+    groups
+}
+
+struct ExactMatch {
+    path: String,
+    tail: bool,
+    group: usize,
+}
+
+/// `rank_exact` over the index of each group in `ranked`. Group 0 (the pane's
+/// checkout) keeps name-only matches; the rest keep whole-tail matches. A path
+/// belongs to the deepest group containing it. A worktree row at the same
+/// checkout-relative path as a group-0 row is that file on another branch and
+/// drops out.
+fn exact_matches(rel: &str, groups: &[ExactGroup], ranked: std::ops::Range<usize>) -> Vec<ExactMatch> {
+    let under = |path: &str, dir: &Path| path.strip_prefix(&format!("{}/", trim_slash(&dir.to_string_lossy()))).map(str::to_owned);
+    let mut found: Vec<ExactMatch> = Vec::new();
+    for index in ranked {
+        for (path, tail) in rank_exact(rel, &index_for(&groups[index].dir)) {
+            if (index > 0 && !tail) || found.iter().any(|seen| seen.path == path) {
+                continue;
+            }
+            let owner = groups
+                .iter()
+                .enumerate()
+                .filter(|(_, group)| under(&path, &group.dir).is_some())
+                .max_by_key(|(_, group)| group.dir.as_os_str().len())
+                .map_or(index, |(owner, _)| owner);
+            found.push(ExactMatch { path, tail, group: owner });
+        }
+    }
+    let first: Vec<String> = found
+        .iter()
+        .filter(|found| found.group == 0)
+        .filter_map(|found| under(&found.path, &groups[0].dir))
+        .collect();
+    found.retain(|found| {
+        found.group == 0
+            || groups[found.group].source != "worktree"
+            || under(&found.path, &groups[found.group].dir).is_none_or(|rel| !first.contains(&rel))
+    });
+    found.sort_by_key(|found| found.group);
+    found
+}
+
+/// One match, or one whole-tail match among several, opens; several are a
+/// choice, tagged by checkout when they span more than one.
+fn answer_exact(found: Vec<ExactMatch>, groups: &[ExactGroup], line: Option<u32>) -> Option<ResolveResult> {
+    let tails: Vec<&ExactMatch> = found.iter().filter(|found| found.tail).collect();
+    if found.len() == 1 || tails.len() == 1 {
+        let only = tails.first().copied().unwrap_or(&found[0]);
+        return Some(ResolveResult::Hit {
+            reference: ResolvedRef { path: only.path.clone(), line, source: groups[only.group].source },
+        });
+    }
+    if found.is_empty() {
+        return None;
+    }
+    let mut labels: Vec<String> = found.iter().map(|found| groups[found.group].label.clone()).collect();
+    let spans = labels.iter().any(|label| label != &labels[0]);
+    let mut paths: Vec<String> = found.into_iter().map(|found| found.path).collect();
+    paths.truncate(MAX_CHOICES);
+    labels.truncate(MAX_CHOICES);
+    Some(ResolveResult::Choices { paths, line, via: "exact", worktrees: if spans { labels } else { Vec::new() } })
+}
+
 /// A token resolved against the click's roots. `roots[0]` is the pane cwd.
 pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
     let Some((rel, line)) = clean_token(token) else {
@@ -222,19 +329,17 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
         return ResolveResult::Miss;
     }
     let entries = index_for(Path::new(&search_root));
-    let exact = rank_exact(&rel, &entries);
-    // One whole-tail match is unambiguous even when the bare filename repeats.
-    let tails: Vec<&(String, bool)> = exact.iter().filter(|(_, tail)| *tail).collect();
-    if exact.len() == 1 || tails.len() == 1 {
-        let path = tails.first().map_or_else(|| exact[0].0.clone(), |(path, _)| path.clone());
-        return ResolveResult::Hit {
-            reference: ResolvedRef { path, line, source: "search" },
-        };
-    }
-    if exact.len() > 1 {
-        let mut paths: Vec<String> = exact.into_iter().map(|(path, _)| path).collect();
-        paths.truncate(MAX_CHOICES);
-        return ResolveResult::Choices { paths, line, via: "exact", worktrees: Vec::new() };
+    // A bare filename is a choice between every checkout of the pane's
+    // repository that holds one: its own, then the other worktrees (untracked
+    // files in an ignored `.boop-worktrees` lane included). A token with a
+    // directory in it stays with the pane's checkout while any rung there
+    // answers. Sibling repositories rank only a token with a directory in it.
+    let groups = exact_groups(&search_root, roots);
+    let checkouts = groups.iter().filter(|group| group.source != "sibling").count();
+    let bare = !tail.trim_end_matches('/').contains('/');
+    let ranked = if bare { 0..checkouts } else { 0..1 };
+    if let Some(found) = answer_exact(exact_matches(&rel, &groups, ranked), &groups, line) {
+        return found;
     }
 
     // A file inside a gitignored directory: `out/timeline.txt` under a lab whose
@@ -257,6 +362,14 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
             return ResolveResult::Hit {
                 reference: ResolvedRef { path: candidate, line, source: "sibling" },
             };
+        }
+    }
+
+    // The tail under another worktree or a sibling repository's subdirectory:
+    // `plugins/files/1_FileTree.tsx` printed from `<sibling>/src`.
+    if !bare {
+        if let Some(found) = answer_exact(exact_matches(&rel, &groups, 1..groups.len()), &groups, line) {
+            return found;
         }
     }
 
@@ -309,7 +422,6 @@ pub fn resolve_fs_in_doc(token: &str, doc: &Path, roots: &[Root], home: &str) ->
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
 
     fn pane(cwd: &str) -> PaneHit {
         PaneHit { pane: String::new(), pane_current_path: PathBuf::from(cwd), pane_col: 0, pane_row: 0 }
@@ -580,6 +692,152 @@ mod tests {
             ResolveResult::Hit {
                 reference: ResolvedRef { path: second, line: None, source: "absolute" },
             }
+        );
+    }
+
+    fn git_in(dir: &Path, args: &[&str]) {
+        let status = std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@t")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@t")
+            .status()
+            .unwrap();
+        assert!(status.success(), "git {args:?} in {}", dir.display());
+    }
+
+    fn put(path: &Path) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, "x").unwrap();
+    }
+
+    /// `projects/trunk` (committed `site/index.html`, `.boop-worktrees/`
+    /// ignored), its linked worktree `projects/trunk-feat` (untracked
+    /// `docs/index.html`), a boop lane worktree
+    /// `trunk/.boop-worktrees/chore/x` (untracked `plans/p/index.html`), and a
+    /// sibling repo `projects/instant` holding `src/plugins/files/1_FileTree.tsx`.
+    fn lane_tree() -> (tempfile::TempDir, PathBuf) {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let trunk = base.join("projects/trunk");
+        put(&trunk.join("site/index.html"));
+        std::fs::write(trunk.join(".gitignore"), ".boop-worktrees/\n").unwrap();
+        git_in(&trunk, &["init", "-q", "-b", "main"]);
+        git_in(&trunk, &["add", "-A"]);
+        git_in(&trunk, &["commit", "-qm", "site"]);
+        git_in(&trunk, &["worktree", "add", "-q", "-b", "feat", base.join("projects/trunk-feat").to_str().unwrap()]);
+        put(&base.join("projects/trunk-feat/docs/index.html"));
+        git_in(&trunk, &["worktree", "add", "-q", "-b", "chore/x", trunk.join(".boop-worktrees/chore/x").to_str().unwrap()]);
+        put(&trunk.join(".boop-worktrees/chore/x/plans/p/index.html"));
+        let sibling = base.join("projects/instant");
+        put(&sibling.join("src/plugins/files/1_FileTree.tsx"));
+        git_in(&sibling, &["init", "-q", "-b", "main"]);
+        clear_index_cache();
+        (scratch, base)
+    }
+
+    fn debug_under(base: &Path, value: &impl std::fmt::Debug) -> String {
+        format!("{value:#?}").replace(&format!("{}/", base.display()), "")
+    }
+
+    /// RECEIPT (click-bare-name-choices). A bare filename lists every
+    /// reachable match: the pane's checkout (trunk), its linked worktree, and
+    /// the untracked file in a `.boop-worktrees` lane the trunk ignores. The
+    /// tracked copies of `site/index.html` in the other worktrees are the
+    /// trunk's file on another branch and stay out.
+    #[test]
+    fn a_bare_filename_lists_every_worktree_match_grouped_by_root() {
+        let (_scratch, base) = lane_tree();
+        let hit = pane(&base.join("projects/trunk").to_string_lossy());
+        let lookup = cmd_click_lookup(&hit, "index.html", None, &base.to_string_lossy());
+        assert_eq!(
+            debug_under(&base, &lookup.result),
+            r#"Choices {
+    paths: [
+        "projects/trunk/site/index.html",
+        "projects/trunk-feat/docs/index.html",
+        "projects/trunk/.boop-worktrees/chore/x/plans/p/index.html",
+    ],
+    line: None,
+    via: "exact",
+    worktrees: [
+        "trunk",
+        "worktree feat",
+        "worktree chore/x",
+    ],
+}"#
+        );
+    }
+
+    /// RECEIPT (click-bare-name-choices). A token relative to a subdirectory
+    /// of a sibling repository resolves by exact tail over that sibling's
+    /// index once every earlier rung misses.
+    #[test]
+    fn a_tail_under_a_sibling_repository_subdirectory_resolves_there() {
+        let (_scratch, base) = lane_tree();
+        let hit = pane(&base.join("projects/trunk").to_string_lossy());
+        let lookup = cmd_click_lookup(&hit, "plugins/files/1_FileTree.tsx:12", None, &base.to_string_lossy());
+        assert_eq!(
+            debug_under(&base, &lookup.result),
+            r#"Hit {
+    reference: ResolvedRef {
+        path: "projects/instant/src/plugins/files/1_FileTree.tsx",
+        line: Some(
+            12,
+        ),
+        source: "sibling",
+    },
+}"#
+        );
+    }
+
+    /// RECEIPT. boop-mux answers a click from the pane alone, with no agent
+    /// store: from the linked worktree the roots fan out to the trunk and the
+    /// lane, and the pane's own checkout groups first.
+    #[test]
+    fn the_lookup_from_a_linked_worktree_needs_only_the_filesystem() {
+        let (_scratch, base) = lane_tree();
+        let hit = pane(&base.join("projects/trunk-feat").to_string_lossy());
+        let lookup = cmd_click_lookup(&hit, "index.html", None, &base.to_string_lossy());
+        assert_eq!(
+            debug_under(&base, &lookup),
+            r#"FsLookup {
+    roots: [
+        Root {
+            dir: "projects/trunk-feat",
+            via: PaneCwd,
+        },
+        Root {
+            dir: "projects/trunk",
+            via: Worktree(
+                "main",
+            ),
+        },
+        Root {
+            dir: "projects/trunk/.boop-worktrees/chore/x",
+            via: Worktree(
+                "chore/x",
+            ),
+        },
+    ],
+    result: Choices {
+        paths: [
+            "projects/trunk-feat/docs/index.html",
+            "projects/trunk-feat/site/index.html",
+            "projects/trunk/.boop-worktrees/chore/x/plans/p/index.html",
+        ],
+        line: None,
+        via: "exact",
+        worktrees: [
+            "worktree feat",
+            "worktree feat",
+            "worktree chore/x",
+        ],
+    },
+}"#
         );
     }
 
