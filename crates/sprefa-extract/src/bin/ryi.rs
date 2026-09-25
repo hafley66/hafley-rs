@@ -21,7 +21,7 @@ use std::time::Instant;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
-use clap::{CommandFactory, Parser};
+use clap::{Args, Parser, Subcommand};
 
 use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
@@ -86,7 +86,99 @@ mod cleave;
     about = "sprefa-extract: one source file -> flat graph facts (JSONL to stdout)",
     long_about = LONG_ABOUT,
     after_help = AFTER_HELP,
+    args_conflicts_with_subcommands = true,
+    subcommand_negates_reqs = true,
+    disable_help_subcommand = true,
 )]
+struct Ryi {
+    #[command(subcommand)]
+    mode: Option<ModeCmd>,
+
+    #[command(flatten)]
+    cli: Cli,
+}
+
+#[derive(Subcommand)]
+enum ModeCmd {
+    /// Syntax-only whole-project extraction (`--family diet_scip`).
+    Fast(FastArgs),
+    /// Semantic whole-project extraction from a real SCIP index (`--family scip`).
+    Slow(SlowArgs),
+}
+
+#[derive(Args)]
+struct FastArgs {
+    #[arg(required = true, value_name = "PATH", long_help = PATH_LONG)]
+    paths: Vec<PathBuf>,
+
+    /// Write facts to a NEW SQLite database at PATH, then print schema/query commands.
+    #[arg(long, value_name = "PATH")]
+    sqlite: Option<PathBuf>,
+
+    /// Decorate stdout: 1-based line and col beside every start/end span.
+    #[arg(long, long_help = LINES_LONG)]
+    lines: bool,
+}
+
+#[derive(Args)]
+struct SlowArgs {
+    #[arg(value_name = "ROOT")]
+    root: PathBuf,
+
+    /// Write facts to a NEW SQLite database at PATH, then print schema/query commands.
+    #[arg(long, value_name = "PATH")]
+    sqlite: Option<PathBuf>,
+
+    /// Decorate stdout: 1-based line and col beside every start/end span.
+    #[arg(long, long_help = LINES_LONG)]
+    lines: bool,
+
+    /// Load this index.scip instead of finding or building one.
+    #[arg(long, value_name = "FILE", conflicts_with = "indexer", long_help = SCIP_INDEX_LONG)]
+    scip_index: Option<PathBuf>,
+
+    /// Where the index cache is placed and found.
+    #[arg(long, value_name = "DIR", long_help = SCIP_CACHE_LONG)]
+    scip_cache: Option<PathBuf>,
+
+    /// Wall budget in seconds for ONE indexer run.
+    #[arg(long, value_name = "SECS", long_help = SCIP_TIMEOUT_LONG)]
+    scip_timeout: Option<u64>,
+
+    /// Run ONE named SCIP indexer instead of every one the root's marker files match.
+    #[arg(long, value_name = "LANG", long_help = INDEXER_LONG)]
+    indexer: Option<String>,
+}
+
+impl From<FastArgs> for Cli {
+    fn from(fast: FastArgs) -> Self {
+        Cli {
+            paths: fast.paths,
+            sqlite: fast.sqlite,
+            lines: fast.lines,
+            family: Some(vec!["diet_scip".to_string()]),
+            ..Cli::default()
+        }
+    }
+}
+
+impl From<SlowArgs> for Cli {
+    fn from(slow: SlowArgs) -> Self {
+        Cli {
+            paths: vec![slow.root],
+            sqlite: slow.sqlite,
+            lines: slow.lines,
+            scip_index: slow.scip_index,
+            scip_cache: slow.scip_cache,
+            scip_timeout: slow.scip_timeout,
+            indexer: slow.indexer,
+            family: Some(vec!["scip".to_string()]),
+            ..Cli::default()
+        }
+    }
+}
+
+#[derive(Args, Default)]
 struct Cli {
     #[arg(required_unless_present_any = ["schema", "ingest", "trail"], value_name = "PATH", long_help = PATH_LONG)]
     paths: Vec<PathBuf>,
@@ -288,70 +380,6 @@ enum FamilyMode {
     Scip,
     /// The tree-sitter + heuristic resolve pass over the supplied paths.
     DietScip,
-}
-
-#[derive(Clone, Copy)]
-enum AliasMode {
-    Fast,
-    Slow,
-}
-
-impl AliasMode {
-    fn family(self) -> &'static str {
-        match self {
-            Self::Fast => "diet_scip",
-            Self::Slow => "scip",
-        }
-    }
-
-    /// Flags that would pick a different mode. Slow keeps the index-source
-    /// flags: they say where its SCIP index comes from, not which mode runs.
-    fn refused(self) -> &'static [&'static str] {
-        match self {
-            Self::Fast => &[
-                "--family",
-                "--rust-checker",
-                "--ts-checker",
-                "--go-checker",
-                "--scip-index",
-                "--scip-build",
-                "--indexer",
-            ],
-            Self::Slow => &["--family", "--rust-checker", "--ts-checker", "--go-checker"],
-        }
-    }
-}
-
-/// Expand the command aliases onto the existing family-mode dispatch, refusing
-/// flags that would pick another mode instead of accepting and ignoring them.
-fn alias_args() -> Result<Vec<String>, String> {
-    let mut args: Vec<String> = std::env::args().collect();
-    let alias = match args.get(1).map(String::as_str) {
-        Some("fast") => AliasMode::Fast,
-        Some("slow") => AliasMode::Slow,
-        _ => return Ok(args),
-    };
-    if let Some(flag) = args
-        .iter()
-        .skip(2)
-        .take_while(|arg| arg.as_str() != "--")
-        .find(|arg| {
-            alias
-                .refused()
-                .iter()
-                .any(|name| arg.as_str() == *name || arg.starts_with(&format!("{name}=")))
-        })
-    {
-        return Err(format!(
-            "ryi {} pins --family {}; {flag} cannot select or configure another mode",
-            args[1],
-            alias.family(),
-        ));
-    }
-    args.remove(1);
-    args.insert(1, alias.family().to_string());
-    args.insert(1, "--family".to_string());
-    Ok(args)
 }
 
 /// Which mode `--family` names, if any. Mixing a mode with a mask name is an
@@ -666,13 +694,12 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         }
         return Ok(());
     }
-    let argv = match alias_args() {
-        Ok(argv) => argv,
-        Err(error) => Cli::command()
-            .error(clap::error::ErrorKind::ArgumentConflict, error)
-            .exit(),
+    let ryi = Ryi::parse();
+    let cli = match ryi.mode {
+        Some(ModeCmd::Fast(fast)) => Cli::from(fast),
+        Some(ModeCmd::Slow(slow)) => Cli::from(slow),
+        None => ryi.cli,
     };
-    let cli = Cli::parse_from(argv);
 
     // `--scip-timeout` must reach the library's `ScipMode::Build` path, whose
     // budget comes from `IndexBudget::from_env` (project.rs). Setting the same

@@ -8,11 +8,7 @@
 //! bin auto-discovery does not see this directory as a second binary.
 
 pub const AFTER_HELP: &str = concat!(
-    "Aliases:\n",
-    "  ryi fast PATH...    syntax-only whole-project extraction (diet_scip)\n",
-    "  ryi slow ROOT       semantic whole-project extraction (real SCIP/compiler)\n",
-    "\n",
-    "Commands:\n",
+    "Other commands:\n",
     "  ryi diff ROOT --from REV --to REV [--pattern GLOB]... [--family call,type]\n",
     "                          [--sqlite PATH] [--json]\n",
     "    The fact delta between two commits of the repository rooted at ROOT. Both\n",

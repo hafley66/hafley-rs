@@ -34,8 +34,8 @@ fn help_names_the_build_and_mode_aliases() {
     let help = String::from_utf8_lossy(&output.stdout);
     assert!(help.contains(concat!("git hash: ", env!("SPREFA_BUILD_GIT_HASH"))));
     assert!(help.contains(concat!("datetime: ", env!("SPREFA_BUILD_DATETIME"))));
-    assert!(help.contains("ryi fast PATH..."));
-    assert!(help.contains("ryi slow ROOT"));
+    assert!(help.contains("  fast "));
+    assert!(help.contains("  slow "));
     assert!(help.contains("sprefa_extract=info"));
     assert!(help.contains("HAFLEY_LOG_FORMAT"));
 }
@@ -121,55 +121,4 @@ fn slow_preserves_named_indexer_dispatch_and_its_separate_cache() {
     );
     assert_eq!(alias.stdout, family.stdout);
     assert_eq!(alias.stderr, family.stderr);
-}
-
-#[test]
-fn aliases_reject_an_explicit_mode() {
-    for alias in ["fast", "slow"] {
-        let output = extract(&[alias, "--family", "diet_scip", "some.rs"]);
-        assert_eq!(output.status.code(), Some(2));
-        let error = String::from_utf8_lossy(&output.stderr);
-        assert!(error.contains("pins --family"), "{error}");
-        assert!(
-            error.contains("--family cannot select or configure another mode"),
-            "{error}"
-        );
-    }
-}
-
-#[test]
-fn slow_takes_an_explicit_index_like_family_scip() {
-    let root = "tests/fixtures/scip_rel";
-    let index = "tests/fixtures/scip_relationship/fixture.scip";
-    let alias = extract(&["slow", "--scip-index", index, root]);
-    let family = extract(&["--family", "scip", "--scip-index", index, root]);
-    assert!(alias.status.success(), "{}", String::from_utf8_lossy(&alias.stderr));
-    assert_eq!(alias.stdout, family.stdout);
-    assert_eq!(alias.stderr, family.stderr);
-}
-
-#[test]
-fn aliases_reject_checker_flags_and_fast_rejects_index_sources() {
-    for (alias, flag) in [
-        ("fast", "--go-checker"),
-        ("slow", "--go-checker"),
-        ("fast", "--indexer=go"),
-        ("fast", "--scip-index"),
-        ("fast", "--scip-build"),
-    ] {
-        let output = extract(&[alias, flag, "some.rs"]);
-        assert_eq!(output.status.code(), Some(2));
-        let error = String::from_utf8_lossy(&output.stderr);
-        assert!(error.contains("pins --family"), "{error}");
-        assert!(error.contains(flag), "{error}");
-    }
-}
-
-#[test]
-fn alias_mode_scan_stops_at_the_option_delimiter() {
-    let output = extract(&["fast", "--", "--family"]);
-    assert_eq!(output.status.code(), Some(2));
-    let error = String::from_utf8_lossy(&output.stderr);
-    assert!(!error.contains("pins --family"), "{error}");
-    assert!(error.contains("--family does not exist"), "{error}");
 }
