@@ -574,7 +574,16 @@ impl Resolve<CallF> for RustSource {
                 .then(|| call.aux.expected_types.iter().find(|(span, _)| *span == site.span))
                 .flatten()
                 .and_then(|(_, ty)| modules.and_then(|m| {
-                    m.impl_target(output.strings.lookup(*ty), callee, own_path)
+                    let path = output.strings.lookup(*ty);
+                    let segments = path.split("::").collect::<Vec<_>>();
+                    let name = segments.last().copied()?;
+                    if segments.len() > 1 {
+                        let qualifier = segments[..segments.len() - 1].iter()
+                            .map(|segment| (*segment).to_string()).collect::<Vec<_>>();
+                        own_path.and_then(|from| m.qualified_impl_target(from, &qualifier, name, callee))
+                    } else {
+                        m.impl_target(name, callee, own_path)
+                    }
                 }))
                 .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
             // Each leg names ITSELF: `kind` is `name_resolve` for nearly all

@@ -78,6 +78,20 @@ struct CallCollector<'a> {
 }
 
 impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
+    fn visit_local(&mut self, local: &'ast syn::Local) {
+        if let (syn::Pat::Type(pattern), Some(init)) = (&local.pat, &local.init) {
+            if let (syn::Type::Path(ty), Some(call)) = (&*pattern.ty, default_call(&init.expr)) {
+                if !ty.path.segments.is_empty() {
+                    self.expected_types.push((
+                        span_range(self.line_starts, call.func.span()),
+                        path_string(&ty.path),
+                    ));
+                }
+            }
+        }
+        syn::visit::visit_local(self, local);
+    }
+
     fn visit_item(&mut self, item: &'ast syn::Item) {
         let outer = self.under_cfg.take();
         let own = cfg_test_predicate(item_attrs(item));
@@ -150,20 +164,11 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
             }
             syn::Expr::Struct(struct_expr) => {
                 if let Some(rest) = &struct_expr.rest {
-                    if let syn::Expr::Call(call) = peel_parens(rest) {
-                        if let syn::Expr::Path(path) = peel_parens(&call.func) {
-                            if path.path.segments.len() == 2
-                                && path.path.segments[0].ident == "Default"
-                                && path.path.segments[1].ident == "default"
-                            {
-                                if let Some(ty) = struct_expr.path.segments.last() {
-                                    self.expected_types.push((
-                                        span_range(self.line_starts, call.func.span()),
-                                        ty.ident.to_string(),
-                                    ));
-                                }
-                            }
-                        }
+                    if let Some(call) = default_call(rest) {
+                        self.expected_types.push((
+                            span_range(self.line_starts, call.func.span()),
+                            path_string(&struct_expr.path),
+                        ));
                     }
                 }
                 if let Some(segment) = struct_expr
@@ -185,6 +190,15 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
             _ => syn::visit::visit_expr(self, expr),
         }
     }
+}
+
+fn default_call(expr: &syn::Expr) -> Option<&syn::ExprCall> {
+    let syn::Expr::Call(call) = peel_parens(expr) else { return None };
+    let syn::Expr::Path(path) = peel_parens(&call.func) else { return None };
+    (path.path.segments.len() == 2
+        && path.path.segments[0].ident == "Default"
+        && path.path.segments[1].ident == "default")
+        .then_some(call)
 }
 
 fn is_variant_literal_path(path: &syn::Path) -> bool {

@@ -4,3 +4,7 @@ pub fn default_probe() {
         ..Default::default()
     };
 }
+
+pub fn typed_default_probe() {
+    let _: crate::_0_left::Defaults = Default::default();
+}

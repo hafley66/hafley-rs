@@ -38,32 +38,37 @@ fn qualified_new_uses_its_declaring_type() {
     let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
     ryi(&["fast", "tests/fixtures/call_ladder_qualified/src", "--sqlite", &fast]);
     let conn = rusqlite::Connection::open(&fast).unwrap();
-    let rows: Vec<(String, String)> = conn.prepare(
-        "select distinct caller_name, callee_path from resolved_edge
-         where caller_path like '%/_2_qualified.rs' and callee_name = 'new'
-         order by caller_name, callee_path"
-    ).unwrap().query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-        .unwrap().collect::<Result<_, _>>().unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].0, "choose_left");
-    assert!(rows[0].1.ends_with("/_0_left.rs"), "{rows:?}");
+    let rows: Vec<String> = conn.prepare(
+        "select caller_name,
+           replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') target_file,
+           callee_name from resolved_edge
+         where caller_path like '%/_2_qualified.rs'
+         order by caller_site_start, target_file, callee_name"
+    ).unwrap().query_map([], |row| Ok(format!("{} -> {}:{}",
+        row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))
+    ).unwrap().collect::<Result<_, _>>().unwrap();
+    assert_eq!(rows.join("\n"), "choose_left -> _0_left.rs:new");
 }
 
 #[test]
-fn struct_update_default_uses_its_type_impl() {
+fn contextual_default_uses_its_type_impl() {
     let scratch = tempfile::tempdir().unwrap();
     let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
     ryi(&["fast", "tests/fixtures/call_ladder_qualified/src", "--sqlite", &fast]);
     let conn = rusqlite::Connection::open(&fast).unwrap();
-    let rows: Vec<(String, String)> = conn.prepare(
-        "select distinct caller_name, callee_path from resolved_edge
-         where caller_path like '%/_3_default.rs' and callee_name = 'default'
-         order by caller_name, callee_path"
-    ).unwrap().query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-        .unwrap().collect::<Result<_, _>>().unwrap();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0].0, "default_probe");
-    assert!(rows[0].1.ends_with("/_0_left.rs"), "{rows:?}");
+    let rows: Vec<String> = conn.prepare(
+        "select caller_name,
+           replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') target_file,
+           callee_name from resolved_edge
+         where caller_path like '%/_3_default.rs'
+         order by caller_site_start, target_file, callee_name"
+    ).unwrap().query_map([], |row| Ok(format!("{} -> {}:{}",
+        row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))
+    ).unwrap().collect::<Result<_, _>>().unwrap();
+    assert_eq!(rows.join("\n"), "\
+default_probe -> _0_left.rs:Defaults
+default_probe -> _0_left.rs:default
+typed_default_probe -> _0_left.rs:default");
 }
 
 #[test]
