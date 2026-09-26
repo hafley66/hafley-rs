@@ -23,6 +23,14 @@ const CHUNK_ROWS: usize = 64;
 /// Column kinds per table; a `json` column stores its value JSON-encoded,
 /// the same text the typed writers bind.
 const FACTS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/schema/generated/5_facts.json"));
+const COLUMN_KINDS: [&str; 7] = ["string", "uint32", "int64", "boolean", "int32", "json", "uint64"];
+
+#[derive(Clone, Copy, Default)]
+struct KindTime {
+    calls: u64,
+    nulls: u64,
+    nanos: u64,
+}
 
 #[derive(serde::Deserialize)]
 struct TableSpec {
@@ -319,6 +327,7 @@ pub struct Binder {
     buffers: Vec<Batch>,
     columns: Vec<Vec<String>>,
     json: Vec<Vec<bool>>,
+    column_kinds: Vec<Vec<usize>>,
     by_name: HashMap<String, usize>,
     path: String,
     threaded: bool,
@@ -327,6 +336,8 @@ pub struct Binder {
     table_bind_nanos: Vec<u64>,
     table_rows: Vec<u64>,
     profile_tables: bool,
+    kind_time: [KindTime; COLUMN_KINDS.len()],
+    submit_nanos: u64,
 }
 
 impl Binder {
@@ -339,19 +350,18 @@ impl Binder {
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<_>>()?;
         let specs: Vec<TableSpec> = serde_json::from_str(FACTS)?;
-        let json_columns: std::collections::HashSet<(String, String)> = specs
-            .into_iter()
-            .flat_map(|spec| {
-                let table = spec.table;
-                spec.columns
-                    .into_iter()
-                    .filter(|column| column.kind == "json")
-                    .map(move |column| (table.clone(), column.name))
-            })
-            .collect();
+        let mut types = HashMap::new();
+        for spec in &specs {
+            for column in &spec.columns {
+                let kind = COLUMN_KINDS.iter().position(|name| *name == column.kind)
+                    .ok_or_else(|| format!("unknown SQLite column kind `{}`", column.kind))?;
+                types.insert((spec.table.clone(), column.name.clone()), kind);
+            }
+        }
         let mut meta = Vec::with_capacity(names.len());
         let mut columns = Vec::with_capacity(names.len());
         let mut json = Vec::with_capacity(names.len());
+        let mut column_kinds = Vec::with_capacity(names.len());
         let mut by_name = HashMap::new();
         for (index, name) in names.into_iter().enumerate() {
             let column_names: Vec<String> = connection
@@ -376,17 +386,22 @@ impl Binder {
                 select_sql: format!("INSERT INTO \"{name}\" ({list}) SELECT {select_cols} FROM {module_name}"),
                 active,
             });
-            json.push(column_names.iter().map(|c| json_columns.contains(&(name.clone(), c.clone()))).collect());
+            let kinds = column_names.iter().map(|column| types.get(&(name.clone(), column.clone())).copied()
+                .ok_or_else(|| format!("missing SQLite column kind for {name}.{column}")))
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            json.push(kinds.iter().map(|kind| *kind == 5).collect());
+            column_kinds.push(kinds);
             columns.push(column_names);
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
         let table_count = meta.len();
-        Ok(Self { meta: Arc::new(meta), buffers, columns, json, by_name, path: String::new(), threaded,
+        Ok(Self { meta: Arc::new(meta), buffers, columns, json, column_kinds, by_name, path: String::new(), threaded,
             insert_nanos: Arc::new(AtomicU64::new(0)),
             table_insert_nanos: Arc::new((0..table_count).map(|_| AtomicU64::new(0)).collect()),
             table_bind_nanos: vec![0; table_count], table_rows: vec![0; table_count],
-            profile_tables: std::env::var_os("RYI_SQLITE_PHASES").is_some() })
+            profile_tables: std::env::var_os("RYI_SQLITE_PHASES").is_some(),
+            kind_time: [KindTime::default(); COLUMN_KINDS.len()], submit_nanos: 0 })
     }
 
     /// Serialize one row into its table's buffer; a full buffer goes to the
@@ -436,12 +451,15 @@ impl Binder {
     }
 
     fn submit(&mut self, slot: &mut Slot, table: usize) -> Result<()> {
+        let started = self.profile_tables.then(Instant::now);
         if !self.threaded {
             let connection = slot.local()?;
-            let started = Instant::now();
+            let insert_started = Instant::now();
             self.buffers[table].drain(&self.meta[table], connection)?;
-            self.insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
-            self.table_insert_nanos[table].fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            let nanos = insert_started.elapsed().as_nanos() as u64;
+            self.insert_nanos.fetch_add(nanos, Ordering::Relaxed);
+            self.table_insert_nanos[table].fetch_add(nanos, Ordering::Relaxed);
+            if let Some(started) = started { self.submit_nanos += started.elapsed().as_nanos() as u64; }
             return Ok(());
         }
         slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.insert_nanos), Arc::clone(&self.table_insert_nanos))?;
@@ -460,6 +478,7 @@ impl Binder {
             slot.local()?;
             return Err("SQLite writer thread stopped".into());
         }
+        if let Some(started) = started { self.submit_nanos += started.elapsed().as_nanos() as u64; }
         Ok(())
     }
 
@@ -489,6 +508,18 @@ impl Binder {
                     self.table_insert_nanos[index].load(Ordering::Relaxed) as f64 / 1e9);
             }
         }
+        eprintln!("sqlite bind kinds: kind calls nulls seconds");
+        for (kind, time) in COLUMN_KINDS.iter().zip(self.kind_time) {
+            if time.calls > 0 {
+                eprintln!("sqlite bind kinds: {kind} {} {} {:.6}", time.calls, time.nulls,
+                    time.nanos as f64 / 1e9);
+            }
+        }
+        let bind = self.table_bind_nanos.iter().sum::<u64>();
+        let columns = self.kind_time.iter().map(|time| time.nanos).sum::<u64>();
+        eprintln!("sqlite bind kinds: submit 0 0 {:.6}", self.submit_nanos as f64 / 1e9);
+        eprintln!("sqlite bind kinds: dispatch_meta_lookup 0 0 {:.6}",
+            bind.saturating_sub(columns).saturating_sub(self.submit_nanos) as f64 / 1e9);
     }
 }
 
@@ -592,27 +623,34 @@ impl RowWriter<'_> {
 
     #[inline(always)]
     fn column<T: ?Sized + Serialize>(&mut self, index: usize, column: usize, value: &T) -> std::result::Result<(), Error> {
+        let started = self.binder.profile_tables.then(Instant::now);
+        let kind = self.binder.column_kinds[index][column];
         let width = self.binder.meta[index].width;
         let table = &mut self.binder.buffers[index];
-        if self.binder.json[index][column] {
+        let val = if self.binder.json[index][column] {
             let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
-            let val = table.text(&json);
-            table.vals[table.rows * width + column] = val;
-            return Ok(());
-        }
-        let mark = table.text.len();
-        let mut probe = Scalar { arena: Some(&mut table.text), val: None, text: None,
-            lookup: None, table: None };
-        let val = match value.serialize(&mut probe) {
-            Ok(()) => probe.val.unwrap_or(Val::Null),
-            Err(Compound) => {
-                table.text.truncate(mark);
-                let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
-                table.text(&json)
+            table.text(&json)
+        } else {
+            let mark = table.text.len();
+            let mut probe = Scalar { arena: Some(&mut table.text), val: None, text: None,
+                lookup: None, table: None };
+            match value.serialize(&mut probe) {
+                Ok(()) => probe.val.unwrap_or(Val::Null),
+                Err(Compound) => {
+                    table.text.truncate(mark);
+                    let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
+                    table.text(&json)
+                }
             }
         };
         let base = table.rows * width;
         table.vals[base + column] = val;
+        if let Some(started) = started {
+            let time = &mut self.binder.kind_time[kind];
+            time.calls += 1;
+            time.nulls += u64::from(matches!(val, Val::Null));
+            time.nanos += started.elapsed().as_nanos() as u64;
+        }
         Ok(())
     }
 }

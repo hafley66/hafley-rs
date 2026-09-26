@@ -25,11 +25,11 @@ Base `96292970`. The sorted first 2,000 TypeScript-5.9 compiler `*.ts` files emi
 | Export total | 2.283 | 2.239 |
 | Process wall | 2.716 | 2.473 |
 
-Every one of 73 tables, including `sqlite_sequence`, has zero rows in `EXCEPT` in both directions between baseline and selected writer (146 comparisons). No output rows changed; no ryi-only growth sample applies. The frozen ratchet fixture also produced identical fast and slow database tables under both writer paths, with type-edge counts `(both 904, fast-only 3, slow-only 2)`.
+Private-target bind profile, full TS: string 2,090,950 calls / 0.266 s (224,726 SQL NULLs); `uint32` 2,254,076 / 0.148 s; `int64` 3,572 / 0.0002 s; boolean 17,768 / 0.0012 s; `int32`, JSON, `uint64` zero calls. Batch submission 0.005 s; dispatch, metadata, and lookup 1.423 s. Every one of 73 tables, including `sqlite_sequence`, has zero rows in `EXCEPT` in both directions (146 comparisons) on the private binary. No output rows changed; no ryi-only growth sample applies. The frozen ratchet fixture yielded `(both 904, fast-only 3, slow-only 2)` with both writer paths.
 
 Targets missed: TS SQLite wall 2.473 s versus requested 0.65 s; direct `sprefa/v6` root 84.611 s versus requested 30 s (20,619,867 rows, 4.56 GB database, 699,285,504-byte peak RSS). The root database was deleted immediately.
 
-Gate: `cd crates/sprefa-extract && CARGO_TARGET_DIR=$HOME/.cache/boop/cargo-target CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=4 RYI_MAX_MEM_MB=2048 RYI_CODEQL_REUSE=1 cargo test --features cli` exited 0. A second lane overwrote the shared `debug/ryi` during the run; the copied lane binary supplied the 146 equality comparisons. The first run's transient fast-only count of 49 returned to the pinned 3 in both writer variants on the frozen fixture. No pin or expected table changed. Last five lines:
+Gate: `cd crates/sprefa-extract && CARGO_TARGET_DIR=$HOME/.cache/boop/lane-targets/feature-ryi-sqlite-writer CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=4 RYI_MAX_MEM_MB=2048 RYI_CODEQL_REUSE=1 cargo test --features cli` exited 0. The private target kept its `ryi` binary separate; the first shared-target run had a transient fast-only count of 49. No pin or expected table changed. Last five lines:
 ```text
 
 running 0 tests
