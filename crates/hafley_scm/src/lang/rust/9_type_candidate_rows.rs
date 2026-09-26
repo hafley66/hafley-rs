@@ -183,7 +183,7 @@ fn collect(
                 retain_non_generic(&item.generics, &mut candidates);
                 groups.push(TypeCandidateGroup {
                     owner: TypeCandidateOwner::Impl {
-                        primary_name,
+                        primary_name: primary_name.clone(),
                         bare_head,
                     },
                     candidates,
@@ -192,6 +192,19 @@ fn collect(
                     if let syn::ImplItem::Fn(method) = child {
                         let mut candidates = signature_candidates(&method.sig);
                         candidates.extend(body_type_candidates(&method.block));
+                        for arg in &method.sig.inputs {
+                            if let syn::FnArg::Typed(arg) = arg {
+                                self_type_candidate(&arg.ty, &primary_name, TypeCandidateKind::Param, &mut candidates);
+                            }
+                        }
+                        if let syn::ReturnType::Type(_, ty) = &method.sig.output {
+                            self_type_candidate(ty, &primary_name, TypeCandidateKind::Returns, &mut candidates);
+                        }
+                        let mut self_refs = SelfRefWalk::default();
+                        self_refs.visit_block(&method.block);
+                        if self_refs.found {
+                            candidates.push(TypeCandidateRow { to: primary_name.clone(), kind: TypeCandidateKind::Uses });
+                        }
                         retain_non_generic(&item.generics, &mut candidates);
                         retain_non_generic(&method.sig.generics, &mut candidates);
                         groups.push(declared(
@@ -240,6 +253,33 @@ fn collect(
         for group in &mut groups[first..] {
             group.candidates.retain(|candidate| !shadowed.contains(&candidate.to));
         }
+    }
+}
+
+#[derive(Default)]
+struct SelfRefWalk { found: bool }
+
+impl<'ast> Visit<'ast> for SelfRefWalk {
+    fn visit_type_path(&mut self, ty: &'ast syn::TypePath) {
+        if ty.qself.is_none() && ty.path.is_ident("Self") {
+            self.found = true;
+        }
+        syn::visit::visit_type_path(self, ty);
+    }
+
+    fn visit_item(&mut self, _: &'ast syn::Item) {}
+}
+
+fn self_type_candidate(
+    ty: &Type,
+    primary_name: &str,
+    kind: TypeCandidateKind,
+    candidates: &mut Vec<TypeCandidateRow>,
+) {
+    let mut refs = SelfRefWalk::default();
+    refs.visit_type(ty);
+    if refs.found {
+        candidates.push(TypeCandidateRow { to: primary_name.to_owned(), kind });
     }
 }
 

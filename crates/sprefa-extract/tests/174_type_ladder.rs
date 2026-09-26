@@ -284,3 +284,21 @@ fn type_scope_ladder_follows_crate_module_reexport() {
     ).unwrap();
     assert_eq!(rows, (1, 1, 1, 0));
 }
+
+#[test]
+fn type_scope_ladder_resolves_impl_self_references() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_scope/src", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'wrap'
+              and target_name = 'SelfType' and target_path like '%/_13_self.rs'),
+           (select count(*) from resolved_type_edge where owner_name = 'annotate'
+              and target_name = 'SelfType' and target_path like '%/_13_self.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (2, 1));
+}
