@@ -4621,24 +4621,25 @@ impl TsSource {
         own: Option<&ContentId>,
     ) -> Option<(ContentId, Span)> {
         let sites = corpus_defs(index, callee);
-        // A lexical declaration in this file wins before the corpus-wide
-        // duplicate count. Require its CallF span in the current blob: a
-        // same-named export in another file cannot seat a local call.
-        if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
-            if let Some(node) = def_named(call, &output.strings, callee) {
-                let span = call.node(node).span;
-                if sites.iter().any(|site| {
-                    site.blob == *own_blob && site.span == span && site.family == FamilyTag::Call
-                }) {
-                    return Some(((*own_blob).clone(), span));
-                }
-            }
-        }
         let mut blobs: Vec<&ContentId> = Vec::new();
         for site in sites {
             if !blobs.contains(&&site.blob) {
                 blobs.push(&site.blob);
             }
+        }
+        // A same-file declaration names this call before the unique-blob leg.
+        if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
+            if let Some(node) = def_named(call, &output.strings, callee) {
+                let span = call.node(node).span;
+                if sites.iter().any(|site| {
+                    site.blob == *own_blob && site.span == span
+                }) {
+                    return Some(((*own_blob).clone(), span));
+                }
+            }
+        }
+        if blobs.len() > 1 {
+            return None;
         }
         let [blob] = blobs.as_slice() else {
             return None;
@@ -4646,6 +4647,64 @@ impl TsSource {
         let site = sites.iter().find(|site| site.family == FamilyTag::Call)
             .unwrap_or(&sites[0]);
         Some(((**blob).clone(), site.span))
+    }
+
+    fn ts_call_name_match(
+        output: &RyiOutput,
+        def_index: &DefIndex,
+        callee: &str,
+        own: Option<&ContentId>,
+        modules: Option<(&TsModuleIndex, &str)>,
+        paths: Option<&crate::read::types::PathIndex>,
+        kinds: Option<&crate::read::types::KindIndex>,
+    ) -> Option<(ContentId, Span)> {
+        let sites = corpus_defs(def_index, callee);
+        let mut blobs: Vec<&ContentId> = Vec::new();
+        for site in sites {
+            if !blobs.contains(&&site.blob) {
+                blobs.push(&site.blob);
+            }
+        }
+        if blobs.len() <= 1 {
+            return TsSource::call_name_match(output, def_index, callee, own);
+        }
+        let call = output.call.as_ref()?;
+        let node = def_named(call, &output.strings, callee)?;
+        let span = call.node(node).span;
+        let own_blob = own?;
+        if !sites.iter().any(|site| Some(&site.blob) == own && site.span == span) {
+            return None;
+        }
+        if sites.iter().any(|site| site.span != span)
+            && kinds.is_some_and(|kinds| kinds.get(own_blob, span) == Some(CallKind::Free))
+        {
+            let (modules, path) = modules?;
+            // A reached module participates in the import graph, so retain
+            // the corpus ambiguity guard for a same-named free function.
+            // An unreferenced module has only its local lexical seat here.
+            if modules.reached(own_blob) {
+                let own_exported = modules.exports_local(path, callee);
+                let own_arity = modules.free_arity(path, span);
+                if sites.iter().filter(|site| {
+                    Some(&site.blob) != own
+                        && site.family == FamilyTag::Call
+                        && kinds.is_some_and(|kinds| kinds.get(&site.blob, site.span) == Some(CallKind::Free))
+                }).any(|site| {
+                    let other_path = paths.and_then(|paths| paths.get(&site.blob));
+                    let mixed_visibility = other_path
+                        .is_none_or(|path| modules.exports_local(path, callee) != own_exported);
+                    let different_arity = other_path
+                        .and_then(|path| modules.free_arity(path, site.span))
+                        .zip(own_arity)
+                        .is_some_and(|(other, own)| other != own);
+                    mixed_visibility && !different_arity
+                }) {
+                    return None;
+                }
+            }
+        }
+        let site = sites.iter().find(|site| Some(&site.blob) == own && site.span == span)?;
+        Some((site.blob.clone(), site.span))
     }
 }
 
@@ -5049,11 +5108,14 @@ impl Resolve<CallF> for TsSource {
                 if imported {
                     return None;
                 }
-                Self::call_name_match(
+                Self::ts_call_name_match(
                     output,
                     def_index,
                     callee,
                     own.as_ref(),
+                    modules,
+                    paths,
+                    kinds,
                 )
                 .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
@@ -5217,11 +5279,14 @@ impl Resolve<CallF> for TsSource {
                 if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
                     return None;
                 }
-                Self::call_name_match(
+                Self::ts_call_name_match(
                     output,
                     def_index,
                     named,
                     own.as_ref(),
+                    modules,
+                    paths,
+                    kinds,
                 )
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
             }) else {

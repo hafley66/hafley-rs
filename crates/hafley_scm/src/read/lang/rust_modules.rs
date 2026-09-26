@@ -1238,6 +1238,28 @@ impl RustModuleIndex {
 
     /// The corpus file `mod name;` in `path` loads: `#[path]` against the
     /// file's dir, else `name.rs` then `name/mod.rs` under `mod_dir`.
+    fn module_tree_reaches(&self, root: &str, target: &str) -> bool {
+        let mut pending = vec![root.to_string()];
+        let mut seen = HashSet::new();
+        while let Some(path) = pending.pop() {
+            if path == target {
+                return true;
+            }
+            if !seen.insert(path.clone()) {
+                continue;
+            }
+            let Some(facts) = self.facts.get(&path) else {
+                continue;
+            };
+            for (name, path_attr) in &facts.mod_decls {
+                if let Some(child) = self.mod_file(&path, name, path_attr.as_deref()) {
+                    pending.push(child);
+                }
+            }
+        }
+        false
+    }
+
     fn mod_file(&self, path: &str, name: &str, path_attr: Option<&str>) -> Option<String> {
         if let Some(literal) = path_attr {
             let target = normalize_join(parent_dir(path), literal);
@@ -1343,8 +1365,12 @@ impl RustModuleIndex {
         };
         let Some(scopes) = self.target_scopes.get(from) else { return false };
         if target_crate == own {
-            return self.target_scopes.get(target)
+            let shares_target = self.target_scopes.get(target)
                 .is_some_and(|target_scopes| scopes.iter().any(|scope| target_scopes.contains(scope)));
+            let is_own_library = self.crate_libs.values().any(|library| {
+                library == target && self.crate_dirs.get(library).is_some_and(|dir| dir == own)
+            });
+            return shares_target || is_own_library;
         }
         self.crate_deps.get(own).is_some_and(|deps| {
             scopes.iter().any(|scope| deps.allows(scope.kind, target_crate))
@@ -1698,6 +1724,20 @@ impl RustModuleIndex {
             let Some(target) = module_target(from, &refs) else { return HomeFile::None; };
             target
         };
+        if target.crate_root.is_some() && target.suffix.is_empty() {
+            let mut candidates = self.module_paths.iter()
+                .filter(|(path, segments)| {
+                    self.sees_path(from, path)
+                        && target.covers(segments)
+                        && self.module_tree_reaches(path, from)
+                })
+                .map(|(path, _)| path.clone());
+            return match (candidates.next(), candidates.next()) {
+                (Some(path), None) => HomeFile::Unique(path),
+                (Some(_), Some(_)) => HomeFile::Ambiguous,
+                (None, _) => HomeFile::None,
+            };
+        }
         // Bucket by the RESOLVED target's own last segment: `super`/`self`/
         // `crate` never appear in a file's own module path.
         let Some(last) = target.suffix.last() else {
