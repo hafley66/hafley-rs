@@ -125,7 +125,11 @@ unsafe impl VTabCursor for BatchCursor {
             Val::Null => ctx.set_result(&rusqlite::types::Null),
             Val::Int(value) => ctx.set_result(&value),
             Val::Real(value) => ctx.set_result(&value),
-            Val::Text(start, len) => ctx.set_result(&&batch.text[start as usize..(start + len) as usize]),
+            Val::Text(start, len) => {
+                // Every span came from a str or serde_json's UTF-8 writer.
+                let value = unsafe { std::str::from_utf8_unchecked(&batch.text[start as usize..(start + len) as usize]) };
+                ctx.set_result(&value)
+            }
         }
     }
     fn rowid(&self) -> rusqlite::Result<i64> { Ok(self.row as i64 + 1) }
@@ -138,21 +142,30 @@ static BATCH_MODULE: Module<'static, BatchTable> = Module::eponymous_only_module
 struct Batch {
     table: usize,
     vals: Vec<Val>,
-    text: String,
+    text: Vec<u8>,
     interned: HashMap<u64, Val>,
     rows: usize,
 }
 
 impl Batch {
     fn empty(table: usize) -> Self {
-        Self { table, vals: Vec::new(), text: String::new(), interned: HashMap::new(), rows: 0 }
+        Self { table, vals: Vec::new(), text: Vec::new(), interned: HashMap::new(), rows: 0 }
     }
 
     #[inline(always)]
     fn text(&mut self, value: &str) -> Val {
         let start = self.text.len() as u32;
-        self.text.push_str(value);
+        self.text.extend_from_slice(value.as_bytes());
         Val::Text(start, value.len() as u32)
+    }
+
+    fn json<T: ?Sized + Serialize>(&mut self, value: &T) -> std::result::Result<Val, serde_json::Error> {
+        let start = self.text.len();
+        if let Err(error) = serde_json::to_writer(&mut self.text, value) {
+            self.text.truncate(start);
+            return Err(error);
+        }
+        Ok(Val::Text(start as u32, (self.text.len() - start) as u32))
     }
 
     #[inline(always)]
@@ -162,7 +175,7 @@ impl Batch {
         value.hash(&mut hasher);
         let hash = hasher.finish();
         if let Some(&Val::Text(start, len)) = self.interned.get(&hash) {
-            if &self.text[start as usize..(start + len) as usize] == value {
+            if &self.text[start as usize..(start + len) as usize] == value.as_bytes() {
                 return Val::Text(start, len);
             }
         }
@@ -186,8 +199,10 @@ impl Batch {
                 Val::Null => statement.raw_bind_parameter(parameter, rusqlite::types::Null)?,
                 Val::Int(v) => statement.raw_bind_parameter(parameter, v)?,
                 Val::Real(v) => statement.raw_bind_parameter(parameter, v)?,
-                Val::Text(start, len) => statement
-                    .raw_bind_parameter(parameter, &self.text[start as usize..(start + len) as usize])?,
+                Val::Text(start, len) => {
+                    let value = unsafe { std::str::from_utf8_unchecked(&self.text[start as usize..(start + len) as usize]) };
+                    statement.raw_bind_parameter(parameter, value)?;
+                }
             }
         }
         Ok(())
@@ -627,8 +642,7 @@ impl RowWriter<'_> {
         let width = self.binder.meta[index].width;
         let table = &mut self.binder.buffers[index];
         let val = if self.binder.json[index][column] {
-            let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
-            table.text(&json)
+            table.json(value).map_err(|e| Error(e.into()))?
         } else {
             let mark = table.text.len();
             let mut probe = Scalar { arena: Some(&mut *table), val: None, text: None,
@@ -638,8 +652,7 @@ impl RowWriter<'_> {
                 Err(Compound) => {
                     table.text.truncate(mark);
                     table.interned.clear();
-                    let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
-                    table.text(&json)
+                    table.json(value).map_err(|e| Error(e.into()))?
                 }
             }
         };
@@ -914,14 +927,24 @@ mod tests {
         let first = batch.intern("shared-name");
         let second = batch.intern("shared-name");
         assert!(matches!((first, second), (Val::Text(a, n), Val::Text(b, m)) if a == b && n == m));
-        assert_eq!(batch.text, "shared-name");
+        assert_eq!(batch.text.as_slice(), b"shared-name");
         batch.intern("other-name");
-        assert_eq!(batch.text, "shared-nameother-name");
+        assert_eq!(batch.text.as_slice(), b"shared-nameother-name");
         let capacity = batch.text.capacity();
         batch.clear();
         assert_eq!(batch.text.capacity(), capacity);
         assert!(batch.interned.is_empty());
         assert!(matches!(batch.intern("shared-name"), Val::Text(0, 11)));
-        assert_eq!(batch.text, "shared-name");
+        assert_eq!(batch.text.as_slice(), b"shared-name");
+    }
+
+    #[test]
+    fn json_columns_append_utf8_directly_to_the_batch_arena() {
+        let mut batch = Batch::empty(0);
+        batch.text("prefix");
+        let value = serde_json::json!({"text": "λ\n\"", "array": [null, true, 7]});
+        let Val::Text(start, len) = batch.json(&value).unwrap() else { panic!("JSON must be text") };
+        assert_eq!(start, 6);
+        assert_eq!(&batch.text[start as usize..(start + len) as usize], serde_json::to_string(&value).unwrap().as_bytes());
     }
 }
