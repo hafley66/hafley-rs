@@ -1,17 +1,12 @@
-//! `boop lane squares`: the user/agent squares on a lane's pane, read through
-//! the multiplexer rather than handed in.
-//!
-//! The caller is a renderer that draws them in the terminal's right margin. It
-//! gets the pane's own geometry with them, so it never has to ask the terminal
-//! for its shape separately and never disagrees with the snapshot it is
-//! overlaying.
+//! `boop lane squares`: a lane's pane frame (boop_harness::pane), the same frame instant pushes.
 
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 
 use boop::bus;
-use boop::{screen, tmux};
+use boop::tmux;
+use boop_harness::pane::{self, Options};
 
 use crate::cli::db::open_store;
 use crate::cli::{line, mail_dir};
@@ -31,51 +26,32 @@ pub(crate) fn run_lane_squares(
     let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
         anyhow::bail!("lane `{lane}` has no tmux session to read")
     };
-    let Some(session) = route
-        .session_id
-        .as_deref()
-        .filter(|session| !session.is_empty())
-    else {
+    let Some(session) = route.session_id.as_deref().filter(|session| !session.is_empty()) else {
         anyhow::bail!("lane `{lane}` route carries no session_id")
     };
-    // The pane answers first: a dead pane is a missing screen, not an empty
-    // one, and a renderer must not draw an overlay over nothing.
-    let snapshot = tmux::mux()
-        .pane_snapshot(socket, target, 0)
-        .with_context(|| format!("lane `{lane}` pane {target} answered no snapshot"))?;
-    let rows = open_store()?.turn_rows(&boop::ident::TurnQuery {
-        session: Some(session.to_owned()),
-        ..Default::default()
-    })?;
-    let state = screen::screen_state(lane, session, snapshot, &rows);
+    let frame = pane::frame(tmux::mux(), socket, target, &open_store()?, session, &Options::default())?;
     match format {
-        QueryFormat::Ndjson => line(&serde_json::to_string(&state)?),
-        QueryFormat::Text => emit_text(&state),
+        QueryFormat::Ndjson => line(&serde_json::to_string(&frame)?),
+        QueryFormat::Text => emit_text(lane, &frame),
     }
     Ok(())
 }
 
-/// Text output stays one value per line, so a preview's own newlines and tabs
-/// become spaces. The ndjson form is the one that carries the exact text.
-fn emit_text(state: &screen::ScreenState) {
-    line(&format!("lane\t{}", state.lane));
-    line(&format!("session\t{}", state.session));
-    line(&format!("pane\t{}", state.snapshot.target.terminal));
-    line(&format!(
-        "columns\t{}",
-        state.snapshot.size.columns
-    ));
-    line(&format!("rows\t{}", state.snapshot.size.rows));
-    line(&format!("screen\t{:?}", state.snapshot.screen));
-    line("role\tturn\tviewport_start\tviewport_end\tpreview");
-    for square in &state.squares {
+/// One value per line; `said` flattened to one line and cut to 120 chars.
+fn emit_text(lane: &str, frame: &pane::PaneFrame) {
+    line(&format!("lane\t{lane}"));
+    line(&format!("session\t{}", frame.session));
+    line(&format!("pane\t{}", frame.pane));
+    line(&format!("rows\t{}", frame.rows));
+    if let Some(window) = frame.window {
+        line(&format!("window\t{}\t{}", window.top, window.bottom));
+    }
+    line("role\tturn\tbuffer_start\tbuffer_end\tconfidence\tsaid");
+    for turn in frame.pinned.iter().chain(&frame.turns) {
+        let said: String = turn.said.replace(['\n', '\r', '\t'], " ").chars().take(120).collect();
         line(&format!(
-            "{}\t{}\t{}\t{}\t{}",
-            square.role,
-            square.turn,
-            square.viewport_start,
-            square.viewport_end,
-            square.preview.replace(['\n', '\r', '\t'], " ")
+            "{}\t{}\t{}\t{}\t{:?}\t{}",
+            turn.role, turn.turn, turn.buffer_start, turn.buffer_end, turn.confidence, said
         ));
     }
 }

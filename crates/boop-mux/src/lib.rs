@@ -1488,9 +1488,17 @@ mod tests {
         let name = session_name();
         server.create_session(&name);
         send_keys(&server.socket, &name, "seq 1 300");
-        let live = poll_snapshot(&server.socket, &name, 100, |snapshot| {
-            snapshot.rows.iter().any(|row| row.text == "300")
-        });
+        poll_snapshot(&server.socket, &name, 100, |snapshot| snapshot.rows.iter().any(|row| row.text == "300"));
+        // The shell's next prompt lands after `300`: wait for two equal grids.
+        let mut live = mux().pane_snapshot(Some(&server.socket), &name, 100).unwrap();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let next = mux().pane_snapshot(Some(&server.socket), &name, 100).unwrap();
+            if next.grid_eq(&live) {
+                break;
+            }
+            live = next;
+        }
         let window = live.window().expect("a live pane has a window");
         assert_eq!(live.scroll, 0);
         assert_eq!(window.top, 100, "100 history rows sit above the window");

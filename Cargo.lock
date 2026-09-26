@@ -423,6 +423,7 @@ dependencies = [
  "boop-acp",
  "boop-mux",
  "boop-store",
+ "boop-turnstrip",
  "boop-turnvis",
  "dirs 5.0.1",
  "futures-util",
@@ -512,7 +513,6 @@ name = "boop-turnvis"
 version = "0.1.0"
 dependencies = [
  "aho-corasick",
- "boop-mux",
  "serde",
  "serde_json",
 ]

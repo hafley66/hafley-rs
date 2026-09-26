@@ -2,11 +2,9 @@
 //! built on: `kind_of` (a harness role to a square kind) and `lines_of` (a
 //! turn's own line count, which rides on its text and so costs no read).
 //!
-//! Field spelling is part of the contract, not a detail: the strip's shapes
-//! cross JSON to a TypeScript client that already declares these names, so
-//! every wire shape is camelCase (`#[serde(rename_all = "camelCase")]`) and
-//! `TurnKind` is lowercase. The tables below are the one place where shapes are
-//! not involved and where the TypeScript spelling is dropped.
+//! Field spelling is part of the contract: a field crosses JSON to the
+//! TypeScript client under its Rust name, snake_case, with no rename. Enum
+//! variants serialize lowercase/camelCase (`TurnKind`, `Mode`, `Layout`).
 
 use serde::{Deserialize, Serialize};
 
@@ -87,7 +85,6 @@ pub use boop_mux::Viewport;
 /// anchor the placement uses; `total` is its line count; `lines` is how many of
 /// its lines landed on rows the viewport holds.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct TurnRow {
     pub id: String,
     pub kind: TurnKind,
@@ -101,7 +98,6 @@ pub struct TurnRow {
 /// what kind. No rows: the list draws places in the block, not rows, so a turn
 /// the window lost is a member like any other.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ListedTurn {
     pub id: String,
     pub kind: TurnKind,
@@ -194,7 +190,6 @@ pub enum Mode {
 /// constants in either mode: a caller draws `y * cell_height` (relative) or
 /// steps `y` along its own track, one square per step (recent).
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Options {
     pub mode: Mode,
     /// The floor a square's size may fall to. A square is as big as the part of
@@ -242,7 +237,6 @@ impl Default for Options {
 /// One square: where it sits on the strip, how big it draws, and whether the
 /// reader is looking at it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Square {
     pub id: String,
     pub kind: TurnKind,
@@ -269,7 +263,6 @@ pub struct Square {
 /// centred in. There is no band: a list of the newest turns already holds the
 /// reader's own prompts, so a band beside it would say a turn twice.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RecentStrip {
     pub squares: Vec<Square>,
     pub rows: f64,
@@ -279,7 +272,6 @@ pub struct RecentStrip {
 
 /// A visible tool-only interval between conversational turns.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct ToolGap {
     pub before_id: Option<String>,
     pub after_id: Option<String>,
@@ -296,7 +288,6 @@ pub struct ToolGap {
 /// caller draws them in their own lane. Everything after them is a window row:
 /// `y` in `0..rows`, `y * cell_height` from the window's first row.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct RelativeStrip {
     pub squares: Vec<Square>,
     pub band: usize,

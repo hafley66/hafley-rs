@@ -3,16 +3,11 @@
 
 use serde::{Deserialize, Serialize};
 
-mod _1_snapshot;
 #[path = "0_boop_envelope.rs"]
 mod boop_envelope;
 pub use boop_envelope::boop_content;
 #[path = "0_candidates.rs"]
 mod candidates;
-pub use _1_snapshot::{
-    locate_snapshot_turns, locate_snapshot_turns_with, logical_lines, visible_squares,
-    visible_squares_with, TurnSquare, PREVIEW_CHARS,
-};
 
 #[derive(Clone, Debug, Deserialize)]
 pub struct BoopTurn {
