@@ -46,8 +46,8 @@ use crate::read::shape::{content_id_of, ContentId, FamilyTag, Span, Strings};
 use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
-    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource,
-    TypeEdgeKind, TypeEntityKind, TypeF, UnresolvedReason,
+    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
+    UnresolvedReason,
 };
 use crate::read::trace::stage_span;
 use crate::read::wire::{flatten_flow, FlatFact};
@@ -2543,13 +2543,6 @@ fn type_facts(
     let mut facts: Vec<FlatFact> = resolved
         .iter()
         .filter_map(|edge| {
-            if !include_ts_signatures
-                && arm_for(&input.path).is_some_and(|arm| arm.name == "ts")
-                && matches!(edge.kind, TypeEdgeKind::Param | TypeEdgeKind::Returns)
-                && types.nodes.get(edge.src.0 as usize).is_some_and(|node| node.kind == TypeEntityKind::Method)
-            {
-                return None;
-            }
             let target = (edge.dst_blob == input.blob)
                 .then_some(input)
                 .or_else(|| targets.input(&edge.dst_blob))?;

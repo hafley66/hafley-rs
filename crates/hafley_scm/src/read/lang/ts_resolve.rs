@@ -396,9 +396,16 @@ impl RuntimeModuleRequests {
 
 impl<'a> Visit<'a> for RuntimeModuleRequests {
     fn visit_method_definition(&mut self, method: &ts::MethodDefinition<'a>) {
-        if method.kind == ts::MethodDefinitionKind::Constructor {
+        let owner = if method.kind == ts::MethodDefinitionKind::Constructor {
+            Some("constructor")
+        } else if let ts::PropertyKey::StaticIdentifier(key) = &method.key {
+            Some(key.name.as_str())
+        } else {
+            None
+        };
+        if let Some(owner) = owner {
             self.signature(
-                "constructor",
+                owner,
                 method.span,
                 method.value.type_parameters.as_deref(),
                 &method.value.params,
