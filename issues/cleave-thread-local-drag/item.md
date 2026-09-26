@@ -1,0 +1,33 @@
+---
+created: 2026-09-26
+updated: 2026-09-26
+type: bug
+reporter: claude
+status: open
+priority: normal
+related: ['@cleave-cross-crate-reach']
+labels: [extract]
+---
+
+# thread_local! statics invisible to cleave; --drag leaves them unreported
+
+## Description
+
+Corpus: ascii-renderer at main `1c24a4b` (single binary crate, `src/main.rs` declares ~140 `mod` lines), worktree `.claude/worktrees/agent-abab70b186ac7c270`. `ryi 0.1.0`. Found while planning `plans/3_engine_crate_isolation.md` (branch `plan/engine-crate-isolation-v3`, `ae4a003`), which splits an engine library crate out of the binary. All runs are dry runs.
+
+`src/opts.rs:55-57` declares a static inside `thread_local!`:
+```rust
+thread_local! {
+    pub(crate) static LIVE_PARAMS: std::cell::RefCell<std::collections::BTreeMap<&'static str, Option<f32>>> = ...
+}
+```
+
+1. `ryi cleave src/opts.rs#LIVE_PARAMS crates/ascii-engine/src/_2_knobs.rs` exits 2 with only `src/opts.rs declares no LIVE_PARAMS`.
+2. `ryi cleave --drag src/opts.rs#param_f32 ...` exits 0 and prints `drag fixpoint 1 passes`. `param_f32` (`src/opts.rs:63`) reads `LIVE_PARAMS`, but the drag does not take it along and does not report it. The moved body still references `LIVE_PARAMS` in the new file (`+    match LIVE_PARAMS.with(...)`), where it does not resolve.
+
+Compare `ryi cleave src/morph.rs#IterateFrameRenderer ...`, which prints `ungraded iterate_grid_into` and `next: ryi graph --uses iterate_grid_into <root>`. That output is the useful behaviour, although it also exits 0 with no plan written. Expected: a reference the drag cannot move is reported as `ungraded`, and the run exits non-zero when the plan would leave an unresolved name.
+
+## Acceptance Criteria
+- [ ] items declared inside `thread_local!` (and other item-producing std macros) are indexed and cleavable, or named as unsupported
+- [ ] `--drag` reports every referenced item it could not move as `ungraded`
+- [ ] a plan with unresolved references in DEST exits non-zero
