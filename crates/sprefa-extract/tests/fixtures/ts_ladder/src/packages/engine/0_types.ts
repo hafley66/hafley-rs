@@ -1,3 +1,7 @@
+export interface Result {
+  value: number;
+}
+
 export interface EnginePort {
-  execute(): void;
+  execute(input: Result): Result;
 }

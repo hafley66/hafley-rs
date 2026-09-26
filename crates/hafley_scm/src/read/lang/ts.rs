@@ -688,8 +688,8 @@ fn var_fn_entity(
 /// The signature slots of one callable: param type-refs (with their positional
 /// index) + the return type-refs. `owner` is the callable node's span; the sigs
 /// join back to that node at the wire and the resolution seam. When
-/// `record_candidates` (the Function-entity call sites — v5 emits no method-
-/// signature type_edges), each ref ALSO lands as an unresolved param/returns
+/// `record_candidates` (functions and the v6 class-method resolve layer),
+/// each ref ALSO lands as an unresolved param/returns
 /// type-edge candidate; the sigs and the candidates then share ONE
 /// refs walk, so they cannot drift.
 fn fn_sigs(
@@ -758,7 +758,7 @@ fn type_param_names(
 
 /// Every `TSTypeReference` name under a type subtree, excluding the callable's
 /// own type-parameter names. Port of v5 `ts_refs_in_type`.
-fn refs_in_type(ty: &ts::TSType, exclude: &BTreeSet<String>) -> Vec<String> {
+pub(crate) fn refs_in_type(ty: &ts::TSType, exclude: &BTreeSet<String>) -> Vec<String> {
     let mut collector = TypeRefCollector {
         exclude,
         out: Vec::new(),

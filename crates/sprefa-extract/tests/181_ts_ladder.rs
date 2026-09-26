@@ -68,11 +68,19 @@ fn ts_ladder_fast_and_slow() {
     assert_eq!(
         table,
         "\
+0_types.ts   param     execute      -> 0_types.ts:Result      f-
+0_types.ts   returns   execute      -> 0_types.ts:Result      f-
 0_use.ts     call      invoke       -> 0_types.ts:execute     f-
 0_use.ts     call      invokeHolder -> 0_types.ts:execute     f-
 0_use.ts     field     Holder       -> 0_types.ts:EnginePort  f-
+0_use.ts     field     Runner       -> 0_types.ts:EnginePort  f-
+0_use.ts     param     constructor  -> 0_types.ts:EnginePort  f-
+0_use.ts     param     forward      -> 0_types.ts:EnginePort  f-
 0_use.ts     param     invoke       -> 0_types.ts:EnginePort  f-
 0_use.ts     param     invokeHolder -> 0_use.ts:Holder        f-
+0_use.ts     param     use          -> 0_types.ts:EnginePort  f-
+0_use.ts     returns   forward      -> 0_types.ts:EnginePort  f-
+0_use.ts     returns   use          -> 0_types.ts:EnginePort  f-
 _0_types.ts  param     ping         -> _0_types.ts:Base       fs
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
 _0_types.ts  returns   ping         -> _0_types.ts:Base       fs

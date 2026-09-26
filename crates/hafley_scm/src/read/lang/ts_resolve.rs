@@ -219,6 +219,17 @@ pub struct ModuleFacts {
     /// Named function declaration span -> parameter count, collected during
     /// the module walk already used for runtime specifiers.
     pub free_arity: BTreeMap<(u32, u32), u32>,
+    /// Signature type references whose owner has no TypeF edge candidate:
+    /// interface methods, constructors, and object-literal methods.
+    pub signature_uses: Vec<SignatureTypeUse>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SignatureTypeUse {
+    pub owner: String,
+    pub owner_span: Span,
+    pub name: String,
+    pub kind: &'static str,
 }
 
 impl ModuleFacts {
@@ -323,6 +334,7 @@ pub fn ts_module_facts_from_parsed(parsed: &oxc_parser::ParserReturn<'_>) -> Mod
     runtime.visit_program(&parsed.program);
     facts.requested_modules.extend(runtime.modules);
     facts.free_arity.extend(runtime.free_arity);
+    facts.signature_uses = runtime.signature_uses;
     facts
 }
 
@@ -332,9 +344,102 @@ pub fn ts_module_facts_from_parsed(parsed: &oxc_parser::ParserReturn<'_>) -> Mod
 struct RuntimeModuleRequests {
     modules: Vec<String>,
     free_arity: BTreeMap<(u32, u32), u32>,
+    signature_uses: Vec<SignatureTypeUse>,
+}
+
+impl RuntimeModuleRequests {
+    fn signature(
+        &mut self,
+        owner: &str,
+        span: oxc_span::Span,
+        type_parameters: Option<&ts::TSTypeParameterDeclaration<'_>>,
+        params: &ts::FormalParameters<'_>,
+        returned: Option<&ts::TSTypeAnnotation<'_>>,
+    ) {
+        let excluded: BTreeSet<String> = type_parameters
+            .into_iter()
+            .flat_map(|parameters| parameters.params.iter())
+            .map(|parameter| parameter.name.name.to_string())
+            .collect();
+        let owner_span = to_local_span(span);
+        let mut push = |name: String, kind| {
+            self.signature_uses.push(SignatureTypeUse {
+                owner: owner.to_string(),
+                owner_span,
+                name,
+                kind,
+            });
+        };
+        if let Some(parameters) = type_parameters {
+            for parameter in &parameters.params {
+                if let Some(constraint) = &parameter.constraint {
+                    for name in super::ts::refs_in_type(constraint, &excluded) {
+                        push(name, "generic");
+                    }
+                }
+            }
+        }
+        for parameter in &params.items {
+            if let Some(annotation) = &parameter.type_annotation {
+                for name in super::ts::refs_in_type(&annotation.type_annotation, &excluded) {
+                    push(name, "param");
+                }
+            }
+        }
+        if let Some(annotation) = returned {
+            for name in super::ts::refs_in_type(&annotation.type_annotation, &excluded) {
+                push(name, "returns");
+            }
+        }
+    }
 }
 
 impl<'a> Visit<'a> for RuntimeModuleRequests {
+    fn visit_method_definition(&mut self, method: &ts::MethodDefinition<'a>) {
+        if method.kind == ts::MethodDefinitionKind::Constructor {
+            self.signature(
+                "constructor",
+                method.span,
+                method.value.type_parameters.as_deref(),
+                &method.value.params,
+                method.value.return_type.as_deref(),
+            );
+        }
+        oxc_ast_visit::walk::walk_method_definition(self, method);
+    }
+
+    fn visit_ts_method_signature(&mut self, method: &ts::TSMethodSignature<'a>) {
+        if let ts::PropertyKey::StaticIdentifier(key) = &method.key {
+            self.signature(
+                &key.name,
+                method.span,
+                method.type_parameters.as_deref(),
+                &method.params,
+                method.return_type.as_deref(),
+            );
+        }
+        oxc_ast_visit::walk::walk_ts_method_signature(self, method);
+    }
+
+    fn visit_object_property(&mut self, property: &ts::ObjectProperty<'a>) {
+        if property.method {
+            if let (
+                ts::PropertyKey::StaticIdentifier(key),
+                ts::Expression::FunctionExpression(func),
+            ) = (&property.key, &property.value)
+            {
+                self.signature(
+                    &key.name,
+                    property.span,
+                    func.type_parameters.as_deref(),
+                    &func.params,
+                    func.return_type.as_deref(),
+                );
+            }
+        }
+        oxc_ast_visit::walk::walk_object_property(self, property);
+    }
+
     fn visit_function(&mut self, it: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         if it.id.is_some() && it.body.is_some() {
             self.free_arity.insert(
@@ -759,6 +864,12 @@ impl TsModuleIndex {
     /// What `local` is bound to by an import statement in `path`.
     pub fn import(&self, path: &str, local: &str) -> Option<&ImportBinding> {
         self.facts.get(path)?.imports.get(local)
+    }
+
+    pub fn signature_uses(&self, path: &str) -> &[SignatureTypeUse] {
+        self.facts
+            .get(path)
+            .map_or(&[], |facts| facts.signature_uses.as_slice())
     }
 
     /// Whether this module exports a declaration under its local spelling.

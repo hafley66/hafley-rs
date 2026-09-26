@@ -42,7 +42,7 @@ use crate::read::scip_rows::ScipRecords;
 use crate::read::seams::{
     build_def_index, BlobSource, FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
 };
-use crate::read::shape::{content_id_of, ContentId, Span, Strings};
+use crate::read::shape::{content_id_of, ContentId, FamilyTag, Span, Strings};
 use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
@@ -2530,12 +2530,19 @@ fn type_facts(
     let plane = arm_for(&input.path).map_or(TypePlane::Nodes, |arm| arm.type_plane);
     let mut resolved = resolve_type_edges(&input.path, &input.output, cx);
     if let Some(index) = cx.indexes.go_checker.get() {
-        crate::read::lang::go_checker::apply_types(index, &input.path, &input.output, &mut resolved);
+        crate::read::lang::go_checker::apply_types(
+            index,
+            &input.path,
+            &input.output,
+            &mut resolved,
+        );
     }
-    resolved
+    let mut facts: Vec<FlatFact> = resolved
         .iter()
         .filter_map(|edge| {
-            let target = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob))?;
+            let target = (edge.dst_blob == input.blob)
+                .then_some(input)
+                .or_else(|| targets.input(&edge.dst_blob))?;
             let names = targets.type_names.get(&input.blob);
             let (owner, owner_name) = type_owner(plane, input, types, names, edge.src)?;
             trail.push(edge);
@@ -2551,7 +2558,54 @@ fn type_facts(
                 resolution_origin: edge.origin.as_str().to_string(),
             })
         })
-        .collect()
+        .collect();
+    if let (Some(modules), Some(defs)) = (cx.indexes.ts_modules.get(), cx.indexes.def_index.get()) {
+        for use_site in modules.signature_uses(&input.path) {
+            let local = defs.map.get(&use_site.name).and_then(|sites| {
+                sites
+                    .iter()
+                    .find(|site| site.blob == input.blob && site.family == FamilyTag::Type)
+                    .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile))
+            });
+            let imported = || {
+                modules
+                    .bind(&input.path, &use_site.name)
+                    .ok()
+                    .flatten()
+                    .map(|target| {
+                        (
+                            target.target_blob,
+                            target.target_span,
+                            ResolutionOrigin::ModulePlane,
+                        )
+                    })
+            };
+            let Some((blob, span, origin)) = local.or_else(imported) else {
+                continue;
+            };
+            let Some(target) = (blob == input.blob)
+                .then_some(input)
+                .or_else(|| targets.input(&blob))
+            else {
+                continue;
+            };
+            let Some(target_name) = name_at(targets.type_names.get(&blob), span) else {
+                continue;
+            };
+            facts.push(FlatFact::ResolvedTypeEdge {
+                fact: None,
+                owner_path: input.path.clone(),
+                owner_name: Some(use_site.owner.clone()),
+                owner_start: use_site.owner_span.start,
+                owner_end: use_site.owner_span.end(),
+                target_path: target.path.clone(),
+                target_name: Some(target_name),
+                kind: use_site.kind.to_string(),
+                resolution_origin: origin.as_str().to_string(),
+            });
+        }
+    }
+    facts
 }
 
 /// Whether a SCIP document path is a coordinate inside the project root. A go
