@@ -1,0 +1,3 @@
+"src_file","enclosing_item","dst_file","dst_name"
+"src/_1_none.rs","clone","src/_1_none.rs","NoField"
+"src/_2_one.rs","from","src/_2_one.rs","OneField"

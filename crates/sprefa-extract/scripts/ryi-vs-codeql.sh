@@ -6,6 +6,23 @@ if [ "$#" -ne 2 ]; then
   echo "usage: $0 <root> <rust|ts>" >&2
   exit 2
 fi
+# One CodeQL run per machine: every caller queues on one flock. The lock fd is
+# made inheritable so it survives the exec back into this script.
+if [ -z "${RYI_CODEQL_CSV:-}" ] && [ -z "${RYI_CODEQL_LOCKED:-}" ]; then
+  lock=${XDG_CACHE_HOME:-$HOME/.cache}/ryi-vs-codeql.lock
+  mkdir -p "$(dirname "$lock")"
+  exec env RYI_CODEQL_LOCKED=1 python3 -c '
+import fcntl, os, sys
+f = open(sys.argv[1], "a")
+try:
+    fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+except BlockingIOError:
+    print("ryi-vs-codeql: waiting for the running CodeQL job", file=sys.stderr)
+    fcntl.flock(f, fcntl.LOCK_EX)
+os.set_inheritable(f.fileno(), True)
+os.execvp(sys.argv[2], sys.argv[2:])
+' "$lock" "$0" "$@"
+fi
 source_root=$(cd "$1" && pwd -P)
 case "$2" in
   rust) language=rust; query_dir=$(cd "$(dirname "$0")/../codeql" && pwd -P) ;;
@@ -106,7 +123,11 @@ if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -f "$out/ryi.db" ]; then
   echo "$(( $(date +%s) - start ))" >"$out/ryi-build-seconds"
 fi
 
-if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -d "$out/codeql-db" ]; then
+# RYI_CODEQL_CSV=<dir> reads committed type.csv/call.csv for a fixed corpus;
+# no database, no queries, no JVM.
+if [ -n "${RYI_CODEQL_CSV:-}" ]; then
+  cp "$RYI_CODEQL_CSV/type.csv" "$RYI_CODEQL_CSV/call.csv" "$out/"
+elif [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -d "$out/codeql-db" ]; then
   rm -rf "$out/codeql-db"
   start=$(date +%s)
   cargo_target_option=()
@@ -130,7 +151,7 @@ if [ "$language" = javascript ]; then
   query_kinds+=(type-canonical)
 fi
 for kind in "${query_kinds[@]}"; do
-  if [ "${RYI_CODEQL_REUSE_QUERIES:-0}" = 1 ] && [ -f "$out/$kind.csv" ]; then
+  if [ -n "${RYI_CODEQL_CSV:-}" ] || { [ "${RYI_CODEQL_REUSE_QUERIES:-0}" = 1 ] && [ -f "$out/$kind.csv" ]; }; then
     continue
   fi
   query_ran=1
@@ -145,7 +166,7 @@ for kind in "${query_kinds[@]}"; do
   "$codeql" bqrs decode "$out/$kind.bqrs" --format=csv --output "$out/$kind.csv" -J=-Xmx2g \
     >>"$out/$kind-query.log" 2>&1
 done
-if [ "$query_ran" = 1 ] || [ ! -f "$out/codeql-query-seconds" ]; then
+if [ -z "${RYI_CODEQL_CSV:-}" ] && { [ "$query_ran" = 1 ] || [ ! -f "$out/codeql-query-seconds" ]; }; then
   echo "$(( $(date +%s) - start ))" >"$out/codeql-query-seconds"
 fi
 
@@ -247,10 +268,13 @@ if rewrite.is_file():
     print(f'dependency_rewrite\t{rewrite.read_text().strip()}')
 print(f'ryi_build_s\t{(out / "ryi-build-seconds").read_text().strip()}')
 print(f'ryi_query_s\t{time.perf_counter() - started:.3f}')
-print(f'codeql_build_s\t{(out / "codeql-build-seconds").read_text().strip()}')
-print(f'codeql_query_s\t{(out / "codeql-query-seconds").read_text().strip()}')
 print(f'ryi_db_kib\t{(out / "ryi.db").stat().st_size // 1024}')
 database = out / 'codeql-db'
-content = [*database.glob('db-*'), database / 'src.zip']
-print(f'codeql_db_kib\t{sum(p.stat().st_size for root in content if root.exists() for p in root.rglob("*") if p.is_file()) // 1024 + (database / "src.zip").stat().st_size // 1024}')
+if database.is_dir():
+    print(f'codeql_build_s\t{(out / "codeql-build-seconds").read_text().strip()}')
+    print(f'codeql_query_s\t{(out / "codeql-query-seconds").read_text().strip()}')
+    content = [*database.glob('db-*'), database / 'src.zip']
+    print(f'codeql_db_kib\t{sum(p.stat().st_size for root in content if root.exists() for p in root.rglob("*") if p.is_file()) // 1024 + (database / "src.zip").stat().st_size // 1024}')
+else:
+    print('codeql\tcommitted csv')
 PY
