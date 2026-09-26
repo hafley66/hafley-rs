@@ -7,4 +7,5 @@ Arguments:
 
 Options:
       --sqlite <PATH>  Write to a new SQLite database instead of stdout
+      --fresh
   -h, --help           Print help

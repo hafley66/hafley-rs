@@ -1,5 +1,4 @@
 // Generated from the Ryi HTTP operations and @daemon options.
-use std::io::{BufRead as _, Write as _};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -29,13 +28,11 @@ fn error_status(code: i32) -> StatusCode {
     }
 }
 
-impl IntoResponse for OpError {
-    fn into_response(self) -> Response {
-        (error_status(self.1), Json(serde_json::json!({"error": self.0, "code": self.1}))).into_response()
-    }
+fn error_response(error: OpError) -> Response {
+    (error_status(error.1), Json(serde_json::json!({"error": error.0, "code": error.1}))).into_response()
 }
 
-fn bad_request(message: String) -> Response { OpError(message, 2).into_response() }
+fn bad_request(message: String) -> Response { error_response(OpError(message, 2)) }
 
 async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>) -> Response {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<i32>, Bytes)>(64);
@@ -58,7 +55,7 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
         complete.push(b'\n');
         let _ = tx.blocking_send((None, Bytes::from(complete)));
     });
-    let Some(first) = rx.recv().await else { return OpError("operation produced no response".into(), 1).into_response(); };
+    let Some(first) = rx.recv().await else { return error_response(OpError("operation produced no response".into(), 1)); };
     let status = first.0.map_or(StatusCode::OK, error_status);
     let stream = futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(first.1) })
         .chain(futures_util::stream::unfold(rx, |mut rx| async move {
@@ -70,7 +67,7 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
 async fn raw_response(out: OpResult<Vec<u8>>) -> Response {
     match out {
         Ok(bytes) => ([(CONTENT_TYPE, "application/x-ndjson")], bytes).into_response(),
-        Err(error) => error.into_response(),
+        Err(error) => error_response(error),
     }
 }
 
@@ -90,7 +87,7 @@ macro_rules! raw_handler {
             let root = request.request_root.clone();
             let args: $args = match request.decode($verb) { Ok(args) => args, Err(error) => return bad_request(error) };
             let out = tokio::task::spawn_blocking(move || crate::ops::with_request_root(root, || crate::ops::$op(&args))).await;
-            match out { Ok(out) => raw_response(out).await, Err(error) => OpError(error.to_string(), 1).into_response() }
+            match out { Ok(out) => raw_response(out).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
         }
     };
 }
@@ -110,7 +107,7 @@ stream_handler!(diff, "diff", DiffArgs, diff);
 raw_handler!(schema, "schema", SchemaArgs, schema);
 raw_handler!(trail, "trail", TrailArgs, trail);
 
-fn jsonl_input(body: Body) -> impl Iterator<Item = OpResult<serde_json::Value>> + Send {
+fn jsonl_input<T: serde::de::DeserializeOwned + Send + 'static>(body: Body) -> impl Iterator<Item = OpResult<T>> + Send {
     let (tx, mut rx) = tokio::sync::mpsc::channel(64);
     tokio::spawn(async move {
         let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
@@ -141,7 +138,7 @@ async fn ingest(headers: HeaderMap, body: Body) -> Response {
     let args: IngestArgs = match request.decode("ingest") { Ok(args) => args, Err(error) => return bad_request(error) };
     let input = jsonl_input(body);
     let out = tokio::task::spawn_blocking(move || crate::ops::with_request_root(root, || crate::ops::ingest(&args, input))).await;
-    match out { Ok(out) => raw_response(out).await, Err(error) => OpError(error.to_string(), 1).into_response() }
+    match out { Ok(out) => raw_response(out).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 #[derive(Clone)]
@@ -161,7 +158,7 @@ async fn handshake(State(state): State<DaemonState>, headers: HeaderMap) -> Stat
 }
 
 fn build_stamp() -> &'static str {
-    concat!(env!("SPREFA_BUILD_GIT_HASH"), " ", env!("SPREFA_BUILD_DATETIME"))
+    env!("RYI_BUILD_GIT_HASH")
 }
 
 fn router(state: DaemonState) -> axum::Router {
@@ -222,64 +219,4 @@ pub fn daemon() -> Result<(), Box<dyn std::error::Error>> {
     });
     let _ = std::fs::remove_file(socket);
     result
-}
-
-fn print_error(error: OpError) -> i32 {
-    let _ = writeln!(std::io::stdout().lock(), "{}", serde_json::json!({"error": error.0, "code": error.1}));
-    error.1
-}
-
-fn write_rows(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>) -> i32 {
-    let mut out = std::io::stdout().lock();
-    let mut rows = 0u64;
-    for item in items {
-        match item {
-            Ok(bytes) => { if out.write_all(&bytes).is_err() { return 1; } rows += 1; }
-            Err(error) => { drop(out); return print_error(error); }
-        }
-    }
-    let _ = writeln!(out, "{}", serde_json::json!({"complete": true, "rows": rows}));
-    0
-}
-
-fn write_one(out: OpResult<Vec<u8>>) -> i32 {
-    match out {
-        Ok(bytes) => std::io::stdout().lock().write_all(&bytes).map_or(1, |_| 0),
-        Err(error) => print_error(error),
-    }
-}
-
-pub fn oneshot(verb: &str, json: &str) -> i32 {
-    let request: Request = match serde_json::from_str(json) { Ok(request) => request, Err(error) => return print_error(OpError(error.to_string(), 2)) };
-    let root = request.request_root.clone();
-    macro_rules! stream { ($ty:ty, $op:ident) => {{
-        let args: $ty = match request.decode(verb) { Ok(args) => args, Err(error) => return print_error(OpError(error, 2)) };
-        write_rows(crate::ops::$op(&args))
-    }}; }
-    macro_rules! raw { ($ty:ty, $op:ident) => {{
-        let args: $ty = match request.decode(verb) { Ok(args) => args, Err(error) => return print_error(OpError(error, 2)) };
-        write_one(crate::ops::$op(&args))
-    }}; }
-    crate::ops::with_request_root(root, || match verb {
-        "extract" => stream!(ExtractArgs, extract),
-        "fast" => stream!(FastArgs, fast),
-        "slow" => stream!(SlowArgs, slow),
-        "scip" => stream!(ScipArgs, scip),
-        "graph" => stream!(GraphArgs, graph),
-        "cleave" => raw!(CleaveArgs, cleave),
-        "move" => raw!(MoveArgs, r#move),
-        "rename" => raw!(RenameArgs, rename),
-        "query" => stream!(QueryArgs, query),
-        "region" => raw!(RegionArgs, region),
-        "watch" => stream!(WatchArgs, watch),
-        "diff" => stream!(DiffArgs, diff),
-        "ingest" => {
-            let args: IngestArgs = match request.decode(verb) { Ok(args) => args, Err(error) => return print_error(OpError(error, 2)) };
-            let input = std::io::stdin().lock().lines().map(|line| line.map_err(OpError::from).and_then(|line| serde_json::from_str(&line).map_err(OpError::from)));
-            write_one(crate::ops::ingest(&args, input))
-        }
-        "schema" => raw!(SchemaArgs, schema),
-        "trail" => raw!(TrailArgs, trail),
-        _ => print_error(OpError(format!("unknown operation {verb}"), 2)),
-    })
 }

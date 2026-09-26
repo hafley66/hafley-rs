@@ -46,17 +46,10 @@ use sprefa_extract::{
     ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
-#[path = "ryi/gen/models/mod.rs"]
-mod models;
-
-#[path = "ryi/gen/ops_auto.rs"]
-mod ops_auto;
+pub use ryi_proto::{daemon_auto, models, ops_auto};
 
 #[path = "ryi/gen/cli_auto.rs"]
 mod cli_auto;
-
-#[path = "ryi/gen/daemon_auto.rs"]
-mod daemon_auto;
 
 #[path = "ryi/gen/server_auto.rs"]
 mod server_auto;
@@ -352,21 +345,36 @@ impl From<String> for RyiExit {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mimalloc")]
     cap_memory();
-    let mut args = std::env::args().skip(1);
-    match args.next().as_deref() {
-        Some("--stamp") if args.next().is_none() => {
-            println!("{} {}", env!("SPREFA_BUILD_GIT_HASH"), env!("SPREFA_BUILD_DATETIME"));
-            Ok(())
-        }
-        Some("--daemon") if args.next().is_none() => server_auto::daemon(),
-        Some("--oneshot") => {
-            let verb = args.next().ok_or("--oneshot needs a verb")?;
-            let request = args.next().ok_or("--oneshot needs request JSON")?;
-            if args.next().is_some() { return Err("--oneshot takes one request JSON".into()); }
-            std::process::exit(server_auto::oneshot(&verb, &request));
-        }
-        _ => Err("ryi-server requires --daemon, --oneshot, or --stamp".into()),
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--stamp")) {
+        println!("{} {}", env!("SPREFA_BUILD_GIT_HASH"), env!("SPREFA_BUILD_DATETIME"));
+        return Ok(());
     }
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
+        return server_auto::daemon();
+    }
+    let summary = sprefa_extract::trace::install();
+    if let Some(state) = &summary {
+        let _ = TRAIL_STATE.set(Arc::clone(state));
+    }
+    let outcome = match run() {
+        Ok(()) => Ok(()),
+        Err(error) if is_broken_pipe(error.as_ref()) => Ok(()),
+        Err(error) => {
+            let exit_error = RyiExit::boxed(error);
+            if !exit_error.message.is_empty() { eprintln!("{}", exit_error.message); }
+            exit(exit_error.code);
+        },
+    };
+    if let Some(state) = summary {
+        if matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
+            || std::env::args().any(|arg| arg == "--bench")
+        {
+            state.print();
+        }
+        write_trail(&state);
+    }
+    hafley_observe::finish_trace();
+    outcome
 }
 
 /// The run row and its phase rows, once, after the summary rendered. A trail is
@@ -454,6 +462,153 @@ fn or_exit_2<E: std::fmt::Display + 'static>(result: Result<(), E>) -> Result<()
             .map_or(2, |exit| exit.code);
         Box::new(RyiExit::new(code, error.to_string())) as Box<dyn std::error::Error>
     })
+}
+
+fn run() -> Result<(), Box<dyn std::error::Error>> {
+    let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let format_first = argv.get(1).is_some_and(|arg| arg == "--format")
+        && argv.get(2).is_some_and(|arg| arg == "jsonl")
+        && argv.get(3).and_then(|arg| arg.to_str()).is_some_and(|name| {
+            Ryi::command().get_subcommands().any(|sub| sub.get_name() == name)
+        });
+    if format_first {
+        let flag = argv.remove(1);
+        let value = argv.remove(1);
+        argv.insert(2, flag);
+        argv.insert(3, value);
+    }
+    let ryi = match Ryi::try_parse_from(argv) {
+        Ok(ryi) => ryi,
+        Err(error) => {
+            let _ = error.print();
+            exit(error.exit_code());
+        }
+    };
+    if let Some(format) = ryi.file.format.as_deref() {
+        if format != "jsonl" {
+            eprintln!("ryi: --format {format}: use jsonl");
+            exit(2);
+        }
+        let stdin = std::io::stdin();
+        // The format adapter consumes the in-process operation while that
+        // operation owns stdout. Write its envelope through the original fd.
+        let fd = unsafe { libc::dup(libc::STDOUT_FILENO) };
+        if fd < 0 { return Err(std::io::Error::last_os_error().into()); }
+        let original = unsafe { std::fs::File::from_raw_fd(fd) };
+        let mut stdout = std::io::BufWriter::with_capacity(256 * 1024, original);
+        if ryi.cmd.is_none() {
+            return write_formatted_rows(&mut stdout, ops::file(&ryi.file));
+        }
+        return run_formatted(ryi, &mut stdin.lock(), &mut stdout);
+    }
+    let (mut cli, tier) = match ryi.cmd {
+        None => (ryi.file, Tier::Files),
+        Some(Cmd::Fast(fast)) => (FileArgs::from(fast), Tier::Fast),
+        Some(Cmd::Slow(slow)) => return run_slow(slow, None),
+        Some(Cmd::Scip(args)) => return run_scip(args, None),
+        Some(Cmd::Ingest(args)) => return run_ingest(args, None),
+        Some(Cmd::Schema) => return print_schema(&mut std::io::stdout().lock()),
+        Some(Cmd::Trail(args)) => return print_trail(args.runs, &mut std::io::stdout().lock()),
+        Some(Cmd::Extract(args)) => return run_file_verb(args.args, Tier::Files, Box::new(std::io::stdout())),
+        Some(Cmd::Watch(args)) => return watch::run(args),
+        Some(Cmd::Diff(args)) => return or_exit_2(diff::run(args)),
+        Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
+        Some(Cmd::Query(args)) => return or_exit_2(query::run(args)),
+        Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args)),
+        Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args)),
+        Some(Cmd::Rename(args)) => match source_rename::run(args) {
+            Ok(()) => return Ok(()),
+            Err(error) => {
+                return Err(RyiExit::new(error.exit, error.to_string()).into());
+            }
+        },
+        Some(Cmd::Region(args)) => match region_writer::run(args) {
+            Ok(0) => return Ok(()),
+            Ok(code) => return Err(RyiExit::new(code, "").into()),
+            Err(error) => {
+                return Err(RyiExit::new(error.exit, error.message).into());
+            }
+        },
+    };
+
+    // `--scip-timeout` reaches the library's `ScipMode::Build` budget through
+    // the variable `IndexBudget::from_env` reads (project.rs).
+    if let Some(secs) = cli.scip_timeout.filter(|secs| *secs > 0) {
+        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
+    }
+
+    // Input expansion can exit with clap-style status 2. Do it before opening
+    // an export so such an exit cannot strand a staging database.
+    let expanding = sprefa_extract::trace::stage_span("expand").entered();
+    cli.paths = match inputs::expand(&cli.inputs) {
+        Ok(paths) => paths,
+        Err(error) => {
+            // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
+            return Err(RyiExit::new(2, format!("ryi: {error}")).into());
+        }
+    };
+    drop(expanding);
+    let root_only = cli.scip_deps || cli.deps || cli.package_deps;
+    if cli.paths.is_empty() && !root_only {
+        return Err(RyiExit::new(2, "ryi: no inputs; pass files, directories, globs, - or --entry").into());
+    }
+    if cli.scip_index.is_some() && cli.inputs.root.is_none() {
+        return Err("--scip-index needs --root".into());
+    }
+    let mut output = sqlite::Output::new(cli.sqlite.as_deref())?;
+    extract_to(&cli, tier, &mut output)?;
+    output.finish()
+}
+
+fn write_formatted_rows(
+    out: &mut dyn Write,
+    rows: impl Iterator<Item = ops_auto::OpResult<Vec<u8>>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let mut count = 0u64;
+    for row in rows {
+        match row {
+            Ok(bytes) => { out.write_all(&bytes)?; count += 1; }
+            Err(error) => {
+                emit(out, &serde_json::json!({"error": error.0, "code": error.1}).to_string())?;
+                return Err(RyiExit::new(error.1, "").into());
+            }
+        }
+    }
+    emit(out, &serde_json::json!({"complete": true, "rows": count}).to_string())?;
+    Ok(())
+}
+
+fn write_formatted_one(out: &mut dyn Write, row: ops_auto::OpResult<Vec<u8>>) -> Result<(), Box<dyn std::error::Error>> {
+    match row {
+        Ok(bytes) => { out.write_all(&bytes)?; Ok(()) }
+        Err(error) => Err(RyiExit::new(error.1, error.0).into()),
+    }
+}
+
+fn run_formatted(ryi: Ryi, input: &mut dyn std::io::BufRead, out: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
+    match ryi.cmd {
+        None => write_formatted_rows(out, ops::file(&ryi.file)),
+        Some(Cmd::Extract(args)) => write_formatted_rows(out, ops::extract(&args)),
+        Some(Cmd::Fast(args)) => write_formatted_rows(out, ops::fast(&args)),
+        Some(Cmd::Slow(args)) => write_formatted_rows(out, ops::slow(&args)),
+        Some(Cmd::Scip(args)) => write_formatted_rows(out, ops::scip(&args)),
+        Some(Cmd::Graph(args)) => write_formatted_rows(out, ops::graph(&args)),
+        Some(Cmd::Query(args)) => write_formatted_rows(out, ops::query(&args)),
+        Some(Cmd::Watch(args)) => write_formatted_rows(out, ops::watch(&args)),
+        Some(Cmd::Diff(args)) => write_formatted_rows(out, ops::diff(&args)),
+        Some(Cmd::Cleave(args)) => write_formatted_one(out, ops::cleave(&args)),
+        Some(Cmd::Move(args)) => write_formatted_one(out, ops::r#move(&args)),
+        Some(Cmd::Rename(args)) => write_formatted_one(out, ops::rename(&args)),
+        Some(Cmd::Region(args)) => write_formatted_one(out, ops::region(&args)),
+        Some(Cmd::Schema) => write_formatted_one(out, ops::schema(&Default::default())),
+        Some(Cmd::Trail(args)) => write_formatted_one(out, ops::trail(&args)),
+        Some(Cmd::Ingest(args)) => {
+            use std::io::BufRead as _;
+            let rows = input.lines().map(|line| line.map_err(ops_auto::OpError::from)
+                .and_then(|line| serde_json::from_str(&line).map_err(ops_auto::OpError::from)));
+            write_formatted_one(out, ops::ingest(&args, rows))
+        }
+    }
 }
 
 /// The transport and CLI use the same handler results.

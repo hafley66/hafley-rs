@@ -15,4 +15,5 @@ Options:
       --verify <VERIFY>  Command to run after --commit; failure rolls back
       --text-refs        Report leftover SRC spellings in plain text
       --json             End with one JSON line holding the plan
+      --fresh
   -h, --help             Print help

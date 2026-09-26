@@ -4594,10 +4594,20 @@ dependencies = [
  "http-body-util",
  "hyper",
  "hyper-util",
+ "ryi-proto",
  "serde",
  "serde_json",
  "tokio",
  "tokio-util",
+]
+
+[[package]]
+name = "ryi-proto"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -5402,7 +5412,6 @@ dependencies = [
  "bytes",
  "futures-core",
  "futures-sink",
- "libc",
  "pin-project-lite",
  "tokio",
 ]

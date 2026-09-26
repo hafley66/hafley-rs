@@ -16,4 +16,5 @@ Options:
       --relocate-mod             Move a Rust module's `mod` line instead of adding #[path]
       --verify <VERIFY>          Command to run after --commit; failure rolls back
       --text-refs                Report leftover old-path spellings in plain text
+      --fresh
   -h, --help                     Print help

@@ -6,7 +6,7 @@ use std::process::Command;
 fn generated_clap_help_matches_captured_main() {
     let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ryi_help");
     for verb in [
-        "root", "fast", "slow", "scip", "graph", "cleave", "move", "rename",
+        "root", "extract", "fast", "slow", "scip", "graph", "cleave", "move", "rename",
         "query", "region", "watch", "diff", "ingest", "schema", "trail",
     ] {
         let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));
@@ -29,17 +29,6 @@ fn generated_clap_help_matches_captured_main() {
         }
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{verb} help bytes");
     }
-}
-
-#[test]
-fn serve_help_comes_from_generated_clap() {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
-        .args(["serve", "--help"])
-        .output().expect("serve help");
-    assert!(output.status.success());
-    let help = String::from_utf8(output.stdout).expect("UTF-8 serve help");
-    assert!(help.contains("Usage: ryi serve --listen <HOST:PORT|unix:/PATH>"));
-    assert!(help.contains("--listen <HOST:PORT|unix:/PATH>"));
 }
 
 #[test]

@@ -6,7 +6,6 @@ pub const IDLE_SECS: u64 = 600;
 pub const HANDSHAKE: bool = true;
 
 #[derive(Debug, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Request {
     pub request_root: PathBuf,
     pub args: serde_json::Value,
@@ -21,7 +20,7 @@ impl Request {
 
     pub fn decode<T: serde::de::DeserializeOwned>(mut self, verb: &str) -> Result<T, String> {
         if !self.request_root.is_absolute() {
-            return Err("requestRoot must be absolute".into());
+            return Err("request_root must be absolute".into());
         }
         resolve_paths(verb, &self.request_root, &mut self.args);
         serde_json::from_value(self.args).map_err(|error| error.to_string())

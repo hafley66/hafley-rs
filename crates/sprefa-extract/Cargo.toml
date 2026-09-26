@@ -28,6 +28,7 @@ tree-sitter = "0.25"
 tree-sitter-kotlin-sg = "0.4"
 
 [dependencies]
+ryi-proto = { path = "../ryi-proto", optional = true }
 # The newline scan behind the per-document line table. Already unified in the
 # workspace lock through regex/aho-corasick, so this pins no new copy.
 memchr = "2"
@@ -275,7 +276,7 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-cli = ["hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+cli = ["dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc", "dep:cap"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out

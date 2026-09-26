@@ -3,4 +3,5 @@ Print the output record schema
 Usage: ryi schema
 
 Options:
+      --fresh
   -h, --help  Print help

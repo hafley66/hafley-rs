@@ -10,4 +10,5 @@ Options:
       --generated <GENERATED>  Generated body file, or - for stdin [default: -]
       --apply                  Write the replacement (default: report drift)
       --state <STATE>          Soopy state root for --apply
+      --fresh
   -h, --help                   Print help

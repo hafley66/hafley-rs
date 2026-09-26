@@ -20,4 +20,5 @@ Options:
       --records <KINDS>      Only these --raw record kinds (comma-separated)
       --occurrence-text      Add the source text to each scip_occurrence
       --scip-build           Build the index for --raw with the inputs' language indexer
+      --fresh
   -h, --help                 Print help

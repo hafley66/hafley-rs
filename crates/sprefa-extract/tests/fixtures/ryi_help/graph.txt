@@ -25,4 +25,5 @@ Options:
       --rust-checker                Add rust-analyzer type evidence
       --ts-checker                  Add TypeScript checker type evidence
       --go-checker                  Add go/types type evidence
+      --fresh
   -h, --help                        Print help

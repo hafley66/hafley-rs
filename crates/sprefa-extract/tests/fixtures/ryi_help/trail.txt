@@ -6,4 +6,5 @@ Arguments:
   [N]  Runs to print [default: 5]
 
 Options:
+      --fresh
   -h, --help  Print help
