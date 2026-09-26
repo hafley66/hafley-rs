@@ -195,11 +195,11 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     table.push(row("fast", "socket", &socket_body, &root, scratch.path()));
 
     let proof_socket = scratch.path().join("nochild.sock");
-    let empty_path = scratch.path().join("empty-path");
-    std::fs::create_dir(&empty_path).unwrap();
+    let system_path = "/usr/bin:/bin:/opt/homebrew/bin";
+    assert!(system_path.split(':').all(|dir| !Path::new(dir).join("ryi").exists()));
     let proof_server = Command::new(&binary).args(["serve", "--listen", &format!("unix:{}", proof_socket.display())])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env("PATH", &empty_path).env_remove("RYI_BIN")
+        .env("PATH", system_path).env_remove("RYI_BIN")
         .stdout(Stdio::null()).stderr(Stdio::piped()).spawn().expect("start unix server");
     let _proof_server = Server(proof_server);
     for _ in 0..200 {
