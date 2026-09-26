@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::move_stage::{
-    content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
+    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
     VerifyJournal,
 };
 use sprefa_extract::{
@@ -41,12 +41,12 @@ pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
 
     for plan in &plan {
         let prefix = prefix(plan);
-        println!("{prefix}root {}", plan.root.display());
+        crate::outln!("{prefix}root {}", plan.root.display());
         for (old, new) in &plan.moves {
-            println!("{prefix}plan {old} -> {new}");
+            crate::outln!("{prefix}plan {old} -> {new}");
         }
         for receipt in &plan.receipts {
-            println!("{prefix}{receipt}");
+            crate::outln!("{prefix}{receipt}");
         }
     }
 
@@ -74,15 +74,15 @@ pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
             for stage in &plan.stages {
                 let (id, previews) =
                     stage_and_commit(&plan.root, &state, stage, soopy::Durability::Durable)?;
-                print_previews(&previews, &prefix);
-                println!("{prefix}stage {id} committed");
+                print_previews(&previews, &prefix, |line| crate::outln!("{line}"));
+                crate::outln!("{prefix}stage {id} committed");
             }
             let mut swept = Vec::new();
             for directory in &emptied[index] {
                 std::fs::remove_dir(plan.cx.abs(directory))
                     .map_err(|error| format!("remove empty directory {directory}: {error}"))?;
                 swept.push(directory.clone());
-                println!("{prefix}rmdir {directory}");
+                crate::outln!("{prefix}rmdir {directory}");
             }
             swept_per_root.push(swept);
         }
@@ -101,11 +101,11 @@ pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
             for stage in &plan.stages {
                 let (id, previews) =
                     stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
-                print_previews(&previews, &prefix);
-                println!("{prefix}stage {id} dry run, tree untouched");
+                print_previews(&previews, &prefix, |line| crate::outln!("{line}"));
+                crate::outln!("{prefix}stage {id} dry run, tree untouched");
             }
             for directory in &emptied[index] {
-                println!("{prefix}rmdir {directory} dry run, tree untouched");
+                crate::outln!("{prefix}rmdir {directory} dry run, tree untouched");
             }
         }
     }
@@ -154,7 +154,7 @@ fn verify_after_commit(
         None => plans[0].root.clone(),
     };
     match run_verify_command(&cwd, command)? {
-        Some(0) => println!("verify ok"),
+        Some(0) => crate::outln!("verify ok"),
         code => {
             let reason = match code {
                 None => "timeout".to_string(),
@@ -164,7 +164,7 @@ fn verify_after_commit(
             for index in (0..plans.len()).rev() {
                 count += journals[index].restore(&plans[index].root, state, &swept[index])?;
             }
-            println!("verify failed (rc={reason}): rolled back {count} files");
+            crate::outln!("verify failed (rc={reason}): rolled back {count} files");
             return Err(crate::RyiExit::new(3, String::new()));
         }
     }

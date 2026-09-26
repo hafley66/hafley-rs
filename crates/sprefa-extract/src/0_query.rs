@@ -1,9 +1,14 @@
 use crate::cli::QueryArgs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::{content_id_of, query_tree_sitter_spans, RyiLang, TreeSitterQuery};
 
 pub fn run(cli: QueryArgs) -> Result<(), String> {
+    run_to(cli, Box::new(std::io::stdout()))
+}
+
+pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), String> {
     // A digest names a blob, so its path need not exist in the worktree.
     let paths = match &cli.digest {
         Some(_) if cli.inputs.paths.len() == 1 => vec![PathBuf::from(&cli.inputs.paths[0])],
@@ -13,8 +18,8 @@ pub fn run(cli: QueryArgs) -> Result<(), String> {
     if paths.is_empty() {
         return Err("query: no inputs; pass files, directories, globs, - or --entry".into());
     }
-    let mut output =
-        crate::sqlite::Output::new(cli.sqlite.as_deref()).map_err(|error| error.to_string())?;
+    let mut output = crate::sqlite::Output::with_writer(cli.sqlite.as_deref(), writer, true)
+        .map_err(|error| error.to_string())?;
     for path in &paths {
         let name = path.to_string_lossy();
         let language = match &cli.lang {

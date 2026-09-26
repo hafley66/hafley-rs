@@ -210,6 +210,22 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     std::fs::remove_file(&binary).expect("remove server executable after launch");
     let proof_body = socket_request(&proof_socket, &fast.uri, &fast.body).await;
 
+    let sqlite = scratch.path().join("fast-http.db");
+    let sqlite_arg = sqlite.to_string_lossy().to_string();
+    let (sqlite_status, sqlite_body) = socket_response(
+        &socket,
+        &query("/fast", &[("sqlite", &sqlite_arg)]),
+        &fast.body,
+    ).await;
+    assert_eq!(sqlite_status, axum::http::StatusCode::OK);
+    assert!(sqlite.exists(), "HTTP fast published SQLite");
+    let sqlite_rows: Vec<serde_json::Value> = sqlite_body.split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| serde_json::from_slice(line).expect("SQLite response JSONL"))
+        .collect();
+    assert!(sqlite_rows.iter().any(|row| row.as_str().is_some_and(|text| text.starts_with("Wrote "))));
+    assert_eq!(sqlite_rows.last(), Some(&json!({"complete": true, "rows": sqlite_rows.len() - 1})));
+
     let rendered = table.join("\n");
     println!("{rendered}");
     assert_eq!(rendered, include_str!("fixtures/ryi_http_parity.tsv").trim_end());
@@ -259,4 +275,87 @@ async fn operation_error_has_http_status_and_server_accepts_next_request() {
     let (next_status, next_body) = socket_response(&socket, "/schema", "").await;
     assert_eq!(next_status, axum::http::StatusCode::OK);
     let _: serde_json::Value = serde_json::from_slice(&next_body).expect("next JSON response");
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn persistent_watch_allows_other_ops_and_disconnects() {
+    let scratch = tempfile::tempdir().expect("watch scratch");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/type_ladder");
+    let root = scratch.path().join("type_ladder");
+    copy_tree(&fixture, &root);
+    git(&root, &["init", "-q", "."]);
+    git(&root, &["add", "-A"]);
+    git(&root, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]);
+    let socket = scratch.path().join("watch.sock");
+    let receipts = scratch.path().join("watch.db");
+    let server = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .args(["serve", "--listen", &format!("unix:{}", socket.display())])
+        .env("DL_TRAIL", "0")
+        .stdout(Stdio::null()).stderr(Stdio::piped())
+        .spawn().expect("start watch server");
+    let _server = Server(server);
+    for _ in 0..200 {
+        if socket.exists() { break; }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(socket.exists(), "watch socket bound");
+
+    let stream = tokio::net::UnixStream::connect(&socket).await.expect("watch connect");
+    let (mut client, connection) = http1::handshake(TokioIo::new(stream)).await.expect("watch handshake");
+    tokio::spawn(async move { let _ = connection.await; });
+    let root_arg = root.to_string_lossy().to_string();
+    let receipts_arg = receipts.to_string_lossy().to_string();
+    let uri = query("/watch", &[("root", &root_arg), ("receipts", &receipts_arg), ("poll_ms", "50")]);
+    let request = Request::post(format!("http://localhost{uri}"))
+        .body(Body::empty()).expect("watch request");
+    let mut watch = tokio::time::timeout(Duration::from_secs(15), client.send_request(request))
+        .await.expect("watch response arrived").expect("watch response");
+    assert_eq!(watch.status(), axum::http::StatusCode::OK);
+    let first = tokio::time::timeout(Duration::from_secs(15), watch.body_mut().frame())
+        .await.expect("watch first row arrived").expect("watch first frame").expect("watch frame");
+    assert!(!first.into_data().expect("watch data").is_empty());
+
+    let one = root.join("src/_1_none.rs");
+    let request_body = json!({"paths": [one], "patterns": [], "entry": []}).to_string();
+    let query_uri = query("/query", &[("query", "(function_item name: (identifier) @name)")]);
+    let (status, body) = tokio::time::timeout(Duration::from_secs(15), socket_response(&socket, &query_uri, &request_body))
+        .await.expect("query while watch is open");
+    assert_eq!(status, axum::http::StatusCode::OK);
+    assert!(body.windows(b"\"complete\":true".len()).any(|part| part == b"\"complete\":true"));
+
+    let old = one.to_string_lossy().to_string();
+    let new = root.join("src/_5_moved.rs").to_string_lossy().to_string();
+    let state = scratch.path().join("state").to_string_lossy().to_string();
+    let move_uri = query("/move", &[("old", &old), ("new", &new), ("root", &root_arg), ("state", &state)]);
+    let (move_status, move_body) = tokio::time::timeout(Duration::from_secs(15), socket_response(&socket, &move_uri, ""))
+        .await.expect("move while watch is open");
+    assert_eq!(move_status, axum::http::StatusCode::OK);
+    let move_text: String = serde_json::from_slice(&move_body).expect("move response text");
+    assert!(move_text.contains("plan "));
+
+    drop(watch);
+    drop(client);
+    let (next_status, _) = tokio::time::timeout(Duration::from_secs(15), socket_response(&socket, "/schema", ""))
+        .await.expect("request after watch disconnect");
+    assert_eq!(next_status, axum::http::StatusCode::OK);
+}
+
+#[test]
+fn fast_jsonl_uses_bounded_sorted_path_over_large_roster() {
+    let scratch = tempfile::tempdir().expect("fast scratch");
+    for index in 0..4097 {
+        std::fs::write(scratch.path().join(format!("{index:04}_fact.rs")), format!("pub fn f_{index}() {{}}\n"))
+            .expect("fast fixture file");
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .arg("fast").arg(scratch.path())
+        .env("DL_TRACE_SUMMARY", "1")
+        .env("DL_TRAIL", "0")
+        .env("RYI_MAX_MEM_MB", "1024")
+        .output().expect("bounded fast run");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rows: Vec<&[u8]> = output.stdout.split(|byte| *byte == b'\n').filter(|row| !row.is_empty()).collect();
+    assert!(!rows.is_empty());
+    assert!(rows.windows(2).all(|pair| pair[0] <= pair[1]), "fast JSONL order");
+    assert!(!String::from_utf8_lossy(&output.stderr).contains("sorted_lines"), "fast retained corpus sort");
 }

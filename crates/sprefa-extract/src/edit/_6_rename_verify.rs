@@ -139,7 +139,7 @@ pub fn merge_scip(
 /// that agreed and a leg that never ran would otherwise read the same.
 pub fn report(disagreements: &[ScipDisagreement]) {
     for disagreement in disagreements {
-        println!(
+        crate::outln!(
             "scip-verify {}:{}-{} {}",
             disagreement.file,
             disagreement.start,
@@ -147,7 +147,7 @@ pub fn report(disagreements: &[ScipDisagreement]) {
             disagreement.side.as_str()
         );
     }
-    println!("scip-verify disagreements={}", disagreements.len());
+    crate::outln!("scip-verify disagreements={}", disagreements.len());
 }
 
 fn row(site: Site, side: DisagreementSide) -> ScipDisagreement {

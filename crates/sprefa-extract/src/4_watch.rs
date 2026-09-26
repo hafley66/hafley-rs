@@ -2,6 +2,8 @@ use crate::cli::WatchArgs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -134,6 +136,14 @@ enum ChangeInput {
 }
 
 pub fn run(args: WatchArgs) -> Result<(), Box<dyn std::error::Error>> {
+    run_to(args, Box::new(std::io::stdout()), None)
+}
+
+pub fn run_to(
+    args: WatchArgs,
+    writer: Box<dyn Write + Send>,
+    cancelled: Option<Arc<AtomicBool>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let options = Options::from_args(args)?;
     let repository = soopy::open(&options.root)?;
     let state = options
@@ -146,8 +156,7 @@ pub fn run(args: WatchArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut tree = soopy::SourceTree::open(repository);
     let mut receipts = ReceiptStore::open(&state)?;
-    let stdout = std::io::stdout();
-    let mut output = BufWriter::with_capacity(256 * 1024, stdout.lock());
+    let mut output = BufWriter::with_capacity(256 * 1024, writer);
 
     if options.once {
         emit_snapshot(
@@ -186,10 +195,24 @@ pub fn run(args: WatchArgs) -> Result<(), Box<dyn std::error::Error>> {
 
     let mut generation = 1u64;
     loop {
+        if cancelled.as_ref().is_some_and(|flag| flag.load(Ordering::Acquire)) {
+            return Ok(());
+        }
         let deltas = match &mut input {
-            ChangeInput::Events(watcher) => watcher.recv()?,
+            ChangeInput::Events(watcher) => match watcher.recv_timeout(Duration::from_millis(250))? {
+                Some(deltas) => deltas,
+                None => continue,
+            },
             ChangeInput::Poll(previous) => {
-                std::thread::sleep(Duration::from_millis(options.poll_ms));
+                let mut remaining = Duration::from_millis(options.poll_ms);
+                while !remaining.is_zero() {
+                    if cancelled.as_ref().is_some_and(|flag| flag.load(Ordering::Acquire)) {
+                        return Ok(());
+                    }
+                    let step = remaining.min(Duration::from_millis(250));
+                    std::thread::sleep(step);
+                    remaining -= step;
+                }
                 let after = tree.snapshot(&query)?;
                 let deltas = diff_snapshots(previous, &after);
                 *previous = after;

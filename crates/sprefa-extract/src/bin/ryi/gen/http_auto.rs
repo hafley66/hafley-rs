@@ -1,5 +1,6 @@
 use axum::Json;
 use axum::body::Body;
+use axum::body::Bytes;
 use axum::extract::Path;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
@@ -13,6 +14,8 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 use std::io::{Seek, Write};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::models::inputs::Inputs;
 use crate::ops_auto::CleaveArgs;
@@ -84,6 +87,45 @@ async fn jsonl_response(produce: impl FnOnce(&mut dyn FnMut(OpResult<Vec<u8>>) -
         Ok(Err(error)) => error.into_response(),
         Err(error) => OpError::from(error).into_response(),
     }
+}
+
+struct CancelOnDrop(Arc<AtomicBool>);
+impl Drop for CancelOnDrop {
+    fn drop(&mut self) { self.0.store(true, Ordering::Release); }
+}
+
+async fn live_jsonl_response(
+    items: Box<dyn Iterator<Item = OpResult<serde_json::Value>> + Send>,
+    cancelled: Arc<AtomicBool>,
+) -> Response {
+    let guard = CancelOnDrop(cancelled);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<i32>, Bytes)>(64);
+    tokio::task::spawn_blocking(move || {
+        let mut rows = 0u64;
+        let mut failed = false;
+        for item in items {
+            let (mut bytes, code) = match item.and_then(|value| Ok(serde_json::to_vec(&value)?)) {
+                Ok(bytes) => { rows += 1; (bytes, None) }
+                Err(error) => {
+                    failed = true;
+                    (serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes"), Some(error.1))
+                }
+            };
+            bytes.push(b'\n');
+            if tx.blocking_send((code, Bytes::from(bytes))).is_err() { return; }
+            if failed { break; }
+        }
+        let mut complete = serde_json::to_vec(&serde_json::json!({"complete": !failed, "rows": rows})).expect("completion row serializes");
+        complete.push(b'\n');
+        let _ = tx.blocking_send((None, Bytes::from(complete)));
+    });
+    let Some(first) = rx.recv().await else { return OpError("watch produced no response".into(), 1).into_response(); };
+    let status = first.0.map_or(StatusCode::OK, error_status);
+    let stream = futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(first.1) })
+        .chain(futures_util::stream::unfold((rx, guard), |(mut rx, guard)| async move {
+            rx.recv().await.map(|(_, bytes)| (Ok::<Bytes, std::io::Error>(bytes), (rx, guard)))
+        }));
+    (status, [(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
 }
 
 fn jsonl_input<T: DeserializeOwned + Send + 'static>(body: Body) -> impl Iterator<Item = OpResult<T>> + Send {
@@ -418,13 +460,8 @@ pub async fn watch(Query(query): Query<WatchQuery>) -> Response {
       once: query.once.unwrap_or(false),
       poll_ms: query.poll_ms.unwrap_or(500),
   };
-  jsonl_response(move |emit| {
-      for item in crate::ops::watch(&args) {
-          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
-              break;
-          }
-      }
-  }).await
+  let (items, cancelled) = crate::ops::watch_live(&args);
+  live_jsonl_response(items, cancelled).await
 }
 
 #[derive(Deserialize, Debug)]

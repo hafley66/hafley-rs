@@ -38,6 +38,10 @@ struct Side {
 }
 
 pub fn run(args: DiffArgs) -> Result<(), Box<dyn std::error::Error>> {
+    run_to(args, &mut std::io::stdout().lock())
+}
+
+pub fn run_to(args: DiffArgs, output: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
     let options = Options::from_args(args)?;
     let mut reader = crate::revision::RevisionReader::open(&options.root)?;
     let a = resolve_at(&mut reader, &options, &options.from)?;
@@ -69,8 +73,8 @@ pub fn run(args: DiffArgs) -> Result<(), Box<dyn std::error::Error>> {
     });
 
     match &options.sqlite {
-        Some(path) => write_sqlite(path, &sortable),
-        None => write_jsonl(&sortable),
+        Some(path) => write_sqlite(path, &sortable, output),
+        None => write_jsonl(&sortable, output),
     }
 }
 
@@ -906,9 +910,8 @@ fn unresolved_rows(a: &Side, b: &Side, counts: &mut Counts) -> Vec<DiffRow> {
     rows
 }
 
-fn write_jsonl(rows: &[(u8, String, String, DiffRow)]) -> Result<(), Box<dyn std::error::Error>> {
-    let stdout = std::io::stdout();
-    let mut output = std::io::BufWriter::with_capacity(256 * 1024, stdout.lock());
+fn write_jsonl(rows: &[(u8, String, String, DiffRow)], writer: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
+    let mut output = std::io::BufWriter::with_capacity(256 * 1024, writer);
     for (_, _, _, row) in rows {
         serde_json::to_writer(&mut output, row)?;
         output.write_all(b"\n")?;
@@ -922,6 +925,7 @@ fn write_jsonl(rows: &[(u8, String, String, DiffRow)]) -> Result<(), Box<dyn std
 fn write_sqlite(
     path: &Path,
     rows: &[(u8, String, String, DiffRow)],
+    out: &mut dyn Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
     if path.as_os_str().is_empty() || path == Path::new(":memory:") {
         return Err("--sqlite requires a filesystem path for a new database".into());
@@ -959,7 +963,6 @@ fn write_sqlite(
     connection.close().map_err(|(_, error)| error)?;
     temporary.as_file().sync_all()?;
     temporary.persist_noclobber(path)?;
-    let mut out = std::io::stdout().lock();
     let quoted = format!("'{}'", path.to_string_lossy().replace('\'', "'\"'\"'"));
     writeln!(out, "Wrote {} ({} rows)", path.display(), rows.len())?;
     writeln!(out, "Tables: sqlite3 {quoted} '.tables'")?;

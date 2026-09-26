@@ -16,6 +16,7 @@ use std::io::Write;
 use std::os::fd::FromRawFd;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
+use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 
 #[cfg(feature = "mimalloc")]
@@ -36,7 +37,7 @@ use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
-    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl,
+    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl,
     dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
@@ -59,6 +60,11 @@ mod http_auto;
 
 #[path = "ryi/ops.rs"]
 mod ops;
+
+#[macro_export]
+macro_rules! outln {
+    ($($arg:tt)*) => { $crate::ops::print_line(format_args!($($arg)*)) };
+}
 
 #[path = "ryi/0_cli.rs"]
 mod cli;
@@ -559,7 +565,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 /// The transport and CLI use the same handler results.
-fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>) -> RyiResult<()> {
+fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<AtomicBool>>) -> RyiResult<()> {
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
         Some(Cmd::Fast(args)) => run_file_verb(FileArgs::from(args), Tier::Fast, writer),
@@ -569,10 +575,10 @@ fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>) -> RyiResult<()> {
         Some(Cmd::Schema) => print_schema(&mut writer),
         Some(Cmd::Trail(args)) => print_trail(args.runs, &mut writer),
         Some(Cmd::Serve(_)) => Err(RyiExit::new(2, "serve cannot run as an operation").into()),
-        Some(Cmd::Watch(args)) => watch::run(args),
-        Some(Cmd::Diff(args)) => diff::run(args),
-        Some(Cmd::Graph(args)) => graph::run(args),
-        Some(Cmd::Query(args)) => query::run(args).map_err(Into::into),
+        Some(Cmd::Watch(args)) => watch::run_to(args, writer, cancelled),
+        Some(Cmd::Diff(args)) => diff::run_to(args, &mut writer),
+        Some(Cmd::Graph(args)) => graph::run_to(args, &mut writer),
+        Some(Cmd::Query(args)) => query::run_to(args, writer).map_err(Into::into),
         Some(Cmd::Move(args)) => source_move::run(args).map_err(Into::into),
         Some(Cmd::Cleave(args)) => cleave::run(args).map_err(Into::into),
         Some(Cmd::Rename(args)) => source_rename::run(args)
@@ -632,10 +638,31 @@ fn extract_to(
         if cli.lines {
             register_line_tables(cli, output);
         }
-        let lines = diet_scip_jsonl(&cli.paths)?;
+        // SQLite's on-disk BINARY sort keeps the JSONL order of sorted_lines
+        // without retaining the corpus of serialized facts in the Rust heap.
+        let spool = tempfile::NamedTempFile::new()?;
+        let mut sorted = rusqlite::Connection::open(spool.path())?;
+        sorted.execute_batch("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-8192; PRAGMA temp_store=FILE; CREATE TABLE line (body TEXT NOT NULL);")?;
+        {
+            let transaction = sorted.transaction()?;
+            {
+                let mut insert = transaction.prepare("INSERT INTO line (body) VALUES (?1)")?;
+                sprefa_extract::diet_scip_streamed(&cli.paths, &mut |row| {
+                    let body = match row {
+                        sprefa_extract::DietRow::Raw(raw) => serde_json::to_string(&raw.fact),
+                        sprefa_extract::DietRow::Resolved(fact) => serde_json::to_string(&fact),
+                    }.map_err(std::io::Error::other)?;
+                    insert.execute([body]).map_err(std::io::Error::other)?;
+                    Ok::<(), std::io::Error>(())
+                })?;
+            }
+            transaction.commit()?;
+        }
         let _write = sprefa_extract::trace::stage_span("write").entered();
-        for line in lines {
-            output.line(&line)?;
+        let mut select = sorted.prepare("SELECT body FROM line ORDER BY body COLLATE BINARY")?;
+        let mut rows = select.query([])?;
+        while let Some(row) = rows.next()? {
+            output.line(&row.get::<_, String>(0)?)?;
         }
         return Ok(());
     }
