@@ -117,10 +117,12 @@ if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -d "$out/codeql-db" ]; then
 fi
 
 start=$(date +%s)
+query_ran=0
 for kind in type call; do
   if [ "${RYI_CODEQL_REUSE_QUERIES:-0}" = 1 ] && [ -f "$out/$kind.csv" ]; then
     continue
   fi
+  query_ran=1
   "$codeql" query run "$query_dir/${kind}_edges_repo.ql" \
     --database "$out/codeql-db" --output "$out/$kind.bqrs" \
     --threads "${RYI_CODEQL_THREADS:-4}" \
@@ -128,7 +130,9 @@ for kind in type call; do
   "$codeql" bqrs decode "$out/$kind.bqrs" --format=csv --output "$out/$kind.csv" \
     >>"$out/$kind-query.log" 2>&1
 done
-echo "$(( $(date +%s) - start ))" >"$out/codeql-query-seconds"
+if [ "$query_ran" = 1 ] || [ ! -f "$out/codeql-query-seconds" ]; then
+  echo "$(( $(date +%s) - start ))" >"$out/codeql-query-seconds"
+fi
 
 python3 - "$root" "$out" <<'PY'
 import csv
@@ -146,10 +150,6 @@ def path(value):
     if not value:
         return None
     p = pathlib.Path(value)
-    if not p.is_absolute():
-        from_cwd = pathlib.Path.cwd() / p
-        if from_cwd.is_file():
-            p = from_cwd.resolve()
     if p.is_absolute():
         p = p.resolve()
         try:
