@@ -132,7 +132,7 @@ async fn run() -> Result<i32, ClientError> {
         _ => Method::POST,
     };
     let mut builder = Request::builder().method(method).uri(format!("http://ryi/{verb}"));
-    let body = if verb == "ingest" {
+    let body = if matches!(verb, "ingest") {
         let metadata = base64::engine::general_purpose::STANDARD.encode(json.as_bytes());
         builder = builder.header("x-ryi-request", metadata).header("content-type", "application/x-ndjson");
         let stream = ReaderStream::new(tokio::io::stdin()).map(|chunk| chunk.map(Frame::data));

@@ -20,9 +20,13 @@ STAGED_DECORATOR = '"../../../../decorator-def/lib/main.tsp"'
 def main() -> None:
     if not EMITTER.is_file():
         raise SystemExit(f"missing {EMITTER}; build @hafley/alloy-rs in HAFLEY_TSP")
-    out = Path(sys.argv[1] if len(sys.argv) > 1 else "src/bin/ryi/gen")
-    if not out.is_absolute():
-        out = CRATE / out
+    if len(sys.argv) > 1 and sys.argv[1]:
+        staging = Path(sys.argv[1]).resolve()
+        server_out = staging / "server"
+        proto_out = staging / "proto"
+    else:
+        server_out = CRATE / "src/bin/ryi/gen"
+        proto_out = CRATE.parent / "ryi-proto/src/gen"
     with tempfile.TemporaryDirectory(prefix="ryi_contract_", dir=FIXTURES) as source_dir:
         source = Path(source_dir)
         for name in ("domain.tsp", "ops.tsp"):
@@ -37,10 +41,15 @@ def main() -> None:
                 check=True,
             )
             generated = Path(generated_dir)
-            out.mkdir(parents=True, exist_ok=True)
-            for name in ("cli_auto.rs", "ops_auto.rs", "client_auto.rs", "server_auto.rs", "daemon_auto.rs"):
-                shutil.copy2(generated / name, out / name)
-            shutil.copytree(generated / "models", out / "models", dirs_exist_ok=True)
+            server_out.mkdir(parents=True, exist_ok=True)
+            proto_out.mkdir(parents=True, exist_ok=True)
+            for name in ("cli_auto.rs", "client_auto.rs", "server_auto.rs"):
+                shutil.copy2(generated / name, server_out / name)
+            for name in ("ops_auto.rs", "daemon_auto.rs"):
+                shutil.copy2(generated / name, proto_out / name)
+            if (proto_out / "models").exists():
+                shutil.rmtree(proto_out / "models")
+            shutil.copytree(generated / "models", proto_out / "models", dirs_exist_ok=True)
 
 
 if __name__ == "__main__":

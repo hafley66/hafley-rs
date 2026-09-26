@@ -19,8 +19,7 @@ use crate::ops_auto::WatchArgs;
 pub struct Ryi {
   #[command(subcommand)]
   pub cmd: Option<Cmd>,#[command(flatten)]
-  pub file: FileArgs,
-  #[arg(long, global = true)]
+  pub file: FileArgs,#[arg(long, global = true)]
   pub fresh: bool,
 }
 

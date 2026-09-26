@@ -308,14 +308,14 @@ op diff(
 /** Validate and re-emit foreign TSI JSONL */
 op ingest(
   /** TSI JSONL files (/dev/stdin reads standard input) */
-  @positional @valueName("PATH") @minItems(1) paths?: path[],
+  @query @positional @valueName("PATH") @minItems(1) paths?: path[],
 
   @bodyRoot input: JsonlStream<jsonValue>,
 
   @skip @header("X-Trace") trace?: string,
 
   /** Write to a new SQLite database instead of stdout */
-  @valueName("PATH") sqlite?: path,
+  @query @valueName("PATH") sqlite?: path,
 ): jsonValue;
 
 /** Print the output record schema */

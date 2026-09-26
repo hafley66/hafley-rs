@@ -104,15 +104,13 @@ mod source_rename;
 #[path = "../edit/_7_cleave.rs"]
 mod cleave;
 
-impl From<FastArgs> for FileArgs {
-    fn from(fast: FastArgs) -> Self {
+fn file_args_from_fast(fast: FastArgs) -> FileArgs {
         FileArgs {
             inputs: fast.inputs,
             sqlite: fast.sqlite,
             lines: fast.lines,
             ..FileArgs::default()
         }
-    }
 }
 
 /// What the parsed command runs: per-file extraction (or a root-flag mode),
@@ -503,7 +501,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     }
     let (mut cli, tier) = match ryi.cmd {
         None => (ryi.file, Tier::Files),
-        Some(Cmd::Fast(fast)) => (FileArgs::from(fast), Tier::Fast),
+        Some(Cmd::Fast(fast)) => (file_args_from_fast(fast), Tier::Fast),
         Some(Cmd::Slow(slow)) => return run_slow(slow, None),
         Some(Cmd::Scip(args)) => return run_scip(args, None),
         Some(Cmd::Ingest(args)) => return run_ingest(args, None),
@@ -616,7 +614,7 @@ fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<A
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
         Some(Cmd::Extract(args)) => run_file_verb(args.args, Tier::Files, writer),
-        Some(Cmd::Fast(args)) => run_file_verb(FileArgs::from(args), Tier::Fast, writer),
+        Some(Cmd::Fast(args)) => run_file_verb(file_args_from_fast(args), Tier::Fast, writer),
         Some(Cmd::Slow(args)) => run_slow(args, Some(writer)),
         Some(Cmd::Scip(args)) => run_scip(args, Some(writer)),
         Some(Cmd::Ingest(args)) => run_ingest(args, Some(writer)),

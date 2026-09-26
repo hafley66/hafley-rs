@@ -12,7 +12,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Json;
 use base64::Engine as _;
-use fs4::FileExt as _;
+use fs4::fs_std::FileExt as _;
 use futures_util::StreamExt as _;
 use tokio_util::sync::CancellationToken;
 
@@ -122,9 +122,9 @@ fn jsonl_input<T: serde::de::DeserializeOwned + Send + 'static>(body: Body) -> i
 }
 
 async fn ingest(headers: HeaderMap, body: Body) -> Response {
-    let encoded = match headers.get("x-ryi-request").and_then(|header| header.to_str().ok()) {
+    let encoded = match headers.get("__REQUEST_HEADER__").and_then(|header| header.to_str().ok()) {
         Some(encoded) => encoded,
-        None => return bad_request("missing x-ryi-request".into()),
+        None => return bad_request("missing __REQUEST_HEADER__".into()),
     };
     let json = match base64::engine::general_purpose::STANDARD.decode(encoded) {
         Ok(json) => json,
@@ -176,7 +176,7 @@ fn router(state: DaemonState) -> axum::Router {
         .route("/region", post(region))
         .route("/watch", post(watch))
         .route("/diff", post(diff))
-        .route("/ingest", post(ingest))
+        .route("/ingest{?paths,sqlite}", post(ingest))
         .route("/schema", get(schema))
         .route("/trail", post(trail))
         .layer(axum::middleware::from_fn_with_state(state.clone(), touch))

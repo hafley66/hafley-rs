@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
-use crate::models::inputs::Inputs;
 use crate::models::file_args::FileArgs;
+use crate::models::inputs::Inputs;
 
 #[derive(Debug)]
 pub struct OpError(pub String, pub i32);
@@ -29,8 +29,8 @@ pub struct ExtractArgs {
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FastArgs {
-  #[serde(flatten)]
   #[command(flatten)]
+  #[serde(flatten)]
   pub inputs: Inputs,
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH")]
@@ -43,8 +43,8 @@ pub struct FastArgs {
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SlowArgs {
-  #[serde(flatten)]
   #[command(flatten)]
+  #[serde(flatten)]
   pub inputs: Inputs,
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH")]
@@ -67,8 +67,8 @@ pub struct SlowArgs {
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScipArgs {
-  #[serde(flatten)]
   #[command(flatten)]
+  #[serde(flatten)]
   pub inputs: Inputs,
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH")]
@@ -109,8 +109,8 @@ pub struct ScipArgs {
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[command(group(clap::ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path"])))]
 pub struct GraphArgs {
-  #[serde(flatten)]
   #[command(flatten)]
+  #[serde(flatten)]
   pub inputs: Inputs,
   #[doc = "Resolved call edges landing on NAME"]
   #[arg(long, value_name = "NAME")]
@@ -286,8 +286,8 @@ pub struct RenameArgs {
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryArgs {
-  #[serde(flatten)]
   #[command(flatten)]
+  #[serde(flatten)]
   pub inputs: Inputs,
   #[doc = "Language name (default: from each file's extension)"]
   #[arg(long)]
@@ -306,10 +306,10 @@ pub struct QueryArgs {
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RegionArgs {
   #[doc = "DL7 file holding the markers"]
-  #[arg()]
+  #[arg(long)]
   pub target: PathBuf,
   #[doc = "Marker id after sprefa:auto-begin / sprefa:auto-end"]
-  #[arg()]
+  #[arg(long)]
   pub id: String,
   #[doc = "Generated body file, or - for stdin"]
   #[arg(long, default_value = "-")]
@@ -333,7 +333,7 @@ pub struct WatchArgs {
   #[serde(default)]
   pub patterns: Vec<String>,
   #[doc = "Fact kinds (cst,type,call,df,data)"]
-  #[arg(long, value_name = "KINDS", value_delimiter = ',')]
+  #[arg(long, value_delimiter = ',')]
   #[serde(default)]
   pub kinds: Vec<String>,
   #[doc = "Receipt store path"]
@@ -364,7 +364,7 @@ pub struct DiffArgs {
   #[serde(default)]
   pub patterns: Vec<String>,
   #[doc = "Resolve arms (call,type)"]
-  #[arg(long, value_name = "ARMS", value_delimiter = ',')]
+  #[arg(long, value_delimiter = ',')]
   #[serde(default)]
   pub arms: Vec<String>,
   #[doc = "Write to a new SQLite database instead of stdout"]
@@ -378,20 +378,20 @@ pub struct IngestArgs {
   #[arg(value_name = "PATH", required = true)]
   #[serde(default)]
   pub paths: Vec<PathBuf>,
-  #[serde(skip)]
   #[arg(skip)]
+  #[serde(skip)]
   pub trace: Option<String>,
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH")]
   pub sqlite: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize, Default)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
 pub struct SchemaArgs {}
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TrailArgs {
   #[doc = "Runs to print"]
-  #[arg(default_value_t = 5, value_name = "N")]
+  #[arg(long, default_value_t = 5, value_name = "N")]
   pub runs: usize,
 }

@@ -29,15 +29,15 @@ impl Request {
 
 fn resolve_paths(verb: &str, root: &Path, args: &mut serde_json::Value) {
     let names: &[&str] = match verb {
-        "extract" => &["paths", "entry", "root", "sqlite", "scip_index"],
-        "fast" => &["paths", "entry", "root", "sqlite"],
-        "slow" => &["paths", "entry", "root", "sqlite", "scip_index"],
-        "scip" => &["paths", "entry", "root", "sqlite", "scip_index", "scip_cache"],
-        "graph" => &["paths", "entry", "root", "sqlite", "scip_index"],
-        "cleave" => &["target", "dest", "list", "root", "state"],
+        "extract" => &["entry", "root", "sqlite", "scip_index"],
+        "fast" => &["entry", "root", "sqlite"],
+        "slow" => &["entry", "root", "sqlite", "scip_index"],
+        "scip" => &["entry", "root", "sqlite", "scip_index", "scip_cache"],
+        "graph" => &["entry", "root", "sqlite", "scip_index"],
+        "cleave" => &["dest", "list", "root", "state"],
         "move" => &["old", "new", "list", "root", "verify_cwd", "state"],
-        "rename" => &["target", "list", "root", "state", "verify_scip"],
-        "query" => &["paths", "entry", "root", "sqlite"],
+        "rename" => &["list", "root", "state", "verify_scip"],
+        "query" => &["entry", "root", "sqlite"],
         "region" => &["target", "generated", "state"],
         "watch" => &["root", "receipts"],
         "diff" => &["root", "sqlite"],

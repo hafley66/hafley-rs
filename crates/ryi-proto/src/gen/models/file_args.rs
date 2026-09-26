@@ -6,20 +6,22 @@ use crate::models::inputs::Inputs;
 
 #[derive(Debug, Clone, Serialize, Deserialize, clap::Args, Default)]
 pub struct FileArgs {
-  #[serde(flatten)]
   #[command(flatten)]
+  #[serde(flatten)]
   pub inputs: Inputs,
   #[arg(long, hide = true, global = true)]
   pub format: Option<String>,
-  #[serde(skip)]
   #[arg(skip)]
+  #[serde(skip)]
   #[serde(default)]
   pub paths: Vec<PathBuf>,
   #[doc = "Fact kinds per file (cst,type,call,df,data,cfg)"]
   #[arg(long, value_name = "KINDS", value_delimiter = ',')]
+  #[serde(default)]
   pub kinds: Option<Vec<String>>,
   #[doc = "Resolve arms under --resolve (call,type,flow)"]
   #[arg(long, value_name = "ARMS", requires = "resolve", value_delimiter = ',')]
+  #[serde(default)]
   pub arms: Option<Vec<String>>,
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH", conflicts_with = "bench")]
