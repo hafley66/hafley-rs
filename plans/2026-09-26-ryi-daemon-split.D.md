@@ -93,7 +93,7 @@ The help captures for `cleave`, `diff`, `fast`, `graph`, `ingest`, `move`, `quer
 
 The previous 313-row fast capture included one completion row. The new 312-row raw output has the same fast record kinds; the interim 1446-row capture was a regression caused by sending phase-1 facts through the fast serializer and was removed. The socket fast row also changed 313 -> 312. Slow, scip, graph, query and watch each lose their completion row. Cleave, move, rename, ingest and schema now expose their raw lines instead of one wrapped string. Diff loses its wrapper/completion shape. The trail case uses an isolated HOME to keep historical user runs out of its fixture. Hashes changed with those bodies and path normalization.
 
-After merging main `0d686c37`, the `diff` parity hash changed `208dc82ebd26 -> 750777a29f8d` for both CLI and router, with the row count fixed at 1. That main commit added `tests/fixtures/type_ladder/regen.sh`; the parity test commits the entire copied fixture before running `diff HEAD HEAD`, so the Git revision SHA in its `diff_run` row changed. The two transports still produce the same bytes. This is the only parity golden edit after the main merge.
+After merging main `0d686c37`, the `diff` parity hash changed `208dc82ebd26 -> 750777a29f8d` for both CLI and router, with the row count fixed at 1. That main commit appended five lines to `tests/fixtures/type_ladder/regen.sh`: a CodeQL comment, `out=$(mktemp -d)`, a `RYI_CODEQL_OUT=$out scripts/ryi-vs-codeql.sh ...` invocation, a `cp` of `type.csv` and `call.csv`, and `rm -rf "$out"`. The executable fixture blob changed from Git object `52b7a3ca` to `0f09de92`. `178_cli_http_parity.rs:25-47,154-157` copies and commits every fixture file with fixed author and committer dates before `diff HEAD HEAD`; `5_diff.rs:404-408` writes that commit SHA into both `from` and `to` in the `diff_run` row. The extra script bytes therefore change the normalized row hash in both transports. This is the only parity golden edit after that merge.
 
 On `tests/fixtures/type_ladder/src`, the corrected fast path emits 317 rows with the merge-base record-kind counts: `free_name` 90, `occurrence` 64, `symbol` 64, `resolved_type_edge` 47, `local` 33, `resolved_import` 17, and `resolved_edge` 2. The interim output additionally emitted `node` 574, `edge` 492, `sig` 22, `specifier` 17, `param` 16, and `file` 6. Those extra kinds are absent after restoring `diet_scip_jsonl` for fast stdout.
 
@@ -164,6 +164,10 @@ An invalid rename returned code 2 in both modes, with zero stdout bytes; the dae
 
 ## Unverified expectations and open work
 
+The later review prohibited all test execution. The `6af0e0ad` main merge and subsequent test-registry and formatted-error comparison edits were checked by reading source only; the verification table above predates that rule. `tests/all.rs` now declares `support/0_daemon_guard.rs`, `181_server_modes.rs`, and `182_client_daemon.rs`. `182_client_daemon.rs` compares the daemon's late-error stdout and exit code with the in-process `ryi-server --format jsonl` path. `ryi.rs:552-561` emits the final JSON error row through its stdout writer; `ryi.rs:352-356` writes plain CLI errors to stderr. The generated daemon client forwards response data bytes to stdout and takes the exit code from the trailer. This matches the in-process formatted path without per-line parsing. The new assertion has not run under the no-tests rule.
+
+The reviewer requested reverting the one-line binary rename in `179_codeql_baseline.rs`. The line remains pending clarification: it uses compile-time `env!("CARGO_BIN_EXE_ryi-server")`, while the main version uses `env!("CARGO_BIN_EXE_ryi")`; `sprefa-extract/Cargo.toml:314-317` declares only the former binary. Restoring the main line would leave the consolidated `tests/all.rs` target without that compile-time variable. No CodeQL command was run in this review.
+
 - Full stderr/tracing parity, lock behavior beyond the tested two-client startup, all verb-specific relative path cases, and memory behavior under concurrent requests remain unverified.
 - The server captures its file disclosure and SCIP location messages in a request-local buffer. Stream responses send them in `x-ryi-stderr` HTTP trailers, and raw responses send them in the same header. The client writes those bytes to stderr; the daemon round-trip test checks the zero-fact disclosure against fresh mode. Diagnostics emitted directly from other engine modules, including the optional `RYI_SQLITE_PHASES` timing line, still go to the detached process stderr.
 - `fast -` and `region --generated -` still read the daemon's stdin. Only `ingest` has a TypeSpec `@bodyRoot JsonlStream<jsonValue>` request stream. Ingest avoids reading an interactive TTY. Modeling these other stdin uses as streams conflicts with body-default parameters unless their metadata placement changes.
@@ -175,7 +179,7 @@ An invalid rename returned code 2 in both modes, with zero stdout bytes; the dae
 
 ## Complete changed-file roster
 
-The roster lists 20 hafley-tsp lane paths and 229 hafley-rs lane paths. The hafley-rs branch also merged main `0d686c37`; its 12 inherited paths are excluded from the lane roster. One inherited fixture script changes the diff parity revision hash as described above.
+The roster lists 20 hafley-tsp lane paths and 230 hafley-rs lane paths. The hafley-rs branch also merged main `0d686c37` and `6af0e0ad`; inherited paths are excluded from the lane roster. One inherited fixture script changes the diff parity revision hash as described above.
 
 <details><summary>hafley-tsp: 20 paths</summary>
 
@@ -321,6 +325,7 @@ The roster lists 20 hafley-tsp lane paths and 229 hafley-rs lane paths. The hafl
 - `crates/sprefa-extract/tests/181_server_modes.rs`
 - `crates/sprefa-extract/tests/181_ts_ladder.rs`
 - `crates/sprefa-extract/tests/182_client_daemon.rs`
+- `crates/sprefa-extract/tests/all.rs`
 - `crates/sprefa-extract/tests/support/0_daemon_guard.rs`
 - `crates/sprefa-extract/tests/1_move.rs`
 - `crates/sprefa-extract/tests/1_resolve_cli.rs`
