@@ -324,7 +324,7 @@ fn type_scope_ladder_collects_expression_type_arguments() {
 }
 
 #[test]
-fn displaced_module_types_stay_in_their_fixture_crate() {
+fn displaced_module_types_respect_cargo_package_roots() {
     let relative = "tests/fixtures/rust_rename".to_string();
     let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
     for src in [relative, absolute] {
@@ -343,9 +343,40 @@ fn displaced_module_types_stay_in_their_fixture_crate() {
             [],
             |row| Ok((row.get(0)?, row.get(1)?)),
         ).unwrap();
-        // These two fixture files have identical bytes and share a content ID.
-        // The emitted path cannot identify which file supplied that ID, so a
-        // cross-fixture path must not be reported as the import's target.
+        // These files in separate Cargo packages have identical bytes and
+        // share a content ID. The emitted path cannot identify which package
+        // supplied that ID, so the sibling package cannot be the target.
         assert_eq!(rows, (0, 0), "{src}");
+    }
+}
+
+#[test]
+fn cargo_package_and_qualified_type_boundaries() {
+    let relative = "tests/fixtures/rust_visibility".to_string();
+    let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
+    for source in [relative, absolute] {
+        let scratch = tempfile::tempdir().unwrap();
+        let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+        ryi(&["fast", &source, "--sqlite", &fast]);
+        let conn = rusqlite::Connection::open(&fast).unwrap();
+        let count = |owner: &str, target: &str, source_suffix: &str, target_suffix: &str| -> i64 {
+            conn.query_row(
+                "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2
+                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+                rusqlite::params![owner, target, source_suffix, target_suffix],
+                |row| row.get(0),
+            ).unwrap()
+        };
+        let lib = "/rust_visibility/app/src/lib.rs";
+        assert_eq!(count("normal_type_probe", "NormalType", lib, "/normal_dep/src/lib.rs"), 1);
+        assert_eq!(count("dev_type_probe", "DevType", lib, "/dev_dep/src/lib.rs"), 0);
+        assert_eq!(count("build_type_probe", "BuildType", lib, "/build_dep/src/lib.rs"), 0);
+        assert_eq!(count("build_type_probe", "BuildType", "/rust_visibility/app/build.rs", "/build_dep/src/lib.rs"), 1);
+        assert_eq!(count("dev_probe", "DevType", "/rust_visibility/app/tests/0_dev.rs", "/dev_dep/src/lib.rs"), 1);
+        assert_eq!(count("ForeignSlot", "Item", lib, "/dev_dep/src/lib.rs"), 0);
+        assert_eq!(count("LocalSlot", "Item", lib, lib), 1);
+        assert_eq!(count("wrong_branch", "Widget", lib, "/rust_visibility/app/src/c/0_b.rs"), 0);
+        assert_eq!(count("missing_branch", "Widget", lib, "/rust_visibility/app/src/c/0_b.rs"), 0);
+        assert_eq!(count("right_branch", "Widget", lib, "/rust_visibility/app/src/c/0_b.rs"), 1);
     }
 }

@@ -1,0 +1,16 @@
+[package]
+name = "visibility_app"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+normal_dep = { path = "../normal_dep" }
+
+[dev-dependencies]
+dev_dep = { path = "../dev_dep" }
+
+[build-dependencies]
+build_dep = { path = "../build_dep" }
+
+[workspace]

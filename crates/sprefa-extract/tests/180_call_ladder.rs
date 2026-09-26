@@ -158,3 +158,32 @@ fn same_named_methods_on_local_types_keep_their_targets() {
     assert_eq!(rows[1].0, "second_rows");
     assert!(rows[0].1 < rows[1].1, "each receiver binds to its own impl");
 }
+
+#[test]
+fn cargo_target_and_dependency_call_boundaries() {
+    let relative = "tests/fixtures/rust_visibility".to_string();
+    let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
+    for source in [relative, absolute] {
+        let scratch = tempfile::tempdir().unwrap();
+        let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+        ryi(&["fast", &source, "--sqlite", &fast]);
+        let conn = rusqlite::Connection::open(&fast).unwrap();
+        let count = |caller: &str, callee: &str, source_suffix: &str, target_suffix: &str| -> i64 {
+            conn.query_row(
+                "select count(*) from resolved_edge where caller_name = ?1 and callee_name = ?2
+                   and caller_path like '%' || ?3 and callee_path like '%' || ?4",
+                rusqlite::params![caller, callee, source_suffix, target_suffix],
+                |row| row.get(0),
+            ).unwrap()
+        };
+        let lib = "/rust_visibility/app/src/lib.rs";
+        assert_eq!(count("library_target_probe", "bin_helper", lib, "/app/src/bin/0_tool.rs"), 0);
+        assert_eq!(count("library_target_probe", "nested_helper", lib, "/app/tests/data/nested/src/lib.rs"), 0);
+        assert_eq!(count("library_target_probe", "normal_call", lib, "/normal_dep/src/lib.rs"), 1);
+        assert_eq!(count("library_target_probe", "dev_call", lib, "/dev_dep/src/lib.rs"), 0);
+        assert_eq!(count("library_target_probe", "build_call", lib, "/build_dep/src/lib.rs"), 0);
+        assert_eq!(count("main", "build_call", "/rust_visibility/app/build.rs", "/build_dep/src/lib.rs"), 1);
+        assert_eq!(count("dev_probe", "dev_call", "/rust_visibility/app/tests/0_dev.rs", "/dev_dep/src/lib.rs"), 1);
+        assert_eq!(count("main", "bin_helper", "/rust_visibility/app/src/bin/0_tool.rs", "/app/src/bin/0_tool.rs"), 1);
+    }
+}

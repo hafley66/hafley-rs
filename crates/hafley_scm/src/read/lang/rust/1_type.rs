@@ -198,7 +198,8 @@ fn resolve_type_dst(
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let (qualifier, trailing) = type_probe_key(name, kind);
     if let Some(trait_name) = qualifier {
-        if let Some((blob, span)) = modules.and_then(|m| m.assoc_type_target(trait_name, trailing)) {
+        if let Some((blob, span)) = modules.zip(own_path)
+            .and_then(|(m, from)| m.assoc_type_target(from, trait_name, trailing)) {
             return Some((blob, span, ResolutionOrigin::ModulePlane));
         }
     }
