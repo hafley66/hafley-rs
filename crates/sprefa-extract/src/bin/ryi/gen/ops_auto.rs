@@ -19,7 +19,7 @@ impl std::fmt::Display for OpError {
 
 pub type OpResult<T> = Result<T, OpError>;
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct FastArgs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
   #[arg(skip)]
@@ -34,7 +34,7 @@ pub struct FastArgs {
   pub lines: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct SlowArgs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
   #[arg(skip)]
@@ -58,7 +58,7 @@ pub struct SlowArgs {
   pub scip_timeout: Option<u64>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct ScipArgs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
   #[arg(skip)]
@@ -97,7 +97,7 @@ pub struct ScipArgs {
   pub scip_build: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 #[command(group(clap::ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path"])))]
 pub struct GraphArgs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
@@ -152,7 +152,7 @@ pub struct GraphArgs {
   pub go_checker: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct CleaveArgs {
   #[doc = "SRC#ITEM (omit with --list)"]
   #[arg()]
@@ -186,7 +186,7 @@ pub struct CleaveArgs {
   pub json: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct MoveArgs {
   #[doc = "File to move (omit with --list)"]
   #[arg()]
@@ -223,7 +223,7 @@ pub struct MoveArgs {
   pub text_refs: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct RenameArgs {
   #[doc = "FILE#OLD (omit with --list)"]
   #[arg()]
@@ -260,7 +260,7 @@ pub struct RenameArgs {
   pub json: bool,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct QueryArgs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
   #[arg(skip)]
@@ -281,7 +281,7 @@ pub struct QueryArgs {
   pub sqlite: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct RegionArgs {
   #[doc = "DL7 file holding the markers"]
   #[arg()]
@@ -300,7 +300,7 @@ pub struct RegionArgs {
   pub state: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct WatchArgs {
   #[doc = "Repository root (default: git root of the working directory)"]
   #[arg(long, value_name = "DIR")]
@@ -322,7 +322,7 @@ pub struct WatchArgs {
   pub poll_ms: u64,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct DiffArgs {
   #[doc = "Repository root (default: git root of the working directory)"]
   #[arg(long, value_name = "DIR")]
@@ -344,7 +344,7 @@ pub struct DiffArgs {
   pub sqlite: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct IngestArgs {
   #[doc = "TSI JSONL files (/dev/stdin reads standard input)"]
   #[arg(value_name = "PATH", required = true)]
@@ -356,10 +356,10 @@ pub struct IngestArgs {
   pub sqlite: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone, Default)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, Default)]
 pub struct SchemaArgs {}
 
-#[derive(clap::Args, Debug, Clone)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
 pub struct TrailArgs {
   #[doc = "Runs to print"]
   #[arg(default_value_t = 5, value_name = "N")]

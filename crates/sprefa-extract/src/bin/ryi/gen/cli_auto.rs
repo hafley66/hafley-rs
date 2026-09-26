@@ -60,17 +60,17 @@ pub enum Cmd {
 
 pub fn run(cli: Ryi, input: &mut dyn BufRead, out: &mut dyn Write) -> OpResult<()> {
   match cli.cmd {
-          Some(Cmd::Fast(args)) => { for item in crate::ops::fast(&args) { write_json(out, &item?)?; } }
-          Some(Cmd::Slow(args)) => { write_json(out, &crate::ops::slow(&args)?)?; }
-          Some(Cmd::Scip(args)) => { write_json(out, &crate::ops::scip(&args)?)?; }
-          Some(Cmd::Graph(args)) => { write_json(out, &crate::ops::graph(&args)?)?; }
+          Some(Cmd::Fast(args)) => { write_stream(out, crate::ops::fast(&args))?; }
+          Some(Cmd::Slow(args)) => { write_stream(out, crate::ops::slow(&args))?; }
+          Some(Cmd::Scip(args)) => { write_stream(out, crate::ops::scip(&args))?; }
+          Some(Cmd::Graph(args)) => { write_stream(out, crate::ops::graph(&args))?; }
           Some(Cmd::Cleave(args)) => { write_json(out, &crate::ops::cleave(&args)?)?; }
           Some(Cmd::Move(args)) => { write_json(out, &crate::ops::r#move(&args)?)?; }
           Some(Cmd::Rename(args)) => { write_json(out, &crate::ops::rename(&args)?)?; }
-          Some(Cmd::Query(args)) => { write_json(out, &crate::ops::query(&args)?)?; }
+          Some(Cmd::Query(args)) => { write_stream(out, crate::ops::query(&args))?; }
           Some(Cmd::Region(args)) => { write_json(out, &crate::ops::region(&args)?)?; }
-          Some(Cmd::Watch(args)) => { write_json(out, &crate::ops::watch(&args)?)?; }
-          Some(Cmd::Diff(args)) => { write_json(out, &crate::ops::diff(&args)?)?; }
+          Some(Cmd::Watch(args)) => { write_stream(out, crate::ops::watch(&args))?; }
+          Some(Cmd::Diff(args)) => { write_stream(out, crate::ops::diff(&args))?; }
           Some(Cmd::Ingest(args)) => { write_json(out, &crate::ops::ingest(&args, read_jsonl(&mut *input))?)?; }
           Some(Cmd::Schema) => { let args = Default::default(); write_json(out, &crate::ops::schema(&args)?)?; }
           Some(Cmd::Trail(args)) => { write_json(out, &crate::ops::trail(&args)?)?; }
@@ -94,6 +94,22 @@ pub fn main(cli: Ryi) -> std::process::ExitCode {
 fn write_json<T: serde::Serialize>(out: &mut dyn Write, value: &T) -> OpResult<()> {
     serde_json::to_writer(&mut *out, value)?;
     out.write_all(b"\n")?;
+    Ok(())
+}
+
+pub fn write_stream<T: serde::Serialize>(out: &mut dyn Write, items: impl Iterator<Item = OpResult<T>>) -> OpResult<()> {
+    let mut rows = 0u64;
+    for item in items {
+        match item {
+            Ok(value) => { write_json(out, &value)?; rows += 1; }
+            Err(error) => {
+                write_json(out, &serde_json::json!({"error": &error.0}))?;
+                write_json(out, &serde_json::json!({"complete": false, "rows": rows}))?;
+                return Err(error);
+            }
+        }
+    }
+    write_json(out, &serde_json::json!({"complete": true, "rows": rows}))?;
     Ok(())
 }
 

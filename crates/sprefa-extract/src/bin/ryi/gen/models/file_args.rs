@@ -8,6 +8,8 @@ use crate::models::inputs::Inputs;
 pub struct FileArgs {
   #[command(flatten)]
   pub inputs: Inputs,
+  #[arg(long, hide = true, global = true)]
+  pub format: Option<String>,
   #[arg(skip)]
   pub paths: Vec<PathBuf>,
   #[doc = "Fact kinds per file (cst,type,call,df,data,cfg)"]

@@ -14,11 +14,7 @@ use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
 
-use crate::models::call_edge::CallEdge;
-use crate::models::edit_plan::EditPlan;
-use crate::models::fact_summary::FactSummary;
 use crate::models::inputs::Inputs;
-use crate::models::type_edge::TypeEdge;
 use crate::ops_auto::CleaveArgs;
 use crate::ops_auto::DiffArgs;
 use crate::ops_auto::FastArgs;
@@ -38,53 +34,49 @@ use crate::ops_auto::WatchArgs;
 
 impl IntoResponse for OpError {
     fn into_response(self) -> Response {
-        (StatusCode::INTERNAL_SERVER_ERROR, self.0).into_response()
+        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": self.0}))).into_response()
     }
 }
 
 fn jsonl_response(produce: impl FnOnce(&mut dyn FnMut(OpResult<Vec<u8>>) -> bool) + Send + 'static) -> Response {
     let (tx, rx) = tokio::sync::mpsc::channel::<Result<Bytes, std::io::Error>>(64);
     tokio::task::spawn_blocking(move || {
+        let mut rows = 0u64;
+        let mut failed = false;
+        let mut connected = true;
         produce(&mut |line| {
-            let chunk = line
-                .map(|mut bytes| {
-                    bytes.push(b'\n');
-                    Bytes::from(bytes)
-                })
-                .map_err(|e| std::io::Error::other(e.0));
-            let failed = chunk.is_err();
-            tx.blocking_send(chunk).is_ok() && !failed
-        })
+            let mut bytes = match line {
+                Ok(bytes) => { rows += 1; bytes }
+                Err(error) => {
+                    failed = true;
+                    serde_json::to_vec(&serde_json::json!({"error": error.0})).expect("error row serializes")
+                }
+            };
+            bytes.push(b'\n');
+            connected = tx.blocking_send(Ok(Bytes::from(bytes))).is_ok();
+            connected && !failed
+        });
+        if connected {
+            let mut complete = serde_json::to_vec(&serde_json::json!({"complete": !failed, "rows": rows})).expect("completion row serializes");
+            complete.push(b'\n');
+            let _ = tx.blocking_send(Ok(Bytes::from(complete)));
+        }
     });
     let stream = futures_util::stream::unfold(rx, |mut rx| async move { rx.recv().await.map(|chunk| (chunk, rx)) });
-    ([(CONTENT_TYPE, "application/jsonl")], Body::from_stream(stream)).into_response()
+    ([(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
 }
 
 fn jsonl_input<T: DeserializeOwned + Send + 'static>(body: Body) -> impl Iterator<Item = OpResult<T>> + Send {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<OpResult<T>>(64);
     tokio::spawn(async move {
-        let mut chunks = body.into_data_stream();
-        let mut buf: Vec<u8> = Vec::new();
-        while let Some(chunk) = chunks.next().await {
-            match chunk {
-                Ok(bytes) => buf.extend_from_slice(&bytes),
-                Err(e) => {
-                    let _ = tx.send(Err(OpError(e.to_string()))).await;
-                    return;
-                }
+        let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
+        let reader = tokio_util::io::StreamReader::new(chunks);
+        let mut lines = tokio_util::codec::FramedRead::new(reader, tokio_util::codec::LinesCodec::new());
+        while let Some(line) = lines.next().await {
+            let value = line.map_err(OpError::from).and_then(|line| serde_json::from_str(&line).map_err(OpError::from));
+            if tx.send(value).await.is_err() {
+                return;
             }
-            while let Some(pos) = buf.iter().position(|b| *b == b'\n') {
-                let line: Vec<u8> = buf.drain(..=pos).collect();
-                if line.iter().all(u8::is_ascii_whitespace) {
-                    continue;
-                }
-                if tx.send(serde_json::from_slice(&line).map_err(OpError::from)).await.is_err() {
-                    return;
-                }
-            }
-        }
-        if !buf.iter().all(u8::is_ascii_whitespace) {
-            let _ = tx.send(serde_json::from_slice(&buf).map_err(OpError::from)).await;
         }
     });
     std::iter::from_fn(move || rx.blocking_recv())
@@ -125,7 +117,7 @@ pub struct SlowQuery {
   pub scip_timeout: Option<u64>,
 }
 
-pub async fn slow(Query(query): Query<SlowQuery>, Json(body): Json<Inputs>) -> OpResult<Json<FactSummary>> {
+pub async fn slow(Query(query): Query<SlowQuery>, Json(body): Json<Inputs>) -> Response {
   let args = SlowArgs {
       paths: query.paths,
       inputs: body,
@@ -135,8 +127,13 @@ pub async fn slow(Query(query): Query<SlowQuery>, Json(body): Json<Inputs>) -> O
       no_checker: query.no_checker.unwrap_or(false),
       scip_timeout: query.scip_timeout,
   };
-  let out = tokio::task::spawn_blocking(move || crate::ops::slow(&args)).await??;
-  Ok(Json(out))
+  jsonl_response(move |emit| {
+      for item in crate::ops::slow(&args) {
+          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
+              break;
+          }
+      }
+  })
 }
 
 #[derive(Deserialize, Debug)]
@@ -155,7 +152,7 @@ pub struct ScipQuery {
   pub scip_build: Option<bool>,
 }
 
-pub async fn scip(Query(query): Query<ScipQuery>, Json(body): Json<Inputs>) -> OpResult<Json<FactSummary>> {
+pub async fn scip(Query(query): Query<ScipQuery>, Json(body): Json<Inputs>) -> Response {
   let args = ScipArgs {
       paths: query.paths,
       inputs: body,
@@ -170,8 +167,13 @@ pub async fn scip(Query(query): Query<ScipQuery>, Json(body): Json<Inputs>) -> O
       occurrence_text: query.occurrence_text.unwrap_or(false),
       scip_build: query.scip_build.unwrap_or(false),
   };
-  let out = tokio::task::spawn_blocking(move || crate::ops::scip(&args)).await??;
-  Ok(Json(out))
+  jsonl_response(move |emit| {
+      for item in crate::ops::scip(&args) {
+          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
+              break;
+          }
+      }
+  })
 }
 
 #[derive(Deserialize, Debug)]
@@ -195,7 +197,7 @@ pub struct GraphQuery {
   pub go_checker: Option<bool>,
 }
 
-pub async fn graph(Query(query): Query<GraphQuery>, Json(body): Json<Inputs>) -> OpResult<Json<Vec<CallEdge>>> {
+pub async fn graph(Query(query): Query<GraphQuery>, Json(body): Json<Inputs>) -> Response {
   let args = GraphArgs {
       paths: query.paths,
       inputs: body,
@@ -215,8 +217,13 @@ pub async fn graph(Query(query): Query<GraphQuery>, Json(body): Json<Inputs>) ->
       ts_checker: query.ts_checker.unwrap_or(false),
       go_checker: query.go_checker.unwrap_or(false),
   };
-  let out = tokio::task::spawn_blocking(move || crate::ops::graph(&args)).await??;
-  Ok(Json(out))
+  jsonl_response(move |emit| {
+      for item in crate::ops::graph(&args) {
+          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
+              break;
+          }
+      }
+  })
 }
 
 #[derive(Deserialize, Debug)]
@@ -233,7 +240,7 @@ pub struct CleaveQuery {
   pub json: Option<bool>,
 }
 
-pub async fn cleave(Query(query): Query<CleaveQuery>) -> OpResult<Json<EditPlan>> {
+pub async fn cleave(Query(query): Query<CleaveQuery>) -> OpResult<Json<serde_json::Value>> {
   let args = CleaveArgs {
       target: query.target,
       dest: query.dest,
@@ -266,7 +273,7 @@ pub struct MoveQuery {
   pub text_refs: Option<bool>,
 }
 
-pub async fn r#move(Query(query): Query<MoveQuery>) -> OpResult<Json<EditPlan>> {
+pub async fn r#move(Query(query): Query<MoveQuery>) -> OpResult<Json<serde_json::Value>> {
   let args = MoveArgs {
       old: query.old,
       new: query.new,
@@ -299,7 +306,7 @@ pub struct RenameQuery {
   pub json: Option<bool>,
 }
 
-pub async fn rename(Query(query): Query<RenameQuery>) -> OpResult<Json<EditPlan>> {
+pub async fn rename(Query(query): Query<RenameQuery>) -> OpResult<Json<serde_json::Value>> {
   let args = RenameArgs {
       target: query.target,
       new: query.new,
@@ -327,7 +334,7 @@ pub struct QueryQuery {
   pub sqlite: Option<PathBuf>,
 }
 
-pub async fn query(Query(query): Query<QueryQuery>, Json(body): Json<Inputs>) -> OpResult<Json<FactSummary>> {
+pub async fn query(Query(query): Query<QueryQuery>, Json(body): Json<Inputs>) -> Response {
   let args = QueryArgs {
       paths: query.paths,
       inputs: body,
@@ -336,8 +343,13 @@ pub async fn query(Query(query): Query<QueryQuery>, Json(body): Json<Inputs>) ->
       digest: query.digest,
       sqlite: query.sqlite,
   };
-  let out = tokio::task::spawn_blocking(move || crate::ops::query(&args)).await??;
-  Ok(Json(out))
+  jsonl_response(move |emit| {
+      for item in crate::ops::query(&args) {
+          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
+              break;
+          }
+      }
+  })
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -353,7 +365,7 @@ pub struct RegionQuery {
   pub state: Option<PathBuf>,
 }
 
-pub async fn region(Path(path): Path<RegionPath>, Query(query): Query<RegionQuery>) -> OpResult<Json<EditPlan>> {
+pub async fn region(Path(path): Path<RegionPath>, Query(query): Query<RegionQuery>) -> OpResult<Json<serde_json::Value>> {
   let args = RegionArgs {
       target: path.target,
       id: path.id,
@@ -377,7 +389,7 @@ pub struct WatchQuery {
   pub poll_ms: Option<u64>,
 }
 
-pub async fn watch(Query(query): Query<WatchQuery>) -> OpResult<Json<FactSummary>> {
+pub async fn watch(Query(query): Query<WatchQuery>) -> Response {
   let args = WatchArgs {
       root: query.root,
       patterns: query.patterns,
@@ -386,8 +398,13 @@ pub async fn watch(Query(query): Query<WatchQuery>) -> OpResult<Json<FactSummary
       once: query.once.unwrap_or(false),
       poll_ms: query.poll_ms.unwrap_or(500),
   };
-  let out = tokio::task::spawn_blocking(move || crate::ops::watch(&args)).await??;
-  Ok(Json(out))
+  jsonl_response(move |emit| {
+      for item in crate::ops::watch(&args) {
+          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
+              break;
+          }
+      }
+  })
 }
 
 #[derive(Deserialize, Debug)]
@@ -402,7 +419,7 @@ pub struct DiffQuery {
   pub sqlite: Option<PathBuf>,
 }
 
-pub async fn diff(Query(query): Query<DiffQuery>) -> OpResult<Json<FactSummary>> {
+pub async fn diff(Query(query): Query<DiffQuery>) -> Response {
   let args = DiffArgs {
       root: query.root,
       from: query.from,
@@ -411,8 +428,13 @@ pub async fn diff(Query(query): Query<DiffQuery>) -> OpResult<Json<FactSummary>>
       arms: query.arms,
       sqlite: query.sqlite,
   };
-  let out = tokio::task::spawn_blocking(move || crate::ops::diff(&args)).await??;
-  Ok(Json(out))
+  jsonl_response(move |emit| {
+      for item in crate::ops::diff(&args) {
+          if !emit(item.and_then(|v| Ok(serde_json::to_vec(&v)?))) {
+              break;
+          }
+      }
+  })
 }
 
 #[derive(Deserialize, Debug)]
@@ -422,18 +444,18 @@ pub struct IngestQuery {
   pub sqlite: Option<PathBuf>,
 }
 
-pub async fn ingest(Query(query): Query<IngestQuery>, headers: HeaderMap, body: Body) -> OpResult<Json<FactSummary>> {
+pub async fn ingest(Query(query): Query<IngestQuery>, headers: HeaderMap, body: Body) -> OpResult<Json<serde_json::Value>> {
   let args = IngestArgs {
       paths: query.paths,
       trace: headers.get("X-Trace").and_then(|v| v.to_str().ok()).map(|v| v.parse::<String>()).transpose().map_err(|e| OpError(e.to_string()))?,
       sqlite: query.sqlite,
   };
-  let input = jsonl_input::<TypeEdge>(body);
+  let input = jsonl_input::<serde_json::Value>(body);
   let out = tokio::task::spawn_blocking(move || crate::ops::ingest(&args, input)).await??;
   Ok(Json(out))
 }
 
-pub async fn schema() -> OpResult<Json<FactSummary>> {
+pub async fn schema() -> OpResult<Json<serde_json::Value>> {
   let args = SchemaArgs {
 
   };
@@ -446,7 +468,7 @@ pub struct TrailPath {
   pub runs: usize,
 }
 
-pub async fn trail(Path(path): Path<TrailPath>) -> OpResult<Json<FactSummary>> {
+pub async fn trail(Path(path): Path<TrailPath>) -> OpResult<Json<serde_json::Value>> {
   let args = TrailArgs {
       runs: path.runs,
   };

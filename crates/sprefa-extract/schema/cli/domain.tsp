@@ -5,6 +5,7 @@ namespace Ryi;
 
 scalar path extends string;
 scalar usize extends uint64;
+scalar jsonValue extends string;
 
 model Inputs {
   /** Files, directories, or globs; - reads a path list from stdin */
@@ -33,6 +34,7 @@ model Inputs {
 
 model FileArgs {
   inputs: Inputs;
+  @hidden @global format?: string;
   @skip paths: path[];
   /** Fact kinds per file (cst,type,call,df,data,cfg) */
   @valueDelimiter(",") @valueName("KINDS") kinds?: string[];

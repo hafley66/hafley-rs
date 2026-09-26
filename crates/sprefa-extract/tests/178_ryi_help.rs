@@ -28,3 +28,28 @@ fn generated_clap_help_matches_captured_main() {
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{verb} help bytes");
     }
 }
+
+#[test]
+fn generated_format_accepts_root_and_global_positions() {
+    let file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/type_ladder/src/_1_none.rs");
+    let run = |args: &[&str]| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+            .args(args)
+            .env("DL_TRAIL", "0")
+            .output()
+            .expect("ryi jsonl");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8(output.stdout).expect("UTF-8 JSONL")
+    };
+    let before = run(&["--format", "jsonl", "fast", file]);
+    let after = run(&["fast", "--format", "jsonl", file]);
+    let root = run(&["--format", "jsonl", file]);
+    let rows = [
+        ("before", before == after, before.lines().last()),
+        ("root", root.lines().last().is_some(), root.lines().last()),
+    ];
+    assert_eq!(
+        rows.map(|(name, condition, last)| format!("{name} {condition} {}", last.unwrap_or(""))).join("\n"),
+        "before true {\"complete\":true,\"rows\":31}\nroot true {\"complete\":true,\"rows\":35}",
+    );
+}

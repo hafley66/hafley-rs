@@ -28,7 +28,7 @@ op fast(
 
   /** Add 1-based line/col beside every span */
   @query lines?: boolean,
-): JsonlStream<TypeEdge>;
+): JsonlStream<jsonValue>;
 
 /** The SCIP oracle written as fast's tables */
 @route("/slow")
@@ -53,7 +53,7 @@ op slow(
 
   /** Seconds allowed for one indexer run */
   @valueName("SECS") @query scip_timeout?: uint64,
-): FactSummary;
+): JsonlStream<jsonValue>;
 
 /** Raw SCIP index rows */
 @route("/scip")
@@ -93,7 +93,7 @@ op scip(
 
   /** Build the index for --raw with the inputs' language indexer */
   @requiresAll(#["raw", "root"]) @conflictsWith(#["scip_index"]) @query scip_build?: boolean,
-): FactSummary;
+): JsonlStream<jsonValue>;
 
 /** Ask one question of the resolved call/type graph */
 @route("/graph")
@@ -149,7 +149,7 @@ op graph(
 
   /** Add go/types type evidence */
   @requires("root") @query go_checker?: boolean,
-): CallEdge[];
+): JsonlStream<jsonValue>;
 
 /** Move one item into another file, with its imports */
 @route("/cleave")
@@ -184,7 +184,7 @@ op cleave(
 
   /** End with one JSON line holding the plan */
   @query json?: boolean,
-): EditPlan;
+): jsonValue;
 
 /** Move a file and repair every specifier that names it */
 @route("/move")
@@ -222,7 +222,7 @@ op `move`(
 
   /** Report leftover old-path spellings in plain text */
   @query text_refs?: boolean,
-): EditPlan;
+): jsonValue;
 
 /** Rename a symbol and every occurrence bound to it */
 @route("/rename")
@@ -261,7 +261,7 @@ op rename(
 
   /** End with one JSON line of abstains */
   @query json?: boolean,
-): EditPlan;
+): jsonValue;
 
 /** Run a tree-sitter query over files */
 @route("/query")
@@ -283,7 +283,7 @@ op query(
 
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") @query sqlite?: path,
-): FactSummary;
+): JsonlStream<jsonValue>;
 
 /** Replace a generated region between sprefa markers */
 @route("/region") @post
@@ -298,7 +298,7 @@ op region(
   @query apply?: boolean,
   /** Soopy state root for --apply */
   @query state?: path,
-): EditPlan;
+): jsonValue;
 
 /** Stream fact deltas as the worktree changes */
 @route("/watch") @post
@@ -315,7 +315,7 @@ op watch(
   @query once?: boolean,
   /** Poll interval when the platform watcher is unavailable */
   @minValue(1) @query poll_ms?: uint64 = 500,
-): FactSummary;
+): JsonlStream<jsonValue>;
 
 /** Fact delta between two commits */
 @route("/diff") @post
@@ -332,7 +332,7 @@ op diff(
   @valueDelimiter(",") @valueName("ARMS") @query arms: string[],
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") @query sqlite?: path,
-): FactSummary;
+): JsonlStream<jsonValue>;
 
 /** Validate and re-emit foreign TSI JSONL */
 @route("/ingest")
@@ -341,21 +341,21 @@ op ingest(
   /** TSI JSONL files (/dev/stdin reads standard input) */
   @positional @valueName("PATH") @minItems(1) @query paths?: path[],
 
-  @bodyRoot input: JsonlStream<TypeEdge>,
+  @bodyRoot input: JsonlStream<jsonValue>,
 
   @skip @header("X-Trace") trace?: string,
 
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") @query sqlite?: path,
-): FactSummary;
+): jsonValue;
 
 /** Print the output record schema */
 @route("/schema") @post
-op schema(): FactSummary;
+op schema(): jsonValue;
 
 /** Print the last N runs from the trail */
 @route("/trail") @post
 op trail(
   /** Runs to print */
   @valueName("N") @path runs: usize = 5,
-): FactSummary;
+): jsonValue;
