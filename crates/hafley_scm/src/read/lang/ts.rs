@@ -5023,6 +5023,18 @@ impl Resolve<CallF> for TsSource {
                 })
                 .is_some();
             let name_match = || {
+                // An import binding owns its spelling even when its module is
+                // absent from this corpus. A same-named corpus function is
+                // not the target of that unresolved or external import.
+                let imported = modules.is_some_and(|(modules, path)| {
+                    modules.import(path, callee).is_some()
+                        || written
+                            .and_then(|name| name.rsplit_once('.'))
+                            .is_some_and(|(receiver, _)| modules.import(path, receiver).is_some())
+                });
+                if imported {
+                    return None;
+                }
                 Self::ts_call_name_match(
                     output,
                     def_index,
@@ -5188,6 +5200,9 @@ impl Resolve<CallF> for TsSource {
                     )
                 });
             let Some((blob, span, origin)) = bound.or_else(|| {
+                if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
+                    return None;
+                }
                 Self::ts_call_name_match(
                     output,
                     def_index,
