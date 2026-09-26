@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
 use crate::models::inputs::Inputs;
+use crate::models::file_args::FileArgs;
 
 #[derive(Debug)]
 pub struct OpError(pub String, pub i32);
@@ -19,11 +20,16 @@ impl std::fmt::Display for OpError {
 
 pub type OpResult<T> = Result<T, OpError>;
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct ExtractArgs {
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub args: FileArgs,
+}
+
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct FastArgs {
-  #[doc = "Files, directories, or globs; - reads a path list from stdin"]
-  #[arg(skip)]
-  pub paths: Vec<String>,
+  #[serde(flatten)]
   #[command(flatten)]
   pub inputs: Inputs,
   #[doc = "Write to a new SQLite database instead of stdout"]
@@ -31,14 +37,13 @@ pub struct FastArgs {
   pub sqlite: Option<PathBuf>,
   #[doc = "Add 1-based line/col beside every span"]
   #[arg(long)]
+  #[serde(default)]
   pub lines: bool,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct SlowArgs {
-  #[doc = "Files, directories, or globs; - reads a path list from stdin"]
-  #[arg(skip)]
-  pub paths: Vec<String>,
+  #[serde(flatten)]
   #[command(flatten)]
   pub inputs: Inputs,
   #[doc = "Write to a new SQLite database instead of stdout"]
@@ -46,23 +51,23 @@ pub struct SlowArgs {
   pub sqlite: Option<PathBuf>,
   #[doc = "Add 1-based line/col beside every span"]
   #[arg(long)]
+  #[serde(default)]
   pub lines: bool,
   #[doc = "Load this index.scip instead of finding or building one"]
   #[arg(long, value_name = "FILE")]
   pub scip_index: Option<PathBuf>,
   #[doc = "Skip the compiler checkers"]
   #[arg(long)]
+  #[serde(default)]
   pub no_checker: bool,
   #[doc = "Seconds allowed for one indexer run"]
   #[arg(long, value_name = "SECS")]
   pub scip_timeout: Option<u64>,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ScipArgs {
-  #[doc = "Files, directories, or globs; - reads a path list from stdin"]
-  #[arg(skip)]
-  pub paths: Vec<String>,
+  #[serde(flatten)]
   #[command(flatten)]
   pub inputs: Inputs,
   #[doc = "Write to a new SQLite database instead of stdout"]
@@ -70,6 +75,7 @@ pub struct ScipArgs {
   pub sqlite: Option<PathBuf>,
   #[doc = "Add 1-based line/col beside every span"]
   #[arg(long)]
+  #[serde(default)]
   pub lines: bool,
   #[doc = "Load this index.scip instead of finding or building one"]
   #[arg(long, value_name = "FILE", conflicts_with = "indexer")]
@@ -85,24 +91,25 @@ pub struct ScipArgs {
   pub indexer: Option<String>,
   #[doc = "Stream the index records themselves instead of the scip_* relations"]
   #[arg(long)]
+  #[serde(default)]
   pub raw: bool,
   #[doc = "Only these --raw record kinds (comma-separated)"]
   #[arg(long, value_name = "KINDS", requires = "raw")]
   pub records: Option<String>,
   #[doc = "Add the source text to each scip_occurrence"]
   #[arg(long, requires = "raw")]
+  #[serde(default)]
   pub occurrence_text: bool,
   #[doc = "Build the index for --raw with the inputs' language indexer"]
   #[arg(long, requires_all = ["raw", "root"], conflicts_with = "scip_index")]
+  #[serde(default)]
   pub scip_build: bool,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 #[command(group(clap::ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path"])))]
 pub struct GraphArgs {
-  #[doc = "Files, directories, or globs; - reads a path list from stdin"]
-  #[arg(skip)]
-  pub paths: Vec<String>,
+  #[serde(flatten)]
   #[command(flatten)]
   pub inputs: Inputs,
   #[doc = "Resolved call edges landing on NAME"]
@@ -128,6 +135,7 @@ pub struct GraphArgs {
   pub sqlite: Option<PathBuf>,
   #[doc = "Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve"]
   #[arg(long, conflicts_with_all = ["rust_checker", "ts_checker", "go_checker"])]
+  #[serde(default)]
   pub slow: bool,
   #[doc = "Seconds the question may run; past it graph exits 3"]
   #[arg(long, default_value_t = 30, value_name = "SECS", value_parser = clap::value_parser!(u64).range(1..))]
@@ -143,16 +151,19 @@ pub struct GraphArgs {
   pub scip_index: Option<PathBuf>,
   #[doc = "Add rust-analyzer type evidence"]
   #[arg(long, requires = "root")]
+  #[serde(default)]
   pub rust_checker: bool,
   #[doc = "Add TypeScript checker type evidence"]
   #[arg(long, requires = "root")]
+  #[serde(default)]
   pub ts_checker: bool,
   #[doc = "Add go/types type evidence"]
   #[arg(long, requires = "root")]
+  #[serde(default)]
   pub go_checker: bool,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct CleaveArgs {
   #[doc = "SRC#ITEM (omit with --list)"]
   #[arg()]
@@ -171,22 +182,26 @@ pub struct CleaveArgs {
   pub state: Option<PathBuf>,
   #[doc = "Also move private helpers only this item uses"]
   #[arg(long)]
+  #[serde(default)]
   pub drag: bool,
   #[doc = "Apply instead of dry run"]
   #[arg(long)]
+  #[serde(default)]
   pub commit: bool,
   #[doc = "Command to run after --commit; failure rolls back"]
   #[arg(long)]
   pub verify: Option<String>,
   #[doc = "Report leftover SRC spellings in plain text"]
   #[arg(long)]
+  #[serde(default)]
   pub text_refs: bool,
   #[doc = "End with one JSON line holding the plan"]
   #[arg(long)]
+  #[serde(default)]
   pub json: bool,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct MoveArgs {
   #[doc = "File to move (omit with --list)"]
   #[arg()]
@@ -199,6 +214,7 @@ pub struct MoveArgs {
   pub list: Option<PathBuf>,
   #[doc = "Corpus root; repeatable"]
   #[arg(long)]
+  #[serde(default)]
   pub root: Vec<PathBuf>,
   #[doc = "Directory --verify runs in (default: first root)"]
   #[arg(long)]
@@ -208,22 +224,26 @@ pub struct MoveArgs {
   pub state: Option<PathBuf>,
   #[doc = "Apply instead of dry run"]
   #[arg(long)]
+  #[serde(default)]
   pub commit: bool,
   #[doc = "Leave a reexport shim at OLD instead of rewriting importers"]
   #[arg(long)]
+  #[serde(default)]
   pub shim: bool,
   #[doc = "Move a Rust module's `mod` line instead of adding #[path]"]
   #[arg(long)]
+  #[serde(default)]
   pub relocate_mod: bool,
   #[doc = "Command to run after --commit; failure rolls back"]
   #[arg(long)]
   pub verify: Option<String>,
   #[doc = "Report leftover old-path spellings in plain text"]
   #[arg(long)]
+  #[serde(default)]
   pub text_refs: bool,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RenameArgs {
   #[doc = "FILE#OLD (omit with --list)"]
   #[arg()]
@@ -245,26 +265,28 @@ pub struct RenameArgs {
   pub at: Option<u32>,
   #[doc = "Apply instead of dry run"]
   #[arg(long)]
+  #[serde(default)]
   pub commit: bool,
   #[doc = "Report leftover old-name spellings in plain text"]
   #[arg(long)]
+  #[serde(default)]
   pub text_refs: bool,
   #[doc = "SCIP index (default ROOT/index.scip): its seats join the plan"]
   #[arg(long, value_name = "INDEX")]
   pub verify_scip: Option<PathBuf>,
   #[doc = "Only report the SCIP diff; keep the syntax plan as is"]
   #[arg(long)]
+  #[serde(default)]
   pub no_scip_merge: bool,
   #[doc = "End with one JSON line of abstains"]
   #[arg(long)]
+  #[serde(default)]
   pub json: bool,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryArgs {
-  #[doc = "Files, directories, or globs; - reads a path list from stdin"]
-  #[arg(skip)]
-  pub paths: Vec<String>,
+  #[serde(flatten)]
   #[command(flatten)]
   pub inputs: Inputs,
   #[doc = "Language name (default: from each file's extension)"]
@@ -281,7 +303,7 @@ pub struct QueryArgs {
   pub sqlite: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RegionArgs {
   #[doc = "DL7 file holding the markers"]
   #[arg()]
@@ -294,35 +316,39 @@ pub struct RegionArgs {
   pub generated: PathBuf,
   #[doc = "Write the replacement (default: report drift)"]
   #[arg(long)]
+  #[serde(default)]
   pub apply: bool,
   #[doc = "Soopy state root for --apply"]
   #[arg(long)]
   pub state: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct WatchArgs {
   #[doc = "Repository root (default: git root of the working directory)"]
   #[arg(long, value_name = "DIR")]
   pub root: Option<PathBuf>,
   #[doc = "Glob to watch; repeatable (default: every roster extension)"]
   #[arg(long = "pattern", value_name = "GLOB")]
+  #[serde(default)]
   pub patterns: Vec<String>,
   #[doc = "Fact kinds (cst,type,call,df,data)"]
   #[arg(long, value_name = "KINDS", value_delimiter = ',')]
+  #[serde(default)]
   pub kinds: Vec<String>,
   #[doc = "Receipt store path"]
   #[arg(long, value_name = "PATH")]
   pub receipts: Option<PathBuf>,
   #[doc = "Emit one snapshot and exit"]
   #[arg(long)]
+  #[serde(default)]
   pub once: bool,
   #[doc = "Poll interval when the platform watcher is unavailable"]
   #[arg(long, default_value_t = 500, value_parser = clap::value_parser!(u64).range(1..))]
   pub poll_ms: u64,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DiffArgs {
   #[doc = "Repository root (default: git root of the working directory)"]
   #[arg(long, value_name = "DIR")]
@@ -335,20 +361,24 @@ pub struct DiffArgs {
   pub to: String,
   #[doc = "Glob to include; repeatable (default: every roster extension)"]
   #[arg(long = "pattern", value_name = "GLOB")]
+  #[serde(default)]
   pub patterns: Vec<String>,
   #[doc = "Resolve arms (call,type)"]
   #[arg(long, value_name = "ARMS", value_delimiter = ',')]
+  #[serde(default)]
   pub arms: Vec<String>,
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH")]
   pub sqlite: Option<PathBuf>,
 }
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct IngestArgs {
   #[doc = "TSI JSONL files (/dev/stdin reads standard input)"]
   #[arg(value_name = "PATH", required = true)]
+  #[serde(default)]
   pub paths: Vec<PathBuf>,
+  #[serde(skip)]
   #[arg(skip)]
   pub trace: Option<String>,
   #[doc = "Write to a new SQLite database instead of stdout"]
@@ -359,16 +389,9 @@ pub struct IngestArgs {
 #[derive(clap::Args, Debug, Clone, serde::Serialize, Default)]
 pub struct SchemaArgs {}
 
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TrailArgs {
   #[doc = "Runs to print"]
   #[arg(default_value_t = 5, value_name = "N")]
   pub runs: usize,
-}
-
-#[derive(clap::Args, Debug, Clone, serde::Serialize)]
-pub struct ServeArgs {
-  #[doc = "Listen on HOST:PORT or unix:/PATH"]
-  #[arg(long, value_name = "HOST:PORT|unix:/PATH")]
-  pub listen: String,
 }

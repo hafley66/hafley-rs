@@ -38,7 +38,7 @@ def main() -> None:
             )
             generated = Path(generated_dir)
             out.mkdir(parents=True, exist_ok=True)
-            for name in ("cli_auto.rs", "ops_auto.rs", "http_auto.rs"):
+            for name in ("cli_auto.rs", "ops_auto.rs", "client_auto.rs", "server_auto.rs", "daemon_auto.rs"):
                 shutil.copy2(generated / name, out / name)
             shutil.copytree(generated / "models", out / "models", dirs_exist_ok=True)
 

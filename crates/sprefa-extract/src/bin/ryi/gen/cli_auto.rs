@@ -1,14 +1,11 @@
-use std::io::BufRead;
-use std::io::Write;
-
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::CleaveArgs;
 use crate::ops_auto::DiffArgs;
+use crate::ops_auto::ExtractArgs;
 use crate::ops_auto::FastArgs;
 use crate::ops_auto::GraphArgs;
 use crate::ops_auto::IngestArgs;
 use crate::ops_auto::MoveArgs;
-use crate::ops_auto::OpResult;
 use crate::ops_auto::QueryArgs;
 use crate::ops_auto::RegionArgs;
 use crate::ops_auto::RenameArgs;
@@ -23,12 +20,14 @@ pub struct Ryi {
   #[command(subcommand)]
   pub cmd: Option<Cmd>,#[command(flatten)]
   pub file: FileArgs,
+  #[arg(long, global = true)]
+  pub fresh: bool,
 }
 
 #[derive(clap::Subcommand, Debug)]
 pub enum Cmd {
-  #[doc = "Serve the HTTP contract"]
-  Serve(ServeArgs),
+  #[doc = "Extract file facts with the root flags"]
+  Extract(ExtractArgs),
   #[doc = "Syntax-only whole-project facts (no compiler)"]
   Fast(FastArgs),
   #[doc = "The SCIP oracle written as fast's tables"]
@@ -58,64 +57,4 @@ pub enum Cmd {
   Schema,
   #[doc = "Print the last N runs from the trail"]
   Trail(TrailArgs),
-}
-
-pub fn run(cli: Ryi, input: &mut dyn BufRead, out: &mut dyn Write) -> OpResult<()> {
-  match cli.cmd {
-          Some(Cmd::Serve(_)) => { return Err(crate::ops_auto::OpError("serve cannot run as an operation".into(), 2)); }
-          Some(Cmd::Fast(args)) => { write_stream(out, crate::ops::fast(&args))?; }
-          Some(Cmd::Slow(args)) => { write_stream(out, crate::ops::slow(&args))?; }
-          Some(Cmd::Scip(args)) => { write_stream(out, crate::ops::scip(&args))?; }
-          Some(Cmd::Graph(args)) => { write_stream(out, crate::ops::graph(&args))?; }
-          Some(Cmd::Cleave(args)) => { write_json(out, &crate::ops::cleave(&args)?)?; }
-          Some(Cmd::Move(args)) => { write_json(out, &crate::ops::r#move(&args)?)?; }
-          Some(Cmd::Rename(args)) => { write_json(out, &crate::ops::rename(&args)?)?; }
-          Some(Cmd::Query(args)) => { write_stream(out, crate::ops::query(&args))?; }
-          Some(Cmd::Region(args)) => { write_json(out, &crate::ops::region(&args)?)?; }
-          Some(Cmd::Watch(args)) => { write_stream(out, crate::ops::watch(&args))?; }
-          Some(Cmd::Diff(args)) => { write_stream(out, crate::ops::diff(&args))?; }
-          Some(Cmd::Ingest(args)) => { write_json(out, &crate::ops::ingest(&args, read_jsonl(&mut *input))?)?; }
-          Some(Cmd::Schema) => { let args = Default::default(); write_json(out, &crate::ops::schema(&args)?)?; }
-          Some(Cmd::Trail(args)) => { write_json(out, &crate::ops::trail(&args)?)?; }
-          None => { let _ = cli.file; }
-  }
-  Ok(())
-}
-
-pub fn main(cli: Ryi) -> std::process::ExitCode {
-  let stdin = std::io::stdin();
-  let stdout = std::io::stdout();
-  match run(cli, &mut stdin.lock(), &mut stdout.lock()) {
-      Ok(()) => std::process::ExitCode::SUCCESS,
-      Err(e) => {
-          eprintln!("error: {e}");
-          std::process::ExitCode::FAILURE
-      }
-  }
-}
-
-fn write_json<T: serde::Serialize>(out: &mut dyn Write, value: &T) -> OpResult<()> {
-    serde_json::to_writer(&mut *out, value)?;
-    out.write_all(b"\n")?;
-    Ok(())
-}
-
-pub fn write_stream<T: serde::Serialize>(out: &mut dyn Write, items: impl Iterator<Item = OpResult<T>>) -> OpResult<()> {
-    let mut rows = 0u64;
-    for item in items {
-        match item {
-            Ok(value) => { write_json(out, &value)?; rows += 1; }
-            Err(error) => {
-                write_json(out, &serde_json::json!({"error": &error.0}))?;
-                write_json(out, &serde_json::json!({"complete": false, "rows": rows}))?;
-                return Err(error);
-            }
-        }
-    }
-    write_json(out, &serde_json::json!({"complete": true, "rows": rows}))?;
-    Ok(())
-}
-
-fn read_jsonl<'a, T: serde::de::DeserializeOwned>(input: &'a mut dyn BufRead) -> impl Iterator<Item = OpResult<T>> + 'a {
-    input.lines().map(|line| Ok(serde_json::from_str(&line?)?))
 }
