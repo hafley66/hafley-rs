@@ -702,19 +702,19 @@ fn scip_verify_reports_a_declaration_the_index_defines_nowhere() {
     assert_untouched(&fixture, EXPORTS);
 }
 
-/// The flag reports and does nothing else. Two commits over the same tree, one
+/// `--verify-scip` with `--no-scip-merge` reports and does nothing else. Two commits over the same tree, one
 /// that DISAGREES, with and without the flag: the plan lines match, the staged
 /// diffs match, and the two committed trees are byte-identical. The exit code
 /// is inside the claim, because `rename_verb` asserts success on both runs.
 #[test]
-fn scip_verify_never_changes_the_plan() {
+fn scip_verify_without_merge_never_changes_the_plan() {
     let verified = fixture_plus("scip_same_on", "src/ns.ts", NAMESPACE_IMPORTER);
     let index = scip_index(&verified.root);
     let with = rename_verb(
         &verified,
         &format!("{EXPORTS_ANCHOR}#Foo"),
         "Baz",
-        &["--verify-scip", &index_arg(&index), "--commit"],
+        &["--verify-scip", &index_arg(&index), "--no-scip-merge", "--commit"],
     );
     let plain = fixture_plus("scip_same_off", "src/ns.ts", NAMESPACE_IMPORTER);
     let without = rename_verb(

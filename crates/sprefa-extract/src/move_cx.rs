@@ -30,6 +30,7 @@ pub const SKIP_DIRS: [&str; 4] = [".git", "target", "node_modules", ".boop-workt
 /// by contract and carries no worktree root, while a move resolves against
 /// on-disk truth through `oxc_resolver`.
 /// @comment-ok: the ProjectCx split is a decision the signature cannot show
+#[derive(Clone)]
 pub struct MoveCx {
     root: PathBuf,
     files: Vec<String>,
@@ -37,6 +38,8 @@ pub struct MoveCx {
     moved: BTreeMap<String, String>,
     shim: bool,
     relocate_mod: bool,
+    /// Texts a batch already rewrote in memory, read before the disk.
+    overlay: BTreeMap<String, String>,
 }
 
 impl MoveCx {
@@ -73,6 +76,7 @@ impl MoveCx {
             moved: BTreeMap::new(),
             shim: false,
             relocate_mod: false,
+            overlay: BTreeMap::new(),
         })
     }
 
@@ -119,7 +123,38 @@ impl MoveCx {
     }
 
     pub fn read(&self, rel: &str) -> Option<Vec<u8>> {
-        std::fs::read(self.abs(rel)).ok()
+        match self.overlay.get(rel) {
+            Some(text) => Some(text.clone().into_bytes()),
+            None => std::fs::read(self.abs(rel)).ok(),
+        }
+    }
+
+    /// `rel` now holds `text` for every later read; a new path joins the corpus.
+    pub fn overlay(&mut self, rel: &str, text: String) {
+        if self.present.insert(rel.to_string()) {
+            self.files.push(rel.to_string());
+            self.files.sort();
+        }
+        self.overlay.insert(rel.to_string(), text);
+    }
+
+    /// The batch's rewritten texts, path order.
+    pub fn overlaid(&self) -> &BTreeMap<String, String> {
+        &self.overlay
+    }
+
+    /// A path whose bytes are `rel`'s current text: the file itself, or a copy
+    /// under `scratch` when the batch rewrote it, for readers that take paths.
+    pub fn materialize(&self, rel: &str, scratch: &Path) -> Result<PathBuf, String> {
+        let Some(text) = self.overlay.get(rel) else {
+            return Ok(self.abs(rel));
+        };
+        let path = scratch.join(rel);
+        if let Some(parent) = path.parent() {
+            std::fs::create_dir_all(parent).map_err(|error| format!("mkdir {}: {error}", parent.display()))?;
+        }
+        std::fs::write(&path, text).map_err(|error| format!("write {}: {error}", path.display()))?;
+        Ok(path)
     }
 
     pub fn text(&self, rel: &str) -> Option<String> {

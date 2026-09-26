@@ -322,11 +322,15 @@ pub struct GraphArgs {
 
 #[derive(Args)]
 pub struct CleaveArgs {
-    /// SRC#ITEM
-    pub target: String,
+    /// SRC#ITEM (omit with --list)
+    pub target: Option<String>,
 
-    /// Destination file (created if missing)
-    pub dest: PathBuf,
+    /// Destination file, created if missing (omit with --list)
+    pub dest: Option<PathBuf>,
+
+    /// TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage
+    #[arg(long, conflicts_with_all = ["target", "dest", "json"])]
+    pub list: Option<PathBuf>,
 
     /// Corpus root (default: git root of SRC)
     #[arg(long)]
@@ -435,9 +439,13 @@ pub struct RenameArgs {
     #[arg(long)]
     pub text_refs: bool,
 
-    /// Cross-check the plan against this SCIP index (report only)
+    /// SCIP index (default ROOT/index.scip): its seats join the plan
     #[arg(long, value_name = "INDEX")]
     pub verify_scip: Option<PathBuf>,
+
+    /// Only report the SCIP diff; keep the syntax plan as is
+    #[arg(long)]
+    pub no_scip_merge: bool,
 
     /// End with one JSON line of abstains
     #[arg(long)]

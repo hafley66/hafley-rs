@@ -1844,6 +1844,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
                 self.declare_fields(named, &variant_owner);
             }
         }
+        syn::visit::visit_item_enum(self, node);
     }
 }
 

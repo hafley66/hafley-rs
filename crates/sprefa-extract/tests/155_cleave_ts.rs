@@ -328,8 +328,8 @@ fn a_helper_the_source_still_uses_is_exported_not_moved() {
 #[test]
 fn a_non_typescript_source_names_the_out_of_scope_list() {
     let fixture = fixture("basic", "scope");
-    std::fs::write(fixture.root.join("src/lib.rs"), "pub fn boot() {}\n").unwrap();
-    let (code, _) = run_cleave(&fixture, &["src/lib.rs#boot", "src/other.rs"]);
+    std::fs::write(fixture.root.join("src/boot.py"), "def boot():\n    pass\n").unwrap();
+    let (code, _) = run_cleave(&fixture, &["src/boot.py#boot", "src/other.py"]);
     assert_eq!(code, Some(2), "a path no arm owns is a plan error");
 }
 

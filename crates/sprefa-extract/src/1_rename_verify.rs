@@ -1,7 +1,5 @@
-//! `--verify-scip <index.scip>`: a second opinion on a rename plan, read off a
-//! SCIP index. It REPORTS. It never changes the plan, the stages, or the exit
-//! code (user decision, 2026-08-27). No language is named here; the index and
-//! the plan decide everything.
+//! `--verify-scip <index.scip>` (default ROOT/index.scip): slow then fast. SCIP seats
+//! join the syntax plan, plan-only seats stay; `--no-scip-merge` only reports.
 //! @comment-ok: module header, the seam list every rename file opens with
 
 use std::collections::BTreeSet;
@@ -9,7 +7,7 @@ use std::path::Path;
 
 use sprefa_extract::scip::{byte_range_at, LineTable};
 use sprefa_extract::scip_decode::load_index;
-use sprefa_extract::{OccurrenceRole, RefRole, RenameCx, RenameRequest, ScipIndex, SymbolRef};
+use sprefa_extract::{OccurrenceRole, RefRole, RenameCx, RenameRequest, ScipIndex, Span, SymbolRef};
 
 /// One span in the corpus, as both sides of the diff spell it.
 type Site = (String, u32, u32);
@@ -38,29 +36,6 @@ pub struct ScipDisagreement {
     pub start: u32,
     pub end: u32,
     pub side: DisagreementSide,
-}
-
-/// Every disagreement one loaded index has with a whole batch's plan, in
-/// (file, offset, side) order. ONE load per run; the batch shares it.
-pub fn verify_plan(
-    cx: &RenameCx,
-    refs: &[Vec<SymbolRef>],
-    index_path: &Path,
-) -> Result<Vec<ScipDisagreement>, String> {
-    let index = load_index(index_path)
-        .map_err(|error| format!("verify-scip {}: {error}", index_path.display()))?;
-    let mut out = Vec::new();
-    for (request, found) in cx.batch().iter().zip(refs) {
-        out.extend(verify_against_scip(cx, &index, request, found)?);
-    }
-    out.sort_by(|left, right| {
-        (&left.file, left.start, left.side.as_str()).cmp(&(
-            &right.file,
-            right.start,
-            right.side.as_str(),
-        ))
-    });
-    Ok(out)
 }
 
 /// Where `index` and one request's plan disagree. An index answers about ONE
@@ -119,6 +94,44 @@ pub fn verify_against_scip(
         disagreements = out.len(),
         "rename scip verify"
     );
+    Ok(out)
+}
+
+/// SCIP-only seats join the plan; plan-only seats stay and are reported.
+/// Returns the unmerged diff; `merge = false` only reports.
+pub fn merge_scip(
+    cx: &RenameCx,
+    refs: &mut [Vec<SymbolRef>],
+    index_path: &Path,
+    merge: bool,
+) -> Result<Vec<ScipDisagreement>, String> {
+    let index = load_index(index_path)
+        .map_err(|error| format!("verify-scip {}: {error}", index_path.display()))?;
+    let mut out = Vec::new();
+    for (request, found) in cx.batch().iter().zip(refs.iter_mut()) {
+        let rows = verify_against_scip(cx, &index, request, found)?;
+        if merge {
+            for row in &rows {
+                let span = Span { start: row.start, len: row.end - row.start };
+                match row.side {
+                    DisagreementSide::ScipOnly => found.push(SymbolRef {
+                        file: row.file.clone(),
+                        span,
+                        role: RefRole::Read,
+                        text: request.old.clone(),
+                    }),
+                    // rust-analyzer indexes no token inside a `macro_rules!` body; dropping
+                    // those seats broke the build (measured), so fast-only seats stay planned.
+                    DisagreementSide::PlanOnly => {}
+                }
+            }
+            found.sort_by(|left, right| (&left.file, left.span.start).cmp(&(&right.file, right.span.start)));
+        }
+        out.extend(rows);
+    }
+    out.sort_by(|left, right| {
+        (&left.file, left.start, left.side.as_str()).cmp(&(&right.file, right.start, right.side.as_str()))
+    });
     Ok(out)
 }
 
