@@ -5,7 +5,7 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::read::project::{
-    conformance_edges, read_inputs, scip_conformances, ProjectError, ProjectInput,
+    conformance_edges, scip_conformances, ProjectError, ProjectInput,
     RawProjectFact, ResolveWithRawError,
 };
 use crate::read::scip::{byte_range_at, join_documents, LineTable};
@@ -39,10 +39,12 @@ pub fn slow_project_with_raw<E>(
     checkers: bool,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let mut inputs = read_inputs(files).map_err(ResolveWithRawError::Project)?;
-    for input in &mut inputs {
-        push_phase_one(input, push_raw)?;
-    }
+    let inputs = crate::read::project::read_inputs_streamed(
+        files,
+        false,
+        crate::read::project::Planes::All,
+        &mut |input| push_phase_one(input, push_raw),
+    )?;
     let mut facts = Vec::new();
     let index = match index {
         Some(path) => crate::read::scip_decode::load_index(path)

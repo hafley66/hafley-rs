@@ -19,7 +19,17 @@ use std::time::Instant;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
-static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static GLOBAL_ALLOCATOR: cap::Cap<mimalloc::MiMalloc> = cap::Cap::new(mimalloc::MiMalloc, usize::MAX);
+
+/// Heap ceiling: RYI_MAX_MEM_MB (default 2048, 0 = unlimited). Past it an
+/// allocation fails and the process aborts instead of eating the machine.
+#[cfg(feature = "mimalloc")]
+fn cap_memory() {
+    let mb: usize = std::env::var("RYI_MAX_MEM_MB").ok().and_then(|v| v.parse().ok()).unwrap_or(2048);
+    if mb > 0 {
+        let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
+    }
+}
 
 use clap::Parser as _;
 
@@ -27,7 +37,7 @@ use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
-    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, diet_scip_with_raw,
+    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl,
     dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
@@ -277,6 +287,8 @@ fn exit(code: i32) -> ! {
 static TRAIL_STATE: OnceLock<Arc<sprefa_extract::trace::SummaryState>> = OnceLock::new();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "mimalloc")]
+    cap_memory();
     let summary = sprefa_extract::trace::install();
     if let Some(state) = &summary {
         let _ = TRAIL_STATE.set(Arc::clone(state));
@@ -474,16 +486,15 @@ fn extract_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if tier == Tier::Fast {
         if output.database.is_some() {
-            let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
-                output
-                    .source_fact(raw.path, raw.content_id, &raw.fact)
-                    .map_err(|error| std::io::Error::other(error.to_string()))
-            };
-            let resolved = diet_scip_with_raw(&cli.paths, &mut push_raw)?;
-            output.clear_source()?;
-            for fact in resolved {
-                output.fact(&fact)?;
-            }
+            sprefa_extract::diet_scip_streamed(&cli.paths, &mut |row| {
+                match row {
+                    sprefa_extract::DietRow::Raw(raw) => output.source_fact(raw.path, raw.content_id, &raw.fact),
+                    sprefa_extract::DietRow::Resolved(fact) => {
+                        output.clear_source().and_then(|()| output.fact(&fact))
+                    }
+                }
+                .map_err(|error| std::io::Error::other(error.to_string()))
+            })?;
             return Ok(());
         }
         if cli.lines {

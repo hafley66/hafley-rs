@@ -88,12 +88,24 @@ impl RustSource {
         own: Option<&ContentId>,
         callee: &str,
     ) -> Option<(ContentId, Span)> {
+        Self::call_name_match_seen(output, index, own, callee, |_| true)
+    }
+
+    /// `call_name_match_in` over only the def sites `sees` admits: a name is
+    /// corpus-unique among the crates the caller can reach.
+    pub fn call_name_match_seen(
+        output: &RyiOutput,
+        index: &DefIndex,
+        own: Option<&ContentId>,
+        callee: &str,
+        sees: impl Fn(&ContentId) -> bool,
+    ) -> Option<(ContentId, Span)> {
         if let Some(found) = same_file_call_match(output, index, own, callee) {
             return Some(found);
         }
-        let sites = corpus_defs(index, callee);
+        let sites: Vec<&DefSite> = corpus_defs(index, callee).iter().filter(|site| sees(&site.blob)).collect();
         let mut blobs: Vec<ContentId> = Vec::new();
-        for site in sites {
+        for site in &sites {
             if !blobs.contains(&site.blob) {
                 blobs.push(site.blob.clone());
             }
@@ -112,6 +124,7 @@ impl RustSource {
     /// only defs whose file spells a module path ending in `a::b` are candidates.
     pub fn call_name_match_in_module(
         index: &DefIndex,
+        modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
         paths: &PathIndex,
         from: &str,
         qualifier: &[&str],
@@ -123,7 +136,10 @@ impl RustSource {
             .filter(|site| {
                 paths
                     .get(&site.blob)
-                    .is_some_and(|path| want.covers(&module_segments(path)))
+                    .is_some_and(|path| {
+                        want.covers(&module_segments(path))
+                            && modules.is_none_or(|m| m.sees_path(from, path))
+                    })
             })
             .collect();
         let mut blobs: Vec<&ContentId> = Vec::new();
@@ -559,7 +575,7 @@ impl Resolve<CallF> for RustSource {
                                 ))
                             }
                             _ => RustSource::call_name_match_in_module(
-                                def_index, paths, from, &qualifier, callee,
+                                def_index, modules, paths, from, &qualifier, callee,
                             )
                             .map(|(blob, span)| {
                                 (
@@ -599,7 +615,13 @@ impl Resolve<CallF> for RustSource {
                             })
                         })
                         .or_else(|| {
-                            RustSource::call_name_match_in(output, def_index, own.as_ref(), callee)
+                            if modules.zip(own_path).is_some_and(|(m, from)| m.binds_external(from, callee)) {
+                                return None;
+                            }
+                            let sees = |blob: &ContentId| {
+                                modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, blob))
+                            };
+                            RustSource::call_name_match_seen(output, def_index, own.as_ref(), callee, sees)
                                 .map(|(blob, span)| {
                                     (
                                         blob,

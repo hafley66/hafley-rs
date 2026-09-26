@@ -45,6 +45,21 @@ pub fn extracting_blob(content: &[u8]) -> Option<ContentId> {
 /// and the test treat that as "nothing to emit"). The arena(s) are owned inside
 /// `Source::extract`; nothing borrowed crosses this call. The result is the
 /// content-keyed cache's shared entry, so a second identical call skips the parse.
+/// `dispatch` without the content-keyed cache: a one-shot project read reuses
+/// no entry, so caching would only hold every file's output until exit.
+pub fn dispatch_uncached(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiOutput>> {
+    let src = source_for(path)?;
+    let span = tracing::info_span!("extract_file", path, lang = src.name(), bytes = content.len());
+    let _entered = span.enter();
+    let blob = content_id_of(content);
+    EXTRACTING.with(|slot| {
+        *slot.borrow_mut() = Some((content.as_ptr(), content.len(), blob));
+    });
+    let _clear_on_drop = ExtractingGuard;
+    crate::read::cache::EXTRACTIONS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    Some(Arc::new(src.extract(path, content, mask)))
+}
+
 pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiOutput>> {
     let Some(src) = source_for(path) else {
         tracing::warn!(path, "no Source matches this path; nothing to emit");

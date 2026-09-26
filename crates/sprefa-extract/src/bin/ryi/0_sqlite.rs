@@ -15,6 +15,9 @@ pub const DDL: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/schema/generated/4_facts.sql"
 ));
+#[path = "0a_bind.rs"]
+mod bind;
+
 pub mod writers {
     include!(concat!(
         env!("CARGO_MANIFEST_DIR"),
@@ -23,7 +26,8 @@ pub mod writers {
 }
 
 pub struct Database {
-    connection: Connection,
+    /// On this thread, or inside the writer thread while an export streams.
+    slot: bind::Slot,
     /// Both `None` for an in-memory store: nothing to sync, nothing to publish.
     temporary: Option<tempfile::NamedTempFile>,
     destination: Option<PathBuf>,
@@ -33,6 +37,7 @@ pub struct Database {
     pending: Vec<writers::Fact>,
     pending_bytes: usize,
     max_batch_rows: usize,
+    binder: bind::Binder,
 }
 
 const BATCH_BYTES: usize = 8 * 1024 * 1024;
@@ -154,25 +159,27 @@ impl Database {
     /// facts, queries the views, and drops the lot.
     pub fn memory() -> Result<Self> {
         let connection = Connection::open_in_memory()?;
-        Self::furnish(connection, None, None)
+        Self::furnish(connection, None, None, false)
     }
 
     /// The connection the graph views are queried through.
     pub fn connection(&self) -> &Connection {
-        &self.connection
+        self.slot.get().expect("Database::flush lands rows before a query")
     }
 
     /// Land every pending row so a query on this connection sees it.
     pub fn flush(&mut self) -> Result<()> {
-        self.flush_pending()
+        self.flush_pending()?;
+        self.binder.flush(&mut self.slot)
     }
 
     /// Commit, and publish the staging file when there is one. Returns the
     /// published path so `finish` can report it; silent otherwise.
     pub fn close(mut self) -> Result<Option<PathBuf>> {
-        self.flush_pending()?;
-        self.connection.execute_batch("COMMIT;")?;
-        self.connection.close().map_err(|(_, error)| error)?;
+        self.flush()?;
+        let connection = std::mem::replace(&mut self.slot, bind::Slot::Moving).into_local()?;
+        connection.execute_batch("COMMIT;")?;
+        connection.close().map_err(|(_, error)| error)?;
         let (Some(temporary), Some(destination)) = (self.temporary, self.destination) else {
             return Ok(None);
         };
@@ -186,18 +193,24 @@ impl Database {
         connection: Connection,
         temporary: Option<tempfile::NamedTempFile>,
         destination: Option<PathBuf>,
+        threaded: bool,
     ) -> Result<Self> {
-        connection.set_prepared_statement_cache_capacity(writers::TABLE_COUNT);
+        connection.set_prepared_statement_cache_capacity(4 * writers::TABLE_COUNT);
         connection.busy_timeout(Duration::from_secs(5))?;
+        // A private staging file: nothing reads it before the commit and the
+        // publish, and a failed run discards it, so no journal and no fsync.
         connection.execute_batch(
-            "PRAGMA foreign_keys=ON; PRAGMA journal_mode=DELETE; BEGIN IMMEDIATE;",
+            "PRAGMA page_size=65536; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
+             PRAGMA cache_size=-16384; PRAGMA temp_store=MEMORY; BEGIN IMMEDIATE;",
         )?;
         connection.execute_batch(DDL)?;
         connection.execute_batch(&span_lines_view_sql(&connection)?)?;
         connection.execute_batch(&graph_views_sql())?;
         let max_batch_rows = writers::max_batch_rows(&connection)?;
+        let binder = bind::Binder::new(&connection, threaded)?;
         Ok(Self {
-            connection,
+            binder,
+            slot: bind::Slot::Local(connection),
             temporary,
             destination,
             rows: 0,
@@ -232,6 +245,7 @@ impl Database {
             connection,
             Some(temporary),
             Some(std::path::absolute(path)?),
+            true,
         )
     }
 
@@ -255,9 +269,24 @@ impl Database {
         Ok(())
     }
 
+    /// Untrusted JSON: the typed writers validate every field before it lands.
     pub fn insert(&mut self, value: Value) -> Result<()> {
         let encoded = serde_json::to_vec(&value)?;
         self.insert_fact(serde_json::from_slice(&encoded)?, encoded.len())
+    }
+
+    /// One row this process serialized from a typed fact, straight into its
+    /// table's buffer. Pending writer rows land first: both number off `rows`.
+    pub fn bind_row(&mut self, row: &impl Serialize) -> Result<()> {
+        self.flush_pending()?;
+        self.rows = self.rows.checked_add(1).ok_or("SQLite row counter overflow")?;
+        self.binder.push(
+            &mut self.slot,
+            self.rows,
+            self.input_path.as_deref(),
+            self.content_id.as_deref(),
+            row,
+        )
     }
 
     pub fn insert_fact(&mut self, fact: writers::Fact, encoded_bytes: usize) -> Result<()> {
@@ -291,7 +320,7 @@ impl Database {
         }
         let first_row = self.rows - i64::try_from(self.pending.len())? + 1;
         writers::insert_all(
-            &self.connection,
+            self.slot.local()?,
             &writers::Source {
                 row: first_row,
                 input_path: self.input_path.as_deref(),
@@ -421,8 +450,7 @@ impl Output {
          if db.input_path.as_deref() != Some(path) {
              db.source(path, content_id.to_string())?;
          }
-         let encoded = serde_json::to_vec(fact)?;
-         db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len())
+         db.bind_row(fact)
      }
     pub fn clear_source(&mut self) -> Result<()> {
         if let Some(db) = &mut self.database {
@@ -432,8 +460,7 @@ impl Output {
     }
     pub fn fact(&mut self, fact: &impl Serialize) -> Result<()> {
         if let Some(db) = &mut self.database {
-            let encoded = serde_json::to_vec(fact)?;
-            return db.insert_fact(serde_json::from_slice(&encoded)?, encoded.len());
+            return db.bind_row(fact);
         }
         self.write_stdout(&serde_json::to_vec(fact)?)
     }
@@ -535,7 +562,7 @@ impl Output {
      }
      pub fn flush(&mut self) -> Result<()> {
          if let Some(db) = &mut self.database {
-             db.flush_pending()?;
+             db.flush()?;
          }
          self.stdout.flush()?;
          Ok(())
@@ -624,7 +651,7 @@ mod tests {
     }
     fn stored_rows(database: &Database) -> i64 {
         database
-            .connection
+            .connection()
             .query_row("SELECT count(*) FROM protocol", [], |row| row.get(0))
             .unwrap()
     }
