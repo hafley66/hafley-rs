@@ -1,6 +1,6 @@
 # ryi daemon split, code-only receipt
 
-Branches: `feature/the-gang-splits-the-daemon` in both worktrees. Hafley TSP commits: `a8ddbed`, `fe1971a`. Hafley RS code commits: `bbe725bc`, `acf887c2`. The final hafley-rs commit adds this report.
+Branches: `feature/the-gang-splits-the-daemon` in both worktrees. Hafley TSP commits: `a8ddbed`, `fe1971a`, `6ae2a73`. Hafley RS code commits: `bbe725bc`, `acf887c2`, `25b0c277`. The final hafley-rs commit updates this report.
 
 ## State
 
@@ -17,7 +17,7 @@ Code was edited without `cargo`, `pnpm`, `tsp compile`, `node`, `just`, ryi, or 
 
 ### hafley-rs
 
-- `Cargo.lock`, `crates/ryi/{Cargo.toml,build.rs,src/main.rs,tests/0_help.rs}`: thin crate, shared generated modules, hyper HTTP/1 Unix client, fresh child mode.
+- `Cargo.lock`, `crates/ryi/{Cargo.toml,build.rs,src/main.rs,tests/0_help.rs}`: thin crate, shared generated modules, hyper HTTP/1 Unix client, fresh server exec mode.
 - `crates/sprefa-extract/{Cargo.toml,Cargo.lock}`, `src/bin/ryi.rs`, `src/bin/ryi/{1_inputs.rs,ops.rs}`: renamed server binary, daemon and one-shot entry, request-root context, raw row forwarding.
 - `crates/sprefa-extract/schema/cli/{ops.tsp,0_gen.py}`: reduced contract and generated-file roster.
 - `crates/sprefa-extract/src/bin/ryi/gen/{cli_auto.rs,ops_auto.rs,client_auto.rs,daemon_auto.rs,server_auto.rs,models/inputs.rs,models/file_args.rs}`: hand-written generated files. Both crates include this one model and argument module set. `gen/http_auto.rs` and `src/bin/ryi/2_serve.rs` were removed.
