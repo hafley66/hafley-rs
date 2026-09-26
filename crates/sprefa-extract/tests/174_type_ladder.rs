@@ -27,6 +27,33 @@ fn ryi(args: &[&str]) {
 }
 
 #[test]
+fn residual_type_candidates_have_declared_targets() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_scope/src", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: Vec<String> = conn.prepare(
+        "select distinct kind, owner_name,
+           replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') target_file,
+           target_name from resolved_type_edge
+         where owner_path like '%/_15_residual.rs'
+         order by kind, owner_name, target_file, target_name"
+    ).unwrap().query_map([], |row| Ok(format!("{} {} -> {}:{}",
+        row.get::<_, String>(0)?, row.get::<_, String>(1)?,
+        row.get::<_, String>(2)?, row.get::<_, String>(3)?)))
+    ).unwrap().collect::<Result<_, _>>().unwrap();
+    assert_eq!(rows.join("\n"), "\
+generic NestedGeneric -> _15_residual.rs:ResidualTarget
+impl Residual -> _15_residual.rs:AliasSlot
+impl Shared -> _0_alias.rs:SharedTrait
+param cross_module -> _0_alias.rs:Shared
+param explicit -> _15_residual.rs:Residual
+uses Item -> _15_residual.rs:ResidualTarget
+uses Residual -> _15_residual.rs:Residual
+uses Shared -> _0_alias.rs:Shared");
+}
+
+#[test]
 fn type_ladder_fast_and_slow() {
     let scratch = tempfile::tempdir().unwrap();
     let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
@@ -42,6 +69,7 @@ fn type_ladder_fast_and_slow() {
     assert_eq!(
         table,
         "\
+_1_none.rs  returns  clone         -> _1_none.rs:NoField fs
 _1_none.rs  uses     NoField       -> _1_none.rs:NoField f-
 _2_one.rs   field    OneField      -> _0_types.rs:A  fs
 _2_one.rs   field    OneVariant    -> _0_types.rs:A  fs
@@ -51,6 +79,7 @@ _2_one.rs   generic  one_bound     -> _0_types.rs:T  fs
 _2_one.rs   impl     OneField      -> _0_types.rs:T  fs
 _2_one.rs   param    from          -> _0_types.rs:A  fs
 _2_one.rs   param    one_param     -> _0_types.rs:A  fs
+_2_one.rs   returns  from          -> _2_one.rs:OneField fs
 _2_one.rs   returns  one_return    -> _0_types.rs:A  fs
 _2_one.rs   uses     OneAlias      -> _0_types.rs:A  fs
 _2_one.rs   uses     OneField      -> _2_one.rs:OneField f-
@@ -283,4 +312,98 @@ fn type_scope_ladder_follows_crate_module_reexport() {
         |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
     ).unwrap();
     assert_eq!(rows, (1, 1, 1, 0));
+}
+
+#[test]
+fn type_scope_ladder_resolves_impl_self_references() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_scope/src", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'wrap'
+              and target_name = 'SelfType' and target_path like '%/_13_self.rs'),
+           (select count(*) from resolved_type_edge where owner_name = 'annotate'
+              and target_name = 'SelfType' and target_path like '%/_13_self.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (2, 1));
+}
+
+#[test]
+fn type_scope_ladder_collects_expression_type_arguments() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_scope/src", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'turbofish'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),
+           (select count(*) from resolved_type_edge where owner_name = 'turbofish'
+              and target_name = 'String' and target_path like '%/_12_other.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 0));
+}
+
+#[test]
+fn displaced_module_types_respect_cargo_package_roots() {
+    let relative = "tests/fixtures/rust_rename".to_string();
+    let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
+    for src in [relative, absolute] {
+        let scratch = tempfile::tempdir().unwrap();
+        let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+        ryi(&["fast", &src, "--sqlite", &fast]);
+        let conn = rusqlite::Connection::open(&fast).unwrap();
+        let rows: (i64, i64) = conn.query_row(
+            "select
+           (select count(*) from resolved_type_edge where owner_name = 'build'
+              and owner_path like '%/path/after/src/lib.rs' and target_name = 'Tool'
+              and target_path like '%/path/after/src/elsewhere/impl.rs'),
+           (select count(*) from resolved_type_edge where owner_name = 'build'
+              and owner_path like '%/path/after/src/lib.rs' and target_name = 'Tool'
+              and target_path like '%/fnuse/after/src/util.rs')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap();
+        // These files in separate Cargo packages have identical bytes and
+        // share a content ID. The emitted path cannot identify which package
+        // supplied that ID, so the sibling package cannot be the target.
+        assert_eq!(rows, (0, 0), "{src}");
+    }
+}
+
+#[test]
+fn cargo_package_and_qualified_type_boundaries() {
+    let relative = "tests/fixtures/rust_visibility".to_string();
+    let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
+    for source in [relative, absolute] {
+        let scratch = tempfile::tempdir().unwrap();
+        let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+        ryi(&["fast", &source, "--sqlite", &fast]);
+        let conn = rusqlite::Connection::open(&fast).unwrap();
+        let count = |owner: &str, target: &str, source_suffix: &str, target_suffix: &str| -> i64 {
+            conn.query_row(
+                "select count(*) from resolved_type_edge where owner_name = ?1 and target_name = ?2
+                   and owner_path like '%' || ?3 and target_path like '%' || ?4",
+                rusqlite::params![owner, target, source_suffix, target_suffix],
+                |row| row.get(0),
+            ).unwrap()
+        };
+        let lib = "/rust_visibility/app/src/lib.rs";
+        assert_eq!(count("normal_type_probe", "NormalType", lib, "/normal_dep/src/lib.rs"), 1);
+        assert_eq!(count("dev_type_probe", "DevType", lib, "/dev_dep/src/lib.rs"), 0);
+        assert_eq!(count("build_type_probe", "BuildType", lib, "/build_dep/src/lib.rs"), 0);
+        assert_eq!(count("build_type_probe", "BuildType", "/rust_visibility/app/build.rs", "/build_dep/src/lib.rs"), 1);
+        assert_eq!(count("dev_probe", "DevType", "/rust_visibility/app/tests/0_dev.rs", "/dev_dep/src/lib.rs"), 1);
+        assert_eq!(count("ForeignSlot", "Item", lib, "/dev_dep/src/lib.rs"), 0);
+        assert_eq!(count("LocalSlot", "Item", lib, lib), 1);
+        assert_eq!(count("wrong_branch", "Widget", lib, "/rust_visibility/app/src/c/0_b.rs"), 0);
+        assert_eq!(count("missing_branch", "Widget", lib, "/rust_visibility/app/src/c/0_b.rs"), 0);
+        assert_eq!(count("right_branch", "Widget", lib, "/rust_visibility/app/src/c/0_b.rs"), 1);
+    }
 }

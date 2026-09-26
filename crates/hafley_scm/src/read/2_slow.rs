@@ -304,19 +304,104 @@ fn site_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
     facts
 }
 
+struct ImplSelfBinding {
+    block: Span,
+    name: String,
+    symbol: SymbolId,
+}
+
+/// The impl header's self-type token carries the declaration's actual SCIP
+/// symbol, including its declaring module. Pair it with the enclosing block
+/// so a later `Self` occurrence uses that token's symbol.
+fn impl_self_bindings(index: &ScipIndex, doc: &Doc<'_>) -> Vec<ImplSelfBinding> {
+    use syn::spanned::Spanned;
+    use syn::visit::Visit;
+
+    struct Heads<'a> {
+        lines: &'a [u32],
+        rows: Vec<(Span, Span, String)>,
+    }
+    impl<'ast> Visit<'ast> for Heads<'_> {
+        fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+            if let syn::Type::Path(path) = hafley_scm::lang::rust::strip_type(&item.self_ty) {
+                if path.qself.is_none() {
+                    if let Some(head) = path.path.segments.last() {
+                        self.rows.push((
+                            crate::read::lang::rust::syn_span(self.lines, item.span()),
+                            crate::read::lang::rust::syn_span(self.lines, head.ident.span()),
+                            head.ident.to_string(),
+                        ));
+                    }
+                }
+            }
+            syn::visit::visit_item_impl(self, item);
+        }
+    }
+
+    let Ok(source) = std::str::from_utf8(doc.content) else { return Vec::new() };
+    let Ok(parsed) = hafley_scm::lang::rust::parse_rust_syntax(source) else { return Vec::new() };
+    let mut heads = Heads { lines: &parsed.line_starts, rows: Vec::new() };
+    heads.visit_file(&parsed.file);
+    let header_symbols: HashMap<(u32, u32), SymbolId> = index.documents[doc.ix].occurrences.iter()
+        .filter(|occurrence| !occurrence.roles.contains(OccurrenceRole::DEFINITION)
+            && index.symbol(occurrence.symbol).ends_with('#'))
+        .filter_map(|occurrence| {
+            let span = span_of(doc, index, occurrence.range)?;
+            Some(((span.start, span.end()), occurrence.symbol))
+        })
+        .collect();
+    heads.rows.into_iter().filter_map(|(block, head, name)| {
+        let symbol = *header_symbols.get(&(head.start, head.end()))?;
+        Some(ImplSelfBinding { block, name, symbol })
+    }).collect()
+}
+
+fn impl_self_type_symbol(
+    symbol: &str,
+    site: Span,
+    bindings: &[ImplSelfBinding],
+    defs: &Defs,
+) -> Option<SymbolId> {
+    let (_, rest) = symbol.split_once("/impl#[")?;
+    let (self_type, tail) = rest.split_once(']')?;
+    if !tail.is_empty() && !(tail.starts_with('[') && tail.ends_with(']')) {
+        return None;
+    }
+    bindings.iter()
+        .filter(|binding| binding.name == self_type
+            && binding.block.start <= site.start && site.end() <= binding.block.end()
+            && defs.contains_key(&binding.symbol))
+        .min_by_key(|binding| binding.block.len)
+        .map(|binding| binding.symbol)
+}
+
 /// One `resolved_type_edge` per parse type-edge candidate: the first type
 /// reference inside the owner spelling the candidate's name names the target.
 fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
     let Some(types) = doc.input.output.types.as_ref() else { return Vec::new() };
     let strings = &doc.input.output.strings;
+    let impl_bindings = impl_self_bindings(index, doc);
     let mut refs: Vec<(Span, SymbolId)> = index.documents[doc.ix]
         .occurrences
         .iter()
         .filter(|occurrence| {
             !occurrence.roles.contains(OccurrenceRole::DEFINITION)
-                && index.symbol(occurrence.symbol).ends_with('#')
+                && (index.symbol(occurrence.symbol).ends_with('#')
+                    || index.symbol(occurrence.symbol).contains("/impl#["))
         })
-        .filter_map(|occurrence| Some((span_of(doc, index, occurrence.range)?, occurrence.symbol)))
+        .filter_map(|occurrence| {
+            let span = span_of(doc, index, occurrence.range)?;
+            let symbol = index.symbol(occurrence.symbol);
+            if symbol.ends_with('#') {
+                return Some((span, occurrence.symbol));
+            }
+            // rust-analyzer uses the impl descriptor for a `Self` reference.
+            // The impl header's own reference supplies the declaration symbol.
+            if doc.content.get(span.start as usize..span.end() as usize) != Some(&b"Self"[..]) {
+                return None;
+            }
+            impl_self_type_symbol(symbol, span, &impl_bindings, defs).map(|target| (span, target))
+        })
         .collect();
     refs.sort_by_key(|(span, _)| (span.start, span.end()));
     // An owner span is its name; the owner's text runs to the next owner's name.
@@ -341,8 +426,11 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
                     text(span) == Some(bare.as_bytes()) && line_of(doc.content, *span).windows(name.len()).any(|w| w == name)
                 })
             }
-            _ => refs.iter().find(|(span, _)| {
-                span.start >= owner.start && span.end() <= until && text(span) == Some(bare.as_bytes())
+            _ => refs.iter().find(|(span, symbol)| {
+                span.start >= owner.start && span.end() <= until
+                    && (text(span) == Some(bare.as_bytes())
+                        || (text(span) == Some(&b"Self"[..])
+                            && descriptor_name(index.symbol(*symbol)).as_deref() == Some(bare)))
             }),
         };
         let Some(&(_, symbol)) = hit else { continue };
@@ -510,4 +598,32 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
             _ => false,
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn impl_self_descriptor_uses_the_header_reference_across_modules() {
+        let symbol = "rust-analyzer cargo soopy 0.1.0 other/impl#[Shared][Trait]";
+        let header = ImplSelfBinding {
+            block: Span { start: 0, len: 80 },
+            name: "Shared".to_string(),
+            symbol: SymbolId(1),
+        };
+        let site = Span { start: 40, len: 4 };
+        let wrong_same_name = ("other/Shared".to_string(), Span::anchor(3));
+        let declared_elsewhere = ("declaration/Shared".to_string(), Span::anchor(7));
+        let rows = [
+            (Defs::from([(SymbolId(2), wrong_same_name.clone())]), None),
+            (Defs::from([
+                (SymbolId(1), declared_elsewhere),
+                (SymbolId(2), wrong_same_name),
+            ]), Some(SymbolId(1))),
+        ];
+        for (definitions, expected) in rows {
+            assert_eq!(impl_self_type_symbol(symbol, site, std::slice::from_ref(&header), &definitions), expected);
+        }
+    }
 }

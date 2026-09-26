@@ -183,7 +183,7 @@ fn collect(
                 retain_non_generic(&item.generics, &mut candidates);
                 groups.push(TypeCandidateGroup {
                     owner: TypeCandidateOwner::Impl {
-                        primary_name,
+                        primary_name: primary_name.clone(),
                         bare_head,
                     },
                     candidates,
@@ -192,6 +192,23 @@ fn collect(
                     if let syn::ImplItem::Fn(method) = child {
                         let mut candidates = signature_candidates(&method.sig);
                         candidates.extend(body_type_candidates(&method.block));
+                        for arg in &method.sig.inputs {
+                            if let syn::FnArg::Typed(arg) = arg {
+                                self_type_candidate(&arg.ty, &primary_name, TypeCandidateKind::Param, &mut candidates);
+                            } else if let syn::FnArg::Receiver(receiver) = arg {
+                                if receiver.colon_token.is_some() {
+                                    self_type_candidate(&receiver.ty, &primary_name, TypeCandidateKind::Param, &mut candidates);
+                                }
+                            }
+                        }
+                        if let syn::ReturnType::Type(_, ty) = &method.sig.output {
+                            self_type_candidate(ty, &primary_name, TypeCandidateKind::Returns, &mut candidates);
+                        }
+                        let mut self_refs = SelfRefWalk::default();
+                        self_refs.visit_block(&method.block);
+                        if self_refs.found {
+                            candidates.push(TypeCandidateRow { to: primary_name.clone(), kind: TypeCandidateKind::Uses });
+                        }
                         retain_non_generic(&item.generics, &mut candidates);
                         retain_non_generic(&method.sig.generics, &mut candidates);
                         groups.push(declared(
@@ -201,13 +218,6 @@ fn collect(
                         ));
                     }
                     if let syn::ImplItem::Type(assoc) = child {
-                        if matches!(&assoc.ty, Type::Path(path)
-                            if path.qself.is_none() && path.path.segments.len() == 1
-                                && path.path.segments.first().is_some_and(|segment| {
-                                    matches!(segment.arguments, syn::PathArguments::None)
-                                })) {
-                            continue;
-                        }
                         let mut candidates: Vec<_> = type_refs(&assoc.ty).into_iter().map(|to| TypeCandidateRow {
                             to,
                             kind: TypeCandidateKind::Uses,
@@ -244,11 +254,53 @@ fn collect(
 }
 
 #[derive(Default)]
+struct SelfRefWalk { found: bool }
+
+impl<'ast> Visit<'ast> for SelfRefWalk {
+    fn visit_type_path(&mut self, ty: &'ast syn::TypePath) {
+        if ty.qself.is_none() && ty.path.is_ident("Self") {
+            self.found = true;
+        }
+        syn::visit::visit_type_path(self, ty);
+    }
+
+    fn visit_item(&mut self, _: &'ast syn::Item) {}
+}
+
+fn self_type_candidate(
+    ty: &Type,
+    primary_name: &str,
+    kind: TypeCandidateKind,
+    candidates: &mut Vec<TypeCandidateRow>,
+) {
+    let mut refs = SelfRefWalk::default();
+    refs.visit_type(ty);
+    if refs.found {
+        candidates.push(TypeCandidateRow { to: primary_name.to_owned(), kind });
+    }
+}
+
+#[derive(Default)]
 struct BodyTypeWalk {
     candidates: Vec<TypeCandidateRow>,
 }
 
 impl<'ast> Visit<'ast> for BodyTypeWalk {
+    fn visit_generic_argument(&mut self, arg: &'ast syn::GenericArgument) {
+        let ty = match arg {
+            syn::GenericArgument::Type(ty) => Some(ty),
+            syn::GenericArgument::AssocType(assoc) => Some(&assoc.ty),
+            _ => None,
+        };
+        if let Some(ty) = ty {
+            self.candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
+                to,
+                kind: TypeCandidateKind::Uses,
+            }));
+        }
+        syn::visit::visit_generic_argument(self, arg);
+    }
+
     fn visit_pat_type(&mut self, pat: &'ast syn::PatType) {
         self.candidates.extend(type_refs(&pat.ty).into_iter().map(|to| TypeCandidateRow {
             to,
@@ -310,8 +362,13 @@ fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
         Some((ident, trait_name))
     })).collect();
     for arg in &sig.inputs {
-        if let syn::FnArg::Typed(arg) = arg {
-            candidates.extend(type_refs(&arg.ty).into_iter().map(|to| TypeCandidateRow {
+        let ty = match arg {
+            syn::FnArg::Typed(arg) => Some(&*arg.ty),
+            syn::FnArg::Receiver(receiver) if receiver.colon_token.is_some() => Some(&*receiver.ty),
+            _ => None,
+        };
+        if let Some(ty) = ty {
+            candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
                 to: projection_trait(&to, &bounds),
                 kind: TypeCandidateKind::Param,
             }));
@@ -378,6 +435,12 @@ fn field_candidates(fields: &Fields, candidates: &mut Vec<TypeCandidateRow>) {
 fn generic_candidates(generics: &syn::Generics, candidates: &mut Vec<TypeCandidateRow>) {
     for param in &generics.params {
         if let GenericParam::Type(param) = param {
+            if let Some(default) = &param.default {
+                candidates.extend(type_refs(default).into_iter().map(|to| TypeCandidateRow {
+                    to,
+                    kind: TypeCandidateKind::Generic,
+                }));
+            }
             for bound in &param.bounds {
                 bound_candidate(bound, candidates);
             }
@@ -386,6 +449,10 @@ fn generic_candidates(generics: &syn::Generics, candidates: &mut Vec<TypeCandida
     if let Some(where_clause) = &generics.where_clause {
         for pred in &where_clause.predicates {
             if let WherePredicate::Type(pred) = pred {
+                candidates.extend(type_refs(&pred.bounded_ty).into_iter().map(|to| TypeCandidateRow {
+                    to,
+                    kind: TypeCandidateKind::Generic,
+                }));
                 for bound in &pred.bounds {
                     bound_candidate(bound, candidates);
                 }
