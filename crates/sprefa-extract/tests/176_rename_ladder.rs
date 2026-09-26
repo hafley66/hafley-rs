@@ -72,7 +72,7 @@ fn every_ladder_rename_compiles() {
         let (root_arg, state_arg) = (root.to_string_lossy(), state.to_string_lossy());
         let mut args = vec!["rename", &anchor, &renamed, "--root", &root_arg, "--state", &state_arg, "--commit"];
         args.extend(flag);
-        let (_, plan) = run(env!("CARGO_BIN_EXE_ryi"), &args, &root, &[]);
+        let (_, plan) = run(env!("CARGO_BIN_EXE_ryi-server"), &args, &root, &[]);
         let uses: usize = plan
             .lines()
             .filter_map(|line| line.strip_suffix(" uses")?.rsplit(' ').next()?.parse::<usize>().ok())

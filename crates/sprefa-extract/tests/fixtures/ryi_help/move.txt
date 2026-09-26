@@ -1,6 +1,6 @@
 Move a file and repair every specifier that names it
 
-Usage: ryi move [OPTIONS] [OLD] [NEW]
+Usage: ryi-server move [OPTIONS] [OLD] [NEW]
 
 Arguments:
   [OLD]  File to move (omit with --list)
@@ -16,4 +16,5 @@ Options:
       --relocate-mod             Move a Rust module's `mod` line instead of adding #[path]
       --verify <VERIFY>          Command to run after --commit; failure rolls back
       --text-refs                Report leftover old-path spellings in plain text
+      --daemon-client            Send this command to the resident daemon (ignored by the server binary)
   -h, --help                     Print help

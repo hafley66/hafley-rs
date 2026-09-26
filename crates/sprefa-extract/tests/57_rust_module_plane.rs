@@ -41,7 +41,7 @@ fn run(names: &[&str]) -> Vec<Value> {
     ];
     args.extend(names.iter().map(|name| format!("{CRATE_A}/{name}")));
     args.push(format!("{CRATE_B}/lib.rs"));
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(&args)
         .output()
@@ -345,7 +345,7 @@ fn barrel_corpus(dir: &Path, n: usize) -> Vec<String> {
 
 fn resolve_wall(args: &[String]) -> f64 {
     let start = Instant::now();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("--resolve")
         .arg("--arms")
         .arg("call")

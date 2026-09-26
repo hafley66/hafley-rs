@@ -6,6 +6,7 @@
 use crate::cli::GraphArgs;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -375,9 +376,9 @@ impl GradeSplit {
     }
 }
 
-fn emit_rows(rows: &[FlatFact]) -> Result<(), Box<dyn std::error::Error>> {
+fn emit_rows(rows: &[FlatFact], output: &mut dyn std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
     for row in rows {
-        println!("{}", serde_json::to_string(row)?);
+        writeln!(output, "{}", serde_json::to_string(row)?)?;
     }
     Ok(())
 }
@@ -488,8 +489,7 @@ impl Arm<'_> {
         match answer {
             Err(_) if deadline.expired() => {
                 // @eprintln-ok: CLI-UX stop, off the fact stream, exit 3.
-                eprintln!("graph: query exceeded {secs}s");
-                crate::exit(3);
+                Err(crate::RyiExit::new(3, format!("graph: query exceeded {secs}s")).into())
             }
             answer => answer,
         }
@@ -573,6 +573,10 @@ fn changed_paths(
 }
 
 pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
+    run_to(cli, &mut std::io::stdout().lock())
+}
+
+pub fn run_to(cli: GraphArgs, output: &mut dyn std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
     let arm = match (
         &cli.callers,
         &cli.uses,
@@ -630,7 +634,7 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
         database.close()?;
         rows
     };
-    emit_rows(&rows)?;
+    emit_rows(&rows, output)?;
     emit_summary_line(&rows, &arm, cli.compare.is_some());
     Ok(())
 }

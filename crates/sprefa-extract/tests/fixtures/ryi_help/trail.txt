@@ -1,9 +1,10 @@
 Print the last N runs from the trail
 
-Usage: ryi trail [N]
+Usage: ryi-server trail [OPTIONS] [N]
 
 Arguments:
   [N]  Runs to print [default: 5]
 
 Options:
-  -h, --help  Print help
+      --daemon-client  Send this command to the resident daemon (ignored by the server binary)
+  -h, --help           Print help

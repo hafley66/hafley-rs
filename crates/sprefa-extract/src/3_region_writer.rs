@@ -105,7 +105,7 @@ fn read_generated(path: &Path) -> Result<String, RegionError> {
 }
 
 fn print_status(status: &str, region: &str, start: u64, end: u64, stage: Option<&str>) {
-    println!(
+    crate::outln!(
         "{}",
         serde_json::json!({
             "status": status,

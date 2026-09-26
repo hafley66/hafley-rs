@@ -1,6 +1,6 @@
 Ask one question of the resolved call/type graph
 
-Usage: ryi graph [OPTIONS] <--callers <NAME>|--uses <NAME>|--from <NAME>|--call-path <NAME>|--type-path <NAME>|--flow-path <BLOB@START:END>> [PATH]...
+Usage: ryi-server graph [OPTIONS] <--callers <NAME>|--uses <NAME>|--from <NAME>|--call-path <NAME>|--type-path <NAME>|--flow-path <BLOB@START:END>> [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -25,4 +25,5 @@ Options:
       --rust-checker                Add rust-analyzer type evidence
       --ts-checker                  Add TypeScript checker type evidence
       --go-checker                  Add go/types type evidence
+      --daemon-client               Send this command to the resident daemon (ignored by the server binary)
   -h, --help                        Print help

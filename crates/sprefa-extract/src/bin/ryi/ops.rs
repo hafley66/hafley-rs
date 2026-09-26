@@ -1,171 +1,223 @@
-use std::collections::HashMap;
-use std::ffi::OsString;
-use std::io::{BufRead, BufReader, Write};
-use std::os::fd::AsRawFd;
-use std::os::unix::net::UnixStream;
-use std::sync::{mpsc, Mutex, OnceLock};
+use std::cell::RefCell;
+use std::io::Write;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{mpsc, Arc, Mutex};
 
-use clap::Parser as _;
-use serde::Serialize;
 use serde_json::Value;
 
+use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
-    CleaveArgs, DiffArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError, OpResult,
+    CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError, OpResult,
     QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs, WatchArgs,
 };
 
-fn flat_fields(value: &Value, fields: &mut HashMap<String, Value>) {
-    if let Value::Object(object) = value {
-        for (name, value) in object {
-            if value.is_object() {
-                flat_fields(value, fields);
-            } else {
-                let empty = value.is_null() || value.as_array().is_some_and(Vec::is_empty);
-                if !empty || !fields.contains_key(name) {
-                    fields.insert(name.clone(), value.clone());
-                }
+fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default(), daemon_client: false } }
+
+struct RowSink {
+    tx: mpsc::SyncSender<OpResult<Vec<u8>>>,
+    pending: Vec<u8>,
+    chunked: bool,
+}
+
+impl RowSink {
+    fn flush_pending(&mut self) -> std::io::Result<()> {
+        if !self.pending.is_empty() {
+            self.tx.send(Ok(std::mem::take(&mut self.pending)))
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
+        }
+        Ok(())
+    }
+}
+
+impl Write for RowSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if !self.chunked {
+            let mut remaining = buf;
+            while let Some(end) = remaining.iter().position(|byte| *byte == b'\n') {
+                self.pending.extend_from_slice(&remaining[..=end]);
+                remaining = &remaining[end + 1..];
+                self.flush_pending()?;
+            }
+            self.pending.extend_from_slice(remaining);
+            return Ok(buf.len());
+        }
+        let mut remaining = buf;
+        while !remaining.is_empty() {
+            let size = (64 * 1024 - self.pending.len()).min(remaining.len());
+            self.pending.extend_from_slice(&remaining[..size]);
+            remaining = &remaining[size..];
+            if self.pending.len() == 64 * 1024 {
+                self.tx.send(Ok(std::mem::take(&mut self.pending)))
+                    .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
             }
         }
+        Ok(buf.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        if self.chunked { Ok(()) } else { self.flush_pending() }
     }
 }
 
-fn scalar(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        value => value.to_string(),
+#[derive(Clone)]
+struct SharedSink(Arc<Mutex<RowSink>>);
+
+impl Write for SharedSink {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().write(buf)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.0.lock().unwrap().flush()
     }
 }
 
-fn argv<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Vec<OsString>> {
-    let mut fields = HashMap::new();
-    flat_fields(&serde_json::to_value(args)?, &mut fields);
-    let command = A::augment_args(clap::Command::new("ryi"));
-    let mut flags = Vec::new();
-    let mut positionals = Vec::new();
-    for (ordinal, arg) in command.get_arguments().enumerate() {
-        let Some(value) = fields.get(arg.get_id().as_str()) else { continue };
-        if value.is_null() || value == false || value.as_array().is_some_and(Vec::is_empty) {
-            continue;
-        }
-        let values: Vec<&Value> = match value {
-            Value::Array(values) => values.iter().collect(),
-            value => vec![value],
-        };
-        if let Some(long) = arg.get_long() {
-            for value in values {
-                flags.push(OsString::from(format!("--{long}")));
-                if value != true {
-                    flags.push(OsString::from(scalar(value)));
-                }
+thread_local! {
+    static OP_SINK: RefCell<Option<SharedSink>> = const { RefCell::new(None) };
+    static OP_WRITE_ERROR: RefCell<Option<std::io::Error>> = const { RefCell::new(None) };
+    static REQUEST_ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    static REQUEST_DIAGNOSTICS: RefCell<Option<Diagnostics>> = const { RefCell::new(None) };
+}
+
+pub(crate) type Diagnostics = Arc<Mutex<Vec<u8>>>;
+
+struct RequestContextGuard {
+    root: Option<PathBuf>,
+    diagnostics: Option<Diagnostics>,
+}
+
+impl Drop for RequestContextGuard {
+    fn drop(&mut self) {
+        REQUEST_ROOT.with(|slot| { slot.replace(self.root.take()); });
+        REQUEST_DIAGNOSTICS.with(|slot| { slot.replace(self.diagnostics.take()); });
+    }
+}
+
+pub(crate) fn with_request_context<T>(root: PathBuf, diagnostics: Option<Diagnostics>, run: impl FnOnce() -> T) -> T {
+    let guard = RequestContextGuard {
+        root: REQUEST_ROOT.with(|slot| slot.replace(Some(root))),
+        diagnostics: REQUEST_DIAGNOSTICS.with(|slot| slot.replace(diagnostics)),
+    };
+    let result = run();
+    drop(guard);
+    result
+}
+
+pub(crate) fn print_diagnostic(args: std::fmt::Arguments<'_>) {
+    let captured = REQUEST_DIAGNOSTICS.with(|slot| {
+        let value = slot.borrow();
+        value.as_ref().map(|diagnostics| {
+            let _ = writeln!(diagnostics.lock().unwrap(), "{args}");
+        }).is_some()
+    });
+    if !captured { let _ = writeln!(std::io::stderr().lock(), "{args}"); }
+}
+
+pub(crate) fn request_root() -> PathBuf {
+    REQUEST_ROOT.with(|slot| slot.borrow().clone()).unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+}
+
+pub(crate) fn print_line(args: std::fmt::Arguments<'_>) {
+    OP_SINK.with(|slot| {
+        if let Some(sink) = slot.borrow_mut().as_mut() {
+            if let Err(error) = writeln!(sink, "{args}") {
+                OP_WRITE_ERROR.with(|failure| *failure.borrow_mut() = Some(error));
             }
         } else {
-            positionals.push((arg.get_index().unwrap_or(ordinal + 1), values.into_iter().map(scalar).collect::<Vec<_>>()));
+            let _ = writeln!(std::io::stdout().lock(), "{args}");
         }
-    }
-    positionals.sort_by_key(|(index, _)| *index);
-    let mut output = if verb.is_empty() { Vec::new() } else { vec![OsString::from(verb)] };
-    output.extend(flags);
-    for (_, values) in positionals {
-        output.extend(values.into_iter().map(OsString::from));
+    });
+}
+
+pub(crate) fn flush_line() {
+    OP_SINK.with(|slot| {
+        if let Some(sink) = slot.borrow_mut().as_mut() {
+            if let Err(error) = sink.flush() {
+                OP_WRITE_ERROR.with(|failure| *failure.borrow_mut() = Some(error));
+            }
+        } else {
+            let _ = std::io::stdout().flush();
+        }
+    });
+}
+
+struct Rows {
+    rx: mpsc::Receiver<OpResult<Vec<u8>>>,
+    cancelled: Arc<AtomicBool>,
+}
+
+impl Iterator for Rows {
+    type Item = OpResult<Vec<u8>>;
+    fn next(&mut self) -> Option<Self::Item> { self.rx.recv().ok() }
+}
+
+impl Drop for Rows {
+    fn drop(&mut self) { self.cancelled.store(true, Ordering::Release); }
+}
+
+fn produce(ryi: Ryi) -> Rows {
+    let (tx, rx) = mpsc::sync_channel(64);
+    let cancelled = Arc::new(AtomicBool::new(false));
+    let operation_cancelled = Arc::clone(&cancelled);
+    let request_root = request_root();
+    let diagnostics = REQUEST_DIAGNOSTICS.with(|slot| slot.borrow().clone());
+    let chunked = REQUEST_ROOT.with(|slot| slot.borrow().is_some()) && !matches!(&ryi.cmd, Some(Cmd::Watch(_)));
+    std::thread::spawn(move || {
+        let result = with_request_context(request_root, diagnostics, || -> OpResult<()> {
+            let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new(), chunked })));
+            OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
+            let outcome = crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled)).map_err(|error| {
+                let message = if error.message.is_empty() { format!("ryi exited {}", error.code) } else { error.message };
+                OpError(message, error.code)
+            });
+            OP_SINK.with(|slot| *slot.borrow_mut() = None);
+            sink.0.lock().unwrap().flush_pending()?;
+            if let Some(error) = OP_WRITE_ERROR.with(|failure| failure.borrow_mut().take()) {
+                return Err(OpError::from(error));
+            }
+            outcome
+        });
+        if let Err(error) = result { let _ = tx.send(Err(error)); }
+    });
+    Rows { rx, cancelled }
+}
+
+fn stream(ryi: Ryi) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    Box::new(produce(ryi))
+}
+
+fn one(ryi: Ryi) -> OpResult<Vec<u8>> {
+    let mut output = Vec::new();
+    for line in produce(ryi) {
+        output.extend(line?);
     }
     Ok(output)
 }
 
-static STDOUT_GATE: OnceLock<Mutex<()>> = OnceLock::new();
-
-struct RestoreStdout(i32);
-impl Drop for RestoreStdout {
-    fn drop(&mut self) {
-        let _ = std::io::stdout().flush();
-        unsafe { libc::dup2(self.0, libc::STDOUT_FILENO); libc::close(self.0); }
-    }
-}
-
-/// The edit handlers still print through stdout. Redirect that fd only while
-/// one handler runs, and relay its rows through a bounded channel. The gate
-/// keeps concurrent HTTP requests from crossing streams.
-fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> mpsc::Receiver<OpResult<Vec<u8>>> {
-    let (tx, rx) = mpsc::sync_channel(64);
-    let argv = argv(verb, args);
-    let captures_stdout = !matches!(verb, "" | "fast" | "slow" | "scip" | "ingest" | "schema" | "trail");
-    std::thread::spawn(move || {
-        let result = (|| -> OpResult<()> {
-            let argv = argv?;
-            let ryi = crate::Ryi::try_parse_from(std::iter::once(OsString::from("ryi")).chain(argv))
-                .map_err(|error| OpError(error.to_string()))?;
-            let (reader, writer) = UnixStream::pair()?;
-            let sink = writer.try_clone()?;
-            let _gate = captures_stdout.then(|| STDOUT_GATE.get_or_init(|| Mutex::new(())).lock().unwrap());
-            let restore = if captures_stdout {
-                let saved = unsafe { libc::dup(libc::STDOUT_FILENO) };
-                if saved < 0 { return Err(OpError::from(std::io::Error::last_os_error())); }
-                if unsafe { libc::dup2(writer.as_raw_fd(), libc::STDOUT_FILENO) } < 0 {
-                    unsafe { libc::close(saved); }
-                    return Err(OpError::from(std::io::Error::last_os_error()));
-                }
-                Some(RestoreStdout(saved))
-            } else { None };
-            drop(writer);
-            let row_tx = tx.clone();
-            let rows = std::thread::spawn(move || {
-                let mut input = BufReader::new(reader);
-                let mut line = Vec::new();
-                loop {
-                    line.clear();
-                    match input.read_until(b'\n', &mut line) {
-                        Ok(0) => break,
-                        Ok(_) => { let _ = row_tx.send(Ok(line.clone())); },
-                        Err(error) => { let _ = row_tx.send(Err(OpError::from(error))); break; },
-                    }
-                }
-            });
-            let outcome = crate::run_verb(ryi, Box::new(sink)).map_err(|error| OpError(error.to_string()));
-            drop(restore);
-            let _ = rows.join();
-            outcome
-        })();
-        if let Err(error) = result { let _ = tx.send(Err(error)); }
-    });
-    rx
-}
-
-fn stream<A: clap::Args + Serialize>(verb: &str, args: &A) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> {
-    Box::new(produce(verb, args).into_iter().map(|line| {
-        let line = line?;
-        Ok(serde_json::from_slice(&line)?)
-    }))
-}
-
-fn one<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Value> {
-    let mut output = Vec::new();
-    for line in produce(verb, args) {
-        output.extend(line?);
-    }
-    Ok(Value::String(String::from_utf8_lossy(&output).into_owned()))
-}
-
-pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("fast", args) }
-pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> {
+pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Fast(args.clone()))) }
+pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { file(&args.args) }
+pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     let mut args = args.clone();
     args.format = None;
-    stream("", &args)
+    stream(Ryi { cmd: None, file: args, daemon_client: false })
 }
-pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("slow", args) }
-pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("scip", args) }
-pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("graph", args) }
-pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("query", args) }
-pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("watch", args) }
-pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("diff", args) }
+pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Slow(args.clone()))) }
+pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Scip(args.clone()))) }
+pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Graph(args.clone()))) }
+pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Query(args.clone()))) }
+pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Watch(args.clone()))) }
+pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Diff(args.clone()))) }
 
-pub fn cleave(args: &CleaveArgs) -> OpResult<Value> { one("cleave", args) }
-pub fn r#move(args: &MoveArgs) -> OpResult<Value> { one("move", args) }
-pub fn rename(args: &RenameArgs) -> OpResult<Value> { one("rename", args) }
-pub fn region(args: &RegionArgs) -> OpResult<Value> { one("region", args) }
-pub fn schema(args: &SchemaArgs) -> OpResult<Value> { one("schema", args) }
-pub fn trail(args: &TrailArgs) -> OpResult<Value> { one("trail", args) }
+pub fn cleave(args: &CleaveArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Cleave(args.clone()))) }
+pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Move(args.clone()))) }
+pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Rename(args.clone()))) }
+pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Region(args.clone()))) }
+pub fn schema(_args: &SchemaArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Schema)) }
+pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Trail(args.clone()))) }
 
-pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -> OpResult<Value> {
+pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -> OpResult<Vec<u8>> {
     let mut staged = tempfile::NamedTempFile::new()?;
     let mut received = false;
     for value in input {
@@ -174,9 +226,53 @@ pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -
         received = true;
     }
     if !received {
-        return one("ingest", args);
+        return one(command(Cmd::Ingest(args.clone())));
     }
     let mut args = args.clone();
     args.paths = vec![staged.path().to_path_buf()];
-    one("ingest", &args)
+    one(command(Cmd::Ingest(args)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn dropped_response_cancels_and_closes_its_row_sink() {
+        let (tx, rx) = mpsc::sync_channel(1);
+        let cancelled = Arc::new(AtomicBool::new(false));
+        let rows = Rows { rx, cancelled: Arc::clone(&cancelled) };
+        drop(rows);
+        assert!(cancelled.load(Ordering::Acquire));
+        let mut sink = RowSink { tx, pending: Vec::new(), chunked: false };
+        assert_eq!(sink.write_all(b"row\n").unwrap_err().kind(), std::io::ErrorKind::BrokenPipe);
+    }
+
+    #[test]
+    fn daemon_rows_cross_the_channel_in_64_kib_chunks() {
+        let (tx, rx) = mpsc::sync_channel(2);
+        let mut sink = RowSink { tx, pending: Vec::new(), chunked: true };
+        for _ in 0..1023 {
+            sink.write_all(&[b'x'; 64]).unwrap();
+            sink.flush().unwrap();
+        }
+        assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        sink.write_all(&[b'x'; 64]).unwrap();
+        assert_eq!(rx.try_recv().unwrap().unwrap().len(), 64 * 1024);
+        sink.write_all(b"tail").unwrap();
+        sink.flush().unwrap();
+        assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        sink.flush_pending().unwrap();
+        let tail = rx.try_recv().unwrap().unwrap();
+        assert_eq!(tail.as_slice(), b"tail");
+    }
+
+    #[test]
+    fn request_diagnostics_stay_in_the_request_buffer() {
+        let diagnostics = Arc::new(Mutex::new(Vec::new()));
+        with_request_context(PathBuf::from("/tmp"), Some(diagnostics.clone()), || {
+            print_diagnostic(format_args!("0 facts: no extractor"));
+        });
+        assert_eq!(&*diagnostics.lock().unwrap(), b"0 facts: no extractor\n");
+    }
 }

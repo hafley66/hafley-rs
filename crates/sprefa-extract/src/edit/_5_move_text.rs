@@ -26,7 +26,7 @@ pub fn report(cx: &MoveCx) {
         .collect();
     let skip_file = |rel: &str| carriers.contains(rel) || rehome_for(rel).is_some();
     for hit in scan(cx, &skip_file, &|_, _| false, &per_move) {
-        println!(
+        crate::outln!(
             "text-ref {}:{} {} -> {}",
             hit.file, hit.line, hit.matched, hit.proposed
         );
@@ -57,7 +57,7 @@ pub fn report_rename(
     spellings.sort_by(|left, right| right.0.len().cmp(&left.0.len()));
     let skip_line = |rel: &str, line: usize| rewritten.contains(&(rel.to_string(), line));
     for hit in scan(cx, &|_| false, &skip_line, &[spellings]) {
-        println!(
+        crate::outln!(
             "text-ref {}:{} {} -> {}",
             hit.file, hit.line, hit.matched, hit.proposed
         );

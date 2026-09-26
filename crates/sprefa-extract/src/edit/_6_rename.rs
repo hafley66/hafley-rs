@@ -11,7 +11,7 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::move_stage::{
-    content_id, print_previews, stage_and_commit, state_root, Mirror,
+    content_id, print_previews_with as print_previews, stage_and_commit, state_root, Mirror,
 };
 use sprefa_extract::{
     directory_source, normalize, rename_for, renames, replace_action, RenameCx, RenameRequest,
@@ -65,19 +65,19 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
     let plan = Plan::build(&cli)?;
     let state = state_root(cli.state.as_deref()).map_err(plan_error)?;
 
-    println!("root {}", plan.root.display());
+    crate::outln!("root {}", plan.root.display());
     for (request, refs) in plan.cx.batch().iter().zip(&plan.refs) {
-        println!("plan {} {} -> {}", request.anchor, request.old, request.new);
+        crate::outln!("plan {} {} -> {}", request.anchor, request.old, request.new);
         for (file, uses) in uses_per_file(refs) {
-            println!("  {file}  {uses} uses");
+            crate::outln!("  {file}  {uses} uses");
         }
     }
     for receipt in &plan.receipts {
-        println!("{receipt}");
+        crate::outln!("{receipt}");
     }
     if !cli.json {
         for abstain in &plan.abstains {
-            println!(
+            crate::outln!(
                 "{}:{}: abstain {} receiver={}",
                 abstain.file,
                 line_of(&plan.cx, &abstain.file, abstain.span.start),
@@ -96,8 +96,8 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
                 let (id, previews) =
                     stage_and_commit(&plan.root, &state, stage, soopy::Durability::Durable)
                         .map_err(plan_error)?;
-                print_previews(&previews, "");
-                println!("stage {id} committed");
+                print_previews(&previews, "", |line| crate::outln!("{line}"));
+                crate::outln!("stage {id} committed");
             }
         }
         false => {
@@ -106,8 +106,8 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
                 let (id, previews) =
                     stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)
                         .map_err(plan_error)?;
-                print_previews(&previews, "");
-                println!("stage {id} dry run, tree untouched");
+                print_previews(&previews, "", |line| crate::outln!("{line}"));
+                crate::outln!("stage {id} dry run, tree untouched");
             }
         }
     }
@@ -117,13 +117,13 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
         }
     }
     if cli.json {
-        println!("{}", abstains_json(&plan.cx, &plan.abstains));
+        crate::outln!("{}", abstains_json(&plan.cx, &plan.abstains));
     }
     if !plan.abstains.is_empty() {
         // The plan is out and the tree is settled; a `RenameError` would add a
         // message line to stderr for a run that did not fail.
-        let _ = std::io::stdout().flush();
-        super::exit(ABSTAINED);
+        crate::ops::flush_line();
+        return Err(RenameError { message: String::new(), exit: ABSTAINED });
     }
     Ok(())
 }
@@ -582,8 +582,7 @@ fn absolute(path: &Path) -> Result<PathBuf, RenameError> {
     if path.is_absolute() {
         return Ok(normalize(path));
     }
-    let cwd = std::env::current_dir()
-        .map_err(|error| plan_error(format!("current directory: {error}")))?;
+    let cwd = crate::ops::request_root();
     Ok(normalize(&cwd.join(path)))
 }
 

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::move_stage::{
-    content_id, print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
+    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
     VerifyJournal,
 };
 use sprefa_extract::{
@@ -30,10 +30,10 @@ const IMPORTED_TRAITS: [&str; 16] = [
 
 const SCOPE: &str ="not supported: cross-language cleave, moving a type with its impl blocks";
 
-pub fn run(cli: CleaveArgs) -> Result<(), String> {
+pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
         return Err(
-            "--verify needs --commit".to_string(),
+            "--verify needs --commit".to_string().into(),
         );
     }
     if let Some(list) = cli.list.as_deref() {
@@ -42,16 +42,16 @@ pub fn run(cli: CleaveArgs) -> Result<(), String> {
     let plan = Plan::build(&cli)?;
     let state = state_root(cli.state.as_deref())?;
 
-    println!("root {}", plan.root.display());
-    println!(
+    crate::outln!("root {}", plan.root.display());
+    crate::outln!(
         "plan {}#{} -> {}",
         plan.rows.src, plan.rows.item, plan.rows.dest
     );
     if !plan.rows.unresolved.is_empty() {
         for name in &plan.rows.unresolved {
-            println!("ungraded {name}");
+            crate::outln!("ungraded {name}");
         }
-        println!(
+        crate::outln!(
             "next: ryi graph --uses {} {}",
             plan.rows.unresolved[0],
             plan.root.display()
@@ -59,20 +59,20 @@ pub fn run(cli: CleaveArgs) -> Result<(), String> {
         return Ok(());
     }
     for row in &plan.rows.travelling {
-        println!(
+        crate::outln!(
             "travel {} from {} as {} ({})",
             row.name, row.module, row.dest_module, row.kind
         );
     }
     for row in &plan.rows.orphans {
-        println!("orphan {} from {}", row.name, row.module);
+        crate::outln!("orphan {} from {}", row.name, row.module);
     }
     for row in &plan.rows.dragged {
-        println!("drag {} {} pass {}", row.name, row.action, row.iteration);
+        crate::outln!("drag {} {} pass {}", row.name, row.action, row.iteration);
     }
-    println!("drag fixpoint {} passes", plan.rows.drag_iterations);
+    crate::outln!("drag fixpoint {} passes", plan.rows.drag_iterations);
     for caller in &plan.rows.callers {
-        println!("caller {caller}");
+        crate::outln!("caller {caller}");
     }
 
     let stages = plan.stages()?;
@@ -94,15 +94,15 @@ pub fn run(cli: CleaveArgs) -> Result<(), String> {
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(&plan.root, &state, stage, soopy::Durability::Durable)?;
-                print_previews(&previews, "");
-                println!("stage {id} committed");
+                print_previews(&previews, "", |line| crate::outln!("{line}"));
+                crate::outln!("stage {id} committed");
             }
             verify_after_commit(&plan, &state, cli.verify.as_deref(), &journal)?;
         }
         false => {
             for (id, previews) in dry_previews {
-                print_previews(&previews, "");
-                println!("stage {id} dry run, tree untouched");
+                print_previews(&previews, "", |line| crate::outln!("{line}"));
+                crate::outln!("stage {id} dry run, tree untouched");
             }
         }
     }
@@ -110,14 +110,14 @@ pub fn run(cli: CleaveArgs) -> Result<(), String> {
         report_text_refs(&plan);
     }
     if cli.json {
-        println!("{}", plan_json(&plan.rows));
+        crate::outln!("{}", plan_json(&plan.rows));
     }
     Ok(())
 }
 
 /// `--list`: every row planned in order over ONE corpus walk and ONE resolve,
 /// each row reading the texts the rows before it wrote, landed as ONE stage.
-fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
+fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
     let rows = read_cleave_list(list)?;
     let (first, _) = split_target(&rows[0].0)?;
     let root = plan_root(cli.root.as_ref(), &first)?;
@@ -125,7 +125,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
     let mut cx = MoveCx::open(&root)?;
     let mut imports = Imports::read(&cx, &root)?;
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
-    println!("root {}", root.display());
+    crate::outln!("root {}", root.display());
     for (target, dest) in &rows {
         let plan = Plan::build_with(cx, &imports, target, dest, cli.drag)?;
         print_plan(&plan);
@@ -133,7 +133,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
             return Err(format!(
                 "{}#{} has ungraded names; the batch stops before any write",
                 plan.rows.src, plan.rows.item
-            ));
+            ).into());
         }
         for row in &plan.source.specifiers {
             if plan.source.refs_outside(&row.name, &[]) > 0 {
@@ -165,17 +165,17 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(&root, &state, stage, soopy::Durability::Durable)?;
-                print_previews(&previews, "");
-                println!("stage {id} committed");
+                print_previews(&previews, "", |line| crate::outln!("{line}"));
+                crate::outln!("stage {id} committed");
             }
             if let Some(command) = cli.verify.as_deref() {
                 match run_verify_command(&root, command)? {
-                    Some(0) => println!("verify ok"),
+                    Some(0) => crate::outln!("verify ok"),
                     code => {
                         let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
                         let count = journal.restore(&root, &state, &[])?;
-                        println!("verify failed (rc={reason}): rolled back {count} files");
-                        super::exit(3);
+                        crate::outln!("verify failed (rc={reason}): rolled back {count} files");
+                        return Err(crate::RyiExit::new(3, String::new()));
                     }
                 }
             }
@@ -185,8 +185,8 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
-                print_previews(&previews, "");
-                println!("stage {id} dry run, tree untouched");
+                print_previews(&previews, "", |line| crate::outln!("{line}"));
+                crate::outln!("stage {id} dry run, tree untouched");
             }
         }
     }
@@ -419,21 +419,21 @@ fn overlay_scratch() -> PathBuf {
 
 /// The plan rows a batch prints per row before its one stage.
 fn print_plan(plan: &Plan) {
-    println!("plan {}#{} -> {}", plan.rows.src, plan.rows.item, plan.rows.dest);
+    crate::outln!("plan {}#{} -> {}", plan.rows.src, plan.rows.item, plan.rows.dest);
     for name in &plan.rows.unresolved {
-        println!("ungraded {name}");
+        crate::outln!("ungraded {name}");
     }
     for row in &plan.rows.travelling {
-        println!("travel {} from {} as {} ({})", row.name, row.module, row.dest_module, row.kind);
+        crate::outln!("travel {} from {} as {} ({})", row.name, row.module, row.dest_module, row.kind);
     }
     for row in &plan.rows.orphans {
-        println!("orphan {} from {}", row.name, row.module);
+        crate::outln!("orphan {} from {}", row.name, row.module);
     }
     for row in &plan.rows.dragged {
-        println!("drag {} {} pass {}", row.name, row.action, row.iteration);
+        crate::outln!("drag {} {} pass {}", row.name, row.action, row.iteration);
     }
     for caller in &plan.rows.callers {
-        println!("caller {caller}");
+        crate::outln!("caller {caller}");
     }
 }
 
@@ -444,17 +444,17 @@ fn verify_after_commit(
     state: &Path,
     command: Option<&str>,
     journal: &VerifyJournal,
-) -> Result<(), String> {
+) -> Result<(), crate::RyiExit> {
     let Some(command) = command else {
         return Ok(());
     };
     match run_verify_command(&plan.root, command)? {
-        Some(0) => println!("verify ok"),
+        Some(0) => crate::outln!("verify ok"),
         code => {
             let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
             let count = journal.restore(&plan.root, state, &[])?;
-            println!("verify failed (rc={reason}): rolled back {count} files");
-            super::exit(3);
+            crate::outln!("verify failed (rc={reason}): rolled back {count} files");
+            return Err(crate::RyiExit::new(3, String::new()));
         }
     }
     Ok(())
@@ -473,7 +473,7 @@ fn report_text_refs(plan: &Plan) {
         };
         for (index, line) in text.lines().enumerate() {
             if line.contains(&plan.rows.item) {
-                println!(
+                crate::outln!(
                     "text-ref {rel}:{} {} -> {}",
                     index + 1,
                     plan.rows.src,
@@ -2212,7 +2212,7 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(normalize(path));
     }
-    let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
+    let cwd = crate::ops::request_root();
     Ok(normalize(&cwd.join(path)))
 }
 

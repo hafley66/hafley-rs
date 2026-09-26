@@ -9,7 +9,7 @@ fn generated_clap_help_matches_captured_main() {
         "root", "fast", "slow", "scip", "graph", "cleave", "move", "rename",
         "query", "region", "watch", "diff", "ingest", "schema", "trail",
     ] {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));
         if verb != "root" {
             command.arg(verb);
         }
@@ -35,7 +35,7 @@ fn generated_clap_help_matches_captured_main() {
 fn generated_format_accepts_root_and_global_positions() {
     let file = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/type_ladder/src/_1_none.rs");
     let run = |args: &[&str]| {
-        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
             .args(args)
             .env("DL_TRAIL", "0")
             .output()

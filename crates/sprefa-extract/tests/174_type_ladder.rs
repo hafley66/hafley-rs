@@ -22,7 +22,7 @@ select group_concat(line, char(10)) from (
   from u order by file, kind, owner_name, target)";
 
 fn ryi(args: &[&str]) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi")).args(args).env("RUST_LOG", "off").output().unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server")).args(args).env("RUST_LOG", "off").output().unwrap();
     assert!(output.status.success(), "ryi {args:?}: {}", String::from_utf8_lossy(&output.stderr));
 }
 

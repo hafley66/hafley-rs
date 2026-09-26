@@ -8,7 +8,7 @@ use std::process::Command;
 use serde_json::Value;
 
 fn run(args: &[&str]) -> Vec<Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(args)
         .output()

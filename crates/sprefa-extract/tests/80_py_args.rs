@@ -12,7 +12,7 @@ use std::process::Command;
 const MAIN: &str = "tests/fixtures/py_findings/args/main.py";
 
 fn resolved_edges(paths: &[&str]) -> Vec<serde_json::Value> {
-    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("--resolve")
         .args(paths)
         .output()

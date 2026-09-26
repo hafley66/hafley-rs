@@ -87,7 +87,7 @@ fn digest(root: &Path) -> BTreeMap<String, Vec<u8>> {
 }
 
 fn run_cleave(fixture: &Fixture, args: &[&str]) -> (Option<i32>, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("cleave")
         .args(args)
         .arg("--root")

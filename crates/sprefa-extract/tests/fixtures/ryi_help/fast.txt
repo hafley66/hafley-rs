@@ -1,6 +1,6 @@
 Syntax-only whole-project facts (no compiler)
 
-Usage: ryi fast [OPTIONS] [PATH]...
+Usage: ryi-server fast [OPTIONS] [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -12,4 +12,5 @@ Options:
       --root <DIR>      Corpus root
       --sqlite <PATH>   Write to a new SQLite database instead of stdout
       --lines           Add 1-based line/col beside every span
+      --daemon-client   Send this command to the resident daemon (ignored by the server binary)
   -h, --help            Print help

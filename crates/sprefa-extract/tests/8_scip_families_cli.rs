@@ -86,7 +86,7 @@ pub fn run() -> u32 {\n\
 }
 
 fn raw(args: &[&str]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi"))
+    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(args)
         .output()
         .expect("extract binary runs")
@@ -478,7 +478,7 @@ fn an_explicit_family_index_is_read_directly_without_spawning_an_indexer() {
     std::fs::set_permissions(&indexer, std::fs::Permissions::from_mode(0o755))
         .expect("executable sentinel");
 
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .env("PATH", &bin)
         .env("SPREFA_SCIP_INDEX", &environment_index)
         .args([
@@ -525,7 +525,7 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
         .expect("executable sentinel");
 
     let missing = root.join("missing.scip");
-    let missing_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let missing_output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .env("PATH", &bin)
         .args([
             "scip",
@@ -543,7 +543,7 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
 
     let invalid = root.join("invalid.scip");
     std::fs::write(&invalid, b"\x0a\x05x").expect("invalid index");
-    let invalid_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let invalid_output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .env("PATH", &bin)
         .args([
             "scip",
@@ -679,7 +679,7 @@ fn stale_cached_index_without_an_indexer_emits_only_a_skip() {
     set_mtime_unix_ms(&index, INDEX_MTIME_MS);
     set_mtime_unix_ms(&source, INDEX_MTIME_MS + 5_000);
 
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .env("PATH", empty_path)
         .args([
             "scip",
@@ -765,7 +765,7 @@ fn a_root_with_no_installed_indexer_emits_a_named_skip_and_exits_zero() {
     let empty_path = scratch("no-toolchain-path");
     let cache_arg = cache.to_string_lossy().to_string();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         // An empty PATH: no rust-analyzer, no scip-typescript, no npx, no go.
         .env("PATH", &empty_path)
         .args(["scip", "--scip-cache", &cache_arg, RUST_ROOT])
@@ -863,7 +863,7 @@ fn an_indexer_past_its_budget_is_killed_with_its_whole_process_group() {
     // system dirs follow because the planted script itself needs `sleep` and
     // `date`, and no real indexer lives in either of them.
     let started = Instant::now();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .env("PATH", format!("{}:/bin:/usr/bin", bin_dir.display()))
         .args([
             "scip",
@@ -1041,7 +1041,7 @@ fn the_three_added_languages_detect_and_skip_by_name() {
         let empty_path = scratch(&format!("added-{lang}-path").replace('/', "-"));
         std::fs::write(root.join(marker), "").expect("plant the marker");
 
-        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
             .env("PATH", &empty_path)
             .args([
                 "scip",

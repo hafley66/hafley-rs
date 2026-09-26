@@ -1,6 +1,10 @@
 //! Every integration test in one binary: cargo links once, not per file.
 //! Run one: cargo nextest run -p sprefa-extract -E 'test(/type_ladder/)'
 
+#[cfg(feature = "cli")]
+#[path = "support/0_daemon_guard.rs"]
+mod daemon_guard;
+
 #[path = "0_prolog.rs"]
 mod t_0_prolog;
 #[path = "0_sqlite.rs"]
@@ -425,8 +429,12 @@ mod t_178_ryi_help;
 mod t_179_codeql_baseline;
 #[path = "180_call_ladder.rs"]
 mod t_180_call_ladder;
+#[path = "181_server_modes.rs"]
+mod t_181_server_modes;
 #[path = "181_ts_ladder.rs"]
 mod t_181_ts_ladder;
+#[path = "182_client_daemon.rs"]
+mod t_182_client_daemon;
 #[path = "bench_normal_form.rs"]
 mod t_bench_normal_form;
 #[path = "golden_parity.rs"]

@@ -25,7 +25,7 @@ fn the_demo_plays_four_cleaves_and_ends_green() {
     let output = Command::new("bash")
         .arg(demo.join("play.sh"))
         .current_dir(&demo)
-        .env("RYI", env!("CARGO_BIN_EXE_ryi"))
+        .env("RYI", env!("CARGO_BIN_EXE_ryi-server"))
         .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
         .output()
         .expect("play.sh runs");

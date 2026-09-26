@@ -29,6 +29,7 @@ tree-sitter = "0.25"
 tree-sitter-kotlin-sg = "0.4"
 
 [dependencies]
+ryi-proto = { path = "../ryi-proto", optional = true }
 # The newline scan behind the per-document line table. Already unified in the
 # workspace lock through regex/aho-corasick, so this pins no new copy.
 memchr = "2"
@@ -248,7 +249,7 @@ optional = true
 
 [dependencies.tokio]
 version = "1"
-features = ["macros", "rt-multi-thread", "net", "sync"]
+features = ["macros", "rt-multi-thread", "net", "sync", "time"]
 optional = true
 
 [dependencies.futures-util]
@@ -257,7 +258,27 @@ optional = true
 
 [dependencies.tokio-util]
 version = "0.7"
-features = ["codec", "io"]
+features = ["codec", "io", "rt"]
+optional = true
+
+[dependencies.fs4]
+version = "0.12"
+optional = true
+
+[dependencies.daemonize]
+version = "0.5"
+optional = true
+
+[dependencies.base64]
+version = "0.22"
+optional = true
+
+[dependencies.http-body-util]
+version = "0.1"
+optional = true
+
+[dependencies.http-body]
+version = "1"
 optional = true
 
 # The subscriber is BIN-only for the same reason clap is: a library that installs
@@ -268,7 +289,7 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-cli = ["hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+cli = ["dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc", "dep:cap"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out
@@ -295,7 +316,7 @@ name = "all"
 path = "tests/all.rs"
 
 [[bin]]
-name = "ryi"
+name = "ryi-server"
 path = "src/bin/ryi.rs"
 required-features = ["cli"]
 

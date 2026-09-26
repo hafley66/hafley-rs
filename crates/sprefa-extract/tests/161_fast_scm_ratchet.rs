@@ -128,7 +128,7 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 /// `ryi fast` over the same file set, through the binary.
 fn fast_edges(paths: &[PathBuf]) -> BTreeMap<Key, String> {
     let trace = std::env::temp_dir().join(format!("ryi-161-{}.json", std::process::id()));
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)

@@ -3,6 +3,7 @@
 //! holding agent evidence runs its own rung in front of `resolve_fs`.
 
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use serde::Serialize;
 
@@ -191,8 +192,14 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
         }
     };
     let mut groups = vec![ExactGroup { label: label(&own, "cwd"), dir: own.clone(), source: "search" }];
+    let own_checkouts: Vec<PathBuf> = worktrees.iter().map(|(dir, _)| canonical(dir)).collect();
     for root in roots {
         let RootVia::Worktree(name) = &root.via else { continue };
+        // Only the pane repository's own checkouts: a pane outside any repo
+        // otherwise walks every worktree of every repo its sessions touched.
+        if !own_checkouts.contains(&canonical(&root.dir)) {
+            continue;
+        }
         groups.push(ExactGroup { label: label(&root.dir, &format!("worktree {name}")), dir: root.dir.clone(), source: "worktree" });
     }
     let mut seen: Vec<PathBuf> = groups.iter().map(|group| canonical(&group.dir)).collect();
@@ -221,9 +228,30 @@ struct ExactMatch {
 /// drops out.
 fn exact_matches(rel: &str, groups: &[ExactGroup], ranked: std::ops::Range<usize>) -> Vec<ExactMatch> {
     let under = |path: &str, dir: &Path| path.strip_prefix(&format!("{}/", trim_slash(&dir.to_string_lossy()))).map(str::to_owned);
+    // One walker thread per core across all checkouts, never a pool per checkout.
+    let next = std::sync::atomic::AtomicUsize::new(ranked.start);
+    let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(ranked.len().max(1));
+    let mut indexes: Vec<(usize, Arc<Vec<IndexEntry>>)> = std::thread::scope(|scope| {
+        let pool: Vec<_> = (0..workers)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                        if index >= ranked.end {
+                            return done;
+                        }
+                        done.push((index, index_with(&groups[index].dir, 1)));
+                    }
+                })
+            })
+            .collect();
+        pool.into_iter().flat_map(|worker| worker.join().unwrap_or_default()).collect()
+    });
+    indexes.sort_by_key(|(index, _)| *index);
     let mut found: Vec<ExactMatch> = Vec::new();
-    for index in ranked {
-        for (path, tail) in rank_exact(rel, &index_for(&groups[index].dir)) {
+    for (index, entries) in indexes {
+        for (path, tail) in rank_exact(rel, &entries) {
             if (index > 0 && !tail) || found.iter().any(|seen| seen.path == path) {
                 continue;
             }

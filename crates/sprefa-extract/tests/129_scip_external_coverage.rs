@@ -85,7 +85,7 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
         .iter()
         .any(|(symbol, _)| symbol.contains("Vec#contains().")));
 
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "scip",
@@ -121,7 +121,7 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
             .collect::<Vec<_>>()
     );
 
-    let raw_output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let raw_output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "scip", "--raw",

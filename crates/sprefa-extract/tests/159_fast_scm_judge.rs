@@ -198,7 +198,7 @@ fn ryi(args: &[&str], slug: &str) -> Vec<Value> {
         "ryi-159-{slug}-{}.json",
         std::process::id()
     ));
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(args)
         .env("HAFLEY_TRACE", trace)
         .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")

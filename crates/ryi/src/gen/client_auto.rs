@@ -1,0 +1,224 @@
+use std::error::Error;
+use std::io::IsTerminal as _;
+use std::path::{Path, PathBuf};
+use std::process::{Command, ExitCode, Stdio};
+use std::os::unix::process::CommandExt as _;
+use std::time::Duration;
+
+use base64::Engine as _;
+use bytes::Bytes;
+use clap::Parser as _;
+use futures_util::StreamExt as _;
+use http_body_util::{BodyExt as _, Full, StreamBody};
+use hyper::body::Frame;
+use hyper::{Method, Request, StatusCode};
+use hyper_util::rt::TokioIo;
+use tokio::io::AsyncWriteExt as _;
+use tokio_util::io::ReaderStream;
+
+use crate::cli_auto::{Cmd, Ryi};
+use crate::daemon_auto;
+
+type ClientBody = http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Error>;
+type ClientError = Box<dyn Error + Send + Sync>;
+
+fn server_binary() -> Result<PathBuf, ClientError> {
+    let sibling = std::env::current_exe()?.with_file_name("ryi-server");
+    if sibling.is_file() { return Ok(sibling); }
+    for dir in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()) {
+        let candidate = dir.join("ryi-server");
+        if candidate.is_file() { return Ok(candidate); }
+    }
+    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "ryi-server was not found").into())
+}
+
+fn start_daemon(server: &Path) -> Result<(), ClientError> {
+    Command::new(server).arg("--daemon")
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
+    Ok(())
+}
+
+async fn send(request: Request<ClientBody>, socket: &Path) -> Result<hyper::Response<hyper::body::Incoming>, ClientError> {
+    let stream = tokio::net::UnixStream::connect(socket).await?;
+    let (mut sender, connection) = hyper::client::conn::http1::handshake(TokioIo::new(stream)).await?;
+    tokio::spawn(async move { let _ = connection.await; });
+    Ok(sender.send_request(request).await?)
+}
+
+fn empty_body() -> ClientBody {
+    Full::new(Bytes::new()).map_err(|never| match never {}).boxed_unsync()
+}
+
+fn append_diagnostics(bytes: &mut Vec<u8>, headers: &hyper::HeaderMap) -> Result<(), ClientError> {
+    if let Some(value) = headers.get("x-ryi-stderr") {
+        bytes.extend(base64::engine::general_purpose::STANDARD.decode(value.as_bytes())?);
+    }
+    Ok(())
+}
+
+async fn handshake(socket: &Path, stamp: &str) -> Result<StatusCode, ClientError> {
+    let request = Request::builder().method(Method::GET).uri("http://ryi/__handshake")
+        .header("x-ryi-build", stamp).body(empty_body())?;
+    let response = send(request, socket).await?;
+    let status = response.status();
+    response.into_body().collect().await?;
+    Ok(status)
+}
+
+async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
+    let socket = daemon_auto::socket_path()?;
+    let stamp = if daemon_auto::handshake_enabled() { Some(daemon_auto::executable_stamp(server)?) } else { None };
+    let mut started = false;
+    for _ in 0..100 {
+        match tokio::net::UnixStream::connect(&socket).await {
+            Ok(stream) => {
+                drop(stream);
+                if let Some(stamp) = &stamp {
+                    match handshake(&socket, stamp).await {
+                        Ok(StatusCode::OK) => return Ok(socket),
+                        Ok(StatusCode::CONFLICT) => {
+                            // The old daemon cancels itself when its executable differs.
+                            started = false;
+                            tokio::time::sleep(Duration::from_millis(50)).await;
+                        }
+                        Ok(status) => return Err(format!("ryi handshake returned {status}").into()),
+                        Err(_) => {}
+                    }
+                } else {
+                    return Ok(socket);
+                }
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound || error.kind() == std::io::ErrorKind::ConnectionRefused => {
+                if !started {
+                    start_daemon(server)?;
+                    started = true;
+                }
+            }
+            Err(error) => return Err(error.into()),
+        }
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
+    Err("ryi-server did not become ready".into())
+}
+
+fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> {
+    let pair = match &cli.cmd {
+        None => ("extract", serde_json::to_value(&cli.file)?),
+        Some(Cmd::Fast(args)) => ("fast", serde_json::to_value(args)?),
+        Some(Cmd::Slow(args)) => ("slow", serde_json::to_value(args)?),
+        Some(Cmd::Scip(args)) => ("scip", serde_json::to_value(args)?),
+        Some(Cmd::Graph(args)) => ("graph", serde_json::to_value(args)?),
+        Some(Cmd::Cleave(args)) => ("cleave", serde_json::to_value(args)?),
+        Some(Cmd::Move(args)) => ("move", serde_json::to_value(args)?),
+        Some(Cmd::Rename(args)) => ("rename", serde_json::to_value(args)?),
+        Some(Cmd::Query(args)) => ("query", serde_json::to_value(args)?),
+        Some(Cmd::Region(args)) => ("region", serde_json::to_value(args)?),
+        Some(Cmd::Watch(args)) => ("watch", serde_json::to_value(args)?),
+        Some(Cmd::Diff(args)) => ("diff", serde_json::to_value(args)?),
+        Some(Cmd::Ingest(args)) => ("ingest", serde_json::to_value(args)?),
+        Some(Cmd::Schema) => ("schema", serde_json::json!({})),
+        Some(Cmd::Trail(args)) => ("trail", serde_json::to_value(args)?),
+    };
+    Ok(pair)
+}
+
+async fn run() -> Result<i32, ClientError> {
+    let original_argv: Vec<std::ffi::OsString> = std::env::args_os().skip(1).filter(|arg| arg != "--daemon-client").collect();
+    let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    if argv.get(1).is_some_and(|arg| arg == "--daemon-client") && argv.len() > 2 {
+        let daemon_client = argv.remove(1);
+        argv.insert(2, daemon_client);
+    }
+    let cli = Ryi::parse_from(argv);
+    let server = server_binary()?;
+    if !cli.daemon_client {
+        let error = Command::new(server).args(original_argv)
+            .stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).exec();
+        return Err(error.into());
+    }
+    let (verb, args) = command(&cli)?;
+    let root = std::env::current_dir()?;
+    let request = daemon_auto::Request::new(verb, root, &args)?;
+    let json = serde_json::to_string(&request)?;
+    let socket = ready_socket(&server).await?;
+    let method = match verb {
+        "schema" => Method::GET,
+        _ => Method::POST,
+    };
+    let path = match verb {
+        "extract" => "/extract",
+        "fast" => "/fast",
+        "slow" => "/slow",
+        "scip" => "/scip",
+        "graph" => "/graph",
+        "cleave" => "/cleave",
+        "move" => "/move",
+        "rename" => "/rename",
+        "query" => "/query",
+        "region" => "/region",
+        "watch" => "/watch",
+        "diff" => "/diff",
+        "ingest" => "/ingest",
+        "schema" => "/schema",
+        "trail" => "/trail",
+        _ => return Err(format!("no HTTP path for {verb}").into()),
+    };
+    let mut builder = Request::builder().method(method).uri(format!("http://ryi{path}")).header("te", "trailers");
+    let body = if matches!(verb, "ingest") {
+        let metadata = base64::engine::general_purpose::STANDARD.encode(json.as_bytes());
+        builder = builder.header("x-ryi-request", metadata).header("content-type", "application/x-ndjson");
+        if std::io::stdin().is_terminal() {
+            empty_body()
+        } else {
+            let stream = ReaderStream::new(tokio::io::stdin()).map(|chunk| chunk.map(Frame::data));
+            StreamBody::new(stream).boxed_unsync()
+        }
+    } else {
+        builder = builder.header("content-type", "application/json");
+        Full::new(Bytes::from(json)).map_err(|never| match never {}).boxed_unsync()
+    };
+    let response = send(builder.body(body)?, &socket).await?;
+    let status = response.status();
+    let mut error_code = response.headers().get("x-ryi-exit-code")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<i32>().ok());
+    let mut diagnostics = Vec::new();
+    append_diagnostics(&mut diagnostics, response.headers())?;
+    let mut body = response.into_body();
+    if !status.is_success() {
+        let mut stderr = tokio::io::stderr();
+        while let Some(frame) = body.frame().await {
+            match frame?.into_data() {
+                Ok(bytes) => stderr.write_all(&bytes).await?,
+                Err(frame) => if let Ok(headers) = frame.into_trailers() {
+                    append_diagnostics(&mut diagnostics, &headers)?;
+                    error_code = headers.get("x-ryi-exit-code").and_then(|value| value.to_str().ok()).and_then(|value| value.parse().ok()).or(error_code);
+                },
+            }
+        }
+        stderr.write_all(&diagnostics).await?;
+        stderr.flush().await?;
+        return Ok(error_code.unwrap_or(if status == StatusCode::BAD_REQUEST { 2 } else { 1 }));
+    }
+    let mut stdout = tokio::io::BufWriter::with_capacity(64 * 1024, tokio::io::stdout());
+    while let Some(frame) = body.frame().await {
+        let frame = frame?;
+        match frame.into_data() {
+            Ok(bytes) => stdout.write_all(&bytes).await?,
+            Err(frame) => if let Ok(headers) = frame.into_trailers() {
+                append_diagnostics(&mut diagnostics, &headers)?;
+                error_code = headers.get("x-ryi-exit-code").and_then(|value| value.to_str().ok()).and_then(|value| value.parse().ok()).or(error_code);
+            },
+        }
+    }
+    tokio::io::stderr().write_all(&diagnostics).await?;
+    stdout.flush().await?;
+    Ok(error_code.unwrap_or(0))
+}
+
+pub async fn main() -> ExitCode {
+    match run().await {
+        Ok(code) => ExitCode::from(u8::try_from(code).unwrap_or(1)),
+        Err(error) => { eprintln!("ryi: {error}"); ExitCode::FAILURE }
+    }
+}

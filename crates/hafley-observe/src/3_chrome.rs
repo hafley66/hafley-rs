@@ -61,5 +61,19 @@ pub fn finish_trace() {
     }
 }
 
+/// Flush the current timeline without closing it, for a long-lived host's
+/// request boundary.
+#[cfg(feature = "chrome")]
+pub fn flush_trace() {
+    if let Ok(slot) = TRACE_GUARD.lock() {
+        if let Some(guard) = slot.as_ref() {
+            guard.flush();
+        }
+    }
+}
+
+#[cfg(not(feature = "chrome"))]
+pub fn flush_trace() {}
+
 #[cfg(not(feature = "chrome"))]
 pub fn finish_trace() {}
