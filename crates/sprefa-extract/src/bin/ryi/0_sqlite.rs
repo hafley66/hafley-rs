@@ -42,6 +42,7 @@ pub struct Database {
     bind_time: Duration,
     export_span: tracing::Span,
     bind_span: tracing::Span,
+    _export_guard: tracing::span::EnteredSpan,
 }
 
 const BATCH_BYTES: usize = 8 * 1024 * 1024;
@@ -180,8 +181,6 @@ impl Database {
     /// Commit, and publish the staging file when there is one. Returns the
     /// published path so `finish` can report it; silent otherwise.
     pub fn close(mut self) -> Result<Option<PathBuf>> {
-        let export_span = self.export_span.clone();
-        let _export_guard = export_span.enter();
         self.flush()?;
         self.binder.record_profile(&self.bind_span, self.bind_time.as_secs_f64());
         let connection = std::mem::replace(&mut self.slot, bind::Slot::Moving).into_local()?;
@@ -215,6 +214,7 @@ impl Database {
             seconds = tracing::field::Empty,
             dispatch_meta_lookup_seconds = tracing::field::Empty,
         );
+        let export_guard = export_span.clone().entered();
         connection.set_prepared_statement_cache_capacity(4 * writers::TABLE_COUNT);
         connection.busy_timeout(Duration::from_secs(5))?;
         // A private staging file: nothing reads it before the commit and the
@@ -247,6 +247,7 @@ impl Database {
             bind_time: Duration::ZERO,
             export_span,
             bind_span,
+            _export_guard: export_guard,
         })
     }
 
@@ -309,19 +310,13 @@ impl Database {
         self.flush_pending()?;
         self.rows = self.rows.checked_add(1).ok_or("SQLite row counter overflow")?;
         let started = self.binder.profiling_enabled().then(Instant::now);
-        let export_span = self.export_span.clone();
-        let bind_span = self.bind_span.clone();
-        let result = export_span.in_scope(|| {
-            bind_span.in_scope(|| {
-                self.binder.push(
-                    &mut self.slot,
-                    self.rows,
-                    self.input_path.as_deref(),
-                    self.content_id.as_deref(),
-                    row,
-                )
-            })
-        });
+        let result = self.binder.push(
+            &mut self.slot,
+            self.rows,
+            self.input_path.as_deref(),
+            self.content_id.as_deref(),
+            row,
+        );
         if let Some(started) = started {
             self.bind_time += started.elapsed();
         }
@@ -358,18 +353,15 @@ impl Database {
             return Ok(());
         }
         let first_row = self.rows - i64::try_from(self.pending.len())? + 1;
-        let export_span = self.export_span.clone();
-        export_span.in_scope(|| {
-            writers::insert_all(
-                self.slot.local()?,
-                &writers::Source {
-                    row: first_row,
-                    input_path: self.input_path.as_deref(),
-                    content_id: self.content_id.as_deref(),
-                },
-                &self.pending,
-            )
-        })?;
+        writers::insert_all(
+            self.slot.local()?,
+            &writers::Source {
+                row: first_row,
+                input_path: self.input_path.as_deref(),
+                content_id: self.content_id.as_deref(),
+            },
+            &self.pending,
+        )?;
         self.pending.clear();
         self.pending_bytes = 0;
         Ok(())

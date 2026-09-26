@@ -15,8 +15,8 @@ Interning is per batch. Strings longer than 128 bytes bypass the table. JSON ser
 ## Spans and fields
 
 - `sqlite_table_batch_drain`: one info span per table batch drain, fields `table` and `rows`, covering the drain call.
-- `sqlite_bind_phase`: debug span held across the export and entered for bind calls, fields `seconds` and `dispatch_meta_lookup_seconds`. Close-time `sqlite bind column kind` events iterate `COLUMN_KINDS` and report `kind`, `calls`, `nulls`, and `seconds`. `sqlite table profile` events report `table`, `rows`, `bind_seconds`, and `insert_seconds`.
-- `sqlite_export_total`: created with the database and held through close; entered around bind and pending-row writes and again through close. Fields `rows` and `seconds` are recorded at close.
+- `sqlite_bind_phase`: debug child span; `seconds` and `dispatch_meta_lookup_seconds` are recorded once from accumulated bind timing at close. It is not entered per row. Close-time `sqlite bind column kind` events iterate `COLUMN_KINDS` and report `kind`, `calls`, `nulls`, and `seconds`. `sqlite table profile` events report `table`, `rows`, `bind_seconds`, and `insert_seconds`.
+- `sqlite_export_total`: created and entered once when the database is created; its `EnteredSpan` is held through close. Row writes and pending-row flushes inherit that context without per-row span clones or enter/exit calls. Fields `rows` and `seconds` are recorded at close.
 - `RYI_SQLITE_PHASES` and its `eprintln!` timings were removed. Per-row and per-column clocks are enabled only when `tracing::enabled!(Level::DEBUG)` is true, cached once in `Binder::new`. Set `RUST_LOG=sprefa_extract=debug,hafley_scm=info` to capture detailed metrics through hafley-observe. No environment variable was added.
 
 ## Verification and measurement
