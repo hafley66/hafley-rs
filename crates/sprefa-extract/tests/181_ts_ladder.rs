@@ -11,22 +11,26 @@ const TABLE: &str = "
 with f as (
   select distinct replace(owner_path, rtrim(owner_path, replace(owner_path, '/', '')), '') file,
     case when kind = 'impl' then 'heritage' else kind end kind, owner_name owner,
-    replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') || ':' || target_name target
+    case when target_path like '%/duplicates/%' then substr(target_path, instr(target_path, 'duplicates/'))
+      else replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') end || ':' || target_name target
   from resolved_type_edge
   union
   select distinct replace(caller_path, rtrim(caller_path, replace(caller_path, '/', '')), ''),
     'call', caller_name,
-    replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') || ':' || callee_name
+    case when callee_path like '%/duplicates/%' then substr(callee_path, instr(callee_path, 'duplicates/'))
+      else replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') end || ':' || callee_name
   from resolved_edge
 ), s as (
   select distinct replace(owner_path, rtrim(owner_path, replace(owner_path, '/', '')), '') file,
     case when kind = 'implements' then 'heritage' else kind end kind, owner_name owner,
-    replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') || ':' || target_name target
+    case when target_path like '%/duplicates/%' then substr(target_path, instr(target_path, 'duplicates/'))
+      else replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') end || ':' || target_name target
   from slow.resolved_type_edge
   union
   select distinct replace(caller_path, rtrim(caller_path, replace(caller_path, '/', '')), ''),
     'call', caller_name,
-    replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') || ':' || callee_name
+    case when callee_path like '%/duplicates/%' then substr(callee_path, instr(callee_path, 'duplicates/'))
+      else replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') end || ':' || callee_name
   from slow.resolved_edge
 ), u as (select * from f union select * from s)
 select group_concat(line, char(10)) from (
@@ -81,15 +85,17 @@ fn ts_ladder_fast_and_slow() {
 0_use.ts     param     use          -> 0_types.ts:EnginePort  f-
 0_use.ts     returns   forward      -> 0_types.ts:EnginePort  f-
 0_use.ts     returns   use          -> 0_types.ts:EnginePort  f-
+1_main.ts    call      useShared    -> duplicates/b/0_shared.ts:shared f-
 _0_types.ts  param     ping         -> _0_types.ts:Base       f-
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
 _0_types.ts  returns   ping         -> _0_types.ts:Base       f-
 _11_duplicate.ts param     duplicate    -> _5_peer_a.ts:Peer      fs
 _11_duplicate.ts returns   duplicate    -> _5_peer_a.ts:Peer      fs
 _14_static_use.ts call      runStatic    -> _13_static.ts:load     fs
-_15_private.ts call      usePrivate   -> _15_private.ts:clashPriv -s
-_17_export.ts call      useExported  -> _17_export.ts:clashPub -s
+_15_private.ts call      usePrivate   -> _15_private.ts:clashPriv fs
+_17_export.ts call      useExported  -> _17_export.ts:clashPub fs
 _19_local_a.ts call      useLocalTwin -> _19_local_a.ts:localTwin fs
+_21_local_peer.ts call      useLocalHelper -> _21_local_peer.ts:helper f-
 _2_one.ts    call      one          -> _0_types.ts:Service    f-
 _2_one.ts    call      one          -> _0_types.ts:ping       fs
 _2_one.ts    param     one          -> _0_types.ts:Base       fs

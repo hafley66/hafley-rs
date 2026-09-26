@@ -4653,9 +4653,9 @@ impl TsSource {
         def_index: &DefIndex,
         callee: &str,
         own: Option<&ContentId>,
-        modules: Option<(&TsModuleIndex, &str)>,
-        paths: Option<&crate::read::types::PathIndex>,
-        kinds: Option<&crate::read::types::KindIndex>,
+        _modules: Option<(&TsModuleIndex, &str)>,
+        _paths: Option<&crate::read::types::PathIndex>,
+        _kinds: Option<&crate::read::types::KindIndex>,
     ) -> Option<(ContentId, Span)> {
         let sites = corpus_defs(def_index, callee);
         let mut blobs: Vec<&ContentId> = Vec::new();
@@ -4671,33 +4671,6 @@ impl TsSource {
         let node = def_named(call, &output.strings, callee)?;
         let span = call.node(node).span;
         let own_blob = own?;
-        // A local/private declaration and a newly exported same-name peer
-        // at a different span retain the mutation battery's ambiguity rule.
-        // Identical generated peers and same-visibility local peers bind to
-        // the declaration in this file.
-        if sites.iter().any(|site| site.span != span)
-            && kinds.is_some_and(|kinds| kinds.get(own_blob, span) == Some(CallKind::Free))
-        {
-            let (modules, path) = modules?;
-            let own_exported = modules.exports_local(path, callee);
-            let own_arity = modules.free_arity(path, span);
-            if sites.iter().filter(|site| {
-                Some(&site.blob) != own
-                    && site.family == FamilyTag::Call
-                    && kinds.is_some_and(|kinds| kinds.get(&site.blob, site.span) == Some(CallKind::Free))
-            }).any(|site| {
-                let other_path = paths.and_then(|paths| paths.get(&site.blob));
-                let mixed_visibility = other_path
-                    .is_none_or(|path| modules.exports_local(path, callee) != own_exported);
-                let different_arity = other_path
-                    .and_then(|path| modules.free_arity(path, site.span))
-                    .zip(own_arity)
-                    .is_some_and(|(other, own)| other != own);
-                mixed_visibility && !different_arity
-            }) {
-                return None;
-            }
-        }
         let site = sites
             .iter()
             .find(|site| Some(&site.blob) == own && site.span == span)?;

@@ -249,7 +249,7 @@ pub struct ProjectInput {
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    resolve_project_inputs(request, inputs, false, false)
+    resolve_project_inputs(request, inputs, false)
 }
 
 /// Keep syntax type rows alongside checker rows in one witnessed project run.
@@ -258,7 +258,7 @@ pub fn resolve_project_with_tsi_tiers(
     request: &ResolveRequest,
 ) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    resolve_project_inputs(request, inputs, true, false)
+    resolve_project_inputs(request, inputs, true)
 }
 
 /// One phase-1 fact retained beside a project resolve, with the source
@@ -351,7 +351,7 @@ fn resolve_pushed<E>(
     scm_paths: Option<&[PathBuf]>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
-    let mut facts = resolve_project_inputs(request, inputs, false, false).map_err(ResolveWithRawError::Project)?;
+    let mut facts = resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
         facts.extend(scm.map_err(ResolveWithRawError::Project)?);
     }
@@ -362,7 +362,6 @@ fn resolve_project_inputs(
     request: &ResolveRequest,
     inputs: Vec<ProjectInput>,
     preserve_syntax_tsi: bool,
-    include_ts_signatures: bool,
 ) -> Result<Vec<FlatFact>, ProjectError> {
     let scip_index = stage_span("load_scip").in_scope(|| load_scip(request, &inputs))?;
 
@@ -541,7 +540,7 @@ fn resolve_project_inputs(
                         lang: arm_for(&input.path).map_or("", |arm| arm.name),
                         rows: Vec::new(),
                     };
-                    let mut out = call_facts(input, &targets, edges, &mut local);
+                    let mut out = call_facts(input, &targets, &cx, edges, &mut local);
                     out.extend(call_drop_facts(input, &cx, edges));
                     for row in rows {
                         out.push(FlatFact::MacroSiteOut {
@@ -591,8 +590,7 @@ fn resolve_project_inputs(
                         lang: arm_for(&input.path).map_or("", |arm| arm.name),
                         rows: Vec::new(),
                     };
-                    // The resolve CLI pins its existing type edge set.
-                    let out = type_facts(input, &targets, &cx, &mut local, include_ts_signatures);
+                    let out = type_facts(input, &targets, &cx, &mut local);
                     crate::read::types::set_own(None);
                     crate::read::lang::ts::set_resolve_path(None);
                     (out, local.rows)
@@ -1403,7 +1401,7 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
         .in_scope(|| read_inputs_with_modules(paths, Planes::Fast))?;
     let scm = stage_span("scm_rows").in_scope(|| scm_rows(paths, &inputs));
     let skips: Vec<_> = inputs.iter_mut().filter_map(|input| input.size_skip.take()).collect();
-    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false, true)?;
+    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
     facts.extend(skips);
     facts.extend(scm?);
     Ok(facts)
@@ -1494,7 +1492,7 @@ pub fn diet_scip_streamed<E>(
             captures.insert(input.path.clone(), taken);
         }
     }
-    let resolved = resolve_project_inputs(&diet_scip_request(paths), inputs, false, true)
+    let resolved = resolve_project_inputs(&diet_scip_request(paths), inputs, false)
         .map_err(ResolveWithRawError::Project)?;
     for fact in resolved {
         push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
@@ -1606,7 +1604,7 @@ fn diet_scip_bounded<E>(
         crate::read::lang::ts::set_resolve_path(Some(&input.path));
         let edges = resolve_call_edges(&input.path, &input.output, &cx);
         let mut trail = LegTrail::default();
-        let mut rows = call_facts(&input, &targets, &edges, &mut trail);
+        let mut rows = call_facts(&input, &targets, &cx, &edges, &mut trail);
         rows.extend(call_drop_facts(&input, &cx, &edges));
         crate::read::types::set_own(None);
         crate::read::lang::ts::set_resolve_path(None);
@@ -1629,7 +1627,7 @@ fn diet_scip_bounded<E>(
     visit_fast_inputs(paths, &mut |input| {
         crate::read::types::set_own(Some(input.blob.clone()));
         crate::read::lang::ts::set_resolve_path(Some(&input.path));
-        let rows = type_facts(&input, &targets, &cx, &mut LegTrail::default(), true);
+        let rows = type_facts(&input, &targets, &cx, &mut LegTrail::default());
         crate::read::types::set_own(None);
         crate::read::lang::ts::set_resolve_path(None);
         for fact in rows {
@@ -2270,6 +2268,8 @@ type SpanNames = std::collections::HashMap<(u32, u32), Option<String>>;
 /// are tables built once over the whole input set, never a walk per edge.
 struct TargetIndex<'a> {
     by_blob: std::collections::HashMap<&'a ContentId, &'a ProjectInput>,
+    by_path: std::collections::HashMap<&'a str, &'a ProjectInput>,
+    ambiguous_blobs: std::collections::HashSet<&'a ContentId>,
     call_names: std::collections::HashMap<&'a ContentId, SpanNames>,
     type_names: std::collections::HashMap<&'a ContentId, SpanNames>,
 }
@@ -2288,12 +2288,17 @@ fn span_names<F: crate::read::family::Family>(bundle: &FamilyBundle<F>, strings:
 impl<'a> TargetIndex<'a> {
     fn build(inputs: &'a [ProjectInput]) -> TargetIndex<'a> {
         let mut by_blob = std::collections::HashMap::with_capacity(inputs.len());
+        let mut by_path = std::collections::HashMap::with_capacity(inputs.len());
+        let mut ambiguous_blobs = std::collections::HashSet::new();
         let mut call_names = std::collections::HashMap::new();
         let mut type_names = std::collections::HashMap::new();
         for input in inputs {
-            // First wins, the answer the scan this replaces gave when two paths
-            // carry one blob.
-            by_blob.entry(&input.blob).or_insert(input);
+            if by_blob.contains_key(&input.blob) {
+                ambiguous_blobs.insert(&input.blob);
+            } else {
+                by_blob.insert(&input.blob, input);
+            }
+            by_path.insert(&input.path, input);
             if let Some(bundle) = input.output.call.as_ref() {
                 call_names.insert(&input.blob, span_names(bundle, &input.output.strings));
             }
@@ -2303,6 +2308,8 @@ impl<'a> TargetIndex<'a> {
         }
         TargetIndex {
             by_blob,
+            by_path,
+            ambiguous_blobs,
             call_names,
             type_names,
         }
@@ -2311,6 +2318,12 @@ impl<'a> TargetIndex<'a> {
     fn input(&self, blob: &ContentId) -> Option<&'a ProjectInput> {
         RESOLVE_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.by_blob.get(blob).copied()
+    }
+
+    fn import_target(&self, imported: &crate::read::lang::ts_resolve::ResolvedImport, blob: &ContentId, span: Span) -> Option<&'a ProjectInput> {
+        (imported.target_blob == *blob && imported.target_span == span)
+            .then(|| self.by_path.get(imported.target_path.as_str()).copied())
+            .flatten()
     }
 }
 
@@ -2330,6 +2343,7 @@ fn callee_name(targets: &TargetIndex<'_>, target: &ProjectInput, span: Span) -> 
 fn call_facts(
     input: &ProjectInput,
     targets: &TargetIndex<'_>,
+    cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
     trail: &mut LegTrail,
 ) -> Vec<FlatFact> {
@@ -2340,9 +2354,16 @@ fn call_facts(
         std::collections::BTreeSet::new();
     let mut facts = Vec::new();
     for edge in edges {
-        // Byte-identical files share a blob: a target in this file's own blob
-        // is this file, not whichever copy the blob index met first.
-        let Some(target) = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob)) else {
+        let imported = cx.indexes.ts_modules.get().filter(|_| targets.ambiguous_blobs.contains(&edge.dst_blob)).and_then(|modules| {
+            let site = call.aux.sites.iter().find(|site| Some(site.span) == edge.call_site)?;
+            let local = input.output.strings.lookup(site.callee);
+            modules.bind(&input.path, local).ok().flatten()
+        });
+        // Import bindings carry the path identity that a shared content blob loses.
+        let Some(target) = imported.as_ref()
+            .and_then(|imported| targets.import_target(imported, &edge.dst_blob, edge.dst_span))
+            .or_else(|| (edge.dst_blob == input.blob).then_some(input))
+            .or_else(|| targets.input(&edge.dst_blob)) else {
             continue;
         };
         let caller_path = input.path.clone();
@@ -2525,7 +2546,6 @@ fn type_facts(
     targets: &TargetIndex<'_>,
     cx: &ProjectCx,
     trail: &mut LegTrail,
-    include_ts_signatures: bool,
 ) -> Vec<FlatFact> {
     let Some(types) = input.output.types.as_ref() else {
         return Vec::new();
@@ -2543,9 +2563,14 @@ fn type_facts(
     let mut facts: Vec<FlatFact> = resolved
         .iter()
         .filter_map(|edge| {
-            let target = (edge.dst_blob == input.blob)
+            let target_name = name_at(targets.type_names.get(&edge.dst_blob), edge.dst_span);
+            let imported = cx.indexes.ts_modules.get().filter(|_| targets.ambiguous_blobs.contains(&edge.dst_blob))
+                .and_then(|modules| target_name.as_deref().and_then(|name| modules.bind(&input.path, name).ok().flatten()));
+            let target = imported.as_ref()
+                .and_then(|imported| targets.import_target(imported, &edge.dst_blob, edge.dst_span))
+                .or_else(|| (edge.dst_blob == input.blob)
                 .then_some(input)
-                .or_else(|| targets.input(&edge.dst_blob))?;
+                .or_else(|| targets.input(&edge.dst_blob)))?;
             let names = targets.type_names.get(&input.blob);
             let (owner, owner_name) = type_owner(plane, input, types, names, edge.src)?;
             trail.push(edge);
@@ -2562,8 +2587,7 @@ fn type_facts(
             })
         })
         .collect();
-    if let (true, Some(modules), Some(defs)) = (
-        include_ts_signatures,
+    if let (Some(modules), Some(defs)) = (
         cx.indexes.ts_modules.get(),
         cx.indexes.def_index.get(),
     ) {
@@ -2590,9 +2614,13 @@ fn type_facts(
             let Some((blob, span, origin)) = local.or_else(imported) else {
                 continue;
             };
-            let Some(target) = (blob == input.blob)
+            let imported_target = targets.ambiguous_blobs.contains(&blob)
+                .then(|| modules.bind(&input.path, &use_site.name).ok().flatten()).flatten();
+            let Some(target) = imported_target.as_ref()
+                .and_then(|imported| targets.import_target(imported, &blob, span))
+                .or_else(|| (blob == input.blob)
                 .then_some(input)
-                .or_else(|| targets.input(&blob))
+                .or_else(|| targets.input(&blob)))
             else {
                 continue;
             };

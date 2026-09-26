@@ -5,7 +5,7 @@
     "moduleResolution": "Bundler",
     "strict": true,
     "baseUrl": ".",
-    "paths": { "@core/*": ["src/*"] }
+    "paths": { "@core/*": ["src/*"], "ladder-engine/*": ["src/packages/engine/*"] }
   },
   "include": ["src/**/*.ts"]
 }
