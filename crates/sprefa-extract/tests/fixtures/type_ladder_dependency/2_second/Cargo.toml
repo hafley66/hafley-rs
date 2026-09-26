@@ -1,0 +1,9 @@
+[package]
+name = "ladder-second"
+version = "0.0.0"
+edition = "2021"
+
+[dependencies]
+ladder-collector = { path = "../0_collector" }
+
+[workspace]

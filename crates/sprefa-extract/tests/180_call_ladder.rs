@@ -45,6 +45,29 @@ fn call_ladder_fast_and_slow() {
     let conn = rusqlite::Connection::open(&fast).unwrap();
     conn.execute("attach ?1 as slow", [&slow]).unwrap();
     let table: String = conn.query_row(TABLE, [], |row| row.get(0)).unwrap();
+    let foreign_output: i64 = conn.query_row(
+        "select count(*) from resolved_edge where caller_name = 'external_receiver' \
+         and callee_name = 'output' and callee_path like '%/_5_foreign/src/lib.rs'",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(foreign_output, 0);
+    let local_probes: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_edge where caller_name in ('local_probe_six', 'local_probe_seven') and caller_path = callee_path and callee_name = 'rows'),
+           (select count(*) from slow.resolved_edge where caller_name in ('local_probe_six', 'local_probe_seven') and caller_path = callee_path and callee_name = 'rows')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(local_probes, (2, 2));
+    let trait_adapter: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_edge where caller_path like '%/_8_trait.rs' and callee_path like '%/_0_types.rs' and callee_name = 'ping'),
+           (select count(*) from resolved_edge where caller_path like '%/_8_trait.rs' and callee_path like '%/_8_trait.rs' and callee_name = 'ping')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(trait_adapter, (1, 0));
     assert_eq!(table, "\
 _2_one.rs     104 free_call          -> _0_types.rs:free_zero  fs
 _2_one.rs     166 inherent_call      -> _0_types.rs:ping       fs
@@ -66,5 +89,8 @@ _4_nested.rs  114 inner              -> _0_types.rs:act        fs
 _4_nested.rs  140 nested_calls       -> _0_types.rs:make       fs
 _4_nested.rs  160 nested_calls       -> _4_nested.rs:inner      fs
 _4_nested.rs  184 closure@181        -> _0_types.rs:free_zero  fs
-_4_nested.rs  184 nested_calls       -> _0_types.rs:free_zero  f-");
+_4_nested.rs  184 nested_calls       -> _0_types.rs:free_zero  f-
+_6_local.rs   119 local_probe_six    -> _6_local.rs:rows       fs
+_7_local.rs   121 local_probe_seven  -> _7_local.rs:rows       fs
+_8_trait.rs   123 ping               -> _0_types.rs:ping       fs");
 }

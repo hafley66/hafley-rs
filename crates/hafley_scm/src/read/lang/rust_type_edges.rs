@@ -29,6 +29,12 @@ pub fn edge_candidates(
                 start: range.start,
                 len: range.end - range.start,
             },
+            TypeCandidateOwner::Synthetic { range, name } => impl_owner_span(
+                sink,
+                strings,
+                Span { start: range.start, len: range.end - range.start },
+                &name,
+            ),
             TypeCandidateOwner::Impl {
                 primary_name,
                 bare_head,

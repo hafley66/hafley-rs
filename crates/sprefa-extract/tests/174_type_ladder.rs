@@ -91,3 +91,196 @@ _4_nested.rs param    projection    -> _0_types.rs:Out fs
 _4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs"
     );
 }
+
+#[test]
+fn type_scope_ladder_keeps_prelude_result_external() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64, i64, i64, i64, i64, i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'prelude_result' and target_name = 'Result'),
+           (select count(*) from resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),
+           (select count(*) from resolved_type_edge where owner_name = 'external_output' and target_name = 'Output'),
+           (select count(*) from resolved_type_edge where owner_name = 'bridged' and target_name = 'LocalThing'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'bridged' and target_name = 'LocalThing'),
+           (select count(*) from resolved_type_edge where owner_name = 'Generic' and target_name = 'Outer'),
+           (select count(*) from resolved_type_edge where owner_name = 'nested' and target_name = 'Output' and target_path like '%/_6_nested.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?)),
+    ).unwrap();
+    assert_eq!(rows, (0, 1, 1, 0, 1, 1, 0, 0));
+}
+
+#[test]
+fn type_scope_ladder_preserves_declared_fixture_dependency() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let root = std::fs::canonicalize("tests/fixtures/type_ladder_dependency").unwrap();
+    ryi(&["fast", root.to_str().unwrap(), "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: i64 = conn.query_row(
+        "select count(*) from resolved_type_edge
+         where owner_path like '%/type_ladder_dependency/%/src/lib.rs'
+           and target_path like '%/0_collector/src/0_collector.rs'
+           and target_name in ('BulkTrigger', 'RowChange')",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(rows, 6);
+}
+
+#[test]
+fn type_scope_ladder_keeps_uncrated_std_import_external() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_uncrated", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: i64 = conn.query_row(
+        "select count(*) from resolved_type_edge where owner_name = 'probe' and target_name = 'Output'",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(rows, 0);
+}
+
+#[test]
+fn type_scope_ladder_finds_local_body_annotation() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'local_annotation'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'local_annotation'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 1));
+}
+
+#[test]
+fn type_scope_ladder_finds_required_trait_signature() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'read'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'read'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (2, 2));
+}
+
+#[test]
+fn type_scope_ladder_finds_impl_associated_type() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'Item'
+              and owner_path like '%/_9_assoc.rs' and target_name = 'LocalThing'
+              and target_path like '%/_0_alias.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'Item'
+              and owner_path like '%/_9_assoc.rs' and target_name = 'LocalThing'
+              and target_path like '%/_0_alias.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 1));
+}
+
+#[test]
+fn type_scope_ladder_finds_qualified_variant_field() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'Item'
+              and owner_path like '%/_10_variant.rs' and target_name = 'LocalThing'
+              and target_path like '%/_0_alias.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'Item'
+              and owner_path like '%/_10_variant.rs' and target_name = 'LocalThing'
+              and target_path like '%/_0_alias.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 1));
+}
+
+#[test]
+fn type_scope_ladder_follows_crate_module_reexport() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let absolute_fast = scratch.path().join("absolute.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    let absolute_src = std::fs::canonicalize(&src).unwrap();
+    ryi(&["fast", absolute_src.to_str().unwrap(), "--sqlite", &absolute_fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    conn.execute("attach ?1 as absolute", [&absolute_fast]).unwrap();
+    let rows: (i64, i64, i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'reexport_chain'
+              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'reexport_chain'
+              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),
+           (select count(*) from absolute.resolved_type_edge where owner_name = 'reexport_chain'
+              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),
+           (select count(*) from absolute.resolved_type_edge where owner_name = 'external_shadow'
+              and target_name = 'String' and target_path like '%/_12_other.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 1, 1, 0));
+}

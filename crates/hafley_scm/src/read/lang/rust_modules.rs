@@ -68,6 +68,8 @@ pub struct RustModuleFacts {
     /// Every `type X = ..` def span. An alias rides the shared `DefIndex` as a
     /// type entity and is never the item a `X(..)` call constructs.
     aliases: Vec<Span>,
+    /// Top-level declarations unavailable through an external crate import.
+    private_defs: HashSet<String>,
     pub macro_invocations: Vec<(Span, String)>,
 }
 
@@ -155,6 +157,18 @@ pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) ->
             start: range.start,
             len: range.end - range.start,
         }).collect(),
+        private_defs: parsed.items.iter().filter_map(|item| match item {
+            syn::Item::Struct(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Enum(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Union(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Type(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Trait(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Fn(item) => Some((&item.sig.ident, &item.vis)),
+            syn::Item::Const(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Static(item) => Some((&item.ident, &item.vis)),
+            _ => None,
+        }).filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
+          .map(|(ident, _)| ident.to_string()).collect(),
         macro_invocations: hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts)
             .into_iter()
             .map(|row| (Span { start: row.range.start, len: row.range.end - row.range.start }, row.name))
@@ -265,13 +279,13 @@ fn crate_libs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
         corpus.iter().map(|(path, _)| path.as_str()).collect();
     let mut out = HashMap::new();
     for root in roots {
-        let Some(parsed) = std::fs::read_to_string(normalize_join(&root, "Cargo.toml"))
+        let Some(parsed) = std::fs::read_to_string(std::path::Path::new(&root).join("Cargo.toml"))
             .ok()
             .and_then(|text| CargoManifest::parse(&text))
         else {
             continue;
         };
-        let lib = normalize_join(&root, &parsed.lib_path());
+        let lib = lexical(&std::path::Path::new(&root).join(parsed.lib_path()));
         if let (Some(ident), true) = (parsed.ident(), in_corpus.contains(lib.as_str())) {
             out.insert(ident, lib);
         }
@@ -546,6 +560,7 @@ pub struct RustModuleIndex {
     impl_types: std::collections::HashSet<String>,
     /// `.rs` path -> the directory of its nearest `Cargo.toml`.
     crate_dirs: HashMap<String, String>,
+    known_crate_idents: HashSet<String>,
     /// crate directory -> the crate directories its path dependencies name.
     crate_deps: HashMap<String, HashSet<String>>,
 }
@@ -706,10 +721,13 @@ impl RustModuleIndex {
         def_index: &DefIndex,
     ) -> RustModuleIndex {
         let crate_dirs = crate_dirs_of(corpus, &files);
+        let known_crate_idents = crate_dirs.values().filter_map(|dir| dir.rsplit('/').next())
+            .map(|name| name.replace('-', "_")).collect();
         let mut index = RustModuleIndex {
             crate_libs: crate_libs(corpus),
             crate_deps: crate_deps_of(&crate_dirs),
             crate_dirs,
+            known_crate_idents,
             ..RustModuleIndex::default()
         };
         for (path, blob) in corpus {
@@ -869,27 +887,41 @@ impl RustModuleIndex {
             .impl_methods
             .get(&(self_type.to_string(), method.to_string()))?
             .as_slice();
+        let visible: Vec<&ImplMethodTarget> = sites
+            .iter()
+            .filter(|site| caller.is_none_or(|from| self.sees(from, &site.blob)))
+            .collect();
         let pick = |site: &ImplMethodTarget| Some((site.blob.clone(), site.span));
-        match sites {
+        match visible.as_slice() {
             [only] => pick(only),
             many => {
                 let inherent: Vec<&ImplMethodTarget> = many
                     .iter()
+                    .copied()
                     .filter(|site| site.trait_name.is_none())
                     .collect();
-                match inherent.as_slice() {
+                let nearby: Vec<&ImplMethodTarget> = inherent.iter().copied().filter(|site| {
+                    caller.is_some_and(|from| self.paths.get(&site.blob).is_some_and(|path| path == from))
+                }).collect();
+                let inherent = if nearby.is_empty() { inherent.as_slice() } else { nearby.as_slice() };
+                match inherent {
                     [one] => pick(one),
                     [] => {
                         let caller = caller?;
                         let survivors: Vec<&ImplMethodTarget> = many
                             .iter()
+                            .copied()
                             .filter(|site| {
                                 site.trait_name.as_deref().is_some_and(|trait_name| {
                                     self.trait_in_scope(caller, trait_name)
                                 })
                             })
                             .collect();
-                        match survivors.as_slice() {
+                        let nearby: Vec<&ImplMethodTarget> = survivors.iter().copied().filter(|site| {
+                            self.paths.get(&site.blob).is_some_and(|path| path == caller)
+                        }).collect();
+                        let survivors = if nearby.is_empty() { survivors.as_slice() } else { nearby.as_slice() };
+                        match survivors {
                             [one] => pick(one),
                             _ => None,
                         }
@@ -1164,6 +1196,20 @@ impl RustModuleIndex {
 
     /// Path version for module lookups, before a target has become a blob.
     pub fn sees_path(&self, from: &str, target: &str) -> bool {
+        fn fixture(path: &str) -> Option<(&str, &str)> {
+            path.split_once("/tests/fixtures/")
+                .and_then(|(root, rest)| rest.split('/').next().map(|name| (root, name)))
+        }
+        let declared_dependency = self.crate_dirs.get(from)
+            .zip(self.crate_dirs.get(target))
+            .is_some_and(|(own, target_crate)| {
+                self.crate_deps.get(own).is_some_and(|deps| deps.contains(target_crate))
+            });
+        match (fixture(from), fixture(target)) {
+            (Some(a), Some(b)) if a != b && !declared_dependency => return false,
+            (Some(_), None) | (None, Some(_)) if !declared_dependency => return false,
+            _ => {}
+        }
         let Some(own) = self.crate_dirs.get(from) else {
             return true;
         };
@@ -1175,18 +1221,37 @@ impl RustModuleIndex {
 
     /// Whether `path` binds `local` with a `use` from a crate it cannot see.
     pub fn binds_external(&self, path: &str, local: &str) -> bool {
-        if !self.crate_dirs.contains_key(path) {
-            return false;
-        }
+        let uncrated = self.crate_dirs.get(path).is_none();
+        let sibling_lib = path.ends_with("/src/main.rs")
+            .then(|| format!("{}/lib.rs", parent_dir(path)));
         self.facts.get(path).is_some_and(|facts| {
             facts.uses.iter().any(|binding| {
                 binding.local == local
                     && binding.qualifier.first().is_some_and(|root| {
                         !matches!(root.as_str(), "crate" | "self" | "super")
+                            && !(uncrated && self.known_crate_idents.contains(root))
+                            && !(uncrated && sibling_lib.as_ref().is_some_and(|lib| {
+                                self.blobs.contains_key(lib) && self.target(lib, local).is_some()
+                            }))
                             && self.crate_libs.get(root).is_none_or(|lib| !self.sees_path(path, lib))
                     })
             })
         })
+    }
+
+    /// An unresolved `use crate_name::Name` cannot fall back to a private
+    /// declaration elsewhere in that crate's corpus.
+    pub fn private_import_target(&self, from: &str, local: &str, blob: &ContentId) -> bool {
+        let Some(target) = self.paths.get(blob) else { return false };
+        if !self.facts.get(target).is_some_and(|facts| facts.private_defs.contains(local)) {
+            return false;
+        }
+        self.facts.get(from).is_some_and(|facts| facts.uses.iter().any(|binding| {
+            binding.local == local
+                && binding.qualifier.first().is_some_and(|root| {
+                    self.crate_libs.get(root).is_some_and(|lib| self.sees_path(from, lib))
+                })
+        }))
     }
 
     /// The blob of a corpus path.
@@ -1204,6 +1269,62 @@ impl RustModuleIndex {
     /// facet, and a type reference to it emits a nameless row.
     pub fn type_target(&self, path: &str, local: &str) -> Option<(ContentId, Span)> {
         let (blob, span) = self.target(path, local)?;
+        self.type_facet(blob, span)
+    }
+
+    /// A qualified type through the same module and re-export table used by
+    /// qualified calls. The binding's type facet may share its name with a
+    /// call facet at a different span.
+    pub fn qualified_type_target(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+    ) -> Option<(ContentId, Span)> {
+        match self.module_call(from, qualifier, name) {
+            ModuleCallTarget::Target(blob, span) => self.type_facet(blob, span),
+            ModuleCallTarget::Miss => self.module_named_type_target(from, qualifier, name),
+            ModuleCallTarget::External => None,
+        }
+    }
+
+    fn module_named_type_target(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+    ) -> Option<(ContentId, Span)> {
+        let homes = self.by_last_segment.get(qualifier.last()?)?;
+        let mut targets = Vec::new();
+        for home in homes.iter().filter(|home| self.sees_path(from, home)) {
+            if let Some(target) = self.type_target(home, name) {
+                if !targets.contains(&target) {
+                    targets.push(target);
+                }
+            }
+        }
+        let [only] = targets.as_slice() else { return None };
+        Some(only.clone())
+    }
+
+    /// A corpus-unique type can complete a qualified path only when the
+    /// qualifier's module could itself see that type. This keeps a same-named
+    /// declaration in an unrelated crate from answering a re-export path.
+    pub fn qualified_type_fallback_sees(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+        target: &ContentId,
+    ) -> bool {
+        if matches!(self.module_call(from, qualifier, "__ryi_type_probe"), ModuleCallTarget::External) {
+            return false;
+        }
+        self.module_named_type_target(from, qualifier, name)
+            .is_none_or(|(blob, _)| blob == *target)
+    }
+
+    fn type_facet(&self, blob: ContentId, span: Span) -> Option<(ContentId, Span)> {
         let defs = self.defs.get(&blob)?;
         let bound_name = defs
             .iter()
@@ -1404,7 +1525,19 @@ impl RustModuleIndex {
                 }
                 let mut full = module_segments(lib);
                 full.extend(qualifier[1..].iter().cloned());
-                return self.exact_module(from, &full);
+                let exact = self.exact_module(from, &full);
+                if !matches!(exact, HomeFile::None) {
+                    return exact;
+                }
+                let mut current = lib.clone();
+                for segment in &qualifier[1..] {
+                    match self.resolve_in_module(&current, segment, stack).0 {
+                        Resolution::Module { file, .. } => current = file,
+                        Resolution::Ambiguous => return HomeFile::Ambiguous,
+                        _ => return HomeFile::None,
+                    }
+                }
+                return HomeFile::Unique(current);
             }
         }
         let refs: Vec<&str> = qualifier.iter().map(String::as_str).collect();
