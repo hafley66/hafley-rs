@@ -105,15 +105,20 @@ fn type_scope_ladder_keeps_prelude_result_external() {
 
     let conn = rusqlite::Connection::open(&fast).unwrap();
     conn.execute("attach ?1 as slow", [&slow]).unwrap();
-    let rows: (i64, i64, i64) = conn.query_row(
+    let rows: (i64, i64, i64, i64, i64, i64, i64, i64) = conn.query_row(
         "select
            (select count(*) from resolved_type_edge where owner_name = 'prelude_result' and target_name = 'Result'),
            (select count(*) from resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),
-           (select count(*) from slow.resolved_type_edge where owner_name = 'local_result' and target_name = 'Result')",
+           (select count(*) from slow.resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),
+           (select count(*) from resolved_type_edge where owner_name = 'external_output' and target_name = 'Output'),
+           (select count(*) from resolved_type_edge where owner_name = 'bridged' and target_name = 'LocalThing'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'bridged' and target_name = 'LocalThing'),
+           (select count(*) from resolved_type_edge where owner_name = 'Generic' and target_name = 'Outer'),
+           (select count(*) from resolved_type_edge where owner_name = 'nested' and target_name = 'Output' and target_path like '%/_6_nested.rs')",
         [],
-        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?, row.get(5)?, row.get(6)?, row.get(7)?)),
     ).unwrap();
-    assert_eq!(rows, (0, 1, 1));
+    assert_eq!(rows, (0, 1, 1, 0, 1, 1, 0, 0));
 }
 
 #[test]
@@ -132,4 +137,18 @@ fn type_scope_ladder_preserves_declared_fixture_dependency() {
         |row| row.get(0),
     ).unwrap();
     assert_eq!(rows, 6);
+}
+
+#[test]
+fn type_scope_ladder_keeps_uncrated_std_import_external() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_uncrated", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: i64 = conn.query_row(
+        "select count(*) from resolved_type_edge where owner_name = 'probe' and target_name = 'Output'",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(rows, 0);
 }

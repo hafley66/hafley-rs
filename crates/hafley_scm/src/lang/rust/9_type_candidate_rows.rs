@@ -42,17 +42,33 @@ pub struct TypeCandidateGroup {
 
 pub fn type_candidate_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<TypeCandidateGroup> {
     let mut groups = Vec::new();
-    collect(&parsed.items, line_starts, &mut groups);
+    let file_types: Vec<String> = parsed.items.iter().filter_map(|item| match item {
+        syn::Item::Struct(item) => Some(item.ident.to_string()),
+        syn::Item::Enum(item) => Some(item.ident.to_string()),
+        syn::Item::Union(item) => Some(item.ident.to_string()),
+        syn::Item::Type(item) => Some(item.ident.to_string()),
+        syn::Item::Trait(item) => Some(item.ident.to_string()),
+        _ => None,
+    }).collect();
+    collect(&parsed.items, line_starts, &file_types, &[], &mut groups);
     groups
 }
 
-fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandidateGroup>) {
+fn collect(
+    items: &[syn::Item],
+    line_starts: &[u32],
+    file_types: &[String],
+    shadowed: &[String],
+    groups: &mut Vec<TypeCandidateGroup>,
+) {
     for item in items {
+        let first = groups.len();
         match item {
             syn::Item::Struct(item) => {
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
                 field_candidates(&item.fields, &mut candidates);
+                retain_non_generic(&item.generics, &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
             }
             syn::Item::Enum(item) => {
@@ -65,25 +81,24 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
                     });
                     field_candidates(&variant.fields, &mut candidates);
                 }
+                retain_non_generic(&item.generics, &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
             }
             syn::Item::Union(item) => {
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
                 field_candidates(&Fields::Named(item.fields.clone()), &mut candidates);
+                retain_non_generic(&item.generics, &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
             }
             syn::Item::Type(item) => {
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
-                candidates.extend(type_refs(&item.ty).into_iter().filter(|to| {
-                    !item.generics.params.iter().any(|param| {
-                        matches!(param, GenericParam::Type(param) if param.ident.to_string() == *to)
-                    })
-                }).map(|to| TypeCandidateRow {
+                candidates.extend(type_refs(&item.ty).into_iter().map(|to| TypeCandidateRow {
                     to,
                     kind: TypeCandidateKind::Uses,
                 }));
+                retain_non_generic(&item.generics, &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
             }
             syn::Item::Fn(item) => {
@@ -99,6 +114,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
                 for bound in &item.supertraits {
                     bound_candidate(bound, &mut candidates);
                 }
+                retain_non_generic(&item.generics, &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
                 for child in &item.items {
                     if let syn::TraitItem::Fn(method) = child {
@@ -131,6 +147,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
                 if let Type::Path(path) = strip_type(&item.self_ty) {
                     arg_candidates(&path.path, &mut candidates);
                 }
+                retain_non_generic(&item.generics, &mut candidates);
                 groups.push(TypeCandidateGroup {
                     owner: TypeCandidateOwner::Impl {
                         primary_name,
@@ -150,12 +167,43 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
             }
             syn::Item::Mod(item) => {
                 if let Some((_, inner)) = &item.content {
-                    collect(inner, line_starts, groups);
+                    let mut inner_shadowed = shadowed.to_vec();
+                    for imported in external_imported_locals(inner) {
+                        if file_types.contains(&imported) && !inner_shadowed.contains(&imported) {
+                            inner_shadowed.push(imported);
+                        }
+                    }
+                    collect(inner, line_starts, file_types, &inner_shadowed, groups);
                 }
             }
             _ => {}
         }
+        for group in &mut groups[first..] {
+            group.candidates.retain(|candidate| !shadowed.contains(&candidate.to));
+        }
     }
+}
+
+fn external_imported_locals(items: &[syn::Item]) -> Vec<String> {
+    fn names(tree: &syn::UseTree, out: &mut Vec<String>) {
+        match tree {
+            syn::UseTree::Path(path) => names(&path.tree, out),
+            syn::UseTree::Group(group) => {
+                for member in &group.items { names(member, out); }
+            }
+            syn::UseTree::Name(name) => out.push(name.ident.to_string()),
+            syn::UseTree::Rename(rename) => out.push(rename.rename.to_string()),
+            syn::UseTree::Glob(_) => {}
+        }
+    }
+    let mut out = Vec::new();
+    for item in items {
+        let syn::Item::Use(item) = item else { continue };
+        let syn::UseTree::Path(root) = &item.tree else { continue };
+        if matches!(root.ident.to_string().as_str(), "crate" | "self" | "super") { continue; }
+        names(&root.tree, &mut out);
+    }
+    out
 }
 
 fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
@@ -192,7 +240,16 @@ fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
             kind: TypeCandidateKind::Returns,
         }));
     }
+    retain_non_generic(&sig.generics, &mut candidates);
     candidates
+}
+
+fn retain_non_generic(generics: &syn::Generics, candidates: &mut Vec<TypeCandidateRow>) {
+    let names: Vec<String> = generics.params.iter().filter_map(|param| {
+        let GenericParam::Type(param) = param else { return None };
+        Some(param.ident.to_string())
+    }).collect();
+    candidates.retain(|candidate| !names.contains(&candidate.to));
 }
 
 fn projection_trait(name: &str, bounds: &[(String, String)]) -> String {

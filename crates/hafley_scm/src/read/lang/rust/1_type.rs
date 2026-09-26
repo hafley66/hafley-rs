@@ -211,19 +211,28 @@ fn resolve_type_dst(
     // The qualifier narrows: only a declaration whose FILE spells a module path
     // ending in it is the one `a::b::C` names.
     let segments: Vec<&str> = qualifier.split("::").collect();
-    // The file's `use` bindings answer a BARE name; a qualified one carries its
-    // own scope, so only the qualifier-narrowed leg and corpus uniqueness apply,
-    // and uniqueness only where the qualifier names a corpus module at all.
-    let in_corpus = matches!(segments[0], "crate" | "self" | "super")
-        || segments
-            .last()
-            .is_some_and(|last| modules.is_some_and(|m| m.names_a_module(last)));
-    module_scoped_type(index, modules, paths, own_path, &segments, trailing)
+    let qualifier = segments.iter().map(|segment| (*segment).to_string()).collect::<Vec<_>>();
+    modules
+        .zip(own_path)
+        .and_then(|(m, from)| m.qualified_type_target(from, &qualifier, trailing))
+        .or_else(|| module_scoped_type(index, modules, paths, own_path, &segments, trailing))
         .map(|(blob, span)| (blob, span, ResolutionOrigin::ModulePlane))
         .or_else(|| {
-            in_corpus
-                .then(|| unique_declared_type(index, modules, own_path, trailing))
-                .flatten()
+            let head = segments.last().copied().unwrap_or_default();
+            if head != "Self"
+                && head.chars().next().is_some_and(char::is_uppercase)
+                && index.is_none_or(|index| {
+                    !corpus_defs(index, head).iter().any(|site| site.family == FamilyTag::Type)
+                })
+            {
+                return None;
+            }
+            unique_declared_type(index, modules, own_path, trailing)
+                .filter(|(blob, _)| {
+                    modules.zip(own_path).is_some_and(|(m, from)| {
+                        m.qualified_type_fallback_sees(from, &qualifier, trailing, blob)
+                    })
+                })
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
         })
 }

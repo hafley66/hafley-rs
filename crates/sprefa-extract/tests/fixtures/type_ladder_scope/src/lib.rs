@@ -1,2 +1,7 @@
 pub mod _0_alias;
 pub mod _1_prelude;
+#[path = "_2_process.rs"]
+pub mod process;
+pub mod _3_bridge;
+pub mod _5_generic;
+pub mod _6_nested;

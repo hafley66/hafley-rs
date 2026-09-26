@@ -546,6 +546,7 @@ pub struct RustModuleIndex {
     impl_types: std::collections::HashSet<String>,
     /// `.rs` path -> the directory of its nearest `Cargo.toml`.
     crate_dirs: HashMap<String, String>,
+    known_crate_idents: HashSet<String>,
     /// crate directory -> the crate directories its path dependencies name.
     crate_deps: HashMap<String, HashSet<String>>,
 }
@@ -706,10 +707,13 @@ impl RustModuleIndex {
         def_index: &DefIndex,
     ) -> RustModuleIndex {
         let crate_dirs = crate_dirs_of(corpus, &files);
+        let known_crate_idents = crate_dirs.values().filter_map(|dir| dir.rsplit('/').next())
+            .map(|name| name.replace('-', "_")).collect();
         let mut index = RustModuleIndex {
             crate_libs: crate_libs(corpus),
             crate_deps: crate_deps_of(&crate_dirs),
             crate_dirs,
+            known_crate_idents,
             ..RustModuleIndex::default()
         };
         for (path, blob) in corpus {
@@ -1203,14 +1207,18 @@ impl RustModuleIndex {
 
     /// Whether `path` binds `local` with a `use` from a crate it cannot see.
     pub fn binds_external(&self, path: &str, local: &str) -> bool {
-        if !self.crate_dirs.contains_key(path) {
-            return false;
-        }
+        let uncrated = self.crate_dirs.get(path).is_none();
+        let sibling_lib = path.ends_with("/src/main.rs")
+            .then(|| format!("{}/lib.rs", parent_dir(path)));
         self.facts.get(path).is_some_and(|facts| {
             facts.uses.iter().any(|binding| {
                 binding.local == local
                     && binding.qualifier.first().is_some_and(|root| {
                         !matches!(root.as_str(), "crate" | "self" | "super")
+                            && !(uncrated && self.known_crate_idents.contains(root))
+                            && !(uncrated && sibling_lib.as_ref().is_some_and(|lib| {
+                                self.blobs.contains_key(lib) && self.target(lib, local).is_some()
+                            }))
                             && self.crate_libs.get(root).is_none_or(|lib| !self.sees_path(path, lib))
                     })
             })
@@ -1232,6 +1240,62 @@ impl RustModuleIndex {
     /// facet, and a type reference to it emits a nameless row.
     pub fn type_target(&self, path: &str, local: &str) -> Option<(ContentId, Span)> {
         let (blob, span) = self.target(path, local)?;
+        self.type_facet(blob, span)
+    }
+
+    /// A qualified type through the same module and re-export table used by
+    /// qualified calls. The binding's type facet may share its name with a
+    /// call facet at a different span.
+    pub fn qualified_type_target(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+    ) -> Option<(ContentId, Span)> {
+        match self.module_call(from, qualifier, name) {
+            ModuleCallTarget::Target(blob, span) => self.type_facet(blob, span),
+            ModuleCallTarget::Miss => self.module_named_type_target(from, qualifier, name),
+            ModuleCallTarget::External => None,
+        }
+    }
+
+    fn module_named_type_target(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+    ) -> Option<(ContentId, Span)> {
+        let homes = self.by_last_segment.get(qualifier.last()?)?;
+        let mut targets = Vec::new();
+        for home in homes.iter().filter(|home| self.sees_path(from, home)) {
+            if let Some(target) = self.type_target(home, name) {
+                if !targets.contains(&target) {
+                    targets.push(target);
+                }
+            }
+        }
+        let [only] = targets.as_slice() else { return None };
+        Some(only.clone())
+    }
+
+    /// A corpus-unique type can complete a qualified path only when the
+    /// qualifier's module could itself see that type. This keeps a same-named
+    /// declaration in an unrelated crate from answering a re-export path.
+    pub fn qualified_type_fallback_sees(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        name: &str,
+        target: &ContentId,
+    ) -> bool {
+        if matches!(self.module_call(from, qualifier, "__ryi_type_probe"), ModuleCallTarget::External) {
+            return false;
+        }
+        self.module_named_type_target(from, qualifier, name)
+            .is_none_or(|(blob, _)| blob == *target)
+    }
+
+    fn type_facet(&self, blob: ContentId, span: Span) -> Option<(ContentId, Span)> {
         let defs = self.defs.get(&blob)?;
         let bound_name = defs
             .iter()
