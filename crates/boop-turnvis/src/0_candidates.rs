@@ -105,6 +105,8 @@ mod tests {
                     ts: index as i64,
                     role: "assistant".into(),
                     said: (*text).into(),
+
+                    aliases: Vec::new(),
                 },
                 id: index.to_string(),
                 normalized: if text.is_empty() {

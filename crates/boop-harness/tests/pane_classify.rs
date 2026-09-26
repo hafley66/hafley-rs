@@ -110,7 +110,7 @@ fn claude_mixed_blocks_preserve_text_tools_and_usage_provenance() {
         scroll: 0,
         rows: rows_from_capture(&text, &text, size),
     };
-    let frame = project(&snapshot, "fixture", rows, &Options { mode: Mode::Recent, ..Default::default() });
+    let frame = project(&snapshot, "fixture", rows, &Default::default(), &Options { mode: Mode::Recent, ..Default::default() });
     let layout = frame.layout.unwrap();
     assert_eq!(
         layout.squares().iter().map(|square| (square.id.as_str(), square.active)).collect::<Vec<_>>(),

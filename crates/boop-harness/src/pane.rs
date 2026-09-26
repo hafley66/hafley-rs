@@ -11,7 +11,6 @@ use boop_turnstrip::{drawn_at_all, kind_of, ListedTurn, TurnKind};
 pub use boop_turnstrip::{Layout, Mode, Options};
 use serde::{Deserialize, Serialize};
 
-use crate::harness::claude_summary::locate_visible_turns;
 use crate::Registry;
 
 /// History rows a frame reads above the reader's window.
@@ -77,7 +76,9 @@ pub fn frame(
     let snapshot = mux
         .pane_snapshot(socket, target, HISTORY_ROWS)
         .with_context(|| format!("pane {target} answered no snapshot"))?;
-    let frame = project(&snapshot, session, frame_turns(store, session)?, options);
+    let turns = frame_turns(store, session)?;
+    let args = tool_args(store, session, &turns)?;
+    let frame = project(&snapshot, session, turns, &args, options);
     // The band's turns carry marks too: a pinned prompt is the square a reader
     // hovers to see what they asked.
     let sources: Vec<String> = frame.turns.iter().chain(&frame.pinned).map(source_of).collect();
@@ -99,17 +100,15 @@ pub fn turns(store: &Store, session: &str) -> Result<Vec<TurnRow>> {
 
 /// The turns a frame matches: [`turns`] after the reset boundary.
 pub fn frame_turns(store: &Store, session: &str) -> Result<Vec<TurnRow>> {
-    let mut rows = current_conversation(turns(store, session)?, reset_from(store, session)?);
-    tool_headers(store, session, &mut rows)?;
-    Ok(rows)
+    Ok(current_conversation(turns(store, session)?, reset_from(store, session)?))
 }
 
-/// A tool row stores its name only; the TUI draws `Name(arg)`. The arg is the
-/// first line of the call's fact (`agent_cmd` command, else `agent_touch` path).
-fn tool_headers(store: &Store, session: &str, rows: &mut [TurnRow]) -> Result<()> {
+/// Each tool turn's first argument, by turn: the `agent_cmd` command, else the
+/// `agent_touch` path. A tool row's `said` is its name only.
+pub fn tool_args(store: &Store, session: &str, rows: &[TurnRow]) -> Result<BTreeMap<i64, String>> {
     let tools: Vec<i64> = rows.iter().filter(|row| row.role == "tool").map(|row| row.turn).collect();
     let (Some(from), Some(to)) = (tools.iter().min(), tools.iter().max()) else {
-        return Ok(());
+        return Ok(BTreeMap::new());
     };
     let mut args: BTreeMap<i64, String> = BTreeMap::new();
     let mut commands = store.connection().prepare(
@@ -133,23 +132,23 @@ fn tool_headers(store: &Store, session: &str, rows: &mut [TurnRow]) -> Result<()
         let (turn, path) = row?;
         args.entry(turn).or_insert(path);
     }
-    for row in rows.iter_mut().filter(|row| row.role == "tool") {
-        if let Some(arg) = args.get(&row.turn) {
-            row.said = format!("{}({arg})", row.said);
-        }
-    }
-    Ok(())
+    Ok(args)
 }
 
 /// The projection: snapshot and turns in, spans and the strip's geometry out.
 /// Pure, so tests pin it without tmux; tags are the caller's read.
-pub fn project(snapshot: &TerminalSnapshot, session: &str, turns: Vec<TurnRow>, options: &Options) -> PaneFrame {
+pub fn project(
+    snapshot: &TerminalSnapshot,
+    session: &str,
+    turns: Vec<TurnRow>,
+    args: &BTreeMap<i64, String>,
+    options: &Options,
+) -> PaneFrame {
     let rows: Vec<&str> = snapshot.rows.iter().map(|row| row.text.as_str()).collect();
     let harness = turns.iter().max_by_key(|turn| turn.ts).map(|turn| turn.harness.as_str());
     let registry = Registry::discover();
-    let composer = harness
-        .and_then(|name| registry.by_name(name))
-        .and_then(|adapter| adapter.terminal_input_region(&rows));
+    let adapter = harness.and_then(|name| registry.by_name(name));
+    let composer = adapter.and_then(|adapter| adapter.terminal_input_region(&rows));
     // One logical line per physical row: a row's index is the row the pane
     // draws it on, so squares line up with rows.
     let lines: Vec<boop_turnvis::LogicalLine> = rows
@@ -165,7 +164,16 @@ pub fn project(snapshot: &TerminalSnapshot, session: &str, turns: Vec<TurnRow>, 
             end: index,
         })
         .collect();
-    let located = locate_visible_turns(&lines, &turns.iter().map(to_turnvis).collect::<Vec<_>>());
+    let sources: Vec<boop_turnvis::BoopTurn> = turns
+        .iter()
+        .map(|turn| {
+            let aliases = adapter
+                .map(|adapter| adapter.screen_lines(&turn.role, &turn.said, args.get(&turn.turn).map(String::as_str)))
+                .unwrap_or_default();
+            to_turnvis(turn, aliases)
+        })
+        .collect();
+    let located = boop_turnvis::locate_visible_turns_with(&lines, &sources, adapter.and_then(|adapter| adapter.screen_anchor()));
     let pins = pinned_of(&turns, options);
     let pin_ids: Vec<String> = pins.iter().map(|turn| turn_id(turn)).collect();
     let listed = listed_of(&turns);
@@ -244,7 +252,7 @@ fn turn_id(turn: &TurnRow) -> String {
     format!("{}:{}", turn.session, turn.turn)
 }
 
-fn to_turnvis(turn: &TurnRow) -> boop_turnvis::BoopTurn {
+fn to_turnvis(turn: &TurnRow, aliases: Vec<String>) -> boop_turnvis::BoopTurn {
     boop_turnvis::BoopTurn {
         session: turn.session.clone(),
         harness: turn.harness.clone(),
@@ -252,6 +260,7 @@ fn to_turnvis(turn: &TurnRow) -> boop_turnvis::BoopTurn {
         ts: turn.ts,
         role: turn.role.clone(),
         said: turn.said.clone(),
+        aliases,
     }
 }
 
@@ -432,7 +441,7 @@ mod tests {
             0,
         );
         let turns = vec![turn("s1", 1, "user", "add the batch verb"), turn("s1", 2, "assistant", "Reading the store")];
-        let frame = project(&snapshot, "s1", turns, &Options::default());
+        let frame = project(&snapshot, "s1", turns, &BTreeMap::new(), &Options::default());
 
         assert_eq!((frame.pane.as_str(), frame.session.as_str(), frame.rows), ("%1", "s1", 5));
         assert_eq!(sources(&frame.turns), ["turn:s1:1", "turn:s1:2"]);
@@ -456,7 +465,7 @@ mod tests {
 
     #[test]
     fn a_blank_pane_is_one_frame_with_nothing_on_it() {
-        let frame = project(&pane(&[], 10, 0), "s1", Vec::new(), &Options::default());
+        let frame = project(&pane(&[], 10, 0), "s1", Vec::new(), &BTreeMap::new(), &Options::default());
         assert_eq!(frame.rows, 10, "a pane is its rows, written or not");
         assert!(frame.turns.is_empty() && frame.pinned.is_empty() && frame.tags.is_empty());
     }
@@ -470,7 +479,7 @@ mod tests {
             turn("s1", 3, "user", "and again"),
             turn("s1", 4, "assistant", "working"),
         ];
-        let frame = project(&snapshot, "s1", turns, &Options::default());
+        let frame = project(&snapshot, "s1", turns, &BTreeMap::new(), &Options::default());
         assert_eq!(sources(&frame.pinned), ["turn:s1:1"], "{:?}", frame.pinned);
         assert_eq!(frame.pinned[0].confidence, Confidence::pinned);
         assert_eq!(frame.pinned[0].buffer_start, 0);
@@ -485,7 +494,7 @@ mod tests {
     #[test]
     fn the_composer_is_not_a_turn() {
         let snapshot = pane(&["❯ hi", "", "⏺ done", "", "╭──────╮", "│ ❯    │", "╰──────╯"], 4, 0);
-        let frame = project(&snapshot, "s1", vec![turn("s1", 1, "assistant", "done")], &Options::default());
+        let frame = project(&snapshot, "s1", vec![turn("s1", 1, "assistant", "done")], &BTreeMap::new(), &Options::default());
         for found in &frame.turns {
             assert!(found.buffer_end < 5, "no span may reach the composer: {found:?}");
         }
@@ -502,7 +511,7 @@ mod tests {
             // Never on the pane: only the recency list knows it.
             turn("s1", 3, "assistant", "a reply the capture never held"),
         ];
-        let at = |height: u16, scroll: u32, options: &Options| project(&pane(&rows, height, scroll), "s1", turns.clone(), options);
+        let at = |height: u16, scroll: u32, options: &Options| project(&pane(&rows, height, scroll), "s1", turns.clone(), &BTreeMap::new(), options);
         let ids = |frame: &PaneFrame| -> Vec<String> {
             let layout = frame.layout.as_ref().expect("layout");
             layout.squares()[layout.band()..].iter().map(|square| square.id.clone()).collect()
@@ -558,7 +567,7 @@ mod tests {
     fn a_frame_is_unchanged_only_when_what_the_client_draws_is() {
         let snapshot = pane(&["❯ hi", "", "⏺ done"], 3, 0);
         let frame = |said: &str| {
-            project(&snapshot, "s1", vec![turn("s1", 1, "user", "hi"), turn("s1", 2, "assistant", said)], &Options::default())
+            project(&snapshot, "s1", vec![turn("s1", 1, "user", "hi"), turn("s1", 2, "assistant", said)], &BTreeMap::new(), &Options::default())
         };
         let one = frame("done");
         assert_eq!(fingerprint(&one), fingerprint(&frame("done")));
@@ -574,7 +583,7 @@ mod tests {
     #[test]
     fn a_frame_crosses_json_under_its_rust_names() {
         let snapshot = pane(&["❯ hi", "", "⏺ done"], 3, 0);
-        let frame = project(&snapshot, "s1", vec![turn("s1", 1, "user", "hi"), turn("s1", 2, "assistant", "done")], &Options::default());
+        let frame = project(&snapshot, "s1", vec![turn("s1", 1, "user", "hi"), turn("s1", 2, "assistant", "done")], &BTreeMap::new(), &Options::default());
         let json = serde_json::to_value(&frame).unwrap();
         let turn = &json["turns"][0];
         assert!(turn.get("buffer_start").is_some() && turn.get("bufferStart").is_none(), "{turn}");
