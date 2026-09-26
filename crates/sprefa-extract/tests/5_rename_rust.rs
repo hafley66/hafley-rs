@@ -296,7 +296,7 @@ fn self_rename_is_judged_by_rustc() {
     let output = run_rename(
         &root,
         &state,
-        "src/rename_cx.rs#RenameCx",
+        "src/edit/_1_rename_cx.rs#RenameCx",
         "SymbolCx",
         &["--commit"],
     );

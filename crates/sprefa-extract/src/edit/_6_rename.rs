@@ -19,7 +19,7 @@ use sprefa_extract::{
 };
 use sprefa_extract::edit_seams::RenameAbstain;
 
-#[path = "1_rename_verify.rs"]
+#[path = "_6_rename_verify.rs"]
 mod rename_verify;
 
 const PRODUCER: &str = "extract-rename";

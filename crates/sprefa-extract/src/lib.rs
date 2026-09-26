@@ -17,15 +17,15 @@
 #![allow(dead_code)]
 
 pub use hafley_scm::read::*;
-pub mod drain;
-pub mod move_cx;
-pub mod move_scip;
-pub mod move_stage;
-pub mod rename_cx;
+#[path = "edit/_2_drain.rs"] pub mod drain;
+#[path = "edit/_1_move_cx.rs"] pub mod move_cx;
+#[path = "edit/_4_move_scip.rs"] pub mod move_scip;
+#[path = "edit/_3_stage.rs"] pub mod move_stage;
+#[path = "edit/_1_rename_cx.rs"] pub mod rename_cx;
 /// The run trail rides the same subscriber the `cli` feature installs.
 #[cfg(feature = "cli")]
 pub mod trail;
-#[path = "0_edit_seams.rs"] pub mod edit_seams;
+#[path = "edit/_0_seams.rs"] pub mod edit_seams;
 pub mod edit;
 pub use drain::{
     bind_action, directory_path, directory_source, replace_action, source_rel,
