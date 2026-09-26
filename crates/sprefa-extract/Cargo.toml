@@ -207,6 +207,10 @@ prost = "0.13"
 # a cycle; sprefa-store's sea-orm/sqlx reader - async, banned above the SqlRunner
 # seam. `trace` is what the once-per-run statement count is measured on.
 rusqlite = { version = "0.40", features = ["bundled", "limits", "trace", "vtab"] }
+# Batch-local text spans use Bump::alloc_slice_copy; FxHasher fingerprints
+# short strings before a byte comparison in the interner.
+bumpalo = "3"
+rustc-hash = "2"
 # Atomic, no-clobber publication of a CLI SQLite export. Reuses the tempfile
 # version already in this lock through rust-analyzer; no custom temp-file protocol.
 tempfile = { version = "3", optional = true }

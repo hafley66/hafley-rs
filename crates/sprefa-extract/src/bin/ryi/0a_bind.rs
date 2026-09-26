@@ -8,13 +8,15 @@ use std::hash::{Hash, Hasher};
 use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use rusqlite::Connection;
 use rusqlite::vtab::{Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor};
 use serde::ser::{self, Impossible, Serialize};
+use bumpalo::Bump;
+use rustc_hash::FxHasher;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -50,7 +52,7 @@ enum Val {
     Null,
     Int(i64),
     Real(f64),
-    Text(u32, u32),
+    Text(*const u8, u32),
 }
 
 /// One table's statements, shared with the writer thread.
@@ -125,9 +127,9 @@ unsafe impl VTabCursor for BatchCursor {
             Val::Null => ctx.set_result(&rusqlite::types::Null),
             Val::Int(value) => ctx.set_result(&value),
             Val::Real(value) => ctx.set_result(&value),
-            Val::Text(start, len) => {
+            Val::Text(_, _) => {
                 // Every span came from a str or serde_json's UTF-8 writer.
-                let value = unsafe { std::str::from_utf8_unchecked(&batch.text[start as usize..(start + len) as usize]) };
+                let value = unsafe { std::str::from_utf8_unchecked(batch.bytes(batch.vals[self.row * self.width + i as usize])) };
                 ctx.set_result(&value)
             }
         }
@@ -142,51 +144,56 @@ static BATCH_MODULE: Module<'static, BatchTable> = Module::eponymous_only_module
 struct Batch {
     table: usize,
     vals: Vec<Val>,
-    text: Vec<u8>,
-    interned: HashMap<u64, Val>,
+    text: Bump,
+    interned: HashMap<u64, Vec<Val>>,
     rows: usize,
 }
 
 impl Batch {
     fn empty(table: usize) -> Self {
-        Self { table, vals: Vec::new(), text: Vec::new(), interned: HashMap::new(), rows: 0 }
+        Self { table, vals: Vec::new(), text: Bump::new(), interned: HashMap::new(), rows: 0 }
     }
 
     #[inline(always)]
     fn text(&mut self, value: &str) -> Val {
-        let start = self.text.len() as u32;
-        self.text.extend_from_slice(value.as_bytes());
-        Val::Text(start, value.len() as u32)
+        let span = self.text.alloc_slice_copy(value.as_bytes());
+        Val::Text(span.as_ptr(), span.len() as u32)
     }
 
     fn json<T: ?Sized + Serialize>(&mut self, value: &T) -> std::result::Result<Val, serde_json::Error> {
-        let start = self.text.len();
-        if let Err(error) = serde_json::to_writer(&mut self.text, value) {
-            self.text.truncate(start);
-            return Err(error);
-        }
-        Ok(Val::Text(start as u32, (self.text.len() - start) as u32))
+        let mut bytes = bumpalo::collections::Vec::new_in(&self.text);
+        serde_json::to_writer(&mut bytes, value)?;
+        let span = bytes.into_bump_slice();
+        Ok(Val::Text(span.as_ptr(), span.len() as u32))
+    }
+
+    #[inline(always)]
+    fn bytes(&self, val: Val) -> &[u8] {
+        let Val::Text(ptr, len) = val else { unreachable!("text span required") };
+        // Every text pointer is allocated from `self.text` and remains valid
+        // until clear resets the arena, after the SQLite read has completed.
+        unsafe { std::slice::from_raw_parts(ptr, len as usize) }
     }
 
     #[inline(always)]
     fn intern(&mut self, value: &str) -> Val {
         if value.len() > 128 { return self.text(value); }
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut hasher = FxHasher::default();
         value.hash(&mut hasher);
         let hash = hasher.finish();
-        if let Some(&Val::Text(start, len)) = self.interned.get(&hash) {
-            if &self.text[start as usize..(start + len) as usize] == value.as_bytes() {
-                return Val::Text(start, len);
+        if let Some(spans) = self.interned.get(&hash) {
+            if let Some(&span) = spans.iter().find(|&&span| self.bytes(span) == value.as_bytes()) {
+                return span;
             }
         }
         let val = self.text(value);
-        self.interned.entry(hash).or_insert(val);
+        self.interned.entry(hash).or_default().push(val);
         val
     }
 
     fn clear(&mut self) {
         self.vals.clear();
-        self.text.clear();
+        self.text.reset();
         self.interned.clear();
         self.rows = 0;
     }
@@ -199,8 +206,8 @@ impl Batch {
                 Val::Null => statement.raw_bind_parameter(parameter, rusqlite::types::Null)?,
                 Val::Int(v) => statement.raw_bind_parameter(parameter, v)?,
                 Val::Real(v) => statement.raw_bind_parameter(parameter, v)?,
-                Val::Text(start, len) => {
-                    let value = unsafe { std::str::from_utf8_unchecked(&self.text[start as usize..(start + len) as usize]) };
+                Val::Text(_, _) => {
+                    let value = unsafe { std::str::from_utf8_unchecked(self.bytes(*val)) };
                     statement.raw_bind_parameter(parameter, value)?;
                 }
             }
@@ -249,6 +256,10 @@ impl Batch {
         Ok(())
     }
 }
+
+// The batch and its bump are transferred together to one writer thread. The
+// text pointers remain owned by that moved bump and are read before reset.
+unsafe impl Send for Batch {}
 
 /// The writer thread: owns the connection while batches stream in, returns
 /// it (and the first error, if any) when the channel closes.
@@ -300,7 +311,7 @@ impl Slot {
         }
     }
 
-    fn spawn(&mut self, meta: Arc<Vec<Meta>>, insert_nanos: Arc<AtomicU64>, table_insert_nanos: Arc<Vec<AtomicU64>>) -> Result<()> {
+    fn spawn(&mut self, meta: Arc<Vec<Meta>>) -> Result<()> {
         let Slot::Local(_) = self else { return Ok(()) };
         let Slot::Local(connection) = std::mem::replace(self, Slot::Moving) else { unreachable!() };
         let (batches, inbox) = sync_channel::<Batch>(QUEUE_BATCHES);
@@ -309,13 +320,9 @@ impl Slot {
             let mut error = None;
             for mut batch in inbox {
                 if error.is_none() {
-                    let started = Instant::now();
                     if let Err(e) = batch.drain(&meta[batch.table], &connection) {
                         error = Some(e.to_string());
                     }
-                    let nanos = started.elapsed().as_nanos() as u64;
-                    insert_nanos.fetch_add(nanos, Ordering::Relaxed);
-                    table_insert_nanos[batch.table].fetch_add(nanos, Ordering::Relaxed);
                 }
                 batch.clear();
                 let _ = give_back.try_send(batch);
@@ -342,13 +349,7 @@ pub struct Binder {
     by_name: HashMap<String, usize>,
     path: String,
     threaded: bool,
-    insert_nanos: Arc<AtomicU64>,
-    table_insert_nanos: Arc<Vec<AtomicU64>>,
-    table_bind_nanos: Vec<u64>,
-    table_rows: Vec<u64>,
-    profile_tables: bool,
     kind_time: [KindTime; COLUMN_KINDS.len()],
-    submit_nanos: u64,
 }
 
 impl Binder {
@@ -410,13 +411,8 @@ impl Binder {
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
-        let table_count = meta.len();
         Ok(Self { meta: Arc::new(meta), buffers, columns, json, column_kinds, by_name, path: String::new(), threaded,
-            insert_nanos: Arc::new(AtomicU64::new(0)),
-            table_insert_nanos: Arc::new((0..table_count).map(|_| AtomicU64::new(0)).collect()),
-            table_bind_nanos: vec![0; table_count], table_rows: vec![0; table_count],
-            profile_tables: true,
-            kind_time: [KindTime::default(); COLUMN_KINDS.len()], submit_nanos: 0 })
+            kind_time: [KindTime::default(); COLUMN_KINDS.len()] })
     }
 
     /// Serialize one row into its table's buffer; a full buffer goes to the
@@ -429,22 +425,19 @@ impl Binder {
         content_id: Option<&str>,
         value: &impl Serialize,
     ) -> Result<()> {
-        let started = self.profile_tables.then(Instant::now);
         self.path.clear();
         let mut writer = RowWriter {
             binder: self,
             table: None,
-            text_mark: 0,
             prefix_len: 0,
             meta: (row, input_path, content_id),
         };
         let written = value.serialize(&mut writer);
-        let (opened, text_mark) = (writer.table, writer.text_mark);
+        let opened = writer.table;
         if let Err(error) = written {
             if let Some(table) = opened {
                 let buffer = &mut self.buffers[table];
                 buffer.vals.truncate(buffer.rows * self.meta[table].width);
-                buffer.text.truncate(text_mark);
                 buffer.interned.clear();
             }
             return Err(error.0);
@@ -453,29 +446,19 @@ impl Binder {
             return Err("row has no `record` tag".into());
         };
         self.buffers[table].rows += 1;
-        if self.profile_tables { self.table_rows[table] += 1; }
         if self.buffers[table].rows == self.meta[table].chunk_rows * CHUNKS_PER_BATCH {
             self.submit(slot, table)?;
-        }
-        if let Some(started) = started {
-            self.table_bind_nanos[table] += started.elapsed().as_nanos() as u64;
         }
         Ok(())
     }
 
     fn submit(&mut self, slot: &mut Slot, table: usize) -> Result<()> {
-        let started = self.profile_tables.then(Instant::now);
         if !self.threaded {
             let connection = slot.local()?;
-            let insert_started = Instant::now();
             self.buffers[table].drain(&self.meta[table], connection)?;
-            let nanos = insert_started.elapsed().as_nanos() as u64;
-            self.insert_nanos.fetch_add(nanos, Ordering::Relaxed);
-            self.table_insert_nanos[table].fetch_add(nanos, Ordering::Relaxed);
-            if let Some(started) = started { self.submit_nanos += started.elapsed().as_nanos() as u64; }
             return Ok(());
         }
-        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.insert_nanos), Arc::clone(&self.table_insert_nanos))?;
+        slot.spawn(Arc::clone(&self.meta))?;
         let Slot::Worker(worker) = slot else {
             return Err("SQLite writer thread did not start".into());
         };
@@ -491,7 +474,6 @@ impl Binder {
             slot.local()?;
             return Err("SQLite writer thread stopped".into());
         }
-        if let Some(started) = started { self.submit_nanos += started.elapsed().as_nanos() as u64; }
         Ok(())
     }
 
@@ -507,15 +489,10 @@ impl Binder {
         Ok(())
     }
 
-    pub fn insert_time(&self) -> Duration {
-        Duration::from_nanos(self.insert_nanos.load(Ordering::Relaxed))
-    }
-
-    pub fn record_profile(&self, bind_seconds: f64, insert_seconds: f64) {
+    pub fn record_profile(&self, bind_seconds: f64) {
         let span = tracing::info_span!(
             "sqlite_bind_phase",
             seconds = tracing::field::Empty,
-            insert_seconds = tracing::field::Empty,
             string_calls = tracing::field::Empty, string_nulls = tracing::field::Empty, string_seconds = tracing::field::Empty,
             uint32_calls = tracing::field::Empty, uint32_nulls = tracing::field::Empty, uint32_seconds = tracing::field::Empty,
             int64_calls = tracing::field::Empty, int64_nulls = tracing::field::Empty, int64_seconds = tracing::field::Empty,
@@ -525,7 +502,6 @@ impl Binder {
             uint64_calls = tracing::field::Empty, uint64_nulls = tracing::field::Empty, uint64_seconds = tracing::field::Empty,
         );
         span.record("seconds", bind_seconds);
-        span.record("insert_seconds", insert_seconds);
         for (index, kind) in ["string", "uint32", "int64", "boolean", "int32", "json", "uint64"].iter().enumerate() {
             let time = self.kind_time[index];
             span.record(format!("{kind}_calls").as_str(), time.calls);
@@ -560,8 +536,6 @@ fn err<T>(msg: String) -> std::result::Result<T, Error> {
 struct RowWriter<'b> {
     binder: &'b mut Binder,
     table: Option<usize>,
-    /// The table's text length before this row: a rejected row rolls back to it.
-    text_mark: usize,
     prefix_len: usize,
     meta: (i64, Option<&'b str>, Option<&'b str>),
 }
@@ -574,7 +548,6 @@ impl RowWriter<'_> {
         let width = self.binder.meta[index].width;
         let meta = &self.binder.meta[index];
         let table = &mut self.binder.buffers[index];
-        self.text_mark = table.text.len();
         let base = table.vals.len();
         table.vals.resize(base + width, Val::Null);
         let set = |table: &mut Batch, column: Option<usize>, val: Val| {
@@ -641,20 +614,18 @@ impl RowWriter<'_> {
 
     #[inline(always)]
     fn column<T: ?Sized + Serialize>(&mut self, index: usize, column: usize, value: &T) -> std::result::Result<(), Error> {
-        let started = self.binder.profile_tables.then(Instant::now);
+        let started = Instant::now();
         let kind = self.binder.column_kinds[index][column];
         let width = self.binder.meta[index].width;
         let table = &mut self.binder.buffers[index];
         let val = if self.binder.json[index][column] {
             table.json(value).map_err(|e| Error(e.into()))?
         } else {
-            let mark = table.text.len();
             let mut probe = Scalar { arena: Some(&mut *table), val: None, text: None,
                 lookup: None, table: None };
             match value.serialize(&mut probe) {
                 Ok(()) => probe.val.unwrap_or(Val::Null),
                 Err(Compound) => {
-                    table.text.truncate(mark);
                     table.interned.clear();
                     table.json(value).map_err(|e| Error(e.into()))?
                 }
@@ -662,12 +633,10 @@ impl RowWriter<'_> {
         };
         let base = table.rows * width;
         table.vals[base + column] = val;
-        if let Some(started) = started {
-            let time = &mut self.binder.kind_time[kind];
-            time.calls += 1;
-            time.nulls += u64::from(matches!(val, Val::Null));
-            time.nanos += started.elapsed().as_nanos() as u64;
-        }
+        let time = &mut self.binder.kind_time[kind];
+        time.calls += 1;
+        time.nulls += u64::from(matches!(val, Val::Null));
+        time.nanos += started.elapsed().as_nanos() as u64;
         Ok(())
     }
 }
@@ -925,6 +894,7 @@ impl ser::Serializer for &mut Scalar<'_> {
 mod tests {
     use super::{Batch, Val};
     use std::hash::{Hash, Hasher};
+    use rustc_hash::FxHasher;
 
     #[test]
     fn repeated_text_reuses_one_batch_span_and_recycled_capacity() {
@@ -932,15 +902,14 @@ mod tests {
         let first = batch.intern("shared-name");
         let second = batch.intern("shared-name");
         assert!(matches!((first, second), (Val::Text(a, n), Val::Text(b, m)) if a == b && n == m));
-        assert_eq!(batch.text.as_slice(), b"shared-name");
+        assert_eq!(batch.bytes(first), b"shared-name");
         batch.intern("other-name");
-        assert_eq!(batch.text.as_slice(), b"shared-nameother-name");
-        let capacity = batch.text.capacity();
+        let allocated = batch.text.allocated_bytes_including_metadata();
         batch.clear();
-        assert_eq!(batch.text.capacity(), capacity);
+        assert_eq!(batch.text.allocated_bytes_including_metadata(), allocated);
         assert!(batch.interned.is_empty());
-        assert!(matches!(batch.intern("shared-name"), Val::Text(0, 11)));
-        assert_eq!(batch.text.as_slice(), b"shared-name");
+        let recycled = batch.intern("shared-name");
+        assert_eq!(batch.bytes(recycled), b"shared-name");
     }
 
     #[test]
@@ -948,19 +917,27 @@ mod tests {
         let mut batch = Batch::empty(0);
         batch.text("prefix");
         let value = serde_json::json!({"text": "λ\n\"", "array": [null, true, 7]});
-        let Val::Text(start, len) = batch.json(&value).unwrap() else { panic!("JSON must be text") };
-        assert_eq!(start, 6);
-        assert_eq!(&batch.text[start as usize..(start + len) as usize], serde_json::to_string(&value).unwrap().as_bytes());
+        let encoded = batch.json(&value).unwrap();
+        assert_eq!(batch.bytes(encoded), serde_json::to_string(&value).unwrap().as_bytes());
     }
 
     #[test]
     fn hash_collision_keeps_distinct_text_spans() {
         let mut batch = Batch::empty(0);
-        batch.text("seed");
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        let mut hasher = FxHasher::default();
         "other".hash(&mut hasher);
-        batch.interned.insert(hasher.finish(), Val::Text(0, 4));
-        assert!(matches!(batch.intern("other"), Val::Text(4, 5)));
-        assert_eq!(batch.text.as_slice(), b"seedother");
+        let seed = batch.text("seed");
+        batch.interned.insert(hasher.finish(), vec![seed]);
+        let other = batch.intern("other");
+        assert_ne!(batch.bytes(other), batch.bytes(seed));
+        assert_eq!(batch.bytes(other), b"other");
+        let repeated = batch.intern("other");
+        assert_eq!(batch.bytes(repeated), b"other");
+        assert_eq!(batch.interned.values().map(Vec::len).sum::<usize>(), 2);
+        let long = "x".repeat(129);
+        let before = batch.interned.values().map(Vec::len).sum::<usize>();
+        let bypassed = batch.intern(&long);
+        assert_eq!(batch.bytes(bypassed), long.as_bytes());
+        assert_eq!(batch.interned.values().map(Vec::len).sum::<usize>(), before);
     }
 }

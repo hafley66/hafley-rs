@@ -179,8 +179,7 @@ impl Database {
     /// published path so `finish` can report it; silent otherwise.
     pub fn close(mut self) -> Result<Option<PathBuf>> {
         self.flush()?;
-        let insert_time = self.binder.insert_time();
-        self.binder.record_profile(self.bind_time.as_secs_f64(), insert_time.as_secs_f64());
+        self.binder.record_profile(self.bind_time.as_secs_f64());
         let connection = std::mem::replace(&mut self.slot, bind::Slot::Moving).into_local()?;
         connection.execute_batch("COMMIT;")?;
         connection.close().map_err(|(_, error)| error)?;
