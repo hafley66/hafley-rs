@@ -33,3 +33,9 @@ The file stays compiled into the binary crate through a path reaching outside `s
 - [ ] `--relocate-mod` renames the `mod` item to the new stem and respells all `crate::<old>::` paths, with no `#[path]`
 - [ ] move with DEST outside SRC's package root is a named stop unless a flag opts into `#[path]`
 - [ ] tests for both
+
+## Comments
+
+### 2026-09-26T22:27:59Z · @claude
+
+Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.

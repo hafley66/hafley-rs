@@ -31,3 +31,9 @@ Expected: when DEST is under no package, or under a package other than SRC's, ei
 - [ ] cleave into a path that is under no `Cargo.toml` is a named stop (exit 2)
 - [ ] cleave into a path whose module is undeclared in SRC's crate adds the `mod` declaration (or stops), never emits `crate::<undeclared>` paths
 - [ ] test: fixture binary crate, cleave into `crates/new/src/x.rs`, assert the stop
+
+## Comments
+
+### 2026-09-26T22:27:59Z · @claude
+
+Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.

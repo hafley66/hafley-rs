@@ -25,3 +25,9 @@ Output noise from `ryi cleave` on a 140-module binary crate:
 - [ ] default log level hides per-file INFO
 - [ ] `orphan` lists only imports orphaned by this plan
 - [ ] corpus walk skips gitignored/untracked paths by default
+
+## Comments
+
+### 2026-09-26T22:28:00Z · @claude
+
+Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.

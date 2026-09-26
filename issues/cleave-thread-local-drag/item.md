@@ -31,3 +31,9 @@ Compare `ryi cleave src/morph.rs#IterateFrameRenderer ...`, which prints `ungrad
 - [ ] items declared inside `thread_local!` (and other item-producing std macros) are indexed and cleavable, or named as unsupported
 - [ ] `--drag` reports every referenced item it could not move as `ungraded`
 - [ ] a plan with unresolved references in DEST exits non-zero
+
+## Comments
+
+### 2026-09-26T22:28:00Z · @claude
+
+Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
