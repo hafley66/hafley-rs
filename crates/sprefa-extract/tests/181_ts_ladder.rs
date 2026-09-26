@@ -85,6 +85,16 @@ _4_nested.ts call      run          -> _3_many.ts:Child       f-
 _4_nested.ts call      run          -> _3_many.ts:many        fs
 _4_nested.ts heritage  Nested       -> _0_types.ts:Service    fs
 _4_nested.ts param     reexported   -> _0_types.ts:Base       fs
-_4_nested.ts returns   reexported   -> _0_types.ts:Base       fs"
+_4_nested.ts returns   reexported   -> _0_types.ts:Base       fs
+_5_peer_a.ts call      useA         -> _5_peer_a.ts:same      fs
+_5_peer_a.ts param     same         -> _5_peer_a.ts:Peer      fs
+_5_peer_a.ts param     useA         -> _5_peer_a.ts:Peer      fs
+_5_peer_a.ts returns   same         -> _5_peer_a.ts:Peer      fs
+_5_peer_a.ts returns   useA         -> _5_peer_a.ts:Peer      fs
+_6_peer_b.ts call      useB         -> _6_peer_b.ts:same      fs
+_6_peer_b.ts param     same         -> _6_peer_b.ts:Peer      fs
+_6_peer_b.ts param     useB         -> _6_peer_b.ts:Peer      fs
+_6_peer_b.ts returns   same         -> _6_peer_b.ts:Peer      fs
+_6_peer_b.ts returns   useB         -> _6_peer_b.ts:Peer      fs"
     );
 }

@@ -4263,16 +4263,17 @@ fn resolve_type_dst(
     types: &FamilyBundle<TypeF>,
     strings: &Strings,
     index: Option<&DefIndex>,
+    own: Option<&ContentId>,
     name: &str,
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let same_file = types
         .nodes
         .iter()
         .find(|node| node.name.map_or(false, |id| strings.lookup(id) == name));
-    if let (Some(node), Some(index)) = (same_file, index) {
+    if let (Some(node), Some(index), Some(own)) = (same_file, index, own) {
         return corpus_defs(index, name)
             .iter()
-            .find(|site| site.span == node.span)
+            .find(|site| site.blob == *own && site.span == node.span)
             .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile));
     }
     let sites = index.map(|index| corpus_defs(index, name)).unwrap_or(&[]);
@@ -4297,6 +4298,7 @@ impl Resolve<TypeF> for TsSource {
             .zip(own_path(output, cx))
             .filter(|(modules, path)| modules.knows(path));
         let checker = cx.indexes.ts_checker.get();
+        let own_blob = own_blob(cx, output);
         let own = own_path(output, cx);
         let mut edges = Vec::new();
         for candidate in TsSource::type_edge_candidates(output) {
@@ -4323,7 +4325,15 @@ impl Resolve<TypeF> for TsSource {
                             ResolutionOrigin::ModulePlane,
                         )
                     })
-                    .or_else(|| resolve_type_dst(types, &output.strings, index, referenced))
+                    .or_else(|| {
+                        resolve_type_dst(
+                            types,
+                            &output.strings,
+                            index,
+                            own_blob.as_ref(),
+                            referenced,
+                        )
+                    })
             };
             // The CHECKER tier answers first: a name one file resolves two ways
             // is the only shape it declines, and the legs below then run.
@@ -4604,6 +4614,7 @@ impl TsSource {
         output: &RyiOutput,
         def_index: &DefIndex,
         callee: &str,
+        own: Option<&ContentId>,
         modules: Option<&TsModuleIndex>,
         paths: Option<&crate::read::types::PathIndex>,
         member: bool,
@@ -4621,7 +4632,9 @@ impl TsSource {
         let call = output.call.as_ref()?;
         let node = def_named(call, &output.strings, callee)?;
         let span = call.node(node).span;
-        let site = sites.iter().find(|site| site.span == span)?;
+        let site = sites
+            .iter()
+            .find(|site| Some(&site.blob) == own && site.span == span)?;
         // A module-private def with unclaimed twins is spelling noise: no dst
         // is distinguishable from a guess. Everything else owns its file.
         let private = paths
@@ -5033,6 +5046,7 @@ impl Resolve<CallF> for TsSource {
                     output,
                     def_index,
                     callee,
+                    own.as_ref(),
                     modules.map(|(modules, _)| modules),
                     paths,
                     member,
@@ -5200,6 +5214,7 @@ impl Resolve<CallF> for TsSource {
                     output,
                     def_index,
                     named,
+                    own.as_ref(),
                     modules.map(|(modules, _)| modules),
                     paths,
                     false,
