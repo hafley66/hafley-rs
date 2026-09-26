@@ -222,6 +222,8 @@ pub struct ModuleFacts {
     /// Signature type references whose owner has no TypeF edge candidate:
     /// interface methods, constructors, and object-literal methods.
     pub signature_uses: Vec<SignatureTypeUse>,
+    /// References bound to a lexical type parameter in this file.
+    pub type_parameter_uses: Vec<SignatureTypeUse>,
 }
 
 #[derive(Clone, Debug)]
@@ -335,6 +337,7 @@ pub fn ts_module_facts_from_parsed(parsed: &oxc_parser::ParserReturn<'_>) -> Mod
     facts.requested_modules.extend(runtime.modules);
     facts.free_arity.extend(runtime.free_arity);
     facts.signature_uses = runtime.signature_uses;
+    facts.type_parameter_uses = runtime.type_parameter_uses;
     facts
 }
 
@@ -345,9 +348,30 @@ struct RuntimeModuleRequests {
     modules: Vec<String>,
     free_arity: BTreeMap<(u32, u32), u32>,
     signature_uses: Vec<SignatureTypeUse>,
+    type_parameter_uses: Vec<SignatureTypeUse>,
+    type_parameter_scopes: Vec<BTreeSet<String>>,
+    type_owners: Vec<(String, Span)>,
 }
 
 impl RuntimeModuleRequests {
+    fn enter_type_owner(
+        &mut self,
+        name: &str,
+        span: oxc_span::Span,
+        parameters: Option<&ts::TSTypeParameterDeclaration<'_>>,
+    ) {
+        self.type_owners.push((name.to_string(), to_local_span(span)));
+        self.type_parameter_scopes.push(
+            parameters.into_iter().flat_map(|parameters| parameters.params.iter())
+                .map(|parameter| parameter.name.name.to_string()).collect(),
+        );
+    }
+
+    fn leave_type_owner(&mut self) {
+        self.type_owners.pop();
+        self.type_parameter_scopes.pop();
+    }
+
     fn signature(
         &mut self,
         owner: &str,
@@ -395,6 +419,42 @@ impl RuntimeModuleRequests {
 }
 
 impl<'a> Visit<'a> for RuntimeModuleRequests {
+    fn visit_ts_type_reference(&mut self, reference: &ts::TSTypeReference<'a>) {
+        if let ts::TSTypeName::IdentifierReference(name) = &reference.type_name {
+            if self.type_parameter_scopes.iter().rev().any(|scope| scope.contains(name.name.as_str())) {
+                if let Some((owner, owner_span)) = self.type_owners.last() {
+                    self.type_parameter_uses.push(SignatureTypeUse {
+                        owner: owner.clone(), owner_span: *owner_span,
+                        name: name.name.to_string(), kind: "generic",
+                    });
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_ts_type_reference(self, reference);
+    }
+
+    fn visit_ts_type_alias_declaration(&mut self, alias: &ts::TSTypeAliasDeclaration<'a>) {
+        self.enter_type_owner(&alias.id.name, alias.span, alias.type_parameters.as_deref());
+        oxc_ast_visit::walk::walk_ts_type_alias_declaration(self, alias);
+        self.leave_type_owner();
+    }
+
+    fn visit_ts_interface_declaration(&mut self, interface: &ts::TSInterfaceDeclaration<'a>) {
+        self.enter_type_owner(&interface.id.name, interface.span, interface.type_parameters.as_deref());
+        oxc_ast_visit::walk::walk_ts_interface_declaration(self, interface);
+        self.leave_type_owner();
+    }
+
+    fn visit_class(&mut self, class: &ts::Class<'a>) {
+        if let Some(id) = &class.id {
+            self.enter_type_owner(&id.name, class.span, class.type_parameters.as_deref());
+            oxc_ast_visit::walk::walk_class(self, class);
+            self.leave_type_owner();
+        } else {
+            oxc_ast_visit::walk::walk_class(self, class);
+        }
+    }
+
     fn visit_method_definition(&mut self, method: &ts::MethodDefinition<'a>) {
         let owner = if method.kind == ts::MethodDefinitionKind::Constructor {
             Some("constructor")
@@ -412,7 +472,13 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
                 method.value.return_type.as_deref(),
             );
         }
-        oxc_ast_visit::walk::walk_method_definition(self, method);
+        if let Some(owner) = owner {
+            self.enter_type_owner(owner, method.span, method.value.type_parameters.as_deref());
+            oxc_ast_visit::walk::walk_method_definition(self, method);
+            self.leave_type_owner();
+        } else {
+            oxc_ast_visit::walk::walk_method_definition(self, method);
+        }
     }
 
     fn visit_ts_method_signature(&mut self, method: &ts::TSMethodSignature<'a>) {
@@ -424,8 +490,12 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
                 &method.params,
                 method.return_type.as_deref(),
             );
+            self.enter_type_owner(&key.name, method.span, method.type_parameters.as_deref());
+            oxc_ast_visit::walk::walk_ts_method_signature(self, method);
+            self.leave_type_owner();
+        } else {
+            oxc_ast_visit::walk::walk_ts_method_signature(self, method);
         }
-        oxc_ast_visit::walk::walk_ts_method_signature(self, method);
     }
 
     fn visit_object_property(&mut self, property: &ts::ObjectProperty<'a>) {
@@ -442,6 +512,10 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
                     &func.params,
                     func.return_type.as_deref(),
                 );
+                self.enter_type_owner(&key.name, property.span, func.type_parameters.as_deref());
+                oxc_ast_visit::walk::walk_object_property(self, property);
+                self.leave_type_owner();
+                return;
             }
         }
         oxc_ast_visit::walk::walk_object_property(self, property);
@@ -454,7 +528,13 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
                 it.params.items.len() as u32,
             );
         }
-        oxc_ast_visit::walk::walk_function(self, it, flags);
+        if let Some(id) = &it.id {
+            self.enter_type_owner(&id.name, it.span, it.type_parameters.as_deref());
+            oxc_ast_visit::walk::walk_function(self, it, flags);
+            self.leave_type_owner();
+        } else {
+            oxc_ast_visit::walk::walk_function(self, it, flags);
+        }
     }
 
     fn visit_import_expression(&mut self, it: &ts::ImportExpression<'a>) {
@@ -877,6 +957,12 @@ impl TsModuleIndex {
         self.facts
             .get(path)
             .map_or(&[], |facts| facts.signature_uses.as_slice())
+    }
+
+    pub fn type_parameter_uses(&self, path: &str) -> &[SignatureTypeUse] {
+        self.facts
+            .get(path)
+            .map_or(&[], |facts| facts.type_parameter_uses.as_slice())
     }
 
     /// Whether this module exports a declaration under its local spelling.

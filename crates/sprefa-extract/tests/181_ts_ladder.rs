@@ -96,6 +96,9 @@ _15_private.ts call      usePrivate   -> _15_private.ts:clashPriv fs
 _17_export.ts call      useExported  -> _17_export.ts:clashPub fs
 _19_local_a.ts call      useLocalTwin -> _19_local_a.ts:localTwin fs
 _21_local_peer.ts call      useLocalHelper -> _21_local_peer.ts:helper f-
+_23_type_params.ts generic   Boxed        -> _23_type_params.ts:T   f-
+_23_type_params.ts generic   identity     -> _23_type_params.ts:T   f-
+_24_bind_args.ts call      arrival_statement -> _24_bind_args.ts:bind_args f-
 _2_one.ts    call      one          -> _0_types.ts:Service    f-
 _2_one.ts    call      one          -> _0_types.ts:ping       fs
 _2_one.ts    param     one          -> _0_types.ts:Base       fs

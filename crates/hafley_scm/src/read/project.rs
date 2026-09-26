@@ -2640,6 +2640,21 @@ fn type_facts(
             });
         }
     }
+    if let Some(modules) = cx.indexes.ts_modules.get() {
+        for use_site in modules.type_parameter_uses(&input.path) {
+            facts.push(FlatFact::ResolvedTypeEdge {
+                fact: None,
+                owner_path: input.path.clone(),
+                owner_name: Some(use_site.owner.clone()),
+                owner_start: use_site.owner_span.start,
+                owner_end: use_site.owner_span.end(),
+                target_path: input.path.clone(),
+                target_name: Some(use_site.name.clone()),
+                kind: use_site.kind.to_string(),
+                resolution_origin: ResolutionOrigin::SameFile.as_str().to_string(),
+            });
+        }
+    }
     facts
 }
 
