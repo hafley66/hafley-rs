@@ -277,6 +277,31 @@ fn list_commit_is_atomic_across_rows() {
     );
 }
 
+/// The second row binds the declaration after the first row has renamed it.
+#[test]
+fn list_rows_read_earlier_edits() {
+    let fixture = fixture("local", "chained_list");
+    let list = fixture.state.join("renames.tsv");
+    std::fs::write(&list, "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .args(["rename", "--list"])
+        .arg(&list)
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .arg("--commit")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    for rel in ["src/util.rs", "src/lib.rs"] {
+        let actual = std::fs::read_to_string(fixture.root.join(rel)).unwrap();
+        let expected = std::fs::read_to_string(tree("local", "after").join(rel)).unwrap()
+            .replace("Tool", "Instrument");
+        assert_eq!(actual, expected, "{rel}");
+    }
+}
+
 /// The verb run against this crate's own tree, judged by rustc, not by an
 /// assertion. MEASURED 2026-08-27: 25.2 s, over the 10-second cap, so it runs by
 /// hand: `cargo test --features cli --test 5_rename_rust -- --ignored`.

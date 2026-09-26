@@ -8,6 +8,7 @@
 //! root-relative spelling law (`move_cx.rs:26,45,158`).
 
 use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
 
 use ignore::WalkBuilder;
 
@@ -21,6 +22,7 @@ pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {
 
 /// One symbol this run renames. The anchor names the DECLARING file; the
 /// declaration in it is found by name, or by `at` when the name is declared twice.
+#[derive(Clone)]
 pub struct RenameRequest {
     /// Project-relative path of the declaring file.
     pub anchor: String,
@@ -38,6 +40,7 @@ pub struct RenameCx {
     root: PathBuf,
     files: Vec<String>,
     batch: Vec<RenameRequest>,
+    overlay: BTreeMap<String, String>,
 }
 
 impl RenameCx {
@@ -70,6 +73,7 @@ impl RenameCx {
             root: root.to_path_buf(),
             files,
             batch: Vec::new(),
+            overlay: BTreeMap::new(),
         })
     }
 
@@ -98,7 +102,8 @@ impl RenameCx {
     }
 
     pub fn read(&self, rel: &str) -> Option<Vec<u8>> {
-        std::fs::read(self.abs(rel)).ok()
+        self.overlay.get(rel).map(|text| text.as_bytes().to_vec())
+            .or_else(|| std::fs::read(self.abs(rel)).ok())
     }
 
     pub fn text(&self, rel: &str) -> Option<String> {
@@ -107,6 +112,14 @@ impl RenameCx {
 
     pub fn batch(&self) -> &[RenameRequest] {
         &self.batch
+    }
+
+    pub fn overlay(&mut self, rel: String, text: String) {
+        self.overlay.insert(rel, text);
+    }
+
+    pub fn overlaid(&self) -> &BTreeMap<String, String> {
+        &self.overlay
     }
 
     pub fn abs(&self, rel: &str) -> PathBuf {
