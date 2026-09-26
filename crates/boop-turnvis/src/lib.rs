@@ -147,7 +147,14 @@ fn line_matches(screen: &str, source: &str) -> bool {
     screen == source
         || src_len >= 8
             && ((screen.contains(source) && src_len * 2 >= slen)
-                || (source.contains(screen) && slen >= 12))
+                || (source.contains(screen) && slen >= 12)
+                || truncated_prefix(screen).is_some_and(|prefix| source.contains(prefix)))
+}
+
+/// The TUI cuts a long row with `…`; the text before it is still verbatim source.
+fn truncated_prefix(screen: &str) -> Option<&str> {
+    let (prefix, _) = screen.split_once('…')?;
+    (prefix.chars().count() >= 12).then_some(prefix)
 }
 
 struct Source {
@@ -231,6 +238,27 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
         return None;
     }
     hits.reverse();
+    // A source line longer than the pane is hard-wrapped over the rows that follow
+    // it; the DP pairs a source line with one row, so claim the continuation rows too.
+    let mut wrapped: Vec<Hit> = Vec::with_capacity(hits.len());
+    for (index, hit) in hits.iter().enumerate() {
+        wrapped.push(Hit { line: hit.line.clone(), source_index: hit.source_index });
+        let next_hit_start = hits.get(index + 1).map(|next| next.line.start);
+        let Some(mut at) = rows.iter().position(|row| row.line.start == hit.line.start) else {
+            continue;
+        };
+        while let Some(row) = rows.get(at + 1) {
+            if Some(row.line.start) == next_hit_start
+                || row.line.start != rows[at].line.end + 1
+                || !source.normalized[hit.source_index].contains(row.normalized.as_str())
+            {
+                break;
+            }
+            wrapped.push(Hit { line: row.line.clone(), source_index: hit.source_index });
+            at += 1;
+        }
+    }
+    let hits = wrapped;
     let source_span = hits[hits.len() - 1].source_index - hits[0].source_index + 1;
     Some(TurnMatch {
         source: Source {
@@ -243,7 +271,59 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
     })
 }
 
+/// Input keys the claude TUI prints inside `Name(…)`, in the order it prefers them.
+const TOOL_HEADER_KEYS: &[&str] = &["command", "file_path", "notebook_path", "path", "pattern", "url", "query", "prompt"];
+
+/// The first string value of `key` in a JSON object that may be cut short by `cap`.
+fn json_string_field(json: &str, key: &str) -> Option<String> {
+    let start = json.find(&format!("\"{key}\":\""))? + key.len() + 4;
+    let mut out = String::new();
+    let mut chars = json[start..].chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => return Some(out),
+            '\\' => match chars.next()? {
+                'n' => out.push('\n'),
+                't' => out.push('\t'),
+                other => out.push(other),
+            },
+            other => out.push(other),
+        }
+    }
+    Some(out)
+}
+
+/// `/Users/<name>/…` and `/home/<name>/…` as the TUI prints them: `~/…`.
+fn home_relative(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/Users/").or_else(|| path.strip_prefix("/home/"))?;
+    let (_, tail) = rest.split_once('/')?;
+    Some(format!("~/{tail}"))
+}
+
+/// `[Name] {json}` → the `Name(arg)` header rows the TUI draws for that call.
+fn tool_header_lines(line: &str) -> Vec<String> {
+    let Some((name, json)) = line.strip_prefix('[').and_then(|rest| rest.split_once("] ")) else {
+        return Vec::new();
+    };
+    let Some(arg) = TOOL_HEADER_KEYS.iter().find_map(|key| json_string_field(json, key)) else {
+        return Vec::new();
+    };
+    let first = arg.split('\n').next().unwrap_or_default();
+    let mut headers = vec![format!("{name}({first})")];
+    if let Some(home) = home_relative(first) {
+        headers.push(format!("{name}({home})"));
+    }
+    headers
+}
+
 fn source_lines(turn: &BoopTurn) -> Vec<String> {
+    if turn.role == "assistant" {
+        return turn
+            .said
+            .split('\n')
+            .flat_map(|line| std::iter::once(line.to_owned()).chain(tool_header_lines(line)))
+            .collect();
+    }
     if turn.role == "user" {
         return boop_content(&turn.said)
             .split('\n')

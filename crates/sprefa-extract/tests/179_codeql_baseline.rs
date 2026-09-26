@@ -1,4 +1,6 @@
-//! Compare the type ladder's rendered agreement table with CodeQL when the CLI is available.
+//! Compare the type ladder's rendered agreement table with CodeQL's committed
+//! answers (fixtures/codeql_baseline/type_ladder/*.csv, written by
+//! fixtures/type_ladder/regen.sh). CodeQL never runs here.
 #![cfg(feature = "cli")]
 
 use std::path::Path;
@@ -6,11 +8,6 @@ use std::process::Command;
 
 #[test]
 fn type_ladder_codeql_baseline() {
-    if Command::new("codeql").arg("version").output().is_err() {
-        eprintln!("skipping type_ladder_codeql_baseline: codeql is absent from PATH");
-        return;
-    }
-
     let manifest = Path::new(env!("CARGO_MANIFEST_DIR"));
     let fixture = manifest.join("tests/fixtures/type_ladder");
     let script = manifest.join("scripts/ryi-vs-codeql.sh");
@@ -20,6 +17,7 @@ fn type_ladder_codeql_baseline() {
         .arg("rust")
         .env("RYI_BIN", env!("CARGO_BIN_EXE_ryi-server"))
         .env("RYI_CODEQL_OUT", scratch.path())
+        .env("RYI_CODEQL_CSV", manifest.join("tests/fixtures/codeql_baseline/type_ladder"))
         .output()
         .expect("run baseline script");
     let logs = ["codeql-build.log", "type-query.log", "call-query.log", "ryi.log"]
