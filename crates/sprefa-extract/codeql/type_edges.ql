@@ -11,6 +11,8 @@ string ownerName(Item owner) {
   result = owner.(TypeAlias).getName().getText()
   or
   result = owner.(Impl).getSelfTy().toString()
+  or
+  result = owner.(Trait).getName().getText()
 }
 
 Item owner(PathTypeRepr t) {
@@ -24,7 +26,12 @@ Item owner(PathTypeRepr t) {
 from PathTypeRepr t, ItemNode target, Item o
 where
   target = resolvePath(t.getPath()) and
+  not t.isInMacroExpansion() and
+  (target instanceof Struct or target instanceof Enum or
+   target instanceof Trait or target instanceof TypeAlias) and
   target.getLocation().getFile().getBaseName() = "_0_types.rs" and
   o = owner(t)
-select t.getLocation().getFile().getBaseName() as file_name, ownerName(o) as owner_name,
-  target.getName() as target_name, t.getLocation().getStartLine() as line
+select t.getLocation().getFile().getRelativePath() as src_file,
+  ownerName(o) as enclosing_item,
+  target.getLocation().getFile().getRelativePath() as dst_file,
+  target.getName() as dst_name

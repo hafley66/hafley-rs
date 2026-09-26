@@ -47,7 +47,6 @@ if language == 'rust' and manifest.is_file():
                      tomllib.loads(manifest.read_text()).get('workspace', {}).get('exclude', []))
 files = subprocess.check_output(['rg', '--files', '--hidden', str(source)], text=True).splitlines()
 count = 0
-unicode_rewrites = []
 for filename in files:
     path = pathlib.Path(filename)
     relative = path.relative_to(source)
@@ -62,13 +61,31 @@ for filename in files:
     dest = target / relative
     dest.parent.mkdir(parents=True, exist_ok=True)
     shutil.copy2(path, dest)
-    if language == 'rust' and '│' in path.read_text(errors='replace'):
-        dest.write_text(path.read_text().replace('│', '|'))
-        unicode_rewrites.append(relative.as_posix())
     if path.suffix in ('.rs', '.ts', '.tsx'):
         count += 1
 (target / '.baseline-complete').write_text(str(count) + '\n')
-(target / '.unicode-rewrites').write_text('\n'.join(sorted(unicode_rewrites)) + '\n')
+
+# ra_ap_parser's intentionally invalid lexer fixture starts with "-│". CodeQL
+# parses dependency test_data and panics on that byte boundary. Patch only a
+# private dependency copy; the repository and Cargo registry stay untouched.
+if language == 'rust' and (source / 'crates/boop').is_dir() and (source / 'Cargo.lock').is_file():
+    packages = tomllib.loads((source / 'Cargo.lock').read_text()).get('package', [])
+    versions = [p['version'] for p in packages if p['name'] == 'ra_ap_parser']
+    if versions:
+        version = versions[0]
+        matches = list((pathlib.Path.home() / '.cargo/registry/src').glob(f'*/ra_ap_parser-{version}'))
+        if not matches:
+            raise FileNotFoundError(f'Cargo registry lacks ra_ap_parser {version}')
+        dep = target.parent / 'dependency-overrides' / f'ra_ap_parser-{version}'
+        shutil.copytree(matches[0], dep, dirs_exist_ok=True)
+        fixture = dep / 'test_data/lexer/err/incomplete_frontmatter_before_unicode.rs'
+        if fixture.is_file():
+            fixture.write_text(fixture.read_text().replace('│', '|'))
+            patch = target / 'Cargo.toml'
+            header = '' if '[patch.crates-io]' in patch.read_text() else '\n[patch.crates-io]\n'
+            patch.write_text(patch.read_text() + header +
+                             f'ra_ap_parser = {{ path = "../dependency-overrides/ra_ap_parser-{version}" }}\n')
+            (target / '.dependency-rewrite').write_text(str(fixture) + '\n')
 PY
 fi
 if [ "${RYI_CODEQL_STAGE:-1}" != 0 ]; then
@@ -85,7 +102,12 @@ fi
 if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -d "$out/codeql-db" ]; then
   rm -rf "$out/codeql-db"
   start=$(date +%s)
+  cargo_target_option=()
+  if [ -n "${RYI_CODEQL_CARGO_TARGET_DIR:-}" ]; then
+    cargo_target_option=("--extractor-option=rust.cargo_target_dir=$RYI_CODEQL_CARGO_TARGET_DIR")
+  fi
   if ! "$codeql" database create "$out/codeql-db" -l "$language" --source-root "$root" \
+      "${cargo_target_option[@]}" \
       --threads "${RYI_CODEQL_THREADS:-4}" >"$out/codeql-build.log" 2>&1; then
     echo "CodeQL database creation failed; log: $out/codeql-build.log" >&2
     rg -n -C 2 'panicked|panic|│|ERROR|Error' "$out/codeql-build.log" | tail -40 >&2 || true
@@ -180,15 +202,15 @@ for kind in ('type', 'call'):
 print(f'full_disagreements\t{out / "disagreements.tsv"}')
 source_count = sum(p.suffix in ('.rs', '.ts', '.tsx') for p in root.rglob('*') if p.is_file())
 print(f'source_files\t{source_count}')
-rewrites = out / 'source/.unicode-rewrites'
-if rewrites.is_file():
-    for filename in rewrites.read_text().splitlines():
-        if filename:
-            print(f'unicode_rewrite\t{filename}')
+rewrite = out / 'source/.dependency-rewrite'
+if rewrite.is_file():
+    print(f'dependency_rewrite\t{rewrite.read_text().strip()}')
 print(f'ryi_build_s\t{(out / "ryi-build-seconds").read_text().strip()}')
 print(f'ryi_query_s\t{time.perf_counter() - started:.3f}')
 print(f'codeql_build_s\t{(out / "codeql-build-seconds").read_text().strip()}')
 print(f'codeql_query_s\t{(out / "codeql-query-seconds").read_text().strip()}')
 print(f'ryi_db_kib\t{(out / "ryi.db").stat().st_size // 1024}')
-print(f'codeql_db_kib\t{sum(p.stat().st_size for p in (out / "codeql-db").rglob("*") if p.is_file()) // 1024}')
+database = out / 'codeql-db'
+content = [*database.glob('db-*'), database / 'src.zip']
+print(f'codeql_db_kib\t{sum(p.stat().st_size for root in content if root.exists() for p in root.rglob("*") if p.is_file()) // 1024 + (database / "src.zip").stat().st_size // 1024}')
 PY
