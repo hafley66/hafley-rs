@@ -1,27 +1,27 @@
 # ryi daemon split, code-only receipt
 
-Branches: `feature/the-gang-splits-the-daemon` in both worktrees. Hafley TSP commits: `a8ddbed`, `fe1971a`, `6ae2a73`. Hafley RS code commits: `bbe725bc`, `acf887c2`, `25b0c277`. The final hafley-rs commit updates this report.
+Branches: `feature/the-gang-splits-the-daemon` in both worktrees. Hafley TSP commits: `a8ddbed`, `fe1971a`, `6ae2a73`, `edd1759`. Hafley RS code commits: `bbe725bc`, `acf887c2`, `25b0c277`, `d9c9be8b`. The final hafley-rs commit updates this report.
 
 ## State
 
-Code was edited without `cargo`, `pnpm`, `tsp compile`, `node`, `just`, ryi, or CodeQL runs. `git diff --check` passed before the report commit. No compile, test, emitted-file, or runtime expectation below has been verified. The lane is incomplete at the test migration and connect-or-spawn library boundary described below.
+Code was edited without `cargo`, `pnpm`, `tsp compile`, `node`, `just`, ryi, or CodeQL runs. `git diff --check` passed before the report commit. No compile, test, emitted-file, or runtime expectation below has been verified. The existing direct CLI tests again target an executable one-shot server path. The connect-or-spawn library boundary and non-JSONL stdin modes remain open below.
 
 ## Files
 
 ### hafley-tsp
 
-- `packages/decorator-def/lib/daemon.tsp`, `lib/main.tsp`, `src/daemon.ts`, `src/index.ts`, `src/lib.ts`, `src/tsp-index.ts`, `package.json`, `pnpm-lock.yaml`: Daemon namespace, state, validation-time routes, package dependency.
-- `packages/rust/src/adapters/02_http-ops.ts`, `src/components/4_codegen/7_OpsTransports.tsx`, `src/emitter/00_types.ts`, `02_emit-model.tsx`, `03_emit-crate.tsx`, `07_daemon-files.tsx`: daemon metadata, spread grouping, shared serializable args, client/server emission.
+- `packages/decorator-def/lib/daemon.tsp`, `lib/main.tsp`, `src/daemon.ts`, `src/index.ts`, `src/lib.ts`, `src/tsp-index.ts`, `package.json`, `pnpm-lock.yaml`: Daemon namespace with `TypeSpec.Reflection` import, state, validation-time routes, package dependency.
+- `packages/rust/src/adapters/02_http-ops.ts`, `src/components/4_codegen/7_OpsTransports.tsx`, `src/emitter/00_types.ts`, `02_emit-model.tsx`, `03_emit-crate.tsx`, `07_daemon-files.tsx`: daemon metadata, spread grouping, daemon-gated serialization attributes, generic client/server emission.
 - `packages/rust/src/emitter/templates/{client_auto,daemon_auto,server_auto}.rs`: Rust transport templates.
-- `packages/rust/test/fixtures/daemon_cli/ops.tsp`, `src/emitter/07_daemon-files.test.tsx`: hand-written TypeSpec fixture and unverified snapshot.
+- `packages/rust/test/fixtures/daemon_cli/ops.tsp`, `src/emitter/07_daemon-files.test.tsx`: hand-written TypeSpec fixture and unverified generated-file and full daemon-module snapshots.
 
 ### hafley-rs
 
-- `Cargo.lock`, `crates/ryi/{Cargo.toml,build.rs,src/main.rs,tests/0_help.rs}`: thin crate, shared generated modules, hyper HTTP/1 Unix client, fresh server exec mode.
-- `crates/sprefa-extract/{Cargo.toml,Cargo.lock}`, `src/bin/ryi.rs`, `src/bin/ryi/{1_inputs.rs,ops.rs}`: renamed server binary, daemon and one-shot entry, request-root context, raw row forwarding.
+- `Cargo.lock`, `crates/ryi/{Cargo.toml,build.rs,src/main.rs,tests/0_help.rs}`, `crates/ryi-proto/{Cargo.toml,src/lib.rs}`: thin crate, shared generated protocol crate, hyper HTTP/1 Unix client, direct fresh server exec mode.
+- `crates/sprefa-extract/{Cargo.toml,Cargo.lock}`, `build/0_metadata.rs`, `src/bin/ryi.rs`, `src/bin/ryi/{1_inputs.rs,ops.rs}`: renamed server binary, daemon and direct clap one-shot entry, restored trace/trail/exit handling, request-root context, raw row forwarding.
 - `crates/sprefa-extract/schema/cli/{ops.tsp,0_gen.py}`: reduced contract and generated-file roster.
-- `crates/sprefa-extract/src/bin/ryi/gen/{cli_auto.rs,ops_auto.rs,client_auto.rs,daemon_auto.rs,server_auto.rs,models/inputs.rs,models/file_args.rs}`: hand-written generated files. Both crates include this one model and argument module set. `gen/http_auto.rs` and `src/bin/ryi/2_serve.rs` were removed.
-- `crates/sprefa-extract/tests/181_server_modes.rs`: new unverified mode check. The existing integration test files listed below changed `CARGO_BIN_EXE_ryi` to `CARGO_BIN_EXE_ryi-server`; their invocation bodies still use the prior direct CLI shape.
+- `crates/sprefa-extract/src/bin/ryi/gen/{cli_auto.rs,ops_auto.rs,client_auto.rs,daemon_auto.rs,server_auto.rs,models/inputs.rs,models/file_args.rs}`: hand-written generated files. `ryi-proto` includes this one generated model and argument set; both binaries depend on it. The generated source remains under `sprefa-extract` for `0_gen.py` and the generated contract rail. `gen/http_auto.rs` and `src/bin/ryi/2_serve.rs` were removed.
+- `crates/sprefa-extract/tests/{178_ryi_help.rs,181_server_modes.rs}` and `tests/fixtures/ryi_help/*.txt`: direct clap mode and captured help changes. The existing integration test files listed below changed `CARGO_BIN_EXE_ryi` to `CARGO_BIN_EXE_ryi-server`; the server again accepts their direct argument vectors.
 
 <details><summary>Existing integration test source files with binary-reference changes</summary>
 
@@ -225,25 +225,48 @@ Counts in `schema/cli/ops.tsp`, read from the base and edited files:
 | Streamed stdin | `tokio-util` | `ReaderStream::new(tokio::io::stdin())` on the client; `StreamReader` and `FramedRead` on the server |
 | Connect-or-spawn | no candidate integrated | The client currently uses `Command::spawn` and waits for the socket. [`muzan` 0.1.1](https://docs.rs/muzan/0.1.1/muzan/) `ensure_daemon_with_args` uses its own newline-delimited JSON IPC; [`daemonizable`](https://docs.rs/daemonizable/0.2.0/daemonizable/) `Daemonizer::spawn_daemon` uses its typed pipe RPC. Neither call has been connected to the Hyper socket path. This requirement remains open. |
 
-The client reads the current `ryi-server --stamp` output for the build hash and datetime before the handshake. The server returns HTTP 409 and cancels itself on a mismatch when `handshake` is enabled. `idleSecs` and `handshake` in generated Rust are read from `@daemon`.
+The handshake key is `RYI_BUILD_GIT_HASH`, emitted by both build scripts from `git rev-parse --short=12 HEAD` and baked into both binaries. The build datetime remains in CLI help but does not affect the handshake. The server returns HTTP 409 and cancels itself on a mismatch when `handshake` is enabled. `idleSecs` and `handshake` in generated Rust are read from `@daemon`. The client inspects only the final JSONL line for an error code after copying all response bytes to stdout.
 
-## Goldens and unverified expectations
+`with_request_root` stores the absolute root in a thread-local slot for the duration of an operation call, restoring the previous value afterward. For streamed operations, `Rows` captures that root before spawning its worker and reapplies it in that worker. `inputs::root` and stdin path-list expansion read this slot. No request changes the process working directory.
 
-No captured golden file changed. The existing `tests/fixtures/ryi_help/*.txt` captures still describe the direct CLI, including `serve`, and do not cover `--fresh` or `extract`; they require a hand-written before-to-after update when the help test moves to the thin client crate. No expected row count or pinned output was changed to bypass a case.
+The protocol source bridge is `ryi-proto/src/lib.rs` with `#[path]` declarations into the single generated `sprefa-extract/src/bin/ryi/gen` tree. The client and server depend on `ryi-proto`; the transport-specific `client_auto.rs`, `server_auto.rs`, and clap `cli_auto.rs` remain included by their respective binaries. This preserves the existing `0_gen.py` output location without hand-copied model files.
 
-The following expectations are **unverified** because the ordered commands were not run:
+## Changed help goldens
 
-- `packages/rust/src/emitter/07_daemon-files.test.tsx`: zero TypeSpec diagnostics; POST routes `/extract` and `/ingest`; generated file roster and `idleSecs: 37` snapshot.
-- All seven hand-written generated Rust files listed above: output equality with `just gen-cli` and Rust compilation.
-- Both hand-edited Cargo locks and the hand-edited pnpm lock: dependency resolution and locked builds.
-- `crates/ryi/tests/0_help.rs` and `crates/sprefa-extract/tests/181_server_modes.rs`: thin help, server stamp, and mode diagnostics.
-- Daemon startup, lock race, stale socket replacement, build mismatch, idle exit, Unix HTTP response streaming, stdin streaming, per-request root resolution, and `--fresh` exit codes.
-- All existing sprefa-extract integration tests and their help/output captures. Their binary reference was renamed, but their old argument vectors are not valid `ryi-server --oneshot <verb> <request json>` calls. These tests are expected to fail until migrated to invoke the thin `ryi` binary and compare the new response contract.
+Every entry below is hand-written and unverified. The cause for each existing verb capture is the generated global `--fresh` clap flag. No row-count golden or other fixture was changed.
 
-## Open work
+| Golden under `crates/sprefa-extract/tests/fixtures/ryi_help/` | Before -> after | Cause |
+| --- | --- | --- |
+| `root.txt` | `serve` command, no `--fresh` -> `extract` command, `--fresh` | TypeSpec drops `serve`, adds explicit extract, and marks fresh global |
+| `extract.txt` | absent -> extract help capture | Explicit TypeSpec extract operation |
+| `fast.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `slow.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `scip.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `graph.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `cleave.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `move.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `rename.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `query.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `region.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `watch.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `diff.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `ingest.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `schema.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
+| `trail.txt` | no `--fresh` -> `--fresh` option | Generated global fresh flag |
 
-1. Integrate a listed connect-or-spawn library without replacing the required Hyper Unix HTTP transport. The current connect/spawn loop is manual.
-2. Migrate the existing direct CLI integration suite to the new thin client and update help captures with stated causes. No golden has been changed yet.
-3. Express the inherited `-` path-list stdin mode and the region generated-body stdin mode as `@bodyRoot JsonlStream<T>` request streams, or remove those modes from the public contract. The current daemon does not receive those stdin bytes for non-ingest verbs.
-4. Generalize `server_auto.rs` emission beyond one stream-typed request operation. The emitter currently rejects a daemon service with zero or multiple stream inputs.
-5. Verify all generated outputs and builds when code execution is allowed.
+## Unverified expectations
+
+No `cargo`, `pnpm`, `tsp compile`, `node`, `just`, ryi, or CodeQL command was run. These outputs and behaviors are **unverified**:
+
+- TypeSpec fixture: zero diagnostics, POST routes `/extract` and `/ingest`, idle 37, handshake disabled, and the sorted file-list and complete `daemon_auto.rs` inline snapshots.
+- The seven hand-written generated files: `gen/cli_auto.rs`, `gen/ops_auto.rs`, `gen/client_auto.rs`, `gen/daemon_auto.rs`, `gen/server_auto.rs`, `gen/models/inputs.rs`, and `gen/models/file_args.rs`. Their equality with emitter output and Rust compilation are unverified.
+- All help goldens in the table, `crates/ryi/tests/0_help.rs`, and `crates/sprefa-extract/tests/{178_ryi_help.rs,181_server_modes.rs}`. Clap spacing, extract help, fresh placement, server stamp, and direct command help are unverified.
+- The existing `178_ryi_help.rs` JSONL expected row counts of 31 for fast and 35 for root; the restored adapter and all other integration test outputs are unverified.
+- Both hand-edited Cargo locks and the hand-edited pnpm lock: resolution and locked builds are unverified.
+- Daemon startup, single-instance lock race, stale socket replacement, build mismatch, idle exit, Unix HTTP response streaming, stdin streaming, per-request root resolution, and fresh exit codes are unverified.
+
+## Open questions and work
+
+1. The connect-or-spawn loop still uses `Command::spawn` and socket retries. Neither permitted library exposes a Hyper socket transport hook: `muzan::ensure_daemon_with_args` owns newline-delimited JSON IPC, and `daemonizable::Daemonizer::spawn_daemon` returns its typed pipe RPC client. The specified library requirement is unmet; selecting either would add a second IPC path. `daemonize::Daemonize::new().start()` covers detach, and `fs4::FileExt::try_lock_exclusive` covers the single-instance lock.
+2. The inherited `-` path-list stdin mode and region generated-body stdin mode are not represented as TypeSpec `@bodyRoot JsonlStream<T>` inputs. The daemon request path only streams stdin for stream-typed operations such as ingest.
+3. Run the ordered generation, build, and test commands when code execution is permitted, then reconcile the hand-written generated files and all unverified captures.
