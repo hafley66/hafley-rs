@@ -237,6 +237,7 @@ fn turn(turn: i64, role: &str, said: &str) -> BoopTurn {
         ts: turn,
         role: role.to_string(),
         said: said.to_string(),
+        aliases: Vec::new(),
     }
 }
 
