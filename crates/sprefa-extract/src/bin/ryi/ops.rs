@@ -88,21 +88,24 @@ impl Drop for RestoreStdout {
 fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> mpsc::Receiver<OpResult<Vec<u8>>> {
     let (tx, rx) = mpsc::sync_channel(64);
     let argv = argv(verb, args);
+    let captures_stdout = !matches!(verb, "" | "fast" | "slow" | "scip" | "ingest" | "schema" | "trail");
     std::thread::spawn(move || {
         let result = (|| -> OpResult<()> {
             let argv = argv?;
             let ryi = crate::Ryi::try_parse_from(std::iter::once(OsString::from("ryi")).chain(argv))
                 .map_err(|error| OpError(error.to_string()))?;
-            let _gate = STDOUT_GATE.get_or_init(|| Mutex::new(())).lock().unwrap();
             let (reader, writer) = UnixStream::pair()?;
             let sink = writer.try_clone()?;
-            let saved = unsafe { libc::dup(libc::STDOUT_FILENO) };
-            if saved < 0 { return Err(OpError::from(std::io::Error::last_os_error())); }
-            if unsafe { libc::dup2(writer.as_raw_fd(), libc::STDOUT_FILENO) } < 0 {
-                unsafe { libc::close(saved); }
-                return Err(OpError::from(std::io::Error::last_os_error()));
-            }
-            let restore = RestoreStdout(saved);
+            let _gate = captures_stdout.then(|| STDOUT_GATE.get_or_init(|| Mutex::new(())).lock().unwrap());
+            let restore = if captures_stdout {
+                let saved = unsafe { libc::dup(libc::STDOUT_FILENO) };
+                if saved < 0 { return Err(OpError::from(std::io::Error::last_os_error())); }
+                if unsafe { libc::dup2(writer.as_raw_fd(), libc::STDOUT_FILENO) } < 0 {
+                    unsafe { libc::close(saved); }
+                    return Err(OpError::from(std::io::Error::last_os_error()));
+                }
+                Some(RestoreStdout(saved))
+            } else { None };
             drop(writer);
             let row_tx = tx.clone();
             let rows = std::thread::spawn(move || {

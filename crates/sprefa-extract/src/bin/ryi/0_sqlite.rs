@@ -183,7 +183,6 @@ impl Database {
         let (Some(temporary), Some(destination)) = (self.temporary, self.destination) else {
             return Ok(None);
         };
-        temporary.as_file().sync_all()?;
         temporary.persist_noclobber(&destination)?;
         Ok(Some(destination))
     }
@@ -200,7 +199,7 @@ impl Database {
         // A private staging file: nothing reads it before the commit and the
         // publish, and a failed run discards it, so no journal and no fsync.
         connection.execute_batch(
-            "PRAGMA page_size=65536; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
+            "PRAGMA page_size=4096; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
              PRAGMA cache_size=-16384; PRAGMA temp_store=MEMORY; BEGIN IMMEDIATE;",
         )?;
         connection.execute_batch(DDL)?;
@@ -334,12 +333,15 @@ impl Database {
     }
 
     pub fn finish(self) -> Result<()> {
+        self.finish_to(&mut std::io::stdout().lock())
+    }
+
+    pub fn finish_to(self, out: &mut impl Write) -> Result<()> {
         let rows = self.rows;
         let Some(destination) = self.close()? else {
             return Ok(());
         };
         let path = shell_quote(&destination.to_string_lossy());
-        let mut out = std::io::stdout().lock();
         writeln!(out, "Wrote {} ({rows} rows)", destination.display())?;
         writeln!(out, "Tables: sqlite3 {path} '.tables'")?;
         writeln!(out, "Schema: sqlite3 {path} '.schema'")?;
@@ -582,8 +584,9 @@ impl Output {
      pub fn finish(mut self) -> Result<()> {
          self.stdout.flush()?;
          if let Some(db) = self.database {
-             db.finish()?;
+             db.finish_to(&mut self.stdout)?;
          }
+         self.stdout.flush()?;
          Ok(())
      }
  }

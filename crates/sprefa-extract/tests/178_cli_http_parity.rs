@@ -119,7 +119,7 @@ impl Drop for Server {
     }
 }
 
-async fn socket_request(socket: &Path, uri: &str, body: &str) -> axum::body::Bytes {
+async fn socket_response(socket: &Path, uri: &str, body: &str) -> (axum::http::StatusCode, axum::body::Bytes) {
     let stream = tokio::net::UnixStream::connect(socket).await.expect("connect unix socket");
     let (mut client, connection) = http1::handshake(TokioIo::new(stream)).await.expect("HTTP handshake");
     tokio::spawn(async move { let _ = connection.await; });
@@ -127,8 +127,15 @@ async fn socket_request(socket: &Path, uri: &str, body: &str) -> axum::body::Byt
         .header(header::CONTENT_TYPE, "application/json")
         .body(Body::from(body.to_string())).expect("socket request");
     let response = client.send_request(request).await.expect("socket response");
-    assert!(response.status().is_success(), "socket HTTP: {}", response.status());
-    response.into_body().collect().await.expect("socket body").to_bytes()
+    let status = response.status();
+    let body = response.into_body().collect().await.expect("socket body").to_bytes();
+    (status, body)
+}
+
+async fn socket_request(socket: &Path, uri: &str, body: &str) -> axum::body::Bytes {
+    let (status, body) = socket_response(socket, uri, body).await;
+    assert!(status.is_success(), "socket HTTP: {status}");
+    body
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -208,5 +215,5 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     assert_eq!(rendered, include_str!("fixtures/ryi_http_parity.tsv").trim_end());
     let no_child = row("fast", "nochild", &proof_body, &root, scratch.path());
     println!("{no_child}");
-    assert_eq!(no_child, row("fast", "nochild", &fast_cli, &root, scratch.path()));
+    assert_eq!(no_child, row("fast", "nochild", &fast_cli, &root, scratch.path()), "proof body: {}", String::from_utf8_lossy(&proof_body));
 }
