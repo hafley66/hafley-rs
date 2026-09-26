@@ -195,6 +195,10 @@ fn collect(
                         for arg in &method.sig.inputs {
                             if let syn::FnArg::Typed(arg) = arg {
                                 self_type_candidate(&arg.ty, &primary_name, TypeCandidateKind::Param, &mut candidates);
+                            } else if let syn::FnArg::Receiver(receiver) = arg {
+                                if receiver.colon_token.is_some() {
+                                    self_type_candidate(&receiver.ty, &primary_name, TypeCandidateKind::Param, &mut candidates);
+                                }
                             }
                         }
                         if let syn::ReturnType::Type(_, ty) = &method.sig.output {
@@ -214,13 +218,6 @@ fn collect(
                         ));
                     }
                     if let syn::ImplItem::Type(assoc) = child {
-                        if matches!(&assoc.ty, Type::Path(path)
-                            if path.qself.is_none() && path.path.segments.len() == 1
-                                && path.path.segments.first().is_some_and(|segment| {
-                                    matches!(segment.arguments, syn::PathArguments::None)
-                                })) {
-                            continue;
-                        }
                         let mut candidates: Vec<_> = type_refs(&assoc.ty).into_iter().map(|to| TypeCandidateRow {
                             to,
                             kind: TypeCandidateKind::Uses,
@@ -365,8 +362,13 @@ fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
         Some((ident, trait_name))
     })).collect();
     for arg in &sig.inputs {
-        if let syn::FnArg::Typed(arg) = arg {
-            candidates.extend(type_refs(&arg.ty).into_iter().map(|to| TypeCandidateRow {
+        let ty = match arg {
+            syn::FnArg::Typed(arg) => Some(&*arg.ty),
+            syn::FnArg::Receiver(receiver) if receiver.colon_token.is_some() => Some(&*receiver.ty),
+            _ => None,
+        };
+        if let Some(ty) = ty {
+            candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
                 to: projection_trait(&to, &bounds),
                 kind: TypeCandidateKind::Param,
             }));
@@ -433,6 +435,12 @@ fn field_candidates(fields: &Fields, candidates: &mut Vec<TypeCandidateRow>) {
 fn generic_candidates(generics: &syn::Generics, candidates: &mut Vec<TypeCandidateRow>) {
     for param in &generics.params {
         if let GenericParam::Type(param) = param {
+            if let Some(default) = &param.default {
+                candidates.extend(type_refs(default).into_iter().map(|to| TypeCandidateRow {
+                    to,
+                    kind: TypeCandidateKind::Generic,
+                }));
+            }
             for bound in &param.bounds {
                 bound_candidate(bound, candidates);
             }
@@ -441,6 +449,10 @@ fn generic_candidates(generics: &syn::Generics, candidates: &mut Vec<TypeCandida
     if let Some(where_clause) = &generics.where_clause {
         for pred in &where_clause.predicates {
             if let WherePredicate::Type(pred) = pred {
+                candidates.extend(type_refs(&pred.bounded_ty).into_iter().map(|to| TypeCandidateRow {
+                    to,
+                    kind: TypeCandidateKind::Generic,
+                }));
                 for bound in &pred.bounds {
                     bound_candidate(bound, candidates);
                 }

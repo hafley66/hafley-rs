@@ -496,7 +496,20 @@ impl Resolve<CallF> for RustSource {
                     assoc_path_type(site.callee_path.map(|id| output.strings.lookup(id))).and_then(
                         |ty| {
                             modules
-                                .and_then(|m| m.impl_target(&ty, callee, own_path))
+                                .and_then(|m| {
+                                    let qualified = site.callee_path
+                                        .map(|id| output.strings.lookup(id))
+                                        .and_then(|path| {
+                                            let segments = path.split("::").collect::<Vec<_>>();
+                                            (segments.len() > 2).then(|| segments[..segments.len() - 2]
+                                                .iter().map(|segment| (*segment).to_string()).collect::<Vec<_>>())
+                                        });
+                                    qualified.as_ref()
+                                        .and_then(|qualifier| own_path.and_then(|from| {
+                                            m.qualified_impl_target(from, qualifier, &ty, callee)
+                                        }))
+                                        .or_else(|| m.impl_target(&ty, callee, own_path))
+                                })
                                 .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
                                 // 0 impls and a variant of the enum: the path names
                                 // the enum itself.
@@ -555,6 +568,14 @@ impl Resolve<CallF> for RustSource {
                         .map(|def| (def.blob.clone(), def.span))
                 })
                 .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
+            let expected_default = (callee == "default"
+                && site.callee_path.map(|id| output.strings.lookup(id) == "Default::default").unwrap_or(false))
+                .then(|| call.aux.expected_types.iter().find(|(span, _)| *span == site.span))
+                .flatten()
+                .and_then(|(_, ty)| modules.and_then(|m| {
+                    m.impl_target(output.strings.lookup(*ty), callee, own_path)
+                }))
+                .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
             // Each leg names ITSELF: `kind` is `name_resolve` for nearly all
             // of them, so only the origin separates the receiver plane from the
             // module plane from the corpus-wide guess.
@@ -573,6 +594,8 @@ impl Resolve<CallF> for RustSource {
                 None
             } else if callee == "Self" {
                 tag(self_constructor, ResolutionOrigin::SelfType)
+            } else if expected_default.is_some() {
+                tag(expected_default, ResolutionOrigin::SelfType)
             } else {
                 match (qualifier, own_path, paths) {
                     (Some(qualifier), Some(from), Some(paths)) => {
@@ -1008,6 +1031,9 @@ pub(super) fn project_call(
     // initializer's calls escape the engine's own def spans.
     let defs: Vec<std::ops::Range<u32>> = sink.nodes.iter().map(|node| node.span.start..node.span.end()).collect();
     let rows = call_site_rows(parsed, line_starts, &defs);
+    sink.aux.expected_types.extend(rows.expected_types.iter().map(|(range, ty)| (
+        Span { start: range.start, len: range.end - range.start }, strings.intern(ty),
+    )));
     // Mint the CONST_INIT defs in walk order, before metadata reads the node
     // set: a gated const's cfg row is admitted by its own CONST_INIT node.
     for row in rows.const_inits {

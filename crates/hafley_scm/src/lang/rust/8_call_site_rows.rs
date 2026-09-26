@@ -24,6 +24,7 @@ pub struct ConstInitRow {
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct CallSiteRows {
     pub sites: Vec<CallSiteRow>,
+    pub expected_types: Vec<(Range<u32>, String)>,
     pub const_inits: Vec<ConstInitRow>,
     pub test_only_calls: Vec<(String, String)>,
 }
@@ -36,6 +37,7 @@ pub fn call_site_rows(
     let mut collector = CallCollector {
         line_starts,
         sites: Vec::new(),
+        expected_types: Vec::new(),
         under_cfg: None,
         defs: def_ranges,
         const_inits: Vec::new(),
@@ -59,6 +61,7 @@ pub fn call_site_rows(
         .collect();
     CallSiteRows {
         sites: collector.sites,
+        expected_types: collector.expected_types,
         const_inits: collector.const_inits,
         test_only_calls,
     }
@@ -67,6 +70,7 @@ pub fn call_site_rows(
 struct CallCollector<'a> {
     line_starts: &'a [u32],
     sites: Vec<CallSiteRow>,
+    expected_types: Vec<(Range<u32>, String)>,
     under_cfg: Option<String>,
     defs: &'a [Range<u32>],
     const_inits: Vec<ConstInitRow>,
@@ -145,6 +149,23 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                 syn::visit::visit_expr(self, expr);
             }
             syn::Expr::Struct(struct_expr) => {
+                if let Some(rest) = &struct_expr.rest {
+                    if let syn::Expr::Call(call) = peel_parens(rest) {
+                        if let syn::Expr::Path(path) = peel_parens(&call.func) {
+                            if path.path.segments.len() == 2
+                                && path.path.segments[0].ident == "Default"
+                                && path.path.segments[1].ident == "default"
+                            {
+                                if let Some(ty) = struct_expr.path.segments.last() {
+                                    self.expected_types.push((
+                                        span_range(self.line_starts, call.func.span()),
+                                        ty.ident.to_string(),
+                                    ));
+                                }
+                            }
+                        }
+                    }
+                }
                 if let Some(segment) = struct_expr
                     .path
                     .segments

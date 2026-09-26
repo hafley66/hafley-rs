@@ -13,5 +13,6 @@ pub mod _11_reexport;
 pub mod _12_other;
 pub mod _13_self;
 pub mod _14_turbofish;
+pub mod _15_residual;
 pub use crate::_11_reexport as bridge_mod;
 pub use std::string::*;

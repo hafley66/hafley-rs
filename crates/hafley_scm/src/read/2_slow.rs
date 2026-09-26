@@ -309,14 +309,37 @@ fn site_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
 fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
     let Some(types) = doc.input.output.types.as_ref() else { return Vec::new() };
     let strings = &doc.input.output.strings;
+    let defined_symbols: HashMap<&str, SymbolId> = defs.keys()
+        .map(|symbol| (index.symbol(*symbol), *symbol))
+        .collect();
     let mut refs: Vec<(Span, SymbolId)> = index.documents[doc.ix]
         .occurrences
         .iter()
         .filter(|occurrence| {
             !occurrence.roles.contains(OccurrenceRole::DEFINITION)
-                && index.symbol(occurrence.symbol).ends_with('#')
+                && (index.symbol(occurrence.symbol).ends_with('#')
+                    || index.symbol(occurrence.symbol).contains("/impl#["))
         })
-        .filter_map(|occurrence| Some((span_of(doc, index, occurrence.range)?, occurrence.symbol)))
+        .filter_map(|occurrence| {
+            let span = span_of(doc, index, occurrence.range)?;
+            let symbol = index.symbol(occurrence.symbol);
+            if symbol.ends_with('#') {
+                return Some((span, occurrence.symbol));
+            }
+            // rust-analyzer uses the impl descriptor for a `Self` reference.
+            // Its first bracket names the self type; the type declaration uses
+            // the same symbol prefix with a `Type#` descriptor instead.
+            if doc.content.get(span.start as usize..span.end() as usize) != Some(&b"Self"[..]) {
+                return None;
+            }
+            let (prefix, rest) = symbol.split_once("/impl#[")?;
+            let (self_type, tail) = rest.split_once(']')?;
+            if !tail.is_empty() && !(tail.starts_with('[') && tail.ends_with(']')) {
+                return None;
+            }
+            let declaration = format!("{prefix}/{self_type}#");
+            defined_symbols.get(declaration.as_str()).copied().map(|target| (span, target))
+        })
         .collect();
     refs.sort_by_key(|(span, _)| (span.start, span.end()));
     // An owner span is its name; the owner's text runs to the next owner's name.
@@ -341,8 +364,11 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
                     text(span) == Some(bare.as_bytes()) && line_of(doc.content, *span).windows(name.len()).any(|w| w == name)
                 })
             }
-            _ => refs.iter().find(|(span, _)| {
-                span.start >= owner.start && span.end() <= until && text(span) == Some(bare.as_bytes())
+            _ => refs.iter().find(|(span, symbol)| {
+                span.start >= owner.start && span.end() <= until
+                    && (text(span) == Some(bare.as_bytes())
+                        || (text(span) == Some(&b"Self"[..])
+                            && descriptor_name(index.symbol(*symbol)).as_deref() == Some(bare)))
             }),
         };
         let Some(&(_, symbol)) = hit else { continue };

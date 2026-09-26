@@ -27,6 +27,28 @@ fn ryi(args: &[&str]) {
 }
 
 #[test]
+fn residual_type_candidates_have_declared_targets() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_scope/src", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: Vec<(String, String, String)> = conn.prepare(
+        "select distinct kind, owner_name, target_name from resolved_type_edge
+         where owner_path like '%/_15_residual.rs' and target_path like '%/_15_residual.rs'
+           and ((kind = 'param' and owner_name = 'explicit' and target_name = 'Residual')
+             or (kind = 'uses' and owner_name = 'Item' and target_name = 'ResidualTarget')
+             or (kind = 'generic' and owner_name = 'NestedGeneric' and target_name = 'ResidualTarget'))
+         order by kind, owner_name, target_name"
+    ).unwrap().query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+        .unwrap().collect::<Result<_, _>>().unwrap();
+    assert_eq!(rows, [
+        ("generic".into(), "NestedGeneric".into(), "ResidualTarget".into()),
+        ("param".into(), "explicit".into(), "Residual".into()),
+        ("uses".into(), "Item".into(), "ResidualTarget".into()),
+    ]);
+}
+
+#[test]
 fn type_ladder_fast_and_slow() {
     let scratch = tempfile::tempdir().unwrap();
     let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();

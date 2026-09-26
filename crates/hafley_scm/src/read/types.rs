@@ -730,6 +730,8 @@ impl SpecifierKind {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CallFAux {
     pub sites: Vec<CallSite>,
+    /// Rust struct update expression type for `Default::default()` sites.
+    pub expected_types: Vec<(Span, NameId)>,
     pub specifiers: Vec<Specifier>,
     /// Runtime-computed edge markers (dynamic import / computed member call /
     /// spread call args). Port of v5 `UnresolvedRef`.

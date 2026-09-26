@@ -1054,6 +1054,22 @@ impl RustModuleIndex {
         }
     }
 
+    /// Resolve an associated method through the type declaration named by a
+    /// qualified path, keeping same-named types in other modules separate.
+    pub fn qualified_impl_target(
+        &self,
+        from: &str,
+        qualifier: &[String],
+        self_type: &str,
+        method: &str,
+    ) -> Option<(ContentId, Span)> {
+        let (type_blob, _) = self.qualified_type_target(from, qualifier, self_type)?;
+        let sites = self.impl_methods.get(&(self_type.to_string(), method.to_string()))?;
+        let mut hits = sites.iter().filter(|site| site.blob == type_blob);
+        let hit = hits.next()?;
+        hits.next().is_none().then(|| (hit.blob.clone(), hit.span))
+    }
+
     /// A trait's presence in the caller's scope: prelude, explicit `use`
     /// (even an external trait), or the scope table's globs and locals.
     fn trait_in_scope(&self, caller: &str, trait_name: &str) -> bool {
