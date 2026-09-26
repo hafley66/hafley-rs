@@ -15,7 +15,7 @@ use std::time::Instant;
 use rusqlite::Connection;
 use rusqlite::vtab::{Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor};
 use serde::ser::{self, Impossible, Serialize};
-use bumpalo::Bump;
+use hashbrown::HashTable;
 use rustc_hash::FxHasher;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -47,12 +47,12 @@ struct ColumnSpec {
     kind: String,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 enum Val {
     Null,
     Int(i64),
     Real(f64),
-    Text(*const u8, u32),
+    Text(u32, u32),
 }
 
 /// One table's statements, shared with the writer thread.
@@ -144,35 +144,37 @@ static BATCH_MODULE: Module<'static, BatchTable> = Module::eponymous_only_module
 struct Batch {
     table: usize,
     vals: Vec<Val>,
-    text: Bump,
-    interned: HashMap<u64, Vec<Val>>,
+    text: Vec<u8>,
+    interned: HashTable<Val>,
     rows: usize,
 }
 
 impl Batch {
     fn empty(table: usize) -> Self {
-        Self { table, vals: Vec::new(), text: Bump::new(), interned: HashMap::new(), rows: 0 }
+        Self { table, vals: Vec::new(), text: Vec::new(), interned: HashTable::new(), rows: 0 }
     }
 
     #[inline(always)]
     fn text(&mut self, value: &str) -> Val {
-        let span = self.text.alloc_slice_copy(value.as_bytes());
-        Val::Text(span.as_ptr(), span.len() as u32)
+        let start = self.text.len() as u32;
+        self.text.extend_from_slice(value.as_bytes());
+        Val::Text(start, value.len() as u32)
     }
 
     fn json<T: ?Sized + Serialize>(&mut self, value: &T) -> std::result::Result<Val, serde_json::Error> {
-        let mut bytes = bumpalo::collections::Vec::new_in(&self.text);
-        serde_json::to_writer(&mut bytes, value)?;
-        let span = bytes.into_bump_slice();
-        Ok(Val::Text(span.as_ptr(), span.len() as u32))
+        let start = self.text.len();
+        if let Err(error) = serde_json::to_writer(&mut self.text, value) {
+            self.text.truncate(start);
+            return Err(error);
+        }
+        let len = self.text.len() - start;
+        Ok(Val::Text(start as u32, len as u32))
     }
 
     #[inline(always)]
     fn bytes(&self, val: Val) -> &[u8] {
-        let Val::Text(ptr, len) = val else { unreachable!("text span required") };
-        // Every text pointer is allocated from `self.text` and remains valid
-        // until clear resets the arena, after the SQLite read has completed.
-        unsafe { std::slice::from_raw_parts(ptr, len as usize) }
+        let Val::Text(start, len) = val else { unreachable!("text span required") };
+        &self.text[start as usize..start as usize + len as usize]
     }
 
     #[inline(always)]
@@ -181,19 +183,17 @@ impl Batch {
         let mut hasher = FxHasher::default();
         value.hash(&mut hasher);
         let hash = hasher.finish();
-        if let Some(spans) = self.interned.get(&hash) {
-            if let Some(&span) = spans.iter().find(|&&span| self.bytes(span) == value.as_bytes()) {
-                return span;
-            }
+        if let Some(&span) = self.interned.find(hash, |&span| self.bytes(span) == value.as_bytes()) {
+            return span;
         }
         let val = self.text(value);
-        self.interned.entry(hash).or_default().push(val);
+        self.interned.insert_unique(hash, val, |_| hash);
         val
     }
 
     fn clear(&mut self) {
         self.vals.clear();
-        self.text.reset();
+        self.text.clear();
         self.interned.clear();
         self.rows = 0;
     }
@@ -256,10 +256,6 @@ impl Batch {
         Ok(())
     }
 }
-
-// The batch and its bump are transferred together to one writer thread. The
-// text pointers remain owned by that moved bump and are read before reset.
-unsafe impl Send for Batch {}
 
 /// The writer thread: owns the connection while batches stream in, returns
 /// it (and the first error, if any) when the channel closes.
@@ -465,7 +461,6 @@ impl Binder {
             if let Some(table) = opened {
                 let buffer = &mut self.buffers[table];
                 buffer.vals.truncate(buffer.rows * self.meta[table].width);
-                buffer.interned.clear();
             }
             return Err(error.0);
         }
@@ -685,7 +680,6 @@ impl RowWriter<'_> {
             match value.serialize(&mut probe) {
                 Ok(()) => probe.val.unwrap_or(Val::Null),
                 Err(Compound) => {
-                    table.interned.clear();
                     table.json(value).map_err(|e| Error(e.into()))?
                 }
             }
@@ -965,11 +959,12 @@ mod tests {
         assert!(matches!((first, second), (Val::Text(a, n), Val::Text(b, m)) if a == b && n == m));
         assert_eq!(batch.bytes(first), b"shared-name");
         batch.intern("other-name");
-        let allocated = batch.text.allocated_bytes_including_metadata();
+        let capacity = batch.text.capacity();
         batch.clear();
-        assert_eq!(batch.text.allocated_bytes_including_metadata(), allocated);
+        assert_eq!(batch.text.capacity(), capacity);
         assert!(batch.interned.is_empty());
         let recycled = batch.intern("shared-name");
+        assert_eq!(recycled, Val::Text(0, 11));
         assert_eq!(batch.bytes(recycled), b"shared-name");
     }
 
@@ -979,6 +974,7 @@ mod tests {
         batch.text("prefix");
         let value = serde_json::json!({"text": "λ\n\"", "array": [null, true, 7]});
         let encoded = batch.json(&value).unwrap();
+        assert_eq!(encoded, Val::Text(6, serde_json::to_string(&value).unwrap().len() as u32));
         assert_eq!(batch.bytes(encoded), serde_json::to_string(&value).unwrap().as_bytes());
     }
 
@@ -987,18 +983,24 @@ mod tests {
         let mut batch = Batch::empty(0);
         let mut hasher = FxHasher::default();
         "other".hash(&mut hasher);
+        let forced_hash = hasher.finish();
         let seed = batch.text("seed");
-        batch.interned.insert(hasher.finish(), vec![seed]);
+        batch.interned.insert_unique(forced_hash, seed, |_| forced_hash);
         let other = batch.intern("other");
         assert_ne!(batch.bytes(other), batch.bytes(seed));
         assert_eq!(batch.bytes(other), b"other");
         let repeated = batch.intern("other");
         assert_eq!(batch.bytes(repeated), b"other");
-        assert_eq!(batch.interned.values().map(Vec::len).sum::<usize>(), 2);
+        assert_eq!(batch.interned.len(), 2);
         let long = "x".repeat(129);
-        let before = batch.interned.values().map(Vec::len).sum::<usize>();
+        let before = batch.interned.len();
         let bypassed = batch.intern(&long);
         assert_eq!(batch.bytes(bypassed), long.as_bytes());
-        assert_eq!(batch.interned.values().map(Vec::len).sum::<usize>(), before);
+        assert_eq!(batch.interned.len(), before);
+    }
+
+    #[test]
+    fn val_stays_sixteen_bytes() {
+        assert_eq!(std::mem::size_of::<Val>(), 16);
     }
 }
