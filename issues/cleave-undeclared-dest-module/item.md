@@ -13,7 +13,7 @@ labels: [extract]
 
 ## Description
 
-Corpus: ascii-renderer at main `1c24a4b` (single binary crate, `src/main.rs` declares ~140 `mod` lines), worktree `.claude/worktrees/agent-abab70b186ac7c270`. `ryi 0.1.0`. Found while planning `plans/3_engine_crate_isolation.md` (branch `plan/engine-crate-isolation-v3`, `ae4a003`), which splits an engine library crate out of the binary. All runs are dry runs.
+Corpus: ascii-renderer at main `1c24a4b` (single binary crate, `src/main.rs` declares ~140 `mod` lines), worktree `.claude/worktrees/agent-abab70b186ac7c270`. `ryi 0.1.0` = `~/.cargo/bin/ryi`, sha256 `c2ec8bb01142049e…`, installed 2026-09-26 03:24 -0400 from worktree `.claude/worktrees/merge-main` (since removed). 18 commits touched `crates/sprefa-extract` after that build (latest `0d686c37`); not re-checked against main. Found while planning `plans/3_engine_crate_isolation.md` (branch `plan/engine-crate-isolation-v3`, `ae4a003`), which splits an engine library crate out of the binary. All runs are dry runs.
 
 `ryi cleave --drag src/opts.rs#rand_knob crates/ascii-engine/src/_6_knobs.rs` exits 0 and plans an edit set that does not compile. `crates/ascii-engine/` does not exist and has no `Cargo.toml`, so DEST belongs to no package.
 
