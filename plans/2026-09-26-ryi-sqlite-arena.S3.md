@@ -8,10 +8,10 @@
 
 ## Spans and fields
 
-- `sqlite_table_batch_drain`: one span per table batch drain; fields `table` and `rows`. The span's close duration is the drain interval.
-- `sqlite_bind_phase`: one span per export bind phase; fields `seconds` and, for each of `string`, `uint32`, `int64`, `boolean`, `int32`, `json`, and `uint64`, `<kind>_calls`, `<kind>_nulls`, and `<kind>_seconds`. The counters and durations are recorded once when the span closes.
-- `sqlite_export_total`: export completion span; fields `rows` and `seconds`.
-- `RYI_SQLITE_PHASES` was removed. The tracing subscriber's environment filter controls visibility; no environment variable was added.
+- `sqlite_table_batch_drain`: one span per table batch drain; fields `table` and `rows`. Its lifetime covers the drain.
+- `sqlite_bind_phase`: one debug span held across the export, entered for each bind call; fields `seconds` and `dispatch_meta_lookup_seconds`. Close-time `sqlite_bind_column_kind` events report `kind`, `calls`, `nulls`, and `seconds` for each `COLUMN_KINDS` entry. Close-time `sqlite_table_profile` events report `table`, `rows`, `bind_seconds`, and `insert_seconds`.
+- `sqlite_export_total`: created with the database and held through close; entered around bind and pending-row writes and again through close; fields `rows` and `seconds` are recorded at close.
+- `RYI_SQLITE_PHASES` was removed. Per-row and per-column clocks are enabled only when `tracing::enabled!(Level::DEBUG)` is true, computed once in `Binder::new`. Set `RUST_LOG=sprefa_extract=debug,hafley_scm=info` to capture detailed SQLite bind metrics through hafley-observe. No environment variable was added.
 
 ## Verification status
 

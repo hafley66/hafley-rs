@@ -5,7 +5,7 @@ use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::fmt::Display;
 use std::hash::{Hash, Hasher};
-use std::sync::atomic::AtomicPtr;
+use std::sync::atomic::{AtomicPtr, AtomicU64};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -311,7 +311,12 @@ impl Slot {
         }
     }
 
-    fn spawn(&mut self, meta: Arc<Vec<Meta>>) -> Result<()> {
+    fn spawn(
+        &mut self,
+        meta: Arc<Vec<Meta>>,
+        table_insert_nanos: Arc<Vec<AtomicU64>>,
+        profile_enabled: bool,
+    ) -> Result<()> {
         let Slot::Local(_) = self else { return Ok(()) };
         let Slot::Local(connection) = std::mem::replace(self, Slot::Moving) else { unreachable!() };
         let (batches, inbox) = sync_channel::<Batch>(QUEUE_BATCHES);
@@ -320,8 +325,13 @@ impl Slot {
             let mut error = None;
             for mut batch in inbox {
                 if error.is_none() {
+                    let started = profile_enabled.then(Instant::now);
                     if let Err(e) = batch.drain(&meta[batch.table], &connection) {
                         error = Some(e.to_string());
+                    }
+                    if let Some(started) = started {
+                        let nanos = started.elapsed().as_nanos() as u64;
+                        table_insert_nanos[batch.table].fetch_add(nanos, Ordering::Relaxed);
                     }
                 }
                 batch.clear();
@@ -349,6 +359,11 @@ pub struct Binder {
     by_name: HashMap<String, usize>,
     path: String,
     threaded: bool,
+    profile_enabled: bool,
+    table_bind_nanos: Vec<u64>,
+    table_rows: Vec<u64>,
+    submit_nanos: u64,
+    table_insert_nanos: Arc<Vec<AtomicU64>>,
     kind_time: [KindTime; COLUMN_KINDS.len()],
 }
 
@@ -411,8 +426,19 @@ impl Binder {
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
+        let table_count = meta.len();
+        let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
         Ok(Self { meta: Arc::new(meta), buffers, columns, json, column_kinds, by_name, path: String::new(), threaded,
+            profile_enabled,
+            table_bind_nanos: vec![0; table_count],
+            table_rows: vec![0; table_count],
+            submit_nanos: 0,
+            table_insert_nanos: Arc::new((0..table_count).map(|_| AtomicU64::new(0)).collect()),
             kind_time: [KindTime::default(); COLUMN_KINDS.len()] })
+    }
+
+    pub fn profiling_enabled(&self) -> bool {
+        self.profile_enabled
     }
 
     /// Serialize one row into its table's buffer; a full buffer goes to the
@@ -425,6 +451,7 @@ impl Binder {
         content_id: Option<&str>,
         value: &impl Serialize,
     ) -> Result<()> {
+        let started = self.profile_enabled.then(Instant::now);
         self.path.clear();
         let mut writer = RowWriter {
             binder: self,
@@ -446,19 +473,34 @@ impl Binder {
             return Err("row has no `record` tag".into());
         };
         self.buffers[table].rows += 1;
+        if self.profile_enabled {
+            self.table_rows[table] += 1;
+        }
         if self.buffers[table].rows == self.meta[table].chunk_rows * CHUNKS_PER_BATCH {
             self.submit(slot, table)?;
+        }
+        if let Some(started) = started {
+            self.table_bind_nanos[table] += started.elapsed().as_nanos() as u64;
         }
         Ok(())
     }
 
     fn submit(&mut self, slot: &mut Slot, table: usize) -> Result<()> {
+        let started = self.profile_enabled.then(Instant::now);
         if !self.threaded {
             let connection = slot.local()?;
+            let insert_started = self.profile_enabled.then(Instant::now);
             self.buffers[table].drain(&self.meta[table], connection)?;
+            if let Some(insert_started) = insert_started {
+                let nanos = insert_started.elapsed().as_nanos() as u64;
+                self.table_insert_nanos[table].fetch_add(nanos, Ordering::Relaxed);
+            }
+            if let Some(started) = started {
+                self.submit_nanos += started.elapsed().as_nanos() as u64;
+            }
             return Ok(());
         }
-        slot.spawn(Arc::clone(&self.meta))?;
+        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.table_insert_nanos), self.profile_enabled)?;
         let Slot::Worker(worker) = slot else {
             return Err("SQLite writer thread did not start".into());
         };
@@ -473,6 +515,9 @@ impl Binder {
         if worker.batches.send(full).is_err() {
             slot.local()?;
             return Err("SQLite writer thread stopped".into());
+        }
+        if let Some(started) = started {
+            self.submit_nanos += started.elapsed().as_nanos() as u64;
         }
         Ok(())
     }
@@ -489,24 +534,38 @@ impl Binder {
         Ok(())
     }
 
-    pub fn record_profile(&self, bind_seconds: f64) {
-        let span = tracing::info_span!(
-            "sqlite_bind_phase",
-            seconds = tracing::field::Empty,
-            string_calls = tracing::field::Empty, string_nulls = tracing::field::Empty, string_seconds = tracing::field::Empty,
-            uint32_calls = tracing::field::Empty, uint32_nulls = tracing::field::Empty, uint32_seconds = tracing::field::Empty,
-            int64_calls = tracing::field::Empty, int64_nulls = tracing::field::Empty, int64_seconds = tracing::field::Empty,
-            boolean_calls = tracing::field::Empty, boolean_nulls = tracing::field::Empty, boolean_seconds = tracing::field::Empty,
-            int32_calls = tracing::field::Empty, int32_nulls = tracing::field::Empty, int32_seconds = tracing::field::Empty,
-            json_calls = tracing::field::Empty, json_nulls = tracing::field::Empty, json_seconds = tracing::field::Empty,
-            uint64_calls = tracing::field::Empty, uint64_nulls = tracing::field::Empty, uint64_seconds = tracing::field::Empty,
-        );
-        span.record("seconds", bind_seconds);
-        for (index, kind) in ["string", "uint32", "int64", "boolean", "int32", "json", "uint64"].iter().enumerate() {
-            let time = self.kind_time[index];
-            span.record(format!("{kind}_calls").as_str(), time.calls);
-            span.record(format!("{kind}_nulls").as_str(), time.nulls);
-            span.record(format!("{kind}_seconds").as_str(), time.nanos as f64 / 1e9);
+    pub fn record_profile(&self, bind_span: &tracing::Span, bind_seconds: f64) {
+        if !self.profile_enabled {
+            return;
+        }
+        bind_span.record("seconds", bind_seconds);
+        let column_seconds = self.kind_time.iter().map(|time| time.nanos).sum::<u64>();
+        let dispatch_meta_lookup = self.table_bind_nanos.iter().sum::<u64>()
+            .saturating_sub(column_seconds)
+            .saturating_sub(self.submit_nanos);
+        bind_span.record("dispatch_meta_lookup_seconds", dispatch_meta_lookup as f64 / 1e9);
+        for (kind, time) in COLUMN_KINDS.iter().zip(self.kind_time) {
+            bind_span.in_scope(|| tracing::info!(
+                kind = %kind,
+                calls = time.calls,
+                nulls = time.nulls,
+                seconds = time.nanos as f64 / 1e9,
+                "sqlite bind column kind"
+            ));
+        }
+        for (index, meta) in self.meta.iter().enumerate() {
+            let rows = self.table_rows[index];
+            if rows > 0 {
+                let bind_seconds = self.table_bind_nanos[index] as f64 / 1e9;
+                let insert_seconds = self.table_insert_nanos[index].load(Ordering::Relaxed) as f64 / 1e9;
+                bind_span.in_scope(|| tracing::info!(
+                    table = %meta.name,
+                    rows,
+                    bind_seconds,
+                    insert_seconds,
+                    "sqlite table profile"
+                ));
+            }
         }
     }
 }
@@ -614,7 +673,7 @@ impl RowWriter<'_> {
 
     #[inline(always)]
     fn column<T: ?Sized + Serialize>(&mut self, index: usize, column: usize, value: &T) -> std::result::Result<(), Error> {
-        let started = Instant::now();
+        let started = self.binder.profile_enabled.then(Instant::now);
         let kind = self.binder.column_kinds[index][column];
         let width = self.binder.meta[index].width;
         let table = &mut self.binder.buffers[index];
@@ -633,10 +692,12 @@ impl RowWriter<'_> {
         };
         let base = table.rows * width;
         table.vals[base + column] = val;
-        let time = &mut self.binder.kind_time[kind];
-        time.calls += 1;
-        time.nulls += u64::from(matches!(val, Val::Null));
-        time.nanos += started.elapsed().as_nanos() as u64;
+        if let Some(started) = started {
+            let time = &mut self.binder.kind_time[kind];
+            time.calls += 1;
+            time.nulls += u64::from(matches!(val, Val::Null));
+            time.nanos += started.elapsed().as_nanos() as u64;
+        }
         Ok(())
     }
 }
