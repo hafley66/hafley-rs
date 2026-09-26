@@ -27,7 +27,7 @@ use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
-    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, diet_scip_with_raw,
+    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl,
     dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
@@ -474,16 +474,15 @@ fn extract_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if tier == Tier::Fast {
         if output.database.is_some() {
-            let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
-                output
-                    .source_fact(raw.path, raw.content_id, &raw.fact)
-                    .map_err(|error| std::io::Error::other(error.to_string()))
-            };
-            let resolved = diet_scip_with_raw(&cli.paths, &mut push_raw)?;
-            output.clear_source()?;
-            for fact in resolved {
-                output.fact(&fact)?;
-            }
+            sprefa_extract::diet_scip_streamed(&cli.paths, &mut |row| {
+                match row {
+                    sprefa_extract::DietRow::Raw(raw) => output.source_fact(raw.path, raw.content_id, &raw.fact),
+                    sprefa_extract::DietRow::Resolved(fact) => {
+                        output.clear_source().and_then(|()| output.fact(&fact))
+                    }
+                }
+                .map_err(|error| std::io::Error::other(error.to_string()))
+            })?;
             return Ok(());
         }
         if cli.lines {

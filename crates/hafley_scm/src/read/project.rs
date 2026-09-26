@@ -295,27 +295,27 @@ pub fn resolve_project_with_raw<E>(
     request: &ResolveRequest,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let inputs =
-        read_inputs_with_modules(request.paths, Planes::All).map_err(ResolveWithRawError::Project)?;
-    resolve_project_with_raw_inputs(request, inputs, push_raw, None)
+    let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input| {
+        push_input_raw(input, push_raw)
+    })?;
+    resolve_pushed(request, inputs, None)
 }
 
-fn resolve_project_with_raw_inputs<E>(
-    request: &ResolveRequest,
-    mut inputs: Vec<ProjectInput>,
+/// One input's file row and phase-1 rows into `push_raw`.
+fn push_input_raw<E>(
+    input: &mut ProjectInput,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
-    scm_paths: Option<&[PathBuf]>,
-) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    for input in &mut inputs {
-        push_raw(RawProjectFact {
-            path: &input.path,
-            content_id: &input.blob,
-            fact: input
-                .file
-                .take()
-                .expect("fresh project input has its file row"),
-        })
-        .map_err(ResolveWithRawError::RawSink)?;
+) -> Result<(), ResolveWithRawError<E>> {
+    push_raw(RawProjectFact {
+        path: &input.path,
+        content_id: &input.blob,
+        fact: input
+            .file
+            .take()
+            .expect("fresh project input has its file row"),
+    })
+    .map_err(ResolveWithRawError::RawSink)?;
+    {
         crate::read::wire::flatten_each(input.output.as_ref(), None, &mut |mut fact| {
             // Stamp the phase-1 `path: None` left by `wire.rs` so it matches
             // the phase-2 shape `call_drop_facts` already sets above.
@@ -332,6 +332,15 @@ fn resolve_project_with_raw_inputs<E>(
         })
         .map_err(ResolveWithRawError::RawSink)?;
     }
+    Ok(())
+}
+
+/// Resolve over inputs whose phase-1 rows already went out.
+fn resolve_pushed<E>(
+    request: &ResolveRequest,
+    inputs: Vec<ProjectInput>,
+    scm_paths: Option<&[PathBuf]>,
+) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
     let mut facts = resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
@@ -1414,9 +1423,69 @@ pub fn diet_scip_with_raw<E>(
     paths: &[PathBuf],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let inputs =
-        read_inputs_with_modules(paths, Planes::All).map_err(ResolveWithRawError::Project)?;
-    resolve_project_with_raw_inputs(&diet_scip_request(paths), inputs, push_raw, Some(paths))
+    let mut resolved = Vec::new();
+    diet_scip_streamed(paths, &mut |row| match row {
+        DietRow::Raw(raw) => push_raw(raw),
+        DietRow::Resolved(fact) => {
+            resolved.push(fact);
+            Ok(())
+        }
+    })?;
+    Ok(resolved)
+}
+
+/// One row of the streamed diet family: a file's phase-1 row, or a project row
+/// (resolved edges, then the `.scm` rows) that names no single input.
+pub enum DietRow<'a> {
+    Raw(RawProjectFact<'a>),
+    Resolved(FlatFact),
+}
+
+/// `diet_scip_with_raw` with the project rows streamed too: the `.scm` rows
+/// are built one chunk at a time off captures moved out of the inputs, so no
+/// whole-corpus row vector is ever held.
+pub fn diet_scip_streamed<E>(
+    paths: &[PathBuf],
+    push: &mut impl FnMut(DietRow<'_>) -> Result<(), E>,
+) -> Result<(), ResolveWithRawError<E>> {
+    let mut inputs = read_inputs_streamed(paths, true, Planes::All, &mut |input| {
+        push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))
+    })?;
+    let mut captures: std::collections::HashMap<String, crate::read::lang::scm_rows::ScmCaptures> =
+        std::collections::HashMap::new();
+    for input in &mut inputs {
+        if let Some(taken) = Arc::get_mut(&mut input.output).and_then(|output| output.scm_captures.take()) {
+            captures.insert(input.path.clone(), taken);
+        }
+    }
+    let resolved = resolve_project_inputs(&diet_scip_request(paths), inputs, false)
+        .map_err(ResolveWithRawError::Project)?;
+    for fact in resolved {
+        push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+    }
+    for chunk in paths.chunks(READ_CHUNK_FILES) {
+        let owned: Vec<(&PathBuf, Option<crate::read::lang::scm_rows::ScmCaptures>)> = chunk
+            .iter()
+            .map(|path| (path, captures.remove(path.to_string_lossy().as_ref())))
+            .collect();
+        let rows: Vec<Result<Vec<FlatFact>, ProjectError>> = EXTRACT_POOL.install(|| {
+            owned
+                .par_iter()
+                .map(|(path, captured)| match captured {
+                    Some(captures) => Ok(captures.facts(&path.to_string_lossy())),
+                    None => crate::read::scm_facts(std::slice::from_ref(*path))
+                        .map_err(|error| ProjectError::Scm(error.to_string())),
+                })
+                .collect()
+        });
+        drop(owned);
+        for file in rows {
+            for fact in file.map_err(ResolveWithRawError::Project)? {
+                push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+            }
+        }
+    }
+    Ok(())
 }
 
 fn diet_scip_request(paths: &[PathBuf]) -> ResolveRequest<'_> {
@@ -1597,6 +1666,55 @@ fn read_inputs_plain(
     modules: bool,
     planes: Planes,
 ) -> Result<Vec<ProjectInput>, ProjectError> {
+    flatten_inputs(read_chunk(paths, modules, planes))
+}
+
+/// Files per streamed chunk: the bound on how many files' CST planes are alive
+/// at once (one chunk handed over, one extracting).
+const READ_CHUNK_FILES: usize = 64;
+
+/// Read like `read_inputs_with_modules`, handing each input to `on_input` in
+/// path order as its chunk lands, then dropping its CST plane (resolve never
+/// reads it). The next chunk extracts while this one is handed over.
+pub fn read_inputs_streamed<E>(
+    paths: &[PathBuf],
+    modules: bool,
+    planes: Planes,
+    on_input: &mut impl FnMut(&mut ProjectInput) -> Result<(), ResolveWithRawError<E>>,
+) -> Result<Vec<ProjectInput>, ResolveWithRawError<E>> {
+    let mut inputs = Vec::with_capacity(paths.len());
+    std::thread::scope(|scope| -> Result<(), ResolveWithRawError<E>> {
+        let (chunks, landed) = std::sync::mpsc::sync_channel(1);
+        scope.spawn(move || {
+            for chunk in paths.chunks(READ_CHUNK_FILES) {
+                if chunks.send(read_chunk(chunk, modules, planes)).is_err() {
+                    break;
+                }
+            }
+        });
+        for chunk in landed {
+            for result in chunk {
+                let Some(mut input) = result.map_err(ResolveWithRawError::Project)? else {
+                    continue;
+                };
+                on_input(&mut input)?;
+                if let Some(output) = Arc::get_mut(&mut input.output) {
+                    output.cst = None;
+                }
+                inputs.push(input);
+            }
+        }
+        Ok(())
+    })?;
+    Ok(inputs)
+}
+
+/// One chunk's inputs, extracted in parallel, back in path order.
+fn read_chunk(
+    paths: &[PathBuf],
+    modules: bool,
+    planes: Planes,
+) -> Vec<Result<Option<ProjectInput>, ProjectError>> {
     // Largest file first, so the longest parse never starts last and leaves the
     // other workers idle; results go back to path order below.
     let mut order: Vec<(u64, usize)> = paths
@@ -1614,7 +1732,8 @@ fn read_inputs_plain(
                 let content =
                     std::fs::read(path).map_err(|err| ProjectError::Read(path.clone(), err))?;
                 let path = path.to_string_lossy().to_string();
-                let output = crate::read::dispatch(&path, &content, resolve_mask(&path, planes));
+                let output =
+                    crate::read::dispatch::dispatch_uncached(&path, &content, resolve_mask(&path, planes));
                 let module = module_facts_of(&path, &content, modules);
                 let rust_module = rust_module_facts_of(&path, &content, modules, output.as_deref());
                 let go_module = go_module_facts_of(&path, &content, modules);
@@ -1640,7 +1759,7 @@ fn read_inputs_plain(
             .collect()
     });
     indexed.sort_unstable_by_key(|(index, _)| *index);
-    flatten_inputs(indexed.into_iter().map(|(_, result)| result).collect())
+    indexed.into_iter().map(|(_, result)| result).collect()
 }
 
 fn load_scip(
