@@ -869,27 +869,41 @@ impl RustModuleIndex {
             .impl_methods
             .get(&(self_type.to_string(), method.to_string()))?
             .as_slice();
+        let visible: Vec<&ImplMethodTarget> = sites
+            .iter()
+            .filter(|site| caller.is_none_or(|from| self.sees(from, &site.blob)))
+            .collect();
         let pick = |site: &ImplMethodTarget| Some((site.blob.clone(), site.span));
-        match sites {
+        match visible.as_slice() {
             [only] => pick(only),
             many => {
                 let inherent: Vec<&ImplMethodTarget> = many
                     .iter()
+                    .copied()
                     .filter(|site| site.trait_name.is_none())
                     .collect();
-                match inherent.as_slice() {
+                let nearby: Vec<&ImplMethodTarget> = inherent.iter().copied().filter(|site| {
+                    caller.is_some_and(|from| self.paths.get(&site.blob).is_some_and(|path| path == from))
+                }).collect();
+                let inherent = if nearby.is_empty() { inherent.as_slice() } else { nearby.as_slice() };
+                match inherent {
                     [one] => pick(one),
                     [] => {
                         let caller = caller?;
                         let survivors: Vec<&ImplMethodTarget> = many
                             .iter()
+                            .copied()
                             .filter(|site| {
                                 site.trait_name.as_deref().is_some_and(|trait_name| {
                                     self.trait_in_scope(caller, trait_name)
                                 })
                             })
                             .collect();
-                        match survivors.as_slice() {
+                        let nearby: Vec<&ImplMethodTarget> = survivors.iter().copied().filter(|site| {
+                            self.paths.get(&site.blob).is_some_and(|path| path == caller)
+                        }).collect();
+                        let survivors = if nearby.is_empty() { survivors.as_slice() } else { nearby.as_slice() };
+                        match survivors {
                             [one] => pick(one),
                             _ => None,
                         }
@@ -1168,9 +1182,14 @@ impl RustModuleIndex {
             path.split_once("/tests/fixtures/")
                 .and_then(|(root, rest)| rest.split('/').next().map(|name| (root, name)))
         }
+        let declared_dependency = self.crate_dirs.get(from)
+            .zip(self.crate_dirs.get(target))
+            .is_some_and(|(own, target_crate)| {
+                self.crate_deps.get(own).is_some_and(|deps| deps.contains(target_crate))
+            });
         match (fixture(from), fixture(target)) {
-            (Some(a), Some(b)) if a != b => return false,
-            (Some(_), None) | (None, Some(_)) => return false,
+            (Some(a), Some(b)) if a != b && !declared_dependency => return false,
+            (Some(_), None) | (None, Some(_)) if !declared_dependency => return false,
             _ => {}
         }
         let Some(own) = self.crate_dirs.get(from) else {
