@@ -1966,6 +1966,7 @@ impl Project<CallF> for CallProjector<'_> {
             nested_defs: Vec::new(),
             sites: Vec::new(),
             value_refs: Vec::new(),
+            parameter_scopes: Vec::new(),
         };
         walker.visit_program(program);
         for (span, name) in walker.nested_defs {
@@ -2688,6 +2689,7 @@ struct CallWalker<'c> {
     /// Every identifier in call-argument position, before the projector keeps
     /// the ones this file declares or imports.
     value_refs: Vec<(oxc_span::Span, String)>,
+    parameter_scopes: Vec<Vec<String>>,
 }
 
 impl<'a> OxcVisit<'a> for CallWalker<'_> {
@@ -2699,17 +2701,25 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 self.nested_defs.push((func.span, id.name.to_string()));
             }
         }
+        self.parameter_scopes.push(
+            func.params.items.iter().filter_map(|param| binding_name(&param.pattern)).collect(),
+        );
         self.depth += 1;
         oxc_ast_visit::walk::walk_function(self, func, flags);
         self.depth -= 1;
+        self.parameter_scopes.pop();
     }
 
     fn visit_arrow_function_expression(&mut self, arrow: &ts::ArrowFunctionExpression<'a>) {
         // Arrows have no own declaration name, but they raise the depth so their
         // nested named decls land as Free defs.
+        self.parameter_scopes.push(
+            arrow.params.items.iter().filter_map(|param| binding_name(&param.pattern)).collect(),
+        );
         self.depth += 1;
         oxc_ast_visit::walk::walk_arrow_function_expression(self, arrow);
         self.depth -= 1;
+        self.parameter_scopes.pop();
     }
 
     fn visit_call_expression(&mut self, call: &ts::CallExpression<'a>) {
@@ -2720,7 +2730,7 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 path: callee_path(&call.callee, self.content),
             });
         }
-        collect_value_refs(&mut self.value_refs, &call.arguments);
+        collect_value_refs(&mut self.value_refs, &call.arguments, &self.parameter_scopes);
         oxc_ast_visit::walk::walk_call_expression(self, call);
     }
 
@@ -2734,7 +2744,7 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 path: callee_path(&new_expr.callee, self.content),
             });
         }
-        collect_value_refs(&mut self.value_refs, &new_expr.arguments);
+        collect_value_refs(&mut self.value_refs, &new_expr.arguments, &self.parameter_scopes);
         oxc_ast_visit::walk::walk_new_expression(self, new_expr);
     }
 
@@ -2778,9 +2788,13 @@ fn callee_name(expr: &ts::Expression) -> Option<String> {
 fn collect_value_refs(
     out: &mut Vec<(oxc_span::Span, String)>,
     arguments: &oxc_allocator::Vec<'_, ts::Argument<'_>>,
+    parameter_scopes: &[Vec<String>],
 ) {
     for argument in arguments {
         if let ts::Argument::Identifier(id) = argument {
+            if parameter_scopes.iter().rev().any(|params| params.iter().any(|param| param == id.name.as_str())) {
+                continue;
+            }
             out.push((id.span, id.name.to_string()));
         }
     }
