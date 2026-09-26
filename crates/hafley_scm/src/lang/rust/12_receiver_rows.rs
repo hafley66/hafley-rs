@@ -44,9 +44,9 @@ fn receiver_ty(ty: &syn::Type) -> Option<String> {
         syn::Type::Reference(r) => receiver_ty(&r.elem),
         syn::Type::Path(path) if path.path.segments.last()?.ident == "Box" => {
             let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments else {
-                return None;
+                return principal_ty(ty);
             };
-            let syn::GenericArgument::Type(inner) = args.args.first()? else { return None };
+            let Some(syn::GenericArgument::Type(inner)) = args.args.first() else { return principal_ty(ty) };
             receiver_ty(inner)
         }
         _ => principal_ty(ty),
