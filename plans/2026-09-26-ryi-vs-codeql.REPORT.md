@@ -3,6 +3,7 @@
 Implementation tip before this report: `454bc937`. CodeQL CLI 2.27.1; Rust pack 0.2.22; JavaScript pack 2.10.2; worktree ryi SHA-256 `daae7eff8ad3ddbe929556a71a4c53653687645322e4b7120b5ca081be86442a`.
 Both tools read each frozen corpus. Rust queries exclude macro expansions. The four-column key is `(source file, enclosing item, target file, target name)`. Build means database creation. Times are seconds, sizes are MiB; Rust Cargo dependencies were cached. Rust type owner names were corrected and re-queried on the fresh databases after the timed runs.
 Root extraction rewrites only a private copy of `ra_ap_parser-0.0.349/test_data/lexer/err/incomplete_frontmatter_before_unicode.rs`, whose `-│` makes CodeQL panic at a UTF-8 byte boundary.
+The recorded timings predate the new 2048 MiB limits. Subsequent runs pass `RYI_MAX_MEM_MB=2048`, CodeQL `--ram=2048 --threads=4 -J=-Xmx2g`, and remove temporary databases on exit.
 
 | Corpus (files) | Type agree / ryi-only / CodeQL-only | Call agree / ryi-only / CodeQL-only | ryi build / query / DB | CodeQL build / query / DB |
 | --- | ---: | ---: | ---: | ---: |
@@ -27,12 +28,12 @@ Causes below partition each disagreement bucket by observable pattern. Sample ve
 | TypeScript call R | Wrong generated peer; synthetic caller; unresolved CodeQL callee | 97; 3925; 2219 | `applyArrivals`; `closure@`; `list_at_scalar_seam` | ryi defect; out of scope; codeql query defect |
 | TypeScript call C | Missing ryi call edge | 3890 | `parseArgs` | ryi defect |
 
-Gate: `PATH="$HOME/.local/bin:$PATH" CARGO_TARGET_DIR="$HOME/.cache/boop/cargo-target" cargo test --features cli --test 179_codeql_baseline -- --nocapture` from `crates/sprefa-extract`.
+Gate: `PATH="$HOME/.local/bin:$PATH" CARGO_TARGET_DIR="$HOME/.cache/boop/cargo-target" CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=4 RYI_MAX_MEM_MB=2048 cargo test --features cli --test 179_codeql_baseline -- --nocapture` from `crates/sprefa-extract`.
 
 ```text
 running 1 test
 test type_ladder_codeql_baseline ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 47.52s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 49.10s
 
 ```

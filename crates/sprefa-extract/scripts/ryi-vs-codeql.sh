@@ -23,6 +23,11 @@ ryi=${RYI_BIN:-$(command -v ryi)}
 key=$(printf '%s\n%s' "$source_root" "$language" | shasum -a 256 | cut -c1-16)
 out=${RYI_CODEQL_OUT:-${XDG_CACHE_HOME:-$HOME/.cache}/ryi-vs-codeql/$key}
 mkdir -p "$out"
+cleanup() {
+  rm -rf "$out/codeql-db" "$out/source" "$out/dependency-overrides"
+  rm -f "$out/ryi.db"
+}
+trap cleanup EXIT
 
 # Both extractors see the same source snapshot. In a Cargo workspace, excluded
 # member directories are left out of that snapshot.
@@ -95,7 +100,7 @@ fi
 if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -f "$out/ryi.db" ]; then
   rm -f "$out/ryi.db"
   start=$(date +%s)
-  RUST_LOG=off "$ryi" fast "$root" --sqlite "$out/ryi.db" >"$out/ryi.log" 2>&1
+  RYI_MAX_MEM_MB=2048 RUST_LOG=off "$ryi" fast "$root" --sqlite "$out/ryi.db" >"$out/ryi.log" 2>&1
   echo "$(( $(date +%s) - start ))" >"$out/ryi-build-seconds"
 fi
 
@@ -106,9 +111,9 @@ if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -d "$out/codeql-db" ]; then
   if [ -n "${RYI_CODEQL_CARGO_TARGET_DIR:-}" ]; then
     cargo_target_option=("--extractor-option=rust.cargo_target_dir=$RYI_CODEQL_CARGO_TARGET_DIR")
   fi
-  if ! "$codeql" database create "$out/codeql-db" -l "$language" --source-root "$root" \
+  if ! CARGO_BUILD_JOBS=4 "$codeql" database create "$out/codeql-db" -l "$language" --source-root "$root" \
       "${cargo_target_option[@]}" \
-      --threads "${RYI_CODEQL_THREADS:-4}" >"$out/codeql-build.log" 2>&1; then
+      --ram=2048 --threads=4 -J=-Xmx2g >"$out/codeql-build.log" 2>&1; then
     echo "CodeQL database creation failed; log: $out/codeql-build.log" >&2
     rg -n -C 2 'panicked|panic|│|ERROR|Error' "$out/codeql-build.log" | tail -40 >&2 || true
     exit 1
@@ -125,9 +130,9 @@ for kind in type call; do
   query_ran=1
   "$codeql" query run "$query_dir/${kind}_edges_repo.ql" \
     --database "$out/codeql-db" --output "$out/$kind.bqrs" \
-    --threads "${RYI_CODEQL_THREADS:-4}" \
+    --ram=2048 --threads=4 -J=-Xmx2g \
     >"$out/$kind-query.log" 2>&1
-  "$codeql" bqrs decode "$out/$kind.bqrs" --format=csv --output "$out/$kind.csv" \
+  "$codeql" bqrs decode "$out/$kind.bqrs" --format=csv --output "$out/$kind.csv" -J=-Xmx2g \
     >>"$out/$kind-query.log" 2>&1
 done
 if [ "$query_ran" = 1 ] || [ ! -f "$out/codeql-query-seconds" ]; then
