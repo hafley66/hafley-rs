@@ -21,7 +21,7 @@ fn trace_path(tag: &str) -> PathBuf {
 }
 
 fn rows(tag: &str, name: &str) -> Vec<Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--from", name])
         .arg("tests/fixtures/graph_ts")
         .env("HAFLEY_TRACE", trace_path(tag))

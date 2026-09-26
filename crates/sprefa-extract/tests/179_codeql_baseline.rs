@@ -15,7 +15,7 @@ fn type_ladder_codeql_baseline() {
     let output = Command::new(script)
         .arg(fixture)
         .arg("rust")
-        .env("RYI_BIN", env!("CARGO_BIN_EXE_ryi-server"))
+        .env("RYI_BIN", env!("CARGO_BIN_EXE_ryii"))
         .env("RYI_CODEQL_OUT", scratch.path())
         .env("RYI_CODEQL_CSV", manifest.join("tests/fixtures/codeql_baseline/type_ladder"))
         .output()

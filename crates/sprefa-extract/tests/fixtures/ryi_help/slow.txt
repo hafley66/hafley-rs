@@ -1,6 +1,6 @@
 The SCIP oracle written as fast's tables
 
-Usage: ryi-server slow [OPTIONS] [PATH]...
+Usage: ryii slow [OPTIONS] [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -15,5 +15,4 @@ Options:
       --scip-index <FILE>    Load this index.scip instead of finding or building one
       --no-checker           Skip the compiler checkers
       --scip-timeout <SECS>  Seconds allowed for one indexer run
-      --daemon-client        Send this command to the resident daemon (ignored by the server binary)
   -h, --help                 Print help

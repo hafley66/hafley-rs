@@ -2,7 +2,6 @@ use std::error::Error;
 use std::io::IsTerminal as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
-use std::os::unix::process::CommandExt as _;
 use std::time::Duration;
 
 use base64::Engine as _;
@@ -23,13 +22,13 @@ type ClientBody = http_body_util::combinators::UnsyncBoxBody<Bytes, std::io::Err
 type ClientError = Box<dyn Error + Send + Sync>;
 
 fn server_binary() -> Result<PathBuf, ClientError> {
-    let sibling = std::env::current_exe()?.with_file_name("ryi-server");
+    let sibling = std::env::current_exe()?.with_file_name(daemon_auto::SERVER_BIN);
     if sibling.is_file() { return Ok(sibling); }
     for dir in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()) {
-        let candidate = dir.join("ryi-server");
+        let candidate = dir.join(daemon_auto::SERVER_BIN);
         if candidate.is_file() { return Ok(candidate); }
     }
-    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "ryi-server was not found").into())
+    Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} was not found", daemon_auto::SERVER_BIN)).into())
 }
 
 fn start_daemon(server: &Path) -> Result<(), ClientError> {
@@ -98,7 +97,7 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    Err("ryi-server did not become ready".into())
+    Err(format!("{} did not become ready", daemon_auto::SERVER_BIN).into())
 }
 
 fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> {
@@ -123,19 +122,8 @@ fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> 
 }
 
 async fn run() -> Result<i32, ClientError> {
-    let original_argv: Vec<std::ffi::OsString> = std::env::args_os().skip(1).filter(|arg| arg != "--daemon-client").collect();
-    let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
-    if argv.get(1).is_some_and(|arg| arg == "--daemon-client") && argv.len() > 2 {
-        let daemon_client = argv.remove(1);
-        argv.insert(2, daemon_client);
-    }
-    let cli = Ryi::parse_from(argv);
+    let cli = Ryi::parse();
     let server = server_binary()?;
-    if !cli.daemon_client {
-        let error = Command::new(server).args(original_argv)
-            .stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).exec();
-        return Err(error.into());
-    }
     let (verb, args) = command(&cli)?;
     let root = std::env::current_dir()?;
     let request = daemon_auto::Request::new(verb, root, &args)?;

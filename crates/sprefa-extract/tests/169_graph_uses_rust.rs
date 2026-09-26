@@ -7,7 +7,7 @@ use serde_json::Value;
 
 #[test]
 fn rust_function_and_method_signatures_are_type_uses() {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
             "graph",

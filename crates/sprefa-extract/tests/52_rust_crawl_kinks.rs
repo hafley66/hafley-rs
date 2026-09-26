@@ -72,7 +72,7 @@ struct Edge {
 
 /// Every flat fact one `--resolve --family call` run prints.
 fn resolve_facts(paths: &[&str]) -> Vec<Value> {
-    let out = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("--resolve")
         .args(["--arms", "call"])
         .args(paths)

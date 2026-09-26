@@ -13,7 +13,7 @@ use crate::ops_auto::{
     QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs, WatchArgs,
 };
 
-fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default(), daemon_client: false } }
+fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default() } }
 
 struct RowSink {
     tx: mpsc::SyncSender<OpResult<Vec<u8>>>,
@@ -201,7 +201,7 @@ pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>>
 pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     let mut args = args.clone();
     args.format = None;
-    stream(Ryi { cmd: None, file: args, daemon_client: false })
+    stream(Ryi { cmd: None, file: args })
 }
 pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Slow(args.clone()))) }
 pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Scip(args.clone()))) }

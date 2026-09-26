@@ -203,7 +203,7 @@ fn trace_path(index: usize) -> PathBuf {
 }
 
 fn fast(paths: &[&str], index: usize) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace_path(index))

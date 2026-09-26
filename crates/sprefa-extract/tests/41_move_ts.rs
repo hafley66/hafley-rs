@@ -83,7 +83,7 @@ fn git(root: &Path, args: &[&str]) -> String {
 }
 
 fn move_verb(fixture: &Fixture, extra: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("move")
         .arg(fixture.root.join(OLD))
         .arg(fixture.root.join(NEW))

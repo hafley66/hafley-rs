@@ -112,7 +112,7 @@ fn try_move(fixture: &Fixture, rows: &[(&str, &str)], extra: &[&str]) -> std::pr
         })
         .collect();
     std::fs::write(&list, body).unwrap();
-    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("move")
         .arg("--list")
         .arg(&list)
@@ -465,7 +465,7 @@ fn moving_this_crates_own_module_leaves_it_compiling() {
     );
     let root = root.canonicalize().unwrap();
 
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("move")
         .arg(root.join("src/edit/ts_rehome.rs"))
         .arg(root.join("src/edit/ts/rehome.rs"))

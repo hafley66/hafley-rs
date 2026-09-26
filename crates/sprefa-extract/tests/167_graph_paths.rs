@@ -6,7 +6,7 @@ use std::process::Command;
 use serde_json::Value;
 
 fn run(arm: &str, seed: &str) -> Vec<Value> {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["graph", arm, seed, "tests/fixtures/graph_ts"])
         .output()
@@ -56,7 +56,7 @@ fn flow_paths_follow_derived_interprocedural_edges() {
         "tests/fixtures/resolve/0_caller.ts",
         "tests/fixtures/resolve/1_callee.ts",
     ];
-    let reference = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let reference = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["--resolve", "--arms", "flow"])
         .args(files)
@@ -75,7 +75,7 @@ fn flow_paths_follow_derived_interprocedural_edges() {
         edge["from"]["start"].as_u64().unwrap(),
         edge["from"]["end"].as_u64().unwrap()
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["graph", "--flow-path", &seed])
         .args(files)

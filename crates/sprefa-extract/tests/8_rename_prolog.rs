@@ -81,7 +81,7 @@ fn run_rename(
     new: &str,
     extra: &[&str],
 ) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("rename")
         .arg(target)
         .arg(new)

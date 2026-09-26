@@ -1,6 +1,6 @@
 Replace a generated region between sprefa markers
 
-Usage: ryi-server region [OPTIONS] <TARGET> <ID>
+Usage: ryii region [OPTIONS] <TARGET> <ID>
 
 Arguments:
   <TARGET>  DL7 file holding the markers
@@ -10,5 +10,4 @@ Options:
       --generated <GENERATED>  Generated body file, or - for stdin [default: -]
       --apply                  Write the replacement (default: report drift)
       --state <STATE>          Soopy state root for --apply
-      --daemon-client          Send this command to the resident daemon (ignored by the server binary)
   -h, --help                   Print help

@@ -5,6 +5,7 @@ use sha2::{Digest as _, Sha256};
 
 pub const IDLE_SECS: u64 = 600;
 pub const HANDSHAKE: bool = true;
+pub const SERVER_BIN: &str = "ryii";
 
 pub fn idle_secs() -> u64 {
     std::env::var("RYI_IDLE_SECS").ok().and_then(|value| value.parse::<u64>().ok())

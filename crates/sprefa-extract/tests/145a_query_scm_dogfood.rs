@@ -17,7 +17,7 @@ fn beta() -> bool {
 ";
 
 fn jsonl(path: &std::path::Path, query: &str) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["query", "--lang", "rust", "--query", query])
         .arg(path)
         .output()
@@ -111,7 +111,7 @@ fn ryi_query_predicate_families_through_hafley_scm() {
 #[ignore = "MatchArena does not yet carry #set! settings"]
 fn set_metadata_settings_are_absent_from_match_arena() {
     let path = temp_file();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args([
             "query",
             "--lang",

@@ -77,7 +77,7 @@ left join un on un.path = ref.path and un.st = ref.st
 group by 1, 2";
 
 fn ryi(args: &[&str]) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .env("RUST_LOG", "off")
         .output()

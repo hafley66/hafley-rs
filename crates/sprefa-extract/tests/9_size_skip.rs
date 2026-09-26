@@ -14,7 +14,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 
-const EXTRACT: &str = env!("CARGO_BIN_EXE_ryi-server");
+const EXTRACT: &str = env!("CARGO_BIN_EXE_ryii");
 
 /// One byte over the default ceiling, in a `.rs` the parser would otherwise
 /// accept: the skip must be decided on size alone, before any parse.

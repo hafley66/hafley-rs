@@ -1,11 +1,10 @@
 Validate and re-emit foreign TSI JSONL
 
-Usage: ryi-server ingest [OPTIONS] <PATH>...
+Usage: ryii ingest [OPTIONS] <PATH>...
 
 Arguments:
   <PATH>...  TSI JSONL files (/dev/stdin reads standard input)
 
 Options:
       --sqlite <PATH>  Write to a new SQLite database instead of stdout
-      --daemon-client  Send this command to the resident daemon (ignored by the server binary)
   -h, --help           Print help

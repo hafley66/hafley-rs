@@ -12,7 +12,7 @@ use std::path::Path;
 use std::process::Command;
 
 fn run(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .env("DL_TRAIL", "0")
         .env("DL_TRACE", "0")
@@ -28,7 +28,7 @@ fn fast_skips_large_json_under_small_heap_cap() {
     let db_path = scratch.path().join("facts.db");
     std::fs::write(&json_path, format!("[{}{{\"value\":1}}]", "{\"value\":1},".repeat(399_999))).unwrap();
     std::fs::write(&source_path, "export function answer() { return 42; }\n").unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["fast", json_path.to_str().unwrap(), source_path.to_str().unwrap(),
             "--sqlite", db_path.to_str().unwrap()])
         .env("RYI_MAX_MEM_MB", "256")

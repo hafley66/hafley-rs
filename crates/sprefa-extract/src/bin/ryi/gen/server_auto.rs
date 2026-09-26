@@ -1,4 +1,4 @@
-// Generated from the Ryi HTTP operations and @daemon options.
+// Generated for ryii from the Ryi HTTP operations and @daemon options.
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};

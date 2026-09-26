@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 fn ryi(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .env("RUST_LOG", "off")
         .output()

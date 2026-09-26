@@ -21,7 +21,7 @@ fn a_path_added_between_commits_is_reported_once() {
         .lines()
         .map(str::to_string)
         .collect();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["graph", "--call-path", "beta", "--root"])
         .arg(&root)

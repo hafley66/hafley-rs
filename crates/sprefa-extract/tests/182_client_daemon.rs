@@ -16,13 +16,15 @@ fn run(client: &Path, cache: &Path, args: &[&str], idle: Option<u64>, trace: Opt
 }
 
 #[test]
-fn plain_and_daemon_replacement_and_idle_exit() {
+fn direct_server_and_daemon_client_replacement_and_idle_exit() {
     let scratch = tempfile::tempdir().expect("round trip scratch");
     let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let target = scratch.path().join("client-target");
+    let target = std::env::var_os("CARGO_TARGET_DIR").map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(std::env::var_os("HOME").expect("HOME"))
+            .join(".cache/lanes/shared/target"));
     let build = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
-        .args(["build", "-p", "ryi", "--target-dir"])
-        .arg(&target)
+        .args(["build", "-p", "ryi", "-j", "4"])
+        .env("CARGO_TARGET_DIR", &target)
         .current_dir(&workspace)
         .output()
         .expect("build thin client");
@@ -31,9 +33,9 @@ fn plain_and_daemon_replacement_and_idle_exit() {
     let bin = scratch.path().join("bin");
     std::fs::create_dir_all(&bin).expect("binary directory");
     let client = bin.join("ryi");
-    let server = bin.join("ryi-server");
+    let server = bin.join("ryii");
     std::fs::copy(target.join("debug/ryi"), &client).expect("copy client");
-    std::fs::copy(env!("CARGO_BIN_EXE_ryi-server"), &server).expect("copy server");
+    std::fs::copy(env!("CARGO_BIN_EXE_ryii"), &server).expect("copy server");
 
     let file = Path::new(env!("CARGO_MANIFEST_DIR"))
         .join("tests/fixtures/type_ladder/src/_0_types.rs");
@@ -45,27 +47,27 @@ fn plain_and_daemon_replacement_and_idle_exit() {
     let relative = "tests/fixtures/type_ladder/src";
     let direct = Command::new(&server).args(["fast", relative])
         .env("DL_TRAIL", "0").env("RUST_LOG", "off").output().expect("direct relative command");
-    let relative_client = run(&client, &cache, &["fast", relative], None, None);
-    assert_eq!(relative_client.status.code(), direct.status.code(), "relative exit code");
-    assert_eq!(relative_client.stdout, direct.stdout, "relative stdout bytes");
-    assert_eq!(relative_client.stderr, direct.stderr, "relative stderr bytes");
-    assert!(!resident.socket().exists(), "plain ryi does not start a daemon");
+    assert!(direct.status.success(), "direct: {}", String::from_utf8_lossy(&direct.stderr));
+    assert!(!resident.socket().exists(), "direct ryii does not start a daemon");
 
-    let plain = run(&client, &cache, &["fast", file], None, None);
-    assert!(plain.status.success(), "plain: {}", String::from_utf8_lossy(&plain.stderr));
-    assert!(!resident.socket().exists(), "plain command skips the socket");
+    let plain = Command::new(&server).args(["fast", file])
+        .env("DL_TRAIL", "0").env("RUST_LOG", "off").output().expect("direct absolute command");
+    assert!(plain.status.success(), "direct: {}", String::from_utf8_lossy(&plain.stderr));
+    assert!(!resident.socket().exists(), "direct ryii skips the socket");
 
     let trace = scratch.path().join("daemon-observe.json");
-    let first = run(&client, &cache, &["--daemon-client", "fast", file], None, Some(&trace));
+    let first = run(&client, &cache, &["fast", file], None, Some(&trace));
     assert!(first.status.success(), "daemon: {}", String::from_utf8_lossy(&first.stderr));
-    assert_eq!(first.stdout, plain.stdout, "plain and daemon stdout");
-    let second = run(&client, &cache, &["--daemon-client", "fast", file], None, Some(&trace));
+    assert!(resident.socket().exists(), "ryi starts the daemon");
+    assert_eq!(first.stdout, plain.stdout, "direct and daemon stdout");
+    let second = run(&client, &cache, &["fast", file], None, Some(&trace));
     assert_eq!(second.stdout, first.stdout, "second request on resident daemon");
     let unknown = scratch.path().join("unknown.extension");
     std::fs::write(&unknown, b"unrecognized source\n").expect("unknown fixture");
     let unknown = unknown.to_str().expect("UTF-8 unknown path");
-    let plain_diagnostic = run(&client, &cache, &[unknown], None, None);
-    let daemon_diagnostic = run(&client, &cache, &["--daemon-client", unknown], None, None);
+    let plain_diagnostic = Command::new(&server).arg(unknown)
+        .env("DL_TRAIL", "0").env("RUST_LOG", "off").output().expect("direct diagnostic");
+    let daemon_diagnostic = run(&client, &cache, &[unknown], None, None);
     assert_eq!(daemon_diagnostic.stdout, plain_diagnostic.stdout);
     assert_eq!(daemon_diagnostic.stderr, plain_diagnostic.stderr);
     assert!(String::from_utf8_lossy(&daemon_diagnostic.stderr).contains("0 facts:"));
@@ -75,7 +77,7 @@ fn plain_and_daemon_replacement_and_idle_exit() {
     std::fs::write(&first_query, "fn first() {}\n").unwrap();
     std::fs::write(&unsupported_query, "second\n").unwrap();
     let late = run(&client, &cache, &[
-        "--daemon-client", "query", first_query.to_str().unwrap(), unsupported_query.to_str().unwrap(),
+        "query", first_query.to_str().unwrap(), unsupported_query.to_str().unwrap(),
         "--query", "(function_item name: (identifier) @name)",
     ], None, None);
     let formatted = Command::new(&server).args([
@@ -99,7 +101,7 @@ fn plain_and_daemon_replacement_and_idle_exit() {
     opened.set_times(std::fs::FileTimes::new().set_modified(modified + Duration::from_secs(2)))
         .expect("change server identity");
     drop(opened);
-    let replaced = run(&client, &cache, &["--daemon-client", "fast", file], None, None);
+    let replaced = run(&client, &cache, &["fast", file], None, None);
     assert!(replaced.status.success(), "replacement: {}", String::from_utf8_lossy(&replaced.stderr));
     assert_eq!(replaced.stdout, plain.stdout, "replacement stdout");
     assert_ne!(std::fs::metadata(resident.socket()).expect("new socket").ino(), old_inode);
@@ -116,7 +118,7 @@ fn plain_and_daemon_replacement_and_idle_exit() {
 
     let idle_cache = scratch.path().join("idle-cache");
     let mut idle = DaemonGuard::new(&idle_cache);
-    let output = run(&client, &idle_cache, &["--daemon-client", "fast", file], Some(1), None);
+    let output = run(&client, &idle_cache, &["fast", file], Some(1), None);
     assert!(output.status.success(), "idle request: {}", String::from_utf8_lossy(&output.stderr));
     assert_eq!(output.stdout, plain.stdout, "idle daemon stdout");
     assert!(idle.socket().exists(), "idle socket started");
@@ -137,7 +139,7 @@ fn plain_and_daemon_replacement_and_idle_exit() {
                 let race_cache = &race_cache;
                 scope.spawn(move || {
                     barrier.wait();
-                    run(client, race_cache, &["--daemon-client", "fast", file], None, None)
+                    run(client, race_cache, &["fast", file], None, None)
                 })
             })
             .collect();
@@ -165,7 +167,7 @@ fn long_cache_socket_is_short_and_test_daemon_exits() {
     let cache = scratch.path().join("nested").join("x".repeat(120));
     let mut daemon = DaemonGuard::new(&cache);
     assert!(daemon.socket().as_os_str().len() <= 100, "socket fits unix path limit");
-    let start = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let start = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("--daemon").env("XDG_CACHE_HOME", &cache).env("RYI_IDLE_SECS", "5")
         .status().expect("start daemon");
     assert!(start.success(), "daemon start");

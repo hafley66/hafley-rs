@@ -18,7 +18,7 @@ const PROBE_MAIN: &str = "tests/fixtures/go_probe/main.go";
 const PROBE_SHAPES: &str = "tests/fixtures/go_probe/shapes/shapes.go";
 
 fn facts(args: &[&str], path: Option<&PathBuf>) -> Vec<Value> {
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
     command.current_dir(env!("CARGO_MANIFEST_DIR")).args(args);
     if let Some(path) = path {
         command.env("PATH", path);

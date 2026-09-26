@@ -210,7 +210,7 @@ fn extract_lang_has_no_path_switch() {
 #[test]
 fn wire_output_is_byte_identical_to_the_kind_vocab_golden() {
     let manifest = env!("CARGO_MANIFEST_DIR");
-    let exe = env!("CARGO_BIN_EXE_ryi-server");
+    let exe = env!("CARGO_BIN_EXE_ryii");
     // The corpus is the fixture list at 946460d75, pinned in corpus.txt so a
     // fixture added later never changes the golden.
     let corpus =

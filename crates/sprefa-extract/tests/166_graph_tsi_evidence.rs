@@ -7,7 +7,7 @@ use std::process::Command;
 fn graph(path: &str, arm: (&str, &str), extra: &[&str]) -> (tempfile::TempDir, rusqlite::Connection) {
     let state = tempfile::tempdir().expect("temporary state directory");
     let destination = state.path().join("graph.db");
-    let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
     command
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args(["graph", arm.0, arm.1, "--sqlite"])

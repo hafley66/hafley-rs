@@ -9,7 +9,7 @@ using Clap;
 using Daemon;
 
 @service
-@daemon(#{ idleSecs: 600, handshake: true })
+@daemon(#{ idleSecs: 600, handshake: true, serverBin: "ryii" })
 @rootArgs(FileArgs)
 @argsConflictsWithSubcommands
 @doc("Source files -> flat graph facts (JSONL on stdout, or --sqlite)")

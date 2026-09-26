@@ -31,7 +31,7 @@ fn cap_memory() {
     let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
 }
 
-use clap::{CommandFactory as _, Parser as _};
+use clap::{CommandFactory as _, FromArgMatches as _};
 
 use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
@@ -468,7 +468,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         argv.insert(2, flag);
         argv.insert(3, value);
     }
-    let ryi = match Ryi::try_parse_from(argv) {
+    let ryi = match Ryi::command().name(daemon_auto::SERVER_BIN)
+        .try_get_matches_from(argv)
+        .and_then(|matches| Ryi::from_arg_matches(&matches)) {
         Ok(ryi) => ryi,
         Err(error) => {
             let _ = error.print();

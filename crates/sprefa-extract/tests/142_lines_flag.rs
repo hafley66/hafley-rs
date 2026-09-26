@@ -17,7 +17,7 @@ const TS_FIXTURE: &str = "const \u{3b1} = 1;\nfunction hop(n: number) { return n
 const TS_OFFSETS: [u32; 3] = [13, 56, 65];
 
 fn ryi(args: &[&str]) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .env("RUST_LOG", "off")
         .output()

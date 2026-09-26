@@ -157,8 +157,8 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     git(&root, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]);
     std::fs::write(root.join("region.rs"), "// sprefa:auto-begin demo\nold\n// sprefa:auto-end demo\n").unwrap();
     std::fs::write(root.join("region.txt"), "old\n").unwrap();
-    let original_bin = PathBuf::from(env!("CARGO_BIN_EXE_ryi-server"));
-    let binary = scratch.path().join("ryi-server");
+    let original_bin = PathBuf::from(env!("CARGO_BIN_EXE_ryii"));
+    let binary = scratch.path().join("ryii");
     std::fs::copy(original_bin, &binary).expect("pin ryi for parity run");
 
     let mut table = Vec::new();
@@ -191,7 +191,7 @@ async fn cli_router_and_unix_socket_share_the_contract() {
 
     let proof_cache = scratch.path().join("proof-cache");
     let system_path = "/usr/bin:/bin:/opt/homebrew/bin";
-    assert!(system_path.split(':').all(|dir| !Path::new(dir).join("ryi-server").exists()));
+    assert!(system_path.split(':').all(|dir| !Path::new(dir).join("ryii").exists()));
     let (_proof_server, proof_socket) = start_server(&binary, &proof_cache);
     std::fs::remove_file(&binary).expect("remove server executable after launch");
     let proof_body = socket_request(&proof_socket, fast.op, &fast.args, Path::new(env!("CARGO_MANIFEST_DIR"))).await;
@@ -218,7 +218,7 @@ async fn cli_router_and_unix_socket_share_the_contract() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn operation_error_has_http_status_and_server_accepts_next_request() {
-    let cli = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let cli = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["scip", "--indexer", "not-a-language"])
         .env("DL_TRAIL", "0")
         .output().expect("CLI error");
@@ -226,7 +226,7 @@ async fn operation_error_has_http_status_and_server_accepts_next_request() {
     assert!(String::from_utf8_lossy(&cli.stderr).contains("unknown language"));
 
     let scratch = tempfile::tempdir().expect("error scratch");
-    let (_server, socket) = start_server(Path::new(env!("CARGO_BIN_EXE_ryi-server")), &scratch.path().join("cache"));
+    let (_server, socket) = start_server(Path::new(env!("CARGO_BIN_EXE_ryii")), &scratch.path().join("cache"));
 
     let (status, body) = socket_response(
         &socket,
@@ -274,7 +274,7 @@ async fn persistent_watch_allows_other_ops_and_disconnects() {
     git(&root, &["add", "-A"]);
     git(&root, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]);
     let receipts = scratch.path().join("watch.db");
-    let (_server, socket) = start_server(Path::new(env!("CARGO_BIN_EXE_ryi-server")), &scratch.path().join("cache"));
+    let (_server, socket) = start_server(Path::new(env!("CARGO_BIN_EXE_ryii")), &scratch.path().join("cache"));
 
     let stream = tokio::net::UnixStream::connect(&socket).await.expect("watch connect");
     let (mut client, connection) = http1::handshake(TokioIo::new(stream)).await.expect("watch handshake");
@@ -320,7 +320,7 @@ fn fast_jsonl_uses_bounded_sorted_path_over_large_roster() {
         std::fs::write(scratch.path().join(format!("{index:04}_fact.rs")), format!("pub fn f_{index}() {{}}\n"))
             .expect("fast fixture file");
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("fast").arg(scratch.path())
         .env("DL_TRACE_SUMMARY", "1")
         .env("DL_TRAIL", "0")

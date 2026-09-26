@@ -1,6 +1,6 @@
 Run a tree-sitter query over files
 
-Usage: ryi-server query [OPTIONS] --query <QUERY> [PATH]...
+Usage: ryii query [OPTIONS] --query <QUERY> [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -14,5 +14,4 @@ Options:
       --query <QUERY>    Tree-sitter query text
       --digest <DIGEST>  Expected content digest (one input only)
       --sqlite <PATH>    Write to a new SQLite database instead of stdout
-      --daemon-client    Send this command to the resident daemon (ignored by the server binary)
   -h, --help             Print help

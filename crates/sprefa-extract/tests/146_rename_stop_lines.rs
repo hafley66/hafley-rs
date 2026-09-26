@@ -58,7 +58,7 @@ fn fixture(label: &str, files: &[(&str, &str)]) -> Fixture {
 
 /// The rename run's exit code and stderr: the stop diagnostics live on stderr.
 fn rename_run(fixture: &Fixture, target: &str, new: &str) -> (Option<i32>, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("rename")
         .arg(target)
         .arg(new)

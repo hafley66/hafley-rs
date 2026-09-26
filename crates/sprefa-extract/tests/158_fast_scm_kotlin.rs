@@ -116,7 +116,7 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 /// `ryi fast` over the supplied files, narrowed to the rows the `.scm` owns.
 fn scm_rows(paths: &[PathBuf], index: usize) -> Vec<Value> {
     let trace = std::env::temp_dir().join(format!("ryi-158-{index}-{}.json", std::process::id()));
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)

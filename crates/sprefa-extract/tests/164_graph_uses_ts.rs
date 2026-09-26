@@ -21,7 +21,7 @@ fn trace_path(tag: &str) -> PathBuf {
 }
 
 fn run(tag: &str, name: &str) -> (Vec<Value>, String) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--uses", name])
         .arg("tests/fixtures/graph_ts")
         .env("HAFLEY_TRACE", trace_path(tag))
@@ -67,7 +67,7 @@ fn a_type_nobody_names_answers_with_nothing() {
 
 #[test]
 fn the_three_arms_are_mutually_exclusive() {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--uses", "Widget", "--callers", "chainB"])
         .arg("tests/fixtures/graph_ts")
         .env("HAFLEY_TRACE", trace_path("group"))
@@ -81,7 +81,7 @@ fn the_three_arms_are_mutually_exclusive() {
 
 #[test]
 fn an_arm_is_required() {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph"])
         .arg("tests/fixtures/graph_ts")
         .env("HAFLEY_TRACE", trace_path("bare"))

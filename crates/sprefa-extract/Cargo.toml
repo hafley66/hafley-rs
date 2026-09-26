@@ -312,7 +312,7 @@ name = "all"
 path = "tests/all.rs"
 
 [[bin]]
-name = "ryi-server"
+name = "ryii"
 path = "src/bin/ryi.rs"
 required-features = ["cli"]
 

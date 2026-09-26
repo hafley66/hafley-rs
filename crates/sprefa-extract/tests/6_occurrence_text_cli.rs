@@ -13,7 +13,7 @@ const SCIP_REL_ROOT: &str = "tests/fixtures/scip_rel";
 const SCIP_REL_SOURCE: &str = "tests/fixtures/scip_rel/animal.ts";
 
 fn run(args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .output()
         .expect("extract binary runs");

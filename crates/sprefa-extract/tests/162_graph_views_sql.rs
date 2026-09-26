@@ -26,7 +26,7 @@ fn count(connection: &rusqlite::Connection, sql: &str) -> i64 {
 fn state_store_carries_the_three_graph_views() {
     let scratch = scratch("state");
     let store = scratch.join("graph.db");
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--callers", "deep", "--sqlite"])
         .arg(&store)
         .arg("tests/fixtures/ts5_findings/module_plane")
@@ -82,7 +82,7 @@ fn state_store_carries_the_three_graph_views() {
 #[test]
 fn the_memory_store_leaves_no_file_behind() {
     let scratch = scratch("memory");
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--callers", "deep"])
         .arg("tests/fixtures/ts5_findings/module_plane")
         .env("HAFLEY_TRACE", scratch.join("graph-memory.json"))

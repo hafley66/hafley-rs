@@ -18,9 +18,7 @@ use crate::ops_auto::WatchArgs;
 pub struct Ryi {
   #[command(subcommand)]
   pub cmd: Option<Cmd>,#[command(flatten)]
-  pub file: FileArgs,#[doc = "Send this command to the resident daemon (ignored by the server binary)"]
-  #[arg(long, global = true)]
-  pub daemon_client: bool,
+  pub file: FileArgs,
 }
 
 #[derive(clap::Subcommand, Debug)]

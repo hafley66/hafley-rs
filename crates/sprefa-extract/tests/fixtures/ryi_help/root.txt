@@ -1,7 +1,7 @@
 Source files -> flat graph facts (JSONL on stdout, or --sqlite)
 
-Usage: ryi-server [OPTIONS] [PATH]...
-       ryi-server <COMMAND>
+Usage: ryii [OPTIONS] [PATH]...
+       ryii <COMMAND>
 
 Commands:
   fast    Syntax-only whole-project facts (no compiler)
@@ -45,7 +45,6 @@ Options:
       --lines                Add 1-based line/col beside every span
       --witness              Wrap output in the TSI envelope
       --max-bytes <BYTES>    Skip inputs over this many bytes (0 = no limit)
-      --daemon-client        Send this command to the resident daemon (ignored by the server binary)
   -h, --help                 Print help
   -V, --version              Print version
 

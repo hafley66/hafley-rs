@@ -17,7 +17,7 @@ fn trace_path() -> PathBuf {
 #[test]
 fn callers_rows_are_graded_and_sorted() {
     let fixture = PathBuf::from("tests/fixtures/ts5_findings/module_plane");
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--callers", "deep"])
         .arg(fixture)
         .env("HAFLEY_TRACE", trace_path())

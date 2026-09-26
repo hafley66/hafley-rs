@@ -67,7 +67,7 @@ fn git(root: &Path, args: &[&str]) {
 }
 
 fn cleave(fixture: &Fixture, args: &[&str]) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("cleave")
         .args(args)
         .arg("--root")
@@ -349,7 +349,7 @@ fn drag_moves_the_sole_user_helper_and_exports_the_shared_one() {
 fn a_failed_verify_rolls_the_rust_tree_back() {
     let fixture = fixture("basic", "verify");
     let before = read(&fixture, "src/util.rs");
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args([
             "cleave",
             "src/util.rs#load_config",
@@ -375,7 +375,7 @@ fn a_failed_verify_rolls_the_rust_tree_back() {
     .expect("verify failure wrote the run trail");
     let rows: i64 = trail
         .query_row(
-            "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryi-server cleave % --commit --verify %'",
+            "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryii cleave % --commit --verify %'",
             [],
             |row| row.get(0),
         )

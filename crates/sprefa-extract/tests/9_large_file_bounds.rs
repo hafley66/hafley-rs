@@ -22,7 +22,7 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-const EXTRACT: &str = env!("CARGO_BIN_EXE_ryi-server");
+const EXTRACT: &str = env!("CARGO_BIN_EXE_ryii");
 
 /// Ordinary JavaScript: enough distinct identifiers that the string interner is
 /// exercised, and a nesting depth that keeps the CST non-trivial.

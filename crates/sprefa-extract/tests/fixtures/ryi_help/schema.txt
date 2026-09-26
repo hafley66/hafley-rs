@@ -1,7 +1,6 @@
 Print the output record schema
 
-Usage: ryi-server schema [OPTIONS]
+Usage: ryii schema
 
 Options:
-      --daemon-client  Send this command to the resident daemon (ignored by the server binary)
-  -h, --help           Print help
+  -h, --help  Print help
