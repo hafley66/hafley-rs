@@ -255,7 +255,13 @@ fn drop_batch_unused_imports(
                 continue;
             }
             if let Some(edit) = arm.edit_import(&text, &kept, &module) {
-                text = apply(&text, &edit);
+                let candidate = apply(&text, &edit);
+                // Import facts were read before this file's preceding batch
+                // edits. Keep a valid overlay when a stale grouping proposes
+                // a rewrite that no longer forms a Rust use item.
+                if !rel.ends_with(".rs") || syn::parse_file(&candidate).is_ok() {
+                    text = candidate;
+                }
             }
         }
         if text != facts.text {
