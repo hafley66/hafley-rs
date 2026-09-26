@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use std::borrow::Cow;
 use std::ffi::{CStr, CString};
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
 use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
@@ -56,6 +57,10 @@ enum Val {
 struct Meta {
     name: String,
     width: usize,
+    row_column: Option<usize>,
+    path_column: Option<usize>,
+    content_column: Option<usize>,
+    record_column: Option<usize>,
     chunk_rows: usize,
     chunk_sql: String,
     one_sql: String,
@@ -134,16 +139,13 @@ struct Batch {
     table: usize,
     vals: Vec<Val>,
     text: String,
+    interned: HashMap<u64, Val>,
     rows: usize,
-    source_path: Option<(String, Val)>,
-    source_id: Option<(String, Val)>,
-    record: Option<Val>,
 }
 
 impl Batch {
     fn empty(table: usize) -> Self {
-        Self { table, vals: Vec::new(), text: String::new(), rows: 0,
-            source_path: None, source_id: None, record: None }
+        Self { table, vals: Vec::new(), text: String::new(), interned: HashMap::new(), rows: 0 }
     }
 
     #[inline(always)]
@@ -153,38 +155,27 @@ impl Batch {
         Val::Text(start, value.len() as u32)
     }
 
-    fn source_path(&mut self, value: &str) -> Val {
-        if let Some((saved, val)) = &self.source_path {
-            if saved == value { return *val; }
+    #[inline(always)]
+    fn intern(&mut self, value: &str) -> Val {
+        if value.len() > 128 { return self.text(value); }
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        value.hash(&mut hasher);
+        let hash = hasher.finish();
+        if let Some(&Val::Text(start, len)) = self.interned.get(&hash) {
+            if &self.text[start as usize..(start + len) as usize] == value {
+                return Val::Text(start, len);
+            }
         }
         let val = self.text(value);
-        self.source_path = Some((value.to_owned(), val));
-        val
-    }
-
-    fn source_id(&mut self, value: &str) -> Val {
-        if let Some((saved, val)) = &self.source_id {
-            if saved == value { return *val; }
-        }
-        let val = self.text(value);
-        self.source_id = Some((value.to_owned(), val));
-        val
-    }
-
-    fn record(&mut self, value: &str) -> Val {
-        if let Some(val) = self.record { return val; }
-        let val = self.text(value);
-        self.record = Some(val);
+        self.interned.entry(hash).or_insert(val);
         val
     }
 
     fn clear(&mut self) {
         self.vals.clear();
         self.text.clear();
+        self.interned.clear();
         self.rows = 0;
-        self.source_path = None;
-        self.source_id = None;
-        self.record = None;
     }
 
     #[inline(always)]
@@ -325,7 +316,7 @@ const CHUNKS_PER_BATCH: usize = 16;
 pub struct Binder {
     meta: Arc<Vec<Meta>>,
     buffers: Vec<Batch>,
-    columns: Vec<Vec<String>>,
+    columns: Vec<HashMap<String, usize>>,
     json: Vec<Vec<bool>>,
     column_kinds: Vec<Vec<usize>>,
     by_name: HashMap<String, usize>,
@@ -380,6 +371,10 @@ impl Binder {
             meta.push(Meta {
                 name: name.clone(),
                 width,
+                row_column: column_names.iter().position(|c| c == "_row"),
+                path_column: column_names.iter().position(|c| c == "_input_path"),
+                content_column: column_names.iter().position(|c| c == "_content_id"),
+                record_column: column_names.iter().position(|c| c == "record"),
                 chunk_rows,
                 chunk_sql: format!("{prefix}{}", vec![tuple.as_str(); chunk_rows].join(", ")),
                 one_sql: format!("{prefix}{tuple}"),
@@ -391,7 +386,7 @@ impl Binder {
                 .collect::<std::result::Result<Vec<_>, _>>()?;
             json.push(kinds.iter().map(|kind| *kind == 5).collect());
             column_kinds.push(kinds);
-            columns.push(column_names);
+            columns.push(column_names.into_iter().enumerate().map(|(i, name)| (name, i)).collect());
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
@@ -430,9 +425,7 @@ impl Binder {
                 let buffer = &mut self.buffers[table];
                 buffer.vals.truncate(buffer.rows * self.meta[table].width);
                 buffer.text.truncate(text_mark);
-                buffer.source_path = None;
-                buffer.source_id = None;
-                buffer.record = None;
+                buffer.interned.clear();
             }
             return Err(error.0);
         }
@@ -560,23 +553,29 @@ impl RowWriter<'_> {
         self.table = Some(index);
         let (row, input_path, content_id) = self.meta;
         let width = self.binder.meta[index].width;
-        let columns = &self.binder.columns[index];
+        let meta = &self.binder.meta[index];
         let table = &mut self.binder.buffers[index];
         self.text_mark = table.text.len();
         let base = table.vals.len();
         table.vals.resize(base + width, Val::Null);
-        let set = |table: &mut Batch, column: &str, val: Val| {
-            if let Some(index) = columns.iter().position(|name| name == column) {
+        let set = |table: &mut Batch, column: Option<usize>, val: Val| {
+            if let Some(index) = column {
                 table.vals[base + index] = val;
             }
         };
-        set(table, "_row", Val::Int(row));
-        let v = input_path.map_or(Val::Null, |p| table.source_path(p));
-        set(table, "_input_path", v);
-        let v = content_id.map_or(Val::Null, |c| table.source_id(c));
-        set(table, "_content_id", v);
-        let v = table.record(&self.binder.meta[index].name);
-        set(table, "record", v);
+        set(table, meta.row_column, Val::Int(row));
+        if meta.path_column.is_some() {
+            let v = input_path.map_or(Val::Null, |p| table.intern(p));
+            set(table, meta.path_column, v);
+        }
+        if meta.content_column.is_some() {
+            let v = content_id.map_or(Val::Null, |c| table.intern(c));
+            set(table, meta.content_column, v);
+        }
+        if meta.record_column.is_some() {
+            let v = table.intern(&meta.name);
+            set(table, meta.record_column, v);
+        }
         Ok(())
     }
 
@@ -598,7 +597,7 @@ impl RowWriter<'_> {
             return err(format!("field `{key}` before `record`"));
         };
         if self.prefix_len == 0 {
-            if let Some(column) = self.binder.columns[index].iter().position(|name| name == key) {
+            if let Some(&column) = self.binder.columns[index].get(key) {
                 return self.column(index, column, value);
             }
         }
@@ -607,7 +606,7 @@ impl RowWriter<'_> {
             self.binder.path.push_str("__");
         }
         self.binder.path.push_str(key);
-        let result = match self.binder.columns[index].iter().position(|name| name == &self.binder.path) {
+        let result = match self.binder.columns[index].get(self.binder.path.as_str()).copied() {
             Some(column) => self.column(index, column, value),
             None => {
                 let saved = self.prefix_len;
@@ -632,12 +631,13 @@ impl RowWriter<'_> {
             table.text(&json)
         } else {
             let mark = table.text.len();
-            let mut probe = Scalar { arena: Some(&mut table.text), val: None, text: None,
+            let mut probe = Scalar { arena: Some(&mut *table), val: None, text: None,
                 lookup: None, table: None };
             match value.serialize(&mut probe) {
                 Ok(()) => probe.val.unwrap_or(Val::Null),
                 Err(Compound) => {
                     table.text.truncate(mark);
+                    table.interned.clear();
                     let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
                     table.text(&json)
                 }
@@ -749,7 +749,7 @@ impl ser::SerializeMap for MapWriter<'_, '_> {
 /// One column's value. Text goes straight into `arena` when there is one; a
 /// compound value reports `Compound` and lands as JSON.
 struct Scalar<'t> {
-    arena: Option<&'t mut String>,
+    arena: Option<&'t mut Batch>,
     val: Option<Val>,
     text: Option<String>,
     lookup: Option<&'t HashMap<String, usize>>,
@@ -765,11 +765,7 @@ impl Scalar<'_> {
             return;
         }
         match self.arena.as_deref_mut() {
-            Some(arena) => {
-                let start = arena.len() as u32;
-                arena.push_str(value);
-                self.val = Some(Val::Text(start, value.len() as u32));
-            }
+            Some(arena) => self.val = Some(arena.intern(value)),
             None => self.text = Some(value.to_owned()),
         }
     }
@@ -905,5 +901,27 @@ impl ser::Serializer for &mut Scalar<'_> {
     }
     fn serialize_struct_variant(self, _: &'static str, _: u32, _: &'static str, _: usize) -> std::result::Result<Self::SerializeStructVariant, Compound> {
         Err(Compound)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Batch, Val};
+
+    #[test]
+    fn repeated_text_reuses_one_batch_span_and_recycled_capacity() {
+        let mut batch = Batch::empty(0);
+        let first = batch.intern("shared-name");
+        let second = batch.intern("shared-name");
+        assert!(matches!((first, second), (Val::Text(a, n), Val::Text(b, m)) if a == b && n == m));
+        assert_eq!(batch.text, "shared-name");
+        batch.intern("other-name");
+        assert_eq!(batch.text, "shared-nameother-name");
+        let capacity = batch.text.capacity();
+        batch.clear();
+        assert_eq!(batch.text.capacity(), capacity);
+        assert!(batch.interned.is_empty());
+        assert!(matches!(batch.intern("shared-name"), Val::Text(0, 11)));
+        assert_eq!(batch.text, "shared-name");
     }
 }
