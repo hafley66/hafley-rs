@@ -220,6 +220,13 @@ async fn cli_router_and_unix_socket_share_the_contract() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn operation_error_has_http_status_and_server_accepts_next_request() {
+    let cli = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .args(["scip", "--indexer", "not-a-language"])
+        .env("DL_TRAIL", "0")
+        .output().expect("CLI error");
+    assert_eq!(cli.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&cli.stderr).contains("unknown language"));
+
     let scratch = tempfile::tempdir().expect("error scratch");
     let socket = scratch.path().join("errors.sock");
     let server = Command::new(env!("CARGO_BIN_EXE_ryi"))

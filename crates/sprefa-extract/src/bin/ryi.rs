@@ -356,11 +356,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         // on: the BufWriter stream, a flush, or one of the row loops.
         Err(error) if is_broken_pipe(error.as_ref()) => Ok(()),
         Err(error) => {
-            if let Some(exit_error) = error.downcast_ref::<RyiExit>() {
-                if !exit_error.message.is_empty() { eprintln!("{}", exit_error.message); }
-                exit(exit_error.code);
-            }
-            Err(error)
+            let exit_error = RyiExit::boxed(error);
+            if !exit_error.message.is_empty() { eprintln!("{}", exit_error.message); }
+            exit(exit_error.code);
         },
     };
     if let Some(state) = summary {
