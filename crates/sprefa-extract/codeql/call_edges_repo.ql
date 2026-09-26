@@ -2,19 +2,12 @@
 import rust
 import codeql.rust.internal.PathResolution
 
-Function owner(AstNode site) {
-  result = site.getParentNode+() and
-  not exists(Function nearer |
-    nearer = site.getParentNode+() and nearer.getParentNode+() = result
-  )
-}
-
 from AstNode site, ItemNode target, Function source
 where
   not site.isInMacroExpansion() and
   (target = site.(Call).getStaticTarget() or
    target = site.(StructExpr).getStruct()) and
-  source = owner(site) and
+  source = site.getEnclosingCallable() and
   exists(target.getLocation().getFile().getRelativePath()) and
   exists(site.getLocation().getFile().getRelativePath()) and
   exists(target.getName())
