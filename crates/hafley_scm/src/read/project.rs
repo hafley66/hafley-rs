@@ -467,6 +467,7 @@ fn resolve_project_inputs(
                         // instead of guessing it from span matches (a wrong
                         // guess when two files share a named span).
                         crate::read::types::set_own(Some(input.blob.clone()));
+                        crate::read::lang::ts::set_resolve_path(Some(&input.path));
                         let mut edges = resolve_call_edges(&input.path, &input.output, &cx);
                         if let Some(index) = cx.indexes.go_checker.get() {
                             crate::read::lang::go_checker::apply_calls(
@@ -477,6 +478,7 @@ fn resolve_project_inputs(
                             );
                         }
                         crate::read::types::set_own(None);
+                        crate::read::lang::ts::set_resolve_path(None);
                         (input.blob.clone(), edges)
                     })
                     .collect()
@@ -523,6 +525,7 @@ fn resolve_project_inputs(
                 .zip(macro_rows.into_par_iter())
                 .map(|((input, (_, edges)), rows)| {
                     crate::read::types::set_own(Some(input.blob.clone()));
+                    crate::read::lang::ts::set_resolve_path(Some(&input.path));
                     let mut local = LegTrail {
                         on: trail.on,
                         lang: arm_for(&input.path).map_or("", |arm| arm.name),
@@ -539,6 +542,7 @@ fn resolve_project_inputs(
                         });
                     }
                     crate::read::types::set_own(None);
+                    crate::read::lang::ts::set_resolve_path(None);
                     (out, local.rows)
                 })
                 .collect()
@@ -555,8 +559,10 @@ fn resolve_project_inputs(
                 .par_iter()
                 .map(|input| {
                     crate::read::types::set_own(Some(input.blob.clone()));
+                    crate::read::lang::ts::set_resolve_path(Some(&input.path));
                     let out = import_facts(input, &cx);
                     crate::read::types::set_own(None);
+                    crate::read::lang::ts::set_resolve_path(None);
                     out
                 })
                 .collect()
@@ -569,6 +575,7 @@ fn resolve_project_inputs(
                 .par_iter()
                 .map(|input| {
                     crate::read::types::set_own(Some(input.blob.clone()));
+                    crate::read::lang::ts::set_resolve_path(Some(&input.path));
                     let mut local = LegTrail {
                         on: trail.on,
                         lang: arm_for(&input.path).map_or("", |arm| arm.name),
@@ -576,6 +583,7 @@ fn resolve_project_inputs(
                     };
                     let out = type_facts(input, &targets, &cx, &mut local);
                     crate::read::types::set_own(None);
+                    crate::read::lang::ts::set_resolve_path(None);
                     (out, local.rows)
                 })
                 .collect()

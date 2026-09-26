@@ -4303,17 +4303,18 @@ impl Resolve<TypeF> for TsSource {
             return Vec::new();
         };
         let index = cx.indexes.def_index.get();
+        let source_path = own_path(output, cx);
         // A type reference through an import binds the way the module system
         // binds it, exactly as a call does; the name match is the fallback.
         let modules = cx
             .indexes
             .ts_modules
             .get()
-            .zip(own_path(output, cx))
+            .zip(source_path.as_deref())
             .filter(|(modules, path)| modules.knows(path));
         let checker = cx.indexes.ts_checker.get();
         let own_blob = own_blob(cx, output);
-        let own = own_path(output, cx);
+        let own = source_path.as_deref();
         let mut edges = Vec::new();
         for candidate in TsSource::type_edge_candidates(output) {
             // src: the TypeF entity at the owner span. Exists by construction
@@ -4426,11 +4427,25 @@ impl Resolve<TypeF> for TsSource {
 // snapshot increment — flagged in the report).
 // ════════════════════════════════════════════════════════════════════════════
 
-/// This file's supplied path, learned the way `own_blob` learns its blob: the
-/// resolve seam carries neither, and the `PathIndex` is the join.
-fn own_path<'a>(output: &RyiOutput, cx: &'a ProjectCx) -> Option<&'a str> {
-    let blob = own_blob(cx, output)?;
-    cx.indexes.paths.get()?.get(&blob)
+thread_local! {
+    static TS_RESOLVE_PATH: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// Pin the input path alongside its blob. Identical generated files share a
+/// blob, while their relative imports can name different modules.
+pub fn set_resolve_path(path: Option<&str>) {
+    TS_RESOLVE_PATH.with(|slot| {
+        *slot.borrow_mut() = path
+            .filter(|path| source_type_for(path).is_some())
+            .map(str::to_owned);
+    });
+}
+
+fn own_path(output: &RyiOutput, cx: &ProjectCx) -> Option<String> {
+    TS_RESOLVE_PATH.with(|slot| slot.borrow().clone()).or_else(|| {
+        let blob = own_blob(cx, output)?;
+        cx.indexes.paths.get()?.get(&blob).map(str::to_owned)
+    })
 }
 
 /// The sites ResolveExport judged AMBIGUOUS (two `export *` arms disagree).
@@ -4443,7 +4458,8 @@ pub fn call_drops(
     let Some(call) = &output.call else {
         return Vec::new();
     };
-    let Some((modules, path)) = cx.indexes.ts_modules.get().zip(own_path(output, cx)) else {
+    let source_path = own_path(output, cx);
+    let Some((modules, path)) = cx.indexes.ts_modules.get().zip(source_path.as_deref()) else {
         return Vec::new();
     };
     let bound: BTreeSet<(u32, u32)> = edges
@@ -4879,11 +4895,12 @@ impl Resolve<CallF> for TsSource {
             });
         // The module plane binds an IMPORTED name; the name match is what a
         // free name falls to.
+        let source_path = own_path(output, cx);
         let modules = cx
             .indexes
             .ts_modules
             .get()
-            .zip(own_path(output, cx))
+            .zip(source_path.as_deref())
             .filter(|(modules, path)| modules.knows(path));
         let mut edges = Vec::new();
         // The receiver leg: phase 1 typed each member-call site's receiver
@@ -4893,7 +4910,7 @@ impl Resolve<CallF> for TsSource {
         // `const x = f()` binds resolve in source order, so the sites are
         // processed sorted and emitted in file order.
         let own = own_blob(cx, output);
-        let checker = cx.indexes.ts_checker.get().zip(own_path(output, cx));
+        let checker = cx.indexes.ts_checker.get().zip(source_path.as_deref());
         let paths = cx.indexes.paths.get();
         let own_facts = own
             .as_ref()
@@ -4997,7 +5014,7 @@ impl Resolve<CallF> for TsSource {
                             Some((blob, facts)) => {
                                 (blob, facts, paths.and_then(|paths| paths.get(blob)))
                             }
-                            None => (blob, facts, own_path(output, cx)),
+                            None => (blob, facts, source_path.as_deref()),
                         };
                         ts_receivers::receiver_member_target(
                             receiver,
