@@ -13,7 +13,6 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
-use std::io::{Seek, Write};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
@@ -51,42 +50,36 @@ impl IntoResponse for OpError {
 }
 
 async fn jsonl_response(produce: impl FnOnce(&mut dyn FnMut(OpResult<Vec<u8>>) -> bool) + Send + 'static) -> Response {
-    let result = tokio::task::spawn_blocking(move || -> OpResult<(std::fs::File, Option<i32>)> {
-        let mut spool = tempfile::tempfile()?;
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<i32>, Bytes)>(64);
+    tokio::task::spawn_blocking(move || {
         let mut rows = 0u64;
-        let mut failed = None;
-        let mut write_error = None;
+        let mut failed = false;
+        let mut connected = true;
         produce(&mut |line| {
-            let mut bytes = match line {
-                Ok(bytes) => { rows += 1; bytes }
+            let (mut bytes, code) = match line {
+                Ok(bytes) => { rows += 1; (bytes, None) }
                 Err(error) => {
-                    failed = Some(error.1);
-                    serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes")
+                    failed = true;
+                    (serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes"), Some(error.1))
                 }
             };
             bytes.push(b'\n');
-            if let Err(error) = spool.write_all(&bytes) {
-                write_error = Some(error);
-                return false;
-            }
-            failed.is_none()
+            connected = tx.blocking_send((code, Bytes::from(bytes))).is_ok();
+            connected && !failed
         });
-        if let Some(error) = write_error { return Err(OpError::from(error)); }
-        let mut complete = serde_json::to_vec(&serde_json::json!({"complete": failed.is_none(), "rows": rows})).expect("completion row serializes");
-        complete.push(b'\n');
-        spool.write_all(&complete)?;
-        spool.rewind()?;
-        Ok((spool, failed))
-    }).await;
-    match result {
-        Ok(Ok((spool, failed))) => {
-            let status = failed.map_or(StatusCode::OK, error_status);
-            let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(spool));
-            (status, [(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
+        if connected && (!failed || rows == 0) {
+            let mut complete = serde_json::to_vec(&serde_json::json!({"complete": !failed, "rows": rows})).expect("completion row serializes");
+            complete.push(b'\n');
+            let _ = tx.blocking_send((None, Bytes::from(complete)));
         }
-        Ok(Err(error)) => error.into_response(),
-        Err(error) => OpError::from(error).into_response(),
-    }
+    });
+    let Some(first) = rx.recv().await else { return OpError("operation produced no response".into(), 1).into_response(); };
+    let status = first.0.map_or(StatusCode::OK, error_status);
+    let stream = futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(first.1) })
+        .chain(futures_util::stream::unfold(rx, |mut rx| async move {
+            rx.recv().await.map(|(_, bytes)| (Ok::<Bytes, std::io::Error>(bytes), rx))
+        }));
+    (status, [(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
 }
 
 struct CancelOnDrop(Arc<AtomicBool>);
@@ -115,9 +108,11 @@ async fn live_jsonl_response(
             if tx.blocking_send((code, Bytes::from(bytes))).is_err() { return; }
             if failed { break; }
         }
-        let mut complete = serde_json::to_vec(&serde_json::json!({"complete": !failed, "rows": rows})).expect("completion row serializes");
-        complete.push(b'\n');
-        let _ = tx.blocking_send((None, Bytes::from(complete)));
+        if !failed || rows == 0 {
+            let mut complete = serde_json::to_vec(&serde_json::json!({"complete": !failed, "rows": rows})).expect("completion row serializes");
+            complete.push(b'\n');
+            let _ = tx.blocking_send((None, Bytes::from(complete)));
+        }
     });
     let Some(first) = rx.recv().await else { return OpError("watch produced no response".into(), 1).into_response(); };
     let status = first.0.map_or(StatusCode::OK, error_status);
@@ -557,12 +552,12 @@ mod tests {
     use http_body_util::BodyExt as _;
 
     #[tokio::test]
-    async fn error_after_a_data_row_still_sets_http_status() {
+    async fn error_after_a_data_row_is_the_final_row_with_http_200() {
         let response = jsonl_response(|emit| {
             assert!(emit(Ok(br#"{"record":"first"}"#.to_vec())));
             assert!(!emit(Err(OpError("late failure".into(), 3))));
         }).await;
-        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        assert_eq!(response.status(), StatusCode::OK);
         let body = response.into_body().collect().await.expect("response body").to_bytes();
         let rows: Vec<serde_json::Value> = body.split(|byte| *byte == b'\n')
             .filter(|line| !line.is_empty())
@@ -571,7 +566,47 @@ mod tests {
         assert_eq!(rows, vec![
             serde_json::json!({"record": "first"}),
             serde_json::json!({"error": "late failure", "code": 3}),
-            serde_json::json!({"complete": false, "rows": 1}),
+        ]);
+    }
+
+    #[tokio::test]
+    async fn jsonl_headers_arrive_before_the_producer_finishes() {
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let response = tokio::time::timeout(std::time::Duration::from_secs(15), jsonl_response(move |emit| {
+            assert!(emit(Ok(br#"{"record":"first"}"#.to_vec())));
+            release_rx.recv().expect("release producer");
+            assert!(emit(Ok(br#"{"record":"second"}"#.to_vec())));
+        })).await.expect("response headers before producer completion");
+        assert_eq!(response.status(), StatusCode::OK);
+        release_tx.send(()).expect("release producer");
+        let body = response.into_body().collect().await.expect("response body").to_bytes();
+        let rows: Vec<serde_json::Value> = body.split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).expect("JSONL row"))
+            .collect();
+        assert_eq!(rows, vec![
+            serde_json::json!({"record": "first"}),
+            serde_json::json!({"record": "second"}),
+            serde_json::json!({"complete": true, "rows": 2}),
+        ]);
+    }
+
+    #[tokio::test]
+    async fn watch_error_after_a_data_row_is_the_final_row() {
+        let items = vec![
+            Ok(serde_json::json!({"record": "first"})),
+            Err(OpError("watch failed".into(), 3)),
+        ];
+        let response = live_jsonl_response(Box::new(items.into_iter()), Arc::new(AtomicBool::new(false))).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body = response.into_body().collect().await.expect("watch body").to_bytes();
+        let rows: Vec<serde_json::Value> = body.split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).expect("JSONL row"))
+            .collect();
+        assert_eq!(rows, vec![
+            serde_json::json!({"record": "first"}),
+            serde_json::json!({"error": "watch failed", "code": 3}),
         ]);
     }
 }

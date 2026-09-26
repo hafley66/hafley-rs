@@ -272,6 +272,23 @@ async fn operation_error_has_http_status_and_server_accepts_next_request() {
     assert!(rows[0]["error"].as_str().unwrap().contains("unknown language"));
     assert_eq!(rows[1], json!({"complete": false, "rows": 0}));
 
+    let first = scratch.path().join("first.rs");
+    let unsupported = scratch.path().join("second.txt");
+    std::fs::write(&first, "fn first() {}\n").expect("first query input");
+    std::fs::write(&unsupported, "second\n").expect("unsupported query input");
+    let query_uri = query("/query", &[("query", "(function_item name: (identifier) @name)")]);
+    let query_body = json!({"paths": [first, unsupported], "patterns": [], "entry": []}).to_string();
+    let (late_status, late_body) = socket_response(&socket, &query_uri, &query_body).await;
+    assert_eq!(late_status, axum::http::StatusCode::OK);
+    let late_rows: Vec<serde_json::Value> = late_body.split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| serde_json::from_slice(line).expect("late JSONL row"))
+        .collect();
+    assert_eq!(late_rows.len(), 2);
+    assert_eq!(late_rows[0]["name"], "first");
+    assert_eq!(late_rows[1]["code"], 2);
+    assert!(late_rows[1]["error"].as_str().unwrap().contains("no language"));
+
     let (next_status, next_body) = socket_response(&socket, "/schema", "").await;
     assert_eq!(next_status, axum::http::StatusCode::OK);
     let _: serde_json::Value = serde_json::from_slice(&next_body).expect("next JSON response");
