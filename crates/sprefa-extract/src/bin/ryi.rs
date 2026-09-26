@@ -38,7 +38,7 @@ use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl,
-    dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
+    diet_scip_jsonl, dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
     line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
     resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
     scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
@@ -46,10 +46,7 @@ use sprefa_extract::{
     ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
-pub use ryi_proto::{daemon_auto, models, ops_auto};
-
-#[path = "ryi/gen/cli_auto.rs"]
-mod cli_auto;
+pub use ryi_proto::{cli_auto, daemon_auto, models, ops_auto};
 
 #[path = "ryi/gen/server_auto.rs"]
 mod server_auto;
@@ -176,10 +173,10 @@ fn run_slow(slow: SlowArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
 fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(lang) = args.indexer.as_deref() {
         if !sprefa_extract::indexer_langs().contains(&lang) {
-            return Err(format!(
+            return Err(RyiExit::new(2, format!(
                 "--indexer {lang}: unknown language; known: {}",
                 sprefa_extract::indexer_langs().join(", ")
-            )
+            ))
             .into());
         }
     }
@@ -319,7 +316,7 @@ impl RyiExit {
     fn boxed(error: Box<dyn std::error::Error>) -> Self {
         match error.downcast::<Self>() {
             Ok(exit) => *exit,
-            Err(error) => Self::new(2, error.to_string()),
+            Err(error) => Self::new(1, error.to_string()),
         }
     }
 }
@@ -606,11 +603,11 @@ fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<A
         Some(Cmd::Schema) => print_schema(&mut writer),
         Some(Cmd::Trail(args)) => print_trail(args.runs, &mut writer),
         Some(Cmd::Watch(args)) => watch::run_to(args, writer, cancelled),
-        Some(Cmd::Diff(args)) => diff::run_to(args, &mut writer),
-        Some(Cmd::Graph(args)) => graph::run_to(args, &mut writer),
-        Some(Cmd::Query(args)) => query::run_to(args, writer).map_err(Into::into),
-        Some(Cmd::Move(args)) => source_move::run(args).map_err(Into::into),
-        Some(Cmd::Cleave(args)) => cleave::run(args).map_err(Into::into),
+        Some(Cmd::Diff(args)) => or_exit_2(diff::run_to(args, &mut writer)),
+        Some(Cmd::Graph(args)) => or_exit_2(graph::run_to(args, &mut writer)),
+        Some(Cmd::Query(args)) => or_exit_2(query::run_to(args, writer)),
+        Some(Cmd::Move(args)) => or_exit_2(source_move::run(args)),
+        Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args)),
         Some(Cmd::Rename(args)) => source_rename::run(args)
             .map_err(|error| RyiExit::new(error.exit, error.to_string()).into()),
         Some(Cmd::Region(args)) => region_writer::run(args)
@@ -652,46 +649,19 @@ fn extract_to(
 ) -> Result<(), Box<dyn std::error::Error>> {
     if tier == Tier::Fast {
         if output.database.is_some() {
-            sprefa_extract::diet_scip_streamed(&cli.paths, &mut |row| {
-                match row {
-                    sprefa_extract::DietRow::Raw(raw) => output.source_fact(raw.path, raw.content_id, &raw.fact),
-                    sprefa_extract::DietRow::Resolved(fact) => {
-                        output.clear_source().and_then(|()| output.fact(&fact))
-                    }
-                }
-                .map_err(|error| std::io::Error::other(error.to_string()))
+            let facts = sprefa_extract::diet_scip_with_raw(&cli.paths, &mut |raw| {
+                output.source_fact(raw.path, raw.content_id, &raw.fact)
             })?;
+            output.clear_source()?;
+            for fact in facts { output.fact(&fact)?; }
             return Ok(());
         }
         if cli.lines {
             register_line_tables(cli, output);
         }
-        // SQLite's on-disk BINARY sort keeps the JSONL order of sorted_lines
-        // without retaining the corpus of serialized facts in the Rust heap.
-        let spool = tempfile::NamedTempFile::new()?;
-        let mut sorted = rusqlite::Connection::open(spool.path())?;
-        sorted.execute_batch("PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; PRAGMA cache_size=-8192; PRAGMA temp_store=FILE; CREATE TABLE line (body TEXT NOT NULL);")?;
-        {
-            let transaction = sorted.transaction()?;
-            {
-                let mut insert = transaction.prepare("INSERT INTO line (body) VALUES (?1)")?;
-                sprefa_extract::diet_scip_streamed(&cli.paths, &mut |row| {
-                    let body = match row {
-                        sprefa_extract::DietRow::Raw(raw) => serde_json::to_string(&raw.fact),
-                        sprefa_extract::DietRow::Resolved(fact) => serde_json::to_string(&fact),
-                    }.map_err(std::io::Error::other)?;
-                    insert.execute([body]).map_err(std::io::Error::other)?;
-                    Ok::<(), std::io::Error>(())
-                })?;
-            }
-            transaction.commit()?;
-        }
+        let lines = diet_scip_jsonl(&cli.paths)?;
         let _write = sprefa_extract::trace::stage_span("write").entered();
-        let mut select = sorted.prepare("SELECT body FROM line ORDER BY body COLLATE BINARY")?;
-        let mut rows = select.query([])?;
-        while let Some(row) = rows.next()? {
-            output.line(&row.get::<_, String>(0)?)?;
-        }
+        for line in lines { output.line(&line)?; }
         return Ok(());
     }
 

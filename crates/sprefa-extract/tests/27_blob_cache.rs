@@ -4,7 +4,7 @@
 //! CONTROL: `cache::EXTRACTIONS` counts computes inside `get_or_extract`; an
 //! identical-bytes second call leaves it unmoved.
 //! SABOTAGE 1, drop the cache lookup and always extract: every call bumps
-//! `EXTRACTIONS`, so `hit_skips_the_parse` and `two_paths_one_blob` go RED.
+//! `EXTRACTIONS`, so `hit_skips_the_parse` goes RED.
 //! SABOTAGE 2, drop the mask from the key (ContentId + lang only): the narrower
 //! mask collides with `FamilyMask::ALL`, so `different_mask` goes RED.
 //! SABOTAGE 3, make the weigher return a constant (1) instead of the byte
@@ -26,13 +26,14 @@ fn lock() -> std::sync::MutexGuard<'static, ()> {
 }
 
 const PATH_A: &str = "blob_cache_a.rs";
-const PATH_B: &str = "blob_cache_b.rs";
 const BLOB: &[u8] = b"pub fn trim(value: String) -> String {\n    value\n}\n";
 
 // Each counter test extracts a blob unique to it: the global cache is shared
 // across the whole test binary, so a reused blob would already be warm.
 const HIT_BLOB: &[u8] = b"pub fn hit_unique() {}\n";
-const TWO_BLOB: &[u8] = b"pub fn two_unique() {}\n";
+const TWO_BLOB: &[u8] = b"function twice() { return () => 2; }\n";
+const TWO_PATH_A: &str = "blob_cache_a.ts";
+const TWO_PATH_B: &str = "blob_cache_b.ts";
 const MASK_BLOB: &[u8] = b"pub fn mask_unique() {}\n";
 
 #[test]
@@ -54,16 +55,17 @@ fn hit_skips_the_parse() {
 }
 
 #[test]
-fn two_paths_one_blob() {
+fn two_paths_one_blob_have_distinct_outputs() {
     let _guard = lock();
     let start = cache::EXTRACTIONS.load(Ordering::Relaxed);
-    dispatch(PATH_A, TWO_BLOB, FamilyMask::ALL).expect("rust source");
-    dispatch(PATH_B, TWO_BLOB, FamilyMask::ALL).expect("rust source");
+    let first = dispatch(TWO_PATH_A, TWO_BLOB, FamilyMask::ALL).expect("TypeScript source");
+    let second = dispatch(TWO_PATH_B, TWO_BLOB, FamilyMask::ALL).expect("TypeScript source");
     assert_eq!(
         cache::EXTRACTIONS.load(Ordering::Relaxed),
-        start + 1,
-        "byte-identical contents share one entry across paths"
+        start + 2,
+        "path-dependent output requires a separate extraction"
     );
+    assert_ne!(wire_bytes(&first), wire_bytes(&second));
 }
 
 #[test]
@@ -106,7 +108,7 @@ fn eviction_binds_at_the_weight_cap() {
     let one_weight = cache::estimate_bytes(&outputs[0]) as u64;
     let keys: Vec<CacheKey> = contents
         .iter()
-        .map(|(_, body)| CacheKey::new(content_id_of(body), "rust", FamilyMask::ALL))
+        .map(|(path, body)| CacheKey::new(content_id_of(body), path, "rust", FamilyMask::ALL))
         .collect();
 
     let tight = cache::cache_with_capacity(one_weight * 2);

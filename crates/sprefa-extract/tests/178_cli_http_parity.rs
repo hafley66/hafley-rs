@@ -106,7 +106,7 @@ struct Server(PathBuf);
 impl Drop for Server {
     fn drop(&mut self) {
         if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&self.0) {
-            let _ = stream.write_all(b"GET /__handshake HTTP/1.1\r\nHost: localhost\r\nx-ryi-build: stop\r\n\r\n");
+            let _ = stream.write_all(b"POST /__shutdown HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
         }
     }
 }

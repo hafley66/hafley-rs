@@ -375,7 +375,7 @@ fn a_failed_verify_rolls_the_rust_tree_back() {
     .expect("verify failure wrote the run trail");
     let rows: i64 = trail
         .query_row(
-            "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryi cleave % --commit --verify %'",
+            "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryi-server cleave % --commit --verify %'",
             [],
             |row| row.get(0),
         )

@@ -73,7 +73,7 @@ pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiO
     );
     let _entered = span.enter();
     let blob = content_id_of(content);
-    let key = CacheKey::new(blob.clone(), src.name(), mask);
+    let key = CacheKey::new(blob.clone(), path, src.name(), mask);
     Some(get_or_extract(key, || {
         EXTRACTING.with(|slot| {
             *slot.borrow_mut() = Some((content.as_ptr(), content.len(), blob));

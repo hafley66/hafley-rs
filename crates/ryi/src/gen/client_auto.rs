@@ -52,7 +52,10 @@ fn empty_body() -> ClientBody {
 async fn handshake(socket: &Path, stamp: &str) -> Result<StatusCode, ClientError> {
     let request = Request::builder().method(Method::GET).uri("http://ryi/__handshake")
         .header("x-ryi-build", stamp).body(empty_body())?;
-    Ok(send(request, socket).await?.status())
+    let response = send(request, socket).await?;
+    let status = response.status();
+    response.into_body().collect().await?;
+    Ok(status)
 }
 
 async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {

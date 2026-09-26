@@ -1,4 +1,4 @@
-//! The content-keyed extraction cache. Weight-bounded and concurrent (sharded
+//! The content-and-path-keyed extraction cache. Weight-bounded and concurrent (sharded
 //! `&self` methods), so the rayon workers all hit it. Weight is an output byte
 //! estimate, never 1-per-entry.
 
@@ -22,17 +22,18 @@ const REPRESENTATIVE_ENTRY_BYTES: usize = 170 * 1024;
 /// cache tests to assert that a hit skips the parse.
 pub static EXTRACTIONS: AtomicUsize = AtomicUsize::new(0);
 
-/// The cache key: blob identity + matched `Source` name + the folded mask.
-/// Distinct bytes, languages, or mask selections are distinct entries.
+/// The cache key: blob identity + source path + matched `Source` name + mask.
+/// Extracted names and rows can contain the path even when bytes are identical.
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct CacheKey {
     blob: crate::read::ContentId,
+    path: String,
     lang: &'static str,
     mask_bits: u8,
 }
 
 impl CacheKey {
-    pub fn new(blob: crate::read::ContentId, lang: &'static str, mask: FamilyMask) -> Self {
+    pub fn new(blob: crate::read::ContentId, path: &str, lang: &'static str, mask: FamilyMask) -> Self {
         let mask_bits = (mask.cst as u8)
             | ((mask.types as u8) << 1)
             | ((mask.call as u8) << 2)
@@ -40,6 +41,7 @@ impl CacheKey {
             | ((mask.data as u8) << 4);
         Self {
             blob,
+            path: path.to_owned(),
             lang,
             mask_bits,
         }

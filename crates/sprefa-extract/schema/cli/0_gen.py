@@ -46,11 +46,11 @@ def main() -> None:
             server_out.mkdir(parents=True, exist_ok=True)
             client_out.mkdir(parents=True, exist_ok=True)
             proto_out.mkdir(parents=True, exist_ok=True)
-            for name in ("cli_auto.rs", "server_auto.rs"):
+            for name in ("server_auto.rs",):
                 shutil.copy2(generated / name, server_out / name)
-            for name in ("cli_auto.rs", "client_auto.rs"):
+            for name in ("client_auto.rs",):
                 shutil.copy2(generated / name, client_out / name)
-            for name in ("ops_auto.rs", "daemon_auto.rs"):
+            for name in ("cli_auto.rs", "ops_auto.rs", "daemon_auto.rs"):
                 shutil.copy2(generated / name, proto_out / name)
             if (proto_out / "models").exists():
                 shutil.rmtree(proto_out / "models")

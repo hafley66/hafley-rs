@@ -8,6 +8,15 @@ fn output(program: &str, args: &[&str]) -> String {
 }
 
 fn main() {
+    for git_path in ["HEAD", "index", "packed-refs"] {
+        let path = output("git", &["rev-parse", "--git-path", git_path]);
+        if path != "unknown" { println!("cargo:rerun-if-changed={path}"); }
+    }
+    let reference = output("git", &["symbolic-ref", "-q", "HEAD"]);
+    if reference != "unknown" {
+        let path = output("git", &["rev-parse", "--git-path", &reference]);
+        if path != "unknown" { println!("cargo:rerun-if-changed={path}"); }
+    }
     let git_hash = output("git", &["rev-parse", "--short=12", "HEAD"]);
     println!("cargo:rustc-env=SPREFA_BUILD_GIT_HASH={git_hash}");
     println!("cargo:rustc-env=SPREFA_BUILD_DATETIME={}", output("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"]));

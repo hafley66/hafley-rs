@@ -22,10 +22,16 @@ fn type_ladder_codeql_baseline() {
         .env("RYI_CODEQL_OUT", scratch.path())
         .output()
         .expect("run baseline script");
+    let logs = ["codeql-build.log", "type-query.log", "call-query.log", "ryi.log"]
+        .into_iter()
+        .filter_map(|name| std::fs::read_to_string(scratch.path().join(name)).ok().map(|body| (name, body)))
+        .map(|(name, body)| format!("{name}: {}", body.chars().rev().take(2000).collect::<String>().chars().rev().collect::<String>()))
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(
         output.status.success(),
-        "baseline script failed: {}",
-        String::from_utf8_lossy(&output.stderr)
+        "baseline script failed: {}\n{logs}",
+        String::from_utf8_lossy(&output.stderr),
     );
 
     let stdout = String::from_utf8(output.stdout).expect("UTF-8 baseline output");

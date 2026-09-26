@@ -173,9 +173,15 @@ async fn handshake(State(state): State<DaemonState>, headers: HeaderMap) -> Stat
     StatusCode::OK
 }
 
+async fn shutdown(State(state): State<DaemonState>) -> StatusCode {
+    state.shutdown.cancel();
+    StatusCode::OK
+}
+
 fn router(state: DaemonState) -> axum::Router {
     axum::Router::new()
         .route("/__handshake", get(handshake))
+        .route("/__shutdown", post(shutdown))
         .route("/extract", post(extract))
         .route("/fast", post(fast))
         .route("/slow", post(slow))
