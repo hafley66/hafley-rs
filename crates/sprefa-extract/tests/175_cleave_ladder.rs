@@ -391,21 +391,53 @@ fn batch_pattern_source_stays_valid_after_import_cleanup() {
     let target = scratch.path().join("target");
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cleave_ladder");
     copy_tree(&fixture, &root);
-    for args in [&["init", "-q", "."][..], &["add", "-A"], &["-c", "user.email=l@l", "-c", "user.name=l", "commit", "-qm", "l"]] {
+    for args in [
+        &["init", "-q", "."][..],
+        &["add", "-A"],
+        &[
+            "-c",
+            "user.email=l@l",
+            "-c",
+            "user.name=l",
+            "commit",
+            "-qm",
+            "l",
+        ],
+    ] {
         assert!(run("git", args, &root, &target).0);
     }
     let list = scratch.path().join("batch.tsv");
-    std::fs::write(&list, "src/_6_pattern.rs#Pattern\tsrc/_8_extract.rs\nsrc/_7_counts.rs#Counts\tsrc/_9_counts.rs\n").unwrap();
+    std::fs::write(
+        &list,
+        "src/_6_pattern.rs#Pattern\tsrc/_8_extract.rs\nsrc/_7_counts.rs#Counts\tsrc/_9_counts.rs\n",
+    )
+    .unwrap();
     let (ok, output) = run(
         env!("CARGO_BIN_EXE_ryi"),
-        &["cleave", "--list", list.to_str().unwrap(), "--root", root.to_str().unwrap(), "--state", state.to_str().unwrap(), "--commit"],
+        &[
+            "cleave",
+            "--list",
+            list.to_str().unwrap(),
+            "--root",
+            root.to_str().unwrap(),
+            "--state",
+            state.to_str().unwrap(),
+            "--commit",
+        ],
         &root,
         &target,
     );
     assert!(ok, "batch Pattern then Counts: {output}");
     let source = std::fs::read_to_string(root.join("src/_6_pattern.rs")).unwrap();
     assert_eq!(source.trim(), "use crate::_8_extract::Pattern;\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}");
-    assert!(std::fs::read_to_string(root.join("src/_8_extract.rs")).unwrap().contains("impl Display for Pattern"));
-    let (checked, check) = run("cargo", &["check", "--offline", "--all-targets", "-q"], &root, &target);
+    assert!(std::fs::read_to_string(root.join("src/_8_extract.rs"))
+        .unwrap()
+        .contains("impl Display for Pattern"));
+    let (checked, check) = run(
+        "cargo",
+        &["check", "--offline", "--all-targets", "-q"],
+        &root,
+        &target,
+    );
     assert!(checked, "batch output must compile: {check}");
 }

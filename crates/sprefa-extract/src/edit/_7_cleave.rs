@@ -1072,6 +1072,11 @@ impl Plan {
                     false
                 }
             });
+            if edits.windows(2).any(|pair| {
+                pair[0].span.end() > pair[1].span.start || pair[0].span.start == pair[1].span.start
+            }) {
+                return Err(format!("{rel}: cleave row has overlapping edits"));
+            }
             let shifts: Vec<(Span, u32)> = edits
                 .iter()
                 .map(|edit| (edit.span, edit.text.len() as u32))
