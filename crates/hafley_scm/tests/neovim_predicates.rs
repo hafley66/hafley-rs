@@ -93,3 +93,69 @@ fn empty_kind_and_literal_lists_are_arity_errors() {
         ));
     }
 }
+
+const HAS_BODIES: &[u8] = br#"
+fn returns() { return; }
+fn tries() -> Result<(), ()> { foo()?; Ok(()) }
+fn breaks() { loop { break; } }
+fn continues() { loop { continue; } }
+fn clean() { 1; }
+"#;
+
+fn render_has_bodies(scm: &str) -> String {
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    let tree = hafley_scm::cst::parse(&language, HAS_BODIES).expect("the source parses");
+    let query = hafley_scm::build(&language, scm).expect("the query builds");
+    let mut arena = MatchArena::default();
+    hafley_scm::run(&query, "test.rs", HAS_BODIES, &tree, u32::MAX, &mut arena)
+        .expect("the query runs");
+    let matched = arena.rows.iter().map(|row| {
+        let name = arena.spans[row.spans.start as usize..row.spans.end as usize]
+            .iter()
+            .find(|span| query.names[span.name as usize].as_ref() == "name")
+            .expect("each match captures a function name");
+        std::str::from_utf8(&HAS_BODIES[name.bytes.start as usize..name.bytes.end as usize])
+            .expect("function names are UTF-8")
+    }).collect::<Vec<_>>();
+    let mut lines = vec!["body      | matches".to_string()];
+    for name in ["returns", "tries", "breaks", "continues", "clean"] {
+        lines.push(format!("{name:<9} | {}", matched.iter().filter(|found| **found == name).count()));
+    }
+    lines.join("\n")
+}
+
+#[test]
+fn not_has_kind_list_excludes_each_descendant_kind() {
+    let scm = r#"((function_item name: (identifier) @name body: (block) @b)
+        (#not-has? @b "return_expression" "try_expression" "break_expression" "continue_expression"))"#;
+    assert_eq!(render_has_bodies(scm), "body      | matches\nreturns   | 0\ntries     | 0\nbreaks    | 0\ncontinues | 0\nclean     | 1");
+}
+
+#[test]
+fn not_has_kind_list_neighbor_checks_direct_children() {
+    let scm = r#"((function_item name: (identifier) @name body: (block) @b)
+        (#not-has? @b "return_expression" "try_expression" "break_expression" "continue_expression" "neighbor"))"#;
+    assert_eq!(render_has_bodies(scm), "body      | matches\nreturns   | 1\ntries     | 1\nbreaks    | 1\ncontinues | 1\nclean     | 1");
+}
+
+#[test]
+fn unknown_kinds_and_stop_words_name_the_predicate_and_pattern() {
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    let rows = [
+        ("has?", "\"retrun_expression\"", 0),
+        ("has-ancestor?", "\"retrun_expression\"", 0),
+        ("has-parent?", "\"retrun_expression\"", 0),
+        ("has?", "\"return_expression\" \"neighbour\"", 0),
+        ("has-ancestor?", "\"return_expression\" \"neighbour\"", 0),
+        ("has?", "\"retrun_expression\"", 1),
+    ].map(|(operator, args, pattern)| {
+        let prefix = if pattern == 1 { "((identifier) @first)\n" } else { "" };
+        let scm = format!("{prefix}((identifier) @x (#{operator} @x {args}))");
+        let error = match hafley_scm::build(&language, &scm) {
+            Err(QueryExtError::UnknownOperator(detail)) => detail,
+            _ => panic!("expected unknown kind for {scm}"),
+        };
+        format!("{operator:<13} | {error}")
+    }).join("\n");
+    assert_eq!(rows, "has?          | has? (unknown kind 'retrun_expression' in pattern 0)\nhas-ancestor? | has-ancestor? (unknown kind 'retrun_expression' in pattern 0)\nhas-parent?   | has-parent? (unknown kind 'retrun_expression' in pattern 0)\nhas?          | has? (unknown kind 'neighbour' in pattern 0)\nhas-ancestor? | has-ancestor? (unknown kind 'neighbour' in pattern 0)\nhas?          | has? (unknown kind 'retrun_expression' in pattern 1)");
+}
