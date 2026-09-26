@@ -586,8 +586,9 @@ fn class_entity(class: &ts::Class, strings: &mut Strings, sink: &mut FamilyBundl
                     TypeEntityKind::Method,
                 );
                 // A method IS a type: carry its arrow signature (param/ret refs).
-                // Method signatures name types at their own owner span, which
-                // the project resolve joins to imported and local declarations.
+                // Method signatures name types at their own owner span; fast
+                // and SCIP use the candidates, while legacy resolve filters
+                // the new method rows to keep its pinned edge set.
                 fn_sigs(
                     method.span,
                     &method.value.type_parameters,
@@ -688,8 +689,8 @@ fn var_fn_entity(
 /// The signature slots of one callable: param type-refs (with their positional
 /// index) + the return type-refs. `owner` is the callable node's span; the sigs
 /// join back to that node at the wire and the resolution seam. When
-/// `record_candidates` (functions and the v6 class-method resolve layer),
-/// each ref ALSO lands as an unresolved param/returns
+/// `record_candidates` (functions and class methods), each ref ALSO lands as
+/// an unresolved param/returns
 /// type-edge candidate; the sigs and the candidates then share ONE
 /// refs walk, so they cannot drift.
 fn fn_sigs(

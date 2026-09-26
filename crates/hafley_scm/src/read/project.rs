@@ -46,8 +46,8 @@ use crate::read::shape::{content_id_of, ContentId, FamilyTag, Span, Strings};
 use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
-    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
-    UnresolvedReason,
+    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource,
+    TypeEdgeKind, TypeEntityKind, TypeF, UnresolvedReason,
 };
 use crate::read::trace::stage_span;
 use crate::read::wire::{flatten_flow, FlatFact};
@@ -249,7 +249,7 @@ pub struct ProjectInput {
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    resolve_project_inputs(request, inputs, false)
+    resolve_project_inputs(request, inputs, false, false)
 }
 
 /// Keep syntax type rows alongside checker rows in one witnessed project run.
@@ -258,7 +258,7 @@ pub fn resolve_project_with_tsi_tiers(
     request: &ResolveRequest,
 ) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    resolve_project_inputs(request, inputs, true)
+    resolve_project_inputs(request, inputs, true, false)
 }
 
 /// One phase-1 fact retained beside a project resolve, with the source
@@ -351,7 +351,7 @@ fn resolve_pushed<E>(
     scm_paths: Option<&[PathBuf]>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
-    let mut facts = resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
+    let mut facts = resolve_project_inputs(request, inputs, false, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
         facts.extend(scm.map_err(ResolveWithRawError::Project)?);
     }
@@ -362,6 +362,7 @@ fn resolve_project_inputs(
     request: &ResolveRequest,
     inputs: Vec<ProjectInput>,
     preserve_syntax_tsi: bool,
+    include_ts_signatures: bool,
 ) -> Result<Vec<FlatFact>, ProjectError> {
     let scip_index = stage_span("load_scip").in_scope(|| load_scip(request, &inputs))?;
 
@@ -590,7 +591,8 @@ fn resolve_project_inputs(
                         lang: arm_for(&input.path).map_or("", |arm| arm.name),
                         rows: Vec::new(),
                     };
-                    let out = type_facts(input, &targets, &cx, &mut local);
+                    // The resolve CLI pins its existing type edge set.
+                    let out = type_facts(input, &targets, &cx, &mut local, include_ts_signatures);
                     crate::read::types::set_own(None);
                     crate::read::lang::ts::set_resolve_path(None);
                     (out, local.rows)
@@ -1401,7 +1403,7 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
         .in_scope(|| read_inputs_with_modules(paths, Planes::Fast))?;
     let scm = stage_span("scm_rows").in_scope(|| scm_rows(paths, &inputs));
     let skips: Vec<_> = inputs.iter_mut().filter_map(|input| input.size_skip.take()).collect();
-    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
+    let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false, true)?;
     facts.extend(skips);
     facts.extend(scm?);
     Ok(facts)
@@ -1492,7 +1494,7 @@ pub fn diet_scip_streamed<E>(
             captures.insert(input.path.clone(), taken);
         }
     }
-    let resolved = resolve_project_inputs(&diet_scip_request(paths), inputs, false)
+    let resolved = resolve_project_inputs(&diet_scip_request(paths), inputs, false, true)
         .map_err(ResolveWithRawError::Project)?;
     for fact in resolved {
         push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
@@ -1627,7 +1629,7 @@ fn diet_scip_bounded<E>(
     visit_fast_inputs(paths, &mut |input| {
         crate::read::types::set_own(Some(input.blob.clone()));
         crate::read::lang::ts::set_resolve_path(Some(&input.path));
-        let rows = type_facts(&input, &targets, &cx, &mut LegTrail::default());
+        let rows = type_facts(&input, &targets, &cx, &mut LegTrail::default(), true);
         crate::read::types::set_own(None);
         crate::read::lang::ts::set_resolve_path(None);
         for fact in rows {
@@ -2523,6 +2525,7 @@ fn type_facts(
     targets: &TargetIndex<'_>,
     cx: &ProjectCx,
     trail: &mut LegTrail,
+    include_ts_signatures: bool,
 ) -> Vec<FlatFact> {
     let Some(types) = input.output.types.as_ref() else {
         return Vec::new();
@@ -2540,6 +2543,13 @@ fn type_facts(
     let mut facts: Vec<FlatFact> = resolved
         .iter()
         .filter_map(|edge| {
+            if !include_ts_signatures
+                && arm_for(&input.path).is_some_and(|arm| arm.name == "ts")
+                && matches!(edge.kind, TypeEdgeKind::Param | TypeEdgeKind::Returns)
+                && types.nodes.get(edge.src.0 as usize).is_some_and(|node| node.kind == TypeEntityKind::Method)
+            {
+                return None;
+            }
             let target = (edge.dst_blob == input.blob)
                 .then_some(input)
                 .or_else(|| targets.input(&edge.dst_blob))?;
@@ -2559,7 +2569,11 @@ fn type_facts(
             })
         })
         .collect();
-    if let (Some(modules), Some(defs)) = (cx.indexes.ts_modules.get(), cx.indexes.def_index.get()) {
+    if let (true, Some(modules), Some(defs)) = (
+        include_ts_signatures,
+        cx.indexes.ts_modules.get(),
+        cx.indexes.def_index.get(),
+    ) {
         for use_site in modules.signature_uses(&input.path) {
             let local = defs.map.get(&use_site.name).and_then(|sites| {
                 sites
