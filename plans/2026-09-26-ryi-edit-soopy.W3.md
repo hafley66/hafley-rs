@@ -14,7 +14,7 @@ Base: `96292970`. Worktree: `feature/ryi-edit-soopy-bugs`.
 - Root cause: batch overlay applied raw duplicate respells; cleanup admitted malformed Rust candidates.
 - Fix: normalize row edits and keep only parseable cleanup rewrites.
 - Expected row: `cleave_ladder` Pattern then Counts batch leaves the Pattern source with only its new importer and `compile` function; the moved impl is present in the destination.
-- Commits: `ede155a3`, `ae8c373e`.
+- Commits: `ede155a3`, `ae8c373e`, `d63b5140`, `c40ed209`.
 
 ## Gate
 
