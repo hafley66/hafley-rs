@@ -24,7 +24,9 @@ key=$(printf '%s\n%s' "$source_root" "$language" | shasum -a 256 | cut -c1-16)
 out=${RYI_CODEQL_OUT:-${XDG_CACHE_HOME:-$HOME/.cache}/ryi-vs-codeql/$key}
 mkdir -p "$out"
 cleanup() {
-  rm -rf "$out/codeql-db" "$out/source" "$out/dependency-overrides"
+  # RYI_CODEQL_REUSE=1 keeps the db for the next rerun over unchanged sources.
+  [ "${RYI_CODEQL_REUSE:-0}" = 1 ] || rm -rf "$out/codeql-db"
+  rm -rf "$out/source" "$out/dependency-overrides"
   rm -f "$out/ryi.db"
 }
 trap cleanup EXIT
