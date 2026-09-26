@@ -1,4 +1,4 @@
-//! Every type edge of `fixtures/type_ladder` (files ladder 0, 1, many), marked by tier:
+//! Every type edge of `fixtures/type_ladder` (files ladder 0, 1, many, nested), marked by tier:
 //! `f` = ryi fast has it, `s` = ryi slow (committed index.scip) has it. `regen.sh` rebuilds the index.
 
 #![cfg(feature = "cli")]
@@ -72,6 +72,15 @@ _3_many.rs  returns  many_returns  -> _0_types.rs:B  fs
 _3_many.rs  returns  method        -> _0_types.rs:C  fs
 _3_many.rs  uses     ManyAliasA    -> _0_types.rs:A  fs
 _3_many.rs  uses     ManyAliasB    -> _0_types.rs:B  fs
-_3_many.rs  uses     ManyFields    -> _3_many.rs:ManyFields f-"
+_3_many.rs  uses     ManyFields    -> _3_many.rs:ManyFields f-
+_4_nested.rs field    Nest          -> _0_types.rs:A  fs
+_4_nested.rs field    Nest          -> _0_types.rs:B  fs
+_4_nested.rs field    Nest          -> _0_types.rs:C  fs
+_4_nested.rs impl     Nest          -> _0_types.rs:V  fs
+_4_nested.rs impl     Nest          -> _0_types.rs:W  fs
+_4_nested.rs param    gat_use       -> _0_types.rs:C  fs
+_4_nested.rs param    gat_use       -> _0_types.rs:Out -s
+_4_nested.rs param    projection    -> _0_types.rs:Out -s
+_4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs"
     );
 }
