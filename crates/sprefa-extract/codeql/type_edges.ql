@@ -10,7 +10,10 @@ string ownerName(Item owner) {
   or
   result = owner.(TypeAlias).getName().getText()
   or
-  result = owner.(Impl).getSelfTy().toString()
+  result = owner.(Impl).getSelfTy().(PathTypeRepr).getPath().getText()
+  or
+  result = owner.(Impl).getSelfTy().toString() and
+    not owner.(Impl).getSelfTy() instanceof PathTypeRepr
   or
   result = owner.(Trait).getName().getText()
 }
