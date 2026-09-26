@@ -657,6 +657,47 @@ impl TsModuleIndex {
         }
 
         let resolver = Resolver::new(options());
+        // A staged source snapshot carries package manifests but normally not
+        // node_modules symlinks. Local `link:` dependencies still name corpus
+        // files, so give their absolute path to the same oxc resolver.
+        let linked_packages: HashMap<PathBuf, Vec<(String, PathBuf)>> = corpus
+            .iter()
+            .filter(|(path, _)| {
+                Path::new(path)
+                    .file_name()
+                    .is_some_and(|name| name == "package.json")
+            })
+            .filter_map(|(path, _)| {
+                let directory = Path::new(path).parent()?.to_path_buf();
+                let manifest: serde_json::Value =
+                    serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+                let mut links = Vec::new();
+                for section in [
+                    "dependencies",
+                    "devDependencies",
+                    "peerDependencies",
+                    "optionalDependencies",
+                ] {
+                    let Some(entries) =
+                        manifest.get(section).and_then(serde_json::Value::as_object)
+                    else {
+                        continue;
+                    };
+                    for (name, version) in entries {
+                        let Some(relative) = version
+                            .as_str()
+                            .and_then(|value| value.strip_prefix("link:"))
+                        else {
+                            continue;
+                        };
+                        if let Ok(target) = directory.join(relative).canonicalize() {
+                            links.push((name.clone(), target));
+                        }
+                    }
+                }
+                Some((directory, links))
+            })
+            .collect();
         // One filesystem answer per (directory, specifier): a package's files
         // import the same modules, and the syscalls are the cost here.
         let mut answers: HashMap<(PathBuf, String), Option<String>> = HashMap::new();
@@ -668,10 +709,25 @@ impl TsModuleIndex {
             // TsconfigDiscovery::Auto walks from the importing file. Give the
             // resolver an absolute path even when ryi received relative inputs.
             let from = std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
+            let links = Path::new(path)
+                .ancestors()
+                .find_map(|ancestor| linked_packages.get(ancestor));
             for specifier in facts.specifiers() {
                 let key = (directory.clone(), specifier.to_string());
                 let answer = answers.entry(key).or_insert_with(|| {
-                    let resolved = resolver.resolve_file(&from, specifier).ok()?;
+                    let resolved = resolver.resolve_file(&from, specifier).ok().or_else(|| {
+                        let (name, root) = links?.iter().find(|(name, _)| {
+                            specifier == name
+                                || specifier
+                                    .strip_prefix(name.as_str())
+                                    .is_some_and(|rest| rest.starts_with('/'))
+                        })?;
+                        let suffix = specifier
+                            .strip_prefix(name.as_str())?
+                            .trim_start_matches('/');
+                        let linked = root.join(suffix);
+                        resolver.resolve_file(&from, linked.to_str()?).ok()
+                    })?;
                     let real = resolved.path();
                     by_real_path.get(real).cloned().or_else(|| {
                         by_real_path
