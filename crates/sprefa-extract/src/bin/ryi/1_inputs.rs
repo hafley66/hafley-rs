@@ -32,7 +32,7 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
         }
     }
     if tokens.is_empty() && !inputs.patterns.is_empty() {
-        tokens.push(".".to_string());
+        tokens.push(crate::ops::request_root().to_string_lossy().into_owned());
     }
     let mut files = Vec::new();
     for token in &tokens {
@@ -81,14 +81,14 @@ pub fn root(inputs: &Inputs) -> PathBuf {
             return PathBuf::from(only);
         }
     }
-    soopy::discover(".")
+    soopy::discover(crate::ops::request_root())
         .map(|repository| repository.root)
-        .unwrap_or_else(|_| PathBuf::from("."))
+        .unwrap_or_else(|_| crate::ops::request_root())
 }
 
 /// The default `--root` for the repository verbs: the working directory's git root.
 pub fn git_root_of_cwd() -> Result<PathBuf, Box<dyn std::error::Error>> {
-    Ok(soopy::discover(".")
+    Ok(soopy::discover(crate::ops::request_root())
         .map_err(|error| format!("--root: {error:#}"))?
         .root)
 }

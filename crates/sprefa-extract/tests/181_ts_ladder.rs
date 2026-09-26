@@ -36,7 +36,7 @@ select group_concat(line, char(10)) from (
   from u order by file, kind, owner, target)";
 
 fn ryi(args: &[&str]) {
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(args)
         .env("RUST_LOG", "off")
         .env("RYI_MAX_MEM_MB", "2048")

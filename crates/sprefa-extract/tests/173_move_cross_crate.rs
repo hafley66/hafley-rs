@@ -80,7 +80,7 @@ fn git(root: &Path, args: &[&str]) {
 }
 
 fn ryi(fixture: &Fixture, args: &[String]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi"))
+    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(args)
         .arg("--root")
         .arg(&fixture.root)

@@ -85,7 +85,7 @@ fn run_rename(
     new: &str,
     extra: &[&str],
 ) -> std::process::Output {
-    Command::new(env!("CARGO_BIN_EXE_ryi"))
+    Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("rename")
         .arg(target)
         .arg(new)
@@ -253,7 +253,7 @@ fn list_commit_is_atomic_across_rows() {
         "src/lib.rs\tground\t_1b_ground\nsrc/twins.rs\tWyll\tVyle\n",
     )
     .expect("write rename list");
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["rename", "--list"])
         .arg(&list)
         .arg("--root")
@@ -283,7 +283,7 @@ fn list_rows_read_earlier_edits() {
     let fixture = fixture("local", "chained_list");
     let list = fixture.state.join("renames.tsv");
     std::fs::write(&list, "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n").unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["rename", "--list"])
         .arg(&list)
         .arg("--root")

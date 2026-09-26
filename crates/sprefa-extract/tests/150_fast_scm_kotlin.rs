@@ -49,7 +49,7 @@ fn collect_files(path: &Path, files: &mut Vec<PathBuf>) {
 fn call_rows(path: &Path, index: usize) -> Vec<String> {
     let trace =
         std::env::temp_dir().join(format!("ryi-150-{index}-{}.json", std::process::id()));
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["--kinds", "call"])
         .arg(path)
         .env("HAFLEY_TRACE", trace)

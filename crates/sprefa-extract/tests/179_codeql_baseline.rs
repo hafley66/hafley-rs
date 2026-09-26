@@ -18,7 +18,7 @@ fn type_ladder_codeql_baseline() {
     let output = Command::new(script)
         .arg(fixture)
         .arg("rust")
-        .env("RYI_BIN", env!("CARGO_BIN_EXE_ryi"))
+        .env("RYI_BIN", env!("CARGO_BIN_EXE_ryi-server"))
         .env("RYI_CODEQL_OUT", scratch.path())
         .output()
         .expect("run baseline script");

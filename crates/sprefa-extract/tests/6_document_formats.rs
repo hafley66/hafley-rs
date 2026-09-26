@@ -54,7 +54,7 @@ fn document_format_coverage_is_what_the_cli_claims() {
         // no-flag run: EXIT 0 WITH NO OUTPUT, never an error. That is the
         // documented contract and it is what lets a caller sweep a mixed tree
         // without filtering by extension first.
-        let mut command = Command::new(env!("CARGO_BIN_EXE_ryi"));
+        let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));
         if !family.is_empty() {
             command.args(["--kinds", family]);
         }

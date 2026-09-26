@@ -23,7 +23,7 @@ struct Probe {
 
 impl Probe {
     fn read() -> Self {
-        let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
             .current_dir(env!("CARGO_MANIFEST_DIR"))
             .args(["--witness", "--kinds", "type", FIXTURE])
             .output()

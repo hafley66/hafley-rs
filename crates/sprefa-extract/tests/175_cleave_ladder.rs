@@ -87,7 +87,7 @@ fn cleave_ladder() {
         let state_arg = state.to_string_lossy().into_owned();
         args.extend(["--root", &root_arg, "--state", &state_arg, "--commit"].map(String::from));
         let args: Vec<&str> = args.iter().map(String::as_str).collect();
-        let (cleaved, text) = run(env!("CARGO_BIN_EXE_ryi"), &args, &root, &target);
+        let (cleaved, text) = run(env!("CARGO_BIN_EXE_ryi-server"), &args, &root, &target);
         assert!(cleaved, "{label}: {text}");
         run("git", &["add", "-A"], &root, &target);
         let (checked, check) = run("cargo", &["check", "--offline", "--all-targets", "-q", "--message-format", "short"], &root, &target);

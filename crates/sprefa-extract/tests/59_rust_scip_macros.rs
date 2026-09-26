@@ -13,7 +13,7 @@ const FIXTURE: &str = "tests/fixtures/rust_findings/scip_macros";
 
 fn resolve(scip: bool) -> Vec<Value> {
     let mut argv = vec![
-        env!("CARGO_BIN_EXE_ryi").to_string(),
+        env!("CARGO_BIN_EXE_ryi-server").to_string(),
         "--resolve".to_string(),
         "--arms".to_string(),
         "call".to_string(),

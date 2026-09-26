@@ -107,7 +107,7 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 fn fast(paths: &[PathBuf], index: usize) -> (Vec<Value>, Duration) {
     let trace = std::env::temp_dir().join(format!("ryi-160-{index}-{}.json", std::process::id()));
     let started = Instant::now();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("fast")
         .args(paths)
         .env("HAFLEY_TRACE", trace)

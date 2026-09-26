@@ -151,7 +151,7 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     std::fs::write(root.join("region.txt"), "old\n").unwrap();
     let home = scratch.path().join("home");
     std::fs::create_dir(&home).unwrap();
-    let original_bin = PathBuf::from(env!("CARGO_BIN_EXE_ryi"));
+    let original_bin = PathBuf::from(env!("CARGO_BIN_EXE_ryi-server"));
     let binary = scratch.path().join("ryi");
     std::fs::copy(original_bin, &binary).expect("pin ryi for parity run");
     std::env::set_var("HOME", &home);
@@ -236,7 +236,7 @@ async fn cli_router_and_unix_socket_share_the_contract() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn operation_error_has_http_status_and_server_accepts_next_request() {
-    let cli = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let cli = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["scip", "--indexer", "not-a-language"])
         .env("DL_TRAIL", "0")
         .output().expect("CLI error");
@@ -245,7 +245,7 @@ async fn operation_error_has_http_status_and_server_accepts_next_request() {
 
     let scratch = tempfile::tempdir().expect("error scratch");
     let socket = scratch.path().join("errors.sock");
-    let server = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let server = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["serve", "--listen", &format!("unix:{}", socket.display())])
         .env("DL_TRAIL", "0")
         .stdout(Stdio::null()).stderr(Stdio::piped())
@@ -305,7 +305,7 @@ async fn persistent_watch_allows_other_ops_and_disconnects() {
     git(&root, &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "base"]);
     let socket = scratch.path().join("watch.sock");
     let receipts = scratch.path().join("watch.db");
-    let server = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let server = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["serve", "--listen", &format!("unix:{}", socket.display())])
         .env("DL_TRAIL", "0")
         .stdout(Stdio::null()).stderr(Stdio::piped())
@@ -364,7 +364,7 @@ fn fast_jsonl_uses_bounded_sorted_path_over_large_roster() {
         std::fs::write(scratch.path().join(format!("{index:04}_fact.rs")), format!("pub fn f_{index}() {{}}\n"))
             .expect("fast fixture file");
     }
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("fast").arg(scratch.path())
         .env("DL_TRACE_SUMMARY", "1")
         .env("DL_TRAIL", "0")

@@ -29,7 +29,7 @@
 use std::process::Command;
 
 fn edges(path: &str) -> Vec<(String, String)> {
-    let out = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let out = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .arg("--resolve")
         .args([path, path])
         .output()

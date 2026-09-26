@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::ffi::OsString;
 use std::cell::RefCell;
 use std::io::Write;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
@@ -11,7 +12,7 @@ use serde_json::Value;
 
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
-    CleaveArgs, DiffArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError, OpResult,
+    CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError, OpResult,
     QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs, WatchArgs,
 };
 
@@ -117,6 +118,20 @@ impl Write for SharedSink {
 thread_local! {
     static OP_SINK: RefCell<Option<SharedSink>> = const { RefCell::new(None) };
     static OP_WRITE_ERROR: RefCell<Option<std::io::Error>> = const { RefCell::new(None) };
+    static REQUEST_ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+}
+
+pub(crate) fn with_request_root<T>(root: PathBuf, run: impl FnOnce() -> T) -> T {
+    REQUEST_ROOT.with(|slot| {
+        let previous = slot.replace(Some(root));
+        let result = run();
+        slot.replace(previous);
+        result
+    })
+}
+
+pub(crate) fn request_root() -> PathBuf {
+    REQUEST_ROOT.with(|slot| slot.borrow().clone()).unwrap_or_else(|| PathBuf::from("."))
 }
 
 pub(crate) fn print_line(args: std::fmt::Arguments<'_>) {
@@ -162,8 +177,9 @@ fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> Rows {
     let argv = argv(verb, args);
     let cancelled = Arc::new(AtomicBool::new(false));
     let operation_cancelled = Arc::clone(&cancelled);
+    let request_root = request_root();
     std::thread::spawn(move || {
-        let result = (|| -> OpResult<()> {
+        let result = with_request_root(request_root, || -> OpResult<()> {
             let argv = argv?;
             let ryi = crate::Ryi::try_parse_from(std::iter::once(OsString::from("ryi")).chain(argv))
                 .map_err(|error| OpError(error.to_string(), 2))?;
@@ -179,64 +195,46 @@ fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> Rows {
                 return Err(OpError::from(error));
             }
             outcome
-        })();
+        });
         if let Err(error) = result { let _ = tx.send(Err(error)); }
     });
     Rows { rx, cancelled }
 }
 
-fn stream<A: clap::Args + Serialize>(verb: &str, args: &A, sqlite: bool) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> {
-    parsed(produce(verb, args), sqlite)
+fn stream<A: clap::Args + Serialize>(verb: &str, args: &A) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    Box::new(produce(verb, args))
 }
 
-fn parsed(rows: Rows, sqlite: bool) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> {
-    Box::new(rows.map(move |line| {
-        let line = line?;
-        match serde_json::from_slice(&line) {
-            Ok(value) => Ok(value),
-            Err(_) if sqlite && [b"Wrote ".as_slice(), b"Tables: ", b"Schema: ", b"Query:  "]
-                .iter().any(|prefix| line.starts_with(prefix)) => {
-                Ok(Value::String(String::from_utf8_lossy(&line).trim_end_matches('\n').to_string()))
-            }
-            Err(error) => Err(OpError::from(error)),
-        }
-    }))
-}
-
-fn one<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Value> {
+fn one<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Vec<u8>> {
     let mut output = Vec::new();
     for line in produce(verb, args) {
         output.extend(line?);
     }
-    Ok(Value::String(String::from_utf8_lossy(&output).into_owned()))
+    Ok(output)
 }
 
-pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("fast", args, args.sqlite.is_some()) }
-pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> {
+pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("fast", args) }
+pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { file(&args.args) }
+pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     let mut args = args.clone();
     args.format = None;
-    stream("", &args, args.sqlite.is_some())
+    stream("", &args)
 }
-pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("slow", args, args.sqlite.is_some()) }
-pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("scip", args, args.sqlite.is_some()) }
-pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("graph", args, args.sqlite.is_some()) }
-pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("query", args, args.sqlite.is_some()) }
-pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("watch", args, false) }
-pub fn watch_live(args: &WatchArgs) -> (Box<dyn Iterator<Item = OpResult<Value>> + Send>, Arc<AtomicBool>) {
-    let rows = produce("watch", args);
-    let cancelled = Arc::clone(&rows.cancelled);
-    (parsed(rows, false), cancelled)
-}
-pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("diff", args, args.sqlite.is_some()) }
+pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("slow", args) }
+pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("scip", args) }
+pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("graph", args) }
+pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("query", args) }
+pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("watch", args) }
+pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("diff", args) }
 
-pub fn cleave(args: &CleaveArgs) -> OpResult<Value> { one("cleave", args) }
-pub fn r#move(args: &MoveArgs) -> OpResult<Value> { one("move", args) }
-pub fn rename(args: &RenameArgs) -> OpResult<Value> { one("rename", args) }
-pub fn region(args: &RegionArgs) -> OpResult<Value> { one("region", args) }
-pub fn schema(args: &SchemaArgs) -> OpResult<Value> { one("schema", args) }
-pub fn trail(args: &TrailArgs) -> OpResult<Value> { one("trail", args) }
+pub fn cleave(args: &CleaveArgs) -> OpResult<Vec<u8>> { one("cleave", args) }
+pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> { one("move", args) }
+pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> { one("rename", args) }
+pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> { one("region", args) }
+pub fn schema(args: &SchemaArgs) -> OpResult<Vec<u8>> { one("schema", args) }
+pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> { one("trail", args) }
 
-pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -> OpResult<Value> {
+pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -> OpResult<Vec<u8>> {
     let mut staged = tempfile::NamedTempFile::new()?;
     let mut received = false;
     for value in input {
