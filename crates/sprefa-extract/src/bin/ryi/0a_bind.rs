@@ -4,7 +4,9 @@ use std::collections::HashMap;
 use std::fmt::Display;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::thread::JoinHandle;
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use serde::ser::{self, Impossible, Serialize};
@@ -53,19 +55,59 @@ struct Batch {
     vals: Vec<Val>,
     text: String,
     rows: usize,
+    source_path: Option<(String, Val)>,
+    source_id: Option<(String, Val)>,
+    record: Option<Val>,
 }
 
 impl Batch {
     fn empty(table: usize) -> Self {
-        Self { table, vals: Vec::new(), text: String::new(), rows: 0 }
+        Self { table, vals: Vec::new(), text: String::new(), rows: 0,
+            source_path: None, source_id: None, record: None }
     }
 
+    #[inline(always)]
     fn text(&mut self, value: &str) -> Val {
         let start = self.text.len() as u32;
         self.text.push_str(value);
         Val::Text(start, value.len() as u32)
     }
 
+    fn source_path(&mut self, value: &str) -> Val {
+        if let Some((saved, val)) = &self.source_path {
+            if saved == value { return *val; }
+        }
+        let val = self.text(value);
+        self.source_path = Some((value.to_owned(), val));
+        val
+    }
+
+    fn source_id(&mut self, value: &str) -> Val {
+        if let Some((saved, val)) = &self.source_id {
+            if saved == value { return *val; }
+        }
+        let val = self.text(value);
+        self.source_id = Some((value.to_owned(), val));
+        val
+    }
+
+    fn record(&mut self, value: &str) -> Val {
+        if let Some(val) = self.record { return val; }
+        let val = self.text(value);
+        self.record = Some(val);
+        val
+    }
+
+    fn clear(&mut self) {
+        self.vals.clear();
+        self.text.clear();
+        self.rows = 0;
+        self.source_path = None;
+        self.source_id = None;
+        self.record = None;
+    }
+
+    #[inline(always)]
     fn bind(&self, width: usize, statement: &mut rusqlite::Statement<'_>, row: usize, first: usize) -> rusqlite::Result<()> {
         for (offset, val) in self.vals[row * width..(row + 1) * width].iter().enumerate() {
             let parameter = first + offset;
@@ -101,9 +143,7 @@ impl Batch {
                 row += 1;
             }
         }
-        self.vals.clear();
-        self.text.clear();
-        self.rows = 0;
+        self.clear();
         Ok(())
     }
 }
@@ -158,7 +198,7 @@ impl Slot {
         }
     }
 
-    fn spawn(&mut self, meta: Arc<Vec<Meta>>) -> Result<()> {
+    fn spawn(&mut self, meta: Arc<Vec<Meta>>, insert_nanos: Arc<AtomicU64>) -> Result<()> {
         let Slot::Local(_) = self else { return Ok(()) };
         let Slot::Local(connection) = std::mem::replace(self, Slot::Moving) else { unreachable!() };
         let (batches, inbox) = sync_channel::<Batch>(QUEUE_BATCHES);
@@ -167,13 +207,13 @@ impl Slot {
             let mut error = None;
             for mut batch in inbox {
                 if error.is_none() {
+                    let started = Instant::now();
                     if let Err(e) = batch.drain(&meta[batch.table], &connection) {
                         error = Some(e.to_string());
                     }
+                    insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
                 }
-                batch.vals.clear();
-                batch.text.clear();
-                batch.rows = 0;
+                batch.clear();
                 let _ = give_back.try_send(batch);
             }
             (connection, error)
@@ -192,11 +232,12 @@ const CHUNKS_PER_BATCH: usize = 16;
 pub struct Binder {
     meta: Arc<Vec<Meta>>,
     buffers: Vec<Batch>,
-    columns: Vec<HashMap<String, usize>>,
+    columns: Vec<Vec<String>>,
     json: Vec<Vec<bool>>,
     by_name: HashMap<String, usize>,
     path: String,
     threaded: bool,
+    insert_nanos: Arc<AtomicU64>,
 }
 
 impl Binder {
@@ -240,11 +281,12 @@ impl Binder {
                 one_sql: format!("{prefix}{tuple}"),
             });
             json.push(column_names.iter().map(|c| json_columns.contains(&(name.clone(), c.clone()))).collect());
-            columns.push(column_names.into_iter().enumerate().map(|(i, c)| (c, i)).collect());
+            columns.push(column_names);
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
-        Ok(Self { meta: Arc::new(meta), buffers, columns, json, by_name, path: String::new(), threaded })
+        Ok(Self { meta: Arc::new(meta), buffers, columns, json, by_name, path: String::new(), threaded,
+            insert_nanos: Arc::new(AtomicU64::new(0)) })
     }
 
     /// Serialize one row into its table's buffer; a full buffer goes to the
@@ -272,6 +314,9 @@ impl Binder {
                 let buffer = &mut self.buffers[table];
                 buffer.vals.truncate(buffer.rows * self.meta[table].width);
                 buffer.text.truncate(text_mark);
+                buffer.source_path = None;
+                buffer.source_id = None;
+                buffer.record = None;
             }
             return Err(error.0);
         }
@@ -288,10 +333,12 @@ impl Binder {
     fn submit(&mut self, slot: &mut Slot, table: usize) -> Result<()> {
         if !self.threaded {
             let connection = slot.local()?;
+            let started = Instant::now();
             self.buffers[table].drain(&self.meta[table], connection)?;
+            self.insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
             return Ok(());
         }
-        slot.spawn(Arc::clone(&self.meta))?;
+        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.insert_nanos))?;
         let Slot::Worker(worker) = slot else {
             return Err("SQLite writer thread did not start".into());
         };
@@ -320,6 +367,10 @@ impl Binder {
         }
         slot.local()?;
         Ok(())
+    }
+
+    pub fn insert_time(&self) -> Duration {
+        Duration::from_nanos(self.insert_nanos.load(Ordering::Relaxed))
     }
 }
 
@@ -355,6 +406,7 @@ struct RowWriter<'b> {
 }
 
 impl RowWriter<'_> {
+    #[inline(always)]
     fn open(&mut self, record: &str) -> std::result::Result<(), Error> {
         let Some(&index) = self.binder.by_name.get(record) else {
             return err(format!("no table for record `{record}`"));
@@ -368,20 +420,21 @@ impl RowWriter<'_> {
         let base = table.vals.len();
         table.vals.resize(base + width, Val::Null);
         let set = |table: &mut Batch, column: &str, val: Val| {
-            if let Some(&i) = columns.get(column) {
-                table.vals[base + i] = val;
+            if let Some(index) = columns.iter().position(|name| name == column) {
+                table.vals[base + index] = val;
             }
         };
         set(table, "_row", Val::Int(row));
-        let v = input_path.map_or(Val::Null, |p| table.text(p));
+        let v = input_path.map_or(Val::Null, |p| table.source_path(p));
         set(table, "_input_path", v);
-        let v = content_id.map_or(Val::Null, |c| table.text(c));
+        let v = content_id.map_or(Val::Null, |c| table.source_id(c));
         set(table, "_content_id", v);
-        let v = table.text(record);
+        let v = table.record(record);
         set(table, "record", v);
         Ok(())
     }
 
+    #[inline(always)]
     fn field<T: ?Sized + Serialize>(&mut self, key: &str, value: &T) -> std::result::Result<(), Error> {
         if self.prefix_len == 0 && key == "record" {
             let mut probe = Scalar { arena: None, val: None, text: None };
@@ -399,7 +452,9 @@ impl RowWriter<'_> {
             self.binder.path.push_str("__");
         }
         self.binder.path.push_str(key);
-        let result = match self.binder.columns[index].get(self.binder.path.as_str()).copied() {
+        let result = match self.binder.columns[index]
+            .iter()
+            .position(|name| name == &self.binder.path) {
             Some(column) => self.column(index, column, value),
             None => {
                 let saved = self.prefix_len;
@@ -413,6 +468,7 @@ impl RowWriter<'_> {
         result
     }
 
+    #[inline(always)]
     fn column<T: ?Sized + Serialize>(&mut self, index: usize, column: usize, value: &T) -> std::result::Result<(), Error> {
         let width = self.binder.meta[index].width;
         let table = &mut self.binder.buffers[index];
@@ -537,6 +593,7 @@ struct Scalar<'t> {
 }
 
 impl Scalar<'_> {
+    #[inline(always)]
     fn put(&mut self, value: &str) {
         match self.arena.as_deref_mut() {
             Some(arena) => {
