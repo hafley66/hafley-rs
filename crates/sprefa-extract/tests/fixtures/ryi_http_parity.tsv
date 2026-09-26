@@ -1,7 +1,7 @@
-fast    cli     304 34d451e4ce1d
-fast    router  304 34d451e4ce1d
-slow    cli     360 b6d578ef93ea
-slow    router  360 b6d578ef93ea
+fast    cli     313 2f3aa020bfb8
+fast    router  313 2f3aa020bfb8
+slow    cli     367 bf7dc7dfe43e
+slow    router  367 bf7dc7dfe43e
 scip    cli     221 ad36d2f83c93
 scip    router  221 ad36d2f83c93
 graph   cli      14 a05bf3ca81b1
@@ -26,4 +26,4 @@ schema  cli       1 c6c4c6f31ce0
 schema  router    1 c6c4c6f31ce0
 trail   cli       1 db3a6949ece9
 trail   router    1 db3a6949ece9
-fast    socket  304 34d451e4ce1d
+fast    socket  313 2f3aa020bfb8
