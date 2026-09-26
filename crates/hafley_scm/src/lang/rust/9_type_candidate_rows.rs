@@ -2,6 +2,7 @@
 
 use std::ops::Range;
 
+use syn::visit::Visit;
 use syn::{Fields, GenericParam, Path, Type, TypeParamBound, WherePredicate};
 
 use super::call_metadata_rows::{path_name, primary_type, span_range};
@@ -102,10 +103,13 @@ fn collect(
                 groups.push(declared(item.ident.span(), line_starts, candidates));
             }
             syn::Item::Fn(item) => {
+                let mut candidates = signature_candidates(&item.sig);
+                candidates.extend(body_type_candidates(&item.block));
+                retain_non_generic(&item.sig.generics, &mut candidates);
                 groups.push(declared(
                     item.sig.ident.span(),
                     line_starts,
-                    signature_candidates(&item.sig),
+                    candidates,
                 ));
             }
             syn::Item::Trait(item) => {
@@ -119,10 +123,14 @@ fn collect(
                 for child in &item.items {
                     if let syn::TraitItem::Fn(method) = child {
                         if method.default.is_some() {
+                            let mut candidates = signature_candidates(&method.sig);
+                            candidates.extend(body_type_candidates(method.default.as_ref().unwrap()));
+                            retain_non_generic(&item.generics, &mut candidates);
+                            retain_non_generic(&method.sig.generics, &mut candidates);
                             groups.push(declared(
                                 method.sig.ident.span(),
                                 line_starts,
-                                signature_candidates(&method.sig),
+                                candidates,
                             ));
                         }
                     }
@@ -157,10 +165,14 @@ fn collect(
                 });
                 for child in &item.items {
                     if let syn::ImplItem::Fn(method) = child {
+                        let mut candidates = signature_candidates(&method.sig);
+                        candidates.extend(body_type_candidates(&method.block));
+                        retain_non_generic(&item.generics, &mut candidates);
+                        retain_non_generic(&method.sig.generics, &mut candidates);
                         groups.push(declared(
                             method.sig.ident.span(),
                             line_starts,
-                            signature_candidates(&method.sig),
+                            candidates,
                         ));
                     }
                 }
@@ -182,6 +194,30 @@ fn collect(
             group.candidates.retain(|candidate| !shadowed.contains(&candidate.to));
         }
     }
+}
+
+#[derive(Default)]
+struct BodyTypeWalk {
+    candidates: Vec<TypeCandidateRow>,
+}
+
+impl<'ast> Visit<'ast> for BodyTypeWalk {
+    fn visit_pat_type(&mut self, pat: &'ast syn::PatType) {
+        self.candidates.extend(type_refs(&pat.ty).into_iter().map(|to| TypeCandidateRow {
+            to,
+            kind: TypeCandidateKind::Uses,
+        }));
+        syn::visit::visit_pat_type(self, pat);
+    }
+
+    fn visit_expr_closure(&mut self, _: &'ast syn::ExprClosure) {}
+    fn visit_item(&mut self, _: &'ast syn::Item) {}
+}
+
+fn body_type_candidates(body: &syn::Block) -> Vec<TypeCandidateRow> {
+    let mut walk = BodyTypeWalk::default();
+    walk.visit_block(body);
+    walk.candidates
 }
 
 fn external_imported_locals(items: &[syn::Item]) -> Vec<String> {
