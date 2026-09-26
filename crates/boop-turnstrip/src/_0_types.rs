@@ -79,13 +79,8 @@ pub fn lines_of(said: &str) -> i64 {
     1.max(said.matches('\n').count() as i64 + 1)
 }
 
-/// A viewport in buffer rows, inclusive.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Viewport {
-    pub top: i64,
-    pub bottom: i64,
-}
+/// A viewport in buffer rows, inclusive: the pane model's own window.
+pub use boop_mux::Viewport;
 
 /// One turn the strip draws, with what the matcher measured of it clipped to
 /// the viewport. `start`/`end` are the turn's own buffer rows, unclipped — the

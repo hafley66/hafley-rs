@@ -122,6 +122,7 @@ mod tests {
             screen: Screen::Primary,
             history: History::Unavailable,
             cursor: None,
+            scroll: 0,
             rows: rows
                 .iter()
                 .enumerate()

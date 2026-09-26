@@ -41,7 +41,7 @@ pub(crate) fn run_lane_squares(
     // The pane answers first: a dead pane is a missing screen, not an empty
     // one, and a renderer must not draw an overlay over nothing.
     let snapshot = tmux::mux()
-        .pane_snapshot(socket, target)
+        .pane_snapshot(socket, target, 0)
         .with_context(|| format!("lane `{lane}` pane {target} answered no snapshot"))?;
     let rows = open_store()?.turn_rows(&boop::ident::TurnQuery {
         session: Some(session.to_owned()),

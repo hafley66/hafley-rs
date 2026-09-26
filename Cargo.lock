@@ -502,6 +502,7 @@ dependencies = [
 name = "boop-turnstrip"
 version = "0.1.0"
 dependencies = [
+ "boop-mux",
  "boop-turnvis",
  "serde",
 ]

@@ -86,6 +86,7 @@ mod tests {
                 capacity: 2000,
             },
             cursor: Some((0, 0)),
+            scroll: 0,
             rows: rows
                 .iter()
                 .enumerate()
