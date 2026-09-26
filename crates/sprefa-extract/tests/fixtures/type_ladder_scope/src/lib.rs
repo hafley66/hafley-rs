@@ -7,3 +7,5 @@ pub mod _5_generic;
 pub mod _6_nested;
 pub mod _7_body;
 pub mod _8_trait;
+pub mod _9_assoc;
+pub mod _10_variant;

@@ -78,6 +78,7 @@ fn collect(
             }
             syn::Item::Enum(item) => {
                 let mut candidates = Vec::new();
+                let mut variant_groups = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
                 for variant in &item.variants {
                     candidates.push(TypeCandidateRow {
@@ -85,9 +86,23 @@ fn collect(
                         kind: TypeCandidateKind::Variant,
                     });
                     field_candidates(&variant.fields, &mut candidates);
+                    let mut variant_candidates = Vec::new();
+                    field_candidates(&variant.fields, &mut variant_candidates);
+                    variant_candidates.retain(|candidate| candidate.to.contains("::"));
+                    retain_non_generic(&item.generics, &mut variant_candidates);
+                    if !variant_candidates.is_empty() {
+                        variant_groups.push(TypeCandidateGroup {
+                            owner: TypeCandidateOwner::Synthetic {
+                                range: span_range(line_starts, variant.ident.span()),
+                                name: variant.ident.to_string(),
+                            },
+                            candidates: variant_candidates,
+                        });
+                    }
                 }
                 retain_non_generic(&item.generics, &mut candidates);
                 groups.push(declared(item.ident.span(), line_starts, candidates));
+                groups.extend(variant_groups);
             }
             syn::Item::Union(item) => {
                 let mut candidates = Vec::new();
@@ -184,6 +199,28 @@ fn collect(
                             line_starts,
                             candidates,
                         ));
+                    }
+                    if let syn::ImplItem::Type(assoc) = child {
+                        if matches!(&assoc.ty, Type::Path(path)
+                            if path.qself.is_none() && path.path.segments.len() == 1
+                                && path.path.segments.first().is_some_and(|segment| {
+                                    matches!(segment.arguments, syn::PathArguments::None)
+                                })) {
+                            continue;
+                        }
+                        let mut candidates: Vec<_> = type_refs(&assoc.ty).into_iter().map(|to| TypeCandidateRow {
+                            to,
+                            kind: TypeCandidateKind::Uses,
+                        }).collect();
+                        retain_non_generic(&item.generics, &mut candidates);
+                        retain_non_generic(&assoc.generics, &mut candidates);
+                        groups.push(TypeCandidateGroup {
+                            owner: TypeCandidateOwner::Synthetic {
+                                range: span_range(line_starts, assoc.ident.span()),
+                                name: assoc.ident.to_string(),
+                            },
+                            candidates,
+                        });
                     }
                 }
             }
