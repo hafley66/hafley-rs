@@ -1,0 +1,28 @@
+Ask one question of the resolved call/type graph
+
+Usage: ryi graph [OPTIONS] <--callers <NAME>|--uses <NAME>|--from <NAME>|--call-path <NAME>|--type-path <NAME>|--flow-path <BLOB@START:END>> [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>              Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>                Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>                   Import hops from --entry
+      --root <DIR>                  Corpus root
+      --callers <NAME>              Resolved call edges landing on NAME
+      --uses <NAME>                 Declarations that reference type NAME
+      --from <NAME>                 Everything NAME reaches along call edges
+      --call-path <NAME>            Shortest call paths from NAME
+      --type-path <NAME>            Shortest type-reference paths from NAME
+      --flow-path <BLOB@START:END>  Flow paths from BLOB@START:END
+      --sqlite <PATH>               Keep the fact store in a new SQLite database at PATH
+      --slow                        Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve
+      --timeout <SECS>              Seconds the question may run; past it graph exits 3 [default: 30]
+      --at <REV>                    Query a committed revision
+      --compare <REV>               Diff the answers against REV
+      --scip-index <FILE>           Load this index.scip
+      --rust-checker                Add rust-analyzer type evidence
+      --ts-checker                  Add TypeScript checker type evidence
+      --go-checker                  Add go/types type evidence
+  -h, --help                        Print help

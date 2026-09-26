@@ -1,0 +1,17 @@
+Run a tree-sitter query over files
+
+Usage: ryi query [OPTIONS] --query <QUERY> [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>   Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>     Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>        Import hops from --entry
+      --root <DIR>       Corpus root
+      --lang <LANG>      Language name (default: from each file's extension)
+      --query <QUERY>    Tree-sitter query text
+      --digest <DIGEST>  Expected content digest (one input only)
+      --sqlite <PATH>    Write to a new SQLite database instead of stdout
+  -h, --help             Print help

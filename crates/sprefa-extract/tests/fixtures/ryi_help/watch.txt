@@ -1,0 +1,12 @@
+Stream fact deltas as the worktree changes
+
+Usage: ryi watch [OPTIONS]
+
+Options:
+      --root <DIR>         Repository root (default: git root of the working directory)
+      --pattern <GLOB>     Glob to watch; repeatable (default: every roster extension)
+      --kinds <KINDS>      Fact kinds (cst,type,call,df,data)
+      --receipts <PATH>    Receipt store path
+      --once               Emit one snapshot and exit
+      --poll-ms <POLL_MS>  Poll interval when the platform watcher is unavailable [default: 500]
+  -h, --help               Print help

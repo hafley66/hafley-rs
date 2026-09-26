@@ -1,0 +1,9 @@
+Print the last N runs from the trail
+
+Usage: ryi trail [N]
+
+Arguments:
+  [N]  Runs to print [default: 5]
+
+Options:
+  -h, --help  Print help

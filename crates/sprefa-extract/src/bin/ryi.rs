@@ -21,17 +21,15 @@ use std::time::Instant;
 #[global_allocator]
 static GLOBAL_ALLOCATOR: cap::Cap<mimalloc::MiMalloc> = cap::Cap::new(mimalloc::MiMalloc, usize::MAX);
 
-/// Heap ceiling: RYI_MAX_MEM_MB (default 2048, 0 = unlimited). Past it an
+/// Heap ceiling: RYI_MAX_MEM_MB (default and maximum 2048). Past it an
 /// allocation fails and the process aborts instead of eating the machine.
 #[cfg(feature = "mimalloc")]
 fn cap_memory() {
-    let mb: usize = std::env::var("RYI_MAX_MEM_MB").ok().and_then(|v| v.parse().ok()).unwrap_or(2048);
-    if mb > 0 {
-        let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
-    }
+    let mb: usize = std::env::var("RYI_MAX_MEM_MB").ok().and_then(|v| v.parse().ok()).unwrap_or(2048).clamp(1, 2048);
+    let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
 }
 
-use clap::Parser as _;
+use clap::{CommandFactory as _, Parser as _};
 
 use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
@@ -46,6 +44,21 @@ use sprefa_extract::{
     ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
+#[path = "ryi/gen/models/mod.rs"]
+mod models;
+
+#[path = "ryi/gen/ops_auto.rs"]
+mod ops_auto;
+
+#[path = "ryi/gen/cli_auto.rs"]
+mod cli_auto;
+
+#[path = "ryi/gen/http_auto.rs"]
+mod http_auto;
+
+#[path = "ryi/ops.rs"]
+mod ops;
+
 #[path = "ryi/0_cli.rs"]
 mod cli;
 
@@ -59,6 +72,9 @@ use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
 
 #[path = "ryi/1_inputs.rs"]
 mod inputs;
+
+#[path = "ryi/2_serve.rs"]
+mod serve;
 
 #[path = "../0_query.rs"]
 mod query;
@@ -400,13 +416,42 @@ fn or_exit_2<E: std::fmt::Display>(result: Result<(), E>) -> Result<(), Box<dyn 
 }
 
 fn run() -> Result<(), Box<dyn std::error::Error>> {
-    let ryi = match Ryi::try_parse() {
+    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("serve")) {
+        return serve::run();
+    }
+    let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
+    let format_first = argv.get(1).is_some_and(|arg| arg == "--format")
+        && argv.get(2).is_some_and(|arg| arg == "jsonl")
+        && argv.get(3).and_then(|arg| arg.to_str()).is_some_and(|name| {
+            Ryi::command().get_subcommands().any(|sub| sub.get_name() == name)
+        });
+    if format_first {
+        let flag = argv.remove(1);
+        let value = argv.remove(1);
+        argv.insert(2, flag);
+        argv.insert(3, value);
+    }
+    let ryi = match Ryi::try_parse_from(argv) {
         Ok(ryi) => ryi,
         Err(error) => {
             let _ = error.print();
             exit(error.exit_code());
         }
     };
+    if let Some(format) = ryi.file.format.as_deref() {
+        if format != "jsonl" {
+            eprintln!("ryi: --format {format}: use jsonl");
+            exit(2);
+        }
+        let stdin = std::io::stdin();
+        let stdout = std::io::stdout();
+        if ryi.cmd.is_none() {
+            return cli_auto::write_stream(&mut stdout.lock(), ops::file(&ryi.file))
+                .map_err(|error| std::io::Error::other(error.to_string()).into());
+        }
+        return cli_auto::run(ryi, &mut stdin.lock(), &mut stdout.lock())
+            .map_err(|error| std::io::Error::other(error.to_string()).into());
+    }
     let (mut cli, tier) = match ryi.cmd {
         None => (ryi.file, Tier::Files),
         Some(Cmd::Fast(fast)) => (FileArgs::from(fast), Tier::Fast),

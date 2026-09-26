@@ -1,0 +1,21 @@
+Rename a symbol and every occurrence bound to it
+
+Usage: ryi rename [OPTIONS] [TARGET] [NEW]
+
+Arguments:
+  [TARGET]  FILE#OLD (omit with --list)
+  [NEW]     New name
+
+Options:
+      --list <LIST>          TSV of anchor<TAB>old<TAB>new rows
+      --root <ROOT>          Corpus root (default: git root of the first anchor)
+      --state <STATE>        Soopy state root, outside the corpus
+      --at <AT>              Byte offset of the declaration when OLD is declared twice
+      --commit               Apply instead of dry run
+      --text-refs            Report leftover old-name spellings in plain text
+      --verify-scip <INDEX>  SCIP index (default ROOT/index.scip): its seats join the plan
+      --no-scip-merge        Only report the SCIP diff; keep the syntax plan as is
+      --json                 End with one JSON line of abstains
+  -h, --help                 Print help
+
+Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains

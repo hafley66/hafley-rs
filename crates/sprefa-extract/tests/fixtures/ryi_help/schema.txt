@@ -1,0 +1,6 @@
+Print the output record schema
+
+Usage: ryi schema
+
+Options:
+  -h, --help  Print help

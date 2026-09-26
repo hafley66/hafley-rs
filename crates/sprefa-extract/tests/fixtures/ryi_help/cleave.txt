@@ -1,0 +1,18 @@
+Move one item into another file, with its imports
+
+Usage: ryi cleave [OPTIONS] [TARGET] [DEST]
+
+Arguments:
+  [TARGET]  SRC#ITEM (omit with --list)
+  [DEST]    Destination file, created if missing (omit with --list)
+
+Options:
+      --list <LIST>      TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage
+      --root <ROOT>      Corpus root (default: git root of SRC)
+      --state <STATE>    Soopy state root, outside the corpus
+      --drag             Also move private helpers only this item uses
+      --commit           Apply instead of dry run
+      --verify <VERIFY>  Command to run after --commit; failure rolls back
+      --text-refs        Report leftover SRC spellings in plain text
+      --json             End with one JSON line holding the plan
+  -h, --help             Print help

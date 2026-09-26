@@ -480,6 +480,9 @@ impl Output {
                     if self.decorate_record(&mut value) {
                         serde_json::to_writer(&mut self.stdout, &value)?;
                         self.stdout.write_all(b"\n")?;
+                        if std::env::var_os("RYI_STREAM_FLUSH").is_some() {
+                            self.stdout.flush()?;
+                        }
                         return Ok(());
                     }
                 }
@@ -487,6 +490,9 @@ impl Output {
         }
         self.stdout.write_all(encoded)?;
         self.stdout.write_all(b"\n")?;
+        if std::env::var_os("RYI_STREAM_FLUSH").is_some() {
+            self.stdout.flush()?;
+        }
         Ok(())
      }
     /// Decorate one record against the file it names. A `path` that resolves

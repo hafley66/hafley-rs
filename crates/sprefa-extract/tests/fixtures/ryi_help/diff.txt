@@ -1,0 +1,12 @@
+Fact delta between two commits
+
+Usage: ryi diff [OPTIONS] --from <REV> --to <REV>
+
+Options:
+      --root <DIR>      Repository root (default: git root of the working directory)
+      --from <REV>      Base revision
+      --to <REV>        Target revision
+      --pattern <GLOB>  Glob to include; repeatable (default: every roster extension)
+      --arms <ARMS>     Resolve arms (call,type)
+      --sqlite <PATH>   Write to a new SQLite database instead of stdout
+  -h, --help            Print help

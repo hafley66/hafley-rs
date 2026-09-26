@@ -232,6 +232,29 @@ version = "4"
 features = ["derive"]
 optional = true
 
+[dependencies.axum]
+version = "0.8"
+optional = true
+
+[dependencies.axum-extra]
+version = "0.10"
+features = ["query"]
+optional = true
+
+[dependencies.tokio]
+version = "1"
+features = ["macros", "rt-multi-thread", "net", "sync"]
+optional = true
+
+[dependencies.futures-util]
+version = "0.3"
+optional = true
+
+[dependencies.tokio-util]
+version = "0.7"
+features = ["codec", "io"]
+optional = true
+
 # The subscriber is BIN-only for the same reason clap is: a library that installs
 # a global subscriber steals the choice from whatever links it.
 [dependencies.tracing-subscriber]
@@ -240,7 +263,7 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-cli = ["hafley_scm/cli", "dep:clap", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+cli = ["hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc", "dep:cap"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out
@@ -275,6 +298,10 @@ required-features = ["cli"]
 # types) and `sysinfo` (a whole process/CPU/NIC survey for one field).
 [dev-dependencies]
 libc = "0.2"
+http-body-util = "0.1"
+tower = { version = "0.5", features = ["util"] }
+sha2 = "0.10"
+url = "2"
 # The trail test reads back the two tables the bin wrote. Same pin and features
 # as the dependency above, so cargo unifies one SQLite into the test binary.
 rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }

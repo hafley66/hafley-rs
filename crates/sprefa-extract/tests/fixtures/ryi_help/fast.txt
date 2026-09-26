@@ -1,0 +1,15 @@
+Syntax-only whole-project facts (no compiler)
+
+Usage: ryi fast [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>  Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>    Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>       Import hops from --entry
+      --root <DIR>      Corpus root
+      --sqlite <PATH>   Write to a new SQLite database instead of stdout
+      --lines           Add 1-based line/col beside every span
+  -h, --help            Print help
