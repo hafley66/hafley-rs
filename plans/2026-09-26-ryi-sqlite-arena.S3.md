@@ -21,7 +21,12 @@ Interning is per batch. Strings longer than 128 bytes bypass the table. JSON ser
 
 ## Verification and measurement
 
-- All performance and behavior expectations remain **unverified**. No Cargo command, test command, or `ryi` run was performed.
+- Verification used `CARGO_TARGET_DIR=/Users/chrishafley/.cache/cargo-target/arena-verify`:
+
+  - `cargo test --features cli --bin ryi -- bind sqlite`: **passed**, 6 passed, 0 failed, 0 ignored, 3 filtered out.
+  - `cargo test --features cli --test 0_sqlite`: **passed**, 17 passed, 0 failed, 0 ignored.
+
+- The selected interner, layout, collision, JSON-offset, and SQLite export tests passed. Performance expectations and the 2,000-file corpus measurement remain **unverified**; no `ryi` measurement run was performed.
 - Run this measurement against a 2,000-file TypeScript corpus, substituting concrete corpus and output database paths:
 
   ```sh
@@ -29,5 +34,5 @@ Interning is per batch. Strings longer than 128 bytes bypass the table. JSON ser
   ```
 
 - Compare the emitted export, bind, and insert timings with the S2 baseline: export 2.239 s, bind 1.743 s, insert 1.121 s. Those timings and the comparison are **unverified** for S3.
-- `val_stays_sixteen_bytes`, the collision/bypass and 1,000-entry resize tests, recycled-capacity assertions, JSON offset assertions, SQLite row parity, output bytes, span output, memory use, and performance effects are **unverified**.
+- Performance effects, span output, memory use, and the S2 timing comparison are **unverified**.
 - The replacement for the S2 note `RYI_SQLITE_PHASES=1` is `RUST_LOG=sprefa_extract=debug,hafley_scm=info`; S2.md was not edited because it belongs to another lane.

@@ -47,7 +47,7 @@ struct ColumnSpec {
     kind: String,
 }
 
-#[derive(Clone, Copy, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Val {
     Null,
     Int(i64),
