@@ -1,6 +1,7 @@
 // Generated from the Ryi HTTP operations and @daemon options.
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
 use axum::body::{Body, Bytes};
@@ -122,9 +123,9 @@ fn jsonl_input<T: serde::de::DeserializeOwned + Send + 'static>(body: Body) -> i
 }
 
 async fn ingest(headers: HeaderMap, body: Body) -> Response {
-    let encoded = match headers.get("__REQUEST_HEADER__").and_then(|header| header.to_str().ok()) {
+    let encoded = match headers.get("x-ryi-request").and_then(|header| header.to_str().ok()) {
         Some(encoded) => encoded,
-        None => return bad_request("missing __REQUEST_HEADER__".into()),
+        None => return bad_request("missing x-ryi-request".into()),
     };
     let json = match base64::engine::general_purpose::STANDARD.decode(encoded) {
         Ok(json) => json,
@@ -142,15 +143,30 @@ async fn ingest(headers: HeaderMap, body: Body) -> Response {
 }
 
 #[derive(Clone)]
-struct DaemonState { last: Arc<Mutex<Instant>>, shutdown: CancellationToken, stamp: Arc<str> }
+struct DaemonState { last: Arc<Mutex<Instant>>, active: Arc<AtomicUsize>, shutdown: CancellationToken, stamp: Arc<str> }
+
+struct RequestGuard(DaemonState);
+
+impl Drop for RequestGuard {
+    fn drop(&mut self) {
+        *self.0.last.lock().unwrap() = Instant::now();
+        self.0.active.fetch_sub(1, Ordering::AcqRel);
+    }
+}
 
 async fn touch(State(state): State<DaemonState>, request: HttpRequest<Body>, next: Next) -> Response {
+    state.active.fetch_add(1, Ordering::AcqRel);
     *state.last.lock().unwrap() = Instant::now();
-    next.run(request).await
+    let guard = RequestGuard(state);
+    let response = next.run(request).await;
+    response.map(|body| Body::from_stream(body.into_data_stream().map(move |chunk| {
+        let _keep_alive = &guard;
+        chunk
+    })))
 }
 
 async fn handshake(State(state): State<DaemonState>, headers: HeaderMap) -> StatusCode {
-    if crate::daemon_auto::HANDSHAKE && headers.get("x-ryi-build").and_then(|value| value.to_str().ok()) != Some(state.stamp.as_ref()) {
+    if crate::daemon_auto::handshake_enabled() && headers.get("x-ryi-build").and_then(|value| value.to_str().ok()) != Some(state.stamp.as_ref()) {
         state.shutdown.cancel();
         return StatusCode::CONFLICT;
     }
@@ -199,12 +215,12 @@ pub fn daemon() -> Result<(), Box<dyn std::error::Error>> {
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
     let result = runtime.block_on(async {
         let listener = tokio::net::UnixListener::bind(&socket)?;
-        let state = DaemonState { last: Arc::new(Mutex::new(Instant::now())), shutdown: CancellationToken::new(), stamp };
+        let state = DaemonState { last: Arc::new(Mutex::new(Instant::now())), active: Arc::new(AtomicUsize::new(0)), shutdown: CancellationToken::new(), stamp };
         let idle_state = state.clone();
         tokio::spawn(async move {
             loop {
                 tokio::time::sleep(Duration::from_secs(1)).await;
-                if idle_state.last.lock().unwrap().elapsed() >= Duration::from_secs(crate::daemon_auto::IDLE_SECS) {
+                if idle_state.active.load(Ordering::Acquire) == 0 && idle_state.last.lock().unwrap().elapsed() >= Duration::from_secs(crate::daemon_auto::idle_secs()) {
                     idle_state.shutdown.cancel();
                     break;
                 }

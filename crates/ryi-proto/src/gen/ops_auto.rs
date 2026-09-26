@@ -139,6 +139,7 @@ pub struct GraphArgs {
   pub slow: bool,
   #[doc = "Seconds the question may run; past it graph exits 3"]
   #[arg(long, default_value_t = 30, value_name = "SECS", value_parser = clap::value_parser!(u64).range(1..))]
+  #[serde(default = "__serde_default_graph_timeout")]
   pub timeout: u64,
   #[doc = "Query a committed revision"]
   #[arg(long, value_name = "REV", requires = "root", conflicts_with_all = ["rust_checker", "ts_checker", "go_checker", "scip_index", "sqlite"])]
@@ -313,6 +314,7 @@ pub struct RegionArgs {
   pub id: String,
   #[doc = "Generated body file, or - for stdin"]
   #[arg(long, default_value = "-")]
+  #[serde(default = "__serde_default_region_generated")]
   pub generated: PathBuf,
   #[doc = "Write the replacement (default: report drift)"]
   #[arg(long)]
@@ -345,6 +347,7 @@ pub struct WatchArgs {
   pub once: bool,
   #[doc = "Poll interval when the platform watcher is unavailable"]
   #[arg(long, default_value_t = 500, value_parser = clap::value_parser!(u64).range(1..))]
+  #[serde(default = "__serde_default_watch_poll_ms")]
   pub poll_ms: u64,
 }
 
@@ -393,5 +396,14 @@ pub struct SchemaArgs {}
 pub struct TrailArgs {
   #[doc = "Runs to print"]
   #[arg(default_value_t = 5, value_name = "N")]
+  #[serde(default = "__serde_default_trail_runs")]
   pub runs: usize,
 }
+
+fn __serde_default_graph_timeout() -> u64 { serde_json::from_value(serde_json::json!(30)).expect("TypeSpec default matches Rust field") }
+
+fn __serde_default_region_generated() -> PathBuf { serde_json::from_value(serde_json::json!("-")).expect("TypeSpec default matches Rust field") }
+
+fn __serde_default_watch_poll_ms() -> u64 { serde_json::from_value(serde_json::json!(500)).expect("TypeSpec default matches Rust field") }
+
+fn __serde_default_trail_runs() -> usize { serde_json::from_value(serde_json::json!(5)).expect("TypeSpec default matches Rust field") }

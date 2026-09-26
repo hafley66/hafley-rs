@@ -35,6 +35,7 @@ struct Side {
     sha: String,
     files: BTreeMap<String, String>,
     facts: Vec<FlatFact>,
+    scratch: PathBuf,
 }
 
 pub fn run(args: DiffArgs) -> Result<(), Box<dyn std::error::Error>> {
@@ -83,25 +84,33 @@ fn resolve_at(
     options: &Options,
     revision: &str,
 ) -> Result<Side, Box<dyn std::error::Error>> {
-    let (snapshot, facts) = reader.with_revision(
+    let (snapshot, (facts, scratch)) = reader.with_revision(
         revision,
         &options.patterns,
         None,
-        |paths, _| Ok(resolve_project(&resolve_request(paths, options))?),
+        |paths, scratch| Ok((resolve_project(&resolve_request(paths, options, scratch))?, scratch.to_path_buf())),
     )?;
     Ok(Side {
         sha: snapshot.sha,
         files: snapshot.files,
         facts,
+        scratch,
     })
 }
 
-fn resolve_request<'a>(paths: &'a [PathBuf], options: &Options) -> ResolveRequest<'a> {
+fn revision_path(side: &Side, path: &str) -> String {
+    Path::new(path)
+        .strip_prefix(&side.scratch)
+        .map(|relative| relative.to_string_lossy().into_owned())
+        .unwrap_or_else(|_| path.to_string())
+}
+
+fn resolve_request<'a>(paths: &'a [PathBuf], options: &Options, scratch: &'a Path) -> ResolveRequest<'a> {
     ResolveRequest {
         paths,
         arms: options.arms,
         scip: ScipMode::Off,
-        project_root: None,
+        project_root: Some(scratch),
         scip_records: ScipRecords::all(),
         occurrence_text: false,
         rust_checker: None,
@@ -692,9 +701,9 @@ fn edge_facts(side: &Side) -> Vec<EdgeFact> {
                 resolution_origin,
                 ..
             } => Some(EdgeFact {
-                caller_path: caller_path.clone(),
+                caller_path: revision_path(side, caller_path),
                 caller_name: caller_name.clone(),
-                callee_path: callee_path.clone(),
+                callee_path: revision_path(side, callee_path),
                 callee_name: callee_name.clone(),
                 kind: kind.clone(),
                 origin: resolution_origin.clone(),
@@ -723,9 +732,9 @@ fn type_edge_facts(side: &Side) -> Vec<TypeEdgeFact> {
                 resolution_origin,
                 ..
             } => Some(TypeEdgeFact {
-                owner_path: owner_path.clone(),
+                owner_path: revision_path(side, owner_path),
                 owner_name: owner_name.clone(),
-                target_path: target_path.clone(),
+                target_path: revision_path(side, target_path),
                 target_name: target_name.clone(),
                 kind: kind.clone(),
                 origin: resolution_origin.clone(),
@@ -752,10 +761,10 @@ fn import_facts(side: &Side) -> Vec<ImportFact> {
                 hops,
                 ..
             } => Some(ImportFact {
-                src_path: src_path.clone(),
+                src_path: revision_path(side, src_path),
                 name: name.clone(),
                 local: local.clone(),
-                target_path: target_path.clone(),
+                target_path: revision_path(side, target_path),
                 target_name: target_name.clone(),
                 hops: *hops,
             }),
@@ -775,7 +784,7 @@ fn unresolved_facts(side: &Side) -> Vec<UnresolvedFact> {
             } => Some(UnresolvedFact {
                 relation: "file_unresolved",
                 path: None,
-                src_path: Some(src_path.clone()),
+                src_path: Some(revision_path(side, src_path)),
                 module: Some(module.clone()),
                 reason: reason.clone(),
                 detail: None,
@@ -789,7 +798,7 @@ fn unresolved_facts(side: &Side) -> Vec<UnresolvedFact> {
                 ..
             } => Some(UnresolvedFact {
                 relation: "unresolved",
-                path: path.clone(),
+                path: path.as_deref().map(|path| revision_path(side, path)),
                 src_path: None,
                 module: None,
                 reason: reason.clone(),

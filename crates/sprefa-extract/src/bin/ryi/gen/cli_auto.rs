@@ -1,7 +1,6 @@
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::CleaveArgs;
 use crate::ops_auto::DiffArgs;
-use crate::ops_auto::ExtractArgs;
 use crate::ops_auto::FastArgs;
 use crate::ops_auto::GraphArgs;
 use crate::ops_auto::IngestArgs;
@@ -26,8 +25,6 @@ pub struct Ryi {
 
 #[derive(clap::Subcommand, Debug)]
 pub enum Cmd {
-  #[doc = "Extract file facts with the root flags"]
-  Extract(ExtractArgs),
   #[doc = "Syntax-only whole-project facts (no compiler)"]
   Fast(FastArgs),
   #[doc = "The SCIP oracle written as fast's tables"]

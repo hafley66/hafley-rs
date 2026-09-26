@@ -57,7 +57,7 @@ async fn handshake(socket: &Path, stamp: &str) -> Result<StatusCode, ClientError
 
 async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
     let socket = daemon_auto::socket_path()?;
-    let stamp = if daemon_auto::HANDSHAKE { Some(daemon_auto::executable_stamp(server)?) } else { None };
+    let stamp = if daemon_auto::handshake_enabled() { Some(daemon_auto::executable_stamp(server)?) } else { None };
     let mut started = false;
     for _ in 0..100 {
         match tokio::net::UnixStream::connect(&socket).await {
@@ -94,7 +94,6 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
 fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> {
     let pair = match &cli.cmd {
         None => ("extract", serde_json::to_value(&cli.file)?),
-        Some(Cmd::Extract(args)) => ("extract", serde_json::to_value(args)?),
         Some(Cmd::Fast(args)) => ("fast", serde_json::to_value(args)?),
         Some(Cmd::Slow(args)) => ("slow", serde_json::to_value(args)?),
         Some(Cmd::Scip(args)) => ("scip", serde_json::to_value(args)?),
@@ -183,29 +182,32 @@ async fn run() -> Result<i32, ClientError> {
         return Ok(error_code.unwrap_or(if status == StatusCode::BAD_REQUEST { 2 } else { 1 }));
     }
     let mut stdout = tokio::io::stdout();
-    let mut exit = 0;
-    let mut current_line = Vec::new();
-    let mut last_line = Vec::new();
+    let mut pending = Vec::new();
+    let mut line = Vec::new();
     while let Some(frame) = body.frame().await {
         let frame = frame?;
         if let Ok(bytes) = frame.into_data() {
-            stdout.write_all(&bytes).await?;
             for byte in &bytes {
+                line.push(*byte);
                 if *byte == b'\n' {
-                    std::mem::swap(&mut current_line, &mut last_line);
-                    current_line.clear();
-                } else {
-                    current_line.push(*byte);
+                    if !pending.is_empty() { stdout.write_all(&pending).await?; }
+                    pending = std::mem::take(&mut line);
                 }
             }
         }
     }
-    let final_line = if current_line.is_empty() { &last_line } else { &current_line };
-    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(final_line) {
+    if !line.is_empty() {
+        if !pending.is_empty() { stdout.write_all(&pending).await?; }
+        pending = line;
+    }
+    let mut exit = 0;
+    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&pending) {
         if value.get("error").is_some() {
             exit = value.get("code").and_then(serde_json::Value::as_i64).unwrap_or(1) as i32;
         }
     }
+    if exit == 0 { stdout.write_all(&pending).await?; }
+    else { tokio::io::stderr().write_all(&pending).await?; }
     stdout.flush().await?;
     Ok(exit)
 }

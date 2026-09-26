@@ -77,13 +77,10 @@ impl RevisionReader {
                 std::fs::create_dir_all(parent)?;
             }
             std::fs::write(&destination, bytes.as_ref())?;
-            paths.push(PathBuf::from(path));
+            paths.push(destination);
         }
 
-        let previous = std::env::current_dir()?;
-        std::env::set_current_dir(scratch.path())?;
         let answer = run(&paths, scratch.path());
-        std::env::set_current_dir(previous)?;
         Ok((
             RevisionSnapshot {
                 sha: commit.0.to_string(),

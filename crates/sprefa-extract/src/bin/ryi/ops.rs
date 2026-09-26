@@ -1,77 +1,19 @@
-use std::collections::HashMap;
-use std::ffi::OsString;
 use std::cell::RefCell;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
-use clap::Parser as _;
-use serde::Serialize;
 use serde_json::Value;
 
+use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
     CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError, OpResult,
     QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs, WatchArgs,
 };
 
-fn flat_fields(value: &Value, fields: &mut HashMap<String, Value>) {
-    if let Value::Object(object) = value {
-        for (name, value) in object {
-            if value.is_object() {
-                flat_fields(value, fields);
-            } else {
-                let empty = value.is_null() || value.as_array().is_some_and(Vec::is_empty);
-                if !empty || !fields.contains_key(name) {
-                    fields.insert(name.clone(), value.clone());
-                }
-            }
-        }
-    }
-}
-
-fn scalar(value: &Value) -> String {
-    match value {
-        Value::String(value) => value.clone(),
-        value => value.to_string(),
-    }
-}
-
-fn argv<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Vec<OsString>> {
-    let mut fields = HashMap::new();
-    flat_fields(&serde_json::to_value(args)?, &mut fields);
-    let command = A::augment_args(clap::Command::new("ryi"));
-    let mut flags = Vec::new();
-    let mut positionals = Vec::new();
-    for (ordinal, arg) in command.get_arguments().enumerate() {
-        let Some(value) = fields.get(arg.get_id().as_str()) else { continue };
-        if value.is_null() || value == false || value.as_array().is_some_and(Vec::is_empty) {
-            continue;
-        }
-        let values: Vec<&Value> = match value {
-            Value::Array(values) => values.iter().collect(),
-            value => vec![value],
-        };
-        if let Some(long) = arg.get_long() {
-            for value in values {
-                flags.push(OsString::from(format!("--{long}")));
-                if value != true {
-                    flags.push(OsString::from(scalar(value)));
-                }
-            }
-        } else {
-            positionals.push((arg.get_index().unwrap_or(ordinal + 1), values.into_iter().map(scalar).collect::<Vec<_>>()));
-        }
-    }
-    positionals.sort_by_key(|(index, _)| *index);
-    let mut output = if verb.is_empty() { Vec::new() } else { vec![OsString::from(verb)] };
-    output.extend(flags);
-    for (_, values) in positionals {
-        output.extend(values.into_iter().map(OsString::from));
-    }
-    Ok(output)
-}
+fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default(), fresh: false } }
 
 struct RowSink {
     tx: mpsc::SyncSender<OpResult<Vec<u8>>>,
@@ -131,7 +73,7 @@ pub(crate) fn with_request_root<T>(root: PathBuf, run: impl FnOnce() -> T) -> T 
 }
 
 pub(crate) fn request_root() -> PathBuf {
-    REQUEST_ROOT.with(|slot| slot.borrow().clone()).unwrap_or_else(|| PathBuf::from("."))
+    REQUEST_ROOT.with(|slot| slot.borrow().clone()).unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
 }
 
 pub(crate) fn print_line(args: std::fmt::Arguments<'_>) {
@@ -172,17 +114,13 @@ impl Drop for Rows {
     fn drop(&mut self) { self.cancelled.store(true, Ordering::Release); }
 }
 
-fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> Rows {
+fn produce(ryi: Ryi) -> Rows {
     let (tx, rx) = mpsc::sync_channel(64);
-    let argv = argv(verb, args);
     let cancelled = Arc::new(AtomicBool::new(false));
     let operation_cancelled = Arc::clone(&cancelled);
     let request_root = request_root();
     std::thread::spawn(move || {
         let result = with_request_root(request_root, || -> OpResult<()> {
-            let argv = argv?;
-            let ryi = crate::Ryi::try_parse_from(std::iter::once(OsString::from("ryi")).chain(argv))
-                .map_err(|error| OpError(error.to_string(), 2))?;
             let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new() })));
             OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
             let outcome = crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled)).map_err(|error| {
@@ -201,38 +139,38 @@ fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> Rows {
     Rows { rx, cancelled }
 }
 
-fn stream<A: clap::Args + Serialize>(verb: &str, args: &A) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
-    Box::new(produce(verb, args))
+fn stream(ryi: Ryi) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    Box::new(produce(ryi))
 }
 
-fn one<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Vec<u8>> {
+fn one(ryi: Ryi) -> OpResult<Vec<u8>> {
     let mut output = Vec::new();
-    for line in produce(verb, args) {
+    for line in produce(ryi) {
         output.extend(line?);
     }
     Ok(output)
 }
 
-pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("fast", args) }
+pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Fast(args.clone()))) }
 pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { file(&args.args) }
 pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     let mut args = args.clone();
     args.format = None;
-    stream("", &args)
+    stream(Ryi { cmd: None, file: args, fresh: false })
 }
-pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("slow", args) }
-pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("scip", args) }
-pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("graph", args) }
-pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("query", args) }
-pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("watch", args) }
-pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream("diff", args) }
+pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Slow(args.clone()))) }
+pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Scip(args.clone()))) }
+pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Graph(args.clone()))) }
+pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Query(args.clone()))) }
+pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Watch(args.clone()))) }
+pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Diff(args.clone()))) }
 
-pub fn cleave(args: &CleaveArgs) -> OpResult<Vec<u8>> { one("cleave", args) }
-pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> { one("move", args) }
-pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> { one("rename", args) }
-pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> { one("region", args) }
-pub fn schema(args: &SchemaArgs) -> OpResult<Vec<u8>> { one("schema", args) }
-pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> { one("trail", args) }
+pub fn cleave(args: &CleaveArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Cleave(args.clone()))) }
+pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Move(args.clone()))) }
+pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Rename(args.clone()))) }
+pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Region(args.clone()))) }
+pub fn schema(_args: &SchemaArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Schema)) }
+pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Trail(args.clone()))) }
 
 pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -> OpResult<Vec<u8>> {
     let mut staged = tempfile::NamedTempFile::new()?;
@@ -243,11 +181,11 @@ pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -
         received = true;
     }
     if !received {
-        return one("ingest", args);
+        return one(command(Cmd::Ingest(args.clone())));
     }
     let mut args = args.clone();
     args.paths = vec![staged.path().to_path_buf()];
-    one("ingest", &args)
+    one(command(Cmd::Ingest(args)))
 }
 
 #[cfg(test)]

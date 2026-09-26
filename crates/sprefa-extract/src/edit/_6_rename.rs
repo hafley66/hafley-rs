@@ -582,8 +582,7 @@ fn absolute(path: &Path) -> Result<PathBuf, RenameError> {
     if path.is_absolute() {
         return Ok(normalize(path));
     }
-    let cwd = std::env::current_dir()
-        .map_err(|error| plan_error(format!("current directory: {error}")))?;
+    let cwd = crate::ops::request_root();
     Ok(normalize(&cwd.join(path)))
 }
 

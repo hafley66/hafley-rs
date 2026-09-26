@@ -6,7 +6,7 @@ use std::process::Command;
 fn generated_clap_help_matches_captured_main() {
     let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ryi_help");
     for verb in [
-        "root", "extract", "fast", "slow", "scip", "graph", "cleave", "move", "rename",
+        "root", "fast", "slow", "scip", "graph", "cleave", "move", "rename",
         "query", "region", "watch", "diff", "ingest", "schema", "trail",
     ] {
         let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));

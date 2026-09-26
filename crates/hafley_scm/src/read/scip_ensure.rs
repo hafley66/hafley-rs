@@ -119,6 +119,18 @@ pub struct IndexBudget {
     pub secs: u64,
 }
 
+thread_local! {
+    static REQUEST_BUDGET: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+pub struct ScopedIndexBudget(Option<u64>);
+
+impl Drop for ScopedIndexBudget {
+    fn drop(&mut self) {
+        REQUEST_BUDGET.with(|slot| slot.set(self.0));
+    }
+}
+
 impl Default for IndexBudget {
     fn default() -> Self {
         Self { secs: 600 }
@@ -126,10 +138,21 @@ impl Default for IndexBudget {
 }
 
 impl IndexBudget {
+    pub fn scoped_override(secs: Option<u64>) -> ScopedIndexBudget {
+        ScopedIndexBudget(REQUEST_BUDGET.with(|slot| {
+            let previous = slot.get();
+            if let Some(secs) = secs { slot.set(Some(secs)); }
+            previous
+        }))
+    }
+
     /// `SPREFA_SCIP_TIMEOUT_SECS` when it parses to a positive integer, else the
     /// default. A zero or unparseable value is the default rather than "no
     /// budget": the law has no opt-out.
     pub fn from_env() -> Self {
+        if let Some(secs) = REQUEST_BUDGET.with(std::cell::Cell::get) {
+            return Self { secs };
+        }
         match std::env::var("SPREFA_SCIP_TIMEOUT_SECS")
             .ok()
             .and_then(|raw| raw.trim().parse::<u64>().ok())

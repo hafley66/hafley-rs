@@ -2212,7 +2212,7 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(normalize(path));
     }
-    let cwd = std::env::current_dir().map_err(|error| format!("current directory: {error}"))?;
+    let cwd = crate::ops::request_root();
     Ok(normalize(&cwd.join(path)))
 }
 

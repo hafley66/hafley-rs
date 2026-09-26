@@ -123,12 +123,10 @@ enum Tier {
 
 /// `ryi slow`: the SCIP oracle over the inputs, written as fast's tables.
 fn run_slow(slow: SlowArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(secs) = slow.scip_timeout {
-        if secs == 0 {
-            return Err("--scip-timeout must be a positive number of seconds".into());
-        }
-        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
+    if slow.scip_timeout == Some(0) {
+        return Err("--scip-timeout must be a positive number of seconds".into());
     }
+    let _budget = IndexBudget::scoped_override(slow.scip_timeout);
     let root = inputs::root(&slow.inputs);
     let mut wanted = slow.inputs.clone();
     if wanted.paths.is_empty() && wanted.entry.is_empty() {
@@ -233,9 +231,7 @@ fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
 /// `ryi scip --raw`: every record the index carries, over `--scip-index` or an
 /// index `--scip-build` makes for the inputs' language.
 fn run_scip_raw(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(secs) = args.scip_timeout.filter(|secs| *secs > 0) {
-        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
-    }
+    let _budget = IndexBudget::scoped_override(args.scip_timeout.filter(|secs| *secs > 0));
     let root = args.inputs.root.clone().ok_or("ryi scip --raw needs --root")?;
     let files = match inputs::expand(&args.inputs) {
         Ok(files) => files,
@@ -343,10 +339,6 @@ impl From<String> for RyiExit {
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mimalloc")]
     cap_memory();
-    if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--stamp")) {
-        println!("{} {}", env!("SPREFA_BUILD_GIT_HASH"), env!("SPREFA_BUILD_DATETIME"));
-        return Ok(());
-    }
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
         return server_auto::daemon();
     }
@@ -507,7 +499,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(Cmd::Ingest(args)) => return run_ingest(args, None),
         Some(Cmd::Schema) => return print_schema(&mut std::io::stdout().lock()),
         Some(Cmd::Trail(args)) => return print_trail(args.runs, &mut std::io::stdout().lock()),
-        Some(Cmd::Extract(args)) => return run_file_verb(args.args, Tier::Files, Box::new(std::io::stdout())),
         Some(Cmd::Watch(args)) => return watch::run(args),
         Some(Cmd::Diff(args)) => return or_exit_2(diff::run(args)),
         Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
@@ -529,11 +520,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         },
     };
 
-    // `--scip-timeout` reaches the library's `ScipMode::Build` budget through
-    // the variable `IndexBudget::from_env` reads (project.rs).
-    if let Some(secs) = cli.scip_timeout.filter(|secs| *secs > 0) {
-        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
-    }
+    let _budget = IndexBudget::scoped_override(cli.scip_timeout.filter(|secs| *secs > 0));
 
     // Input expansion can exit with clap-style status 2. Do it before opening
     // an export so such an exit cannot strand a staging database.
@@ -586,7 +573,6 @@ fn write_formatted_one(out: &mut dyn Write, row: ops_auto::OpResult<Vec<u8>>) ->
 fn run_formatted(ryi: Ryi, input: &mut dyn std::io::BufRead, out: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
     match ryi.cmd {
         None => write_formatted_rows(out, ops::file(&ryi.file)),
-        Some(Cmd::Extract(args)) => write_formatted_rows(out, ops::extract(&args)),
         Some(Cmd::Fast(args)) => write_formatted_rows(out, ops::fast(&args)),
         Some(Cmd::Slow(args)) => write_formatted_rows(out, ops::slow(&args)),
         Some(Cmd::Scip(args)) => write_formatted_rows(out, ops::scip(&args)),
@@ -613,7 +599,6 @@ fn run_formatted(ryi: Ryi, input: &mut dyn std::io::BufRead, out: &mut dyn Write
 fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<AtomicBool>>) -> RyiResult<()> {
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
-        Some(Cmd::Extract(args)) => run_file_verb(args.args, Tier::Files, writer),
         Some(Cmd::Fast(args)) => run_file_verb(file_args_from_fast(args), Tier::Fast, writer),
         Some(Cmd::Slow(args)) => run_slow(args, Some(writer)),
         Some(Cmd::Scip(args)) => run_scip(args, Some(writer)),
@@ -636,9 +621,7 @@ fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<A
 }
 
 fn run_file_verb(mut cli: FileArgs, tier: Tier, writer: Box<dyn Write + Send>) -> Result<(), Box<dyn std::error::Error>> {
-    if let Some(secs) = cli.scip_timeout.filter(|secs| *secs > 0) {
-        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
-    }
+    let _budget = IndexBudget::scoped_override(cli.scip_timeout.filter(|secs| *secs > 0));
     cli.paths = inputs::expand(&cli.inputs)?;
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
