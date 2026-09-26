@@ -10,6 +10,8 @@
 use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
 use std::cell::RefCell;
+use std::rc::Rc;
+use hafley_scm::atoms::Strings;
 
 use crate::move_cx::walk_files;
 use crate::edit_seams::Rename;
@@ -41,6 +43,7 @@ pub struct RenameCx {
     batch: Vec<RenameRequest>,
     overlay: BTreeMap<String, String>,
     rust_parse: RefCell<BTreeMap<String, syn::File>>,
+    names: Rc<RefCell<Strings>>,
 }
 
 impl RenameCx {
@@ -54,6 +57,7 @@ impl RenameCx {
             batch: Vec::new(),
             overlay: BTreeMap::new(),
             rust_parse: RefCell::new(BTreeMap::new()),
+            names: Rc::new(RefCell::new(Strings::new())),
         })
     }
 
@@ -112,6 +116,10 @@ impl RenameCx {
 
     pub fn overlaid(&self) -> &BTreeMap<String, String> {
         &self.overlay
+    }
+
+    pub fn names(&self) -> Rc<RefCell<Strings>> {
+        Rc::clone(&self.names)
     }
 
     pub fn abs(&self, rel: &str) -> PathBuf {

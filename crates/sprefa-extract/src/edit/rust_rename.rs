@@ -22,6 +22,8 @@
 //! reaches through a block-scoped `use`. @comment-ok: module header waiver
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 use syn::spanned::Spanned;
 
@@ -231,7 +233,7 @@ fn module_of(home: &ModuleId, chain: &[String]) -> ModuleId {
 /// tables the module law reads.
 struct Corpus {
     scans: BTreeMap<String, FileScan>,
-    names: Strings,
+    names: Rc<RefCell<Strings>>,
     /// rel -> every module that file IS, in route order; never empty.
     homes: BTreeMap<String, Vec<ModuleId>>,
     /// A crate's identifier as a `use` writes it -> that crate's root file.
@@ -245,7 +247,8 @@ impl Corpus {
         let path_mods = path_module_table(cx, &roots);
         let mut scans = BTreeMap::new();
         let mut homes = BTreeMap::new();
-        let mut names = Strings::new();
+        let names = cx.names();
+        let mut interned = names.borrow_mut();
         for rel in cx.files_of(&RustSource) {
             let Some(text) = cx.text(rel) else {
                 continue;
@@ -261,7 +264,7 @@ impl Corpus {
                     old,
                     source: &text,
                     line_starts: &line_starts,
-                    names: &mut names,
+                    names: &mut interned,
                     chain: Vec::new(),
                     blocks: Vec::new(),
                     role: RefRole::TypeRef,
@@ -280,6 +283,7 @@ impl Corpus {
             );
             scans.insert(rel.to_string(), scanned);
         }
+        drop(interned);
         Corpus {
             scans,
             names,
@@ -750,7 +754,7 @@ impl Corpus {
         match self.resolve(home, chain, before) {
             Some(module) if anchors.contains(&module) => true,
             Some(_) if before.is_empty() => scan.owner_leaves.iter().any(|leaf| {
-                self.names.lookup(leaf.name) == owner
+                self.names.borrow().lookup(leaf.name) == owner
                     && leaf.block.is_none()
                     && self
                         .resolve(home, &leaf.chain, &leaf.prefix)
