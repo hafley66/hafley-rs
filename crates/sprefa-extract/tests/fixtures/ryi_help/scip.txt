@@ -1,0 +1,23 @@
+Raw SCIP index rows
+
+Usage: ryi scip [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>       Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>         Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>            Import hops from --entry
+      --root <DIR>           Corpus root
+      --sqlite <PATH>        Write to a new SQLite database instead of stdout
+      --lines                Add 1-based line/col beside every span
+      --scip-index <FILE>    Load this index.scip instead of finding or building one
+      --scip-cache <DIR>     SCIP index cache directory
+      --scip-timeout <SECS>  Seconds allowed for one indexer run
+      --indexer <LANG>       Run only this language's SCIP indexer
+      --raw                  Stream the index records themselves instead of the scip_* relations
+      --records <KINDS>      Only these --raw record kinds (comma-separated)
+      --occurrence-text      Add the source text to each scip_occurrence
+      --scip-build           Build the index for --raw with the inputs' language indexer
+  -h, --help                 Print help

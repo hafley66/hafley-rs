@@ -1,0 +1,10 @@
+Validate and re-emit foreign TSI JSONL
+
+Usage: ryi ingest [OPTIONS] <PATH>...
+
+Arguments:
+  <PATH>...  TSI JSONL files (/dev/stdin reads standard input)
+
+Options:
+      --sqlite <PATH>  Write to a new SQLite database instead of stdout
+  -h, --help           Print help

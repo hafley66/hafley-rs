@@ -1,0 +1,19 @@
+Move a file and repair every specifier that names it
+
+Usage: ryi move [OPTIONS] [OLD] [NEW]
+
+Arguments:
+  [OLD]  File to move (omit with --list)
+  [NEW]  Destination
+
+Options:
+      --list <LIST>              TSV of old<TAB>new rows
+      --root <ROOT>              Corpus root; repeatable
+      --verify-cwd <VERIFY_CWD>  Directory --verify runs in (default: first root)
+      --state <STATE>            Soopy state root, outside the corpus
+      --commit                   Apply instead of dry run
+      --shim                     Leave a reexport shim at OLD instead of rewriting importers
+      --relocate-mod             Move a Rust module's `mod` line instead of adding #[path]
+      --verify <VERIFY>          Command to run after --commit; failure rolls back
+      --text-refs                Report leftover old-path spellings in plain text
+  -h, --help                     Print help

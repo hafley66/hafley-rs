@@ -1,0 +1,52 @@
+Source files -> flat graph facts (JSONL on stdout, or --sqlite)
+
+Usage: ryi [OPTIONS] [PATH]...
+       ryi <COMMAND>
+
+Commands:
+  fast    Syntax-only whole-project facts (no compiler)
+  slow    The SCIP oracle written as fast's tables
+  scip    Raw SCIP index rows
+  graph   Ask one question of the resolved call/type graph
+  cleave  Move one item into another file, with its imports
+  move    Move a file and repair every specifier that names it
+  rename  Rename a symbol and every occurrence bound to it
+  query   Run a tree-sitter query over files
+  region  Replace a generated region between sprefa markers
+  watch   Stream fact deltas as the worktree changes
+  diff    Fact delta between two commits
+  ingest  Validate and re-emit foreign TSI JSONL
+  schema  Print the output record schema
+  trail   Print the last N runs from the trail
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>       Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>         Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>            Import hops from --entry
+      --root <DIR>           Corpus root
+      --kinds <KINDS>        Fact kinds per file (cst,type,call,df,data,cfg)
+      --arms <ARMS>          Resolve arms under --resolve (call,type,flow)
+      --sqlite <PATH>        Write to a new SQLite database instead of stdout
+      --bench                Time extraction and print per-family counts to stderr
+      --resolve              Resolve cross-file edges over all given paths
+      --scip-index <FILE>    Load this index.scip
+      --rust-checker         Use rust-analyzer for Rust call/type targets
+      --ts-checker           Use the TypeScript compiler for TS call/type targets
+      --go-checker           Use go/types for Go call/type targets
+      --scip-build           Build the index with the language's indexer, then load it
+      --scip-timeout <SECS>  Seconds allowed for one indexer run under --scip-build
+      --scip-deps            File-to-file edges folded from a SCIP index
+      --deps                 File-to-file edges resolved from syntax, no index
+      --package-deps         Manifest-to-manifest workspace edges
+      --file-fact            Prepend one file record: path, digest, bytes, lines
+      --lines                Add 1-based line/col beside every span
+      --witness              Wrap output in the TSI envelope
+      --max-bytes <BYTES>    Skip inputs over this many bytes (0 = no limit)
+  -h, --help                 Print help
+  -V, --version              Print version
+
+Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text
+Build: git hash: 7174f603bac5, datetime: 2026-09-26T04:51:41Z

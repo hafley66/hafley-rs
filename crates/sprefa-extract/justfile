@@ -1,0 +1,2 @@
+gen-cli out="src/bin/ryi/gen":
+    python3 schema/cli/0_gen.py "{{out}}"

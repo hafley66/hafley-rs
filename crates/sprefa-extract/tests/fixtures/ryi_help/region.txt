@@ -1,0 +1,13 @@
+Replace a generated region between sprefa markers
+
+Usage: ryi region [OPTIONS] <TARGET> <ID>
+
+Arguments:
+  <TARGET>  DL7 file holding the markers
+  <ID>      Marker id after sprefa:auto-begin / sprefa:auto-end
+
+Options:
+      --generated <GENERATED>  Generated body file, or - for stdin [default: -]
+      --apply                  Write the replacement (default: report drift)
+      --state <STATE>          Soopy state root for --apply
+  -h, --help                   Print help
