@@ -206,7 +206,7 @@ prost = "0.13"
 # (run.rs:289) - it already depends on this one (its Cargo.toml:31), so reuse is
 # a cycle; sprefa-store's sea-orm/sqlx reader - async, banned above the SqlRunner
 # seam. `trace` is what the once-per-run statement count is measured on.
-rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"] }
+rusqlite = { version = "0.40", features = ["bundled", "limits", "trace", "vtab"] }
 # Atomic, no-clobber publication of a CLI SQLite export. Reuses the tempfile
 # version already in this lock through rust-analyzer; no custom temp-file protocol.
 tempfile = { version = "3", optional = true }

@@ -1,7 +1,10 @@
 //! Any `record`-tagged row straight into its table's columnar buffer: no JSON
 //! round-trip, one prepared chunk statement per table, text in one arena.
 use std::collections::HashMap;
+use std::borrow::Cow;
+use std::ffi::{CStr, CString};
 use std::fmt::Display;
+use std::sync::atomic::AtomicPtr;
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -9,6 +12,7 @@ use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
+use rusqlite::vtab::{Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor};
 use serde::ser::{self, Impossible, Serialize};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -42,11 +46,79 @@ enum Val {
 
 /// One table's statements, shared with the writer thread.
 struct Meta {
+    name: String,
     width: usize,
     chunk_rows: usize,
     chunk_sql: String,
     one_sql: String,
+    select_sql: String,
+    active: Arc<AtomicPtr<Batch>>,
 }
+
+#[repr(C)]
+struct BatchTable {
+    base: rusqlite::vtab::sqlite3_vtab,
+    width: usize,
+    active: Arc<AtomicPtr<Batch>>,
+}
+
+// Module's static only stores callbacks; table instances are owned by SQLite.
+unsafe impl Sync for BatchTable {}
+
+unsafe impl<'vtab> VTab<'vtab> for BatchTable {
+    type Aux = (usize, Arc<AtomicPtr<Batch>>);
+    type Cursor = BatchCursor;
+
+    fn connect(_: &mut VTabConnection, aux: Option<&Self::Aux>, _: &[u8], _: &[u8], _: &[u8], _: &[&[u8]])
+        -> rusqlite::Result<(Cow<'static, CStr>, Self)> {
+        let (width, active) = aux.ok_or_else(|| rusqlite::Error::ModuleError("missing batch table".into()))?;
+        let columns = (0..*width).map(|index| format!("c{index}")).collect::<Vec<_>>().join(",");
+        let ddl = CString::new(format!("CREATE TABLE x({columns})")).unwrap();
+        Ok((Cow::Owned(ddl), Self { base: Default::default(), width: *width, active: Arc::clone(active) }))
+    }
+
+    fn best_index(&self, info: &mut IndexInfo) -> rusqlite::Result<bool> {
+        info.set_estimated_cost(1.0);
+        Ok(true)
+    }
+
+    fn open(&mut self) -> rusqlite::Result<Self::Cursor> {
+        Ok(BatchCursor { base: Default::default(), active: Arc::clone(&self.active), row: 0, width: self.width })
+    }
+}
+
+#[repr(C)]
+struct BatchCursor {
+    base: rusqlite::vtab::sqlite3_vtab_cursor,
+    active: Arc<AtomicPtr<Batch>>,
+    row: usize,
+    width: usize,
+}
+
+unsafe impl VTabCursor for BatchCursor {
+    fn filter(&mut self, _: i32, _: Option<&str>, _: &Filters<'_>) -> rusqlite::Result<()> {
+        self.row = 0;
+        Ok(())
+    }
+    fn next(&mut self) -> rusqlite::Result<()> { self.row += 1; Ok(()) }
+    fn eof(&self) -> bool {
+        let batch = self.active.load(Ordering::Relaxed);
+        batch.is_null() || self.row >= unsafe { (*batch).rows }
+    }
+    fn column(&self, ctx: &mut Context, i: i32) -> rusqlite::Result<()> {
+        let batch = self.active.load(Ordering::Relaxed);
+        let batch = unsafe { &*batch };
+        match batch.vals[self.row * self.width + i as usize] {
+            Val::Null => ctx.set_result(&rusqlite::types::Null),
+            Val::Int(value) => ctx.set_result(&value),
+            Val::Real(value) => ctx.set_result(&value),
+            Val::Text(start, len) => ctx.set_result(&&batch.text[start as usize..(start + len) as usize]),
+        }
+    }
+    fn rowid(&self) -> rusqlite::Result<i64> { Ok(self.row as i64 + 1) }
+}
+
+static BATCH_MODULE: Module<'static, BatchTable> = Module::eponymous_only_module();
 
 /// One table's rows, `width` values per row, plus the text they point into.
 /// Handed whole to the writer thread and handed back cleared.
@@ -124,6 +196,17 @@ impl Batch {
 
     /// Full chunks through the chunk statement, the tail one row at a time.
     fn drain(&mut self, meta: &Meta, connection: &Connection) -> rusqlite::Result<()> {
+        if std::env::var_os("RYI_SQLITE_VALUES").is_none() {
+            // This connection is exclusive to the writer thread. SQLite reads
+            // the batch only during execute; clear the pointer before the
+            // buffer can be recycled or mutated again.
+            meta.active.store(self as *mut Batch, Ordering::Relaxed);
+            let result = connection.execute(&meta.select_sql, []);
+            meta.active.store(std::ptr::null_mut(), Ordering::Relaxed);
+            result?;
+            self.clear();
+            return Ok(());
+        }
         let mut row = 0;
         if self.rows >= meta.chunk_rows {
             let mut statement = connection.prepare_cached(&meta.chunk_sql)?;
@@ -198,7 +281,7 @@ impl Slot {
         }
     }
 
-    fn spawn(&mut self, meta: Arc<Vec<Meta>>, insert_nanos: Arc<AtomicU64>) -> Result<()> {
+    fn spawn(&mut self, meta: Arc<Vec<Meta>>, insert_nanos: Arc<AtomicU64>, table_insert_nanos: Arc<Vec<AtomicU64>>) -> Result<()> {
         let Slot::Local(_) = self else { return Ok(()) };
         let Slot::Local(connection) = std::mem::replace(self, Slot::Moving) else { unreachable!() };
         let (batches, inbox) = sync_channel::<Batch>(QUEUE_BATCHES);
@@ -211,7 +294,9 @@ impl Slot {
                     if let Err(e) = batch.drain(&meta[batch.table], &connection) {
                         error = Some(e.to_string());
                     }
-                    insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                    let nanos = started.elapsed().as_nanos() as u64;
+                    insert_nanos.fetch_add(nanos, Ordering::Relaxed);
+                    table_insert_nanos[batch.table].fetch_add(nanos, Ordering::Relaxed);
                 }
                 batch.clear();
                 let _ = give_back.try_send(batch);
@@ -238,6 +323,10 @@ pub struct Binder {
     path: String,
     threaded: bool,
     insert_nanos: Arc<AtomicU64>,
+    table_insert_nanos: Arc<Vec<AtomicU64>>,
+    table_bind_nanos: Vec<u64>,
+    table_rows: Vec<u64>,
+    profile_tables: bool,
 }
 
 impl Binder {
@@ -274,19 +363,30 @@ impl Binder {
             let list = column_names.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
             let tuple = format!("({})", vec!["?"; width].join(", "));
             let prefix = format!("INSERT INTO \"{name}\" ({list}) VALUES ");
+            let active = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+            let module_name = format!("ryi_batch_{index}");
+            connection.create_module(module_name.as_str(), &BATCH_MODULE, Some((width, Arc::clone(&active))))?;
+            let select_cols = (0..width).map(|index| format!("c{index}")).collect::<Vec<_>>().join(", ");
             meta.push(Meta {
+                name: name.clone(),
                 width,
                 chunk_rows,
                 chunk_sql: format!("{prefix}{}", vec![tuple.as_str(); chunk_rows].join(", ")),
                 one_sql: format!("{prefix}{tuple}"),
+                select_sql: format!("INSERT INTO \"{name}\" ({list}) SELECT {select_cols} FROM {module_name}"),
+                active,
             });
             json.push(column_names.iter().map(|c| json_columns.contains(&(name.clone(), c.clone()))).collect());
             columns.push(column_names);
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
+        let table_count = meta.len();
         Ok(Self { meta: Arc::new(meta), buffers, columns, json, by_name, path: String::new(), threaded,
-            insert_nanos: Arc::new(AtomicU64::new(0)) })
+            insert_nanos: Arc::new(AtomicU64::new(0)),
+            table_insert_nanos: Arc::new((0..table_count).map(|_| AtomicU64::new(0)).collect()),
+            table_bind_nanos: vec![0; table_count], table_rows: vec![0; table_count],
+            profile_tables: std::env::var_os("RYI_SQLITE_PHASES").is_some() })
     }
 
     /// Serialize one row into its table's buffer; a full buffer goes to the
@@ -299,6 +399,7 @@ impl Binder {
         content_id: Option<&str>,
         value: &impl Serialize,
     ) -> Result<()> {
+        let started = self.profile_tables.then(Instant::now);
         self.path.clear();
         let mut writer = RowWriter {
             binder: self,
@@ -324,8 +425,12 @@ impl Binder {
             return Err("row has no `record` tag".into());
         };
         self.buffers[table].rows += 1;
+        if self.profile_tables { self.table_rows[table] += 1; }
         if self.buffers[table].rows == self.meta[table].chunk_rows * CHUNKS_PER_BATCH {
             self.submit(slot, table)?;
+        }
+        if let Some(started) = started {
+            self.table_bind_nanos[table] += started.elapsed().as_nanos() as u64;
         }
         Ok(())
     }
@@ -336,9 +441,10 @@ impl Binder {
             let started = Instant::now();
             self.buffers[table].drain(&self.meta[table], connection)?;
             self.insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            self.table_insert_nanos[table].fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
             return Ok(());
         }
-        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.insert_nanos))?;
+        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.insert_nanos), Arc::clone(&self.table_insert_nanos))?;
         let Slot::Worker(worker) = slot else {
             return Err("SQLite writer thread did not start".into());
         };
@@ -371,6 +477,18 @@ impl Binder {
 
     pub fn insert_time(&self) -> Duration {
         Duration::from_nanos(self.insert_nanos.load(Ordering::Relaxed))
+    }
+
+    pub fn report_tables(&self) {
+        eprintln!("sqlite table phases: table rows bind_s insert_s");
+        for (index, meta) in self.meta.iter().enumerate() {
+            let rows = self.table_rows[index];
+            if rows > 0 {
+                eprintln!("sqlite table phases: {} {} {:.6} {:.6}", meta.name, rows,
+                    self.table_bind_nanos[index] as f64 / 1e9,
+                    self.table_insert_nanos[index].load(Ordering::Relaxed) as f64 / 1e9);
+            }
+        }
     }
 }
 
@@ -407,10 +525,7 @@ struct RowWriter<'b> {
 
 impl RowWriter<'_> {
     #[inline(always)]
-    fn open(&mut self, record: &str) -> std::result::Result<(), Error> {
-        let Some(&index) = self.binder.by_name.get(record) else {
-            return err(format!("no table for record `{record}`"));
-        };
+    fn open(&mut self, index: usize) -> std::result::Result<(), Error> {
         self.table = Some(index);
         let (row, input_path, content_id) = self.meta;
         let width = self.binder.meta[index].width;
@@ -429,7 +544,7 @@ impl RowWriter<'_> {
         set(table, "_input_path", v);
         let v = content_id.map_or(Val::Null, |c| table.source_id(c));
         set(table, "_content_id", v);
-        let v = table.record(record);
+        let v = table.record(&self.binder.meta[index].name);
         set(table, "record", v);
         Ok(())
     }
@@ -437,24 +552,31 @@ impl RowWriter<'_> {
     #[inline(always)]
     fn field<T: ?Sized + Serialize>(&mut self, key: &str, value: &T) -> std::result::Result<(), Error> {
         if self.prefix_len == 0 && key == "record" {
-            let mut probe = Scalar { arena: None, val: None, text: None };
+            let mut probe = Scalar { arena: None, val: None, text: None,
+                lookup: Some(&self.binder.by_name), table: None };
             value.serialize(&mut probe)?;
-            let Some(record) = probe.text else {
-                return err("`record` is not text".into());
+            let Some(index) = probe.table else {
+                return err(match probe.text {
+                    Some(record) => format!("no table for record `{record}`"),
+                    None => "`record` is not text".into(),
+                });
             };
-            return self.open(&record);
+            return self.open(index);
         }
         let Some(index) = self.table else {
             return err(format!("field `{key}` before `record`"));
         };
+        if self.prefix_len == 0 {
+            if let Some(column) = self.binder.columns[index].iter().position(|name| name == key) {
+                return self.column(index, column, value);
+            }
+        }
         let restore = self.binder.path.len();
         if self.prefix_len > 0 {
             self.binder.path.push_str("__");
         }
         self.binder.path.push_str(key);
-        let result = match self.binder.columns[index]
-            .iter()
-            .position(|name| name == &self.binder.path) {
+        let result = match self.binder.columns[index].iter().position(|name| name == &self.binder.path) {
             Some(column) => self.column(index, column, value),
             None => {
                 let saved = self.prefix_len;
@@ -479,7 +601,8 @@ impl RowWriter<'_> {
             return Ok(());
         }
         let mark = table.text.len();
-        let mut probe = Scalar { arena: Some(&mut table.text), val: None, text: None };
+        let mut probe = Scalar { arena: Some(&mut table.text), val: None, text: None,
+            lookup: None, table: None };
         let val = match value.serialize(&mut probe) {
             Ok(()) => probe.val.unwrap_or(Val::Null),
             Err(Compound) => {
@@ -570,7 +693,8 @@ impl ser::SerializeMap for MapWriter<'_, '_> {
     type Ok = ();
     type Error = Error;
     fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> std::result::Result<(), Error> {
-        let mut probe = Scalar { arena: None, val: None, text: None };
+        let mut probe = Scalar { arena: None, val: None, text: None,
+            lookup: None, table: None };
         key.serialize(&mut probe)?;
         self.key = probe.text.ok_or_else(|| Error("map key is not text".into()))?;
         Ok(())
@@ -590,11 +714,18 @@ struct Scalar<'t> {
     arena: Option<&'t mut String>,
     val: Option<Val>,
     text: Option<String>,
+    lookup: Option<&'t HashMap<String, usize>>,
+    table: Option<usize>,
 }
 
 impl Scalar<'_> {
     #[inline(always)]
     fn put(&mut self, value: &str) {
+        if let Some(lookup) = self.lookup {
+            self.table = lookup.get(value).copied();
+            if self.table.is_none() { self.text = Some(value.to_owned()); }
+            return;
+        }
         match self.arena.as_deref_mut() {
             Some(arena) => {
                 let start = arena.len() as u32;

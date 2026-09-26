@@ -181,6 +181,9 @@ impl Database {
         let closing = Instant::now();
         self.flush()?;
         let insert_time = self.binder.insert_time();
+        if std::env::var_os("RYI_SQLITE_PHASES").is_some() {
+            self.binder.report_tables();
+        }
         let connection = std::mem::replace(&mut self.slot, bind::Slot::Moving).into_local()?;
         connection.execute_batch("COMMIT;")?;
         connection.close().map_err(|(_, error)| error)?;
@@ -208,10 +211,14 @@ impl Database {
         connection.busy_timeout(Duration::from_secs(5))?;
         // A private staging file: nothing reads it before the commit and the
         // publish, and a failed run discards it, so no journal and no fsync.
-        connection.execute_batch(
-            "PRAGMA page_size=4096; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
+        let page_size = std::env::var("RYI_SQLITE_PAGE_SIZE").ok().and_then(|v| v.parse::<usize>().ok()).unwrap_or(65536);
+        if ![4096, 16384, 32768, 65536].contains(&page_size) {
+            return Err("RYI_SQLITE_PAGE_SIZE must be 4096, 16384, 32768, or 65536".into());
+        }
+        connection.execute_batch(&format!(
+            "PRAGMA page_size={page_size}; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
              PRAGMA cache_size=-16384; PRAGMA temp_store=MEMORY; BEGIN IMMEDIATE;",
-        )?;
+        ))?;
         connection.execute_batch(DDL)?;
         connection.execute_batch(&span_lines_view_sql(&connection)?)?;
         connection.execute_batch(&graph_views_sql())?;
