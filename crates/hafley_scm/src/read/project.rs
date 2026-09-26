@@ -1449,7 +1449,13 @@ pub fn diet_scip_streamed<E>(
     push: &mut impl FnMut(DietRow<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
     let mut inputs = read_inputs_streamed(paths, true, Planes::All, &mut |input| {
-        push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))
+        push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))?;
+        if crate::read::lang::ts::source_type_for(&input.path).is_some() {
+            if let Some(output) = Arc::get_mut(&mut input.output) {
+                output.df = None;
+            }
+        }
+        Ok(())
     })?;
     let mut captures: std::collections::HashMap<String, crate::read::lang::scm_rows::ScmCaptures> =
         std::collections::HashMap::new();
@@ -1536,8 +1542,8 @@ pub fn read_inputs(paths: &[PathBuf]) -> Result<Vec<ProjectInput>, ProjectError>
     read_inputs_inner(paths, false, Planes::All)
 }
 
-/// The same read, plus each ts/js input's module facts. Split off because the
-/// facts cost one extra parse per file and only `--resolve` reads them.
+/// The same read, plus each ts/js input's module facts. The TS extractor
+/// hands these facts over from its Oxc parse; direct module reads can reparse.
 pub fn read_inputs_with_modules(
     paths: &[PathBuf],
     planes: Planes,
@@ -1669,13 +1675,14 @@ fn read_inputs_plain(
     flatten_inputs(read_chunk(paths, modules, planes))
 }
 
-/// Files per streamed chunk: the bound on how many files' CST planes are alive
-/// at once (one chunk handed over, one extracting).
+/// Files per streamed chunk for mixed-language reads: the bound on how many
+/// files' CST planes are alive at once (one chunk handed over, one extracting).
 const READ_CHUNK_FILES: usize = 64;
 
 /// Read like `read_inputs_with_modules`, handing each input to `on_input` in
 /// path order as its chunk lands, then dropping its CST plane (resolve never
-/// reads it). The next chunk extracts while this one is handed over.
+/// reads it). TS-only reads use 16-file chunks to bound their larger CST
+/// bundles. The next chunk extracts while this one is handed over.
 pub fn read_inputs_streamed<E>(
     paths: &[PathBuf],
     modules: bool,
@@ -1683,10 +1690,19 @@ pub fn read_inputs_streamed<E>(
     on_input: &mut impl FnMut(&mut ProjectInput) -> Result<(), ResolveWithRawError<E>>,
 ) -> Result<Vec<ProjectInput>, ResolveWithRawError<E>> {
     let mut inputs = Vec::with_capacity(paths.len());
+    let chunk_files = if paths.iter().all(|path| {
+        path.to_str()
+            .and_then(crate::read::lang::ts::source_type_for)
+            .is_some()
+    }) {
+        16
+    } else {
+        READ_CHUNK_FILES
+    };
     std::thread::scope(|scope| -> Result<(), ResolveWithRawError<E>> {
         let (chunks, landed) = std::sync::mpsc::sync_channel(1);
         scope.spawn(move || {
-            for chunk in paths.chunks(READ_CHUNK_FILES) {
+            for chunk in paths.chunks(chunk_files) {
                 if chunks.send(read_chunk(chunk, modules, planes)).is_err() {
                     break;
                 }

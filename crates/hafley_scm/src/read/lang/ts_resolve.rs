@@ -235,10 +235,8 @@ impl ModuleFacts {
     }
 }
 
-/// One file's module facts off its own parse, a SECOND one: phase 1's arena
-/// dies with dispatch and the `Parser` seam returns a `Program` alone.
-/// Consumes the handoff the ts extract pass stashed for these exact bytes on
-/// this thread (`ts_stash_module_facts`), so one oxc parse serves both.
+/// One file's module facts. The extract pass hands them over on the same worker
+/// thread; direct callers without an extract pass parse here.
 pub fn module_facts(path: &str, content: &[u8]) -> Option<ModuleFacts> {
     if let Some(stashed) = take_ts_module_facts(path, content) {
         return Some(stashed);
@@ -355,34 +353,35 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
     }
 }
 
-/// The extract pass's handoff slot: dispatch parses, the module plane
-/// consumes on the same worker thread. Single entry, consumed on read.
-static TS_MODULE_FACTS_HANDOFF: std::sync::Mutex<
-    Option<(String, crate::read::shape::ContentId, ModuleFacts)>,
-> = std::sync::Mutex::new(None);
+/// Dispatch and the module plane run on the same extraction worker. A local
+/// slot keeps concurrent workers from replacing one another's facts.
+thread_local! {
+    static TS_MODULE_FACTS_HANDOFF: std::cell::RefCell<
+        Option<(String, crate::read::shape::ContentId, ModuleFacts)>,
+    > = const { std::cell::RefCell::new(None) };
+}
 
 /// Stash the module facts computed off the extract parse. The next
 /// `module_facts` call for the same content on this thread consumes it.
 pub fn ts_stash_module_facts(path: &str, content: &[u8], facts: ModuleFacts) {
-    let mut slot = TS_MODULE_FACTS_HANDOFF
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    *slot = Some((
-        path.to_string(),
-        crate::read::shape::content_id_of(content),
-        facts,
-    ));
+    TS_MODULE_FACTS_HANDOFF.with(|slot| {
+        *slot.borrow_mut() = Some((
+            path.to_string(),
+            crate::read::shape::content_id_of(content),
+            facts,
+        ));
+    });
 }
 
 fn take_ts_module_facts(path: &str, content: &[u8]) -> Option<ModuleFacts> {
-    let mut slot = TS_MODULE_FACTS_HANDOFF
-        .lock()
-        .unwrap_or_else(|poison| poison.into_inner());
-    slot.take()
-        .filter(|(stashed_path, id, _)| {
-            stashed_path == path && *id == crate::read::shape::content_id_of(content)
-        })
-        .map(|(_, _, facts)| facts)
+    TS_MODULE_FACTS_HANDOFF.with(|slot| {
+        slot.borrow_mut()
+            .take()
+            .filter(|(stashed_path, id, _)| {
+                stashed_path == path && *id == crate::read::shape::content_id_of(content)
+            })
+            .map(|(_, _, facts)| facts)
+    })
 }
 
 /// TypeScript's own module forms, absent from the ECMAScript `ModuleRecord`.
@@ -650,10 +649,13 @@ impl TsModuleIndex {
                 .parent()
                 .map(Path::to_path_buf)
                 .unwrap_or_default();
+            // TsconfigDiscovery::Auto walks from the importing file. Give the
+            // resolver an absolute path even when ryi received relative inputs.
+            let from = std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
             for specifier in facts.specifiers() {
                 let key = (directory.clone(), specifier.to_string());
                 let answer = answers.entry(key).or_insert_with(|| {
-                    let resolved = resolver.resolve_file(Path::new(path), specifier).ok()?;
+                    let resolved = resolver.resolve_file(&from, specifier).ok()?;
                     let real = resolved.path();
                     by_real_path.get(real).cloned().or_else(|| {
                         by_real_path

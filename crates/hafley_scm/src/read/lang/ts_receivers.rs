@@ -50,6 +50,8 @@ pub struct TsFileTypes {
     pub const_type: HashMap<u32, String>,
     /// Class and interface names declared in this file (static receivers).
     pub type_names: BTreeSet<String>,
+    /// Namespace import names used to recognize `new ns.Class()` receivers.
+    pub namespace_imports: BTreeSet<String>,
     /// `const x = f()` init-call callee span start -> the bound name. The
     /// resolve phase fills the type after the init call itself resolves.
     pub binds: HashMap<u32, String>,
@@ -188,6 +190,14 @@ fn receiver_of(
         }
         ts::Expression::NewExpression(new_expr) => match &new_expr.callee {
             ts::Expression::Identifier(id) => Some(TypeBinding::Decl(id.name.to_string())),
+            ts::Expression::StaticMemberExpression(member) => {
+                let ts::Expression::Identifier(namespace) = &member.object else {
+                    return None;
+                };
+                facts.namespace_imports.contains(namespace.name.as_str()).then(|| {
+                    TypeBinding::Decl(format!("{}.{}", namespace.name, member.property.name))
+                })
+            }
             _ => None,
         },
         // `this` inside a class names the class as the receiver; a field read
@@ -326,6 +336,16 @@ impl Default for ReceiverWalker {
 }
 
 impl<'a> OxcVisit<'a> for ReceiverWalker {
+    fn visit_import_declaration(&mut self, import: &ts::ImportDeclaration<'a>) {
+        if let Some(specifiers) = &import.specifiers {
+            for specifier in specifiers {
+                if let ts::ImportDeclarationSpecifier::ImportNamespaceSpecifier(namespace) = specifier {
+                    self.facts.namespace_imports.insert(namespace.local.name.to_string());
+                }
+            }
+        }
+    }
+
     fn visit_class(&mut self, class: &ts::Class<'a>) {
         if let Some(id) = &class.id {
             let name = id.name.to_string();
@@ -489,6 +509,16 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
                 let binding = match init {
                     ts::Expression::NewExpression(new_expr) => match &new_expr.callee {
                         ts::Expression::Identifier(id) => TypeBinding::Decl(id.name.to_string()),
+                        ts::Expression::StaticMemberExpression(member) => {
+                            match &member.object {
+                                ts::Expression::Identifier(namespace)
+                                    if self.facts.namespace_imports.contains(namespace.name.as_str()) =>
+                                {
+                                    TypeBinding::Decl(format!("{}.{}", namespace.name, member.property.name))
+                                }
+                                _ => TypeBinding::Inferred,
+                            }
+                        }
                         _ => TypeBinding::Inferred,
                     },
                     ts::Expression::CallExpression(call) => {
@@ -655,7 +685,10 @@ fn type_anchor(
         return Some((ctx_blob.clone(), *span, Arc::clone(ctx_facts)));
     }
     let modules = modules?;
-    let found = modules.bind(ctx_path?, type_name).ok()??;
+    let found = match type_name.split_once('.') {
+        Some((namespace, member)) => modules.member(ctx_path?, namespace, member).ok()??,
+        None => modules.bind(ctx_path?, type_name).ok()??,
+    };
     let facts = facts_of(&found.target_blob, paths)?;
     Some((
         found.target_blob,

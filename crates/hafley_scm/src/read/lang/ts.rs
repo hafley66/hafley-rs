@@ -23,7 +23,9 @@ use oxc_ast_visit::Visit as OxcVisit;
 use oxc_span::{GetSpan, SourceType};
 
 use super::fallback::cst_bundle;
-use super::ts_resolve::{ImportedName, ResolvedImport, TsModuleIndex};
+use super::ts_resolve::{
+    ts_module_facts_from_parsed, ts_stash_module_facts, ImportedName, ResolvedImport, TsModuleIndex,
+};
 use crate::read::family::{
     CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, DocFact, DocTag, ProjectEdge, ResolutionOrigin, SigSlot,
@@ -4096,9 +4098,21 @@ impl Source for TsSource {
             let parsed = {
                 let span = trace::parse_span("ts", "oxc");
                 let _entered = span.enter();
-                OxcParser.parse(&arena, path, content)
+                (|| {
+                    let source_type = source_type_for(path)
+                        .ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
+                    let src = std::str::from_utf8(content)
+                        .map_err(|err| ParseError::Utf8(err.to_string()))?;
+                    let parsed = oxc_parser::Parser::new(&arena, src, source_type).parse();
+                    if parsed.panicked {
+                        return Err(ParseError::Parse(format!("oxc panicked on {path}")));
+                    }
+                    Ok(parsed)
+                })()
             };
             if let Ok(parsed) = parsed {
+                ts_stash_module_facts(path, content, ts_module_facts_from_parsed(&parsed));
+                let parsed = &parsed.program;
                 if mask.types {
                     let span = trace::family_span("ts", "type");
                     let _entered = span.enter();
