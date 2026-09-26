@@ -383,34 +383,47 @@ fn list_commit_is_atomic_across_rows() {
 /// The second row binds the declaration after the first row has renamed it.
 #[test]
 fn list_rows_read_earlier_edits() {
-    let fixture = fixture("local", "chained_list");
-    let list = fixture.state.join("renames.tsv");
-    std::fs::write(
-        &list,
-        "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n",
-    )
-    .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args(["rename", "--list"])
-        .arg(&list)
-        .arg("--root")
-        .arg(&fixture.root)
-        .arg("--state")
-        .arg(&fixture.state)
-        .arg("--commit")
-        .output()
+    for (label, indexed) in [("chained_list", false), ("chained_list_indexed", true)] {
+        let fixture = fixture("local", label);
+        if indexed {
+            let index = Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/rename_merge/index.scip");
+            std::fs::copy(index, fixture.root.join("index.scip")).unwrap();
+        }
+        let list = fixture.state.join("renames.tsv");
+        std::fs::write(
+            &list,
+            "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n",
+        )
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    for rel in ["src/util.rs", "src/lib.rs"] {
-        let actual = std::fs::read_to_string(fixture.root.join(rel)).unwrap();
-        let expected = std::fs::read_to_string(tree("local", "after").join(rel))
-            .unwrap()
-            .replace("Tool", "Instrument");
-        assert_eq!(actual, expected, "{rel}");
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["rename", "--list"])
+            .arg(&list)
+            .arg("--root")
+            .arg(&fixture.root)
+            .arg("--state")
+            .arg(&fixture.state)
+            .arg("--commit")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{label}: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert_eq!(
+            stdout.contains("scip-verify skipped for sequential rename batch"),
+            indexed,
+            "{label}: {stdout}"
+        );
+        for rel in ["src/util.rs", "src/lib.rs"] {
+            let actual = std::fs::read_to_string(fixture.root.join(rel)).unwrap();
+            let expected = std::fs::read_to_string(tree("local", "after").join(rel))
+                .unwrap()
+                .replace("Tool", "Instrument");
+            assert_eq!(actual, expected, "{label}: {rel}");
+        }
     }
 }
 

@@ -181,8 +181,15 @@ impl Plan {
         let batch = validated_batch(&root, requested, cli.at)?;
         let cx = RenameCx::open(&root).map_err(plan_error)?.with_batch(batch);
         let has_index = cli.verify_scip.is_some() || root.join("index.scip").is_file();
-        if cx.batch().len() > 1 && !has_index {
-            return Self::build_sequential(root, cx);
+        if cx.batch().len() > 1 {
+            // An index describes the original tree. Once row one changes its
+            // text, later rows must resolve against the overlay in either case.
+            let mut plan = Self::build_sequential(root, cx)?;
+            if has_index {
+                plan.receipts
+                    .push("scip-verify skipped for sequential rename batch".to_string());
+            }
+            return Ok(plan);
         }
 
         let mut refs: Vec<Vec<SymbolRef>> = Vec::with_capacity(cx.batch().len());
