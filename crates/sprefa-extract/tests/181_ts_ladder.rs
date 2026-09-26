@@ -69,6 +69,12 @@ fn ts_ladder_fast_and_slow() {
         table,
         "\
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
+_11_duplicate.ts param     duplicate    -> _5_peer_a.ts:Peer      fs
+_11_duplicate.ts returns   duplicate    -> _5_peer_a.ts:Peer      fs
+_14_static_use.ts call      runStatic    -> _13_static.ts:load     fs
+_15_private.ts call      usePrivate   -> _15_private.ts:clashPriv -s
+_17_export.ts call      useExported  -> _17_export.ts:clashPub -s
+_19_local_a.ts call      useLocalTwin -> _19_local_a.ts:localTwin fs
 _2_one.ts    call      one          -> _0_types.ts:Service    f-
 _2_one.ts    call      one          -> _0_types.ts:ping       fs
 _2_one.ts    param     one          -> _0_types.ts:Base       fs
@@ -85,6 +91,26 @@ _4_nested.ts call      run          -> _3_many.ts:Child       f-
 _4_nested.ts call      run          -> _3_many.ts:many        fs
 _4_nested.ts heritage  Nested       -> _0_types.ts:Service    fs
 _4_nested.ts param     reexported   -> _0_types.ts:Base       fs
-_4_nested.ts returns   reexported   -> _0_types.ts:Base       fs"
+_4_nested.ts returns   reexported   -> _0_types.ts:Base       fs
+_5_peer_a.ts call      useA         -> _5_peer_a.ts:same      fs
+_5_peer_a.ts param     same         -> _5_peer_a.ts:Peer      fs
+_5_peer_a.ts param     useA         -> _5_peer_a.ts:Peer      fs
+_5_peer_a.ts returns   same         -> _5_peer_a.ts:Peer      fs
+_5_peer_a.ts returns   useA         -> _5_peer_a.ts:Peer      fs
+_6_peer_b.ts call      useB         -> _6_peer_b.ts:same      fs
+_6_peer_b.ts param     same         -> _6_peer_b.ts:Peer      fs
+_6_peer_b.ts param     useB         -> _6_peer_b.ts:Peer      fs
+_6_peer_b.ts returns   same         -> _6_peer_b.ts:Peer      fs
+_6_peer_b.ts returns   useB         -> _6_peer_b.ts:Peer      fs
+_7_export_a.ts call      useC         -> _7_export_a.ts:sameExported fs
+_7_export_a.ts param     sameExported -> _7_export_a.ts:ExportedPeer fs
+_7_export_a.ts param     useC         -> _7_export_a.ts:ExportedPeer fs
+_7_export_a.ts returns   sameExported -> _7_export_a.ts:ExportedPeer fs
+_7_export_a.ts returns   useC         -> _7_export_a.ts:ExportedPeer fs
+_8_export_b.ts call      useD         -> _8_export_b.ts:sameExported fs
+_8_export_b.ts param     sameExported -> _8_export_b.ts:ExportedPeer fs
+_8_export_b.ts param     useD         -> _8_export_b.ts:ExportedPeer fs
+_8_export_b.ts returns   sameExported -> _8_export_b.ts:ExportedPeer fs
+_8_export_b.ts returns   useD         -> _8_export_b.ts:ExportedPeer fs"
     );
 }

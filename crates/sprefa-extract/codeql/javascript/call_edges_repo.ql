@@ -8,13 +8,19 @@ Function owner(CallExpr site) {
   )
 }
 
-from CallExpr site, Function target, Function source
+string ownerName(CallExpr site) {
+  result = owner(site).getName()
+  or
+  not exists(Function source | source = owner(site)) and result = "<module>"
+}
+
+from CallExpr site, Function target
 where
   target = site.getResolvedCallee() and
-  source = owner(site) and
+  (exists(Function source | source = owner(site)) or exists(target.getBody())) and
   exists(site.getFile().getRelativePath()) and
   exists(target.getFile().getRelativePath())
 select site.getFile().getRelativePath() as src_file,
-  source.getName() as enclosing_item,
+  ownerName(site) as enclosing_item,
   target.getFile().getRelativePath() as dst_file,
   target.getName() as dst_name

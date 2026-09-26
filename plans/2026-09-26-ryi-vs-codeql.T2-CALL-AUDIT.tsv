@@ -1,0 +1,31 @@
+pattern	pattern_count	src_file	enclosing_item	dst_file	dst_name	verdict	evidence
+same-file synthetic owner	6237	bench-cli/adapters/tsv2_run.ts	closure@3773	bench-cli/adapters/tsv2_run.ts	finalValueJson	correct-but-CodeQL-misses	Local declaration; source owner is a closure or module
+same-file synthetic owner	6237	bench-cli/adapters/tsv2_run.ts	closure@4602	bench-cli/adapters/tsv2_run.ts	finalStateLine	correct-but-CodeQL-misses	Local declaration; source owner is a closure or module
+same-file synthetic owner	6237	bench-cli/adapters/tsv2_run.ts	closure@6790	bench-cli/adapters/tsv2_run.ts	readFinalState	correct-but-CodeQL-misses	Local declaration; source owner is a closure or module
+same-file synthetic owner	6237	bench-cli/report.ts	closure@2275	bench-cli/report.ts	csvField	correct-but-CodeQL-misses	Local declaration; source owner is a closure or module
+same-file synthetic owner	6237	books/v6/gen/bench_reach.ts	<module>	books/v6/gen/bench_reach.ts	tick	correct-but-CodeQL-misses	Local declaration; source owner is a closure or module
+same-file synthetic owner	6237	books/v6/gen/counter.ts	<module>	books/v6/gen/counter.ts	tick	correct-but-CodeQL-misses	Local declaration; source owner is a closure or module
+same-file named owner	5290	bench-cli/adapters/tsv2_run.ts	finalStateLine	bench-cli/adapters/tsv2_run.ts	finalValueJson	correct-but-CodeQL-misses	Direct local declaration and call
+same-file named owner	5290	bench-cli/adapters/tsv2_run.ts	main	bench-cli/adapters/tsv2_run.ts	readFinalState	correct-but-CodeQL-misses	Direct local declaration and call
+same-file named owner	5290	bench-cli/report.ts	toCsv	bench-cli/report.ts	csvField	correct-but-CodeQL-misses	Direct local declaration and call
+same-file named owner	5290	labs/exec_shootout/dl6/bench.ts	batch	labs/exec_shootout/dl6/bench.ts	batchShape	correct-but-CodeQL-misses	Direct local declaration and call
+same-file named owner	5290	labs/exec_shootout/dl6/bench.ts	batch	labs/exec_shootout/dl6/bench.ts	statementSql	correct-but-CodeQL-misses	Direct local declaration and call
+same-file named owner	5290	labs/exec_shootout/dl6/bench.ts	foldChecksum	labs/exec_shootout/dl6/bench.ts	fnv1a64	correct-but-CodeQL-misses	Direct local declaration and call
+cross-file member spelling	9560	labs/exec_shootout/dl6/incbench.ts	<module>	tsv2/runtime/types.ts	boot	correct-but-CodeQL-misses	Typed receiver member declaration in target file
+cross-file member spelling	9560	labs/exec_shootout/dl6/incbench.ts	<module>	tsv2/runtime/types.ts	open	correct-but-CodeQL-misses	Typed receiver member declaration in target file
+cross-file member spelling	9560	labs/exec_shootout/dl6/incbench.ts	<module>	tsv2/runtime/types.ts	run	correct-but-CodeQL-misses	Typed receiver member declaration in target file
+cross-file member spelling	9560	sprefa-store/js/src/engine/engine.ts	build_condensed	sprefa-store/js/src/engine/types.ts	execute	correct-but-CodeQL-misses	Typed receiver member declaration in target file
+cross-file member spelling	9560	sprefa-store/js/src/engine/ingest.ts	closure@12069	sprefa-store/js/src/engine/types.ts	flush_strings	correct-but-CodeQL-misses	Typed receiver member declaration in target file
+cross-file member spelling	9560	sprefa-store/js/src/engine/ingest.ts	closure@12069	sprefa-store/js/src/engine/types.ts	intern	correct-but-CodeQL-misses	Typed receiver member declaration in target file
+cross-file imported spelling	1691	labs/shared_frontier/rig/q1_sections.ts	closure@1892	labs/shared_frontier/rig/common.ts	round	correct-but-CodeQL-misses	Named relative import resolves to target file
+cross-file imported spelling	1691	labs/shared_frontier/rig/q2_tick_cost.ts	closure@5486	labs/shared_frontier/rig/common.ts	round	correct-but-CodeQL-misses	Named relative import resolves to target file
+cross-file imported spelling	1691	labs/shared_frontier/rig/q5_summarize.ts	closure@2032	labs/shared_frontier/rig/common.ts	round	correct-but-CodeQL-misses	Named relative import resolves to target file
+cross-file imported spelling	1691	labs/shared_frontier/rig/q6_retraction.ts	closure@10007	labs/shared_frontier/rig/common.ts	round	correct-but-CodeQL-misses	Named relative import resolves to target file
+cross-file imported spelling	1691	sprefa-store/js/src/bench/prolog_emit_bench.ts	main	sprefa-store/js/src/lower/lowerSql.ts	evalProgramSql	correct-but-CodeQL-misses	Named relative import resolves to target file
+cross-file imported spelling	1691	sprefa-store/js/src/bench/v1_scale_bench.ts	tick	sprefa-store/js/src/lower/lowerSql.ts	evalProgramSql	correct-but-CodeQL-misses	Named relative import resolves to target file
+cross-file dynamic import	6	tsv2/tests/traceGolden.test.ts	<module>	tsv2/tests/serveHelpers.ts	post_arrivals	correct-but-CodeQL-misses	Destructured await import of ./serveHelpers.ts
+cross-file dynamic import	6	tsv2/tests/traceGolden.test.ts	<module>	tsv2/tests/serveHelpers.ts	post_program	correct-but-CodeQL-misses	Destructured await import of ./serveHelpers.ts
+cross-file dynamic import	6	tsv2/tests/traceGolden.test.ts	<module>	tsv2/tests/serveHelpers.ts	start_served	correct-but-CodeQL-misses	Destructured await import of ./serveHelpers.ts
+cross-file dynamic import	6	tsv2/tests/traceGolden.test.ts	closure@4237	tsv2/tests/serveHelpers.ts	post_arrivals	correct-but-CodeQL-misses	Destructured await import of ./serveHelpers.ts
+cross-file dynamic import	6	tsv2/tests/traceGolden.test.ts	closure@4237	tsv2/tests/serveHelpers.ts	post_program	correct-but-CodeQL-misses	Destructured await import of ./serveHelpers.ts
+cross-file dynamic import	6	tsv2/tests/traceGolden.test.ts	closure@4237	tsv2/tests/serveHelpers.ts	start_served	correct-but-CodeQL-misses	Destructured await import of ./serveHelpers.ts
