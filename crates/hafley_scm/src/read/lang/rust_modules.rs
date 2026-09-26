@@ -68,6 +68,8 @@ pub struct RustModuleFacts {
     /// Every `type X = ..` def span. An alias rides the shared `DefIndex` as a
     /// type entity and is never the item a `X(..)` call constructs.
     aliases: Vec<Span>,
+    /// Top-level declarations unavailable through an external crate import.
+    private_defs: HashSet<String>,
     pub macro_invocations: Vec<(Span, String)>,
 }
 
@@ -155,6 +157,18 @@ pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) ->
             start: range.start,
             len: range.end - range.start,
         }).collect(),
+        private_defs: parsed.items.iter().filter_map(|item| match item {
+            syn::Item::Struct(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Enum(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Union(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Type(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Trait(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Fn(item) => Some((&item.sig.ident, &item.vis)),
+            syn::Item::Const(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Static(item) => Some((&item.ident, &item.vis)),
+            _ => None,
+        }).filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
+          .map(|(ident, _)| ident.to_string()).collect(),
         macro_invocations: hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts)
             .into_iter()
             .map(|row| (Span { start: row.range.start, len: row.range.end - row.range.start }, row.name))
@@ -265,13 +279,13 @@ fn crate_libs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
         corpus.iter().map(|(path, _)| path.as_str()).collect();
     let mut out = HashMap::new();
     for root in roots {
-        let Some(parsed) = std::fs::read_to_string(normalize_join(&root, "Cargo.toml"))
+        let Some(parsed) = std::fs::read_to_string(std::path::Path::new(&root).join("Cargo.toml"))
             .ok()
             .and_then(|text| CargoManifest::parse(&text))
         else {
             continue;
         };
-        let lib = normalize_join(&root, &parsed.lib_path());
+        let lib = lexical(&std::path::Path::new(&root).join(parsed.lib_path()));
         if let (Some(ident), true) = (parsed.ident(), in_corpus.contains(lib.as_str())) {
             out.insert(ident, lib);
         }
@@ -1225,6 +1239,21 @@ impl RustModuleIndex {
         })
     }
 
+    /// An unresolved `use crate_name::Name` cannot fall back to a private
+    /// declaration elsewhere in that crate's corpus.
+    pub fn private_import_target(&self, from: &str, local: &str, blob: &ContentId) -> bool {
+        let Some(target) = self.paths.get(blob) else { return false };
+        if !self.facts.get(target).is_some_and(|facts| facts.private_defs.contains(local)) {
+            return false;
+        }
+        self.facts.get(from).is_some_and(|facts| facts.uses.iter().any(|binding| {
+            binding.local == local
+                && binding.qualifier.first().is_some_and(|root| {
+                    self.crate_libs.get(root).is_some_and(|lib| self.sees_path(from, lib))
+                })
+        }))
+    }
+
     /// The blob of a corpus path.
     pub fn blob_of(&self, path: &str) -> Option<&ContentId> {
         self.blobs.get(path)
@@ -1496,7 +1525,19 @@ impl RustModuleIndex {
                 }
                 let mut full = module_segments(lib);
                 full.extend(qualifier[1..].iter().cloned());
-                return self.exact_module(from, &full);
+                let exact = self.exact_module(from, &full);
+                if !matches!(exact, HomeFile::None) {
+                    return exact;
+                }
+                let mut current = lib.clone();
+                for segment in &qualifier[1..] {
+                    match self.resolve_in_module(&current, segment, stack).0 {
+                        Resolution::Module { file, .. } => current = file,
+                        Resolution::Ambiguous => return HomeFile::Ambiguous,
+                        _ => return HomeFile::None,
+                    }
+                }
+                return HomeFile::Unique(current);
             }
         }
         let refs: Vec<&str> = qualifier.iter().map(String::as_str).collect();

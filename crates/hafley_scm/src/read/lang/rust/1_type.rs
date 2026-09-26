@@ -294,6 +294,7 @@ fn unique_declared_type(
         .iter()
         .filter(|site| site.family == FamilyTag::Type)
         .filter(|site| modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, &site.blob)))
+        .filter(|site| !modules.zip(own_path).is_some_and(|(m, from)| m.private_import_target(from, name, &site.blob)))
         .collect();
     match declared.as_slice() {
         [only] => Some((only.blob.clone(), only.span)),

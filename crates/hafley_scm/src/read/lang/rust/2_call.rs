@@ -622,7 +622,9 @@ impl Resolve<CallF> for RustSource {
                                 return None;
                             }
                             let sees = |blob: &ContentId| {
-                                modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, blob))
+                                modules.zip(own_path).map_or(true, |(m, from)| {
+                                    m.sees(from, blob) && !m.private_import_target(from, callee, blob)
+                                })
                             };
                             RustSource::call_name_match_seen(output, def_index, own.as_ref(), callee, sees)
                                 .map(|(blob, span)| {

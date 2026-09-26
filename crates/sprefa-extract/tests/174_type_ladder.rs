@@ -252,3 +252,35 @@ fn type_scope_ladder_finds_qualified_variant_field() {
     ).unwrap();
     assert_eq!(rows, (1, 1));
 }
+
+#[test]
+fn type_scope_ladder_follows_crate_module_reexport() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let absolute_fast = scratch.path().join("absolute.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    let absolute_src = std::fs::canonicalize(&src).unwrap();
+    ryi(&["fast", absolute_src.to_str().unwrap(), "--sqlite", &absolute_fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    conn.execute("attach ?1 as absolute", [&absolute_fast]).unwrap();
+    let rows: (i64, i64, i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'reexport_chain'
+              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'reexport_chain'
+              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),
+           (select count(*) from absolute.resolved_type_edge where owner_name = 'reexport_chain'
+              and target_name = 'PubThing' and target_path like '%/_11_reexport.rs'),
+           (select count(*) from absolute.resolved_type_edge where owner_name = 'external_shadow'
+              and target_name = 'String' and target_path like '%/_12_other.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 1, 1, 0));
+}
