@@ -61,7 +61,7 @@ _3_many.rs     89 many_calls         -> _0_types.rs:free_zero  fs
 _3_many.rs    106 many_calls         -> _0_types.rs:free_one   fs
 _3_many.rs    123 many_calls         -> _0_types.rs:free_two   fs
 _3_many.rs    143 many_calls         -> _0_types.rs:make       fs
-_3_many.rs    158 many_calls         -> _0_types.rs:ping       -s
+_3_many.rs    158 many_calls         -> _0_types.rs:ping       fs
 _4_nested.rs  114 inner              -> _0_types.rs:act        fs
 _4_nested.rs  140 nested_calls       -> _0_types.rs:make       fs
 _4_nested.rs  160 nested_calls       -> _4_nested.rs:inner      fs
