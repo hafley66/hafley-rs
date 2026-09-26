@@ -156,21 +156,45 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
 
 fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
     let mut candidates = Vec::new();
+    generic_candidates(&sig.generics, &mut candidates);
+    let bounds: Vec<(String, String)> = sig.generics.params.iter().filter_map(|param| {
+        let GenericParam::Type(param) = param else { return None };
+        let trait_name = param.bounds.iter().find_map(|bound| {
+            let TypeParamBound::Trait(bound) = bound else { return None };
+            path_name(&bound.path)
+        })?;
+        Some((param.ident.to_string(), trait_name))
+    }).chain(sig.generics.where_clause.iter().flat_map(|clause| clause.predicates.iter()).filter_map(|pred| {
+        let WherePredicate::Type(pred) = pred else { return None };
+        let Type::Path(ty) = &pred.bounded_ty else { return None };
+        let ident = ty.path.get_ident()?.to_string();
+        let trait_name = pred.bounds.iter().find_map(|bound| {
+            let TypeParamBound::Trait(bound) = bound else { return None };
+            path_name(&bound.path)
+        })?;
+        Some((ident, trait_name))
+    })).collect();
     for arg in &sig.inputs {
         if let syn::FnArg::Typed(arg) = arg {
             candidates.extend(type_refs(&arg.ty).into_iter().map(|to| TypeCandidateRow {
-                to,
+                to: projection_trait(&to, &bounds),
                 kind: TypeCandidateKind::Param,
             }));
         }
     }
     if let syn::ReturnType::Type(_, ty) = &sig.output {
         candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
-            to,
+            to: projection_trait(&to, &bounds),
             kind: TypeCandidateKind::Returns,
         }));
     }
     candidates
+}
+
+fn projection_trait(name: &str, bounds: &[(String, String)]) -> String {
+    let Some((head, slot)) = name.split_once("::") else { return name.to_string() };
+    bounds.iter().find(|(param, _)| param == head)
+        .map_or_else(|| name.to_string(), |(_, trait_name)| format!("{trait_name}::{slot}"))
 }
 
 pub fn bare_self_head(ty: &Type, line_starts: &[u32]) -> Option<(Range<u32>, String)> {

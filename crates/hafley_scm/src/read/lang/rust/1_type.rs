@@ -197,6 +197,11 @@ fn resolve_type_dst(
     kind: TypeEdgeKind,
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let (qualifier, trailing) = type_probe_key(name, kind);
+    if let Some(trait_name) = qualifier {
+        if let Some((blob, span)) = modules.and_then(|m| m.assoc_type_target(trait_name, trailing)) {
+            return Some((blob, span, ResolutionOrigin::ModulePlane));
+        }
+    }
     if let Some(found) = name_match_type_dst(types, strings, index, modules, own_path, name) {
         return Some(found);
     }

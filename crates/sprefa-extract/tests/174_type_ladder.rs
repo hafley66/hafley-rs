@@ -47,6 +47,7 @@ _2_one.rs   field    OneField      -> _0_types.rs:A  fs
 _2_one.rs   field    OneVariant    -> _0_types.rs:A  fs
 _2_one.rs   generic  OneBound      -> _0_types.rs:T  fs
 _2_one.rs   generic  OneField      -> _0_types.rs:A  fs
+_2_one.rs   generic  one_bound     -> _0_types.rs:T  fs
 _2_one.rs   impl     OneField      -> _0_types.rs:T  fs
 _2_one.rs   param    from          -> _0_types.rs:A  fs
 _2_one.rs   param    one_param     -> _0_types.rs:A  fs
@@ -61,6 +62,8 @@ _3_many.rs  field    ManyVariants  -> _0_types.rs:B  fs
 _3_many.rs  field    ManyVariants  -> _0_types.rs:C  fs
 _3_many.rs  generic  ManyBounds    -> _0_types.rs:T  fs
 _3_many.rs  generic  ManyBounds    -> _0_types.rs:U  fs
+_3_many.rs  generic  many_bounds   -> _0_types.rs:T  fs
+_3_many.rs  generic  many_bounds   -> _0_types.rs:U  fs
 _3_many.rs  impl     ManyFields    -> _0_types.rs:T  fs
 _3_many.rs  impl     ManyFields    -> _0_types.rs:U  fs
 _3_many.rs  param    many_params   -> _0_types.rs:A  fs
@@ -76,11 +79,15 @@ _3_many.rs  uses     ManyFields    -> _3_many.rs:ManyFields f-
 _4_nested.rs field    Nest          -> _0_types.rs:A  fs
 _4_nested.rs field    Nest          -> _0_types.rs:B  fs
 _4_nested.rs field    Nest          -> _0_types.rs:C  fs
+_4_nested.rs generic  assoc_bound   -> _0_types.rs:B  fs
+_4_nested.rs generic  assoc_bound   -> _0_types.rs:V  fs
+_4_nested.rs generic  gat_use       -> _0_types.rs:W  fs
+_4_nested.rs generic  projection    -> _0_types.rs:V  fs
 _4_nested.rs impl     Nest          -> _0_types.rs:V  fs
 _4_nested.rs impl     Nest          -> _0_types.rs:W  fs
 _4_nested.rs param    gat_use       -> _0_types.rs:C  fs
-_4_nested.rs param    gat_use       -> _0_types.rs:Out -s
-_4_nested.rs param    projection    -> _0_types.rs:Out -s
+_4_nested.rs param    gat_use       -> _0_types.rs:Out fs
+_4_nested.rs param    projection    -> _0_types.rs:Out fs
 _4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs"
     );
 }
