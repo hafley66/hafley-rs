@@ -1017,7 +1017,7 @@ fn call_resolve_scip_ratchet_ts() {
     let mut total_sites = 0usize;
     let mut counts = RatchetCounts::default();
     let mut lines: Vec<String> = Vec::new();
-    for (rel, _blob, out) in &corpus {
+    for (rel, blob, out) in &corpus {
         let doc_ix = scip_index
             .documents
             .iter()
@@ -1072,7 +1072,7 @@ fn call_resolve_scip_ratchet_ts() {
                     containing_def_site(def_index, def_blob.clone(), ident)
                         .map(|(name, s)| (def_blob.clone(), s.span, name))
                 });
-            let name_t = TsSource::call_name_match(out, def_index, callee);
+            let name_t = TsSource::call_name_match(out, def_index, callee, Some(blob));
             // The twin outcome (the same legs the arm runs; the multiset
             // comparison below is the orchestration check). Clones name_t/scip_t
             // into the closure so both stay owned for the scip-side match below.

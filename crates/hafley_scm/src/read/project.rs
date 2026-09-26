@@ -42,7 +42,7 @@ use crate::read::scip_rows::ScipRecords;
 use crate::read::seams::{
     build_def_index, BlobSource, FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
 };
-use crate::read::shape::{content_id_of, ContentId, Span, Strings};
+use crate::read::shape::{content_id_of, ContentId, FamilyTag, Span, Strings};
 use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
@@ -540,7 +540,7 @@ fn resolve_project_inputs(
                         lang: arm_for(&input.path).map_or("", |arm| arm.name),
                         rows: Vec::new(),
                     };
-                    let mut out = call_facts(input, &targets, edges, &mut local);
+                    let mut out = call_facts(input, &targets, &cx, edges, &mut local);
                     out.extend(call_drop_facts(input, &cx, edges));
                     for row in rows {
                         out.push(FlatFact::MacroSiteOut {
@@ -1604,7 +1604,7 @@ fn diet_scip_bounded<E>(
         crate::read::lang::ts::set_resolve_path(Some(&input.path));
         let edges = resolve_call_edges(&input.path, &input.output, &cx);
         let mut trail = LegTrail::default();
-        let mut rows = call_facts(&input, &targets, &edges, &mut trail);
+        let mut rows = call_facts(&input, &targets, &cx, &edges, &mut trail);
         rows.extend(call_drop_facts(&input, &cx, &edges));
         crate::read::types::set_own(None);
         crate::read::lang::ts::set_resolve_path(None);
@@ -2268,6 +2268,8 @@ type SpanNames = std::collections::HashMap<(u32, u32), Option<String>>;
 /// are tables built once over the whole input set, never a walk per edge.
 struct TargetIndex<'a> {
     by_blob: std::collections::HashMap<&'a ContentId, &'a ProjectInput>,
+    by_path: std::collections::HashMap<&'a str, &'a ProjectInput>,
+    ambiguous_blobs: std::collections::HashSet<&'a ContentId>,
     call_names: std::collections::HashMap<&'a ContentId, SpanNames>,
     type_names: std::collections::HashMap<&'a ContentId, SpanNames>,
 }
@@ -2286,12 +2288,17 @@ fn span_names<F: crate::read::family::Family>(bundle: &FamilyBundle<F>, strings:
 impl<'a> TargetIndex<'a> {
     fn build(inputs: &'a [ProjectInput]) -> TargetIndex<'a> {
         let mut by_blob = std::collections::HashMap::with_capacity(inputs.len());
+        let mut by_path = std::collections::HashMap::with_capacity(inputs.len());
+        let mut ambiguous_blobs = std::collections::HashSet::new();
         let mut call_names = std::collections::HashMap::new();
         let mut type_names = std::collections::HashMap::new();
         for input in inputs {
-            // First wins, the answer the scan this replaces gave when two paths
-            // carry one blob.
-            by_blob.entry(&input.blob).or_insert(input);
+            if by_blob.contains_key(&input.blob) {
+                ambiguous_blobs.insert(&input.blob);
+            } else {
+                by_blob.insert(&input.blob, input);
+            }
+            by_path.insert(&input.path, input);
             if let Some(bundle) = input.output.call.as_ref() {
                 call_names.insert(&input.blob, span_names(bundle, &input.output.strings));
             }
@@ -2301,6 +2308,8 @@ impl<'a> TargetIndex<'a> {
         }
         TargetIndex {
             by_blob,
+            by_path,
+            ambiguous_blobs,
             call_names,
             type_names,
         }
@@ -2309,6 +2318,12 @@ impl<'a> TargetIndex<'a> {
     fn input(&self, blob: &ContentId) -> Option<&'a ProjectInput> {
         RESOLVE_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         self.by_blob.get(blob).copied()
+    }
+
+    fn import_target(&self, imported: &crate::read::lang::ts_resolve::ResolvedImport, blob: &ContentId, span: Span) -> Option<&'a ProjectInput> {
+        (imported.target_blob == *blob && imported.target_span == span)
+            .then(|| self.by_path.get(imported.target_path.as_str()).copied())
+            .flatten()
     }
 }
 
@@ -2328,6 +2343,7 @@ fn callee_name(targets: &TargetIndex<'_>, target: &ProjectInput, span: Span) -> 
 fn call_facts(
     input: &ProjectInput,
     targets: &TargetIndex<'_>,
+    cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
     trail: &mut LegTrail,
 ) -> Vec<FlatFact> {
@@ -2338,9 +2354,16 @@ fn call_facts(
         std::collections::BTreeSet::new();
     let mut facts = Vec::new();
     for edge in edges {
-        // Byte-identical files share a blob: a target in this file's own blob
-        // is this file, not whichever copy the blob index met first.
-        let Some(target) = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob)) else {
+        let imported = cx.indexes.ts_modules.get().filter(|_| targets.ambiguous_blobs.contains(&edge.dst_blob)).and_then(|modules| {
+            let site = call.aux.sites.iter().find(|site| Some(site.span) == edge.call_site)?;
+            let local = input.output.strings.lookup(site.callee);
+            modules.bind(&input.path, local).ok().flatten()
+        });
+        // Import bindings carry the path identity that a shared content blob loses.
+        let Some(target) = imported.as_ref()
+            .and_then(|imported| targets.import_target(imported, &edge.dst_blob, edge.dst_span))
+            .or_else(|| (edge.dst_blob == input.blob).then_some(input))
+            .or_else(|| targets.input(&edge.dst_blob)) else {
             continue;
         };
         let caller_path = input.path.clone();
@@ -2530,12 +2553,24 @@ fn type_facts(
     let plane = arm_for(&input.path).map_or(TypePlane::Nodes, |arm| arm.type_plane);
     let mut resolved = resolve_type_edges(&input.path, &input.output, cx);
     if let Some(index) = cx.indexes.go_checker.get() {
-        crate::read::lang::go_checker::apply_types(index, &input.path, &input.output, &mut resolved);
+        crate::read::lang::go_checker::apply_types(
+            index,
+            &input.path,
+            &input.output,
+            &mut resolved,
+        );
     }
-    resolved
+    let mut facts: Vec<FlatFact> = resolved
         .iter()
         .filter_map(|edge| {
-            let target = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob))?;
+            let target_name = name_at(targets.type_names.get(&edge.dst_blob), edge.dst_span);
+            let imported = cx.indexes.ts_modules.get().filter(|_| targets.ambiguous_blobs.contains(&edge.dst_blob))
+                .and_then(|modules| target_name.as_deref().and_then(|name| modules.bind(&input.path, name).ok().flatten()));
+            let target = imported.as_ref()
+                .and_then(|imported| targets.import_target(imported, &edge.dst_blob, edge.dst_span))
+                .or_else(|| (edge.dst_blob == input.blob)
+                .then_some(input)
+                .or_else(|| targets.input(&edge.dst_blob)))?;
             let names = targets.type_names.get(&input.blob);
             let (owner, owner_name) = type_owner(plane, input, types, names, edge.src)?;
             trail.push(edge);
@@ -2551,7 +2586,80 @@ fn type_facts(
                 resolution_origin: edge.origin.as_str().to_string(),
             })
         })
-        .collect()
+        .collect();
+    if let (Some(modules), Some(defs)) = (
+        cx.indexes.ts_modules.get(),
+        cx.indexes.def_index.get(),
+    ) {
+        for use_site in modules.signature_uses(&input.path) {
+            let local = defs.map.get(&use_site.name).and_then(|sites| {
+                sites
+                    .iter()
+                    .find(|site| site.blob == input.blob && site.family == FamilyTag::Type)
+                    .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile))
+            });
+            let imported = || {
+                modules
+                    .bind(&input.path, &use_site.name)
+                    .ok()
+                    .flatten()
+                    .map(|target| {
+                        (
+                            target.target_blob,
+                            target.target_span,
+                            ResolutionOrigin::ModulePlane,
+                        )
+                    })
+            };
+            let Some((blob, span, origin)) = local.or_else(imported) else {
+                continue;
+            };
+            let imported_target = targets.ambiguous_blobs.contains(&blob)
+                .then(|| modules.bind(&input.path, &use_site.name).ok().flatten()).flatten();
+            let Some(target) = imported_target.as_ref()
+                .and_then(|imported| targets.import_target(imported, &blob, span))
+                .or_else(|| (blob == input.blob)
+                .then_some(input)
+                .or_else(|| targets.input(&blob)))
+            else {
+                continue;
+            };
+            let Some(target_name) = name_at(targets.type_names.get(&blob), span) else {
+                continue;
+            };
+            facts.push(FlatFact::ResolvedTypeEdge {
+                fact: None,
+                owner_path: input.path.clone(),
+                owner_name: Some(use_site.owner.clone()),
+                owner_start: use_site.owner_span.start,
+                owner_end: use_site.owner_span.end(),
+                target_path: target.path.clone(),
+                target_name: Some(target_name),
+                kind: use_site.kind.to_string(),
+                resolution_origin: origin.as_str().to_string(),
+            });
+        }
+    }
+    if let Some(modules) = cx.indexes.ts_modules.get() {
+        let mut seen = std::collections::BTreeSet::new();
+        for use_site in modules.type_parameter_uses(&input.path) {
+            if !seen.insert((use_site.owner_span.start, use_site.owner_span.len, &use_site.name)) {
+                continue;
+            }
+            facts.push(FlatFact::ResolvedTypeEdge {
+                fact: None,
+                owner_path: input.path.clone(),
+                owner_name: Some(use_site.owner.clone()),
+                owner_start: use_site.owner_span.start,
+                owner_end: use_site.owner_span.end(),
+                target_path: input.path.clone(),
+                target_name: Some(use_site.name.clone()),
+                kind: use_site.kind.to_string(),
+                resolution_origin: ResolutionOrigin::SameFile.as_str().to_string(),
+            });
+        }
+    }
+    facts
 }
 
 /// Whether a SCIP document path is a coordinate inside the project root. A go
