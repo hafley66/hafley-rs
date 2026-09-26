@@ -59,6 +59,12 @@ pub struct RustModuleFacts {
     /// trait dispatch table: declared (no body) and default (body present)
     /// fns alike bind to the trait's own def.
     traits: Vec<TraitEntry>,
+    /// Trait-associated type declarations, keyed by trait and slot.
+    assoc_types: Vec<(String, String, Span)>,
+    /// The declared return type of an associated method.
+    method_returns: Vec<(String, String, String)>,
+    /// An outer method call whose receiver is `T::f(...)`.
+    call_result_receivers: Vec<(Span, String, String)>,
     /// Every `type X = ..` def span. An alias rides the shared `DefIndex` as a
     /// type entity and is never the item a `X(..)` call constructs.
     aliases: Vec<Span>,
@@ -93,6 +99,19 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
 /// The module facts off the extract pass's own syn parse, so no second parse.
 pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
+    let mut return_walk = ReturnReceiverWalk { line_starts, method_returns: Vec::new(), receivers: Vec::new() };
+    syn::visit::visit_file(&mut return_walk, parsed);
+    let assoc_types = parsed.items.iter().filter_map(|item| {
+        let syn::Item::Trait(item) = item else { return None };
+        Some(item.items.iter().filter_map(|child| {
+            let syn::TraitItem::Type(assoc) = child else { return None };
+            let begin = assoc.ident.span().start();
+            let finish = assoc.ident.span().end();
+            let start = hafley_scm::lang::rust::line_col_to_byte(line_starts, begin.line as u32, begin.column as u32);
+            let end = hafley_scm::lang::rust::line_col_to_byte(line_starts, finish.line as u32, finish.column as u32);
+            Some((item.ident.to_string(), assoc.ident.to_string(), Span { start, len: end - start }))
+        }).collect::<Vec<_>>())
+    }).flatten().collect();
     RustModuleFacts {
         uses: rows.uses.into_iter().map(|row| UseBinding {
             local: row.local,
@@ -129,6 +148,9 @@ pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) ->
                 default: method.default,
             }).collect(),
         }).collect(),
+        assoc_types,
+        method_returns: return_walk.method_returns,
+        call_result_receivers: return_walk.receivers,
         aliases: rows.aliases.into_iter().map(|range| Span {
             start: range.start,
             len: range.end - range.start,
@@ -137,6 +159,45 @@ pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) ->
             .into_iter()
             .map(|row| (Span { start: row.range.start, len: row.range.end - row.range.start }, row.name))
             .collect(),
+    }
+}
+
+struct ReturnReceiverWalk<'a> {
+    line_starts: &'a [u32],
+    method_returns: Vec<(String, String, String)>,
+    receivers: Vec<(Span, String, String)>,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for ReturnReceiverWalk<'_> {
+    fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+        if let Some(owner) = hafley_scm::lang::rust::principal_ty(&item.self_ty) {
+            for child in &item.items {
+                let syn::ImplItem::Fn(method) = child else { continue };
+                let syn::ReturnType::Type(_, ty) = &method.sig.output else { continue };
+                let Some(ret) = hafley_scm::lang::rust::principal_ty(ty) else { continue };
+                self.method_returns.push((owner.clone(), method.sig.ident.to_string(),
+                    if ret == "Self" { owner.clone() } else { ret }));
+            }
+        }
+        syn::visit::visit_item_impl(self, item);
+    }
+
+    fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
+        if let syn::Expr::Call(receiver) = call.receiver.as_ref() {
+            if let syn::Expr::Path(path) = receiver.func.as_ref() {
+                let segments: Vec<_> = path.path.segments.iter().collect();
+                if segments.len() >= 2 {
+                    let begin = call.method.span().start();
+                    let finish = call.method.span().end();
+                    let start = hafley_scm::lang::rust::line_col_to_byte(self.line_starts, begin.line as u32, begin.column as u32);
+                    let end = hafley_scm::lang::rust::line_col_to_byte(self.line_starts, finish.line as u32, finish.column as u32);
+                    self.receivers.push((Span { start, len: end - start },
+                        segments[segments.len() - 2].ident.to_string(),
+                        segments[segments.len() - 1].ident.to_string()));
+                }
+            }
+        }
+        syn::visit::visit_expr_method_call(self, call);
     }
 }
 
@@ -473,6 +534,9 @@ pub struct RustModuleIndex {
     /// (file, fn): the same trait NAME can be declared by several files, so
     /// a target pick needs the site's own blob.
     trait_fns: HashMap<String, Vec<TraitFnSite>>,
+    assoc_types: HashMap<(String, String), Vec<(ContentId, Span)>>,
+    method_returns: HashMap<(String, String), Vec<String>>,
+    call_result_receivers: HashMap<String, HashMap<Span, (String, String)>>,
     /// (trait name, fn name) -> every corpus `impl Trait for T` fn of the pair.
     trait_impl_fns: HashMap<(String, String), Vec<(ContentId, Span)>>,
     /// self type -> trait names an `impl Trait for T` block names.
@@ -718,6 +782,18 @@ impl RustModuleIndex {
             let Some(blob) = index.blobs.get(path) else {
                 continue;
             };
+            for (owner, method, ret) in &facts.method_returns {
+                index.method_returns.entry((owner.clone(), method.clone()))
+                    .or_default().push(ret.clone());
+            }
+            for (span, owner, method) in &facts.call_result_receivers {
+                index.call_result_receivers.entry(path.clone()).or_default()
+                    .insert(*span, (owner.clone(), method.clone()));
+            }
+            for (trait_name, slot, span) in &facts.assoc_types {
+                index.assoc_types.entry((trait_name.clone(), slot.clone()))
+                    .or_default().push((blob.clone(), *span));
+            }
             for entry in &facts.impls {
                 index.impl_types.insert(entry.self_type.clone());
                 for (name, span) in &entry.methods {
@@ -1137,6 +1213,21 @@ impl RustModuleIndex {
             .iter()
             .find(|(_, name, family)| name == bound_name && *family == FamilyTag::Type);
         Some(declared.map_or((blob.clone(), span), |(span, _, _)| (blob, *span)))
+    }
+
+    pub fn assoc_type_target(&self, trait_name: &str, slot: &str) -> Option<(ContentId, Span)> {
+        let sites = self.assoc_types.get(&(trait_name.to_string(), slot.to_string()))?;
+        match sites.as_slice() {
+            [only] => Some(only.clone()),
+            _ => None,
+        }
+    }
+
+    pub fn call_result_receiver_type(&self, path: &str, site: Span) -> Option<&str> {
+        let (owner, method) = self.call_result_receivers.get(path)?.get(&site)?;
+        let returns = self.method_returns.get(&(owner.clone(), method.clone()))?;
+        let [only] = returns.as_slice() else { return None };
+        Some(only)
     }
 
     /// `local`'s EXPLICIT `use` binding in `path`. `Err(())` is AMBIGUOUS: a

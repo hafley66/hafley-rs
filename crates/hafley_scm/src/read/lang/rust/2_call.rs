@@ -451,7 +451,10 @@ impl Resolve<CallF> for RustSource {
                 .and_then(|r| match &r.outcome {
                     ReceiverOutcome::Named(name) => Some(output.strings.lookup(*name).to_string()),
                     _ => None,
-                });
+                })
+                .or_else(|| modules.zip(own_path)
+                    .and_then(|(modules, path)| modules.call_result_receiver_type(path, site.span))
+                    .map(str::to_string));
             let recv_t = recv_named.as_ref().and_then(|ty| {
                 modules
                     .and_then(|m| {

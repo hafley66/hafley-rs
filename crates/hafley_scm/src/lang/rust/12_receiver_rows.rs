@@ -38,6 +38,21 @@ fn output_ty(sig: &syn::Signature) -> Option<String> {
     }
 }
 
+/// A `Box<T>` receiver reaches `T` through `Deref` during method lookup.
+fn receiver_ty(ty: &syn::Type) -> Option<String> {
+    match ty {
+        syn::Type::Reference(r) => receiver_ty(&r.elem),
+        syn::Type::Path(path) if path.path.segments.last()?.ident == "Box" => {
+            let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments else {
+                return principal_ty(ty);
+            };
+            let Some(syn::GenericArgument::Type(inner)) = args.args.first() else { return principal_ty(ty) };
+            receiver_ty(inner)
+        }
+        _ => principal_ty(ty),
+    }
+}
+
 /// Generic param name -> every trait bound on it, from the param list and
 /// the where clause (`fn f<T: Iter>(t: T)` / `where T: Display`).
 fn trait_bounds_of_generics(
@@ -133,7 +148,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
             )),
             syn::Pat::Type(pat) => match &*pat.pat {
                 syn::Pat::Ident(inner) => {
-                    let binding = principal_ty(&pat.ty)
+                    let binding = receiver_ty(&pat.ty)
                         .map(TypeBinding::Named)
                         .or_else(|| {
                             self.init_type(local.init.as_ref().map(|i| i.expr.as_ref()))
@@ -411,7 +426,7 @@ impl<'a> ReceiverWalk<'a> {
             let syn::Pat::Ident(pat) = &*arg.pat else {
                 continue;
             };
-            if let Some(ty) = principal_ty(&arg.ty) {
+            if let Some(ty) = receiver_ty(&arg.ty) {
                 // A param typed by the fn's OWN generic param resolves to the
                 // param's single trait bound (class 6b); an unbound or
                 // multi-bound param stays as written.
