@@ -125,12 +125,16 @@ fi
 
 start=$(date +%s)
 query_ran=0
-for kind in type call; do
+for kind in type call type-canonical; do
   if [ "${RYI_CODEQL_REUSE_QUERIES:-0}" = 1 ] && [ -f "$out/$kind.csv" ]; then
     continue
   fi
   query_ran=1
-  "$codeql" query run "$query_dir/${kind}_edges_repo.ql" \
+  query_file="$query_dir/${kind}_edges_repo.ql"
+  if [ "$kind" = type-canonical ]; then
+    query_file="$query_dir/type_edges_canonical_repo.ql"
+  fi
+  "$codeql" query run "$query_file" \
     --database "$out/codeql-db" --output "$out/$kind.bqrs" \
     --ram=2048 --threads=4 -J=-Xmx2g \
     >"$out/$kind-query.log" 2>&1
@@ -168,46 +172,67 @@ def path(value):
         text = text[2:]
     return text if not text.startswith('../') else None
 
-summary = []
-disagreements = []
+raw_summary = []
+raw_disagreements = []
+canonical_summary = []
+canonical_disagreements = []
 for kind, table, cols in (
     ('type', 'resolved_type_edge', ('owner_path', 'owner_name', 'target_path', 'target_name')),
     ('call', 'resolved_edge', ('caller_path', 'caller_name', 'callee_path', 'callee_name')),
 ):
     sql = 'select distinct ' + ', '.join(cols) + ' from ' + table
     ryi = {(path(a), b, path(c), d) for a, b, c, d in conn.execute(sql)}
-    with (out / f'{kind}.csv').open(newline='') as stream:
-        rows = csv.reader(stream)
-        next(rows)
-        codeql = {(path(a), b, path(c), d) for a, b, c, d in rows}
     ryi = {row for row in ryi if all(row)}
-    codeql = {row for row in codeql if all(row)}
-    both = ryi & codeql
-    only_ryi = ryi - codeql
-    only_codeql = codeql - ryi
-    summary.append((kind, len(both), len(only_ryi), len(only_codeql)))
-    for bucket, rows in (('ryi-only', only_ryi), ('codeql-only', only_codeql)):
-        disagreements.extend((kind, bucket, *row, '') for row in sorted(rows))
+    for mode, filename, summary, disagreements in (
+        ('raw', kind, raw_summary, raw_disagreements),
+        ('canonical', 'type-canonical' if kind == 'type' else kind,
+         canonical_summary, canonical_disagreements),
+    ):
+        with (out / f'{filename}.csv').open(newline='') as stream:
+            rows = csv.reader(stream)
+            next(rows)
+            codeql = {(path(a), b, path(c), d) for a, b, c, d in rows}
+        codeql = {row for row in codeql if all(row)}
+        both = ryi & codeql
+        only_ryi = ryi - codeql
+        only_codeql = codeql - ryi
+        summary.append((kind, len(both), len(only_ryi), len(only_codeql)))
+        for bucket, rows in (('ryi-only', only_ryi), ('codeql-only', only_codeql)):
+            disagreements.extend((kind, bucket, *row, '') for row in sorted(rows))
 
 with (out / 'disagreements.tsv').open('w', newline='') as stream:
     writer = csv.writer(stream, delimiter='\t')
     writer.writerow(('kind', 'bucket', 'src_file', 'enclosing_item', 'dst_file', 'dst_name', 'verdict'))
-    writer.writerows(disagreements)
+    writer.writerows(raw_disagreements)
 with (out / 'summary.tsv').open('w', newline='') as stream:
     writer = csv.writer(stream, delimiter='\t')
     writer.writerow(('kind', 'agree', 'ryi-only', 'codeql-only'))
-    writer.writerows(summary)
+    writer.writerows(raw_summary)
+with (out / 'canonical-disagreements.tsv').open('w', newline='') as stream:
+    writer = csv.writer(stream, delimiter='\t')
+    writer.writerow(('kind', 'bucket', 'src_file', 'enclosing_item', 'dst_file', 'dst_name', 'verdict'))
+    writer.writerows(canonical_disagreements)
+with (out / 'canonical-summary.tsv').open('w', newline='') as stream:
+    writer = csv.writer(stream, delimiter='\t')
+    writer.writerow(('kind', 'agree', 'ryi-only', 'codeql-only'))
+    writer.writerows(canonical_summary)
 
-print('kind\tagree\tryi-only\tcodeql-only')
-for row in summary:
-    print(*row, sep='\t')
-print('sample\tkind\tbucket\tsrc_file\tenclosing_item\tdst_file\tdst_name\tverdict')
-for kind in ('type', 'call'):
-    for bucket in ('ryi-only', 'codeql-only'):
-        sample = [row for row in disagreements if row[0] == kind and row[1] == bucket][:20]
-        for row in sample:
-            print('sample', *row, sep='\t')
+for mode, summary, disagreements in (
+    ('raw', raw_summary, raw_disagreements),
+    ('canonical', canonical_summary, canonical_disagreements),
+):
+    prefix = '' if mode == 'raw' else 'canonical_'
+    print(f'{prefix}kind\tagree\tryi-only\tcodeql-only')
+    for row in summary:
+        print(f'{prefix}{row[0]}', *row[1:], sep='\t')
+    print(f'{prefix}sample\tkind\tbucket\tsrc_file\tenclosing_item\tdst_file\tdst_name\tverdict')
+    for kind in ('type', 'call'):
+        for bucket in ('ryi-only', 'codeql-only'):
+            sample = [row for row in disagreements if row[0] == kind and row[1] == bucket][:20]
+            for row in sample:
+                print(f'{prefix}sample', *row, sep='\t')
 print(f'full_disagreements\t{out / "disagreements.tsv"}')
+print(f'canonical_disagreements\t{out / "canonical-disagreements.tsv"}')
 source_count = sum(p.suffix in ('.rs', '.ts', '.tsx') for p in root.rglob('*') if p.is_file())
 print(f'source_files\t{source_count}')
 rewrite = out / 'source/.dependency-rewrite'
