@@ -125,7 +125,11 @@ fi
 
 start=$(date +%s)
 query_ran=0
-for kind in type call type-canonical; do
+query_kinds=(type call)
+if [ "$language" = javascript ]; then
+  query_kinds+=(type-canonical)
+fi
+for kind in "${query_kinds[@]}"; do
   if [ "${RYI_CODEQL_REUSE_QUERIES:-0}" = 1 ] && [ -f "$out/$kind.csv" ]; then
     continue
   fi
@@ -145,7 +149,7 @@ if [ "$query_ran" = 1 ] || [ ! -f "$out/codeql-query-seconds" ]; then
   echo "$(( $(date +%s) - start ))" >"$out/codeql-query-seconds"
 fi
 
-python3 - "$root" "$out" <<'PY'
+python3 - "$root" "$out" "$language" <<'PY'
 import csv
 import pathlib
 import sqlite3
@@ -155,6 +159,7 @@ import time
 started = time.perf_counter()
 root = pathlib.Path(sys.argv[1])
 out = pathlib.Path(sys.argv[2])
+language = sys.argv[3]
 conn = sqlite3.connect(out / 'ryi.db')
 
 def path(value):
@@ -183,11 +188,11 @@ for kind, table, cols in (
     sql = 'select distinct ' + ', '.join(cols) + ' from ' + table
     ryi = {(path(a), b, path(c), d) for a, b, c, d in conn.execute(sql)}
     ryi = {row for row in ryi if all(row)}
-    for mode, filename, summary, disagreements in (
-        ('raw', kind, raw_summary, raw_disagreements),
-        ('canonical', 'type-canonical' if kind == 'type' else kind,
-         canonical_summary, canonical_disagreements),
-    ):
+    comparisons = [(kind, raw_summary, raw_disagreements)]
+    if language == 'javascript':
+        comparisons.append(('type-canonical' if kind == 'type' else kind,
+                            canonical_summary, canonical_disagreements))
+    for filename, summary, disagreements in comparisons:
         with (out / f'{filename}.csv').open(newline='') as stream:
             rows = csv.reader(stream)
             next(rows)
@@ -208,19 +213,20 @@ with (out / 'summary.tsv').open('w', newline='') as stream:
     writer = csv.writer(stream, delimiter='\t')
     writer.writerow(('kind', 'agree', 'ryi-only', 'codeql-only'))
     writer.writerows(raw_summary)
-with (out / 'canonical-disagreements.tsv').open('w', newline='') as stream:
-    writer = csv.writer(stream, delimiter='\t')
-    writer.writerow(('kind', 'bucket', 'src_file', 'enclosing_item', 'dst_file', 'dst_name', 'verdict'))
-    writer.writerows(canonical_disagreements)
-with (out / 'canonical-summary.tsv').open('w', newline='') as stream:
-    writer = csv.writer(stream, delimiter='\t')
-    writer.writerow(('kind', 'agree', 'ryi-only', 'codeql-only'))
-    writer.writerows(canonical_summary)
+if language == 'javascript':
+    with (out / 'canonical-disagreements.tsv').open('w', newline='') as stream:
+        writer = csv.writer(stream, delimiter='\t')
+        writer.writerow(('kind', 'bucket', 'src_file', 'enclosing_item', 'dst_file', 'dst_name', 'verdict'))
+        writer.writerows(canonical_disagreements)
+    with (out / 'canonical-summary.tsv').open('w', newline='') as stream:
+        writer = csv.writer(stream, delimiter='\t')
+        writer.writerow(('kind', 'agree', 'ryi-only', 'codeql-only'))
+        writer.writerows(canonical_summary)
 
-for mode, summary, disagreements in (
-    ('raw', raw_summary, raw_disagreements),
-    ('canonical', canonical_summary, canonical_disagreements),
-):
+outputs = [('raw', raw_summary, raw_disagreements)]
+if language == 'javascript':
+    outputs.append(('canonical', canonical_summary, canonical_disagreements))
+for mode, summary, disagreements in outputs:
     prefix = '' if mode == 'raw' else 'canonical_'
     print(f'{prefix}kind\tagree\tryi-only\tcodeql-only')
     for row in summary:
@@ -232,7 +238,8 @@ for mode, summary, disagreements in (
             for row in sample:
                 print(f'{prefix}sample', *row, sep='\t')
 print(f'full_disagreements\t{out / "disagreements.tsv"}')
-print(f'canonical_disagreements\t{out / "canonical-disagreements.tsv"}')
+if language == 'javascript':
+    print(f'canonical_disagreements\t{out / "canonical-disagreements.tsv"}')
 source_count = sum(p.suffix in ('.rs', '.ts', '.tsx') for p in root.rglob('*') if p.is_file())
 print(f'source_files\t{source_count}')
 rewrite = out / 'source/.dependency-rewrite'
