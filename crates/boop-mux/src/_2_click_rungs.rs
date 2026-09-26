@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
-use ignore::WalkBuilder;
+use ignore::{WalkBuilder, WalkState};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 
@@ -391,13 +391,17 @@ fn index_cache() -> &'static IndexCache {
 /// The gitignore-aware file and directory list under `root`, cached briefly: a
 /// wall of agent output resolves many tokens against the same tree.
 pub(crate) fn index_for(root: &Path) -> Arc<Vec<IndexEntry>> {
+    index_with(root, 0)
+}
+
+/// `index_for` on `threads` walker threads; `0` lets the walker pick one per core.
+pub(crate) fn index_with(root: &Path, threads: usize) -> Arc<Vec<IndexEntry>> {
     let key = root.to_path_buf();
     if let Some((at, entries)) = index_cache().lock().ok().and_then(|c| c.get(&key).cloned()) {
         if at.elapsed() < INDEX_TTL {
             return entries;
         }
     }
-    let mut entries = Vec::new();
     let mut walker = WalkBuilder::new(root);
     walker
         .hidden(false)
@@ -406,28 +410,36 @@ pub(crate) fn index_for(root: &Path) -> Arc<Vec<IndexEntry>> {
         .git_exclude(true)
         .parents(true)
         .follow_links(false)
+        .threads(threads)
         // Dependency trees and git internals are never what a pasted path
         // means; keeping them out stops fzf offering node_modules noise.
         .filter_entry(|entry| {
             let name = entry.file_name().to_string_lossy();
             name != "node_modules" && name != ".git"
         });
-    for result in walker.build() {
-        if entries.len() >= INDEX_CAP {
-            break;
-        }
-        let Ok(entry) = result else { continue };
-        let Some(file_type) = entry.file_type() else { continue };
-        let path = entry.path();
-        if path == root {
-            continue;
-        }
-        entries.push(IndexEntry {
-            path: path.to_string_lossy().into_owned(),
-            name: entry.file_name().to_string_lossy().into_owned(),
-            is_dir: file_type.is_dir(),
-        });
-    }
+    let found = Mutex::new(Vec::new());
+    walker.build_parallel().run(|| {
+        Box::new(|result| {
+            let Ok(entry) = result else { return WalkState::Continue };
+            let Some(file_type) = entry.file_type() else { return WalkState::Continue };
+            if entry.path() == root {
+                return WalkState::Continue;
+            }
+            let Ok(mut found) = found.lock() else { return WalkState::Quit };
+            if found.len() >= INDEX_CAP {
+                return WalkState::Quit;
+            }
+            found.push(IndexEntry {
+                path: entry.path().to_string_lossy().into_owned(),
+                name: entry.file_name().to_string_lossy().into_owned(),
+                is_dir: file_type.is_dir(),
+            });
+            WalkState::Continue
+        })
+    });
+    // Threads finish in any order; sorting keeps rankings reproducible.
+    let mut entries = found.into_inner().unwrap_or_default();
+    entries.sort_by(|a, b| a.path.cmp(&b.path));
     let entries = Arc::new(entries);
     if let Ok(mut cache) = index_cache().lock() {
         cache.insert(key, (Instant::now(), entries.clone()));
