@@ -33,7 +33,8 @@ pub use _1_init::{init, init_with_sinks, init_with_writer, startup};
 pub use _2_otlp::shutdown;
 pub use _3_chrome::{chrome_layer, finish_trace, trace_path, TRACE_PATH_VARIABLE};
 pub use _4_counts::{
-    assert_growth, observed_growth, CountRecorder, EventStats, EventSums, FieldStats, Growth,
+    assert_growth, assert_growth_sized, observed_growth, observed_growth_sized, CountRecorder,
+    EventStats, EventSums, FieldStats, Growth,
     SpanCounts,
 };
 pub use flush::{Flush, ParseFlushError, Row, Sink, Writer};
