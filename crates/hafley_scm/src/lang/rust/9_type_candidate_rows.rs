@@ -289,6 +289,21 @@ struct BodyTypeWalk {
 }
 
 impl<'ast> Visit<'ast> for BodyTypeWalk {
+    fn visit_generic_argument(&mut self, arg: &'ast syn::GenericArgument) {
+        let ty = match arg {
+            syn::GenericArgument::Type(ty) => Some(ty),
+            syn::GenericArgument::AssocType(assoc) => Some(&assoc.ty),
+            _ => None,
+        };
+        if let Some(ty) = ty {
+            self.candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
+                to,
+                kind: TypeCandidateKind::Uses,
+            }));
+        }
+        syn::visit::visit_generic_argument(self, arg);
+    }
+
     fn visit_pat_type(&mut self, pat: &'ast syn::PatType) {
         self.candidates.extend(type_refs(&pat.ty).into_iter().map(|to| TypeCandidateRow {
             to,

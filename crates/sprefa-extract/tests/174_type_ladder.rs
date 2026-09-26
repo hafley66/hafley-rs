@@ -302,3 +302,21 @@ fn type_scope_ladder_resolves_impl_self_references() {
     ).unwrap();
     assert_eq!(rows, (2, 1));
 }
+
+#[test]
+fn type_scope_ladder_collects_expression_type_arguments() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    ryi(&["fast", "tests/fixtures/type_ladder_scope/src", "--sqlite", &fast]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'turbofish'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),
+           (select count(*) from resolved_type_edge where owner_name = 'turbofish'
+              and target_name = 'String' and target_path like '%/_12_other.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (1, 0));
+}
