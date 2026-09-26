@@ -55,6 +55,17 @@ enum Val {
     Text(u32, u32),
 }
 
+fn span_bytes(text: &[u8], val: Val) -> &[u8] {
+    let Val::Text(start, len) = val else { unreachable!("text span required") };
+    &text[start as usize..start as usize + len as usize]
+}
+
+fn fx_hash(bytes: &[u8]) -> u64 {
+    let mut hasher = FxHasher::default();
+    bytes.hash(&mut hasher);
+    hasher.finish()
+}
+
 /// One table's statements, shared with the writer thread.
 struct Meta {
     name: String,
@@ -173,21 +184,19 @@ impl Batch {
 
     #[inline(always)]
     fn bytes(&self, val: Val) -> &[u8] {
-        let Val::Text(start, len) = val else { unreachable!("text span required") };
-        &self.text[start as usize..start as usize + len as usize]
+        span_bytes(&self.text, val)
     }
 
     #[inline(always)]
     fn intern(&mut self, value: &str) -> Val {
         if value.len() > 128 { return self.text(value); }
-        let mut hasher = FxHasher::default();
-        value.hash(&mut hasher);
-        let hash = hasher.finish();
+        let hash = fx_hash(value.as_bytes());
         if let Some(&span) = self.interned.find(hash, |&span| self.bytes(span) == value.as_bytes()) {
             return span;
         }
         let val = self.text(value);
-        self.interned.insert_unique(hash, val, |_| hash);
+        let text = &self.text;
+        self.interned.insert_unique(hash, val, |&span| fx_hash(span_bytes(text, span)));
         val
     }
 
@@ -947,9 +956,7 @@ impl ser::Serializer for &mut Scalar<'_> {
 
 #[cfg(test)]
 mod tests {
-    use super::{Batch, Val};
-    use std::hash::{Hash, Hasher};
-    use rustc_hash::FxHasher;
+    use super::{fx_hash, Batch, Val};
 
     #[test]
     fn repeated_text_reuses_one_batch_span_and_recycled_capacity() {
@@ -981,9 +988,7 @@ mod tests {
     #[test]
     fn hash_collision_keeps_distinct_text_spans() {
         let mut batch = Batch::empty(0);
-        let mut hasher = FxHasher::default();
-        "other".hash(&mut hasher);
-        let forced_hash = hasher.finish();
+        let forced_hash = fx_hash(b"other");
         let seed = batch.text("seed");
         batch.interned.insert_unique(forced_hash, seed, |_| forced_hash);
         let other = batch.intern("other");
@@ -997,6 +1002,28 @@ mod tests {
         let bypassed = batch.intern(&long);
         assert_eq!(batch.bytes(bypassed), long.as_bytes());
         assert_eq!(batch.interned.len(), before);
+    }
+
+    #[test]
+    fn interning_survives_hash_table_growth() {
+        let mut batch = Batch::empty(0);
+        let mut first = None;
+        let mut last = None;
+        for index in 0..1_000 {
+            let value = format!("short-{index:04}");
+            let span = batch.intern(&value);
+            if index == 0 {
+                first = Some(span);
+            }
+            if index == 999 {
+                last = Some(span);
+            }
+        }
+        assert_eq!(batch.interned.len(), 1_000);
+        let text_len = batch.text.len();
+        assert_eq!(batch.intern("short-0000"), first.unwrap());
+        assert_eq!(batch.intern("short-0999"), last.unwrap());
+        assert_eq!(batch.text.len(), text_len);
     }
 
     #[test]
