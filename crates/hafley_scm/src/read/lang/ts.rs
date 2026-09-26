@@ -4618,46 +4618,9 @@ impl TsSource {
         output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
-    ) -> Option<(ContentId, Span)> {
-        let call = output.call.as_ref()?;
-        if let Some(r) = def_named(call, &output.strings, callee) {
-            let span = call.node(r).span;
-            if let Some(site) = corpus_defs(index, callee)
-                .iter()
-                .find(|site| site.span == span)
-            {
-                return Some((site.blob.clone(), site.span));
-            }
-        }
-        let sites = corpus_defs(index, callee);
-        let mut blobs: Vec<ContentId> = Vec::new();
-        for site in sites {
-            if !blobs.contains(&site.blob) {
-                blobs.push(site.blob.clone());
-            }
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|s| s.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some((blob.clone(), site.span))
-    }
-
-    /// `call_name_match` with the current blob ahead of the corpus-wide count:
-    /// among twins a declaration in this file binds its own plain calls.
-    fn ts_call_name_match(
-        output: &RyiOutput,
-        def_index: &DefIndex,
-        callee: &str,
         own: Option<&ContentId>,
-        _modules: Option<(&TsModuleIndex, &str)>,
-        _paths: Option<&crate::read::types::PathIndex>,
-        _kinds: Option<&crate::read::types::KindIndex>,
     ) -> Option<(ContentId, Span)> {
-        let sites = corpus_defs(def_index, callee);
+        let sites = corpus_defs(index, callee);
         // A lexical declaration in this file wins before the corpus-wide
         // duplicate count. Require its CallF span in the current blob: a
         // same-named export in another file cannot seat a local call.
@@ -5086,14 +5049,11 @@ impl Resolve<CallF> for TsSource {
                 if imported {
                     return None;
                 }
-                Self::ts_call_name_match(
+                Self::call_name_match(
                     output,
                     def_index,
                     callee,
                     own.as_ref(),
-                    modules,
-                    paths,
-                    kinds,
                 )
                 .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
@@ -5257,14 +5217,11 @@ impl Resolve<CallF> for TsSource {
                 if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
                     return None;
                 }
-                Self::ts_call_name_match(
+                Self::call_name_match(
                     output,
                     def_index,
                     named,
                     own.as_ref(),
-                    modules,
-                    paths,
-                    kinds,
                 )
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
             }) else {
