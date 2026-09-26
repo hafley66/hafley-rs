@@ -16,6 +16,8 @@ use axum::Json;
 use base64::Engine as _;
 use fs4::fs_std::FileExt as _;
 use futures_util::StreamExt as _;
+use http_body::Frame;
+use http_body_util::{BodyExt as _, StreamBody};
 use tokio_util::sync::CancellationToken;
 
 use crate::daemon_auto::Request;
@@ -39,7 +41,13 @@ fn error_response(error: OpError) -> Response {
 
 fn bad_request(message: String) -> Response { error_response(OpError(message, 2)) }
 
-async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>) -> Response {
+fn diagnostic_header(diagnostics: &crate::ops::Diagnostics) -> Option<HeaderValue> {
+    let bytes = std::mem::take(&mut *diagnostics.lock().unwrap());
+    if bytes.is_empty() { return None; }
+    HeaderValue::from_str(&base64::engine::general_purpose::STANDARD.encode(bytes)).ok()
+}
+
+async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>, diagnostics: crate::ops::Diagnostics) -> Response {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<i32>, Bytes)>(64);
     tokio::task::spawn_blocking(move || {
         let mut failed = false;
@@ -56,20 +64,33 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
             if tx.blocking_send((code, Bytes::from(bytes))).is_err() || failed { return; }
         }
     });
-    let Some(first) = rx.recv().await else { return (StatusCode::OK, [(CONTENT_TYPE, "application/x-ndjson")], Body::empty()).into_response(); };
-    let status = first.0.map_or(StatusCode::OK, error_status);
-    let stream = futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(first.1) })
-        .chain(futures_util::stream::unfold(rx, |mut rx| async move {
-            rx.recv().await.map(|(_, bytes)| (Ok::<Bytes, std::io::Error>(bytes), rx))
-        }));
-    (status, [(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
+    let first = rx.recv().await;
+    let status = first.as_ref().and_then(|item| item.0).map_or(StatusCode::OK, error_status);
+    let stream = futures_util::stream::unfold((first.map(|item| item.1), rx, diagnostics, false), |(first, mut rx, diagnostics, finished)| async move {
+        if finished { return None; }
+        if let Some(bytes) = first {
+            return Some((Ok::<Frame<Bytes>, std::io::Error>(Frame::data(bytes)), (None, rx, diagnostics, false)));
+        }
+        if let Some((_, bytes)) = rx.recv().await {
+            return Some((Ok(Frame::data(bytes)), (None, rx, diagnostics, false)));
+        }
+        let value = diagnostic_header(&diagnostics)?;
+        let mut headers = HeaderMap::new();
+        headers.insert(HeaderName::from_static("x-ryi-stderr"), value);
+        Some((Ok(Frame::trailers(headers)), (None, rx, diagnostics, true)))
+    });
+    (status, [(CONTENT_TYPE, "application/x-ndjson"), (axum::http::header::TRAILER, "x-ryi-stderr")], Body::new(StreamBody::new(stream))).into_response()
 }
 
-async fn raw_response(out: OpResult<Vec<u8>>) -> Response {
-    match out {
+async fn raw_response(out: OpResult<Vec<u8>>, diagnostics: &crate::ops::Diagnostics) -> Response {
+    let mut response = match out {
         Ok(bytes) => ([(CONTENT_TYPE, "application/x-ndjson")], bytes).into_response(),
         Err(error) => error_response(error),
+    };
+    if let Some(value) = diagnostic_header(diagnostics) {
+        response.headers_mut().insert(HeaderName::from_static("x-ryi-stderr"), value);
     }
+    response
 }
 
 macro_rules! stream_handler {
@@ -77,8 +98,9 @@ macro_rules! stream_handler {
         async fn $handler(Json(request): Json<Request>) -> Response {
             let root = request.request_root.clone();
             let args: $args = match request.decode($verb) { Ok(args) => args, Err(error) => return bad_request(error) };
-            let items = crate::ops::with_request_root(root, || crate::ops::$op(&args));
-            jsonl_response(items).await
+            let diagnostics = Arc::new(Mutex::new(Vec::new()));
+            let items = crate::ops::with_request_context(root, Some(diagnostics.clone()), || crate::ops::$op(&args));
+            jsonl_response(items, diagnostics).await
         }
     };
 }
@@ -87,8 +109,10 @@ macro_rules! raw_handler {
         async fn $handler(Json(request): Json<Request>) -> Response {
             let root = request.request_root.clone();
             let args: $args = match request.decode($verb) { Ok(args) => args, Err(error) => return bad_request(error) };
-            let out = tokio::task::spawn_blocking(move || crate::ops::with_request_root(root, || crate::ops::$op(&args))).await;
-            match out { Ok(out) => raw_response(out).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+            let diagnostics = Arc::new(Mutex::new(Vec::new()));
+            let captured = diagnostics.clone();
+            let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::$op(&args))).await;
+            raw_response(out.unwrap_or_else(|error| Err(OpError(error.to_string(), 1))), &diagnostics).await
         }
     };
 }
@@ -138,8 +162,10 @@ async fn ingest(headers: HeaderMap, body: Body) -> Response {
     let root = request.request_root.clone();
     let args: IngestArgs = match request.decode("ingest") { Ok(args) => args, Err(error) => return bad_request(error) };
     let input = jsonl_input(body);
-    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_root(root, || crate::ops::ingest(&args, input))).await;
-    match out { Ok(out) => raw_response(out).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
+    let diagnostics = Arc::new(Mutex::new(Vec::new()));
+    let captured = diagnostics.clone();
+    let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::ingest(&args, input))).await;
+    match out { Ok(out) => raw_response(out, &diagnostics).await, Err(error) => error_response(OpError(error.to_string(), 1)) }
 }
 
 #[derive(Clone)]
@@ -159,10 +185,10 @@ async fn touch(State(state): State<DaemonState>, request: HttpRequest<Body>, nex
     *state.last.lock().unwrap() = Instant::now();
     let guard = RequestGuard(state);
     let response = next.run(request).await;
-    response.map(|body| Body::from_stream(body.into_data_stream().map(move |chunk| {
+    response.map(|body| Body::new(StreamBody::new(body.into_stream().map(move |chunk| {
         let _keep_alive = &guard;
         chunk
-    })))
+    }))))
 }
 
 async fn handshake(State(state): State<DaemonState>, headers: HeaderMap) -> StatusCode {

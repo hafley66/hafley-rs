@@ -49,6 +49,13 @@ fn empty_body() -> ClientBody {
     Full::new(Bytes::new()).map_err(|never| match never {}).boxed_unsync()
 }
 
+fn append_diagnostics(bytes: &mut Vec<u8>, headers: &hyper::HeaderMap) -> Result<(), ClientError> {
+    if let Some(value) = headers.get("x-ryi-stderr") {
+        bytes.extend(base64::engine::general_purpose::STANDARD.decode(value.as_bytes())?);
+    }
+    Ok(())
+}
+
 async fn handshake(socket: &Path, stamp: &str) -> Result<StatusCode, ClientError> {
     let request = Request::builder().method(Method::GET).uri("http://ryi/__handshake")
         .header("x-ryi-build", stamp).body(empty_body())?;
@@ -156,7 +163,7 @@ async fn run() -> Result<i32, ClientError> {
         "trail" => "/trail",
         _ => return Err(format!("no HTTP path for {verb}").into()),
     };
-    let mut builder = Request::builder().method(method).uri(format!("http://ryi{path}"));
+    let mut builder = Request::builder().method(method).uri(format!("http://ryi{path}")).header("te", "trailers");
     let body = if matches!(verb, "ingest") {
         let metadata = base64::engine::general_purpose::STANDARD.encode(json.as_bytes());
         builder = builder.header("x-ryi-request", metadata).header("content-type", "application/x-ndjson");
@@ -175,12 +182,18 @@ async fn run() -> Result<i32, ClientError> {
     let error_code = response.headers().get("x-ryi-exit-code")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<i32>().ok());
+    let mut diagnostics = Vec::new();
+    append_diagnostics(&mut diagnostics, response.headers())?;
     let mut body = response.into_body();
     if !status.is_success() {
         let mut stderr = tokio::io::stderr();
         while let Some(frame) = body.frame().await {
-            if let Ok(bytes) = frame?.into_data() { stderr.write_all(&bytes).await?; }
+            match frame?.into_data() {
+                Ok(bytes) => stderr.write_all(&bytes).await?,
+                Err(frame) => if let Ok(headers) = frame.into_trailers() { append_diagnostics(&mut diagnostics, &headers)?; },
+            }
         }
+        stderr.write_all(&diagnostics).await?;
         stderr.flush().await?;
         return Ok(error_code.unwrap_or(if status == StatusCode::BAD_REQUEST { 2 } else { 1 }));
     }
@@ -189,7 +202,8 @@ async fn run() -> Result<i32, ClientError> {
     let mut line = Vec::new();
     while let Some(frame) = body.frame().await {
         let frame = frame?;
-        if let Ok(bytes) = frame.into_data() {
+        match frame.into_data() {
+            Ok(bytes) => {
             for byte in &bytes {
                 line.push(*byte);
                 if *byte == b'\n' {
@@ -197,6 +211,8 @@ async fn run() -> Result<i32, ClientError> {
                     pending = std::mem::take(&mut line);
                 }
             }
+            }
+            Err(frame) => if let Ok(headers) = frame.into_trailers() { append_diagnostics(&mut diagnostics, &headers)?; },
         }
     }
     if !line.is_empty() {
@@ -211,6 +227,7 @@ async fn run() -> Result<i32, ClientError> {
     }
     if exit == 0 { stdout.write_all(&pending).await?; }
     else { tokio::io::stderr().write_all(&pending).await?; }
+    tokio::io::stderr().write_all(&diagnostics).await?;
     stdout.flush().await?;
     Ok(exit)
 }

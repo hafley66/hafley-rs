@@ -220,7 +220,7 @@ fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
         .flatten();
     if let Some(path) = index_location {
         // @eprintln-ok: CLI-UX location line, deliberately off the fact stream.
-        eprintln!("ryi: scip index {}", path.display());
+        ops::print_diagnostic(format_args!("ryi: scip index {}", path.display()));
     }
     output.finish()
 }
@@ -931,15 +931,15 @@ fn stream(
         match &bundle {
             None => {
                 let ext = path.rsplit_once('.').map(|(_, ext)| ext).unwrap_or(path);
-                eprintln!("0 facts: no extractor for .{ext}"); // @eprintln-ok
+                ops::print_diagnostic(format_args!("0 facts: no extractor for .{ext}"));
             }
             Some(_) => {
                 let name = source_for(path).map_or("a Source", |src| src.name());
-                eprintln!("0 facts: {name} found nothing in {path}"); // @eprintln-ok
+                ops::print_diagnostic(format_args!("0 facts: {name} found nothing in {path}"));
             }
         }
-        eprintln!("  try: ryi --kinds cst {path}");
-        eprintln!("  supported extensions: ryi schema");
+        ops::print_diagnostic(format_args!("  try: ryi --kinds cst {path}"));
+        ops::print_diagnostic(format_args!("  supported extensions: ryi schema"));
     }
     output.flush()?;
     sprefa_extract::trace::record_phase(&writing, output.stdout_bytes() - bytes_before, lines, 1);
@@ -954,7 +954,7 @@ fn bench(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let Some(src) = source_for(path) else {
         tracing::warn!(path, "no Source matches this path; nothing to bench");
-        eprintln!("no source for {path}"); // @eprintln-ok: CLI-UX summary, not a diagnostic.
+        ops::print_diagnostic(format_args!("no source for {path}"));
         return Ok(());
     };
     let t = Instant::now();

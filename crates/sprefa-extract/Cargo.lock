@@ -3708,6 +3708,7 @@ dependencies = [
  "gomod-parser",
  "hafley-observe",
  "hafley_scm",
+ "http-body",
  "http-body-util",
  "hyper",
  "hyper-util",

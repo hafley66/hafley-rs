@@ -27,4 +27,13 @@ mod tests {
         let decoded: serde_json::Value = relative.decode("fast").unwrap();
         assert_eq!(decoded, request.args);
     }
+
+    #[test]
+    fn root_clap_args_round_trip_through_http_args() {
+        use clap::Parser as _;
+        let cli = super::cli_auto::Ryi::parse_from(["ryi", "/tmp/unknown.extension"]);
+        let args = serde_json::to_value(&cli.file).unwrap();
+        let decoded: super::ops_auto::ExtractArgs = serde_json::from_value(args).unwrap();
+        assert_eq!(decoded.args.inputs.paths, cli.file.inputs.paths);
+    }
 }

@@ -268,6 +268,14 @@ optional = true
 version = "0.22"
 optional = true
 
+[dependencies.http-body-util]
+version = "0.1"
+optional = true
+
+[dependencies.http-body]
+version = "1"
+optional = true
+
 # The subscriber is BIN-only for the same reason clap is: a library that installs
 # a global subscriber steals the choice from whatever links it.
 [dependencies.tracing-subscriber]
@@ -276,7 +284,7 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-cli = ["dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+cli = ["dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc", "dep:cap"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out

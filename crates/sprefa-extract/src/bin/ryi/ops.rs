@@ -61,15 +61,41 @@ thread_local! {
     static OP_SINK: RefCell<Option<SharedSink>> = const { RefCell::new(None) };
     static OP_WRITE_ERROR: RefCell<Option<std::io::Error>> = const { RefCell::new(None) };
     static REQUEST_ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
+    static REQUEST_DIAGNOSTICS: RefCell<Option<Diagnostics>> = const { RefCell::new(None) };
 }
 
-pub(crate) fn with_request_root<T>(root: PathBuf, run: impl FnOnce() -> T) -> T {
-    REQUEST_ROOT.with(|slot| {
-        let previous = slot.replace(Some(root));
-        let result = run();
-        slot.replace(previous);
-        result
-    })
+pub(crate) type Diagnostics = Arc<Mutex<Vec<u8>>>;
+
+struct RequestContextGuard {
+    root: Option<PathBuf>,
+    diagnostics: Option<Diagnostics>,
+}
+
+impl Drop for RequestContextGuard {
+    fn drop(&mut self) {
+        REQUEST_ROOT.with(|slot| { slot.replace(self.root.take()); });
+        REQUEST_DIAGNOSTICS.with(|slot| { slot.replace(self.diagnostics.take()); });
+    }
+}
+
+pub(crate) fn with_request_context<T>(root: PathBuf, diagnostics: Option<Diagnostics>, run: impl FnOnce() -> T) -> T {
+    let guard = RequestContextGuard {
+        root: REQUEST_ROOT.with(|slot| slot.replace(Some(root))),
+        diagnostics: REQUEST_DIAGNOSTICS.with(|slot| slot.replace(diagnostics)),
+    };
+    let result = run();
+    drop(guard);
+    result
+}
+
+pub(crate) fn print_diagnostic(args: std::fmt::Arguments<'_>) {
+    let captured = REQUEST_DIAGNOSTICS.with(|slot| {
+        let value = slot.borrow();
+        value.as_ref().map(|diagnostics| {
+            let _ = writeln!(diagnostics.lock().unwrap(), "{args}");
+        }).is_some()
+    });
+    if !captured { let _ = writeln!(std::io::stderr().lock(), "{args}"); }
 }
 
 pub(crate) fn request_root() -> PathBuf {
@@ -119,8 +145,9 @@ fn produce(ryi: Ryi) -> Rows {
     let cancelled = Arc::new(AtomicBool::new(false));
     let operation_cancelled = Arc::clone(&cancelled);
     let request_root = request_root();
+    let diagnostics = REQUEST_DIAGNOSTICS.with(|slot| slot.borrow().clone());
     std::thread::spawn(move || {
-        let result = with_request_root(request_root, || -> OpResult<()> {
+        let result = with_request_context(request_root, diagnostics, || -> OpResult<()> {
             let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new() })));
             OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
             let outcome = crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled)).map_err(|error| {
@@ -201,5 +228,14 @@ mod tests {
         assert!(cancelled.load(Ordering::Acquire));
         let mut sink = RowSink { tx, pending: Vec::new() };
         assert_eq!(sink.write_all(b"row\n").unwrap_err().kind(), std::io::ErrorKind::BrokenPipe);
+    }
+
+    #[test]
+    fn request_diagnostics_stay_in_the_request_buffer() {
+        let diagnostics = Arc::new(Mutex::new(Vec::new()));
+        with_request_context(PathBuf::from("/tmp"), Some(diagnostics.clone()), || {
+            print_diagnostic(format_args!("0 facts: no extractor"));
+        });
+        assert_eq!(&*diagnostics.lock().unwrap(), b"0 facts: no extractor\n");
     }
 }

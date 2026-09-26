@@ -59,6 +59,14 @@ fn fresh_daemon_replacement_and_idle_exit() {
     let first = run(&client, &cache, &["fast", file], None);
     assert!(first.status.success(), "daemon: {}", String::from_utf8_lossy(&first.stderr));
     assert_eq!(first.stdout, fresh.stdout, "fresh and daemon stdout");
+    let unknown = scratch.path().join("unknown.extension");
+    std::fs::write(&unknown, b"unrecognized source\n").expect("unknown fixture");
+    let unknown = unknown.to_str().expect("UTF-8 unknown path");
+    let fresh_diagnostic = run(&client, &cache, &["--fresh", unknown], None);
+    let daemon_diagnostic = run(&client, &cache, &[unknown], None);
+    assert_eq!(daemon_diagnostic.stdout, fresh_diagnostic.stdout);
+    assert_eq!(daemon_diagnostic.stderr, fresh_diagnostic.stderr);
+    assert!(String::from_utf8_lossy(&daemon_diagnostic.stderr).contains("0 facts:"));
     let old_inode = std::fs::metadata(&resident.0).expect("bound socket").ino();
 
     let opened = std::fs::OpenOptions::new().write(true).open(&server).expect("server binary");
