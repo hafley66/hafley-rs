@@ -535,7 +535,7 @@ pub struct RustModuleIndex {
     /// a target pick needs the site's own blob.
     trait_fns: HashMap<String, Vec<TraitFnSite>>,
     assoc_types: HashMap<(String, String), Vec<(ContentId, Span)>>,
-    method_returns: HashMap<(String, String), BTreeSet<String>>,
+    method_returns: HashMap<(String, String), Vec<String>>,
     call_result_receivers: HashMap<String, HashMap<Span, (String, String)>>,
     /// (trait name, fn name) -> every corpus `impl Trait for T` fn of the pair.
     trait_impl_fns: HashMap<(String, String), Vec<(ContentId, Span)>>,
@@ -784,7 +784,7 @@ impl RustModuleIndex {
             };
             for (owner, method, ret) in &facts.method_returns {
                 index.method_returns.entry((owner.clone(), method.clone()))
-                    .or_default().insert(ret.clone());
+                    .or_default().push(ret.clone());
             }
             for (span, owner, method) in &facts.call_result_receivers {
                 index.call_result_receivers.entry(path.clone()).or_default()
@@ -1226,7 +1226,8 @@ impl RustModuleIndex {
     pub fn call_result_receiver_type(&self, path: &str, site: Span) -> Option<&str> {
         let (owner, method) = self.call_result_receivers.get(path)?.get(&site)?;
         let returns = self.method_returns.get(&(owner.clone(), method.clone()))?;
-        (returns.len() == 1).then(|| returns.first().map(String::as_str)).flatten()
+        let [only] = returns.as_slice() else { return None };
+        Some(only)
     }
 
     /// `local`'s EXPLICIT `use` binding in `path`. `Err(())` is AMBIGUOUS: a
