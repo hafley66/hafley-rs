@@ -42,6 +42,7 @@ fn type_ladder_fast_and_slow() {
     assert_eq!(
         table,
         "\
+_1_none.rs  returns  clone         -> _1_none.rs:NoField fs
 _1_none.rs  uses     NoField       -> _1_none.rs:NoField f-
 _2_one.rs   field    OneField      -> _0_types.rs:A  fs
 _2_one.rs   field    OneVariant    -> _0_types.rs:A  fs
@@ -51,6 +52,7 @@ _2_one.rs   generic  one_bound     -> _0_types.rs:T  fs
 _2_one.rs   impl     OneField      -> _0_types.rs:T  fs
 _2_one.rs   param    from          -> _0_types.rs:A  fs
 _2_one.rs   param    one_param     -> _0_types.rs:A  fs
+_2_one.rs   returns  from          -> _2_one.rs:OneField fs
 _2_one.rs   returns  one_return    -> _0_types.rs:A  fs
 _2_one.rs   uses     OneAlias      -> _0_types.rs:A  fs
 _2_one.rs   uses     OneField      -> _2_one.rs:OneField f-
@@ -319,4 +321,31 @@ fn type_scope_ladder_collects_expression_type_arguments() {
         |row| Ok((row.get(0)?, row.get(1)?)),
     ).unwrap();
     assert_eq!(rows, (1, 0));
+}
+
+#[test]
+fn displaced_module_types_stay_in_their_fixture_crate() {
+    let relative = "tests/fixtures/rust_rename".to_string();
+    let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
+    for src in [relative, absolute] {
+        let scratch = tempfile::tempdir().unwrap();
+        let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+        ryi(&["fast", &src, "--sqlite", &fast]);
+        let conn = rusqlite::Connection::open(&fast).unwrap();
+        let rows: (i64, i64) = conn.query_row(
+            "select
+           (select count(*) from resolved_type_edge where owner_name = 'build'
+              and owner_path like '%/path/after/src/lib.rs' and target_name = 'Tool'
+              and target_path like '%/path/after/src/elsewhere/impl.rs'),
+           (select count(*) from resolved_type_edge where owner_name = 'build'
+              and owner_path like '%/path/after/src/lib.rs' and target_name = 'Tool'
+              and target_path like '%/fnuse/after/src/util.rs')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        ).unwrap();
+        // These two fixture files have identical bytes and share a content ID.
+        // The emitted path cannot identify which file supplied that ID, so a
+        // cross-fixture path must not be reported as the import's target.
+        assert_eq!(rows, (0, 0), "{src}");
+    }
 }

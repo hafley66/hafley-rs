@@ -1157,7 +1157,9 @@ impl RustModuleIndex {
     /// A bare name: an explicit `use` binding, else any glob's wildcard scope.
     pub fn target(&self, path: &str, local: &str) -> Option<(ContentId, Span)> {
         match self.explicit_binding(path, local) {
-            Ok(Some(found)) => return callable_target(found),
+            Ok(Some(found)) => {
+                return self.sees_path(path, &found.target_path).then(|| callable_target(found)).flatten();
+            }
             Err(()) => return None,
             Ok(None) => {}
         }
@@ -1192,7 +1194,11 @@ impl RustModuleIndex {
     pub fn sees_path(&self, from: &str, target: &str) -> bool {
         fn fixture(path: &str) -> Option<(&str, &str)> {
             path.split_once("/tests/fixtures/")
-                .and_then(|(root, rest)| rest.split('/').next().map(|name| (root, name)))
+                .or_else(|| path.strip_prefix("tests/fixtures/").map(|rest| ("", rest)))
+                .and_then(|(root, rest)| {
+                    let name = rest.split('/').next()?;
+                    Some((root, rest.split_once("/src/").map_or(name, |(crate_root, _)| crate_root)))
+                })
         }
         let declared_dependency = self.crate_dirs.get(from)
             .zip(self.crate_dirs.get(target))
