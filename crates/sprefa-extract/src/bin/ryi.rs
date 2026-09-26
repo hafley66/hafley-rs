@@ -53,10 +53,10 @@ mod inputs;
 #[path = "../0_query.rs"]
 mod query;
 
-#[path = "../0_move.rs"]
+#[path = "../edit/_6_move.rs"]
 mod source_move;
 
-#[path = "../2_move_text.rs"]
+#[path = "../edit/_5_move_text.rs"]
 mod move_text;
 
 #[path = "../3_region_writer.rs"]
@@ -71,10 +71,10 @@ mod diff;
 #[path = "../0_graph.rs"]
 mod graph;
 
-#[path = "../0_rename.rs"]
+#[path = "../edit/_6_rename.rs"]
 mod source_rename;
 
-#[path = "../0_cleave.rs"]
+#[path = "../edit/_7_cleave.rs"]
 mod cleave;
 
 impl From<FastArgs> for FileArgs {

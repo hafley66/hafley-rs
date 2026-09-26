@@ -19,7 +19,7 @@ use sprefa_extract::{
 };
 use sprefa_extract::edit_seams::RenameAbstain;
 
-#[path = "1_rename_verify.rs"]
+#[path = "_6_rename_verify.rs"]
 mod rename_verify;
 
 const PRODUCER: &str = "extract-rename";
@@ -86,10 +86,8 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
             );
         }
     }
-    if let Some(index) = cli.verify_scip.as_deref() {
-        let disagreements =
-            rename_verify::verify_plan(&plan.cx, &plan.refs, index).map_err(plan_error)?;
-        rename_verify::report(&disagreements);
+    if let Some(disagreements) = &plan.disagreements {
+        rename_verify::report(disagreements);
     }
 
     match cli.commit {
@@ -170,6 +168,8 @@ struct Plan {
     /// those lines alone.
     rewritten: BTreeSet<(String, usize)>,
     receipts: Vec<String>,
+    /// The SCIP diff of the unmerged plan, when an index was given or found.
+    disagreements: Option<Vec<rename_verify::ScipDisagreement>>,
 }
 
 impl Plan {
@@ -202,6 +202,28 @@ impl Plan {
         }
 
         let mut receipts = Vec::new();
+        let index = cli
+            .verify_scip
+            .clone()
+            .or_else(|| Some(root.join("index.scip")).filter(|path| path.is_file()));
+        let disagreements = match index {
+            Some(index) => {
+                let rows = rename_verify::merge_scip(&cx, &mut refs, &index, !cli.no_scip_merge)
+                    .map_err(plan_error)?;
+                if !cli.no_scip_merge {
+                    let added = rows
+                        .iter()
+                        .filter(|row| row.side == rename_verify::DisagreementSide::ScipOnly)
+                        .count();
+                    receipts.push(format!("scip-merge {} sites from {}", added, index.display()));
+                }
+                Some(rows)
+            }
+            None => None,
+        };
+        for found in &refs {
+            verify_spans(&cx, found)?;
+        }
         let respells = respells(&cx, &refs, &mut receipts)?;
         let rewritten = rewritten_lines(&cx, &respells)?;
         let identity = soopy::SourceRoot::open_directory(&root)
@@ -248,6 +270,7 @@ impl Plan {
             abstains,
             rewritten,
             receipts,
+            disagreements,
         })
     }
 }
