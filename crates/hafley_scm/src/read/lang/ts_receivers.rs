@@ -339,16 +339,8 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
     fn visit_import_declaration(&mut self, import: &ts::ImportDeclaration<'a>) {
         if let Some(specifiers) = &import.specifiers {
             for specifier in specifiers {
-                match specifier {
-                    ts::ImportDeclarationSpecifier::ImportSpecifier(named) => {
-                        self.facts.type_names.insert(named.local.name.to_string());
-                    }
-                    ts::ImportDeclarationSpecifier::ImportDefaultSpecifier(default) => {
-                        self.facts.type_names.insert(default.local.name.to_string());
-                    }
-                    ts::ImportDeclarationSpecifier::ImportNamespaceSpecifier(namespace) => {
-                        self.facts.namespace_imports.insert(namespace.local.name.to_string());
-                    }
+                if let ts::ImportDeclarationSpecifier::ImportNamespaceSpecifier(namespace) = specifier {
+                    self.facts.namespace_imports.insert(namespace.local.name.to_string());
                 }
             }
         }

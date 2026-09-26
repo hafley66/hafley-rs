@@ -4552,7 +4552,8 @@ fn receiver_seat(modules: &TsModuleIndex, path: &str, receiver: &str) -> Option<
 }
 
 /// The corpus def of `member` on an IMPORTED receiver that seats no def node:
-/// a `namespace X {}`, or an exported `const x: T` whose type has the member.
+/// a named class, a `namespace X {}`, or an exported `const x: T` whose type
+/// has the member.
 fn imported_member_target(
     modules: &TsModuleIndex,
     paths: Option<&crate::read::types::PathIndex>,
@@ -4574,7 +4575,13 @@ fn imported_member_target(
             ));
         }
     }
-    let declared = facts.const_type.get(&seat_span.start)?.clone();
+    let declared = facts
+        .decl_span
+        .iter()
+        .filter(|(_, span)| span.0 <= seat_span.start && seat_span.end() <= span.1)
+        .min_by_key(|(_, span)| span.1 - span.0)
+        .map(|(name, _)| name.clone())
+        .or_else(|| facts.const_type.get(&seat_span.start).cloned())?;
     ts_receivers::receiver_member_target(
         &ts_receivers::RecvSpec::Type(declared),
         member,
