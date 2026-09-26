@@ -1,0 +1,56 @@
+sample	source	owner	target	name	evidence	verdict
+type-01	bench-cli/adapters/tsv2_run.ts	EmittedProgram	tsv2/runtime/types.ts	IGenProgram	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-02	prolog/compile/out/concat_program_queue.ts	IOrderedOccurrence	tsv2/runtime/types.ts	IRow	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-03	prolog/compile/out/float_exact_comparison_has_no_epsilon.ts	validate_arrivals	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-04	prolog/compile/out/json_key_capture_binds_key_and_value.ts	validate_arrivals	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-05	prolog/compile/out/ltrim_strips_leading_default_and_charset.ts	run_tick	tsv2/runtime/types.ts	ISqlSeam	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-06	prolog/compile/out/new_file_no_exceeded_diag.ts	validate_arrivals	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-07	prolog/compile/out/pairwise_reads_state_at_the_departure_tick.ts	run_tick	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-08	prolog/compile/out/seeded_pre_reads_a_body_bound_value.ts	apply_arrivals	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-09	prolog/compile/out/terminal_is_terminal.ts	IBootStatement	tsv2/runtime/types.ts	IRowScalar	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-10	prolog/labs/type_matrix/out/cell_aggregate_head__int__neg_zero.ts	IBootStatement	tsv2/runtime/types.ts	IRowValue	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-11	prolog/labs/type_matrix/out/cell_arrival__bool__plain_text.ts	validateArrivals	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-12	prolog/labs/type_matrix/out/cell_arrival__json__wide_int.ts	runNaiveTick	tsv2/runtime/types.ts	ITickDeltas	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-13	prolog/labs/type_matrix/out/cell_edge_head__bool__bool.ts	resolveProbeOut_0Writes	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-14	prolog/labs/type_matrix/out/cell_join_column__bool__json_array.ts	IBindPlanData	tsv2/runtime/types.ts	IRowValue	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-15	prolog/labs/type_matrix/out/cell_join_column__json__json_array.ts	runTick	tsv2/runtime/types.ts	ISqlSeam	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-16	prolog/labs/type_matrix/out/cell_join_column__undeclared__json_object.ts	runNaiveTick	tsv2/runtime/types.ts	IArrivalBatch	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-17	prolog/labs/type_matrix/out/cell_json_capture__text__neg_zero.ts	recomputeLevels	tsv2/runtime/types.ts	ISqlSeam	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-18	prolog/labs/type_matrix/out/cell_level_head__float__numeric_text.ts	arrivalStatement	sprefa-store/js/src/engine/types.ts	SqlStatement	named import ../runtime/types.ts via runtime export	valid reexport; CodeQL omission
+type-19	prolog/labs/type_matrix/out/cell_level_head__list_text__plain_text.ts	Snapshot	tsv2/runtime/types.ts	IRow	named import ../runtime/types.ts	valid named import; CodeQL omission
+type-20	tsv2/tests/watchGlobDialect.test.ts	collecting_engine	tsv2/runtime/types.ts	ITickOutcome	named import ../runtime/types.ts	valid named import; CodeQL omission
+call-growth-01	tsv2/gen/switch_as_keyed_replace.ts	closure@10770	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL owner differs
+call-growth-02	tsv2/gen/switch_as_keyed_replace.ts	tick	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL omission
+call-growth-03	tsv2/gen_emitted/batched_increments_both_count.ts	apply_ordered_occurrence	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL omission
+call-growth-04	tsv2/gen_emitted/batched_increments_both_count.ts	apply_ordered_occurrence	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL omission
+call-growth-05	tsv2/gen_emitted/batched_increments_both_count.ts	closure@31049	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL owner differs
+call-growth-06	tsv2/gen_emitted/batched_increments_both_count.ts	closure@31958	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL owner differs
+call-growth-07	tsv2/gen_emitted/batched_increments_both_count.ts	closure@32219	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL owner differs
+call-growth-08	tsv2/gen_emitted/batched_increments_both_count.ts	read_ordered_carry	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL omission
+call-growth-09	tsv2/gen_emitted/concat_fold_follows_arrival_order.ts	apply_ordered_occurrence	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL omission
+call-growth-10	tsv2/gen_emitted/concat_fold_follows_arrival_order.ts	closure@34099	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL owner differs
+call-growth-11	tsv2/gen_emitted/concat_fold_follows_arrival_order.ts	closure@35282	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL owner differs
+call-growth-12	tsv2/gen_emitted/concat_fold_follows_arrival_order.ts	read_ordered_carry	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL omission
+call-growth-13	tsv2/gen_emitted/concat_fold_reversed_arrival_reverses_result.ts	apply_ordered_occurrence	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL omission
+call-growth-14	tsv2/gen_emitted/concat_fold_reversed_arrival_reverses_result.ts	closure@34990	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL owner differs
+call-growth-15	tsv2/gen_emitted/concat_fold_reversed_arrival_reverses_result.ts	closure@36173	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL owner differs
+call-growth-16	tsv2/gen_emitted/concat_fold_reversed_arrival_reverses_result.ts	read_ordered_carry	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL omission
+call-growth-17	tsv2/gen_emitted/concat_program_queue.ts	apply_ordered_occurrence	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL omission
+call-growth-18	tsv2/gen_emitted/concat_program_queue.ts	closure@147455	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL owner differs
+call-growth-19	tsv2/gen_emitted/concat_program_queue.ts	closure@147942	sprefa-store/js/src/engine/types.ts	execute	seam.runner.execute(...)	valid typed receiver; CodeQL owner differs
+call-growth-20	tsv2/gen_emitted/concat_program_queue.ts	closure@149262	sprefa-store/js/src/engine/types.ts	batch	seam.runner.batch(...)	valid typed receiver; CodeQL owner differs
+type-growth-01	tsv2/runtime/writeVerbs.ts	arrive	sprefa-store/js/src/engine/types.ts	SqlStatement	named import ./types.ts	valid reexported type; CodeQL omission
+type-growth-02	tsv2/runtime/writeVerbs.ts	publish	sprefa-store/js/src/engine/types.ts	SqlStatement	named import ./types.ts	valid reexported type; CodeQL omission
+type-growth-03	tsv2/scripts/shared-frontier-gate.ts	batch	sprefa-store/js/src/engine/types.ts	QueryResult	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-04	tsv2/scripts/shared-frontier-gate.ts	batch	sprefa-store/js/src/engine/types.ts	SqlStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-05	tsv2/scripts/shared-frontier-gate.ts	batch	sprefa-store/js/src/engine/types.ts	SqliteDb	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-06	tsv2/scripts/shared-frontier-gate.ts	batch	sprefa-store/js/src/engine/types.ts	TraceStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-07	tsv2/scripts/shared-frontier-gate.ts	execute	sprefa-store/js/src/engine/types.ts	QueryResult	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-08	tsv2/scripts/shared-frontier-gate.ts	execute	sprefa-store/js/src/engine/types.ts	SqlStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-09	tsv2/scripts/shared-frontier-gate.ts	execute	sprefa-store/js/src/engine/types.ts	SqliteDb	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-10	tsv2/scripts/shared-frontier-gate.ts	execute	sprefa-store/js/src/engine/types.ts	TraceStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-11	tsv2/scripts/shared-frontier-gate.ts	executeMultiple	sprefa-store/js/src/engine/types.ts	SqliteDb	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-12	tsv2/scripts/shared-frontier-gate.ts	executeMultiple	sprefa-store/js/src/engine/types.ts	TraceStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-13	tsv2/scripts/shared-frontier-gate.ts	scalar	sprefa-store/js/src/engine/types.ts	SqlStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-14	tsv2/scripts/shared-frontier-gate.ts	scalar	sprefa-store/js/src/engine/types.ts	SqliteDb	named import ../runtime/types.ts	valid reexported type; CodeQL omission
+type-growth-15	tsv2/scripts/shared-frontier-gate.ts	scalar	sprefa-store/js/src/engine/types.ts	TraceStatement	named import ../runtime/types.ts	valid reexported type; CodeQL omission
