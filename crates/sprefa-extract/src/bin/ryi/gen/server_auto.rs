@@ -195,7 +195,11 @@ pub fn daemon() -> Result<(), Box<dyn std::error::Error>> {
         std::fs::set_permissions(&cache, std::fs::Permissions::from_mode(0o700))?;
     }
     let lock = std::fs::OpenOptions::new().create(true).read(true).write(true).open(cache.join("ryi.lock"))?;
-    if lock.try_lock_exclusive().is_err() { return Ok(()); }
+    match lock.try_lock_exclusive() {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(()),
+        Err(error) => return Err(error.into()),
+    }
     let socket = crate::daemon_auto::socket_path()?;
     if socket.exists() { std::fs::remove_file(&socket)?; }
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;

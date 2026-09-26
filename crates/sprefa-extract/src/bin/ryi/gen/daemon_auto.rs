@@ -75,6 +75,9 @@ pub fn cache_dir() -> Result<PathBuf, std::io::Error> {
     let base = std::env::var_os("XDG_CACHE_HOME").map(PathBuf::from).or_else(|| {
         std::env::var_os("HOME").map(|home| PathBuf::from(home).join(".cache"))
     }).ok_or_else(|| std::io::Error::new(std::io::ErrorKind::NotFound, "HOME is unset"))?;
+    if !base.is_absolute() {
+        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "cache home must be absolute"));
+    }
     Ok(base.join("ryi"))
 }
 
