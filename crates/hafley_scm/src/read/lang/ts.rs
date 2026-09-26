@@ -15,6 +15,8 @@
 //! `Resolve<TypeF>`; phase 1 stays pure-content.
 
 use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::cell::RefCell;
+use std::sync::OnceLock;
 
 use oxc_allocator::Allocator;
 use oxc_ast::ast as ts;
@@ -22,12 +24,14 @@ use oxc_ast::ast::Program;
 use oxc_ast_visit::Visit as OxcVisit;
 use oxc_span::{GetSpan, SourceType};
 
-use super::fallback::cst_bundle;
+use super::extract_lang::RyiLang;
+use super::fallback::{cst_bundle, cst_bundle_from_tree};
+use super::scm_rows::ScmCaptures;
 use super::ts_resolve::{
     ts_module_facts_from_parsed, ts_stash_module_facts, ImportedName, ResolvedImport, TsModuleIndex,
 };
 use crate::read::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
+    CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, CstF, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, DocFact, DocTag, ProjectEdge, ResolutionOrigin, SigSlot,
     Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF,
 };
@@ -53,6 +57,50 @@ use super::ts_receivers;
 /// TypeScript's own `.scm`: the scope/definition/call captures fast lowers
 /// through L1. Owned here, read through `Source::scm_query`.
 const TYPESCRIPT_SCM: &str = include_str!("../../../../sprefa-extract/queries/typescript/scip.scm");
+
+thread_local! {
+    static TS_CST_PARSER: RefCell<(Option<RyiLang>, tree_sitter::Parser)> =
+        RefCell::new((None, tree_sitter::Parser::new()));
+}
+
+static TS_SCM_QUERY: OnceLock<hafley_scm::QueryExt> = OnceLock::new();
+static TSX_SCM_QUERY: OnceLock<hafley_scm::QueryExt> = OnceLock::new();
+
+/// Fast's CST and `.scm` captures from the same tree-sitter tree. The parser
+/// stays on its extraction worker; the tree and query arena die before Oxc.
+fn cst_and_scm(
+    path: &str,
+    content: &[u8],
+    strings: &mut Strings,
+) -> Option<(FamilyBundle<CstF>, Option<ScmCaptures>)> {
+    std::str::from_utf8(content).ok()?;
+    let lang = RyiLang::from_path(path)?;
+    let language = lang.tree_sitter_language();
+    let tree = TS_CST_PARSER.with(|slot| {
+        let mut state = slot.borrow_mut();
+        if state.0 != Some(lang) {
+            state.1.set_language(&language).ok()?;
+            state.0 = Some(lang);
+        }
+        state.1.parse(content, None)
+    })?;
+    let cst = cst_bundle_from_tree(path, content, &tree, strings)?;
+    let query_slot = match lang {
+        RyiLang::TypeScript => Some(&TS_SCM_QUERY),
+        RyiLang::Tsx => Some(&TSX_SCM_QUERY),
+        _ => None,
+    };
+    let captures = query_slot.and_then(|slot| {
+        let query = slot.get_or_init(|| {
+            hafley_scm::build(&language, TYPESCRIPT_SCM)
+                .expect("the bundled TypeScript query compiles")
+        });
+        let mut arena = hafley_scm::MatchArena::default();
+        hafley_scm::run(query, path, content, &tree, u32::MAX, &mut arena).ok()?;
+        Some(ScmCaptures::from_arena(query, &arena, content))
+    });
+    Some((cst, captures))
+}
 
 /// `oxc_span::Span` (start + end) -> our byte `Span` (start + len). One
 /// coordinate; the engine derives line/col from the file bytes when needed.
@@ -4070,6 +4118,7 @@ impl Source for TsSource {
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
+        let mut scm_captures = None;
 
         // cst via the shared walk (masked). Owns its () arena; dropped at block
         // end. A failed parse leaves cst None (no panic).
@@ -4078,7 +4127,14 @@ impl Source for TsSource {
             let _parse_guard = parse_span.enter();
             let span = trace::family_span("ts", "cst");
             let _entered = span.enter();
-            let bundle = cst_bundle(path, content, &mut strings);
+            let bundle = if mask == FamilyMask::ALL {
+                cst_and_scm(path, content, &mut strings).map(|(bundle, captures)| {
+                    scm_captures = captures;
+                    bundle
+                })
+            } else {
+                cst_bundle(path, content, &mut strings)
+            };
             if let Some(bundle) = &bundle {
                 trace::record_bundle(&span, bundle, 0);
             }
@@ -4164,7 +4220,7 @@ impl Source for TsSource {
             call,
             df,
             data: None,
-            scm_captures: None,
+            scm_captures,
             kotlin_module: None,
             rust_module: None,
         }
