@@ -542,6 +542,19 @@ impl Resolve<CallF> for RustSource {
                     })
                     .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
             });
+            // In an impl, `Self { .. }` constructs the impl's own type. The
+            // call site spells `Self`, while its callable def spells the type.
+            let self_constructor = (callee == "Self" && site.callee_path.is_none())
+                .then(|| self_impl_type(call, &output.strings, caller))
+                .flatten()
+                .and_then(|ty| {
+                    let own = own.as_ref()?;
+                    corpus_defs(def_index, &ty)
+                        .iter()
+                        .find(|def| def.blob == *own && def.family == FamilyTag::Type)
+                        .map(|def| (def.blob.clone(), def.span))
+                })
+                .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
             // Each leg names ITSELF: `kind` is `name_resolve` for nearly all
             // of them, so only the origin separates the receiver plane from the
             // module plane from the corpus-wide guess.
@@ -558,6 +571,8 @@ impl Resolve<CallF> for RustSource {
                 None
             } else if recv_inferred {
                 None
+            } else if callee == "Self" {
+                tag(self_constructor, ResolutionOrigin::SelfType)
             } else {
                 match (qualifier, own_path, paths) {
                     (Some(qualifier), Some(from), Some(paths)) => {

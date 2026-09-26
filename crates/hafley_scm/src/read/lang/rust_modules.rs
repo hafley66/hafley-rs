@@ -17,7 +17,7 @@ use std::sync::Mutex;
 use crate::read::seams::DefIndex;
 use crate::read::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
-use super::rust::{crate_root_of, module_segments, module_target};
+use super::rust::{crate_root_of, module_segments, module_target, ModuleTarget};
 use super::rust_receivers::ImplEntry;
 
 // ── module facts from phase-1 syntax rows ────────────────────────────────────
@@ -1541,8 +1541,26 @@ impl RustModuleIndex {
             }
         }
         let refs: Vec<&str> = qualifier.iter().map(String::as_str).collect();
-        let Some(target) = module_target(from, &refs) else {
-            return HomeFile::None;
+        let target = if matches!(refs[0], "self" | "super") {
+            // A `#[path]` module's spelling can live outside its module
+            // parent. Resolve `super` from its declared module path.
+            let mut base = self.module_paths.get(from).cloned().unwrap_or_else(|| module_segments(from));
+            let mut rest = refs.as_slice();
+            while let Some(head) = rest.first() {
+                match *head {
+                    "self" => {}
+                    "super" => {
+                        if base.pop().is_none() { return HomeFile::None; }
+                    }
+                    _ => break,
+                }
+                rest = &rest[1..];
+            }
+            base.extend(rest.iter().map(|segment| segment.replace('-', "_")));
+            ModuleTarget { suffix: base, crate_root: None }
+        } else {
+            let Some(target) = module_target(from, &refs) else { return HomeFile::None; };
+            target
         };
         // Bucket by the RESOLVED target's own last segment: `super`/`self`/
         // `crate` never appear in a file's own module path.

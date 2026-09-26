@@ -7,3 +7,10 @@ pub mod _5_scope;
 pub mod _6_local;
 pub mod _7_local;
 pub mod _8_trait;
+pub mod _10_self_constructor;
+pub mod deep;
+
+pub fn exit() {}
+
+#[path = "deep/_11_path_module.rs"]
+pub mod relocated;
