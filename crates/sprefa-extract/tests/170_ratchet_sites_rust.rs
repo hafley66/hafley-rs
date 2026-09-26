@@ -9,8 +9,10 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::process::Command;
+use std::sync::Mutex;
 
 const CORPUS: &str = "tests/fixtures/ratchet_soopy";
+static GRADE_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Default, Debug, Clone, Copy, PartialEq)]
 struct Counts {
@@ -139,6 +141,7 @@ fn grade() -> BTreeMap<String, Counts> {
 
 #[test]
 fn fast_matches_slow_on_soopy_at_the_pinned_rate() {
+    let _guard = GRADE_LOCK.lock().unwrap();
     let by_bucket = grade();
     let mut total = Counts::default();
     eprintln!("bucket\ttp\twrong\toverbound\tmiss\ttn\tno_occ");
@@ -190,6 +193,7 @@ fn fast_matches_slow_on_soopy_at_the_pinned_rate() {
 
 #[test]
 fn fast_type_edges_match_slow_on_soopy_at_the_pinned_rate() {
+    let _guard = GRADE_LOCK.lock().unwrap();
     let (_scratch, conn) = tiers();
     let (both, fast_only, slow_only): (usize, usize, usize) = conn
         .query_row(TYPE_GRADE, [], |row| {
