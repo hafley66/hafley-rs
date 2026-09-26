@@ -4608,16 +4608,13 @@ impl TsSource {
         Some((blob.clone(), site.span))
     }
 
-    /// `call_name_match` with the module plane ahead of the corpus-wide count:
-    /// among twins the caller's own binding survives, unless it is module-private and no twin is an import claim's target.
+    /// `call_name_match` with the current blob ahead of the corpus-wide count:
+    /// among twins a declaration in this file binds its own plain calls.
     fn ts_call_name_match(
         output: &RyiOutput,
         def_index: &DefIndex,
         callee: &str,
         own: Option<&ContentId>,
-        modules: Option<&TsModuleIndex>,
-        paths: Option<&crate::read::types::PathIndex>,
-        member: bool,
     ) -> Option<(ContentId, Span)> {
         let sites = corpus_defs(def_index, callee);
         let mut blobs: Vec<&ContentId> = Vec::new();
@@ -4635,23 +4632,7 @@ impl TsSource {
         let site = sites
             .iter()
             .find(|site| Some(&site.blob) == own && site.span == span)?;
-        // A module-private def with unclaimed twins is spelling noise: no dst
-        // is distinguishable from a guess. Everything else owns its file.
-        let private = paths
-            .and_then(|paths| paths.get(&site.blob))
-            .and_then(|path| modules.map(|modules| (path, modules)))
-            .map(|(path, modules)| modules.export_seat(path, callee).is_none())
-            .unwrap_or(false);
-        let twins_reached = modules.is_some_and(|modules| {
-            sites
-                .iter()
-                .all(|twin| twin.blob == site.blob || modules.reached(&twin.blob))
-        });
-        if member || !private || twins_reached {
-            Some((site.blob.clone(), site.span))
-        } else {
-            None
-        }
+        Some((site.blob.clone(), site.span))
     }
 }
 
@@ -5047,9 +5028,6 @@ impl Resolve<CallF> for TsSource {
                     def_index,
                     callee,
                     own.as_ref(),
-                    modules.map(|(modules, _)| modules),
-                    paths,
-                    member,
                 )
                 .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
@@ -5215,9 +5193,6 @@ impl Resolve<CallF> for TsSource {
                     def_index,
                     named,
                     own.as_ref(),
-                    modules.map(|(modules, _)| modules),
-                    paths,
-                    false,
                 )
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
             }) else {

@@ -1,6 +1,6 @@
 export interface Peer { value: string }
 
-export function same(input: Peer): Peer {
+function same(input: Peer): Peer {
   return input;
 }
 
