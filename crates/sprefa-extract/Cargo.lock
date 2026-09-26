@@ -3688,6 +3688,8 @@ dependencies = [
  "hafley-observe",
  "hafley_scm",
  "http-body-util",
+ "hyper",
+ "hyper-util",
  "ignore",
  "libc",
  "memchr",

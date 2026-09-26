@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 use std::ffi::OsString;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::process::{Child, ChildStdout, Command, Stdio};
-use std::thread::JoinHandle;
+use std::io::{BufRead, BufReader, Write};
+use std::os::fd::AsRawFd;
+use std::os::unix::net::UnixStream;
+use std::sync::{mpsc, Mutex, OnceLock};
 
-use clap::Args as _;
+use clap::Parser as _;
 use serde::Serialize;
 use serde_json::Value;
 
@@ -71,90 +72,74 @@ fn argv<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Vec<OsStrin
     Ok(output)
 }
 
-fn child_command<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Command> {
-    let binary = match std::env::var_os("RYI_BIN") {
-        Some(path) => path,
-        None => std::env::current_exe()?.into_os_string(),
-    };
-    let mut command = Command::new(binary);
-    command.args(argv(verb, args)?);
-    let cap = std::env::var("RYI_MAX_MEM_MB").ok().and_then(|value| value.parse::<usize>().ok()).unwrap_or(2048).min(2048);
-    command.env("RYI_MAX_MEM_MB", cap.to_string());
-    command.env("RYI_STREAM_FLUSH", "1");
-    command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    Ok(command)
-}
+static STDOUT_GATE: OnceLock<Mutex<()>> = OnceLock::new();
 
-struct LegacyRows {
-    child: Child,
-    lines: std::io::Lines<BufReader<ChildStdout>>,
-    stderr: Option<JoinHandle<String>>,
-    done: bool,
-}
-
-impl LegacyRows {
-    fn start<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Self> {
-        let mut command = child_command(verb, args)?;
-        command.stdin(Stdio::null());
-        let mut child = command.spawn()?;
-        let stdout = child.stdout.take().expect("piped stdout");
-        let mut stderr = child.stderr.take().expect("piped stderr");
-        let stderr = std::thread::spawn(move || {
-            let mut text = String::new();
-            let _ = stderr.take(64 * 1024).read_to_string(&mut text);
-            text
-        });
-        Ok(Self { child, lines: BufReader::new(stdout).lines(), stderr: Some(stderr), done: false })
-    }
-}
-
-impl Iterator for LegacyRows {
-    type Item = OpResult<Value>;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        if self.done { return None; }
-        match self.lines.next() {
-            Some(Ok(line)) => Some(serde_json::from_str(&line).map_err(OpError::from)),
-            Some(Err(error)) => {
-                self.done = true;
-                Some(Err(OpError::from(error)))
-            }
-            None => {
-                self.done = true;
-                let status = self.child.wait().map_err(OpError::from);
-                let stderr = self.stderr.take().and_then(|reader| reader.join().ok()).unwrap_or_default();
-                match status {
-                    Ok(status) if status.success() => None,
-                    Ok(status) => Some(Err(OpError(format!("ryi exited {status}: {}", stderr.trim())))),
-                    Err(error) => Some(Err(error)),
-                }
-            }
-        }
-    }
-}
-
-impl Drop for LegacyRows {
+struct RestoreStdout(i32);
+impl Drop for RestoreStdout {
     fn drop(&mut self) {
-        if !self.done {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
-        }
+        let _ = std::io::stdout().flush();
+        unsafe { libc::dup2(self.0, libc::STDOUT_FILENO); libc::close(self.0); }
     }
+}
+
+/// The edit handlers still print through stdout. Redirect that fd only while
+/// one handler runs, and relay its rows through a bounded channel. The gate
+/// keeps concurrent HTTP requests from crossing streams.
+fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> mpsc::Receiver<OpResult<Vec<u8>>> {
+    let (tx, rx) = mpsc::sync_channel(64);
+    let argv = argv(verb, args);
+    std::thread::spawn(move || {
+        let result = (|| -> OpResult<()> {
+            let argv = argv?;
+            let ryi = crate::Ryi::try_parse_from(std::iter::once(OsString::from("ryi")).chain(argv))
+                .map_err(|error| OpError(error.to_string()))?;
+            let _gate = STDOUT_GATE.get_or_init(|| Mutex::new(())).lock().unwrap();
+            let (reader, writer) = UnixStream::pair()?;
+            let sink = writer.try_clone()?;
+            let saved = unsafe { libc::dup(libc::STDOUT_FILENO) };
+            if saved < 0 { return Err(OpError::from(std::io::Error::last_os_error())); }
+            if unsafe { libc::dup2(writer.as_raw_fd(), libc::STDOUT_FILENO) } < 0 {
+                unsafe { libc::close(saved); }
+                return Err(OpError::from(std::io::Error::last_os_error()));
+            }
+            let restore = RestoreStdout(saved);
+            drop(writer);
+            let row_tx = tx.clone();
+            let rows = std::thread::spawn(move || {
+                let mut input = BufReader::new(reader);
+                let mut line = Vec::new();
+                loop {
+                    line.clear();
+                    match input.read_until(b'\n', &mut line) {
+                        Ok(0) => break,
+                        Ok(_) => { let _ = row_tx.send(Ok(line.clone())); },
+                        Err(error) => { let _ = row_tx.send(Err(OpError::from(error))); break; },
+                    }
+                }
+            });
+            let outcome = crate::run_verb(ryi, Box::new(sink)).map_err(|error| OpError(error.to_string()));
+            drop(restore);
+            let _ = rows.join();
+            outcome
+        })();
+        if let Err(error) = result { let _ = tx.send(Err(error)); }
+    });
+    rx
 }
 
 fn stream<A: clap::Args + Serialize>(verb: &str, args: &A) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> {
-    match LegacyRows::start(verb, args) {
-        Ok(rows) => Box::new(rows),
-        Err(error) => Box::new(std::iter::once(Err(error))),
-    }
+    Box::new(produce(verb, args).into_iter().map(|line| {
+        let line = line?;
+        Ok(serde_json::from_slice(&line)?)
+    }))
 }
 
 fn one<A: clap::Args + Serialize>(verb: &str, args: &A) -> OpResult<Value> {
-    let output = child_command(verb, args)?.stdin(Stdio::null()).output()?;
-    if !output.status.success() {
-        return Err(OpError(format!("ryi exited {}: {}", output.status, String::from_utf8_lossy(&output.stderr).trim())));
+    let mut output = Vec::new();
+    for line in produce(verb, args) {
+        output.extend(line?);
     }
-    Ok(Value::String(String::from_utf8_lossy(&output.stdout).into_owned()))
+    Ok(Value::String(String::from_utf8_lossy(&output).into_owned()))
 }
 
 pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Value>> + Send> { stream("fast", args) }

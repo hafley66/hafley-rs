@@ -378,7 +378,8 @@ impl<W: Write> Write for CountingWriter<W> {
 }
  pub struct Output {
      pub database: Option<Database>,
-    stdout: BufWriter<CountingWriter<std::io::Stdout>>,
+    stdout: BufWriter<CountingWriter<Box<dyn Write + Send>>>,
+    streaming: bool,
     /// Line tables by the key a row names its file with: the `path` field in
     /// multi-file streams. Arc so per-row lookups clone a handle, not bytes.
     line_tables: HashMap<String, Arc<Vec<u32>>>,
@@ -395,15 +396,20 @@ impl<W: Write> Write for CountingWriter<W> {
  }
 impl Output {
     pub fn new(path: Option<&Path>) -> Result<Self> {
+        Self::with_writer(path, Box::new(std::io::stdout()), false)
+    }
+
+    pub fn with_writer(path: Option<&Path>, writer: Box<dyn Write + Send>, streaming: bool) -> Result<Self> {
         Ok(Self {
             database: path.map(Database::create).transpose()?,
             stdout: BufWriter::with_capacity(
                 256 * 1024,
                 CountingWriter {
-                    inner: std::io::stdout(),
+                    inner: writer,
                     bytes: 0,
                 },
             ),
+            streaming,
             line_tables: HashMap::new(),
             line_probed: HashSet::new(),
             line_offsets: None,
@@ -480,7 +486,7 @@ impl Output {
                     if self.decorate_record(&mut value) {
                         serde_json::to_writer(&mut self.stdout, &value)?;
                         self.stdout.write_all(b"\n")?;
-                        if std::env::var_os("RYI_STREAM_FLUSH").is_some() {
+                        if self.streaming || std::env::var_os("RYI_STREAM_FLUSH").is_some() {
                             self.stdout.flush()?;
                         }
                         return Ok(());
@@ -490,7 +496,7 @@ impl Output {
         }
         self.stdout.write_all(encoded)?;
         self.stdout.write_all(b"\n")?;
-        if std::env::var_os("RYI_STREAM_FLUSH").is_some() {
+        if self.streaming || std::env::var_os("RYI_STREAM_FLUSH").is_some() {
             self.stdout.flush()?;
         }
         Ok(())

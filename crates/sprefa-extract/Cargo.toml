@@ -299,6 +299,8 @@ required-features = ["cli"]
 [dev-dependencies]
 libc = "0.2"
 http-body-util = "0.1"
+hyper = { version = "1", features = ["client", "http1"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
 tower = { version = "0.5", features = ["util"] }
 sha2 = "0.10"
 url = "2"
