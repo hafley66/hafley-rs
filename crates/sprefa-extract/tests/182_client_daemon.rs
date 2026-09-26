@@ -5,9 +5,7 @@ use std::path::Path;
 use std::process::{Command, Output};
 use std::time::{Duration, Instant};
 
-#[path = "support/0_daemon_guard.rs"]
-mod daemon_guard;
-use daemon_guard::DaemonGuard;
+use crate::daemon_guard::DaemonGuard;
 
 fn run(client: &Path, cache: &Path, args: &[&str], idle: Option<u64>, trace: Option<&Path>) -> Output {
     let mut command = Command::new(client);
@@ -80,7 +78,13 @@ fn plain_and_daemon_replacement_and_idle_exit() {
         "--daemon-client", "query", first_query.to_str().unwrap(), unsupported_query.to_str().unwrap(),
         "--query", "(function_item name: (identifier) @name)",
     ], None, None);
+    let formatted = Command::new(&server).args([
+        "--format", "jsonl", "query", first_query.to_str().unwrap(), unsupported_query.to_str().unwrap(),
+        "--query", "(function_item name: (identifier) @name)",
+    ]).env("DL_TRAIL", "0").env("RUST_LOG", "off").output().expect("in-process JSONL query");
     assert_eq!(late.status.code(), Some(2), "late stream error uses the exit trailer");
+    assert_eq!(late.status.code(), formatted.status.code(), "formatted in-process exit code");
+    assert_eq!(late.stdout, formatted.stdout, "formatted in-process stdout includes the final error row");
     let late_rows: Vec<serde_json::Value> = late.stdout.split(|byte| *byte == b'\n')
         .filter(|line| !line.is_empty())
         .map(|line| serde_json::from_slice(line).expect("JSONL response row"))

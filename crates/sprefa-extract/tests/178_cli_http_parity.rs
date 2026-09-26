@@ -5,9 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::Duration;
 
-#[path = "support/0_daemon_guard.rs"]
-mod daemon_guard;
-use daemon_guard::DaemonGuard;
+use crate::daemon_guard::DaemonGuard;
 
 use axum::body::Body;
 use base64::Engine as _;
