@@ -367,7 +367,8 @@ pub fn ts_stash_module_facts(path: &str, content: &[u8], facts: ModuleFacts) {
     TS_MODULE_FACTS_HANDOFF.with(|slot| {
         *slot.borrow_mut() = Some((
             path.to_string(),
-            crate::read::shape::content_id_of(content),
+            crate::read::dispatch::extracting_blob(content)
+                .unwrap_or_else(|| crate::read::shape::content_id_of(content)),
             facts,
         ));
     });
