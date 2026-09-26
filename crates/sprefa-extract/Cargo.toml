@@ -3,6 +3,7 @@ name = "sprefa-extract"
 version = "0.1.0"
 edition = "2021"
 build = "build.rs"
+autotests = false
 description = "v6 extraction leaf: a corpus at a version -> normalized graph facts. Sync, rayon-parallel, arena-mastered. No DB, no async."
 license = "MIT OR Apache-2.0"
 publish = false
@@ -284,6 +285,10 @@ ts-checker = ["hafley_scm/ts-checker"]
 # `cli` for the same reason as its ts twin: it pulls no crate, and it makes
 # every go resolve able to spawn the `go` toolchain.
 go-checker = ["hafley_scm/go-checker"]
+
+[[test]]
+name = "all"
+path = "tests/all.rs"
 
 [[bin]]
 name = "ryi"
