@@ -117,7 +117,8 @@ _4_nested.rs impl     Nest          -> _0_types.rs:W  fs
 _4_nested.rs param    gat_use       -> _0_types.rs:C  fs
 _4_nested.rs param    gat_use       -> _0_types.rs:Out fs
 _4_nested.rs param    projection    -> _0_types.rs:Out fs
-_4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs"
+_4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs
+_4_nested.rs uses     Out           -> _0_types.rs:A  fs"
     );
 }
 

@@ -86,6 +86,7 @@ fn ts_ladder_fast_and_slow() {
 0_use.ts     returns   forward      -> 0_types.ts:EnginePort  f-
 0_use.ts     returns   use          -> 0_types.ts:EnginePort  f-
 1_main.ts    call      useShared    -> duplicates/b/0_shared.ts:shared f-
+_0_types.ts  generic   Box          -> _0_types.ts:T          f-
 _0_types.ts  param     ping         -> _0_types.ts:Base       f-
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
 _0_types.ts  returns   ping         -> _0_types.ts:Base       f-
@@ -109,6 +110,7 @@ _2_one.ts    returns   one          -> _0_types.ts:Base       fs
 _3_many.ts   call      many         -> _0_types.ts:makeService fs
 _3_many.ts   call      many         -> _0_types.ts:ping       fs
 _3_many.ts   generic   many         -> _0_types.ts:Base       fs
+_3_many.ts   generic   many         -> _3_many.ts:T           f-
 _3_many.ts   heritage  Child        -> _0_types.ts:Service    fs
 _3_many.ts   param     many         -> _0_types.ts:Box        fs
 _3_many.ts   returns   many         -> _0_types.ts:Base       fs
@@ -117,6 +119,7 @@ _4_nested.ts call      run          -> _0_types.ts:ping       fs
 _4_nested.ts call      run          -> _3_many.ts:Child       f-
 _4_nested.ts call      run          -> _3_many.ts:many        fs
 _4_nested.ts generic   run          -> _0_types.ts:Base       f-
+_4_nested.ts generic   run          -> _4_nested.ts:T         f-
 _4_nested.ts heritage  Nested       -> _0_types.ts:Service    fs
 _4_nested.ts param     reexported   -> _0_types.ts:Base       fs
 _4_nested.ts param     run          -> _0_types.ts:Box        f-
