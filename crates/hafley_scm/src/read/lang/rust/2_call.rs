@@ -504,11 +504,12 @@ impl Resolve<CallF> for RustSource {
                                             (segments.len() > 2).then(|| segments[..segments.len() - 2]
                                                 .iter().map(|segment| (*segment).to_string()).collect::<Vec<_>>())
                                         });
-                                    qualified.as_ref()
-                                        .and_then(|qualifier| own_path.and_then(|from| {
-                                            m.qualified_impl_target(from, qualifier, &ty, callee)
-                                        }))
-                                        .or_else(|| m.impl_target(&ty, callee, own_path))
+                                    match qualified {
+                                        Some(qualifier) => own_path.and_then(|from| {
+                                            m.qualified_impl_target(from, &qualifier, &ty, callee)
+                                        }),
+                                        None => m.impl_target(&ty, callee, own_path),
+                                    }
                                 })
                                 .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
                                 // 0 impls and a variant of the enum: the path names
