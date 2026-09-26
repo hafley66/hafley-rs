@@ -1,6 +1,6 @@
 Raw SCIP index rows
 
-Usage: ryi scip [OPTIONS] [PATH]...
+Usage: ryi-server scip [OPTIONS] [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -20,5 +20,5 @@ Options:
       --records <KINDS>      Only these --raw record kinds (comma-separated)
       --occurrence-text      Add the source text to each scip_occurrence
       --scip-build           Build the index for --raw with the inputs' language indexer
-      --fresh
+      --fresh                Run without the resident daemon (server mode is already fresh)
   -h, --help                 Print help

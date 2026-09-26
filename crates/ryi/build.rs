@@ -9,7 +9,6 @@ fn output(program: &str, args: &[&str]) -> String {
 
 fn main() {
     let git_hash = output("git", &["rev-parse", "--short=12", "HEAD"]);
-    println!("cargo:rustc-env=RYI_BUILD_GIT_HASH={git_hash}");
     println!("cargo:rustc-env=SPREFA_BUILD_GIT_HASH={git_hash}");
     println!("cargo:rustc-env=SPREFA_BUILD_DATETIME={}", output("date", &["-u", "+%Y-%m-%dT%H:%M:%SZ"]));
 }

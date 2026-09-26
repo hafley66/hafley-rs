@@ -23,9 +23,11 @@ def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1]:
         staging = Path(sys.argv[1]).resolve()
         server_out = staging / "server"
+        client_out = staging / "client"
         proto_out = staging / "proto"
     else:
         server_out = CRATE / "src/bin/ryi/gen"
+        client_out = CRATE.parent / "ryi/src/gen"
         proto_out = CRATE.parent / "ryi-proto/src/gen"
     with tempfile.TemporaryDirectory(prefix="ryi_contract_", dir=FIXTURES) as source_dir:
         source = Path(source_dir)
@@ -42,9 +44,12 @@ def main() -> None:
             )
             generated = Path(generated_dir)
             server_out.mkdir(parents=True, exist_ok=True)
+            client_out.mkdir(parents=True, exist_ok=True)
             proto_out.mkdir(parents=True, exist_ok=True)
-            for name in ("cli_auto.rs", "client_auto.rs", "server_auto.rs"):
+            for name in ("cli_auto.rs", "server_auto.rs"):
                 shutil.copy2(generated / name, server_out / name)
+            for name in ("cli_auto.rs", "client_auto.rs"):
+                shutil.copy2(generated / name, client_out / name)
             for name in ("ops_auto.rs", "daemon_auto.rs"):
                 shutil.copy2(generated / name, proto_out / name)
             if (proto_out / "models").exists():

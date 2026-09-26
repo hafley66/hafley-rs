@@ -132,7 +132,7 @@ fn run_slow(slow: SlowArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
     let root = inputs::root(&slow.inputs);
     let mut wanted = slow.inputs.clone();
     if wanted.paths.is_empty() && wanted.entry.is_empty() {
-        wanted.paths.push(root.to_string_lossy().into_owned());
+        wanted.paths.push(root.clone());
     }
     let files = match inputs::expand(&wanted) {
         Ok(files) => files,

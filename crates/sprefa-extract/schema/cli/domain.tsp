@@ -11,7 +11,7 @@ model Inputs {
   /** Files, directories, or globs; - reads a path list from stdin */
   @positional
   @valueName("PATH")
-  paths: string[];
+  paths: path[];
 
   /** Keep files matching GLOB under each directory input; repeatable */
   @encodedName("application/x-clap", "pattern")

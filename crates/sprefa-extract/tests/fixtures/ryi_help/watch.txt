@@ -1,6 +1,6 @@
 Stream fact deltas as the worktree changes
 
-Usage: ryi watch [OPTIONS]
+Usage: ryi-server watch [OPTIONS]
 
 Options:
       --root <DIR>         Repository root (default: git root of the working directory)
@@ -9,5 +9,5 @@ Options:
       --receipts <PATH>    Receipt store path
       --once               Emit one snapshot and exit
       --poll-ms <POLL_MS>  Poll interval when the platform watcher is unavailable [default: 500]
-      --fresh
+      --fresh              Run without the resident daemon (server mode is already fresh)
   -h, --help               Print help

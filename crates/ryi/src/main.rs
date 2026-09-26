@@ -1,8 +1,8 @@
 pub use ryi_proto::{daemon_auto, models, ops_auto};
 
-#[path = "../../sprefa-extract/src/bin/ryi/gen/cli_auto.rs"]
+#[path = "gen/cli_auto.rs"]
 mod cli_auto;
-#[path = "../../sprefa-extract/src/bin/ryi/gen/client_auto.rs"]
+#[path = "gen/client_auto.rs"]
 mod client_auto;
 
 #[tokio::main]

@@ -1,6 +1,6 @@
 Extract file facts with the root flags
 
-Usage: ryi extract [OPTIONS] [PATH]...
+Usage: ryi-server extract [OPTIONS] [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -28,6 +28,5 @@ Options:
       --lines                Add 1-based line/col beside every span
       --witness              Wrap output in the TSI envelope
       --max-bytes <BYTES>    Skip inputs over this many bytes (0 = no limit)
-      --fresh
+      --fresh                Run without the resident daemon (server mode is already fresh)
   -h, --help                 Print help
-

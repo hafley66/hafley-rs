@@ -1,24 +1,24 @@
 Source files -> flat graph facts (JSONL on stdout, or --sqlite)
 
-Usage: ryi [OPTIONS] [PATH]...
-       ryi <COMMAND>
+Usage: ryi-server [OPTIONS] [PATH]...
+       ryi-server <COMMAND>
 
 Commands:
-  extract Extract file facts with the root flags
-  fast    Syntax-only whole-project facts (no compiler)
-  slow    The SCIP oracle written as fast's tables
-  scip    Raw SCIP index rows
-  graph   Ask one question of the resolved call/type graph
-  cleave  Move one item into another file, with its imports
-  move    Move a file and repair every specifier that names it
-  rename  Rename a symbol and every occurrence bound to it
-  query   Run a tree-sitter query over files
-  region  Replace a generated region between sprefa markers
-  watch   Stream fact deltas as the worktree changes
-  diff    Fact delta between two commits
-  ingest  Validate and re-emit foreign TSI JSONL
-  schema  Print the output record schema
-  trail   Print the last N runs from the trail
+  extract  Extract file facts with the root flags
+  fast     Syntax-only whole-project facts (no compiler)
+  slow     The SCIP oracle written as fast's tables
+  scip     Raw SCIP index rows
+  graph    Ask one question of the resolved call/type graph
+  cleave   Move one item into another file, with its imports
+  move     Move a file and repair every specifier that names it
+  rename   Rename a symbol and every occurrence bound to it
+  query    Run a tree-sitter query over files
+  region   Replace a generated region between sprefa markers
+  watch    Stream fact deltas as the worktree changes
+  diff     Fact delta between two commits
+  ingest   Validate and re-emit foreign TSI JSONL
+  schema   Print the output record schema
+  trail    Print the last N runs from the trail
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -46,7 +46,7 @@ Options:
       --lines                Add 1-based line/col beside every span
       --witness              Wrap output in the TSI envelope
       --max-bytes <BYTES>    Skip inputs over this many bytes (0 = no limit)
-      --fresh
+      --fresh                Run without the resident daemon (server mode is already fresh)
   -h, --help                 Print help
   -V, --version              Print version
 

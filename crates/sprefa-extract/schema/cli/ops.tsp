@@ -262,9 +262,9 @@ op query(
 /** Replace a generated region between sprefa markers */
 op region(
   /** DL7 file holding the markers */
-  target: path,
+  @positional target: path,
   /** Marker id after sprefa:auto-begin / sprefa:auto-end */
-  id: string,
+  @positional id: string,
   /** Generated body file, or - for stdin */
   generated: path = "-",
   /** Write the replacement (default: report drift) */
@@ -324,5 +324,5 @@ op schema(): jsonValue;
 /** Print the last N runs from the trail */
 op trail(
   /** Runs to print */
-  @valueName("N") runs: usize = 5,
+  @positional @valueName("N") runs: usize = 5,
 ): jsonValue;

@@ -1,4 +1,5 @@
 use std::error::Error;
+use std::io::IsTerminal as _;
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitCode, Stdio};
 use std::os::unix::process::CommandExt as _;
@@ -23,7 +24,12 @@ type ClientError = Box<dyn Error + Send + Sync>;
 
 fn server_binary() -> Result<PathBuf, ClientError> {
     let sibling = std::env::current_exe()?.with_file_name("ryi-server");
-    Ok(if sibling.exists() { sibling } else { PathBuf::from("ryi-server") })
+    if sibling.is_file() { return Ok(sibling); }
+    for dir in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()) {
+        let candidate = dir.join("ryi-server");
+        if candidate.is_file() { return Ok(candidate); }
+    }
+    Err(std::io::Error::new(std::io::ErrorKind::NotFound, "ryi-server was not found").into())
 }
 
 fn start_daemon(server: &Path) -> Result<(), ClientError> {
@@ -51,7 +57,7 @@ async fn handshake(socket: &Path, stamp: &str) -> Result<StatusCode, ClientError
 
 async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
     let socket = daemon_auto::socket_path()?;
-    let stamp = if daemon_auto::HANDSHAKE { Some(env!("RYI_BUILD_GIT_HASH")) } else { None };
+    let stamp = if daemon_auto::HANDSHAKE { Some(daemon_auto::executable_stamp(server)?) } else { None };
     let mut started = false;
     for _ in 0..100 {
         match tokio::net::UnixStream::connect(&socket).await {
@@ -61,7 +67,8 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
                     match handshake(&socket, stamp).await {
                         Ok(StatusCode::OK) => return Ok(socket),
                         Ok(StatusCode::CONFLICT) => {
-                            // The server cancels itself on a mismatched build stamp.
+                            // The old daemon cancels itself when its executable differs.
+                            started = false;
                             tokio::time::sleep(Duration::from_millis(50)).await;
                         }
                         Ok(status) => return Err(format!("ryi handshake returned {status}").into()),
@@ -80,8 +87,6 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
             Err(error) => return Err(error.into()),
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
-        // A mismatched instance may still hold the lock. Retry spawn after it exits.
-        if started && !socket.exists() { start_daemon(server)?; }
     }
     Err("ryi-server did not become ready".into())
 }
@@ -124,28 +129,61 @@ async fn run() -> Result<i32, ClientError> {
     }
     let (verb, args) = command(&cli)?;
     let root = std::env::current_dir()?;
-    let request = daemon_auto::Request::new(verb, root, &args)?;
+    let request = daemon_auto::Request::new(root, &args)?;
     let json = serde_json::to_string(&request)?;
     let socket = ready_socket(&server).await?;
     let method = match verb {
         "schema" => Method::GET,
         _ => Method::POST,
     };
-    let mut builder = Request::builder().method(method).uri(format!("http://ryi/{verb}"));
+    let path = match verb {
+        "extract" => "/extract",
+        "fast" => "/fast",
+        "slow" => "/slow",
+        "scip" => "/scip",
+        "graph" => "/graph",
+        "cleave" => "/cleave",
+        "move" => "/move",
+        "rename" => "/rename",
+        "query" => "/query",
+        "region" => "/region",
+        "watch" => "/watch",
+        "diff" => "/diff",
+        "ingest" => "/ingest",
+        "schema" => "/schema",
+        "trail" => "/trail",
+        _ => return Err(format!("no HTTP path for {verb}").into()),
+    };
+    let mut builder = Request::builder().method(method).uri(format!("http://ryi{path}"));
     let body = if matches!(verb, "ingest") {
         let metadata = base64::engine::general_purpose::STANDARD.encode(json.as_bytes());
         builder = builder.header("x-ryi-request", metadata).header("content-type", "application/x-ndjson");
-        let stream = ReaderStream::new(tokio::io::stdin()).map(|chunk| chunk.map(Frame::data));
-        StreamBody::new(stream).boxed_unsync()
+        if std::io::stdin().is_terminal() {
+            empty_body()
+        } else {
+            let stream = ReaderStream::new(tokio::io::stdin()).map(|chunk| chunk.map(Frame::data));
+            StreamBody::new(stream).boxed_unsync()
+        }
     } else {
         builder = builder.header("content-type", "application/json");
         Full::new(Bytes::from(json)).map_err(|never| match never {}).boxed_unsync()
     };
     let response = send(builder.body(body)?, &socket).await?;
     let status = response.status();
+    let error_code = response.headers().get("x-ryi-exit-code")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| value.parse::<i32>().ok());
     let mut body = response.into_body();
+    if !status.is_success() {
+        let mut stderr = tokio::io::stderr();
+        while let Some(frame) = body.frame().await {
+            if let Ok(bytes) = frame?.into_data() { stderr.write_all(&bytes).await?; }
+        }
+        stderr.flush().await?;
+        return Ok(error_code.unwrap_or(if status == StatusCode::BAD_REQUEST { 2 } else { 1 }));
+    }
     let mut stdout = tokio::io::stdout();
-    let mut exit = if status.is_success() { 0 } else if status == StatusCode::BAD_REQUEST { 2 } else { 1 };
+    let mut exit = 0;
     let mut current_line = Vec::new();
     let mut last_line = Vec::new();
     while let Some(frame) = body.frame().await {

@@ -11,7 +11,7 @@ pub fn run(cli: QueryArgs) -> Result<(), String> {
 pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), String> {
     // A digest names a blob, so its path need not exist in the worktree.
     let paths = match &cli.digest {
-        Some(_) if cli.inputs.paths.len() == 1 => vec![PathBuf::from(&cli.inputs.paths[0])],
+        Some(_) if cli.inputs.paths.len() == 1 => vec![cli.inputs.paths[0].clone()],
         Some(_) => return Err("--digest names one blob; pass exactly one input".into()),
         None => crate::inputs::expand(&cli.inputs)?,
     };

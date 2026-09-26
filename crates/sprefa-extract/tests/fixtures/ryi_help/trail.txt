@@ -1,10 +1,10 @@
 Print the last N runs from the trail
 
-Usage: ryi trail [N]
+Usage: ryi-server trail [OPTIONS] [N]
 
 Arguments:
   [N]  Runs to print [default: 5]
 
 Options:
-      --fresh
-  -h, --help  Print help
+      --fresh  Run without the resident daemon (server mode is already fresh)
+  -h, --help   Print help

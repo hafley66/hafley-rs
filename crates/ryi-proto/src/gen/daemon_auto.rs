@@ -5,6 +5,13 @@ use serde::{Deserialize, Serialize};
 pub const IDLE_SECS: u64 = 600;
 pub const HANDSHAKE: bool = true;
 
+pub fn executable_stamp(path: &Path) -> Result<String, std::io::Error> {
+    let metadata = std::fs::metadata(path)?;
+    let modified = metadata.modified()?.duration_since(std::time::UNIX_EPOCH)
+        .map_err(std::io::Error::other)?;
+    Ok(format!("{}:{}:{}", metadata.len(), modified.as_secs(), modified.subsec_nanos()))
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Request {
     pub request_root: PathBuf,
@@ -12,10 +19,8 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new<T: Serialize>(verb: &str, request_root: PathBuf, args: &T) -> Result<Self, serde_json::Error> {
-        let mut args = serde_json::to_value(args)?;
-        resolve_paths(verb, &request_root, &mut args);
-        Ok(Self { request_root, args })
+    pub fn new<T: Serialize>(request_root: PathBuf, args: &T) -> Result<Self, serde_json::Error> {
+        Ok(Self { request_root, args: serde_json::to_value(args)? })
     }
 
     pub fn decode<T: serde::de::DeserializeOwned>(mut self, verb: &str) -> Result<T, String> {
@@ -29,15 +34,15 @@ impl Request {
 
 fn resolve_paths(verb: &str, root: &Path, args: &mut serde_json::Value) {
     let names: &[&str] = match verb {
-        "extract" => &["entry", "root", "sqlite", "scip_index"],
-        "fast" => &["entry", "root", "sqlite"],
-        "slow" => &["entry", "root", "sqlite", "scip_index"],
-        "scip" => &["entry", "root", "sqlite", "scip_index", "scip_cache"],
-        "graph" => &["entry", "root", "sqlite", "scip_index"],
+        "extract" => &["paths", "entry", "root", "sqlite", "scip_index"],
+        "fast" => &["paths", "entry", "root", "sqlite"],
+        "slow" => &["paths", "entry", "root", "sqlite", "scip_index"],
+        "scip" => &["paths", "entry", "root", "sqlite", "scip_index", "scip_cache"],
+        "graph" => &["paths", "entry", "root", "sqlite", "scip_index"],
         "cleave" => &["dest", "list", "root", "state"],
         "move" => &["old", "new", "list", "root", "verify_cwd", "state"],
         "rename" => &["list", "root", "state", "verify_scip"],
-        "query" => &["entry", "root", "sqlite"],
+        "query" => &["paths", "entry", "root", "sqlite"],
         "region" => &["target", "generated", "state"],
         "watch" => &["root", "receipts"],
         "diff" => &["root", "sqlite"],

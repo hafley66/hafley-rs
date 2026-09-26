@@ -1,6 +1,6 @@
 Move one item into another file, with its imports
 
-Usage: ryi cleave [OPTIONS] [TARGET] [DEST]
+Usage: ryi-server cleave [OPTIONS] [TARGET] [DEST]
 
 Arguments:
   [TARGET]  SRC#ITEM (omit with --list)
@@ -15,5 +15,5 @@ Options:
       --verify <VERIFY>  Command to run after --commit; failure rolls back
       --text-refs        Report leftover SRC spellings in plain text
       --json             End with one JSON line holding the plan
-      --fresh
+      --fresh            Run without the resident daemon (server mode is already fresh)
   -h, --help             Print help

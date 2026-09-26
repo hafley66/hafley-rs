@@ -1,7 +1,7 @@
 Print the output record schema
 
-Usage: ryi schema
+Usage: ryi-server schema [OPTIONS]
 
 Options:
-      --fresh
-  -h, --help  Print help
+      --fresh  Run without the resident daemon (server mode is already fresh)
+  -h, --help   Print help

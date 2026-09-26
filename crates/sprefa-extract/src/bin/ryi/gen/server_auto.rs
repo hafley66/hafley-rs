@@ -7,6 +7,7 @@ use axum::body::{Body, Bytes};
 use axum::extract::State;
 use axum::http::{HeaderMap, Request as HttpRequest, StatusCode};
 use axum::http::header::CONTENT_TYPE;
+use axum::http::{HeaderName, HeaderValue};
 use axum::middleware::Next;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
@@ -22,14 +23,17 @@ use crate::ops_auto::*;
 fn error_status(code: i32) -> StatusCode {
     match code {
         2 => StatusCode::BAD_REQUEST,
-        3 | 5..=7 => StatusCode::UNPROCESSABLE_ENTITY,
-        4 => StatusCode::NOT_FOUND,
         _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
 fn error_response(error: OpError) -> Response {
-    (error_status(error.1), Json(serde_json::json!({"error": error.0, "code": error.1}))).into_response()
+    let code = error.1;
+    let mut row = serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes");
+    row.push(b'\n');
+    let mut response = (error_status(code), [(CONTENT_TYPE, "application/x-ndjson")], row).into_response();
+    response.headers_mut().insert(HeaderName::from_static("x-ryi-exit-code"), HeaderValue::from_str(&code.to_string()).expect("exit code header"));
+    response
 }
 
 fn bad_request(message: String) -> Response { error_response(OpError(message, 2)) }
@@ -37,11 +41,10 @@ fn bad_request(message: String) -> Response { error_response(OpError(message, 2)
 async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>) -> Response {
     let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<i32>, Bytes)>(64);
     tokio::task::spawn_blocking(move || {
-        let mut rows = 0u64;
         let mut failed = false;
         for item in items {
             let (bytes, code) = match item {
-                Ok(bytes) => { rows += 1; (bytes, None) }
+                Ok(bytes) => (bytes, None),
                 Err(error) => {
                     failed = true;
                     let mut line = serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes");
@@ -51,11 +54,8 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
             };
             if tx.blocking_send((code, Bytes::from(bytes))).is_err() || failed { return; }
         }
-        let mut complete = serde_json::to_vec(&serde_json::json!({"complete": true, "rows": rows})).expect("completion row serializes");
-        complete.push(b'\n');
-        let _ = tx.blocking_send((None, Bytes::from(complete)));
     });
-    let Some(first) = rx.recv().await else { return error_response(OpError("operation produced no response".into(), 1)); };
+    let Some(first) = rx.recv().await else { return (StatusCode::OK, [(CONTENT_TYPE, "application/x-ndjson")], Body::empty()).into_response(); };
     let status = first.0.map_or(StatusCode::OK, error_status);
     let stream = futures_util::stream::once(async move { Ok::<Bytes, std::io::Error>(first.1) })
         .chain(futures_util::stream::unfold(rx, |mut rx| async move {
@@ -142,7 +142,7 @@ async fn ingest(headers: HeaderMap, body: Body) -> Response {
 }
 
 #[derive(Clone)]
-struct DaemonState { last: Arc<Mutex<Instant>>, shutdown: CancellationToken }
+struct DaemonState { last: Arc<Mutex<Instant>>, shutdown: CancellationToken, stamp: Arc<str> }
 
 async fn touch(State(state): State<DaemonState>, request: HttpRequest<Body>, next: Next) -> Response {
     *state.last.lock().unwrap() = Instant::now();
@@ -150,15 +150,11 @@ async fn touch(State(state): State<DaemonState>, request: HttpRequest<Body>, nex
 }
 
 async fn handshake(State(state): State<DaemonState>, headers: HeaderMap) -> StatusCode {
-    if crate::daemon_auto::HANDSHAKE && headers.get("x-ryi-build").and_then(|value| value.to_str().ok()) != Some(build_stamp()) {
+    if crate::daemon_auto::HANDSHAKE && headers.get("x-ryi-build").and_then(|value| value.to_str().ok()) != Some(state.stamp.as_ref()) {
         state.shutdown.cancel();
         return StatusCode::CONFLICT;
     }
     StatusCode::OK
-}
-
-fn build_stamp() -> &'static str {
-    env!("RYI_BUILD_GIT_HASH")
 }
 
 fn router(state: DaemonState) -> axum::Router {
@@ -176,7 +172,7 @@ fn router(state: DaemonState) -> axum::Router {
         .route("/region", post(region))
         .route("/watch", post(watch))
         .route("/diff", post(diff))
-        .route("/ingest{?paths,sqlite}", post(ingest))
+        .route("/ingest", post(ingest))
         .route("/schema", get(schema))
         .route("/trail", post(trail))
         .layer(axum::middleware::from_fn_with_state(state.clone(), touch))
@@ -199,10 +195,11 @@ pub fn daemon() -> Result<(), Box<dyn std::error::Error>> {
     }
     let socket = crate::daemon_auto::socket_path()?;
     if socket.exists() { std::fs::remove_file(&socket)?; }
+    let stamp: Arc<str> = crate::daemon_auto::executable_stamp(&std::env::current_exe()?)?.into();
     let runtime = tokio::runtime::Builder::new_multi_thread().enable_all().build()?;
     let result = runtime.block_on(async {
         let listener = tokio::net::UnixListener::bind(&socket)?;
-        let state = DaemonState { last: Arc::new(Mutex::new(Instant::now())), shutdown: CancellationToken::new() };
+        let state = DaemonState { last: Arc::new(Mutex::new(Instant::now())), shutdown: CancellationToken::new(), stamp };
         let idle_state = state.clone();
         tokio::spawn(async move {
             loop {

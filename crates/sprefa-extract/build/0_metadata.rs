@@ -40,6 +40,5 @@ pub fn run() {
         });
 
     println!("cargo:rustc-env=SPREFA_BUILD_GIT_HASH={git_hash}");
-    println!("cargo:rustc-env=RYI_BUILD_GIT_HASH={git_hash}");
     println!("cargo:rustc-env=SPREFA_BUILD_DATETIME={build_datetime}");
 }

@@ -15,7 +15,7 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
     let mut tokens = Vec::new();
     let mut stdin_read = false;
     for token in &inputs.paths {
-        if token == "-" {
+        if token.as_os_str() == "-" {
             if stdin_read {
                 continue;
             }
@@ -24,7 +24,7 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
                 let line = line.map_err(|error| format!("stdin: {error}"))?;
                 let line = line.trim();
                 if !line.is_empty() {
-                    tokens.push(line.to_string());
+                    tokens.push(PathBuf::from(line));
                 }
             }
         } else {
@@ -32,27 +32,27 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
         }
     }
     if tokens.is_empty() && !inputs.patterns.is_empty() {
-        tokens.push(crate::ops::request_root().to_string_lossy().into_owned());
+        tokens.push(crate::ops::request_root());
     }
     let mut files = Vec::new();
     for token in &tokens {
-        let path = PathBuf::from(token);
+        let path = token;
         if path.is_dir() {
-            files.extend(walk(&path, &inputs.patterns)?);
+            files.extend(walk(path, &inputs.patterns)?);
         } else if path.exists() {
-            files.push(path);
-        } else if is_glob(token) {
-            let (base, rest) = split_glob(token);
+            files.push(path.clone());
+        } else if is_glob(&token.to_string_lossy()) {
+            let (base, rest) = split_glob(&token.to_string_lossy());
             if !base.is_dir() {
-                return Err(format!("{token} matched nothing"));
+                return Err(format!("{} matched nothing", token.display()));
             }
             let found = walk(&base, &[rest])?;
             if found.is_empty() {
-                return Err(format!("{token} matched nothing"));
+                return Err(format!("{} matched nothing", token.display()));
             }
             files.extend(found);
         } else {
-            return Err(format!("{token} does not exist"));
+            return Err(format!("{} does not exist", token.display()));
         }
     }
     if !inputs.entry.is_empty() {
@@ -77,8 +77,8 @@ pub fn root(inputs: &Inputs) -> PathBuf {
         return root.clone();
     }
     if let [only] = inputs.paths.as_slice() {
-        if Path::new(only).is_dir() {
-            return PathBuf::from(only);
+        if only.is_dir() {
+            return only.clone();
         }
     }
     soopy::discover(crate::ops::request_root())

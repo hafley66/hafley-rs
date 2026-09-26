@@ -306,10 +306,10 @@ pub struct QueryArgs {
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RegionArgs {
   #[doc = "DL7 file holding the markers"]
-  #[arg(long)]
+  #[arg()]
   pub target: PathBuf,
   #[doc = "Marker id after sprefa:auto-begin / sprefa:auto-end"]
-  #[arg(long)]
+  #[arg()]
   pub id: String,
   #[doc = "Generated body file, or - for stdin"]
   #[arg(long, default_value = "-")]
@@ -392,6 +392,6 @@ pub struct SchemaArgs {}
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct TrailArgs {
   #[doc = "Runs to print"]
-  #[arg(long, default_value_t = 5, value_name = "N")]
+  #[arg(default_value_t = 5, value_name = "N")]
   pub runs: usize,
 }

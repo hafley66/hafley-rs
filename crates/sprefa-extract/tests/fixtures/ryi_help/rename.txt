@@ -1,6 +1,6 @@
 Rename a symbol and every occurrence bound to it
 
-Usage: ryi rename [OPTIONS] [TARGET] [NEW]
+Usage: ryi-server rename [OPTIONS] [TARGET] [NEW]
 
 Arguments:
   [TARGET]  FILE#OLD (omit with --list)
@@ -16,7 +16,7 @@ Options:
       --verify-scip <INDEX>  SCIP index (default ROOT/index.scip): its seats join the plan
       --no-scip-merge        Only report the SCIP diff; keep the syntax plan as is
       --json                 End with one JSON line of abstains
-      --fresh
+      --fresh                Run without the resident daemon (server mode is already fresh)
   -h, --help                 Print help
 
 Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains

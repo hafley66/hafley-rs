@@ -29,6 +29,7 @@ fn committed_generated_contract_matches_just_gen_cli() {
     assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     for (name, committed) in [
         ("server", Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bin/ryi/gen")),
+        ("client", Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi/src/gen")),
         ("proto", Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi-proto/src/gen")),
     ] {
         let staged = fresh.path().join(name);

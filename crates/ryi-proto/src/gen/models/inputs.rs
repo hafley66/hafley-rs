@@ -7,7 +7,7 @@ pub struct Inputs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
   #[arg(value_name = "PATH")]
   #[serde(default)]
-  pub paths: Vec<String>,
+  pub paths: Vec<PathBuf>,
   #[doc = "Keep files matching GLOB under each directory input; repeatable"]
   #[arg(long = "pattern", value_name = "GLOB")]
   #[serde(default)]
