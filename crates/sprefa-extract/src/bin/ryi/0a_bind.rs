@@ -1,15 +1,22 @@
 //! Any `record`-tagged row straight into its table's columnar buffer: no JSON
 //! round-trip, one prepared chunk statement per table, text in one arena.
 use std::collections::HashMap;
+use std::borrow::Cow;
+use std::ffi::{CStr, CString};
 use std::fmt::Display;
+use std::hash::{Hash, Hasher};
+use std::sync::atomic::{AtomicPtr, AtomicU64};
 use std::sync::mpsc::{sync_channel, Receiver, SyncSender};
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::Ordering;
 use std::thread::JoinHandle;
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
 use rusqlite::Connection;
+use rusqlite::vtab::{Context, Filters, IndexInfo, Module, VTab, VTabConnection, VTabCursor};
 use serde::ser::{self, Impossible, Serialize};
+use hashbrown::HashTable;
+use rustc_hash::FxHasher;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -19,6 +26,14 @@ const CHUNK_ROWS: usize = 64;
 /// Column kinds per table; a `json` column stores its value JSON-encoded,
 /// the same text the typed writers bind.
 const FACTS: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/schema/generated/5_facts.json"));
+const COLUMN_KINDS: [&str; 7] = ["string", "uint32", "int64", "boolean", "int32", "json", "uint64"];
+
+#[derive(Clone, Copy, Default)]
+struct KindTime {
+    calls: u64,
+    nulls: u64,
+    nanos: u64,
+}
 
 #[derive(serde::Deserialize)]
 struct TableSpec {
@@ -32,7 +47,7 @@ struct ColumnSpec {
     kind: String,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Val {
     Null,
     Int(i64),
@@ -40,71 +55,156 @@ enum Val {
     Text(u32, u32),
 }
 
+fn span_bytes(text: &[u8], val: Val) -> &[u8] {
+    let Val::Text(start, len) = val else { unreachable!("text span required") };
+    &text[start as usize..start as usize + len as usize]
+}
+
+fn fx_hash(bytes: &[u8]) -> u64 {
+    let mut hasher = FxHasher::default();
+    bytes.hash(&mut hasher);
+    hasher.finish()
+}
+
 /// One table's statements, shared with the writer thread.
 struct Meta {
+    name: String,
     width: usize,
+    row_column: Option<usize>,
+    path_column: Option<usize>,
+    content_column: Option<usize>,
+    record_column: Option<usize>,
     chunk_rows: usize,
     chunk_sql: String,
     one_sql: String,
+    select_sql: String,
+    active: Arc<AtomicPtr<Batch>>,
 }
+
+#[repr(C)]
+struct BatchTable {
+    base: rusqlite::vtab::sqlite3_vtab,
+    width: usize,
+    active: Arc<AtomicPtr<Batch>>,
+}
+
+// Module's static only stores callbacks; table instances are owned by SQLite.
+unsafe impl Sync for BatchTable {}
+
+unsafe impl<'vtab> VTab<'vtab> for BatchTable {
+    type Aux = (usize, Arc<AtomicPtr<Batch>>);
+    type Cursor = BatchCursor;
+
+    fn connect(_: &mut VTabConnection, aux: Option<&Self::Aux>, _: &[u8], _: &[u8], _: &[u8], _: &[&[u8]])
+        -> rusqlite::Result<(Cow<'static, CStr>, Self)> {
+        let (width, active) = aux.ok_or_else(|| rusqlite::Error::ModuleError("missing batch table".into()))?;
+        let columns = (0..*width).map(|index| format!("c{index}")).collect::<Vec<_>>().join(",");
+        let ddl = CString::new(format!("CREATE TABLE x({columns})")).unwrap();
+        Ok((Cow::Owned(ddl), Self { base: Default::default(), width: *width, active: Arc::clone(active) }))
+    }
+
+    fn best_index(&self, info: &mut IndexInfo) -> rusqlite::Result<bool> {
+        info.set_estimated_cost(1.0);
+        Ok(true)
+    }
+
+    fn open(&mut self) -> rusqlite::Result<Self::Cursor> {
+        Ok(BatchCursor { base: Default::default(), active: Arc::clone(&self.active), row: 0, width: self.width })
+    }
+}
+
+#[repr(C)]
+struct BatchCursor {
+    base: rusqlite::vtab::sqlite3_vtab_cursor,
+    active: Arc<AtomicPtr<Batch>>,
+    row: usize,
+    width: usize,
+}
+
+unsafe impl VTabCursor for BatchCursor {
+    fn filter(&mut self, _: i32, _: Option<&str>, _: &Filters<'_>) -> rusqlite::Result<()> {
+        self.row = 0;
+        Ok(())
+    }
+    fn next(&mut self) -> rusqlite::Result<()> { self.row += 1; Ok(()) }
+    fn eof(&self) -> bool {
+        let batch = self.active.load(Ordering::Relaxed);
+        batch.is_null() || self.row >= unsafe { (*batch).rows }
+    }
+    fn column(&self, ctx: &mut Context, i: i32) -> rusqlite::Result<()> {
+        let batch = self.active.load(Ordering::Relaxed);
+        let batch = unsafe { &*batch };
+        match batch.vals[self.row * self.width + i as usize] {
+            Val::Null => ctx.set_result(&rusqlite::types::Null),
+            Val::Int(value) => ctx.set_result(&value),
+            Val::Real(value) => ctx.set_result(&value),
+            Val::Text(_, _) => {
+                // Every span came from a str or serde_json's UTF-8 writer.
+                let value = unsafe { std::str::from_utf8_unchecked(batch.bytes(batch.vals[self.row * self.width + i as usize])) };
+                ctx.set_result(&value)
+            }
+        }
+    }
+    fn rowid(&self) -> rusqlite::Result<i64> { Ok(self.row as i64 + 1) }
+}
+
+static BATCH_MODULE: Module<'static, BatchTable> = Module::eponymous_only_module();
 
 /// One table's rows, `width` values per row, plus the text they point into.
 /// Handed whole to the writer thread and handed back cleared.
 struct Batch {
     table: usize,
     vals: Vec<Val>,
-    text: String,
+    text: Vec<u8>,
+    interned: HashTable<Val>,
     rows: usize,
-    source_path: Option<(String, Val)>,
-    source_id: Option<(String, Val)>,
-    record: Option<Val>,
 }
 
 impl Batch {
     fn empty(table: usize) -> Self {
-        Self { table, vals: Vec::new(), text: String::new(), rows: 0,
-            source_path: None, source_id: None, record: None }
+        Self { table, vals: Vec::new(), text: Vec::new(), interned: HashTable::new(), rows: 0 }
     }
 
     #[inline(always)]
     fn text(&mut self, value: &str) -> Val {
         let start = self.text.len() as u32;
-        self.text.push_str(value);
+        self.text.extend_from_slice(value.as_bytes());
         Val::Text(start, value.len() as u32)
     }
 
-    fn source_path(&mut self, value: &str) -> Val {
-        if let Some((saved, val)) = &self.source_path {
-            if saved == value { return *val; }
+    fn json<T: ?Sized + Serialize>(&mut self, value: &T) -> std::result::Result<Val, serde_json::Error> {
+        let start = self.text.len();
+        if let Err(error) = serde_json::to_writer(&mut self.text, value) {
+            self.text.truncate(start);
+            return Err(error);
         }
-        let val = self.text(value);
-        self.source_path = Some((value.to_owned(), val));
-        val
+        let len = self.text.len() - start;
+        Ok(Val::Text(start as u32, len as u32))
     }
 
-    fn source_id(&mut self, value: &str) -> Val {
-        if let Some((saved, val)) = &self.source_id {
-            if saved == value { return *val; }
-        }
-        let val = self.text(value);
-        self.source_id = Some((value.to_owned(), val));
-        val
+    #[inline(always)]
+    fn bytes(&self, val: Val) -> &[u8] {
+        span_bytes(&self.text, val)
     }
 
-    fn record(&mut self, value: &str) -> Val {
-        if let Some(val) = self.record { return val; }
+    #[inline(always)]
+    fn intern(&mut self, value: &str) -> Val {
+        if value.len() > 128 { return self.text(value); }
+        let hash = fx_hash(value.as_bytes());
+        if let Some(&span) = self.interned.find(hash, |&span| self.bytes(span) == value.as_bytes()) {
+            return span;
+        }
         let val = self.text(value);
-        self.record = Some(val);
+        let text = &self.text;
+        self.interned.insert_unique(hash, val, |&span| fx_hash(span_bytes(text, span)));
         val
     }
 
     fn clear(&mut self) {
         self.vals.clear();
         self.text.clear();
+        self.interned.clear();
         self.rows = 0;
-        self.source_path = None;
-        self.source_id = None;
-        self.record = None;
     }
 
     #[inline(always)]
@@ -115,8 +215,10 @@ impl Batch {
                 Val::Null => statement.raw_bind_parameter(parameter, rusqlite::types::Null)?,
                 Val::Int(v) => statement.raw_bind_parameter(parameter, v)?,
                 Val::Real(v) => statement.raw_bind_parameter(parameter, v)?,
-                Val::Text(start, len) => statement
-                    .raw_bind_parameter(parameter, &self.text[start as usize..(start + len) as usize])?,
+                Val::Text(_, _) => {
+                    let value = unsafe { std::str::from_utf8_unchecked(self.bytes(*val)) };
+                    statement.raw_bind_parameter(parameter, value)?;
+                }
             }
         }
         Ok(())
@@ -124,6 +226,22 @@ impl Batch {
 
     /// Full chunks through the chunk statement, the tail one row at a time.
     fn drain(&mut self, meta: &Meta, connection: &Connection) -> rusqlite::Result<()> {
+        let span = tracing::info_span!("sqlite_table_batch_drain", table = %meta.name, rows = self.rows);
+        span.in_scope(|| self.drain_inner(meta, connection))
+    }
+
+    fn drain_inner(&mut self, meta: &Meta, connection: &Connection) -> rusqlite::Result<()> {
+        if std::env::var_os("RYI_SQLITE_VALUES").is_none() {
+            // This connection is exclusive to the writer thread. SQLite reads
+            // the batch only during execute; clear the pointer before the
+            // buffer can be recycled or mutated again.
+            meta.active.store(self as *mut Batch, Ordering::Relaxed);
+            let result = connection.execute(&meta.select_sql, []);
+            meta.active.store(std::ptr::null_mut(), Ordering::Relaxed);
+            result?;
+            self.clear();
+            return Ok(());
+        }
         let mut row = 0;
         if self.rows >= meta.chunk_rows {
             let mut statement = connection.prepare_cached(&meta.chunk_sql)?;
@@ -198,7 +316,12 @@ impl Slot {
         }
     }
 
-    fn spawn(&mut self, meta: Arc<Vec<Meta>>, insert_nanos: Arc<AtomicU64>) -> Result<()> {
+    fn spawn(
+        &mut self,
+        meta: Arc<Vec<Meta>>,
+        table_insert_nanos: Arc<Vec<AtomicU64>>,
+        profile_enabled: bool,
+    ) -> Result<()> {
         let Slot::Local(_) = self else { return Ok(()) };
         let Slot::Local(connection) = std::mem::replace(self, Slot::Moving) else { unreachable!() };
         let (batches, inbox) = sync_channel::<Batch>(QUEUE_BATCHES);
@@ -207,11 +330,14 @@ impl Slot {
             let mut error = None;
             for mut batch in inbox {
                 if error.is_none() {
-                    let started = Instant::now();
+                    let started = profile_enabled.then(Instant::now);
                     if let Err(e) = batch.drain(&meta[batch.table], &connection) {
                         error = Some(e.to_string());
                     }
-                    insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+                    if let Some(started) = started {
+                        let nanos = started.elapsed().as_nanos() as u64;
+                        table_insert_nanos[batch.table].fetch_add(nanos, Ordering::Relaxed);
+                    }
                 }
                 batch.clear();
                 let _ = give_back.try_send(batch);
@@ -232,12 +358,18 @@ const CHUNKS_PER_BATCH: usize = 16;
 pub struct Binder {
     meta: Arc<Vec<Meta>>,
     buffers: Vec<Batch>,
-    columns: Vec<Vec<String>>,
+    columns: Vec<HashMap<String, usize>>,
     json: Vec<Vec<bool>>,
+    column_kinds: Vec<Vec<usize>>,
     by_name: HashMap<String, usize>,
     path: String,
     threaded: bool,
-    insert_nanos: Arc<AtomicU64>,
+    profile_enabled: bool,
+    table_bind_nanos: Vec<u64>,
+    table_rows: Vec<u64>,
+    submit_nanos: u64,
+    table_insert_nanos: Arc<Vec<AtomicU64>>,
+    kind_time: [KindTime; COLUMN_KINDS.len()],
 }
 
 impl Binder {
@@ -250,19 +382,18 @@ impl Binder {
             .query_map([], |row| row.get::<_, String>(0))?
             .collect::<rusqlite::Result<_>>()?;
         let specs: Vec<TableSpec> = serde_json::from_str(FACTS)?;
-        let json_columns: std::collections::HashSet<(String, String)> = specs
-            .into_iter()
-            .flat_map(|spec| {
-                let table = spec.table;
-                spec.columns
-                    .into_iter()
-                    .filter(|column| column.kind == "json")
-                    .map(move |column| (table.clone(), column.name))
-            })
-            .collect();
+        let mut types = HashMap::new();
+        for spec in &specs {
+            for column in &spec.columns {
+                let kind = COLUMN_KINDS.iter().position(|name| *name == column.kind)
+                    .ok_or_else(|| format!("unknown SQLite column kind `{}`", column.kind))?;
+                types.insert((spec.table.clone(), column.name.clone()), kind);
+            }
+        }
         let mut meta = Vec::with_capacity(names.len());
         let mut columns = Vec::with_capacity(names.len());
         let mut json = Vec::with_capacity(names.len());
+        let mut column_kinds = Vec::with_capacity(names.len());
         let mut by_name = HashMap::new();
         for (index, name) in names.into_iter().enumerate() {
             let column_names: Vec<String> = connection
@@ -274,19 +405,45 @@ impl Binder {
             let list = column_names.iter().map(|c| format!("\"{c}\"")).collect::<Vec<_>>().join(", ");
             let tuple = format!("({})", vec!["?"; width].join(", "));
             let prefix = format!("INSERT INTO \"{name}\" ({list}) VALUES ");
+            let active = Arc::new(AtomicPtr::new(std::ptr::null_mut()));
+            let module_name = format!("ryi_batch_{index}");
+            connection.create_module(module_name.as_str(), &BATCH_MODULE, Some((width, Arc::clone(&active))))?;
+            let select_cols = (0..width).map(|index| format!("c{index}")).collect::<Vec<_>>().join(", ");
             meta.push(Meta {
+                name: name.clone(),
                 width,
+                row_column: column_names.iter().position(|c| c == "_row"),
+                path_column: column_names.iter().position(|c| c == "_input_path"),
+                content_column: column_names.iter().position(|c| c == "_content_id"),
+                record_column: column_names.iter().position(|c| c == "record"),
                 chunk_rows,
                 chunk_sql: format!("{prefix}{}", vec![tuple.as_str(); chunk_rows].join(", ")),
                 one_sql: format!("{prefix}{tuple}"),
+                select_sql: format!("INSERT INTO \"{name}\" ({list}) SELECT {select_cols} FROM {module_name}"),
+                active,
             });
-            json.push(column_names.iter().map(|c| json_columns.contains(&(name.clone(), c.clone()))).collect());
-            columns.push(column_names);
+            let kinds = column_names.iter().map(|column| types.get(&(name.clone(), column.clone())).copied()
+                .ok_or_else(|| format!("missing SQLite column kind for {name}.{column}")))
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            json.push(kinds.iter().map(|kind| *kind == 5).collect());
+            column_kinds.push(kinds);
+            columns.push(column_names.into_iter().enumerate().map(|(i, name)| (name, i)).collect());
             by_name.insert(name, index);
         }
         let buffers = (0..meta.len()).map(Batch::empty).collect();
-        Ok(Self { meta: Arc::new(meta), buffers, columns, json, by_name, path: String::new(), threaded,
-            insert_nanos: Arc::new(AtomicU64::new(0)) })
+        let table_count = meta.len();
+        let profile_enabled = tracing::enabled!(tracing::Level::DEBUG);
+        Ok(Self { meta: Arc::new(meta), buffers, columns, json, column_kinds, by_name, path: String::new(), threaded,
+            profile_enabled,
+            table_bind_nanos: vec![0; table_count],
+            table_rows: vec![0; table_count],
+            submit_nanos: 0,
+            table_insert_nanos: Arc::new((0..table_count).map(|_| AtomicU64::new(0)).collect()),
+            kind_time: [KindTime::default(); COLUMN_KINDS.len()] })
+    }
+
+    pub fn profiling_enabled(&self) -> bool {
+        self.profile_enabled
     }
 
     /// Serialize one row into its table's buffer; a full buffer goes to the
@@ -299,24 +456,20 @@ impl Binder {
         content_id: Option<&str>,
         value: &impl Serialize,
     ) -> Result<()> {
+        let started = self.profile_enabled.then(Instant::now);
         self.path.clear();
         let mut writer = RowWriter {
             binder: self,
             table: None,
-            text_mark: 0,
             prefix_len: 0,
             meta: (row, input_path, content_id),
         };
         let written = value.serialize(&mut writer);
-        let (opened, text_mark) = (writer.table, writer.text_mark);
+        let opened = writer.table;
         if let Err(error) = written {
             if let Some(table) = opened {
                 let buffer = &mut self.buffers[table];
                 buffer.vals.truncate(buffer.rows * self.meta[table].width);
-                buffer.text.truncate(text_mark);
-                buffer.source_path = None;
-                buffer.source_id = None;
-                buffer.record = None;
             }
             return Err(error.0);
         }
@@ -324,21 +477,34 @@ impl Binder {
             return Err("row has no `record` tag".into());
         };
         self.buffers[table].rows += 1;
+        if self.profile_enabled {
+            self.table_rows[table] += 1;
+        }
         if self.buffers[table].rows == self.meta[table].chunk_rows * CHUNKS_PER_BATCH {
             self.submit(slot, table)?;
+        }
+        if let Some(started) = started {
+            self.table_bind_nanos[table] += started.elapsed().as_nanos() as u64;
         }
         Ok(())
     }
 
     fn submit(&mut self, slot: &mut Slot, table: usize) -> Result<()> {
+        let started = self.profile_enabled.then(Instant::now);
         if !self.threaded {
             let connection = slot.local()?;
-            let started = Instant::now();
+            let insert_started = self.profile_enabled.then(Instant::now);
             self.buffers[table].drain(&self.meta[table], connection)?;
-            self.insert_nanos.fetch_add(started.elapsed().as_nanos() as u64, Ordering::Relaxed);
+            if let Some(insert_started) = insert_started {
+                let nanos = insert_started.elapsed().as_nanos() as u64;
+                self.table_insert_nanos[table].fetch_add(nanos, Ordering::Relaxed);
+            }
+            if let Some(started) = started {
+                self.submit_nanos += started.elapsed().as_nanos() as u64;
+            }
             return Ok(());
         }
-        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.insert_nanos))?;
+        slot.spawn(Arc::clone(&self.meta), Arc::clone(&self.table_insert_nanos), self.profile_enabled)?;
         let Slot::Worker(worker) = slot else {
             return Err("SQLite writer thread did not start".into());
         };
@@ -353,6 +519,9 @@ impl Binder {
         if worker.batches.send(full).is_err() {
             slot.local()?;
             return Err("SQLite writer thread stopped".into());
+        }
+        if let Some(started) = started {
+            self.submit_nanos += started.elapsed().as_nanos() as u64;
         }
         Ok(())
     }
@@ -369,8 +538,39 @@ impl Binder {
         Ok(())
     }
 
-    pub fn insert_time(&self) -> Duration {
-        Duration::from_nanos(self.insert_nanos.load(Ordering::Relaxed))
+    pub fn record_profile(&self, bind_span: &tracing::Span, bind_seconds: f64) {
+        if !self.profile_enabled {
+            return;
+        }
+        bind_span.record("seconds", bind_seconds);
+        let column_seconds = self.kind_time.iter().map(|time| time.nanos).sum::<u64>();
+        let dispatch_meta_lookup = self.table_bind_nanos.iter().sum::<u64>()
+            .saturating_sub(column_seconds)
+            .saturating_sub(self.submit_nanos);
+        bind_span.record("dispatch_meta_lookup_seconds", dispatch_meta_lookup as f64 / 1e9);
+        for (kind, time) in COLUMN_KINDS.iter().zip(self.kind_time) {
+            bind_span.in_scope(|| tracing::info!(
+                kind = %kind,
+                calls = time.calls,
+                nulls = time.nulls,
+                seconds = time.nanos as f64 / 1e9,
+                "sqlite bind column kind"
+            ));
+        }
+        for (index, meta) in self.meta.iter().enumerate() {
+            let rows = self.table_rows[index];
+            if rows > 0 {
+                let bind_seconds = self.table_bind_nanos[index] as f64 / 1e9;
+                let insert_seconds = self.table_insert_nanos[index].load(Ordering::Relaxed) as f64 / 1e9;
+                bind_span.in_scope(|| tracing::info!(
+                    table = %meta.name,
+                    rows,
+                    bind_seconds,
+                    insert_seconds,
+                    "sqlite table profile"
+                ));
+            }
+        }
     }
 }
 
@@ -399,62 +599,69 @@ fn err<T>(msg: String) -> std::result::Result<T, Error> {
 struct RowWriter<'b> {
     binder: &'b mut Binder,
     table: Option<usize>,
-    /// The table's text length before this row: a rejected row rolls back to it.
-    text_mark: usize,
     prefix_len: usize,
     meta: (i64, Option<&'b str>, Option<&'b str>),
 }
 
 impl RowWriter<'_> {
     #[inline(always)]
-    fn open(&mut self, record: &str) -> std::result::Result<(), Error> {
-        let Some(&index) = self.binder.by_name.get(record) else {
-            return err(format!("no table for record `{record}`"));
-        };
+    fn open(&mut self, index: usize) -> std::result::Result<(), Error> {
         self.table = Some(index);
         let (row, input_path, content_id) = self.meta;
         let width = self.binder.meta[index].width;
-        let columns = &self.binder.columns[index];
+        let meta = &self.binder.meta[index];
         let table = &mut self.binder.buffers[index];
-        self.text_mark = table.text.len();
         let base = table.vals.len();
         table.vals.resize(base + width, Val::Null);
-        let set = |table: &mut Batch, column: &str, val: Val| {
-            if let Some(index) = columns.iter().position(|name| name == column) {
+        let set = |table: &mut Batch, column: Option<usize>, val: Val| {
+            if let Some(index) = column {
                 table.vals[base + index] = val;
             }
         };
-        set(table, "_row", Val::Int(row));
-        let v = input_path.map_or(Val::Null, |p| table.source_path(p));
-        set(table, "_input_path", v);
-        let v = content_id.map_or(Val::Null, |c| table.source_id(c));
-        set(table, "_content_id", v);
-        let v = table.record(record);
-        set(table, "record", v);
+        set(table, meta.row_column, Val::Int(row));
+        if meta.path_column.is_some() {
+            let v = input_path.map_or(Val::Null, |p| table.intern(p));
+            set(table, meta.path_column, v);
+        }
+        if meta.content_column.is_some() {
+            let v = content_id.map_or(Val::Null, |c| table.intern(c));
+            set(table, meta.content_column, v);
+        }
+        if meta.record_column.is_some() {
+            let v = table.intern(&meta.name);
+            set(table, meta.record_column, v);
+        }
         Ok(())
     }
 
     #[inline(always)]
     fn field<T: ?Sized + Serialize>(&mut self, key: &str, value: &T) -> std::result::Result<(), Error> {
         if self.prefix_len == 0 && key == "record" {
-            let mut probe = Scalar { arena: None, val: None, text: None };
+            let mut probe = Scalar { arena: None, val: None, text: None,
+                lookup: Some(&self.binder.by_name), table: None };
             value.serialize(&mut probe)?;
-            let Some(record) = probe.text else {
-                return err("`record` is not text".into());
+            let Some(index) = probe.table else {
+                return err(match probe.text {
+                    Some(record) => format!("no table for record `{record}`"),
+                    None => "`record` is not text".into(),
+                });
             };
-            return self.open(&record);
+            return self.open(index);
         }
         let Some(index) = self.table else {
             return err(format!("field `{key}` before `record`"));
         };
+        if self.prefix_len == 0 {
+            if let Some(&column) = self.binder.columns[index].get(key) {
+                return self.column(index, column, value);
+            }
+        }
         let restore = self.binder.path.len();
         if self.prefix_len > 0 {
             self.binder.path.push_str("__");
         }
         self.binder.path.push_str(key);
-        let result = match self.binder.columns[index]
-            .iter()
-            .position(|name| name == &self.binder.path) {
+        let result = match self.binder.columns[index].get(self.binder.path.as_str()).copied() {
             Some(column) => self.column(index, column, value),
             None => {
                 let saved = self.prefix_len;
@@ -470,26 +677,30 @@ impl RowWriter<'_> {
 
     #[inline(always)]
     fn column<T: ?Sized + Serialize>(&mut self, index: usize, column: usize, value: &T) -> std::result::Result<(), Error> {
+        let started = self.binder.profile_enabled.then(Instant::now);
+        let kind = self.binder.column_kinds[index][column];
         let width = self.binder.meta[index].width;
         let table = &mut self.binder.buffers[index];
-        if self.binder.json[index][column] {
-            let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
-            let val = table.text(&json);
-            table.vals[table.rows * width + column] = val;
-            return Ok(());
-        }
-        let mark = table.text.len();
-        let mut probe = Scalar { arena: Some(&mut table.text), val: None, text: None };
-        let val = match value.serialize(&mut probe) {
-            Ok(()) => probe.val.unwrap_or(Val::Null),
-            Err(Compound) => {
-                table.text.truncate(mark);
-                let json = serde_json::to_string(value).map_err(|e| Error(e.into()))?;
-                table.text(&json)
+        let val = if self.binder.json[index][column] {
+            table.json(value).map_err(|e| Error(e.into()))?
+        } else {
+            let mut probe = Scalar { arena: Some(&mut *table), val: None, text: None,
+                lookup: None, table: None };
+            match value.serialize(&mut probe) {
+                Ok(()) => probe.val.unwrap_or(Val::Null),
+                Err(Compound) => {
+                    table.json(value).map_err(|e| Error(e.into()))?
+                }
             }
         };
         let base = table.rows * width;
         table.vals[base + column] = val;
+        if let Some(started) = started {
+            let time = &mut self.binder.kind_time[kind];
+            time.calls += 1;
+            time.nulls += u64::from(matches!(val, Val::Null));
+            time.nanos += started.elapsed().as_nanos() as u64;
+        }
         Ok(())
     }
 }
@@ -570,7 +781,8 @@ impl ser::SerializeMap for MapWriter<'_, '_> {
     type Ok = ();
     type Error = Error;
     fn serialize_key<T: ?Sized + Serialize>(&mut self, key: &T) -> std::result::Result<(), Error> {
-        let mut probe = Scalar { arena: None, val: None, text: None };
+        let mut probe = Scalar { arena: None, val: None, text: None,
+            lookup: None, table: None };
         key.serialize(&mut probe)?;
         self.key = probe.text.ok_or_else(|| Error("map key is not text".into()))?;
         Ok(())
@@ -587,20 +799,23 @@ impl ser::SerializeMap for MapWriter<'_, '_> {
 /// One column's value. Text goes straight into `arena` when there is one; a
 /// compound value reports `Compound` and lands as JSON.
 struct Scalar<'t> {
-    arena: Option<&'t mut String>,
+    arena: Option<&'t mut Batch>,
     val: Option<Val>,
     text: Option<String>,
+    lookup: Option<&'t HashMap<String, usize>>,
+    table: Option<usize>,
 }
 
 impl Scalar<'_> {
     #[inline(always)]
     fn put(&mut self, value: &str) {
+        if let Some(lookup) = self.lookup {
+            self.table = lookup.get(value).copied();
+            if self.table.is_none() { self.text = Some(value.to_owned()); }
+            return;
+        }
         match self.arena.as_deref_mut() {
-            Some(arena) => {
-                let start = arena.len() as u32;
-                arena.push_str(value);
-                self.val = Some(Val::Text(start, value.len() as u32));
-            }
+            Some(arena) => self.val = Some(arena.intern(value)),
             None => self.text = Some(value.to_owned()),
         }
     }
@@ -736,5 +951,83 @@ impl ser::Serializer for &mut Scalar<'_> {
     }
     fn serialize_struct_variant(self, _: &'static str, _: u32, _: &'static str, _: usize) -> std::result::Result<Self::SerializeStructVariant, Compound> {
         Err(Compound)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{fx_hash, Batch, Val};
+
+    #[test]
+    fn repeated_text_reuses_one_batch_span_and_recycled_capacity() {
+        let mut batch = Batch::empty(0);
+        let first = batch.intern("shared-name");
+        let second = batch.intern("shared-name");
+        assert!(matches!((first, second), (Val::Text(a, n), Val::Text(b, m)) if a == b && n == m));
+        assert_eq!(batch.bytes(first), b"shared-name");
+        batch.intern("other-name");
+        let capacity = batch.text.capacity();
+        batch.clear();
+        assert_eq!(batch.text.capacity(), capacity);
+        assert!(batch.interned.is_empty());
+        let recycled = batch.intern("shared-name");
+        assert_eq!(recycled, Val::Text(0, 11));
+        assert_eq!(batch.bytes(recycled), b"shared-name");
+    }
+
+    #[test]
+    fn json_columns_append_utf8_directly_to_the_batch_arena() {
+        let mut batch = Batch::empty(0);
+        batch.text("prefix");
+        let value = serde_json::json!({"text": "λ\n\"", "array": [null, true, 7]});
+        let encoded = batch.json(&value).unwrap();
+        assert_eq!(encoded, Val::Text(6, serde_json::to_string(&value).unwrap().len() as u32));
+        assert_eq!(batch.bytes(encoded), serde_json::to_string(&value).unwrap().as_bytes());
+    }
+
+    #[test]
+    fn hash_collision_keeps_distinct_text_spans() {
+        let mut batch = Batch::empty(0);
+        let forced_hash = fx_hash(b"other");
+        let seed = batch.text("seed");
+        batch.interned.insert_unique(forced_hash, seed, |_| forced_hash);
+        let other = batch.intern("other");
+        assert_ne!(batch.bytes(other), batch.bytes(seed));
+        assert_eq!(batch.bytes(other), b"other");
+        let repeated = batch.intern("other");
+        assert_eq!(batch.bytes(repeated), b"other");
+        assert_eq!(batch.interned.len(), 2);
+        let long = "x".repeat(129);
+        let before = batch.interned.len();
+        let bypassed = batch.intern(&long);
+        assert_eq!(batch.bytes(bypassed), long.as_bytes());
+        assert_eq!(batch.interned.len(), before);
+    }
+
+    #[test]
+    fn interning_survives_hash_table_growth() {
+        let mut batch = Batch::empty(0);
+        let mut first = None;
+        let mut last = None;
+        for index in 0..1_000 {
+            let value = format!("short-{index:04}");
+            let span = batch.intern(&value);
+            if index == 0 {
+                first = Some(span);
+            }
+            if index == 999 {
+                last = Some(span);
+            }
+        }
+        assert_eq!(batch.interned.len(), 1_000);
+        let text_len = batch.text.len();
+        assert_eq!(batch.intern("short-0000"), first.unwrap());
+        assert_eq!(batch.intern("short-0999"), last.unwrap());
+        assert_eq!(batch.text.len(), text_len);
+    }
+
+    #[test]
+    fn val_stays_sixteen_bytes() {
+        assert_eq!(std::mem::size_of::<Val>(), 16);
     }
 }
