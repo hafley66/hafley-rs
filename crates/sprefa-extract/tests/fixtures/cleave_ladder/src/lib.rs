@@ -11,3 +11,5 @@ pub use _1_src::{
     Plain,
 };
 pub use _4_types::*;
+pub use _6_pattern::Pattern;
+pub use _7_counts::Counts;
