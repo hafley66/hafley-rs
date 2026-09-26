@@ -788,9 +788,9 @@ fn relocation_ts() {
     );
 }
 
-/// Invariant 4 over every ts mutation. TS legs mint no `same_file` call
-/// edges (a same-file bare call lands on the corpus_unique leg), so the
-/// conserved set is empty and this pins that it stays empty.
+/// Invariant 4 over every ts mutation. A same-file bare call binds its
+/// module-scope declaration with origin `same_file`; those edges are
+/// conserved across every mutation.
 #[test]
 fn origin_conservation_ts() {
     for scenario in ts_scenarios() {
