@@ -20,6 +20,39 @@ fn run(args: &[&str]) -> std::process::Output {
         .unwrap()
 }
 
+#[test]
+fn fast_skips_large_json_under_small_heap_cap() {
+    let scratch = tempfile::tempdir().unwrap();
+    let json_path = scratch.path().join("huge.json");
+    let source_path = scratch.path().join("small.ts");
+    let db_path = scratch.path().join("facts.db");
+    std::fs::write(&json_path, format!("[{}{{\"value\":1}}]", "{\"value\":1},".repeat(399_999))).unwrap();
+    std::fs::write(&source_path, "export function answer() { return 42; }\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .args(["fast", json_path.to_str().unwrap(), source_path.to_str().unwrap(),
+            "--sqlite", db_path.to_str().unwrap()])
+        .env("RYI_MAX_MEM_MB", "256")
+        .env("SPREFA_EXTRACT_THREADS", "2")
+        .env("RUST_LOG", "error")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let db = Connection::open(db_path).unwrap();
+    let skip: (String, i64, i64) = db.query_row(
+        "SELECT path, bytes, \"limit\" FROM size_skip", [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).unwrap();
+    assert_eq!(skip, (json_path.to_string_lossy().into_owned(), 4_800_001, 512 * 1024));
+    let sources: i64 = db.query_row("SELECT count(*) FROM file", [], |row| row.get(0)).unwrap();
+    assert_eq!(sources, 2);
+    let nodes: i64 = db.query_row(
+        "SELECT count(*) FROM node WHERE _input_path = ?1",
+        [source_path.to_str().unwrap()],
+        |row| row.get(0),
+    ).unwrap();
+    assert!(nodes > 0);
+}
+
 const CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/schema/generated/5_facts.json"

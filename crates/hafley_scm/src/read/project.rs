@@ -230,6 +230,7 @@ pub struct ProjectInput {
     pub path: String,
     pub blob: ContentId,
     pub file: Option<FlatFact>,
+    size_skip: Option<FlatFact>,
     pub output: Arc<RyiOutput>,
     /// This file's module facts, built while its bytes are in hand so the
     /// plane costs no second read. `None` outside a module-plane run.
@@ -315,6 +316,14 @@ fn push_input_raw<E>(
             .expect("fresh project input has its file row"),
     })
     .map_err(ResolveWithRawError::RawSink)?;
+    if let Some(fact) = input.size_skip.take() {
+        push_raw(RawProjectFact {
+            path: &input.path,
+            content_id: &input.blob,
+            fact,
+        })
+        .map_err(ResolveWithRawError::RawSink)?;
+    }
     {
         crate::read::wire::flatten_each(input.output.as_ref(), None, &mut |mut fact| {
             // Stamp the phase-1 `path: None` left by `wire.rs` so it matches
@@ -1388,10 +1397,12 @@ pub fn scip_family_from_index_jsonl(
 /// default; this family is the labelled entry, not a replacement.
 // @comment-ok: one pre-existing diet_scip design note, edited by one line.
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    let inputs = stage_span("read_inputs")
-        .in_scope(|| read_inputs_with_modules(paths, Planes::Resolve { flow: false }))?;
+    let mut inputs = stage_span("read_inputs")
+        .in_scope(|| read_inputs_with_modules(paths, Planes::Fast))?;
     let scm = stage_span("scm_rows").in_scope(|| scm_rows(paths, &inputs));
+    let skips: Vec<_> = inputs.iter_mut().filter_map(|input| input.size_skip.take()).collect();
     let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
+    facts.extend(skips);
     facts.extend(scm?);
     Ok(facts)
 }
@@ -1456,11 +1467,18 @@ pub fn diet_scip_streamed<E>(
     paths: &[PathBuf],
     push: &mut impl FnMut(DietRow<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
-    let mut inputs = read_inputs_streamed(paths, true, Planes::All, &mut |input| {
+    let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input| {
         push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))?;
-        if crate::read::lang::ts::source_type_for(&input.path).is_some() {
-            if let Some(output) = Arc::get_mut(&mut input.output) {
-                output.df = None;
+        if let Some(output) = Arc::get_mut(&mut input.output) {
+            output.cst = None;
+            output.df = None;
+            output.data = None;
+            if arm_for(&input.path).is_none() {
+                let captures = output.scm_captures.take();
+                *output = RyiOutput {
+                    scm_captures: captures,
+                    ..RyiOutput::default()
+                };
             }
         }
         Ok(())
@@ -1544,7 +1562,12 @@ pub fn sorted_lines(facts: Vec<FlatFact>) -> Vec<String> {
 pub enum Planes {
     All,
     Resolve { flow: bool },
+    Fast,
 }
+
+/// Fast's data fallback can expand a compact document into hundreds of
+/// thousands of CST and data rows. The skip is decided before parsing.
+const FAST_DATA_MAX_BYTES: u64 = 512 * 1024;
 
 pub fn read_inputs(paths: &[PathBuf]) -> Result<Vec<ProjectInput>, ProjectError> {
     read_inputs_inner(paths, false, Planes::All)
@@ -1756,8 +1779,23 @@ fn read_chunk(
                 let content =
                     std::fs::read(path).map_err(|err| ProjectError::Read(path.clone(), err))?;
                 let path = path.to_string_lossy().to_string();
-                let output =
-                    crate::read::dispatch::dispatch_uncached(&path, &content, resolve_mask(&path, planes));
+                let size_skip = if matches!(planes, Planes::Fast)
+                    && content.len() as u64 > FAST_DATA_MAX_BYTES
+                    && source_for(&path).is_some_and(|source| source.name() == "data")
+                {
+                    Some(crate::read::wire::size_skip_fact(
+                        &path,
+                        content.len() as u64,
+                        FAST_DATA_MAX_BYTES,
+                    ))
+                } else {
+                    None
+                };
+                let output = if size_skip.is_some() {
+                    Some(Arc::new(RyiOutput::default()))
+                } else {
+                    crate::read::dispatch::dispatch_uncached(&path, &content, resolve_mask(&path, planes))
+                };
                 let module = module_facts_of(&path, &content, modules);
                 let rust_module = rust_module_facts_of(&path, &content, modules, output.as_deref());
                 let go_module = go_module_facts_of(&path, &content, modules);
@@ -1771,6 +1809,7 @@ fn read_chunk(
                         )),
                         blob,
                         path,
+                        size_skip,
                         output,
                         module,
                         rust_module,
