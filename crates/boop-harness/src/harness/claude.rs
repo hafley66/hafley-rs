@@ -260,6 +260,14 @@ impl Harness for Claude {
         crate::harness::TuiComposer::Claude
     }
 
+    fn screen_lines(&self, role: &str, said: &str, arg: Option<&str>) -> Vec<String> {
+        crate::harness::claude_summary::screen_lines(role, said, arg)
+    }
+
+    fn screen_anchor(&self) -> Option<boop_turnvis::SummaryAnchor> {
+        Some(crate::harness::claude_summary::anchor)
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }

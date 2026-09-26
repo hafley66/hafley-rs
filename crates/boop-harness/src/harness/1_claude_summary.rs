@@ -29,6 +29,64 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
     boop_turnvis::locate_visible_turns_with(lines, turns, Some(anchor))
 }
 
+/// Input keys the claude TUI prints inside `Name(…)`, in the order it prefers them.
+const TOOL_HEADER_KEYS: &[&str] = &["command", "file_path", "notebook_path", "path", "pattern", "url", "query", "prompt"];
+
+/// Rows the claude TUI draws for a stored turn besides its `said`: a tool call's
+/// `Name(arg)` header (from `arg`, or from an assistant `[Name] {json}` line).
+pub fn screen_lines(role: &str, said: &str, arg: Option<&str>) -> Vec<String> {
+    match (role, arg) {
+        ("tool", Some(arg)) => headers(said, arg),
+        ("assistant", _) => said.split('\n').flat_map(json_headers).collect(),
+        _ => Vec::new(),
+    }
+}
+
+/// `Name(arg)` for the arg's first line, plus the `~/…` form the TUI prints for home paths.
+fn headers(name: &str, arg: &str) -> Vec<String> {
+    let first = arg.split('\n').next().unwrap_or_default();
+    let home = home_relative(first).map(|home| format!("{name}({home})"));
+    std::iter::once(format!("{name}({first})")).chain(home).collect()
+}
+
+/// `[Name] {json}` (the harness reader's tool line) → its headers.
+fn json_headers(line: &str) -> Vec<String> {
+    let Some((name, json)) = line.strip_prefix('[').and_then(|rest| rest.split_once("] ")) else {
+        return Vec::new();
+    };
+    TOOL_HEADER_KEYS
+        .iter()
+        .find_map(|key| json_string_field(json, key))
+        .map(|arg| headers(name, &arg))
+        .unwrap_or_default()
+}
+
+/// The first string value of `key` in a JSON object that may be cut short by `cap`.
+fn json_string_field(json: &str, key: &str) -> Option<String> {
+    let start = json.find(&format!("\"{key}\":\""))? + key.len() + 4;
+    let mut out = String::new();
+    let mut chars = json[start..].chars();
+    while let Some(c) = chars.next() {
+        match c {
+            '"' => return Some(out),
+            '\\' => match chars.next()? {
+                'n' => out.push('\n'),
+                't' => out.push('\t'),
+                other => out.push(other),
+            },
+            other => out.push(other),
+        }
+    }
+    Some(out)
+}
+
+/// `/Users/<name>/…` and `/home/<name>/…` as the TUI prints them: `~/…`.
+fn home_relative(path: &str) -> Option<String> {
+    let rest = path.strip_prefix("/Users/").or_else(|| path.strip_prefix("/home/"))?;
+    let (_, tail) = rest.split_once('/')?;
+    Some(format!("~/{tail}"))
+}
+
 pub fn anchor(lines: &[LogicalLine], turns: &[BoopTurn], visible: &mut Vec<VisibleTurn>) {
     for line in lines.iter().filter(|line| summary(&line.text)) {
         if visible
@@ -111,6 +169,8 @@ mod tests {
                 ts: 1,
                 role: "user".into(),
                 said: "okay now try".into(),
+
+                aliases: Vec::new(),
             },
             BoopTurn {
                 session: "fixture".into(),
@@ -119,6 +179,8 @@ mod tests {
                 ts: 2,
                 role: "tool".into(),
                 said: "".into(),
+
+                aliases: Vec::new(),
             },
             BoopTurn {
                 session: "fixture".into(),
@@ -127,6 +189,8 @@ mod tests {
                 ts: 3,
                 role: "assistant".into(),
                 said: "Blocked at the extension".into(),
+
+                aliases: Vec::new(),
             },
         ];
         let lines: Vec<_> = [

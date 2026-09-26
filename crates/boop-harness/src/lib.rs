@@ -7,6 +7,7 @@ pub mod door;
 pub mod harness;
 pub mod identity;
 pub mod live;
+pub mod pane;
 pub mod registry;
 pub mod transcript;
 pub mod worktree;

@@ -516,6 +516,17 @@ pub trait Harness: Send + Sync {
         self.tui_composer().input_region(rows)
     }
 
+    /// Rows this harness's TUI draws for a stored turn besides its `said`; the
+    /// matcher looks for them too. `arg` is a tool call's first argument.
+    fn screen_lines(&self, _role: &str, _said: &str, _arg: Option<&str>) -> Vec<String> {
+        Vec::new()
+    }
+
+    /// Anchors rows the matcher leaves unowned (e.g. a collapsed tool summary).
+    fn screen_anchor(&self) -> Option<boop_turnvis::SummaryAnchor> {
+        None
+    }
+
     /// This harness's own live-session registry: the file, database or server
     /// it writes when a TUI is running.
     fn live(&self) -> &dyn crate::live::LiveSessions {
