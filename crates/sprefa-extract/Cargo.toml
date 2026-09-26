@@ -35,6 +35,9 @@ memchr = "2"
 # ~2% self time in frees on the go corpus. Kept behind a feature until it wins
 # on all three corpora; default build is byte-identical and allocator-unchanged.
 mimalloc = { version = "0.1", optional = true }
+# Hard heap ceiling for the ryi bin (RYI_MAX_MEM_MB). Candidates: cap (allocator
+# wrapper, limit settable at runtime), stats_alloc (counts only), setrlimit (RLIMIT_AS unenforced on macOS).
+cap = { version = "0.1.2", optional = true }
 
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The directory walker soopy itself uses (`soopy/src/_3a_files.rs:6`), already in
@@ -239,7 +242,7 @@ optional = true
 [features]
 cli = ["hafley_scm/cli", "dep:clap", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
-mimalloc = ["dep:mimalloc"]
+mimalloc = ["dep:mimalloc", "dep:cap"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out
 # of `cli`: it pulls the whole rust-analyzer crate graph (380s cold build).
 rust-checker = [

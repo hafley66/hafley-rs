@@ -19,7 +19,17 @@ use std::time::Instant;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
-static GLOBAL_ALLOCATOR: mimalloc::MiMalloc = mimalloc::MiMalloc;
+static GLOBAL_ALLOCATOR: cap::Cap<mimalloc::MiMalloc> = cap::Cap::new(mimalloc::MiMalloc, usize::MAX);
+
+/// Heap ceiling: RYI_MAX_MEM_MB (default 2048, 0 = unlimited). Past it an
+/// allocation fails and the process aborts instead of eating the machine.
+#[cfg(feature = "mimalloc")]
+fn cap_memory() {
+    let mb: usize = std::env::var("RYI_MAX_MEM_MB").ok().and_then(|v| v.parse().ok()).unwrap_or(2048);
+    if mb > 0 {
+        let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
+    }
+}
 
 use clap::Parser as _;
 
@@ -277,6 +287,8 @@ fn exit(code: i32) -> ! {
 static TRAIL_STATE: OnceLock<Arc<sprefa_extract::trace::SummaryState>> = OnceLock::new();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "mimalloc")]
+    cap_memory();
     let summary = sprefa_extract::trace::install();
     if let Some(state) = &summary {
         let _ = TRAIL_STATE.set(Arc::clone(state));
