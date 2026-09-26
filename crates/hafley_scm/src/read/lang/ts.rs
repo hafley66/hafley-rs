@@ -4658,23 +4658,31 @@ impl TsSource {
         _kinds: Option<&crate::read::types::KindIndex>,
     ) -> Option<(ContentId, Span)> {
         let sites = corpus_defs(def_index, callee);
+        // A lexical declaration in this file wins before the corpus-wide
+        // duplicate count. Require its CallF span in the current blob: a
+        // same-named export in another file cannot seat a local call.
+        if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
+            if let Some(node) = def_named(call, &output.strings, callee) {
+                let span = call.node(node).span;
+                if sites.iter().any(|site| {
+                    site.blob == *own_blob && site.span == span && site.family == FamilyTag::Call
+                }) {
+                    return Some(((*own_blob).clone(), span));
+                }
+            }
+        }
         let mut blobs: Vec<&ContentId> = Vec::new();
         for site in sites {
             if !blobs.contains(&&site.blob) {
                 blobs.push(&site.blob);
             }
         }
-        if blobs.len() <= 1 {
-            return TsSource::call_name_match(output, def_index, callee);
-        }
-        let call = output.call.as_ref()?;
-        let node = def_named(call, &output.strings, callee)?;
-        let span = call.node(node).span;
-        let own_blob = own?;
-        let site = sites
-            .iter()
-            .find(|site| Some(&site.blob) == own && site.span == span)?;
-        Some((site.blob.clone(), site.span))
+        let [blob] = blobs.as_slice() else {
+            return None;
+        };
+        let site = sites.iter().find(|site| site.family == FamilyTag::Call)
+            .unwrap_or(&sites[0]);
+        Some(((**blob).clone(), site.span))
     }
 }
 

@@ -2641,7 +2641,11 @@ fn type_facts(
         }
     }
     if let Some(modules) = cx.indexes.ts_modules.get() {
+        let mut seen = std::collections::BTreeSet::new();
         for use_site in modules.type_parameter_uses(&input.path) {
+            if !seen.insert((use_site.owner_span.start, use_site.owner_span.len, &use_site.name)) {
+                continue;
+            }
             facts.push(FlatFact::ResolvedTypeEdge {
                 fact: None,
                 owner_path: input.path.clone(),

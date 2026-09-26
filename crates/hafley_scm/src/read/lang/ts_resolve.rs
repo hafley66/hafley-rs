@@ -354,6 +354,13 @@ struct RuntimeModuleRequests {
 }
 
 impl RuntimeModuleRequests {
+    fn enter_type_scope(&mut self, parameters: Option<&ts::TSTypeParameterDeclaration<'_>>) {
+        self.type_parameter_scopes.push(
+            parameters.into_iter().flat_map(|parameters| parameters.params.iter())
+                .map(|parameter| parameter.name.name.to_string()).collect(),
+        );
+    }
+
     fn enter_type_owner(
         &mut self,
         name: &str,
@@ -361,10 +368,7 @@ impl RuntimeModuleRequests {
         parameters: Option<&ts::TSTypeParameterDeclaration<'_>>,
     ) {
         self.type_owners.push((name.to_string(), to_local_span(span)));
-        self.type_parameter_scopes.push(
-            parameters.into_iter().flat_map(|parameters| parameters.params.iter())
-                .map(|parameter| parameter.name.name.to_string()).collect(),
-        );
+        self.enter_type_scope(parameters);
     }
 
     fn leave_type_owner(&mut self) {
@@ -451,8 +455,33 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
             oxc_ast_visit::walk::walk_class(self, class);
             self.leave_type_owner();
         } else {
+            self.enter_type_scope(class.type_parameters.as_deref());
             oxc_ast_visit::walk::walk_class(self, class);
+            self.type_parameter_scopes.pop();
         }
+    }
+
+    fn visit_variable_declarator(&mut self, declarator: &ts::VariableDeclarator<'a>) {
+        if let ts::BindingPattern::BindingIdentifier(id) = &declarator.id {
+            let parameters = match &declarator.init {
+                Some(ts::Expression::ArrowFunctionExpression(arrow)) => Some(arrow.type_parameters.as_deref()),
+                Some(ts::Expression::FunctionExpression(func)) => Some(func.type_parameters.as_deref()),
+                _ => None,
+            };
+            if let Some(parameters) = parameters {
+                self.enter_type_owner(&id.name, declarator.span, parameters);
+                oxc_ast_visit::walk::walk_variable_declarator(self, declarator);
+                self.leave_type_owner();
+                return;
+            }
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, declarator);
+    }
+
+    fn visit_arrow_function_expression(&mut self, arrow: &ts::ArrowFunctionExpression<'a>) {
+        self.enter_type_scope(arrow.type_parameters.as_deref());
+        oxc_ast_visit::walk::walk_arrow_function_expression(self, arrow);
+        self.type_parameter_scopes.pop();
     }
 
     fn visit_method_definition(&mut self, method: &ts::MethodDefinition<'a>) {
@@ -533,7 +562,9 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
             oxc_ast_visit::walk::walk_function(self, it, flags);
             self.leave_type_owner();
         } else {
+            self.enter_type_scope(it.type_parameters.as_deref());
             oxc_ast_visit::walk::walk_function(self, it, flags);
+            self.type_parameter_scopes.pop();
         }
     }
 

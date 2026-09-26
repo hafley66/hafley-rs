@@ -16,20 +16,27 @@ Proposed **separate commit** for `crates/sprefa-extract/scripts/ryi-vs-codeql.sh
 
 Cause: `TypeRefCollector` excludes a declaration's own type parameters from TypeF candidates. A type parameter is lexically bound within an alias, interface, class, function, or method; it has no corpus TypeF declaration node. CodeQL's `LocalTypeAccess` resolves these references to the same-file type-parameter declaration. T3's 100 same-file CodeQL-only type keys include 28 named `T`.
 
-Fix: `crates/hafley_scm/src/read/lang/ts_resolve.rs` collects references to type parameters while traversing the already parsed AST, with lexical parameter scopes and the enclosing named owner. `crates/hafley_scm/src/read/project.rs` emits a same-file resolved type row from that binding. Existing TypeF candidates remain excluded, so each generic reference uses one binding path. No pin or golden changed.
+Fix: `crates/hafley_scm/src/read/lang/ts_resolve.rs` collects references to type parameters while traversing the already parsed AST, with lexical parameter scopes and the enclosing named owner. This now includes variable-bound arrows and function expressions. Anonymous classes and functions enter their own parameter scopes while inheriting the nearest named owner. `crates/hafley_scm/src/read/project.rs` emits one same-file resolved type row per `(owner span, parameter name)`. Without this emission dedup, `identity<T>(value: T): T` would write two identical SQLite rows; the comparison script's `select distinct` and the ladder's `select distinct` would collapse them downstream. Existing TypeF candidates remain excluded. No pin or golden changed.
 
 New ladder source: `crates/sprefa-extract/tests/fixtures/ts_ladder/src/_23_type_params.ts`. Hand-written expected rows in `crates/sprefa-extract/tests/181_ts_ladder.rs`:
 
 | Source | Kind | Owner | Target | Expected tier | Status |
 | --- | --- | --- | --- | --- | --- |
 | `_23_type_params.ts` | `generic` | `Boxed` | `_23_type_params.ts:T` | `f-` | unverified |
+| `_23_type_params.ts` | `generic` | `echo` | `_23_type_params.ts:T` | `f-` | unverified |
 | `_23_type_params.ts` | `generic` | `identity` | `_23_type_params.ts:T` | `f-` | unverified |
+| `_23_type_params.ts` | `generic` | `makeHolder` | `_23_type_params.ts:T` | `f-` | unverified |
+| `_23_type_params.ts` | `generic` | `makeHolder` | `_23_type_params.ts:U` | `f-` | unverified |
+
+An anonymous generic default export with no enclosing named item remains outside this row model: the comparison query requires `itemName(source)`. A text scan of the retained T3 CodeQL source archive found 0 `export default class<` and 0 `export default function<` forms in the staged TypeScript files. This is a source-text count, not an AST count, and no new extraction ran.
 
 Expected corpus delta: at least the 28 `T` keys move from CodeQL-only to agreement if their enclosing owner coordinates match. Additional names such as `Value`, `Key`, `In`, and `Out` may move; their count needs a fresh comparison. Each new agreement adds one ryi key and removes one CodeQL-only key. No exact post-change total is asserted without a run.
 
 ## 3. Same-file calls and duplicate names
 
-Cause: generated `bind_args` is a top-level function repeated across generated files. Corpus-wide name uniqueness therefore fails. Its calls and definition are in the same source file. `ts_call_name_match` in `crates/hafley_scm/src/read/lang/ts.rs` already narrows the duplicate-name guard: for more than one definition blob, it requires a matching CallF node in the current blob at that node's span. That is the T3 review follow-up for `_21_local_peer.ts`. The 112 `bind_args` residual count was recorded **before** that follow-up and is not evidence that the current guard still drops them. Removing or widening the guard would undo the local-peer correction.
+Cause: generated `bind_args` is a top-level function repeated across generated files. Corpus-wide name uniqueness therefore fails. Its calls and definition are in the same source file. The 112 `bind_args` residual count was recorded **before** the T3 local-peer follow-up, so it is not a measurement of the current tree.
+
+Fix: `ts_call_name_match` in `crates/hafley_scm/src/read/lang/ts.rs` now resolves a current-blob CallF node before counting corpus blobs. If no local CallF node matches, the corpus fallback requires one definition blob. This makes the duplicate-name guard apply only to the cross-file fallback; an unrelated exported peer cannot seat a local call. The public `call_name_match` path used by the SCIP ratchet is unchanged.
 
 New ladder source: `crates/sprefa-extract/tests/fixtures/ts_ladder/src/_24_bind_args.ts` plus a same-named peer in `_25_bind_args_peer.ts`. Hand-written expected row in `crates/sprefa-extract/tests/181_ts_ladder.rs`:
 
@@ -37,8 +44,8 @@ New ladder source: `crates/sprefa-extract/tests/fixtures/ts_ladder/src/_24_bind_
 | --- | --- | --- | --- | --- | --- |
 | `_24_bind_args.ts` | `call` | `arrival_statement` | `_24_bind_args.ts:bind_args` | `f-` | unverified |
 
-The existing `_21_local_peer.ts useLocalHelper -> helper` row and this new row represent the same guard cause with different function names. Expected delta relative to the pre-follow-up T3 call count: up to 112 CodeQL-only `bind_args` keys move to agreement, contingent on the T3 guard producing the local edge and owner coordinates matching. Expected delta from T4's call resolver code: 0; it was left unchanged after static inspection. The post-follow-up count remains unverified.
+The existing `_21_local_peer.ts useLocalHelper -> helper` row and this new row represent the same guard cause with different function names. Expected delta relative to the pre-follow-up T3 call count: up to 112 CodeQL-only `bind_args` keys move to agreement, contingent on matching owner coordinates. The incremental T4 delta cannot be separated from T3's unmeasured follow-up without a run. The post-follow-up count remains unverified.
 
 ## Review state
 
-`git diff --check` found no whitespace errors. The two added ladder source files and all three expected ladder rows are unverified. No existing fixture, pin, or golden was edited.
+The two added ladder source files and all six expected ladder rows are unverified. No existing fixture, pin, or golden was edited.
