@@ -125,13 +125,13 @@ fn type_scope_ladder_keeps_prelude_result_external() {
 fn type_scope_ladder_preserves_declared_fixture_dependency() {
     let scratch = tempfile::tempdir().unwrap();
     let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
-    let root = std::fs::canonicalize("../sqlite-ext").unwrap();
+    let root = std::fs::canonicalize("tests/fixtures/type_ladder_dependency").unwrap();
     ryi(&["fast", root.to_str().unwrap(), "--sqlite", &fast]);
     let conn = rusqlite::Connection::open(&fast).unwrap();
     let rows: i64 = conn.query_row(
         "select count(*) from resolved_type_edge
-         where owner_path like '%/tests/fixtures/%/src/lib.rs'
-           and target_path like '%/src/collector.rs'
+         where owner_path like '%/type_ladder_dependency/%/src/lib.rs'
+           and target_path like '%/0_collector/src/0_collector.rs'
            and target_name in ('BulkTrigger', 'RowChange')",
         [],
         |row| row.get(0),
