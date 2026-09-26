@@ -15,15 +15,17 @@ fn generated_clap_help_matches_captured_main() {
         }
         let output = command.arg("--help").output().expect("ryi help");
         assert!(output.status.success(), "{verb}: {}", String::from_utf8_lossy(&output.stderr));
-        let actual = String::from_utf8(output.stdout).expect("UTF-8 help");
-        let mut expected = std::fs::read_to_string(format!("{fixtures}/{verb}.txt")).expect("captured main help");
+        // The build stamp comes from whichever build last wrote the binary; a
+        // shared cargo target can swap it mid-run. Every other byte is pinned.
+        let stamp = |text: &str| -> String {
+            text.split_inclusive('\n')
+                .map(|line| if line.starts_with("Build: git hash: ") { "Build: <stamp>\n" } else { line })
+                .collect()
+        };
+        let actual = stamp(&String::from_utf8(output.stdout).expect("UTF-8 help"));
+        let expected = stamp(&std::fs::read_to_string(format!("{fixtures}/{verb}.txt")).expect("captured main help"));
         if verb == "root" {
-            let old = expected.lines().find(|line| line.starts_with("Build: ")).expect("main build line");
-            let current = concat!(
-                "Build: git hash: ", env!("SPREFA_BUILD_GIT_HASH"),
-                ", datetime: ", env!("SPREFA_BUILD_DATETIME")
-            );
-            expected = expected.replace(old, current);
+            assert!(actual.contains("Build: <stamp>\n"), "root help carries a build line");
         }
         assert_eq!(actual.as_bytes(), expected.as_bytes(), "{verb} help bytes");
     }
