@@ -586,7 +586,8 @@ fn class_entity(class: &ts::Class, strings: &mut Strings, sink: &mut FamilyBundl
                     TypeEntityKind::Method,
                 );
                 // A method IS a type: carry its arrow signature (param/ret refs).
-                // v5 emits NO method-signature type_edges, so no candidates.
+                // Method signatures name types at their own owner span, which
+                // the project resolve joins to imported and local declarations.
                 fn_sigs(
                     method.span,
                     &method.value.type_parameters,
@@ -594,7 +595,7 @@ fn class_entity(class: &ts::Class, strings: &mut Strings, sink: &mut FamilyBundl
                     &method.value.return_type,
                     strings,
                     sink,
-                    false,
+                    true,
                 );
             }
         }

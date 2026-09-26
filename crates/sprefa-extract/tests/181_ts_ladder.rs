@@ -68,7 +68,9 @@ fn ts_ladder_fast_and_slow() {
     assert_eq!(
         table,
         "\
+_0_types.ts  param     ping         -> _0_types.ts:Base       fs
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
+_0_types.ts  returns   ping         -> _0_types.ts:Base       fs
 _11_duplicate.ts param     duplicate    -> _5_peer_a.ts:Peer      fs
 _11_duplicate.ts returns   duplicate    -> _5_peer_a.ts:Peer      fs
 _14_static_use.ts call      runStatic    -> _13_static.ts:load     fs
@@ -91,7 +93,9 @@ _4_nested.ts call      run          -> _3_many.ts:Child       f-
 _4_nested.ts call      run          -> _3_many.ts:many        fs
 _4_nested.ts heritage  Nested       -> _0_types.ts:Service    fs
 _4_nested.ts param     reexported   -> _0_types.ts:Base       fs
+_4_nested.ts param     run          -> _0_types.ts:Box        fs
 _4_nested.ts returns   reexported   -> _0_types.ts:Base       fs
+_4_nested.ts returns   run          -> _0_types.ts:Base       fs
 _5_peer_a.ts call      useA         -> _5_peer_a.ts:same      fs
 _5_peer_a.ts param     same         -> _5_peer_a.ts:Peer      fs
 _5_peer_a.ts param     useA         -> _5_peer_a.ts:Peer      fs
