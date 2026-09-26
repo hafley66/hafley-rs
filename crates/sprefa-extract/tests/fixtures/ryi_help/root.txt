@@ -45,7 +45,7 @@ Options:
       --lines                Add 1-based line/col beside every span
       --witness              Wrap output in the TSI envelope
       --max-bytes <BYTES>    Skip inputs over this many bytes (0 = no limit)
-      --fresh                Run without the resident daemon (server mode is already fresh)
+      --daemon-client        Send this command to the resident daemon (ignored by the server binary)
   -h, --help                 Print help
   -V, --version              Print version
 

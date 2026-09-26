@@ -18,9 +18,9 @@ use crate::ops_auto::WatchArgs;
 pub struct Ryi {
   #[command(subcommand)]
   pub cmd: Option<Cmd>,#[command(flatten)]
-  pub file: FileArgs,#[doc = "Run without the resident daemon (server mode is already fresh)"]
+  pub file: FileArgs,#[doc = "Send this command to the resident daemon (ignored by the server binary)"]
   #[arg(long, global = true)]
-  pub fresh: bool,
+  pub daemon_client: bool,
 }
 
 #[derive(clap::Subcommand, Debug)]

@@ -18,8 +18,8 @@ region  cli       1 6e64be8bc173
 region  router    1 6e64be8bc173
 watch   cli     403 ce50371ecc4e
 watch   router  403 ce50371ecc4e
-diff    cli       1 208dc82ebd26
-diff    router    1 208dc82ebd26
+diff    cli       1 750777a29f8d
+diff    router    1 750777a29f8d
 ingest  cli      24 0239bab7fd61
 ingest  router   24 0239bab7fd61
 schema  cli     436 e82ba078cc0e

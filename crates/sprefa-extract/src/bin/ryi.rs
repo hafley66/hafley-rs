@@ -337,7 +337,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mimalloc")]
     cap_memory();
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
-        return server_auto::daemon();
+        return server_auto::daemon(
+            || { let _ = sprefa_extract::trace::install(); },
+            hafley_observe::flush_trace,
+            hafley_observe::finish_trace,
+        );
     }
     let summary = sprefa_extract::trace::install();
     if let Some(state) = &summary {

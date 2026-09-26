@@ -14,5 +14,5 @@ Options:
       --query <QUERY>    Tree-sitter query text
       --digest <DIGEST>  Expected content digest (one input only)
       --sqlite <PATH>    Write to a new SQLite database instead of stdout
-      --fresh            Run without the resident daemon (server mode is already fresh)
+      --daemon-client    Send this command to the resident daemon (ignored by the server binary)
   -h, --help             Print help

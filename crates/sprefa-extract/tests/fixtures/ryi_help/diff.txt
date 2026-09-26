@@ -9,5 +9,5 @@ Options:
       --pattern <GLOB>  Glob to include; repeatable (default: every roster extension)
       --arms <ARMS>     Resolve arms (call,type)
       --sqlite <PATH>   Write to a new SQLite database instead of stdout
-      --fresh           Run without the resident daemon (server mode is already fresh)
+      --daemon-client   Send this command to the resident daemon (ignored by the server binary)
   -h, --help            Print help

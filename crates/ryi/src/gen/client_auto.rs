@@ -123,15 +123,15 @@ fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> 
 }
 
 async fn run() -> Result<i32, ClientError> {
-    let original_argv: Vec<std::ffi::OsString> = std::env::args_os().skip(1).filter(|arg| arg != "--fresh").collect();
+    let original_argv: Vec<std::ffi::OsString> = std::env::args_os().skip(1).filter(|arg| arg != "--daemon-client").collect();
     let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
-    if argv.get(1).is_some_and(|arg| arg == "--fresh") && argv.len() > 2 {
-        let fresh = argv.remove(1);
-        argv.insert(2, fresh);
+    if argv.get(1).is_some_and(|arg| arg == "--daemon-client") && argv.len() > 2 {
+        let daemon_client = argv.remove(1);
+        argv.insert(2, daemon_client);
     }
     let cli = Ryi::parse_from(argv);
     let server = server_binary()?;
-    if cli.fresh {
+    if !cli.daemon_client {
         let error = Command::new(server).args(original_argv)
             .stdin(Stdio::inherit()).stdout(Stdio::inherit()).stderr(Stdio::inherit()).exec();
         return Err(error.into());
@@ -179,7 +179,7 @@ async fn run() -> Result<i32, ClientError> {
     };
     let response = send(builder.body(body)?, &socket).await?;
     let status = response.status();
-    let error_code = response.headers().get("x-ryi-exit-code")
+    let mut error_code = response.headers().get("x-ryi-exit-code")
         .and_then(|value| value.to_str().ok())
         .and_then(|value| value.parse::<i32>().ok());
     let mut diagnostics = Vec::new();
@@ -190,46 +190,30 @@ async fn run() -> Result<i32, ClientError> {
         while let Some(frame) = body.frame().await {
             match frame?.into_data() {
                 Ok(bytes) => stderr.write_all(&bytes).await?,
-                Err(frame) => if let Ok(headers) = frame.into_trailers() { append_diagnostics(&mut diagnostics, &headers)?; },
+                Err(frame) => if let Ok(headers) = frame.into_trailers() {
+                    append_diagnostics(&mut diagnostics, &headers)?;
+                    error_code = headers.get("x-ryi-exit-code").and_then(|value| value.to_str().ok()).and_then(|value| value.parse().ok()).or(error_code);
+                },
             }
         }
         stderr.write_all(&diagnostics).await?;
         stderr.flush().await?;
         return Ok(error_code.unwrap_or(if status == StatusCode::BAD_REQUEST { 2 } else { 1 }));
     }
-    let mut stdout = tokio::io::stdout();
-    let mut pending = Vec::new();
-    let mut line = Vec::new();
+    let mut stdout = tokio::io::BufWriter::with_capacity(64 * 1024, tokio::io::stdout());
     while let Some(frame) = body.frame().await {
         let frame = frame?;
         match frame.into_data() {
-            Ok(bytes) => {
-            for byte in &bytes {
-                line.push(*byte);
-                if *byte == b'\n' {
-                    if !pending.is_empty() { stdout.write_all(&pending).await?; }
-                    pending = std::mem::take(&mut line);
-                }
-            }
-            }
-            Err(frame) => if let Ok(headers) = frame.into_trailers() { append_diagnostics(&mut diagnostics, &headers)?; },
+            Ok(bytes) => stdout.write_all(&bytes).await?,
+            Err(frame) => if let Ok(headers) = frame.into_trailers() {
+                append_diagnostics(&mut diagnostics, &headers)?;
+                error_code = headers.get("x-ryi-exit-code").and_then(|value| value.to_str().ok()).and_then(|value| value.parse().ok()).or(error_code);
+            },
         }
     }
-    if !line.is_empty() {
-        if !pending.is_empty() { stdout.write_all(&pending).await?; }
-        pending = line;
-    }
-    let mut exit = 0;
-    if let Ok(value) = serde_json::from_slice::<serde_json::Value>(&pending) {
-        if value.get("error").is_some() {
-            exit = value.get("code").and_then(serde_json::Value::as_i64).unwrap_or(1) as i32;
-        }
-    }
-    if exit == 0 { stdout.write_all(&pending).await?; }
-    else { tokio::io::stderr().write_all(&pending).await?; }
     tokio::io::stderr().write_all(&diagnostics).await?;
     stdout.flush().await?;
-    Ok(exit)
+    Ok(error_code.unwrap_or(0))
 }
 
 pub async fn main() -> ExitCode {

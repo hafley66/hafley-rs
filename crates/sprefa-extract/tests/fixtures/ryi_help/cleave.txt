@@ -15,5 +15,5 @@ Options:
       --verify <VERIFY>  Command to run after --commit; failure rolls back
       --text-refs        Report leftover SRC spellings in plain text
       --json             End with one JSON line holding the plan
-      --fresh            Run without the resident daemon (server mode is already fresh)
+      --daemon-client    Send this command to the resident daemon (ignored by the server binary)
   -h, --help             Print help

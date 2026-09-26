@@ -6,5 +6,5 @@ Arguments:
   [N]  Runs to print [default: 5]
 
 Options:
-      --fresh  Run without the resident daemon (server mode is already fresh)
-  -h, --help   Print help
+      --daemon-client  Send this command to the resident daemon (ignored by the server binary)
+  -h, --help           Print help

@@ -12,5 +12,5 @@ Options:
       --root <DIR>      Corpus root
       --sqlite <PATH>   Write to a new SQLite database instead of stdout
       --lines           Add 1-based line/col beside every span
-      --fresh           Run without the resident daemon (server mode is already fresh)
+      --daemon-client   Send this command to the resident daemon (ignored by the server binary)
   -h, --help            Print help

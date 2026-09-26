@@ -3,8 +3,11 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::io::Write as _;
 use std::time::Duration;
+
+#[path = "support/0_daemon_guard.rs"]
+mod daemon_guard;
+use daemon_guard::DaemonGuard;
 
 use axum::body::Body;
 use base64::Engine as _;
@@ -102,27 +105,21 @@ fn cases(root: &Path, scratch: &Path) -> Vec<Case> {
     ]
 }
 
-struct Server(PathBuf);
-impl Drop for Server {
-    fn drop(&mut self) {
-        if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&self.0) {
-            let _ = stream.write_all(b"POST /__shutdown HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
-        }
-    }
-}
-
-fn start_server(binary: &Path, cache: &Path) -> (Server, PathBuf) {
-    let socket = cache.join("ryi/ryi.sock");
+fn start_server(binary: &Path, cache: &Path) -> (DaemonGuard, PathBuf) {
+    let guard = DaemonGuard::new(cache);
+    let socket = guard.socket().to_path_buf();
     let status = Command::new(binary).arg("--daemon").env("XDG_CACHE_HOME", cache)
+        .env("RYI_IDLE_SECS", "30")
         .env("HOME", cache.parent().expect("cache parent").join("home"))
         .status().expect("start daemon");
     assert!(status.success(), "daemonize");
     for _ in 0..200 {
-        if std::os::unix::net::UnixStream::connect(&socket).is_ok() { break; }
+        if std::os::unix::net::UnixStream::connect(&socket).is_ok() && guard.pid().is_some() { break; }
         std::thread::sleep(Duration::from_millis(10));
     }
     assert!(socket.exists(), "unix socket bound");
-    (Server(socket.clone()), socket)
+    assert!(guard.pid().is_some(), "daemon PID recorded");
+    (guard, socket)
 }
 
 async fn socket_response(socket: &Path, op: &str, args: &serde_json::Value, root: &Path) -> (axum::http::StatusCode, axum::body::Bytes) {

@@ -10,5 +10,5 @@ Options:
       --generated <GENERATED>  Generated body file, or - for stdin [default: -]
       --apply                  Write the replacement (default: report drift)
       --state <STATE>          Soopy state root for --apply
-      --fresh                  Run without the resident daemon (server mode is already fresh)
+      --daemon-client          Send this command to the resident daemon (ignored by the server binary)
   -h, --help                   Print help

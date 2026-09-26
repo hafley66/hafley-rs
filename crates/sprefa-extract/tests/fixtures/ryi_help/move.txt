@@ -16,5 +16,5 @@ Options:
       --relocate-mod             Move a Rust module's `mod` line instead of adding #[path]
       --verify <VERIFY>          Command to run after --commit; failure rolls back
       --text-refs                Report leftover old-path spellings in plain text
-      --fresh                    Run without the resident daemon (server mode is already fresh)
+      --daemon-client            Send this command to the resident daemon (ignored by the server binary)
   -h, --help                     Print help

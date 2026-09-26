@@ -9,5 +9,5 @@ Options:
       --receipts <PATH>    Receipt store path
       --once               Emit one snapshot and exit
       --poll-ms <POLL_MS>  Poll interval when the platform watcher is unavailable [default: 500]
-      --fresh              Run without the resident daemon (server mode is already fresh)
+      --daemon-client      Send this command to the resident daemon (ignored by the server binary)
   -h, --help               Print help

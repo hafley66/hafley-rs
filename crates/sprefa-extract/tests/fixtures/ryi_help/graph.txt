@@ -25,5 +25,5 @@ Options:
       --rust-checker                Add rust-analyzer type evidence
       --ts-checker                  Add TypeScript checker type evidence
       --go-checker                  Add go/types type evidence
-      --fresh                       Run without the resident daemon (server mode is already fresh)
+      --daemon-client               Send this command to the resident daemon (ignored by the server binary)
   -h, --help                        Print help

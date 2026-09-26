@@ -13,34 +13,51 @@ use crate::ops_auto::{
     QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs, WatchArgs,
 };
 
-fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default(), fresh: false } }
+fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default(), daemon_client: false } }
 
 struct RowSink {
     tx: mpsc::SyncSender<OpResult<Vec<u8>>>,
     pending: Vec<u8>,
+    chunked: bool,
+}
+
+impl RowSink {
+    fn flush_pending(&mut self) -> std::io::Result<()> {
+        if !self.pending.is_empty() {
+            self.tx.send(Ok(std::mem::take(&mut self.pending)))
+                .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
+        }
+        Ok(())
+    }
 }
 
 impl Write for RowSink {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        if !self.chunked {
+            let mut remaining = buf;
+            while let Some(end) = remaining.iter().position(|byte| *byte == b'\n') {
+                self.pending.extend_from_slice(&remaining[..=end]);
+                remaining = &remaining[end + 1..];
+                self.flush_pending()?;
+            }
+            self.pending.extend_from_slice(remaining);
+            return Ok(buf.len());
+        }
         let mut remaining = buf;
-        while let Some(end) = remaining.iter().position(|byte| *byte == b'\n') {
-            self.pending.extend_from_slice(&remaining[..=end]);
-            remaining = &remaining[end + 1..];
-            {
-                let line = std::mem::take(&mut self.pending);
-                self.tx.send(Ok(line)).map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
+        while !remaining.is_empty() {
+            let size = (64 * 1024 - self.pending.len()).min(remaining.len());
+            self.pending.extend_from_slice(&remaining[..size]);
+            remaining = &remaining[size..];
+            if self.pending.len() == 64 * 1024 {
+                self.tx.send(Ok(std::mem::take(&mut self.pending)))
+                    .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
             }
         }
-        self.pending.extend_from_slice(remaining);
         Ok(buf.len())
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        if !self.pending.is_empty() {
-            let line = std::mem::take(&mut self.pending);
-            self.tx.send(Ok(line)).map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
-        }
-        Ok(())
+        if self.chunked { Ok(()) } else { self.flush_pending() }
     }
 }
 
@@ -146,16 +163,17 @@ fn produce(ryi: Ryi) -> Rows {
     let operation_cancelled = Arc::clone(&cancelled);
     let request_root = request_root();
     let diagnostics = REQUEST_DIAGNOSTICS.with(|slot| slot.borrow().clone());
+    let chunked = REQUEST_ROOT.with(|slot| slot.borrow().is_some()) && !matches!(&ryi.cmd, Some(Cmd::Watch(_)));
     std::thread::spawn(move || {
         let result = with_request_context(request_root, diagnostics, || -> OpResult<()> {
-            let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new() })));
+            let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new(), chunked })));
             OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
             let outcome = crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled)).map_err(|error| {
                 let message = if error.message.is_empty() { format!("ryi exited {}", error.code) } else { error.message };
                 OpError(message, error.code)
             });
             OP_SINK.with(|slot| *slot.borrow_mut() = None);
-            sink.0.lock().unwrap().flush()?;
+            sink.0.lock().unwrap().flush_pending()?;
             if let Some(error) = OP_WRITE_ERROR.with(|failure| failure.borrow_mut().take()) {
                 return Err(OpError::from(error));
             }
@@ -183,7 +201,7 @@ pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>>
 pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     let mut args = args.clone();
     args.format = None;
-    stream(Ryi { cmd: None, file: args, fresh: false })
+    stream(Ryi { cmd: None, file: args, daemon_client: false })
 }
 pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Slow(args.clone()))) }
 pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Scip(args.clone()))) }
@@ -226,8 +244,27 @@ mod tests {
         let rows = Rows { rx, cancelled: Arc::clone(&cancelled) };
         drop(rows);
         assert!(cancelled.load(Ordering::Acquire));
-        let mut sink = RowSink { tx, pending: Vec::new() };
+        let mut sink = RowSink { tx, pending: Vec::new(), chunked: false };
         assert_eq!(sink.write_all(b"row\n").unwrap_err().kind(), std::io::ErrorKind::BrokenPipe);
+    }
+
+    #[test]
+    fn daemon_rows_cross_the_channel_in_64_kib_chunks() {
+        let (tx, rx) = mpsc::sync_channel(2);
+        let mut sink = RowSink { tx, pending: Vec::new(), chunked: true };
+        for _ in 0..1023 {
+            sink.write_all(&[b'x'; 64]).unwrap();
+            sink.flush().unwrap();
+        }
+        assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        sink.write_all(&[b'x'; 64]).unwrap();
+        assert_eq!(rx.try_recv().unwrap().unwrap().len(), 64 * 1024);
+        sink.write_all(b"tail").unwrap();
+        sink.flush().unwrap();
+        assert!(matches!(rx.try_recv(), Err(mpsc::TryRecvError::Empty)));
+        sink.flush_pending().unwrap();
+        let tail = rx.try_recv().unwrap().unwrap();
+        assert_eq!(tail.as_slice(), b"tail");
     }
 
     #[test]

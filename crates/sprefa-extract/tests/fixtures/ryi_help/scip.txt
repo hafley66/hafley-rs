@@ -20,5 +20,5 @@ Options:
       --records <KINDS>      Only these --raw record kinds (comma-separated)
       --occurrence-text      Add the source text to each scip_occurrence
       --scip-build           Build the index for --raw with the inputs' language indexer
-      --fresh                Run without the resident daemon (server mode is already fresh)
+      --daemon-client        Send this command to the resident daemon (ignored by the server binary)
   -h, --help                 Print help
