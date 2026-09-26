@@ -306,6 +306,16 @@ fn site_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
 
 /// One `resolved_type_edge` per parse type-edge candidate: the first type
 /// reference inside the owner spelling the candidate's name names the target.
+fn impl_self_type_symbol(symbol: &str, defined_symbols: &HashMap<&str, SymbolId>) -> Option<SymbolId> {
+    let (prefix, rest) = symbol.split_once("/impl#[")?;
+    let (self_type, tail) = rest.split_once(']')?;
+    if !tail.is_empty() && !(tail.starts_with('[') && tail.ends_with(']')) {
+        return None;
+    }
+    let declaration = format!("{prefix}/{self_type}#");
+    defined_symbols.get(declaration.as_str()).copied()
+}
+
 fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
     let Some(types) = doc.input.output.types.as_ref() else { return Vec::new() };
     let strings = &doc.input.output.strings;
@@ -332,13 +342,7 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
             if doc.content.get(span.start as usize..span.end() as usize) != Some(&b"Self"[..]) {
                 return None;
             }
-            let (prefix, rest) = symbol.split_once("/impl#[")?;
-            let (self_type, tail) = rest.split_once(']')?;
-            if !tail.is_empty() && !(tail.starts_with('[') && tail.ends_with(']')) {
-                return None;
-            }
-            let declaration = format!("{prefix}/{self_type}#");
-            defined_symbols.get(declaration.as_str()).copied().map(|target| (span, target))
+            impl_self_type_symbol(symbol, &defined_symbols).map(|target| (span, target))
         })
         .collect();
     refs.sort_by_key(|(span, _)| (span.start, span.end()));
@@ -536,4 +540,24 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
             _ => false,
         })
         .collect())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn impl_self_descriptor_requires_the_declaring_module() {
+        let symbol = "rust-analyzer cargo soopy 0.1.0 _7e_stage_store/impl#[DurableStageStore][StageStore]";
+        let other_module = "rust-analyzer cargo soopy 0.1.0 _0_types/DurableStageStore#";
+        let same_module = "rust-analyzer cargo soopy 0.1.0 _7e_stage_store/DurableStageStore#";
+        let rows = [
+            (vec![(other_module, SymbolId(1))], None),
+            (vec![(other_module, SymbolId(1)), (same_module, SymbolId(2))], Some(SymbolId(2))),
+        ];
+        for (definitions, expected) in rows {
+            let definitions = definitions.into_iter().collect();
+            assert_eq!(impl_self_type_symbol(symbol, &definitions), expected);
+        }
+    }
 }
