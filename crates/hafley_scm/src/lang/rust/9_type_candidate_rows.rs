@@ -29,6 +29,10 @@ pub struct TypeCandidateRow {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum TypeCandidateOwner {
     Declared(Range<u32>),
+    Synthetic {
+        range: Range<u32>,
+        name: String,
+    },
     Impl {
         primary_name: String,
         bare_head: Option<(Range<u32>, String)>,
@@ -122,16 +126,22 @@ fn collect(
                 groups.push(declared(item.ident.span(), line_starts, candidates));
                 for child in &item.items {
                     if let syn::TraitItem::Fn(method) = child {
+                        let mut candidates = signature_candidates(&method.sig);
+                        if let Some(body) = &method.default {
+                            candidates.extend(body_type_candidates(body));
+                        }
+                        retain_non_generic(&item.generics, &mut candidates);
+                        retain_non_generic(&method.sig.generics, &mut candidates);
                         if method.default.is_some() {
-                            let mut candidates = signature_candidates(&method.sig);
-                            candidates.extend(body_type_candidates(method.default.as_ref().unwrap()));
-                            retain_non_generic(&item.generics, &mut candidates);
-                            retain_non_generic(&method.sig.generics, &mut candidates);
-                            groups.push(declared(
-                                method.sig.ident.span(),
-                                line_starts,
+                            groups.push(declared(method.sig.ident.span(), line_starts, candidates));
+                        } else {
+                            groups.push(TypeCandidateGroup {
+                                owner: TypeCandidateOwner::Synthetic {
+                                    range: span_range(line_starts, method.sig.ident.span()),
+                                    name: method.sig.ident.to_string(),
+                                },
                                 candidates,
-                            ));
+                            });
                         }
                     }
                 }

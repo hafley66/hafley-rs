@@ -176,3 +176,27 @@ fn type_scope_ladder_finds_local_body_annotation() {
     ).unwrap();
     assert_eq!(rows, (1, 1));
 }
+
+#[test]
+fn type_scope_ladder_finds_required_trait_signature() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'read'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'read'
+              and target_name = 'LocalThing' and target_path like '%/_0_alias.rs')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?)),
+    ).unwrap();
+    assert_eq!(rows, (2, 2));
+}
