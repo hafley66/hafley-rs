@@ -123,6 +123,7 @@ for kind in type call; do
   fi
   "$codeql" query run "$query_dir/${kind}_edges_repo.ql" \
     --database "$out/codeql-db" --output "$out/$kind.bqrs" \
+    --threads "${RYI_CODEQL_THREADS:-4}" \
     >"$out/$kind-query.log" 2>&1
   "$codeql" bqrs decode "$out/$kind.bqrs" --format=csv --output "$out/$kind.csv" \
     >>"$out/$kind-query.log" 2>&1
