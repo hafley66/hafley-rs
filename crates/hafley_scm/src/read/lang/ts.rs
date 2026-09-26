@@ -4652,6 +4652,8 @@ impl TsSource {
         def_index: &DefIndex,
         callee: &str,
         own: Option<&ContentId>,
+        modules: Option<(&TsModuleIndex, &str)>,
+        paths: Option<&crate::read::types::PathIndex>,
     ) -> Option<(ContentId, Span)> {
         let sites = corpus_defs(def_index, callee);
         let mut blobs: Vec<&ContentId> = Vec::new();
@@ -4666,11 +4668,20 @@ impl TsSource {
         let call = output.call.as_ref()?;
         let node = def_named(call, &output.strings, callee)?;
         let span = call.node(node).span;
-        // Identical generated peers have the same declaration span in each
-        // blob. A new same-named declaration at a different span keeps the
-        // corpus name ambiguous (the mutation battery's duplicate rule).
+        // A local/private declaration and a newly exported same-name peer
+        // at a different span retain the mutation battery's ambiguity rule.
+        // Identical generated peers and same-visibility local peers bind to
+        // the declaration in this file.
         if sites.iter().any(|site| site.span != span) {
-            return None;
+            let (modules, path) = modules?;
+            let own_exported = modules.exports_local(path, callee);
+            if sites.iter().filter(|site| Some(&site.blob) != own).any(|site| {
+                paths
+                    .and_then(|paths| paths.get(&site.blob))
+                    .is_none_or(|path| modules.exports_local(path, callee) != own_exported)
+            }) {
+                return None;
+            }
         }
         let site = sites
             .iter()
@@ -5084,6 +5095,8 @@ impl Resolve<CallF> for TsSource {
                     def_index,
                     callee,
                     own.as_ref(),
+                    modules,
+                    paths,
                 )
                 .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
@@ -5252,6 +5265,8 @@ impl Resolve<CallF> for TsSource {
                     def_index,
                     named,
                     own.as_ref(),
+                    modules,
+                    paths,
                 )
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
             }) else {

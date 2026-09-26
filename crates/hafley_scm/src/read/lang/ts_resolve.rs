@@ -690,6 +690,13 @@ impl TsModuleIndex {
         self.facts.get(path)?.imports.get(local)
     }
 
+    /// Whether this module exports a declaration under its local spelling.
+    pub fn exports_local(&self, path: &str, local: &str) -> bool {
+        self.facts.get(path).is_some_and(|facts| {
+            facts.local_exports.values().any(|(name, _)| name == local)
+        })
+    }
+
     /// The corpus blob of one corpus path.
     pub fn blob_of(&self, path: &str) -> Option<&ContentId> {
         self.blobs.get(path)
