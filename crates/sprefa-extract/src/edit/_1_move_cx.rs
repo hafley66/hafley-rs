@@ -46,28 +46,7 @@ impl MoveCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
-        let mut files = Vec::new();
-        let walk = WalkBuilder::new(root)
-            .hidden(false)
-            .ignore(false)
-            .git_ignore(false)
-            .git_global(false)
-            .git_exclude(false)
-            .filter_entry(|entry| {
-                !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref())
-            })
-            .build();
-        for entry in walk {
-            let entry = entry.map_err(|error| format!("walk {}: {error}", root.display()))?;
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-                continue;
-            }
-            let Some(rel) = rel_of(root, entry.path()) else {
-                continue;
-            };
-            files.push(rel);
-        }
-        files.sort();
+        let files = walk_files(root)?;
         let present = files.iter().cloned().collect();
         Ok(Self {
             root: root.to_path_buf(),
@@ -188,6 +167,27 @@ impl MoveCx {
     pub fn rel(&self, path: &Path) -> Option<String> {
         rel_of(&self.root, path)
     }
+}
+
+/// The path inventory shared by every edit verb. A context calls this once
+/// when its invocation opens and keeps the resulting path order throughout.
+pub fn walk_files(root: &Path) -> Result<Vec<String>, String> {
+    let mut files = Vec::new();
+    let walk = WalkBuilder::new(root)
+        .hidden(false)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
+        .filter_entry(|entry| !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref()))
+        .build();
+    for entry in walk {
+        let entry = entry.map_err(|error| format!("walk {}: {error}", root.display()))?;
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) { continue }
+        if let Some(rel) = rel_of(root, entry.path()) { files.push(rel) }
+    }
+    files.sort();
+    Ok(files)
 }
 
 fn rel_of(root: &Path, path: &Path) -> Option<String> {

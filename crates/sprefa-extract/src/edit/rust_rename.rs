@@ -36,6 +36,7 @@ use crate::edit_seams::SymbolSeat;
 use crate::edit_seams::RenameStop;
 use crate::edit_seams::Rename;
 use hafley_scm::span::Span;
+use hafley_scm::atoms::{NameId, Strings};
 
 impl Rename for RustSource {
     fn symbol_refs(
@@ -230,6 +231,7 @@ fn module_of(home: &ModuleId, chain: &[String]) -> ModuleId {
 /// tables the module law reads.
 struct Corpus {
     scans: BTreeMap<String, FileScan>,
+    names: Strings,
     /// rel -> every module that file IS, in route order; never empty.
     homes: BTreeMap<String, Vec<ModuleId>>,
     /// A crate's identifier as a `use` writes it -> that crate's root file.
@@ -243,6 +245,7 @@ impl Corpus {
         let path_mods = path_module_table(cx, &roots);
         let mut scans = BTreeMap::new();
         let mut homes = BTreeMap::new();
+        let mut names = Strings::new();
         for rel in cx.files_of(&RustSource) {
             let Some(text) = cx.text(rel) else {
                 continue;
@@ -252,21 +255,22 @@ impl Corpus {
             if !text.contains(old) {
                 continue;
             }
-            let Ok(parsed) = syn::parse_file(&text) else {
-                continue;
-            };
             let line_starts = build_line_starts(&text);
-            let mut scan = Scan {
-                old,
-                source: &text,
-                line_starts: &line_starts,
-                chain: Vec::new(),
-                blocks: Vec::new(),
-                role: RefRole::TypeRef,
-                out: FileScan::default(),
-            };
-            syn::visit::Visit::visit_file(&mut scan, &parsed);
-            scan.out.field_sites = field_sites(&parsed, &line_starts, old);
+            let Some(scanned) = cx.with_rust_parse(rel, |parsed| {
+                let mut scan = Scan {
+                    old,
+                    source: &text,
+                    line_starts: &line_starts,
+                    names: &mut names,
+                    chain: Vec::new(),
+                    blocks: Vec::new(),
+                    role: RefRole::TypeRef,
+                    out: FileScan::default(),
+                };
+                syn::visit::Visit::visit_file(&mut scan, parsed);
+                scan.out.field_sites = field_sites(parsed, &line_starts, old);
+                scan.out
+            }) else { continue };
             homes.insert(
                 rel.to_string(),
                 path_mods
@@ -274,10 +278,11 @@ impl Corpus {
                     .cloned()
                     .unwrap_or_else(|| vec![module_path(rel, &roots)]),
             );
-            scans.insert(rel.to_string(), scan.out);
+            scans.insert(rel.to_string(), scanned);
         }
         Corpus {
             scans,
+            names,
             homes,
             crates,
         }
@@ -745,7 +750,7 @@ impl Corpus {
         match self.resolve(home, chain, before) {
             Some(module) if anchors.contains(&module) => true,
             Some(_) if before.is_empty() => scan.owner_leaves.iter().any(|leaf| {
-                leaf.name == owner
+                self.names.lookup(leaf.name) == owner
                     && leaf.block.is_none()
                     && self
                         .resolve(home, &leaf.chain, &leaf.prefix)
@@ -816,7 +821,7 @@ struct FileScan {
 /// A `use` clause binding ANY name in this scope, the raw material the owner
 /// law (`Owner { .. }`, `Kind::Old`) reads.
 struct OwnerLeaf {
-    name: String,
+    name: NameId,
     /// The `::`-segments before the bound name.
     prefix: Vec<String>,
     chain: Vec<String>,
@@ -908,6 +913,7 @@ struct Scan<'a> {
     old: &'a str,
     source: &'a str,
     line_starts: &'a [u32],
+    names: &'a mut Strings,
     chain: Vec<String>,
     blocks: Vec<Span>,
     role: RefRole,
@@ -1665,7 +1671,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
             };
             if let Some(name) = bound {
                 self.out.owner_leaves.push(OwnerLeaf {
-                    name,
+                    name: self.names.intern(&name),
                     prefix: branch.idents[..bound_prefix].to_vec(),
                     chain: self.chain.clone(),
                     block,
@@ -2128,4 +2134,3 @@ fn manifests(cx: &RenameCx) -> Vec<(String, CargoManifest)> {
         })
         .collect()
 }
-

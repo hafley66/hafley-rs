@@ -9,10 +9,9 @@
 
 use std::path::{Path, PathBuf};
 use std::collections::BTreeMap;
+use std::cell::RefCell;
 
-use ignore::WalkBuilder;
-
-use crate::move_cx::SKIP_DIRS;
+use crate::move_cx::walk_files;
 use crate::edit_seams::Rename;
 
 /// Whether the roster hands `rel` to `rename`.
@@ -41,39 +40,20 @@ pub struct RenameCx {
     files: Vec<String>,
     batch: Vec<RenameRequest>,
     overlay: BTreeMap<String, String>,
+    rust_parse: RefCell<BTreeMap<String, syn::File>>,
 }
 
 impl RenameCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
-        let mut files = Vec::new();
-        let walk = WalkBuilder::new(root)
-            .hidden(false)
-            .ignore(false)
-            .git_ignore(false)
-            .git_global(false)
-            .git_exclude(false)
-            .filter_entry(|entry| {
-                !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref())
-            })
-            .build();
-        for entry in walk {
-            let entry = entry.map_err(|error| format!("walk {}: {error}", root.display()))?;
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-                continue;
-            }
-            let Some(rel) = rel_of(root, entry.path()) else {
-                continue;
-            };
-            files.push(rel);
-        }
-        files.sort();
+        let files = walk_files(root)?;
         Ok(Self {
             root: root.to_path_buf(),
             files,
             batch: Vec::new(),
             overlay: BTreeMap::new(),
+            rust_parse: RefCell::new(BTreeMap::new()),
         })
     }
 
@@ -115,7 +95,19 @@ impl RenameCx {
     }
 
     pub fn overlay(&mut self, rel: String, text: String) {
+        self.rust_parse.get_mut().remove(&rel);
         self.overlay.insert(rel, text);
+    }
+
+    /// Parse one version of a Rust file once across every list row that reads
+    /// it. An overlay invalidates that file's parsed version.
+    pub fn with_rust_parse<T>(&self, rel: &str, read: impl FnOnce(&syn::File) -> T) -> Option<T> {
+        if !self.rust_parse.borrow().contains_key(rel) {
+            let parsed = syn::parse_file(&self.text(rel)?).ok()?;
+            self.rust_parse.borrow_mut().insert(rel.to_string(), parsed);
+        }
+        let parsed = self.rust_parse.borrow();
+        Some(read(parsed.get(rel)?))
     }
 
     pub fn overlaid(&self) -> &BTreeMap<String, String> {
@@ -125,10 +117,4 @@ impl RenameCx {
     pub fn abs(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
     }
-}
-
-fn rel_of(root: &Path, path: &Path) -> Option<String> {
-    let relative = path.strip_prefix(root).ok()?;
-    let text = relative.to_string_lossy().replace('\\', "/");
-    (!text.is_empty()).then_some(text)
 }
