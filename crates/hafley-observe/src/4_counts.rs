@@ -12,6 +12,8 @@ pub struct SpanCounts {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Growth {
     Constant,
+    /// Only `observed_growth_sized` reports it: a log ratio depends on the sizes, not their ratio.
+    Log,
     Linear,
     Quadratic,
 }
@@ -189,6 +191,57 @@ pub fn assert_growth(
         actual,
         expected,
         "span {name} grew {:?} from {} to {} entries across a {size_ratio}x input",
+        actual,
+        small.entries_of(name),
+        large.entries_of(name)
+    );
+}
+
+/// The class whose predicted entry ratio for `small_n -> large_n` is nearest in log space.
+/// Keep `large_n / small_n` at 100 or more so Log and Constant stay apart.
+pub fn observed_growth_sized(
+    small: &SpanCounts,
+    large: &SpanCounts,
+    name: &str,
+    small_n: usize,
+    large_n: usize,
+) -> Growth {
+    let before = small.entries_of(name) as f64;
+    let after = large.entries_of(name) as f64;
+    if before <= 0.0 {
+        return Growth::Constant;
+    }
+    let (s, l) = (small_n.max(2) as f64, large_n.max(2) as f64);
+    let observed = (after / before).ln();
+    [
+        (Growth::Constant, 1.0),
+        (Growth::Log, l.ln() / s.ln()),
+        (Growth::Linear, l / s),
+        (Growth::Quadratic, (l / s).powi(2)),
+    ]
+    .into_iter()
+    .min_by(|(_, a), (_, b)| {
+        (observed - a.ln())
+            .abs()
+            .total_cmp(&(observed - b.ln()).abs())
+    })
+    .map(|(growth, _)| growth)
+    .unwrap_or(Growth::Constant)
+}
+
+pub fn assert_growth_sized(
+    small: &SpanCounts,
+    large: &SpanCounts,
+    name: &str,
+    small_n: usize,
+    large_n: usize,
+    expected: Growth,
+) {
+    let actual = observed_growth_sized(small, large, name, small_n, large_n);
+    assert_eq!(
+        actual,
+        expected,
+        "span {name} grew {:?} from {} to {} entries across inputs {small_n} -> {large_n}",
         actual,
         small.entries_of(name),
         large.entries_of(name)
