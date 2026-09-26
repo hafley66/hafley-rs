@@ -1,4 +1,4 @@
-//! `fixtures/cleave_ladder` cleaved 0 / 1 / many ways, then all three as one `--list` batch: each
+//! `fixtures/cleave_ladder` cleaved 0 / 1 / many ways, then as `--list` batches: each
 //! case is its `git diff -U0` lines and `cargo check --all-targets` on the tree it leaves.
 
 #![cfg(feature = "cli")]
@@ -6,12 +6,17 @@
 use std::path::Path;
 use std::process::Command;
 
-const CASES: [(&str, &[&str]); 4] = [
+const CASES: [(&str, &[&str]); 5] = [
     ("0 whole-file item to a new file", &["src/_2_dest.rs#Existing", "src/_3_new.rs"]),
     ("1 docs, derive, pub use, re-export importer", &["src/_1_src.rs#Documented", "src/_2_dest.rs"]),
     ("many impl, trait method, test crate importer", &["src/_1_src.rs#Plain", "src/_2_dest.rs"]),
     ("batch all three rows", &["--list", "LIST"]),
+    ("batch glob re-export, inline super glob, nested test use", &["--list", "GLOB"]),
 ];
+
+const GLOB: &str = "src/_4_types.rs#Span4	src/_6_moved.rs
+src/_4_types.rs#Req4	src/_6_moved.rs
+";
 
 const LIST: &str = "src/_2_dest.rs#Existing\tsrc/_3_new.rs\nsrc/_1_src.rs#Documented\tsrc/_2_dest.rs\nsrc/_1_src.rs#Plain\tsrc/_2_dest.rs\n";
 
@@ -39,6 +44,8 @@ fn cleave_ladder() {
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cleave_ladder");
     let list = scratch.path().join("list.tsv");
     std::fs::write(&list, LIST).unwrap();
+    let glob = scratch.path().join("glob.tsv");
+    std::fs::write(&glob, GLOB).unwrap();
     let mut out = Vec::new();
     for (index, (label, case)) in CASES.iter().enumerate() {
         let root = scratch.path().join(format!("case{index}"));
@@ -51,6 +58,7 @@ fn cleave_ladder() {
         for arg in *case {
             args.push(match *arg {
                 "LIST" => list.to_string_lossy().into_owned(),
+                "GLOB" => glob.to_string_lossy().into_owned(),
                 "--list" => arg.to_string(),
                 _ => root.join(arg).to_string_lossy().into_owned(),
             });
@@ -201,6 +209,33 @@ fn cleave_ladder() {
     +pub use crate::_2_dest::Plain;
   tests/uses.rs
     -use cleave_ladder::_1_src::Plain;
-    +use cleave_ladder::_2_dest::Plain;"#
+    +use cleave_ladder::_2_dest::Plain;
+## batch glob re-export, inline super glob, nested test use: check ok
+  src/_4_types.rs
+    -pub struct Span4 {
+    -    pub at: u32,
+    -}
+    -
+    -pub struct Req4 {
+    -    pub span: Span4,
+    -}
+    -
+    +use crate::_6_moved::Span4;
+  src/_5_user.rs
+    -    use crate::_4_types::{Req4, Span4};
+    +    use crate::_6_moved::Req4;
+    +    use crate::_6_moved::Span4;
+  src/_6_moved.rs
+    +pub struct Span4 {
+    +    pub at: u32,
+    +}
+    +
+    +pub struct Req4 {
+    +    pub span: Span4,
+    +}
+  src/lib.rs
+    +pub(crate) mod _6_moved;
+    +pub use crate::_6_moved::Req4;
+    +pub use crate::_6_moved::Span4;"#
     );
 }

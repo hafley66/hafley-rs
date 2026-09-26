@@ -256,26 +256,113 @@ fn read_cleave_list(path: &Path) -> Result<Vec<(String, PathBuf)>, String> {
     }
 }
 
-/// Files outside SRC's module tree (tests, examples, benches, other crates)
-/// that import `item` through SRC's package spelling, which no resolve row carries.
-fn package_callers(cx: &MoveCx, arm: &dyn Cleave, src: &str, item: &str, known: &[String]) -> Vec<String> {
+/// Files whose own specifier rows import `item` by SRC's module path, which a
+/// resolve can miss: a test crate's package spelling, or a nested `use` beside a re-export.
+fn package_callers(cx: &MoveCx, arm: &dyn Cleave, src: &str, item: &str, known: &[String]) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
     for rel in cx.files() {
         if rel == src || known.contains(rel) || cleave_for(rel).map(|other| other.name()) != Some(arm.name()) {
             continue;
         }
         let spelled = arm.spell_module(cx, rel, src);
-        if matches!(spelled.split("::").next(), Some("crate" | "self" | "super") | None) {
+        let Some(text) = cx.text(rel) else {
+            continue;
+        };
+        if !text.contains(&format!("{spelled}::{item}")) && !text.contains(&format!("{spelled}::{{")) {
+            continue;
+        }
+        let facts = FileFacts::open(cx, rel, false)?;
+        if facts.specifiers.iter().any(|row| row.name == item && module_key(item, &row.module) == spelled) {
+            out.push(rel.clone());
+        }
+    }
+    Ok(out)
+}
+
+/// The `use` statement holding `offset`: where it starts (its visibility
+/// included) and how deep its line is indented; nested iff indented.
+fn use_statement(text: &str, offset: u32) -> Option<(usize, usize)> {
+    let before = &text[..offset as usize];
+    let keyword = before.rfind("use ")?;
+    let line_start = before[..keyword].rfind('\n').map_or(0, |newline| newline + 1);
+    let indent = text[line_start..].len() - text[line_start..].trim_start_matches([' ', '\t']).len();
+    Some((line_start + indent, indent))
+}
+
+/// Every `pub use SRC::*;` another file writes, answered with a `pub use
+/// DEST::ITEM;` line after it, so paths through that glob keep resolving.
+fn glob_reexports(cx: &MoveCx, arm: &dyn Cleave, src: &str, dest: &str, item: &str) -> Vec<(String, Span, String)> {
+    let forms = |spelled: &str| {
+        [format!("pub use {spelled}::*;"), format!("pub use {}::*;", spelled.trim_start_matches("crate::"))]
+    };
+    let mut out = Vec::new();
+    for rel in cx.files() {
+        if rel == src || cleave_for(rel).map(|other| other.name()) != Some(arm.name()) {
             continue;
         }
         let Some(text) = cx.text(rel) else {
             continue;
         };
-        if text.contains(&format!("{spelled}::{item}")) || text.contains(&format!("{spelled}::{{")) {
-            out.push(rel.clone());
+        if !text.contains("::*;") {
+            continue;
+        }
+        let dest_spelled = arm.spell_module(cx, rel, dest);
+        if forms(&dest_spelled).iter().any(|form| text.contains(form.as_str())) {
+            continue;
+        }
+        let Some(at) = forms(&arm.spell_module(cx, rel, src)).iter().find_map(|form| text.find(form.as_str())) else {
+            continue;
+        };
+        let line_end = text[at..].find('\n').map_or(text.len(), |newline| at + newline + 1);
+        out.push((rel.clone(), Span::anchor(line_end as u32), format!("pub use {dest_spelled}::{item};\n")));
+    }
+    out
+}
+
+/// Serde attributes name functions and modules inside strings
+/// (`#[serde(with = "arc_str")]`); each path's head is a free name there.
+fn serde_paths(text: &str) -> Vec<(String, Span)> {
+    let mut out = Vec::new();
+    for key in ["with = \"", "serialize_with = \"", "deserialize_with = \"", "default = \""] {
+        for (at, _) in text.match_indices(key) {
+            let line_start = text[..at].rfind('\n').map_or(0, |newline| newline + 1);
+            if !text[line_start..at].contains("serde(") {
+                continue;
+            }
+            let start = at + key.len();
+            let head: String = text[start..].chars().take_while(|ch| ch.is_alphanumeric() || *ch == '_').collect();
+            if !head.is_empty() {
+                out.push((head.clone(), span_of(start as u32, (start + head.len()) as u32)));
+            }
         }
     }
     out
+}
+
+/// A top-level `mod name { .. }` block, whole lines: scope rows carry no
+/// declaration for an inline module, and a serde path can name one.
+fn inline_mod(text: &str, name: &str) -> Option<Decl> {
+    let (start, exported) = ["\npub mod ", "\npub(crate) mod ", "\nmod "].iter().find_map(|head| {
+        let at = text.find(&format!("{head}{name} {{"))? + 1;
+        Some((at, head.contains("pub")))
+    })?;
+    let open = start + text[start..].find('{')?;
+    let mut depth = 0usize;
+    for (offset, ch) in text[open..].char_indices() {
+        match ch {
+            '{' => depth += 1,
+            '}' => {
+                depth -= 1;
+                if depth == 0 {
+                    let end = open + offset + 1;
+                    let end = text[end..].find('\n').map_or(text.len(), |newline| end + newline + 1);
+                    return Some(Decl { name: name.to_string(), span: span_of(start as u32, end as u32), exported });
+                }
+            }
+            _ => {}
+        }
+    }
+    None
 }
 
 /// The single form's two positionals.
@@ -408,6 +495,8 @@ struct Plan {
     caller_modules: Vec<String>,
     /// Call sites naming the item through a module path, as (file, span).
     qualified: Vec<(String, Span)>,
+    /// `pub use DEST::ITEM;` lines landing after each `pub use SRC::*;`.
+    reexports: Vec<(String, Span, String)>,
 }
 
 impl Plan {
@@ -542,7 +631,9 @@ impl Plan {
                 span: row.span,
                 kind,
             };
-            if source.refs_in(&row.name, &moving) > 0 && !dest_bound.contains(row.name.as_str()) {
+            let already_dest = imports.target(&src, &row.name) == Some(dest.as_str())
+                || module_key(&row.name, &row.module) == arm.spell_module(&cx, &src, &dest);
+            if source.refs_in(&row.name, &moving) > 0 && !dest_bound.contains(row.name.as_str()) && !already_dest {
                 travelling.push(plan_row.clone());
             }
             if source.refs_outside(&row.name, &moving) == 0
@@ -553,6 +644,10 @@ impl Plan {
             }
         }
         for glob in source.specifiers.iter().filter(|row| row.glob) {
+            let line_start = source.text[..glob.span.start as usize].rfind('\n').map_or(0, |newline| newline + 1);
+            if source.text[line_start..].starts_with(char::is_whitespace) {
+                continue;
+            }
             let Some(parent) = glob_parent(&cx, &src, &glob.module) else {
                 continue;
             };
@@ -560,6 +655,8 @@ impl Plan {
             for row in provider.specifiers.iter().filter(|row| !row.glob) {
                 if source.refs_in(&row.name, &moving) == 0
                     || travelling.iter().any(|held| held.name == row.name)
+                    || dest_bound.contains(row.name.as_str())
+                    || imports.target(&parent, &row.name) == Some(dest.as_str())
                 {
                     continue;
                 }
@@ -638,6 +735,7 @@ impl Plan {
                 callers: Vec::new(),
                 caller_modules: Vec::new(),
                 qualified: Vec::new(),
+                reexports: Vec::new(),
             });
         }
 
@@ -683,17 +781,21 @@ impl Plan {
         }
 
         let mut callers = imports.callers(&src, &item);
-        callers.extend(package_callers(&cx, arm, &src, &item, &callers));
+        callers.extend(package_callers(&cx, arm, &src, &item, &callers)?);
         callers.sort();
         let mut views = Vec::with_capacity(callers.len());
         let mut caller_modules = Vec::with_capacity(callers.len());
         for caller in &callers {
             let facts = FileFacts::open(&cx, caller, false)?;
+            // The row spelling SRC itself, never one relayed through a re-export.
+            let direct = arm.spell_module(&cx, caller, &src);
             caller_modules.push(
                 facts
                     .specifiers
                     .iter()
-                    .find(|row| row.name == item)
+                    .filter(|row| row.name == item)
+                    .find(|row| module_key(&item, &row.module) == direct)
+                    .or_else(|| facts.specifiers.iter().find(|row| row.name == item))
                     .map_or_else(String::new, |row| row.module.clone()),
             );
             views.push(facts);
@@ -724,6 +826,7 @@ impl Plan {
             &travelling,
         )?;
         let qualified = imports.qualified(&cx, &src, &item);
+        let reexports = glob_reexports(&cx, arm, &src, &dest, &item);
         Ok(Plan {
             root,
             cx,
@@ -747,6 +850,7 @@ impl Plan {
             callers: views,
             caller_modules,
             qualified,
+            reexports,
         })
     }
 
@@ -785,6 +889,14 @@ impl Plan {
         let mut out = self.source_respells();
         out.extend(self.dest_respells());
         out.extend(self.caller_respells());
+        for (file, span, text) in &self.reexports {
+            out.push(Respell {
+                receipt: Some(format!("re-export {file}: {}", text.trim())),
+                file: file.clone(),
+                span: *span,
+                text: text.clone(),
+            });
+        }
         if let Some((file, edit)) = self.new_file_decl() {
             out.push(Respell {
                 receipt: Some(format!("declare {}: {}", self.rows.dest, edit.text.trim())),
@@ -994,6 +1106,15 @@ impl Plan {
             if *rel == self.rows.dest {
                 continue;
             }
+            let top_level = !rel.ends_with(".rs") || facts.specifiers.iter().any(|row| {
+                row.name == self.rows.item
+                    && row.module == *module
+                    && use_statement(&facts.text, row.span.start).is_some_and(|(_, indent)| indent == 0)
+            });
+            if !top_level {
+                out.extend(self.nested_respells(rel, facts));
+                continue;
+            }
             let kept: Vec<String> = facts
                 .specifiers
                 .iter()
@@ -1030,6 +1151,67 @@ impl Plan {
                     span: edit.span,
                     text: edit.text,
                     receipt: Some(format!("caller {rel}: {} -> {spelling}", self.rows.item)),
+                });
+            }
+            if rel.ends_with(".rs") {
+                out.extend(self.nested_respells(rel, facts));
+            }
+        }
+        out
+    }
+
+    /// An indented `use` naming the item (inside `mod tests { .. }` or a body)
+    /// is respelled on its own statement text, then placed back at its offset.
+    fn nested_respells(&self, rel: &str, facts: &FileFacts) -> Vec<Respell> {
+        let item = &self.rows.item;
+        let mut out = Vec::new();
+        let mut seen = BTreeSet::new();
+        for row in facts.specifiers.iter().filter(|row| row.name == *item) {
+            let Some((at, indent_len)) = use_statement(&facts.text, row.span.start) else {
+                continue;
+            };
+            let indent = &facts.text[at - indent_len..at];
+            if indent_len == 0 || !seen.insert(at) {
+                continue;
+            }
+            let end = facts.text[at..].find(';').map_or(facts.text.len(), |semi| at + semi + 1);
+            let statement = format!("{}\n", &facts.text[at..end]);
+            let within = |start: u32| at as u32 <= start && (start as usize) < end;
+            let kept: Vec<String> = facts
+                .specifiers
+                .iter()
+                .filter(|other| within(other.span.start) && other.module == row.module && other.name != *item)
+                .map(|other| other.name.clone())
+                .collect();
+            let spelling = as_written(&self.cx, &self.rows.dest, &row.module, self.arm.spell_module(&self.cx, rel, &self.rows.dest));
+            let edits = [
+                self.arm.edit_import(&statement, &kept, &row.module),
+                self.arm.edit_import_like(&statement, std::slice::from_ref(item), &spelling, item, &row.module),
+            ];
+            for edit in edits.into_iter().flatten() {
+                let at_line_start = statement[..edit.span.start as usize].ends_with('\n');
+                let text = match edit.span.len {
+                    0 => edit
+                        .text
+                        .lines()
+                        .enumerate()
+                        .map(|(index, line)| match index == 0 && !at_line_start {
+                            true => format!("{line}\n"),
+                            false => format!("{indent}{line}\n"),
+                        })
+                        .collect(),
+                    _ => edit.text,
+                };
+                // A whole-statement drop takes its indentation along.
+                let (start, len) = match edit.span.start == 0 && text.is_empty() {
+                    true => (at - indent.len(), edit.span.len as usize + indent.len()),
+                    false => (at + edit.span.start as usize, edit.span.len as usize),
+                };
+                out.push(Respell {
+                    file: rel.to_string(),
+                    span: Span { start: start as u32, len: len as u32 },
+                    text,
+                    receipt: Some(format!("caller {rel}: nested use of {item} -> {spelling}")),
                 });
             }
         }
@@ -1134,6 +1316,7 @@ impl Plan {
         }
         out.extend(self.rows.callers.iter().cloned());
         out.extend(self.qualified.iter().map(|(rel, _)| rel.clone()));
+        out.extend(self.reexports.iter().map(|(rel, _, _)| rel.clone()));
         out.into_iter().collect()
     }
 
@@ -1499,6 +1682,18 @@ impl FileFacts {
             false => (Vec::new(), Vec::new(), Vec::new()),
             true => scope_rows(cx, rel, &text)?,
         };
+        let mut free = free;
+        let mut decls = decls;
+        for (name, _) in serde_paths(&text) {
+            if decls.iter().any(|decl| decl.name == name) {
+                continue;
+            }
+            if let Some(decl) = inline_mod(&text, &name) {
+                decls.push(decl);
+            }
+        }
+        decls.sort_by_key(|decl| decl.span.start);
+        free.extend(serde_paths(&text));
         Ok(Self {
             text,
             specifiers,
@@ -1688,7 +1883,7 @@ fn scope_rows(
             } if role == "def" => {
                 let start = leading_trivia_start(text, &root_children, *decl_start, *decl_end);
                 let span = line_span(text, span_of(start, *decl_end));
-                if (*decl_start, *decl_end) == (file.start, file.end()) || !top_level.contains(&(*decl_start, *decl_end)) {
+                if !top_level.contains(&(*decl_start, *decl_end)) {
                     continue;
                 }
                 let name = declared(symbol);
