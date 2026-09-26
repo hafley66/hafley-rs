@@ -304,24 +304,83 @@ fn site_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
     facts
 }
 
-/// One `resolved_type_edge` per parse type-edge candidate: the first type
-/// reference inside the owner spelling the candidate's name names the target.
-fn impl_self_type_symbol(symbol: &str, defined_symbols: &HashMap<&str, SymbolId>) -> Option<SymbolId> {
-    let (prefix, rest) = symbol.split_once("/impl#[")?;
+struct ImplSelfBinding {
+    block: Span,
+    name: String,
+    symbol: SymbolId,
+}
+
+/// The impl header's self-type token carries the declaration's actual SCIP
+/// symbol, including its declaring module. Pair it with the enclosing block
+/// so a later `Self` occurrence uses that token's symbol.
+fn impl_self_bindings(index: &ScipIndex, doc: &Doc<'_>) -> Vec<ImplSelfBinding> {
+    use syn::spanned::Spanned;
+    use syn::visit::Visit;
+
+    struct Heads<'a> {
+        lines: &'a [u32],
+        rows: Vec<(Span, Span, String)>,
+    }
+    impl<'ast> Visit<'ast> for Heads<'_> {
+        fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
+            if let syn::Type::Path(path) = hafley_scm::lang::rust::strip_type(&item.self_ty) {
+                if path.qself.is_none() {
+                    if let Some(head) = path.path.segments.last() {
+                        self.rows.push((
+                            crate::read::lang::rust::syn_span(self.lines, item.span()),
+                            crate::read::lang::rust::syn_span(self.lines, head.ident.span()),
+                            head.ident.to_string(),
+                        ));
+                    }
+                }
+            }
+            syn::visit::visit_item_impl(self, item);
+        }
+    }
+
+    let Ok(source) = std::str::from_utf8(doc.content) else { return Vec::new() };
+    let Ok(parsed) = hafley_scm::lang::rust::parse_rust_syntax(source) else { return Vec::new() };
+    let mut heads = Heads { lines: &parsed.line_starts, rows: Vec::new() };
+    heads.visit_file(&parsed.file);
+    let header_symbols: HashMap<(u32, u32), SymbolId> = index.documents[doc.ix].occurrences.iter()
+        .filter(|occurrence| !occurrence.roles.contains(OccurrenceRole::DEFINITION)
+            && index.symbol(occurrence.symbol).ends_with('#'))
+        .filter_map(|occurrence| {
+            let span = span_of(doc, index, occurrence.range)?;
+            Some(((span.start, span.end()), occurrence.symbol))
+        })
+        .collect();
+    heads.rows.into_iter().filter_map(|(block, head, name)| {
+        let symbol = *header_symbols.get(&(head.start, head.end()))?;
+        Some(ImplSelfBinding { block, name, symbol })
+    }).collect()
+}
+
+fn impl_self_type_symbol(
+    symbol: &str,
+    site: Span,
+    bindings: &[ImplSelfBinding],
+    defs: &Defs,
+) -> Option<SymbolId> {
+    let (_, rest) = symbol.split_once("/impl#[")?;
     let (self_type, tail) = rest.split_once(']')?;
     if !tail.is_empty() && !(tail.starts_with('[') && tail.ends_with(']')) {
         return None;
     }
-    let declaration = format!("{prefix}/{self_type}#");
-    defined_symbols.get(declaration.as_str()).copied()
+    bindings.iter()
+        .filter(|binding| binding.name == self_type
+            && binding.block.start <= site.start && site.end() <= binding.block.end()
+            && defs.contains_key(&binding.symbol))
+        .min_by_key(|binding| binding.block.len)
+        .map(|binding| binding.symbol)
 }
 
+/// One `resolved_type_edge` per parse type-edge candidate: the first type
+/// reference inside the owner spelling the candidate's name names the target.
 fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
     let Some(types) = doc.input.output.types.as_ref() else { return Vec::new() };
     let strings = &doc.input.output.strings;
-    let defined_symbols: HashMap<&str, SymbolId> = defs.keys()
-        .map(|symbol| (index.symbol(*symbol), *symbol))
-        .collect();
+    let impl_bindings = impl_self_bindings(index, doc);
     let mut refs: Vec<(Span, SymbolId)> = index.documents[doc.ix]
         .occurrences
         .iter()
@@ -337,12 +396,11 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
                 return Some((span, occurrence.symbol));
             }
             // rust-analyzer uses the impl descriptor for a `Self` reference.
-            // Its first bracket names the self type; the type declaration uses
-            // the same symbol prefix with a `Type#` descriptor instead.
+            // The impl header's own reference supplies the declaration symbol.
             if doc.content.get(span.start as usize..span.end() as usize) != Some(&b"Self"[..]) {
                 return None;
             }
-            impl_self_type_symbol(symbol, &defined_symbols).map(|target| (span, target))
+            impl_self_type_symbol(symbol, span, &impl_bindings, defs).map(|target| (span, target))
         })
         .collect();
     refs.sort_by_key(|(span, _)| (span.start, span.end()));
@@ -547,17 +605,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn impl_self_descriptor_requires_the_declaring_module() {
-        let symbol = "rust-analyzer cargo soopy 0.1.0 _7e_stage_store/impl#[DurableStageStore][StageStore]";
-        let other_module = "rust-analyzer cargo soopy 0.1.0 _0_types/DurableStageStore#";
-        let same_module = "rust-analyzer cargo soopy 0.1.0 _7e_stage_store/DurableStageStore#";
+    fn impl_self_descriptor_uses_the_header_reference_across_modules() {
+        let symbol = "rust-analyzer cargo soopy 0.1.0 other/impl#[Shared][Trait]";
+        let header = ImplSelfBinding {
+            block: Span { start: 0, len: 80 },
+            name: "Shared".to_string(),
+            symbol: SymbolId(1),
+        };
+        let site = Span { start: 40, len: 4 };
+        let wrong_same_name = ("other/Shared".to_string(), Span::anchor(3));
+        let declared_elsewhere = ("declaration/Shared".to_string(), Span::anchor(7));
         let rows = [
-            (vec![(other_module, SymbolId(1))], None),
-            (vec![(other_module, SymbolId(1)), (same_module, SymbolId(2))], Some(SymbolId(2))),
+            (Defs::from([(SymbolId(2), wrong_same_name.clone())]), None),
+            (Defs::from([
+                (SymbolId(1), declared_elsewhere),
+                (SymbolId(2), wrong_same_name),
+            ]), Some(SymbolId(1))),
         ];
         for (definitions, expected) in rows {
-            let definitions = definitions.into_iter().collect();
-            assert_eq!(impl_self_type_symbol(symbol, &definitions), expected);
+            assert_eq!(impl_self_type_symbol(symbol, site, std::slice::from_ref(&header), &definitions), expected);
         }
     }
 }

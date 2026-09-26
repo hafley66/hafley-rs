@@ -45,9 +45,12 @@ fn residual_type_candidates_have_declared_targets() {
     assert_eq!(rows.join("\n"), "\
 generic NestedGeneric -> _15_residual.rs:ResidualTarget
 impl Residual -> _15_residual.rs:AliasSlot
+impl Shared -> _0_alias.rs:SharedTrait
+param cross_module -> _0_alias.rs:Shared
 param explicit -> _15_residual.rs:Residual
 uses Item -> _15_residual.rs:ResidualTarget
-uses Residual -> _15_residual.rs:Residual");
+uses Residual -> _15_residual.rs:Residual
+uses Shared -> _0_alias.rs:Shared");
 }
 
 #[test]
