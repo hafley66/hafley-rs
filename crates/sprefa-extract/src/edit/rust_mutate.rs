@@ -59,7 +59,7 @@ impl Cleave for RustSource {
             if held.prefix == module {
                 return Some(Edit { span: held.line, text: String::new() });
             }
-            return Some(drop_leaf(&leaves, held));
+            return Some(drop_leaf(text, &leaves, held));
         }
         // A brace list under `module` that binds names outside `names` is
         // rewritten to bind exactly `names`, keeping its visibility.
@@ -68,6 +68,12 @@ impl Cleave for RustSource {
             let same_line = listed.iter().all(|leaf| leaf.line == first.line);
             let extra = listed.iter().any(|leaf| !names.contains(&leaf.leaf));
             if same_line && extra {
+                let original = slice(text, first.line);
+                if original.contains('\n') {
+                    if let Some(preserved) = preserve_use_list(original, first.line.start, &listed, names) {
+                        return Some(Edit { span: first.line, text: preserved });
+                    }
+                }
                 return Some(Edit {
                     span: first.line,
                     text: format!("{}{}", first.vis, use_line(names, module)),
@@ -229,6 +235,29 @@ impl Cleave for RustSource {
             .and_then(|text| syn::parse_file(&text).ok())
             .is_some_and(|file| file.items.iter().any(|item| matches!(item, syn::Item::Mod(_))))
     }
+}
+
+/// Remove complete member lines from a multiline brace list while retaining
+/// the indentation, commas, and brace layout of every member that stays.
+fn preserve_use_list(original: &str, start: u32, leaves: &[&Leaf], names: &[String]) -> Option<String> {
+    let mut removed = Vec::new();
+    for leaf in leaves.iter().filter(|leaf| !names.contains(&leaf.leaf)) {
+        let at = (leaf.span.start - start) as usize;
+        let line_start = original[..at].rfind('\n').map_or(0, |newline| newline + 1);
+        let line_end = original[at..].find('\n').map_or(original.len(), |newline| at + newline + 1);
+        let line = original[line_start..line_end].trim();
+        if line != leaf.leaf && line != format!("{},", leaf.leaf) {
+            return None;
+        }
+        removed.push((line_start, line_end));
+    }
+    removed.sort_unstable();
+    removed.dedup();
+    let mut result = original.to_string();
+    for (from, to) in removed.into_iter().rev() {
+        result.replace_range(from..to, "");
+    }
+    Some(result)
 }
 
 /// Whether `path`'s own `mod` declaration is `pub`: a file split off a public
@@ -461,13 +490,23 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
 
 /// One leaf gone: the whole line when it was the only one, else the line
 /// rewritten over what is left, so a one-name list loses its braces.
-fn drop_leaf(leaves: &[Leaf], held: &Leaf) -> Edit {
+fn drop_leaf(source: &str, leaves: &[Leaf], held: &Leaf) -> Edit {
     let kept: Vec<&str> = leaves
         .iter()
         .filter(|leaf| leaf.line == held.line && leaf.path != held.path)
         .map(|leaf| leaf.leaf.as_str())
         .collect();
     let vis = &held.vis;
+    if !kept.is_empty() {
+        let line = slice(source, held.line);
+        if line.contains('\n') {
+            let listed: Vec<&Leaf> = leaves.iter().filter(|leaf| leaf.line == held.line).collect();
+            let names: Vec<String> = kept.iter().map(|name| (*name).to_string()).collect();
+            if let Some(preserved) = preserve_use_list(line, held.line.start, &listed, &names) {
+                return Edit { span: held.line, text: preserved };
+            }
+        }
+    }
     let text = match kept.len() {
         0 => String::new(),
         1 => format!("{vis}use {}::{};\n", held.prefix, kept[0]),

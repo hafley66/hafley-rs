@@ -8,10 +8,12 @@
 //! root-relative spelling law (`move_cx.rs:26,45,158`).
 
 use std::path::{Path, PathBuf};
+use std::collections::BTreeMap;
+use std::cell::RefCell;
+use std::rc::Rc;
+use hafley_scm::atoms::Strings;
 
-use ignore::WalkBuilder;
-
-use crate::move_cx::SKIP_DIRS;
+use crate::move_cx::walk_files;
 use crate::edit_seams::Rename;
 
 /// Whether the roster hands `rel` to `rename`.
@@ -21,6 +23,7 @@ pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {
 
 /// One symbol this run renames. The anchor names the DECLARING file; the
 /// declaration in it is found by name, or by `at` when the name is declared twice.
+#[derive(Clone)]
 pub struct RenameRequest {
     /// Project-relative path of the declaring file.
     pub anchor: String,
@@ -38,38 +41,23 @@ pub struct RenameCx {
     root: PathBuf,
     files: Vec<String>,
     batch: Vec<RenameRequest>,
+    overlay: BTreeMap<String, String>,
+    rust_parse: RefCell<BTreeMap<String, syn::File>>,
+    names: Rc<RefCell<Strings>>,
 }
 
 impl RenameCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
-        let mut files = Vec::new();
-        let walk = WalkBuilder::new(root)
-            .hidden(false)
-            .ignore(false)
-            .git_ignore(false)
-            .git_global(false)
-            .git_exclude(false)
-            .filter_entry(|entry| {
-                !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref())
-            })
-            .build();
-        for entry in walk {
-            let entry = entry.map_err(|error| format!("walk {}: {error}", root.display()))?;
-            if !entry.file_type().is_some_and(|kind| kind.is_file()) {
-                continue;
-            }
-            let Some(rel) = rel_of(root, entry.path()) else {
-                continue;
-            };
-            files.push(rel);
-        }
-        files.sort();
+        let files = walk_files(root)?;
         Ok(Self {
             root: root.to_path_buf(),
             files,
             batch: Vec::new(),
+            overlay: BTreeMap::new(),
+            rust_parse: RefCell::new(BTreeMap::new()),
+            names: Rc::new(RefCell::new(Strings::new())),
         })
     }
 
@@ -98,7 +86,8 @@ impl RenameCx {
     }
 
     pub fn read(&self, rel: &str) -> Option<Vec<u8>> {
-        std::fs::read(self.abs(rel)).ok()
+        self.overlay.get(rel).map(|text| text.as_bytes().to_vec())
+            .or_else(|| std::fs::read(self.abs(rel)).ok())
     }
 
     pub fn text(&self, rel: &str) -> Option<String> {
@@ -109,13 +98,31 @@ impl RenameCx {
         &self.batch
     }
 
+    pub fn overlay(&mut self, rel: String, text: String) {
+        self.rust_parse.get_mut().remove(&rel);
+        self.overlay.insert(rel, text);
+    }
+
+    /// Parse one version of a Rust file once across every list row that reads
+    /// it. An overlay invalidates that file's parsed version.
+    pub fn with_rust_parse<T>(&self, rel: &str, read: impl FnOnce(&syn::File) -> T) -> Option<T> {
+        if !self.rust_parse.borrow().contains_key(rel) {
+            let parsed = syn::parse_file(&self.text(rel)?).ok()?;
+            self.rust_parse.borrow_mut().insert(rel.to_string(), parsed);
+        }
+        let parsed = self.rust_parse.borrow();
+        Some(read(parsed.get(rel)?))
+    }
+
+    pub fn overlaid(&self) -> &BTreeMap<String, String> {
+        &self.overlay
+    }
+
+    pub fn names(&self) -> Rc<RefCell<Strings>> {
+        Rc::clone(&self.names)
+    }
+
     pub fn abs(&self, rel: &str) -> PathBuf {
         self.root.join(rel)
     }
-}
-
-fn rel_of(root: &Path, path: &Path) -> Option<String> {
-    let relative = path.strip_prefix(root).ok()?;
-    let text = relative.to_string_lossy().replace('\\', "/");
-    (!text.is_empty()).then_some(text)
 }

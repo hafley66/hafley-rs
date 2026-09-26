@@ -124,6 +124,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
     let state = state_root(cli.state.as_deref())?;
     let mut cx = MoveCx::open(&root)?;
     let mut imports = Imports::read(&cx, &root)?;
+    let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
     println!("root {}", root.display());
     for (target, dest) in &rows {
         let plan = Plan::build_with(cx, &imports, target, dest, cli.drag)?;
@@ -134,6 +135,14 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
                 plan.rows.src, plan.rows.item
             ));
         }
+        for row in &plan.source.specifiers {
+            if plan.source.refs_outside(&row.name, &[]) > 0 {
+                imported_before
+                    .entry(plan.rows.src.clone())
+                    .or_default()
+                    .insert((row.module.clone(), row.name.clone()));
+            }
+        }
         let edits = plan.land()?;
         imports.land(&plan, &edits);
         cx = plan.cx;
@@ -141,6 +150,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
             cx.overlay(&rel, text);
         }
     }
+    drop_batch_unused_imports(&mut cx, &imports, &imported_before)?;
     let _ = std::fs::remove_dir_all(overlay_scratch());
     for (rel, text) in cx.overlaid() {
         if rel.ends_with(".rs") {
@@ -179,6 +189,35 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
                 println!("stage {id} dry run, tree untouched");
             }
         }
+    }
+    Ok(())
+}
+
+/// Revisit only imports the batch's source files used before a row landed.
+/// Earlier rows can keep an import that a later row makes unused.
+fn drop_batch_unused_imports(
+    cx: &mut MoveCx,
+    imports: &Imports,
+    imported_before: &BTreeMap<String, BTreeSet<(String, String)>>,
+) -> Result<(), String> {
+    for (rel, candidates) in imported_before {
+        let Some(arm) = cleave_for(rel) else { continue };
+        if arm.imports_visible_to_children(cx, rel) { continue }
+        let facts = FileFacts::open(cx, rel, true)?;
+        let mut text = facts.text.clone();
+        for (module, names) in facts.modules() {
+            let kept: Vec<String> = names.iter().filter(|name| {
+                !candidates.contains(&(module.clone(), (*name).clone()))
+                    || facts.refs_outside(name, &[]) > 0
+                    || facts.method_scope(name, imports.maybe_trait(cx, rel, name), &[])
+                    || facts.specifiers.iter().any(|row| row.name == **name && row.module == module && facts.reexports(row.span))
+            }).cloned().collect();
+            if kept.len() == names.len() { continue }
+            if let Some(edit) = arm.edit_import(&text, &kept, &module) {
+                text = apply(&text, &edit);
+            }
+        }
+        if text != facts.text { cx.overlay(rel, text) }
     }
     Ok(())
 }

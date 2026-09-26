@@ -178,6 +178,10 @@ impl Plan {
         let root = plan_root(cli.root.as_ref(), &requested[0].0)?;
         let batch = validated_batch(&root, requested, cli.at)?;
         let cx = RenameCx::open(&root).map_err(plan_error)?.with_batch(batch);
+        let has_index = cli.verify_scip.is_some() || root.join("index.scip").is_file();
+        if cx.batch().len() > 1 && !has_index {
+            return Self::build_sequential(root, cx);
+        }
 
         let mut refs: Vec<Vec<SymbolRef>> = Vec::with_capacity(cx.batch().len());
         let mut abstains: Vec<RenameAbstain> = Vec::new();
@@ -273,6 +277,60 @@ impl Plan {
             disagreements,
         })
     }
+
+    /// Each row reads the previous row's text. The final overlay becomes one
+    /// full-file Replace per touched file, retaining a single atomic stage.
+    fn build_sequential(root: PathBuf, mut cx: RenameCx) -> Result<Self, RenameError> {
+        let requests = cx.batch().to_vec();
+        let mut refs = Vec::with_capacity(requests.len());
+        let mut abstains = Vec::new();
+        let mut rewritten = BTreeSet::new();
+        let mut receipts = Vec::new();
+        for request in &requests {
+            let arm = rename_for(&request.anchor).ok_or_else(|| {
+                plan_error(format!("ryi rename does not support {}", request.anchor))
+            })?;
+            let (found, declined) = arm.symbol_refs_and_abstains(&cx, request).map_err(stop_error)?;
+            verify_spans(&cx, &found)?;
+            let edits = respells_for(&cx, request, &found, &mut receipts)?;
+            rewritten.extend(rewritten_lines(&cx, &edits)?);
+            let mut by_file: BTreeMap<String, Vec<Respell>> = BTreeMap::new();
+            for edit in edits { by_file.entry(edit.file.clone()).or_default().push(edit) }
+            for (rel, mut edits) in by_file {
+                edits.sort_by_key(|edit| edit.span.start);
+                if edits.windows(2).any(|pair| pair[0].span.end() > pair[1].span.start) {
+                    return Err(plan_error(format!("{rel}: rename rows claim overlapping spans")));
+                }
+                let mut text = cx.text(&rel).ok_or_else(|| plan_error(format!("read {rel}")))?;
+                for edit in edits.iter().rev() {
+                    text.replace_range(edit.span.start as usize..edit.span.end() as usize, &edit.text);
+                }
+                cx.overlay(rel, text);
+            }
+            refs.push(found);
+            abstains.extend(declined);
+        }
+        let identity = soopy::SourceRoot::open_directory(&root)
+            .map_err(|error| plan_error(format!("open root {}: {error}", root.display())))?
+            .directory().identity.clone();
+        let producer = soopy::ActionProducer::unordered(PRODUCER);
+        let mut stage = Vec::new();
+        for (rel, text) in cx.overlaid() {
+            let source = directory_source(&identity, rel);
+            let old = std::fs::read(root.join(rel)).map_err(|error| plan_error(format!("read {rel}: {error}")))?;
+            stage.push(replace_action(
+                source.clone(),
+                content_id(&root, rel).map_err(plan_error)?,
+                vec![soopy::TextEdit {
+                    range: soopy::ActionSpan { source, start: 0, end: old.len() as u64 },
+                    replacement: text.as_bytes().to_vec(),
+                    producer: producer.clone(),
+                }],
+            ));
+        }
+        let stages = if stage.is_empty() { Vec::new() } else { vec![stage] };
+        Ok(Self { root, cx, refs, stages, abstains, rewritten, receipts, disagreements: None })
+    }
 }
 
 /// Every (file, line) one respell rewrites. A respell never carries a newline,
@@ -339,9 +397,24 @@ fn respells(
     refs: &[Vec<SymbolRef>],
     receipts: &mut Vec<String>,
 ) -> Result<Vec<Respell>, RenameError> {
+    let mut out = Vec::new();
+    for (request, found) in cx.batch().iter().zip(refs) {
+        out.extend(respells_for(cx, request, found, receipts)?);
+    }
+    out.sort_by(|left, right| {
+        left.file.cmp(&right.file).then(left.span.start.cmp(&right.span.start))
+    });
+    Ok(out)
+}
+
+fn respells_for(
+    cx: &RenameCx,
+    request: &RenameRequest,
+    found: &[SymbolRef],
+    receipts: &mut Vec<String>,
+) -> Result<Vec<Respell>, RenameError> {
     let mut claimed: BTreeMap<(String, u32), (&'static str, String)> = BTreeMap::new();
     let mut out: Vec<Respell> = Vec::new();
-    for (request, found) in cx.batch().iter().zip(refs) {
         for reference in found {
             let Some(arm) = rename_for(&reference.file) else {
                 continue;
@@ -367,7 +440,6 @@ fn respells(
             }
             out.push(respell);
         }
-    }
     out.sort_by(|left, right| {
         left.file
             .cmp(&right.file)

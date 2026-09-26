@@ -6,12 +6,14 @@
 use std::path::Path;
 use std::process::Command;
 
-const CASES: [(&str, &[&str]); 5] = [
+const CASES: [(&str, &[&str]); 7] = [
     ("0 whole-file item to a new file", &["src/_2_dest.rs#Existing", "src/_3_new.rs"]),
     ("1 docs, derive, pub use, re-export importer", &["src/_1_src.rs#Documented", "src/_2_dest.rs"]),
     ("many impl, trait method, test crate importer", &["src/_1_src.rs#Plain", "src/_2_dest.rs"]),
     ("batch all three rows", &["--list", "LIST"]),
     ("batch glob re-export, inline super glob, nested test use", &["--list", "GLOB"]),
+    ("batch drops SRC imports made unused", &["--list", "STALE"]),
+    ("multiline use retains member layout", &["src/_1_src.rs#Documented", "src/_2_dest.rs"]),
 ];
 
 const GLOB: &str = "src/_4_types.rs#Span4	src/_6_moved.rs
@@ -19,6 +21,7 @@ src/_4_types.rs#Req4	src/_6_moved.rs
 ";
 
 const LIST: &str = "src/_2_dest.rs#Existing\tsrc/_3_new.rs\nsrc/_1_src.rs#Documented\tsrc/_2_dest.rs\nsrc/_1_src.rs#Plain\tsrc/_2_dest.rs\n";
+const STALE: &str = "src/_1_src.rs#Documented\tsrc/_2_dest.rs\nsrc/_1_src.rs#Plain\tsrc/_2_dest.rs\n";
 
 fn run(program: &str, args: &[&str], dir: &Path, target: &Path) -> (bool, String) {
     let output = Command::new(program).args(args).current_dir(dir).env("CARGO_TARGET_DIR", target).env("RUST_LOG", "off").output().unwrap();
@@ -46,11 +49,27 @@ fn cleave_ladder() {
     std::fs::write(&list, LIST).unwrap();
     let glob = scratch.path().join("glob.tsv");
     std::fs::write(&glob, GLOB).unwrap();
+    let stale = scratch.path().join("stale.tsv");
+    std::fs::write(&stale, STALE).unwrap();
     let mut out = Vec::new();
     for (index, (label, case)) in CASES.iter().enumerate() {
         let root = scratch.path().join(format!("case{index}"));
         let state = scratch.path().join(format!("state{index}"));
         copy_tree(&fixture, &root);
+        if index == 5 {
+            let src = root.join("src/_1_src.rs");
+            let text = std::fs::read_to_string(&src).unwrap();
+            std::fs::write(&src, text.split("pub fn keeps_using()").next().unwrap()).unwrap();
+        }
+        if index == 6 {
+            let base = root.join("src/_0_base.rs");
+            let mut text = std::fs::read_to_string(&base).unwrap();
+            text.push_str("\npub struct Marker;\n");
+            std::fs::write(base, text).unwrap();
+            let src = root.join("src/_1_src.rs");
+            let text = std::fs::read_to_string(&src).unwrap().replace("    Show,\n", "    Show,\n    Marker,\n");
+            std::fs::write(src, format!("{text}\npub fn marker() -> Marker {{ Marker }}\n")).unwrap();
+        }
         for args in [&["init", "-q", "."][..], &["add", "-A"], &["-c", "user.email=l@l", "-c", "user.name=l", "commit", "-qm", "l"]] {
             assert!(run("git", args, &root, &target).0);
         }
@@ -59,6 +78,7 @@ fn cleave_ladder() {
             args.push(match *arg {
                 "LIST" => list.to_string_lossy().into_owned(),
                 "GLOB" => glob.to_string_lossy().into_owned(),
+                "STALE" => stale.to_string_lossy().into_owned(),
                 "--list" => arg.to_string(),
                 _ => root.join(arg).to_string_lossy().into_owned(),
             });
@@ -96,18 +116,14 @@ fn cleave_ladder() {
     +pub mod _3_new;
 ## 1 docs, derive, pub use, re-export importer: check ok
   src/_1_src.rs
-    -use crate::_0_base::{
     -    Base,
-    -    Show,
-    -};
-    -
     -/// Documented item.
     -/// Second doc line.
     -#[derive(Debug, Clone)]
     -pub struct Documented {
     -    pub base: Base,
     -}
-    +use crate::_0_base::Show;
+    -
   src/_2_dest.rs
     +use crate::_0_base::Base;
     +
@@ -118,11 +134,7 @@ fn cleave_ladder() {
     +    pub base: Base,
     +}
   src/lib.rs
-    -pub use _1_src::{
     -    Documented,
-    -    Plain,
-    -};
-    +pub use _1_src::Plain;
     +pub use crate::_2_dest::Documented;
 ## many impl, trait method, test crate importer: check ok
   src/_1_src.rs
@@ -146,21 +158,14 @@ fn cleave_ladder() {
     +    }
     +}
   src/lib.rs
-    -pub use _1_src::{
-    -    Documented,
     -    Plain,
-    -};
-    +pub use _1_src::Documented;
     +pub use crate::_2_dest::Plain;
   tests/uses.rs
     -use cleave_ladder::_1_src::Plain;
     +use cleave_ladder::_2_dest::Plain;
 ## batch all three rows: check ok
   src/_1_src.rs
-    -use crate::_0_base::{
     -    Base,
-    -    Show,
-    -};
     -
     -/// Documented item.
     -/// Second doc line.
@@ -176,7 +181,6 @@ fn cleave_ladder() {
     -        1
     -    }
     -}
-    +use crate::_0_base::Show;
     +use crate::_2_dest::Plain;
   src/_2_dest.rs
     -pub struct Existing;
@@ -236,6 +240,78 @@ fn cleave_ladder() {
   src/lib.rs
     +pub(crate) mod _6_moved;
     +pub use crate::_6_moved::Req4;
-    +pub use crate::_6_moved::Span4;"#
+    +pub use crate::_6_moved::Span4;
+## batch drops SRC imports made unused: check ok
+  src/_1_src.rs
+    -use crate::_0_base::{
+    -    Base,
+    -    Show,
+    -};
+    -
+    -/// Documented item.
+    -/// Second doc line.
+    -#[derive(Debug, Clone)]
+    -pub struct Documented {
+    -    pub base: Base,
+    -}
+    -
+    -pub struct Plain;
+    -
+    -impl Show for Plain {
+    -    fn show(&self) -> u32 {
+    -        1
+    -    }
+    -}
+    -
+  src/_2_dest.rs
+    +use crate::_0_base::Base;
+    +use crate::_0_base::Show;
+    +
+    +/// Documented item.
+    +/// Second doc line.
+    +#[derive(Debug, Clone)]
+    +pub struct Documented {
+    +    pub base: Base,
+    +}
+    +
+    +pub struct Plain;
+    +
+    +impl Show for Plain {
+    +    fn show(&self) -> u32 {
+    +        1
+    +    }
+    +}
+  src/lib.rs
+    -pub use _1_src::{
+    -    Documented,
+    -    Plain,
+    -};
+    +pub use crate::_2_dest::Documented;
+    +pub use crate::_2_dest::Plain;
+  tests/uses.rs
+    -use cleave_ladder::_1_src::Plain;
+    +use cleave_ladder::_2_dest::Plain;
+## multiline use retains member layout: check ok
+  src/_1_src.rs
+    -    Base,
+    -/// Documented item.
+    -/// Second doc line.
+    -#[derive(Debug, Clone)]
+    -pub struct Documented {
+    -    pub base: Base,
+    -}
+    -
+  src/_2_dest.rs
+    +use crate::_0_base::Base;
+    +
+    +/// Documented item.
+    +/// Second doc line.
+    +#[derive(Debug, Clone)]
+    +pub struct Documented {
+    +    pub base: Base,
+    +}
+  src/lib.rs
+    -    Documented,
+    +pub use crate::_2_dest::Documented;"#
     );
 }
