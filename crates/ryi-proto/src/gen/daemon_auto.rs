@@ -32,8 +32,10 @@ pub struct Request {
 }
 
 impl Request {
-    pub fn new<T: Serialize>(request_root: PathBuf, args: &T) -> Result<Self, serde_json::Error> {
-        Ok(Self { request_root, args: serde_json::to_value(args)? })
+    pub fn new<T: Serialize>(verb: &str, request_root: PathBuf, args: &T) -> Result<Self, serde_json::Error> {
+        let mut args = serde_json::to_value(args)?;
+        resolve_paths(verb, &request_root, &mut args);
+        Ok(Self { request_root, args })
     }
 
     pub fn decode<T: serde::de::DeserializeOwned>(mut self, verb: &str) -> Result<T, String> {

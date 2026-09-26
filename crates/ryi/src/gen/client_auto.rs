@@ -131,7 +131,7 @@ async fn run() -> Result<i32, ClientError> {
     }
     let (verb, args) = command(&cli)?;
     let root = std::env::current_dir()?;
-    let request = daemon_auto::Request::new(root, &args)?;
+    let request = daemon_auto::Request::new(verb, root, &args)?;
     let json = serde_json::to_string(&request)?;
     let socket = ready_socket(&server).await?;
     let method = match verb {
