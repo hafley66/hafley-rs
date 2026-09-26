@@ -1,0 +1,10 @@
+[package]
+name = "app"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+lib_a = { path = "../lib_a" }
+
+[workspace]

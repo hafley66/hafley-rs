@@ -217,7 +217,7 @@ fn resolve_type_dst(
         .map(|(blob, span)| (blob, span, ResolutionOrigin::ModulePlane))
         .or_else(|| {
             in_corpus
-                .then(|| unique_declared_type(index, trailing))
+                .then(|| unique_declared_type(index, modules, own_path, trailing))
                 .flatten()
                 .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
         })
@@ -237,10 +237,11 @@ fn name_match_type_dst(
         .nodes
         .iter()
         .find(|node| node.name.map_or(false, |id| strings.lookup(id) == name));
+    let own_blob = modules.zip(own_path).and_then(|(m, path)| m.blob_of(path));
     if let (Some(node), Some(index)) = (same_file, index) {
         if let Some(found) = corpus_defs(index, name)
             .iter()
-            .find(|site| site.span == node.span)
+            .find(|site| site.span == node.span && own_blob.map_or(true, |own| *own == site.blob))
             .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile))
         {
             return Some(found);
@@ -252,18 +253,27 @@ fn name_match_type_dst(
     {
         return Some((blob, span, ResolutionOrigin::ModulePlane));
     }
-    unique_declared_type(index, name)
+    if modules.zip(own_path).is_some_and(|(m, from)| m.binds_external(from, name)) {
+        return None;
+    }
+    unique_declared_type(index, modules, own_path, name)
         .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
 }
 
 /// The one corpus TYPE declaration of `name`, or nothing. A call-plane def
 /// sharing the name (an enum variant, a fn) never makes the pick ambiguous.
-fn unique_declared_type(index: Option<&DefIndex>, name: &str) -> Option<(ContentId, Span)> {
+fn unique_declared_type(
+    index: Option<&DefIndex>,
+    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
+    own_path: Option<&str>,
+    name: &str,
+) -> Option<(ContentId, Span)> {
     let declared: Vec<&DefSite> = index
         .map(|index| corpus_defs(index, name))
         .unwrap_or(&[])
         .iter()
         .filter(|site| site.family == FamilyTag::Type)
+        .filter(|site| modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, &site.blob)))
         .collect();
     match declared.as_slice() {
         [only] => Some((only.blob.clone(), only.span)),

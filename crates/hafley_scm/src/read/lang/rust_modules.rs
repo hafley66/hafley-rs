@@ -480,6 +480,136 @@ pub struct RustModuleIndex {
     /// Every self type some corpus impl block names, inherent or trait: the
     /// types the receiver plane can answer for.
     impl_types: std::collections::HashSet<String>,
+    /// `.rs` path -> the directory of its nearest `Cargo.toml`.
+    crate_dirs: HashMap<String, String>,
+    /// crate directory -> the crate directories its path dependencies name.
+    crate_deps: HashMap<String, HashSet<String>>,
+}
+
+/// Lexically normalized, `..` folded, a leading `/` kept.
+fn lexical(path: &std::path::Path) -> String {
+    let mut out = std::path::PathBuf::new();
+    for component in path.components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                out.pop();
+            }
+            other => out.push(other),
+        }
+    }
+    out.to_string_lossy().into_owned()
+}
+
+/// Each `.rs` file's crate directory: the nearest ancestor holding a
+/// `Cargo.toml` with a `[package]`, read off disk once per directory. Only a
+/// member counts: under `src/`, a Cargo target root, or reached from one by
+/// `mod` (a fixture tree under `tests/` belongs to no crate).
+fn crate_dirs_of(corpus: &[(String, ContentId)], files: &[(String, RustModuleFacts)]) -> HashMap<String, String> {
+    let nearest = nearest_crate_dirs(corpus);
+    let facts: HashMap<&str, &RustModuleFacts> = files.iter().map(|(path, facts)| (path.as_str(), facts)).collect();
+    let mut members: HashMap<String, String> = HashMap::new();
+    let mut queue: Vec<String> = Vec::new();
+    for (path, dir) in &nearest {
+        let relative = std::path::Path::new(path)
+            .strip_prefix(dir)
+            .map(|rel| rel.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        if relative.starts_with("src/") || is_target_root(&relative) {
+            members.insert(path.clone(), dir.clone());
+            queue.push(path.clone());
+        }
+    }
+    while let Some(file) = queue.pop() {
+        let Some(facts) = facts.get(file.as_str()) else { continue };
+        let dir = members[&file].clone();
+        let parent = std::path::Path::new(&file).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        for (name, path_attr) in &facts.mod_decls {
+            let candidates = match path_attr {
+                Some(literal) => vec![lexical(&parent.join(literal))],
+                None => {
+                    let base = mod_dir(&file);
+                    vec![format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
+                }
+            };
+            for candidate in candidates {
+                if nearest.get(&candidate) == Some(&dir) && !members.contains_key(&candidate) {
+                    members.insert(candidate.clone(), dir.clone());
+                    queue.push(candidate);
+                    break;
+                }
+            }
+        }
+    }
+    members
+}
+
+/// A path, relative to its crate directory, that Cargo discovers as a target.
+fn is_target_root(relative: &str) -> bool {
+    let parts: Vec<&str> = relative.split('/').collect();
+    match parts.as_slice() {
+        ["build.rs"] => true,
+        ["tests" | "examples" | "benches", file] => file.ends_with(".rs"),
+        ["tests" | "examples" | "benches", _, "main.rs"] => true,
+        _ => false,
+    }
+}
+
+fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
+    let mut known: HashMap<std::path::PathBuf, Option<String>> = HashMap::new();
+    let mut out = HashMap::new();
+    for (path, _) in corpus.iter().filter(|(path, _)| path.ends_with(".rs")) {
+        let found = std::path::Path::new(path).ancestors().skip(1).find_map(|dir| {
+            known
+                .entry(dir.to_path_buf())
+                .or_insert_with(|| {
+                    let text = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
+                    let manifest: serde_json::Value = basic_toml::from_str(&text).ok()?;
+                    manifest.get("package").map(|_| lexical(dir))
+                })
+                .clone()
+        });
+        if let Some(dir) = found {
+            out.insert(path.clone(), dir);
+        }
+    }
+    out
+}
+
+/// Each crate directory's path dependencies (normal, dev and build), with
+/// `workspace = true` entries read through the nearest `[workspace]` above.
+fn crate_deps_of(crate_dirs: &HashMap<String, String>) -> HashMap<String, HashSet<String>> {
+    let read = |dir: &std::path::Path| -> Option<serde_json::Value> {
+        basic_toml::from_str(&std::fs::read_to_string(dir.join("Cargo.toml")).ok()?).ok()
+    };
+    let mut out = HashMap::new();
+    for dir in crate_dirs.values().collect::<BTreeSet<_>>() {
+        let base = std::path::Path::new(dir.as_str());
+        let Some(manifest) = read(base) else { continue };
+        let workspace = base.ancestors().skip(1).find_map(|up| {
+            let root = read(up)?;
+            let deps = root.get("workspace")?.get("dependencies")?.clone();
+            Some((up.to_path_buf(), deps))
+        });
+        let mut deps = HashSet::new();
+        for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
+            let Some(entries) = manifest.get(table).and_then(|t| t.as_object()) else { continue };
+            for (name, spec) in entries {
+                let local = spec.get("path").and_then(|p| p.as_str()).map(|p| lexical(&base.join(p)));
+                let inherited = || {
+                    spec.get("workspace").and_then(|w| w.as_bool()).filter(|w| *w)?;
+                    let (root, table) = workspace.as_ref()?;
+                    let path = table.get(name)?.get("path")?.as_str()?;
+                    Some(lexical(&root.join(path)))
+                };
+                if let Some(dep) = local.or_else(inherited) {
+                    deps.insert(dep);
+                }
+            }
+        }
+        out.insert(dir.clone(), deps);
+    }
+    out
 }
 
 /// One (file, fn) site a trait declares or defaults. The blob rides along so
@@ -511,8 +641,11 @@ impl RustModuleIndex {
         corpus: &[(String, ContentId)],
         def_index: &DefIndex,
     ) -> RustModuleIndex {
+        let crate_dirs = crate_dirs_of(corpus, &files);
         let mut index = RustModuleIndex {
             crate_libs: crate_libs(corpus),
+            crate_deps: crate_deps_of(&crate_dirs),
+            crate_dirs,
             ..RustModuleIndex::default()
         };
         for (path, blob) in corpus {
@@ -944,6 +1077,38 @@ impl RustModuleIndex {
     /// constructors, whose def IS the constructed item; an alias's is not.
     pub fn is_alias(&self, blob: &ContentId, span: Span) -> bool {
         self.aliases.contains(&(blob.clone(), span))
+    }
+
+    /// Whether code in `from` can name a def in `target`: the same crate, or
+    /// one its manifest lists as a path dependency. A file in no crate is
+    /// unscoped; a crated file never sees a def outside every crate.
+    pub fn sees(&self, from: &str, target: &ContentId) -> bool {
+        let Some(own) = self.crate_dirs.get(from) else {
+            return true;
+        };
+        let Some(target_crate) = self.paths.get(target).and_then(|path| self.crate_dirs.get(path)) else {
+            return false;
+        };
+        target_crate == own || self.crate_deps.get(own).is_some_and(|deps| deps.contains(target_crate))
+    }
+
+    /// Whether `path` binds `local` with a `use` from a crate the corpus does
+    /// not hold (`use serde_json::Value;`): the name is external there.
+    pub fn binds_external(&self, path: &str, local: &str) -> bool {
+        self.facts.get(path).is_some_and(|facts| {
+            facts.uses.iter().any(|binding| {
+                binding.local == local
+                    && binding.qualifier.first().is_some_and(|root| {
+                        !matches!(root.as_str(), "crate" | "self" | "super")
+                            && !self.crate_libs.contains_key(root.as_str())
+                    })
+            })
+        })
+    }
+
+    /// The blob of a corpus path.
+    pub fn blob_of(&self, path: &str) -> Option<&ContentId> {
+        self.blobs.get(path)
     }
 
     /// Whether any corpus file's module path ends in `segment`. A qualifier no

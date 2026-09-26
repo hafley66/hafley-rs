@@ -2147,7 +2147,9 @@ fn call_facts(
         std::collections::BTreeSet::new();
     let mut facts = Vec::new();
     for edge in edges {
-        let Some(target) = targets.input(&edge.dst_blob) else {
+        // Byte-identical files share a blob: a target in this file's own blob
+        // is this file, not whichever copy the blob index met first.
+        let Some(target) = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob)) else {
             continue;
         };
         let caller_path = input.path.clone();
@@ -2342,7 +2344,7 @@ fn type_facts(
     resolved
         .iter()
         .filter_map(|edge| {
-            let target = targets.input(&edge.dst_blob)?;
+            let target = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob))?;
             let names = targets.type_names.get(&input.blob);
             let (owner, owner_name) = type_owner(plane, input, types, names, edge.src)?;
             trail.push(edge);
