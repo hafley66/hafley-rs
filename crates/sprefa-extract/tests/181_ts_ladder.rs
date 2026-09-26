@@ -95,6 +95,16 @@ _6_peer_b.ts call      useB         -> _6_peer_b.ts:same      fs
 _6_peer_b.ts param     same         -> _6_peer_b.ts:Peer      fs
 _6_peer_b.ts param     useB         -> _6_peer_b.ts:Peer      fs
 _6_peer_b.ts returns   same         -> _6_peer_b.ts:Peer      fs
-_6_peer_b.ts returns   useB         -> _6_peer_b.ts:Peer      fs"
+_6_peer_b.ts returns   useB         -> _6_peer_b.ts:Peer      fs
+_7_export_a.ts call      useC         -> _7_export_a.ts:sameExported fs
+_7_export_a.ts param     sameExported -> _7_export_a.ts:ExportedPeer fs
+_7_export_a.ts param     useC         -> _7_export_a.ts:ExportedPeer fs
+_7_export_a.ts returns   sameExported -> _7_export_a.ts:ExportedPeer fs
+_7_export_a.ts returns   useC         -> _7_export_a.ts:ExportedPeer fs
+_8_export_b.ts call      useD         -> _8_export_b.ts:sameExported fs
+_8_export_b.ts param     sameExported -> _8_export_b.ts:ExportedPeer fs
+_8_export_b.ts param     useD         -> _8_export_b.ts:ExportedPeer fs
+_8_export_b.ts returns   sameExported -> _8_export_b.ts:ExportedPeer fs
+_8_export_b.ts returns   useD         -> _8_export_b.ts:ExportedPeer fs"
     );
 }
