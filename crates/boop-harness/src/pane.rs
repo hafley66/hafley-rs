@@ -77,8 +77,7 @@ pub fn frame(
     let snapshot = mux
         .pane_snapshot(socket, target, HISTORY_ROWS)
         .with_context(|| format!("pane {target} answered no snapshot"))?;
-    let turns = current_conversation(turns(store, session)?, reset_from(store, session)?);
-    let frame = project(&snapshot, session, turns, options);
+    let frame = project(&snapshot, session, frame_turns(store, session)?, options);
     // The band's turns carry marks too: a pinned prompt is the square a reader
     // hovers to see what they asked.
     let sources: Vec<String> = frame.turns.iter().chain(&frame.pinned).map(source_of).collect();
@@ -96,6 +95,50 @@ pub fn turns(store: &Store, session: &str) -> Result<Vec<TurnRow>> {
     let mut rows = store.turn_rows_recent(&query, TURN_WINDOW)?;
     classify(store, &mut rows)?;
     Ok(rows)
+}
+
+/// The turns a frame matches: [`turns`] after the reset boundary.
+pub fn frame_turns(store: &Store, session: &str) -> Result<Vec<TurnRow>> {
+    let mut rows = current_conversation(turns(store, session)?, reset_from(store, session)?);
+    tool_headers(store, session, &mut rows)?;
+    Ok(rows)
+}
+
+/// A tool row stores its name only; the TUI draws `Name(arg)`. The arg is the
+/// first line of the call's fact (`agent_cmd` command, else `agent_touch` path).
+fn tool_headers(store: &Store, session: &str, rows: &mut [TurnRow]) -> Result<()> {
+    let tools: Vec<i64> = rows.iter().filter(|row| row.role == "tool").map(|row| row.turn).collect();
+    let (Some(from), Some(to)) = (tools.iter().min(), tools.iter().max()) else {
+        return Ok(());
+    };
+    let mut args: BTreeMap<i64, String> = BTreeMap::new();
+    let mut commands = store.connection().prepare(
+        "SELECT c.turn, p.value, c.argline FROM agent_cmd c
+         JOIN dict_session s ON s.id = c.session_id JOIN dict_program p ON p.id = c.program_id
+         WHERE s.value = ?1 AND c.turn BETWEEN ?2 AND ?3",
+    )?;
+    for row in commands.query_map(rusqlite::params![session, from, to], |row| {
+        Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, Option<String>>(2)?))
+    })? {
+        let (turn, program, argline) = row?;
+        let command = format!("{program} {}", argline.unwrap_or_default());
+        args.insert(turn, command.lines().next().unwrap_or_default().trim_end().to_owned());
+    }
+    let mut touches = store.connection().prepare(
+        "SELECT t.turn, p.value FROM agent_touch t
+         JOIN dict_session s ON s.id = t.session_id JOIN dict_path p ON p.id = t.path_id
+         WHERE s.value = ?1 AND t.turn BETWEEN ?2 AND ?3",
+    )?;
+    for row in touches.query_map(rusqlite::params![session, from, to], |row| Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?)))? {
+        let (turn, path) = row?;
+        args.entry(turn).or_insert(path);
+    }
+    for row in rows.iter_mut().filter(|row| row.role == "tool") {
+        if let Some(arg) = args.get(&row.turn) {
+            row.said = format!("{}({arg})", row.said);
+        }
+    }
+    Ok(())
 }
 
 /// The projection: snapshot and turns in, spans and the strip's geometry out.

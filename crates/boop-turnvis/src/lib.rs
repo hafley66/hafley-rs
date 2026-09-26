@@ -326,7 +326,13 @@ fn source_lines(turn: &BoopTurn) -> Vec<String> {
             .collect();
     }
     let Some((tool_name, arguments)) = turn.said.split_once('\n') else {
-        return turn.said.split('\n').map(str::to_owned).collect();
+        // A one-line tool row is its `Name(arg)` header; the TUI prints home paths as `~/…`.
+        let home = turn
+            .said
+            .split_once('(')
+            .and_then(|(name, arg)| Some((name, home_relative(arg.strip_suffix(')')?)?)))
+            .map(|(name, arg)| format!("{name}({arg})"));
+        return std::iter::once(turn.said.clone()).chain(home).collect();
     };
     if turn.role != "tool" {
         return turn.said.split('\n').map(str::to_owned).collect();
