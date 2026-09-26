@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 mod _0_snapshot;
 pub use _0_snapshot::{
     rows_from_capture, History, Screen, TerminalRow, TerminalSize, TerminalSnapshot,
-    TerminalTarget,
+    TerminalTarget, Viewport,
 };
 mod _1_pane_at;
 pub use _1_pane_at::{parse_pane_at, PaneHit};
@@ -138,8 +138,10 @@ pub trait Multiplexer {
     /// its visible rows with wrap flags, the screen it is on, the history it
     /// can hand back, and the cursor. This is the geometry-bearing read a
     /// renderer places an overlay against; `capture_pane` is the same text with
-    /// none of it. `None` means tmux is unreachable or the target is unknown.
-    fn pane_snapshot(&self, _socket: Option<&str>, _target: &str) -> Option<TerminalSnapshot> {
+    /// none of it. `above` asks for that many history rows above the rows the
+    /// reader sees, so a scrolled pane still carries its window plus `above`.
+    /// `None` means tmux is unreachable or the target is unknown.
+    fn pane_snapshot(&self, _socket: Option<&str>, _target: &str, _above: u32) -> Option<TerminalSnapshot> {
         None
     }
     /// The pane of `session`'s active window under client cell `col`,`row`
@@ -434,7 +436,7 @@ impl Multiplexer for Tmux {
     /// carries tmux's own wrap flags for the same rows. They race under live
     /// output, which is what `generation` is for — this source has no memory of
     /// its last answer, so it reports `0` and callers compare with `grid_eq`.
-    fn pane_snapshot(&self, socket: Option<&str>, target: &str) -> Option<TerminalSnapshot> {
+    fn pane_snapshot(&self, socket: Option<&str>, target: &str, above: u32) -> Option<TerminalSnapshot> {
         let mut facts_builder = tmux_command(socket);
         let facts_output = facts_builder
             .args([
@@ -442,7 +444,7 @@ impl Multiplexer for Tmux {
                 "-p",
                 "-t",
                 target,
-                "#{pane_id}\t#{pane_width}\t#{pane_height}\t#{history_size}\t#{history_limit}\t#{cursor_x}\t#{cursor_y}\t#{alternate_on}\t#{pid}",
+                "#{pane_id}\t#{pane_width}\t#{pane_height}\t#{history_size}\t#{history_limit}\t#{cursor_x}\t#{cursor_y}\t#{alternate_on}\t#{pid}\t#{scroll_position}",
             ])
             .output()
             .ok()?;
@@ -450,9 +452,16 @@ impl Multiplexer for Tmux {
             return None;
         }
         let facts = parse_snapshot_facts(&String::from_utf8_lossy(&facts_output.stdout))?;
+        // History reaches `above` rows over the reader's window, which sits
+        // `scroll` rows over the live bottom.
+        let depth = above.saturating_add(facts.scroll);
+        let start = format!("-{depth}");
         let capture = |extra: Option<&str>| {
             let mut builder = tmux_command(socket);
             builder.args(["capture-pane", "-p", "-t", target]);
+            if depth > 0 {
+                builder.args(["-S", &start]);
+            }
             if let Some(extra) = extra {
                 builder.arg(extra);
             }
@@ -464,7 +473,16 @@ impl Multiplexer for Tmux {
         };
         let trimmed = capture(None)?;
         let joined = capture(Some("-J"))?;
-        let rows = rows_from_capture(&trimmed, &joined, facts.size);
+        let mut rows = rows_from_capture(&trimmed, &joined, facts.size);
+        // The live rows are the capture's tail; a capture short of the history
+        // tmux holds plus the pane is short at the bottom, where tmux pads.
+        let held = match facts.history {
+            History::Retained { rows, .. } => rows.min(depth),
+            History::Unavailable => 0,
+        };
+        while rows.len() < held as usize + facts.size.rows as usize {
+            rows.push(TerminalRow { viewport_row: rows.len() as u16, text: String::new(), wraps_previous: false });
+        }
         Some(TerminalSnapshot {
             target: TerminalTarget {
                 host: "tmux".to_owned(),
@@ -476,6 +494,7 @@ impl Multiplexer for Tmux {
             screen: facts.screen,
             history: facts.history,
             cursor: facts.cursor,
+            scroll: facts.scroll,
             rows,
         })
     }
@@ -954,6 +973,7 @@ struct SnapshotFacts {
     screen: Screen,
     history: History,
     cursor: Option<(u16, u16)>,
+    scroll: u32,
 }
 
 fn parse_snapshot_facts(text: &str) -> Option<SnapshotFacts> {
@@ -990,6 +1010,8 @@ fn parse_snapshot_facts(text: &str) -> Option<SnapshotFacts> {
             }
         },
         cursor: Some((cursor_x, cursor_y)),
+        // Empty outside copy mode.
+        scroll: fields.get(9).and_then(|value| value.trim().parse().ok()).unwrap_or(0),
     })
 }
 
@@ -1401,7 +1423,7 @@ mod tests {
         server.create_session(&name);
 
         let blank = mux()
-            .pane_snapshot(Some(&server.socket), &name)
+            .pane_snapshot(Some(&server.socket), &name, 0)
             .expect("a live session answers a snapshot");
         assert_eq!(
             blank.rows.len(),
@@ -1424,7 +1446,7 @@ mod tests {
         // An unknown target is an absent snapshot, not an error and not a
         // blank grid: a renderer must not draw an overlay over nothing.
         assert!(mux()
-            .pane_snapshot(Some(&server.socket), "boop-no-such-session")
+            .pane_snapshot(Some(&server.socket), "boop-no-such-session", 0)
             .is_none());
 
         // A run that overflows the viewport width must come back with tmux's
@@ -1436,7 +1458,7 @@ mod tests {
             &format!("printf '%0.sA' $(seq 1 {})", columns + 5),
         );
         let full = "A".repeat(columns);
-        let snapshot = poll_snapshot(&server.socket, &name, |snapshot| {
+        let snapshot = poll_snapshot(&server.socket, &name, 0, |snapshot| {
             snapshot.rows.iter().any(|row| row.text == full)
         });
         let at = snapshot
@@ -1456,6 +1478,50 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_snapshot_carries_history_above_the_window_and_the_copy_mode_scroll() {
+        if !tmux_on_path() {
+            eprintln!("skipping: tmux not on PATH");
+            return;
+        }
+        let server = TestServer::new();
+        let name = session_name();
+        server.create_session(&name);
+        send_keys(&server.socket, &name, "seq 1 300");
+        poll_snapshot(&server.socket, &name, 100, |snapshot| snapshot.rows.iter().any(|row| row.text == "300"));
+        // The shell's next prompt lands after `300`: wait for two equal grids.
+        let mut live = mux().pane_snapshot(Some(&server.socket), &name, 100).unwrap();
+        loop {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            let next = mux().pane_snapshot(Some(&server.socket), &name, 100).unwrap();
+            if next.grid_eq(&live) {
+                break;
+            }
+            live = next;
+        }
+        let window = live.window().expect("a live pane has a window");
+        assert_eq!(live.scroll, 0);
+        assert_eq!(window.top, 100, "100 history rows sit above the window");
+        assert_eq!(window.bottom as usize, live.rows.len() - 1, "a live window is the tail");
+        let last = live.rows.iter().position(|row| row.text == "300").unwrap() as i64;
+        assert!(window.top <= last && last <= window.bottom, "the newest output is on screen");
+
+        let copy = |args: &[&str]| {
+            let status = Command::new("tmux").args(["-L", &server.socket]).args(args).status().unwrap();
+            assert!(status.success(), "tmux {args:?}");
+        };
+        copy(&["copy-mode", "-t", &name]);
+        copy(&["send-keys", "-t", &name, "-X", "-N", "50", "scroll-up"]);
+        let scrolled = poll_snapshot(&server.socket, &name, 100, |snapshot| snapshot.scroll == 50);
+        let moved = scrolled.window().expect("a scrolled pane has a window");
+        assert_eq!(moved.top, 100, "history still reaches 100 rows over the reader's window");
+        assert_eq!(
+            scrolled.rows[moved.bottom as usize].text,
+            live.rows[(window.bottom - 50) as usize].text,
+            "the reader's bottom row is the live row 50 up"
+        );
+    }
+
     fn send_keys(socket: &str, target: &str, text: &str) {
         let status = Command::new("tmux")
             .args(["-L", socket, "send-keys", "-t", target, text, "Enter"])
@@ -1467,12 +1533,13 @@ mod tests {
     fn poll_snapshot(
         socket: &str,
         target: &str,
+        above: u32,
         want: impl Fn(&super::TerminalSnapshot) -> bool,
     ) -> super::TerminalSnapshot {
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
         loop {
             let snapshot = mux()
-                .pane_snapshot(Some(socket), target)
+                .pane_snapshot(Some(socket), target, above)
                 .expect("tmux installed and reachable");
             if want(&snapshot) {
                 return snapshot;

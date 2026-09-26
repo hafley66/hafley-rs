@@ -15,7 +15,8 @@ boop-acp = { version = "0.0.2", path = "../boop-acp" }
 # ⌘-click: the pane under a client cell.
 boop-mux = { version = "0.0.9", path = "../boop-mux" }
 # The database an ingest pass writes into, and the session types it shares.
-boop-store = { version = "0.0.2", path = "../boop-store", default-features = false }
+boop-store = { version = "0.0.2", path = "../boop-store", default-features = false, features = ["agent-read"] }
+boop-turnstrip = { version = "0.1.0", path = "../boop-turnstrip" }
 # The transcripts are JSONL; this is the credible reader.
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }

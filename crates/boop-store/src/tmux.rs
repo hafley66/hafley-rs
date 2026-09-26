@@ -4,7 +4,7 @@
 pub use boop_mux::{
     kill_test_server, parse_event, rows_from_capture, ControlClient, ControlEvent, History,
     LiveSessions, Multiplexer, Notification, Screen, TerminalRow, TerminalSize, TerminalSnapshot,
-    TerminalTarget, Tmux,
+    TerminalTarget, Tmux, Viewport,
 };
 
 /// The one shared multiplexer instance. Stateless (the socket is a per-call

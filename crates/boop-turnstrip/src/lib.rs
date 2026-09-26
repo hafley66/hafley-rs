@@ -16,8 +16,7 @@
 //! viewport, so the strip moves on a scroll without a single query. A caller
 //! runs it wherever it happens to live — a Rust server drawing the strip,
 //! a CLI reporting it, or a wasm binding driving the TypeScript client — and
-//! hands the result over as JSON, because every wire shape is camelCase and
-//! `TurnKind` is lowercase.
+//! hands the result over as JSON, every field under its Rust name.
 //!
 //! The one entry point is [`layout`]:
 //!
