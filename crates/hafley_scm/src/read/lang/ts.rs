@@ -4679,14 +4679,20 @@ impl TsSource {
         {
             let (modules, path) = modules?;
             let own_exported = modules.exports_local(path, callee);
+            let own_arity = modules.free_arity(path, span);
             if sites.iter().filter(|site| {
                 Some(&site.blob) != own
                     && site.family == FamilyTag::Call
                     && kinds.is_some_and(|kinds| kinds.get(&site.blob, site.span) == Some(CallKind::Free))
             }).any(|site| {
-                paths
-                    .and_then(|paths| paths.get(&site.blob))
-                    .is_none_or(|path| modules.exports_local(path, callee) != own_exported)
+                let other_path = paths.and_then(|paths| paths.get(&site.blob));
+                let mixed_visibility = other_path
+                    .is_none_or(|path| modules.exports_local(path, callee) != own_exported);
+                let different_arity = other_path
+                    .and_then(|path| modules.free_arity(path, site.span))
+                    .zip(own_arity)
+                    .is_some_and(|(other, own)| other != own);
+                mixed_visibility && !different_arity
             }) {
                 return None;
             }

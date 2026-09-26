@@ -216,6 +216,9 @@ pub struct ModuleFacts {
     /// `import()` and `require()`. The file-to-file module edge reads this;
     /// the binding tables above only know forms that bind a name.
     pub requested_modules: BTreeSet<String>,
+    /// Named function declaration span -> parameter count, collected during
+    /// the module walk already used for runtime specifiers.
+    pub free_arity: BTreeMap<(u32, u32), u32>,
 }
 
 impl ModuleFacts {
@@ -319,6 +322,7 @@ pub fn ts_module_facts_from_parsed(parsed: &oxc_parser::ParserReturn<'_>) -> Mod
     let mut runtime = RuntimeModuleRequests::default();
     runtime.visit_program(&parsed.program);
     facts.requested_modules.extend(runtime.modules);
+    facts.free_arity.extend(runtime.free_arity);
     facts
 }
 
@@ -327,9 +331,20 @@ pub fn ts_module_facts_from_parsed(parsed: &oxc_parser::ParserReturn<'_>) -> Mod
 #[derive(Default)]
 struct RuntimeModuleRequests {
     modules: Vec<String>,
+    free_arity: BTreeMap<(u32, u32), u32>,
 }
 
 impl<'a> Visit<'a> for RuntimeModuleRequests {
+    fn visit_function(&mut self, it: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
+        if it.id.is_some() && it.body.is_some() {
+            self.free_arity.insert(
+                (it.span.start, it.span.end - it.span.start),
+                it.params.items.len() as u32,
+            );
+        }
+        oxc_ast_visit::walk::walk_function(self, it, flags);
+    }
+
     fn visit_import_expression(&mut self, it: &ts::ImportExpression<'a>) {
         if let ts::Expression::StringLiteral(literal) = &it.source {
             self.modules.push(literal.value.to_string());
@@ -695,6 +710,15 @@ impl TsModuleIndex {
         self.facts.get(path).is_some_and(|facts| {
             facts.local_exports.values().any(|(name, _)| name == local)
         })
+    }
+
+    /// Parameter count of a named function declaration at its CallF span.
+    pub fn free_arity(&self, path: &str, span: Span) -> Option<u32> {
+        self.facts
+            .get(path)?
+            .free_arity
+            .get(&(span.start, span.len))
+            .copied()
     }
 
     /// The corpus blob of one corpus path.
