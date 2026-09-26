@@ -53,6 +53,46 @@ fn fast_skips_large_json_under_small_heap_cap() {
     assert!(nodes > 0);
 }
 
+#[test]
+fn large_fast_stream_matches_project_row_order() {
+    let scratch = tempfile::tempdir().unwrap();
+    let mut paths = Vec::new();
+    for index in 0..4097 {
+        let extension = match index {
+            2 => "rs",
+            3 => "json",
+            4 => "yaml",
+            5 => "go",
+            _ => "ts",
+        };
+        let path = scratch.path().join(format!("{index:04}.{extension}"));
+        let text = match index {
+            0 => "import { target } from './0001'; export const answer = target();\n",
+            1 => "export function target() { return 42; }\n",
+            2 => "fn helper() {} fn entry() { helper(); }\n",
+            3 => "{\"nested\": {\"answer\": 42}}\n",
+            4 => "nested:\n  answer: 42\n",
+            5 => "package sample\nfunc Helper() {}\nfunc Entry() { Helper() }\n",
+            _ => "",
+        };
+        std::fs::write(&path, text).unwrap();
+        paths.push(path);
+    }
+    let expected: Vec<Value> = sprefa_extract::diet_scip(&paths)
+        .unwrap()
+        .iter()
+        .map(|fact| serde_json::to_value(fact).unwrap())
+        .collect();
+    let mut actual = Vec::new();
+    sprefa_extract::diet_scip_streamed(&paths, &mut |row| {
+        if let sprefa_extract::DietRow::Resolved(fact) = row {
+            actual.push(serde_json::to_value(fact).unwrap());
+        }
+        Ok::<(), std::io::Error>(())
+    }).unwrap();
+    assert_eq!(actual, expected);
+}
+
 const CATALOG: &str = include_str!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/schema/generated/5_facts.json"

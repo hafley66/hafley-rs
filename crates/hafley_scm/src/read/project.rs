@@ -35,14 +35,14 @@ use crate::read::lang::{
     source_for, FallbackSource, GoSource, KotlinSource, MarkdownSource, PrologSource, PythonSource,
     RustSource, TsSource,
 };
-use crate::read::rows::FamilyBundle;
+use crate::read::rows::{FamilyBundle, Node};
 use crate::read::scip::{ScipGo, ScipRust, ScipTypescript};
 use crate::read::scip_ensure::IndexBudget;
 use crate::read::scip_rows::ScipRecords;
 use crate::read::seams::{
     build_def_index, BlobSource, FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
 };
-use crate::read::shape::{content_id_of, ContentId, Span};
+use crate::read::shape::{content_id_of, ContentId, Span, Strings};
 use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
@@ -225,7 +225,7 @@ impl LegTrail {
     }
 }
 
-/// One supplied file, extracted once, kept for the whole resolve.
+/// One supplied file; large fast roots retain only definition nodes after raw rows leave.
 pub struct ProjectInput {
     pub path: String,
     pub blob: ContentId,
@@ -1460,13 +1460,15 @@ pub enum DietRow<'a> {
     Resolved(FlatFact),
 }
 
-/// `diet_scip_with_raw` with the project rows streamed too: the `.scm` rows
-/// are built one chunk at a time off captures moved out of the inputs, so no
-/// whole-corpus row vector is ever held.
+/// `diet_scip_with_raw` with project rows streamed too. Small roots reuse
+/// captured `.scm` rows; large roots reparse bounded chunks for each section.
 pub fn diet_scip_streamed<E>(
     paths: &[PathBuf],
     push: &mut impl FnMut(DietRow<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
+    if paths.len() > FAST_RETAIN_FILES {
+        return diet_scip_bounded(paths, push);
+    }
     let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input| {
         push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))?;
         if let Some(output) = Arc::get_mut(&mut input.output) {
@@ -1511,6 +1513,135 @@ pub fn diet_scip_streamed<E>(
                 .collect()
         });
         drop(owned);
+        for file in rows {
+            for fact in file.map_err(ResolveWithRawError::Project)? {
+                push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// A fixed retained-output ceiling for fast. Larger roots keep only their
+/// definition and module indexes, then reparse bounded chunks for resolve.
+const FAST_RETAIN_FILES: usize = 4096;
+
+fn definition_bundle<F: crate::read::family::Family>(
+    bundle: &FamilyBundle<F>,
+    source: &Strings,
+    strings: &mut Strings,
+) -> FamilyBundle<F> {
+    let mut result = FamilyBundle::default();
+    // Kind lookup needs every call node; only named nodes enter the interner.
+    result.nodes = bundle.nodes.iter().map(|node| {
+        let mut compact = Node::<F>::new(node.span, node.kind.clone());
+        compact.name = node.name.map(|name| strings.intern(source.lookup(name)));
+        compact
+    }).collect();
+    result
+}
+
+fn definition_output(output: &RyiOutput) -> RyiOutput {
+    let mut strings = Strings::new();
+    let call = output.call.as_ref().map(|bundle| definition_bundle(bundle, &output.strings, &mut strings));
+    let types = output.types.as_ref().map(|bundle| definition_bundle(bundle, &output.strings, &mut strings));
+    RyiOutput { strings, call, types, ..RyiOutput::default() }
+}
+
+/// Reparse one bounded chunk at a time after the corpus indexes are complete.
+fn visit_fast_inputs<E>(
+    paths: &[PathBuf],
+    on_input: &mut impl FnMut(ProjectInput) -> Result<(), ResolveWithRawError<E>>,
+) -> Result<(), ResolveWithRawError<E>> {
+    for chunk in paths.chunks(8) {
+        for result in read_chunk(chunk, false, Planes::Fast) {
+            if let Some(input) = result.map_err(ResolveWithRawError::Project)? {
+                on_input(input)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Large fast roots: raw rows leave in the first pass, then the three project
+/// row sections each read and discard one file's resolve output at a time.
+fn diet_scip_bounded<E>(
+    paths: &[PathBuf],
+    push: &mut impl FnMut(DietRow<'_>) -> Result<(), E>,
+) -> Result<(), ResolveWithRawError<E>> {
+    let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input| {
+        push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))?;
+        let output = Arc::get_mut(&mut input.output).expect("one owner of a streamed output");
+        *output = definition_output(output);
+        Ok(())
+    })?;
+    let files = FileSet;
+    let manifests = ManifestMap;
+    let cx = ProjectCx {
+        files: &files,
+        manifests: &manifests,
+        reader: None,
+        digest: ProjectDigest::default(),
+        indexes: IndexBag::default(),
+        witness: false,
+    };
+    {
+        let pairs: Vec<_> = inputs.iter().map(|input| (input.blob.clone(), input.output.as_ref())).collect();
+        let corpus: Vec<_> = inputs.iter().map(|input| (input.path.clone(), input.blob.clone())).collect();
+        fill_indexes(&cx, &inputs, &pairs, &corpus);
+    }
+    for input in &mut inputs {
+        input.module = None;
+        input.rust_module = None;
+        input.go_module = None;
+        input.py_module = None;
+        input.kt_module = None;
+    }
+    let targets = TargetIndex::build(&inputs);
+
+    visit_fast_inputs(paths, &mut |input| {
+        crate::read::types::set_own(Some(input.blob.clone()));
+        crate::read::lang::ts::set_resolve_path(Some(&input.path));
+        let edges = resolve_call_edges(&input.path, &input.output, &cx);
+        let mut trail = LegTrail::default();
+        let mut rows = call_facts(&input, &targets, &edges, &mut trail);
+        rows.extend(call_drop_facts(&input, &cx, &edges));
+        crate::read::types::set_own(None);
+        crate::read::lang::ts::set_resolve_path(None);
+        for fact in rows {
+            push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+        }
+        Ok(())
+    })?;
+    visit_fast_inputs(paths, &mut |input| {
+        crate::read::types::set_own(Some(input.blob.clone()));
+        crate::read::lang::ts::set_resolve_path(Some(&input.path));
+        let rows = import_facts(&input, &cx);
+        crate::read::types::set_own(None);
+        crate::read::lang::ts::set_resolve_path(None);
+        for fact in rows {
+            push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+        }
+        Ok(())
+    })?;
+    visit_fast_inputs(paths, &mut |input| {
+        crate::read::types::set_own(Some(input.blob.clone()));
+        crate::read::lang::ts::set_resolve_path(Some(&input.path));
+        let rows = type_facts(&input, &targets, &cx, &mut LegTrail::default());
+        crate::read::types::set_own(None);
+        crate::read::lang::ts::set_resolve_path(None);
+        for fact in rows {
+            push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
+        }
+        Ok(())
+    })?;
+    for chunk in paths.chunks(8) {
+        let rows: Vec<Result<Vec<FlatFact>, ProjectError>> = EXTRACT_POOL.install(|| {
+            chunk.par_iter().map(|path| {
+                crate::read::scm_facts(std::slice::from_ref(path))
+                    .map_err(|error| ProjectError::Scm(error.to_string()))
+            }).collect()
+        });
         for file in rows {
             for fact in file.map_err(ResolveWithRawError::Project)? {
                 push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
@@ -2131,7 +2262,7 @@ pub fn resolve_probes() -> u64 {
     RESOLVE_PROBES.load(std::sync::atomic::Ordering::Relaxed)
 }
 
-type SpanNames = std::collections::HashMap<(u32, u32), Option<crate::read::shape::NameId>>;
+type SpanNames = std::collections::HashMap<(u32, u32), Option<String>>;
 
 /// Every resolved edge names a target file and a span inside it. Both lookups
 /// are tables built once over the whole input set, never a walk per edge.
@@ -2142,12 +2273,12 @@ struct TargetIndex<'a> {
 }
 
 /// First node at a span wins, the order the scan it replaces answered in.
-fn span_names<F: crate::read::family::Family>(bundle: &FamilyBundle<F>) -> SpanNames {
+fn span_names<F: crate::read::family::Family>(bundle: &FamilyBundle<F>, strings: &Strings) -> SpanNames {
     let mut names = SpanNames::with_capacity(bundle.nodes.len());
     for node in &bundle.nodes {
         names
             .entry((node.span.start, node.span.len))
-            .or_insert(node.name);
+            .or_insert_with(|| node.name.map(|name| strings.lookup(name).to_string()));
     }
     names
 }
@@ -2162,10 +2293,10 @@ impl<'a> TargetIndex<'a> {
             // carry one blob.
             by_blob.entry(&input.blob).or_insert(input);
             if let Some(bundle) = input.output.call.as_ref() {
-                call_names.insert(&input.blob, span_names(bundle));
+                call_names.insert(&input.blob, span_names(bundle, &input.output.strings));
             }
             if let Some(bundle) = input.output.types.as_ref() {
-                type_names.insert(&input.blob, span_names(bundle));
+                type_names.insert(&input.blob, span_names(bundle, &input.output.strings));
             }
         }
         TargetIndex {
@@ -2181,22 +2312,17 @@ impl<'a> TargetIndex<'a> {
     }
 }
 
-/// The declared name at `span` in one file's table, through that file's own
-/// interner.
-fn name_at(names: Option<&SpanNames>, output: &RyiOutput, span: Span) -> Option<String> {
+/// The declared name at `span` in the corpus's owned definition-name table.
+fn name_at(names: Option<&SpanNames>, span: Span) -> Option<String> {
     RESOLVE_PROBES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-    names?
-        .get(&(span.start, span.len))
-        .copied()
-        .flatten()
-        .map(|name| output.strings.lookup(name).to_string())
+    names?.get(&(span.start, span.len))?.clone()
 }
 
 /// The callee's declared name at `span`. A constructor resolves to a class,
 /// which is a TypeF def and never a CallF one, so the call table alone answers null.
 fn callee_name(targets: &TargetIndex<'_>, target: &ProjectInput, span: Span) -> Option<String> {
-    name_at(targets.call_names.get(&target.blob), &target.output, span)
-        .or_else(|| name_at(targets.type_names.get(&target.blob), &target.output, span))
+    name_at(targets.call_names.get(&target.blob), span)
+        .or_else(|| name_at(targets.type_names.get(&target.blob), span))
 }
 
 fn call_facts(
@@ -2374,7 +2500,7 @@ fn type_owner(
         // Past the node vec is an `ImplOwner`, which carries its own name for
         // the same reason a doc node does: it is not in the span table.
         TypePlane::Nodes => match types.nodes.get(src.0 as usize) {
-            Some(node) => Some((node.span, name_at(names, &input.output, node.span))),
+            Some(node) => Some((node.span, name_at(names, node.span))),
             None => {
                 let owner = types
                     .aux
@@ -2420,11 +2546,7 @@ fn type_facts(
                 owner_start: owner.start,
                 owner_end: owner.end(),
                 target_path: target.path.clone(),
-                target_name: name_at(
-                    targets.type_names.get(&target.blob),
-                    &target.output,
-                    edge.dst_span,
-                ),
+                target_name: name_at(targets.type_names.get(&target.blob), edge.dst_span),
                 kind: edge.kind.as_str().to_string(),
                 resolution_origin: edge.origin.as_str().to_string(),
             })
