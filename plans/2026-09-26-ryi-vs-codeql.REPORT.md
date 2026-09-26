@@ -10,6 +10,26 @@ The recorded timings predate the new 2048 MiB limits. Subsequent runs pass `RYI_
 | Root Rust (423) | 7126 / 13 / 1151 | 10568 / 2843 / 3191 | 18 / 1.338 / 604.7 | 109 / 873 / 1253.0 |
 | sprefa Rust (552) | 1302 / 1142 / 415 | 3617 / 1818 / 605 | 9 / 0.462 / 261.4 | 53 / 38 / 296.4 |
 | TypeScript (1651) | 11326 / 18600 / 6350 | 878 / 6241 / 3890 | 52 / 2.832 / 2272.1 | 87 / 31 / 676.3 |
+| TypeScript after T2 (1651) | unmeasured: 2048 MiB heap cap | unmeasured: 2048 MiB heap cap | aborted / — / — | reused query planned; ryi aborted first |
+
+Lane T2 reran the unchanged script with `RYI_CODEQL_REUSE=1` against `sprefa/v6`. Its default staged walk included 1270 files. The 1651-file direct-root run exceeded `RYI_MAX_MEM_MB=2048` with the default, two, and one extraction worker; it aborted before CodeQL. The staged rows below compare one source snapshot and reused CodeQL queries. A lane-specific copy of the freshly built ryi binary prevented concurrent builds from replacing the measured executable.
+
+| TypeScript staged (1270) | Type agree / ryi-only / CodeQL-only | Call agree / ryi-only / CodeQL-only |
+| --- | ---: | ---: |
+| Before T2 | 3018 / 17235 / 4104 | 781 / 4065 / 2404 |
+| After T2 | 6449 / 13804 / 673 | 2993 / 10842 / 192 |
+
+CodeQL-only rows after T2 on the staged corpus, partitioned by source and spelling (source text classification; a row can contain more than one call site):
+
+| Pattern | Type | Call | Sample |
+| --- | ---: | ---: | --- |
+| Same-file references and calls | 358 | 26 | `Page`; `sqlShape` |
+| Named-import type references | 309 | 0 | `IGraphNs` |
+| Cross-file type reference without named import | 6 | 0 | `Fact` |
+| Cross-file member-call spelling | 0 | 163 | `execute` |
+| Cross-file direct-call spelling | 0 | 3 | `buildRuleGraph` |
+
+The blob-and-span binding reduced staged CodeQL-only type rows by 3431, primarily generated same-name peers. The private local-function binding reduced staged CodeQL-only call rows by 2212. Paired wrong-target rows pointing at generated siblings fell to 0 for both type and call. In test 181, only the new `_5_peer_a.ts` and `_6_peer_b.ts` rows were added. No existing expected row changed. The 2000 sorted TypeScript-5.9 compiler-case files completed in 0.36 s wall against the 1.1 s reference.
 
 Causes below partition each disagreement bucket by observable pattern. Sample verdict cells in `disagreements.tsv` remain blank for human adjudication. R means ryi-only; C means CodeQL-only.
 
@@ -36,4 +56,14 @@ test type_ladder_codeql_baseline ... ok
 
 test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 49.10s
 
+```
+
+T2 gate: `CARGO_TARGET_DIR=$HOME/.cache/boop/cargo-target CARGO_BUILD_JOBS=4 RUST_TEST_THREADS=4 RYI_MAX_MEM_MB=2048 cargo test --features cli` reached `178_ryi_help` and stopped. Its help diff contained only the build hash/timestamp (`494582184e47` versus `14342bf25815`) from shared-target binary replacement. The focused `178_ryi_help` rerun passed 2/2; `181_ts_ladder` passed 1/1. Last five gate lines:
+
+```text
+    generated_clap_help_matches_captured_main
+
+test result: FAILED. 1 passed; 1 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
+
+error: test failed, to rerun pass `--test 178_ryi_help`
 ```
