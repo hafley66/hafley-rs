@@ -71,6 +71,7 @@ fn ts_ladder_fast_and_slow() {
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
 _11_duplicate.ts param     duplicate    -> _5_peer_a.ts:Peer      fs
 _11_duplicate.ts returns   duplicate    -> _5_peer_a.ts:Peer      fs
+_14_static_use.ts call      runStatic    -> _13_static.ts:load     fs
 _2_one.ts    call      one          -> _0_types.ts:Service    f-
 _2_one.ts    call      one          -> _0_types.ts:ping       fs
 _2_one.ts    param     one          -> _0_types.ts:Base       fs
