@@ -210,6 +210,11 @@ impl Batch {
 
     /// Full chunks through the chunk statement, the tail one row at a time.
     fn drain(&mut self, meta: &Meta, connection: &Connection) -> rusqlite::Result<()> {
+        let span = tracing::info_span!("sqlite_table_batch_drain", table = %meta.name, rows = self.rows);
+        span.in_scope(|| self.drain_inner(meta, connection))
+    }
+
+    fn drain_inner(&mut self, meta: &Meta, connection: &Connection) -> rusqlite::Result<()> {
         if std::env::var_os("RYI_SQLITE_VALUES").is_none() {
             // This connection is exclusive to the writer thread. SQLite reads
             // the batch only during execute; clear the pointer before the
@@ -410,7 +415,7 @@ impl Binder {
             insert_nanos: Arc::new(AtomicU64::new(0)),
             table_insert_nanos: Arc::new((0..table_count).map(|_| AtomicU64::new(0)).collect()),
             table_bind_nanos: vec![0; table_count], table_rows: vec![0; table_count],
-            profile_tables: std::env::var_os("RYI_SQLITE_PHASES").is_some(),
+            profile_tables: true,
             kind_time: [KindTime::default(); COLUMN_KINDS.len()], submit_nanos: 0 })
     }
 
@@ -506,28 +511,27 @@ impl Binder {
         Duration::from_nanos(self.insert_nanos.load(Ordering::Relaxed))
     }
 
-    pub fn report_tables(&self) {
-        eprintln!("sqlite table phases: table rows bind_s insert_s");
-        for (index, meta) in self.meta.iter().enumerate() {
-            let rows = self.table_rows[index];
-            if rows > 0 {
-                eprintln!("sqlite table phases: {} {} {:.6} {:.6}", meta.name, rows,
-                    self.table_bind_nanos[index] as f64 / 1e9,
-                    self.table_insert_nanos[index].load(Ordering::Relaxed) as f64 / 1e9);
-            }
+    pub fn record_profile(&self, bind_seconds: f64, insert_seconds: f64) {
+        let span = tracing::info_span!(
+            "sqlite_bind_phase",
+            seconds = tracing::field::Empty,
+            insert_seconds = tracing::field::Empty,
+            string_calls = tracing::field::Empty, string_nulls = tracing::field::Empty, string_seconds = tracing::field::Empty,
+            uint32_calls = tracing::field::Empty, uint32_nulls = tracing::field::Empty, uint32_seconds = tracing::field::Empty,
+            int64_calls = tracing::field::Empty, int64_nulls = tracing::field::Empty, int64_seconds = tracing::field::Empty,
+            boolean_calls = tracing::field::Empty, boolean_nulls = tracing::field::Empty, boolean_seconds = tracing::field::Empty,
+            int32_calls = tracing::field::Empty, int32_nulls = tracing::field::Empty, int32_seconds = tracing::field::Empty,
+            json_calls = tracing::field::Empty, json_nulls = tracing::field::Empty, json_seconds = tracing::field::Empty,
+            uint64_calls = tracing::field::Empty, uint64_nulls = tracing::field::Empty, uint64_seconds = tracing::field::Empty,
+        );
+        span.record("seconds", bind_seconds);
+        span.record("insert_seconds", insert_seconds);
+        for (index, kind) in ["string", "uint32", "int64", "boolean", "int32", "json", "uint64"].iter().enumerate() {
+            let time = self.kind_time[index];
+            span.record(format!("{kind}_calls").as_str(), time.calls);
+            span.record(format!("{kind}_nulls").as_str(), time.nulls);
+            span.record(format!("{kind}_seconds").as_str(), time.nanos as f64 / 1e9);
         }
-        eprintln!("sqlite bind kinds: kind calls nulls seconds");
-        for (kind, time) in COLUMN_KINDS.iter().zip(self.kind_time) {
-            if time.calls > 0 {
-                eprintln!("sqlite bind kinds: {kind} {} {} {:.6}", time.calls, time.nulls,
-                    time.nanos as f64 / 1e9);
-            }
-        }
-        let bind = self.table_bind_nanos.iter().sum::<u64>();
-        let columns = self.kind_time.iter().map(|time| time.nanos).sum::<u64>();
-        eprintln!("sqlite bind kinds: submit 0 0 {:.6}", self.submit_nanos as f64 / 1e9);
-        eprintln!("sqlite bind kinds: dispatch_meta_lookup 0 0 {:.6}",
-            bind.saturating_sub(columns).saturating_sub(self.submit_nanos) as f64 / 1e9);
     }
 }
 

@@ -40,7 +40,6 @@ pub struct Database {
     binder: bind::Binder,
     started: Instant,
     bind_time: Duration,
-    profile: bool,
 }
 
 const BATCH_BYTES: usize = 8 * 1024 * 1024;
@@ -179,20 +178,14 @@ impl Database {
     /// Commit, and publish the staging file when there is one. Returns the
     /// published path so `finish` can report it; silent otherwise.
     pub fn close(mut self) -> Result<Option<PathBuf>> {
-        let closing = Instant::now();
         self.flush()?;
         let insert_time = self.binder.insert_time();
-        if self.profile {
-            self.binder.report_tables();
-        }
+        self.binder.record_profile(self.bind_time.as_secs_f64(), insert_time.as_secs_f64());
         let connection = std::mem::replace(&mut self.slot, bind::Slot::Moving).into_local()?;
         connection.execute_batch("COMMIT;")?;
         connection.close().map_err(|(_, error)| error)?;
-        if self.profile {
-            eprintln!("sqlite phases: bind={:.3}s insert={:.3}s index_build=0.000s close={:.3}s total={:.3}s",
-                self.bind_time.as_secs_f64(), insert_time.as_secs_f64(),
-                closing.elapsed().as_secs_f64(), self.started.elapsed().as_secs_f64());
-        }
+        let export = tracing::info_span!("sqlite_export_total", rows = self.rows, seconds = tracing::field::Empty);
+        export.record("seconds", self.started.elapsed().as_secs_f64());
         let (Some(temporary), Some(destination)) = (self.temporary, self.destination) else {
             return Ok(None);
         };
@@ -238,7 +231,6 @@ impl Database {
             max_batch_rows,
             started,
             bind_time: Duration::ZERO,
-            profile: std::env::var_os("RYI_SQLITE_PHASES").is_some(),
         })
     }
 
@@ -300,7 +292,7 @@ impl Database {
     pub fn bind_row(&mut self, row: &impl Serialize) -> Result<()> {
         self.flush_pending()?;
         self.rows = self.rows.checked_add(1).ok_or("SQLite row counter overflow")?;
-        let started = self.profile.then(Instant::now);
+        let started = Instant::now();
         let result = self.binder.push(
             &mut self.slot,
             self.rows,
@@ -308,7 +300,7 @@ impl Database {
             self.content_id.as_deref(),
             row,
         );
-        if let Some(started) = started { self.bind_time += started.elapsed(); }
+        self.bind_time += started.elapsed();
         result
     }
 
