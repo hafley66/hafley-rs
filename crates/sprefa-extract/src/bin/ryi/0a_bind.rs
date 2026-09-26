@@ -920,6 +920,7 @@ impl ser::Serializer for &mut Scalar<'_> {
 #[cfg(test)]
 mod tests {
     use super::{Batch, Val};
+    use std::hash::{Hash, Hasher};
 
     #[test]
     fn repeated_text_reuses_one_batch_span_and_recycled_capacity() {
@@ -946,5 +947,16 @@ mod tests {
         let Val::Text(start, len) = batch.json(&value).unwrap() else { panic!("JSON must be text") };
         assert_eq!(start, 6);
         assert_eq!(&batch.text[start as usize..(start + len) as usize], serde_json::to_string(&value).unwrap().as_bytes());
+    }
+
+    #[test]
+    fn hash_collision_keeps_distinct_text_spans() {
+        let mut batch = Batch::empty(0);
+        batch.text("seed");
+        let mut hasher = std::collections::hash_map::DefaultHasher::new();
+        "other".hash(&mut hasher);
+        batch.interned.insert(hasher.finish(), Val::Text(0, 4));
+        assert!(matches!(batch.intern("other"), Val::Text(4, 5)));
+        assert_eq!(batch.text.as_slice(), b"seedother");
     }
 }
