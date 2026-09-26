@@ -1,15 +1,6 @@
 #![cfg(feature = "cli")]
 #![allow(dead_code)]
 
-#[path = "../src/bin/ryi/gen/models/mod.rs"]
-mod models;
-#[path = "../src/bin/ryi/gen/ops_auto.rs"]
-mod ops_auto;
-#[path = "../src/bin/ryi/ops.rs"]
-mod ops;
-#[path = "../src/bin/ryi/gen/http_auto.rs"]
-mod http_auto;
-
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 use std::time::Duration;
@@ -17,9 +8,10 @@ use std::time::Duration;
 use axum::body::Body;
 use axum::http::{header, Request};
 use http_body_util::BodyExt;
+use hyper::client::conn::http1;
+use hyper_util::rt::TokioIo;
 use serde_json::json;
 use sha2::{Digest, Sha256};
-use tower::ServiceExt;
 
 struct Case {
     op: &'static str,
@@ -127,6 +119,25 @@ impl Drop for Server {
     }
 }
 
+async fn socket_response(socket: &Path, uri: &str, body: &str) -> (axum::http::StatusCode, axum::body::Bytes) {
+    let stream = tokio::net::UnixStream::connect(socket).await.expect("connect unix socket");
+    let (mut client, connection) = http1::handshake(TokioIo::new(stream)).await.expect("HTTP handshake");
+    tokio::spawn(async move { let _ = connection.await; });
+    let request = Request::post(format!("http://localhost{uri}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(body.to_string())).expect("socket request");
+    let response = client.send_request(request).await.expect("socket response");
+    let status = response.status();
+    let body = response.into_body().collect().await.expect("socket body").to_bytes();
+    (status, body)
+}
+
+async fn socket_request(socket: &Path, uri: &str, body: &str) -> axum::body::Bytes {
+    let (status, body) = socket_response(socket, uri, body).await;
+    assert!(status.is_success(), "socket HTTP: {status}");
+    body
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cli_router_and_unix_socket_share_the_contract() {
     let scratch = tempfile::tempdir().expect("parity scratch");
@@ -140,39 +151,17 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     std::fs::write(root.join("region.txt"), "old\n").unwrap();
     let home = scratch.path().join("home");
     std::fs::create_dir(&home).unwrap();
-    let original_bin = std::env::var_os("RYI_BIN").map(PathBuf::from).unwrap_or_else(|| PathBuf::from(env!("CARGO_BIN_EXE_ryi")));
+    let original_bin = PathBuf::from(env!("CARGO_BIN_EXE_ryi"));
     let binary = scratch.path().join("ryi");
     std::fs::copy(original_bin, &binary).expect("pin ryi for parity run");
-    std::env::set_var("RYI_BIN", &binary);
     std::env::set_var("HOME", &home);
     std::env::set_var("RUST_LOG", "off");
     std::env::set_var("DL_TRAIL", "0");
     std::env::set_var("RYI_MAX_MEM_MB", "2048");
 
-    let app = http_auto::router();
     let mut table = Vec::new();
+    let mut fast_cli = Vec::new();
     let cases = cases(&root, scratch.path());
-    for case in &cases {
-        let cli = Command::new(&binary)
-            .arg(&case.argv[0]).args(["--format", "jsonl"]).args(&case.argv[1..])
-            .current_dir(env!("CARGO_MANIFEST_DIR"))
-            .output().expect("CLI transport");
-        assert!(cli.status.success(), "{} CLI: {}", case.op, String::from_utf8_lossy(&cli.stderr));
-        table.push(row(case.op, "cli", &cli.stdout, &root, scratch.path()));
-        if matches!(case.op, "cleave" | "move" | "rename") {
-            let state = scratch.path().join("state");
-            if state.exists() {
-                std::fs::remove_dir_all(state).expect("reset dry-run stage for HTTP transport");
-            }
-        }
-        let request = Request::post(&case.uri).header(header::CONTENT_TYPE, "application/json")
-            .body(Body::from(case.body.clone())).expect("HTTP request");
-        let response = app.clone().oneshot(request).await.expect("Router oneshot");
-        assert!(response.status().is_success(), "{} HTTP: {}", case.op, response.status());
-        let body = response.into_body().collect().await.expect("HTTP body").to_bytes();
-        table.push(row(case.op, "router", &body, &root, scratch.path()));
-    }
-
     let socket = scratch.path().join("ryi.sock");
     let server = Command::new(&binary).args(["serve", "--listen", &format!("unix:{}", socket.display())])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -183,18 +172,48 @@ async fn cli_router_and_unix_socket_share_the_contract() {
         std::thread::sleep(Duration::from_millis(10));
     }
     assert!(socket.exists(), "unix socket bound");
+    for case in &cases {
+        let cli = Command::new(&binary)
+            .arg(&case.argv[0]).args(["--format", "jsonl"]).args(&case.argv[1..])
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .output().expect("CLI transport");
+        assert!(cli.status.success(), "{} CLI: {}", case.op, String::from_utf8_lossy(&cli.stderr));
+        if case.op == "fast" { fast_cli = cli.stdout.clone(); }
+        table.push(row(case.op, "cli", &cli.stdout, &root, scratch.path()));
+        if matches!(case.op, "cleave" | "move" | "rename") {
+            let state = scratch.path().join("state");
+            if state.exists() {
+                std::fs::remove_dir_all(state).expect("reset dry-run stage for HTTP transport");
+            }
+        }
+        let body = socket_request(&socket, &case.uri, &case.body).await;
+        table.push(row(case.op, "router", &body, &root, scratch.path()));
+    }
+
     let fast = &cases[0];
-    let socket_response = Command::new("curl")
-        .args(["--silent", "--show-error", "--fail-with-body", "--unix-socket"])
-        .arg(&socket)
-        .args(["-X", "POST", "-H", "content-type: application/json", "--data-binary"])
-        .arg(&fast.body)
-        .arg("http://localhost/fast")
-        .output().expect("curl unix socket");
-    assert!(socket_response.status.success(), "{}", String::from_utf8_lossy(&socket_response.stderr));
-    table.push(row("fast", "socket", &socket_response.stdout, &root, scratch.path()));
+    let socket_body = socket_request(&socket, &fast.uri, &fast.body).await;
+    table.push(row("fast", "socket", &socket_body, &root, scratch.path()));
+
+    let proof_socket = scratch.path().join("nochild.sock");
+    let system_path = "/usr/bin:/bin:/opt/homebrew/bin";
+    assert!(system_path.split(':').all(|dir| !Path::new(dir).join("ryi").exists()));
+    let proof_server = Command::new(&binary).args(["serve", "--listen", &format!("unix:{}", proof_socket.display())])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("PATH", system_path).env_remove("RYI_BIN")
+        .stdout(Stdio::null()).stderr(Stdio::piped()).spawn().expect("start unix server");
+    let _proof_server = Server(proof_server);
+    for _ in 0..200 {
+        if proof_socket.exists() { break; }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(proof_socket.exists(), "proof socket bound");
+    std::fs::remove_file(&binary).expect("remove server executable after launch");
+    let proof_body = socket_request(&proof_socket, &fast.uri, &fast.body).await;
 
     let rendered = table.join("\n");
     println!("{rendered}");
     assert_eq!(rendered, include_str!("fixtures/ryi_http_parity.tsv").trim_end());
+    let no_child = row("fast", "nochild", &proof_body, &root, scratch.path());
+    println!("{no_child}");
+    assert_eq!(no_child, row("fast", "nochild", &fast_cli, &root, scratch.path()), "proof body: {}", String::from_utf8_lossy(&proof_body));
 }

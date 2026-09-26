@@ -13,6 +13,8 @@
 //! capability, so that drift cannot recur silently.
 
 use std::io::Write;
+use std::cell::Cell;
+use std::os::fd::FromRawFd;
 use std::path::PathBuf;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
@@ -123,7 +125,7 @@ enum Tier {
 }
 
 /// `ryi slow`: the SCIP oracle over the inputs, written as fast's tables.
-fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn run_slow(slow: SlowArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(secs) = slow.scip_timeout {
         if secs == 0 {
             return Err("--scip-timeout must be a positive number of seconds".into());
@@ -145,7 +147,10 @@ fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
     };
     let checkers = !slow.no_checker;
     let index = slow.scip_index.as_deref();
-    let mut output = sqlite::Output::new(slow.sqlite.as_deref())?;
+    let mut output = match writer {
+        Some(writer) => sqlite::Output::with_writer(slow.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(slow.sqlite.as_deref())?,
+    };
     if output.database.is_some() {
         let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
             output
@@ -174,7 +179,7 @@ fn run_slow(slow: SlowArgs) -> Result<(), Box<dyn std::error::Error>> {
 
 /// `ryi scip`: ensure the root's SCIP index and stream it raw: v5's `scip_*`
 /// relations, or with `--raw` the index records themselves.
-fn run_scip(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(lang) = args.indexer.as_deref() {
         if !sprefa_extract::indexer_langs().contains(&lang) {
             return Err(format!(
@@ -185,13 +190,16 @@ fn run_scip(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
         }
     }
     if args.raw {
-        return run_scip_raw(args);
+        return run_scip_raw(args, writer);
     }
     if args.inputs.paths.len() > 1 {
         return Err("ryi scip takes one ROOT directory".into());
     }
     let root = inputs::root(&args.inputs);
-    let mut output = sqlite::Output::new(args.sqlite.as_deref())?;
+    let mut output = match writer {
+        Some(writer) => sqlite::Output::with_writer(args.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(args.sqlite.as_deref())?,
+    };
     if args.lines {
         output.set_line_root(Some(root.clone()));
     }
@@ -228,7 +236,7 @@ fn run_scip(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
 
 /// `ryi scip --raw`: every record the index carries, over `--scip-index` or an
 /// index `--scip-build` makes for the inputs' language.
-fn run_scip_raw(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
+fn run_scip_raw(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(secs) = args.scip_timeout.filter(|secs| *secs > 0) {
         std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
     }
@@ -256,7 +264,10 @@ fn run_scip_raw(args: ScipArgs) -> Result<(), Box<dyn std::error::Error>> {
         go_checker: None,
         witness: false,
     };
-    let mut output = sqlite::Output::new(args.sqlite.as_deref())?;
+    let mut output = match writer {
+        Some(writer) => sqlite::Output::with_writer(args.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(args.sqlite.as_deref())?,
+    };
     if args.lines {
         output.set_line_root(Some(root.clone()));
     }
@@ -293,6 +304,9 @@ fn check_ingest_paths(paths: &[PathBuf]) {
 
 /// Every exit path flushes the chrome timeline first; `process::exit` skips Drop.
 fn exit(code: i32) -> ! {
+    if TRANSPORT_OP.with(Cell::get) {
+        std::panic::panic_any(TransportExit(code));
+    }
     if let Some(state) = TRAIL_STATE.get() {
         write_trail(state);
     }
@@ -301,6 +315,9 @@ fn exit(code: i32) -> ! {
 }
 
 static TRAIL_STATE: OnceLock<Arc<sprefa_extract::trace::SummaryState>> = OnceLock::new();
+thread_local! { static TRANSPORT_OP: Cell<bool> = const { Cell::new(false) }; }
+struct TransportExit(i32);
+static TRANSPORT_HOOK: OnceLock<()> = OnceLock::new();
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mimalloc")]
@@ -357,14 +374,14 @@ fn git_sha() -> Option<String> {
 }
 
 /// `ryi trail [N]`: the canned report off `~/.agent/dl6.db`, newest run first.
-fn print_trail(runs: usize) -> Result<(), Box<dyn std::error::Error>> {
+fn print_trail(runs: usize, out: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
     let reports = Trail::open()?.recent(runs)?;
     if reports.is_empty() {
-        emit("no runs")?;
+        emit(out, "no runs")?;
         return Ok(());
     }
     for report in reports {
-        emit(&format!(
+        emit(out, &format!(
             "run {} {} wall {}ms load {:.2} -> {:.2} argv {}",
             report.id,
             report.started,
@@ -374,7 +391,7 @@ fn print_trail(runs: usize) -> Result<(), Box<dyn std::error::Error>> {
             report.argv,
         ))?;
         for (lang, phase, files, calls, rows, bytes, micros) in report.phases {
-            emit(&format!(
+            emit(out, &format!(
                 "  {lang:<10} {phase:<14} files {files:>6} calls {calls:>8} \
                  rows {rows:>10} bytes {bytes:>12} us {micros:>12}"
             ))?;
@@ -400,8 +417,7 @@ fn is_broken_pipe(error: &(dyn std::error::Error + 'static)) -> bool {
 /// One stdout row, `println!` minus the panic on a closed pipe: `println!`
 /// panics with "failed printing to stdout" (rc 101) when the consumer closed
 /// early, and the error here propagates to `main`'s BrokenPipe intercept.
-fn emit(line: &str) -> Result<(), std::io::Error> {
-    let mut out = std::io::stdout().lock();
+fn emit(out: &mut dyn Write, line: &str) -> Result<(), std::io::Error> {
     out.write_all(line.as_bytes())?;
     out.write_all(b"\n")
 }
@@ -444,25 +460,27 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             exit(2);
         }
         let stdin = std::io::stdin();
-        let stdout = std::io::stdout();
+        // The format adapter consumes the in-process operation while that
+        // operation owns stdout. Write its envelope through the original fd.
+        let fd = unsafe { libc::dup(libc::STDOUT_FILENO) };
+        if fd < 0 { return Err(std::io::Error::last_os_error().into()); }
+        let original = unsafe { std::fs::File::from_raw_fd(fd) };
+        let mut stdout = std::io::BufWriter::with_capacity(256 * 1024, original);
         if ryi.cmd.is_none() {
-            return cli_auto::write_stream(&mut stdout.lock(), ops::file(&ryi.file))
+            return cli_auto::write_stream(&mut stdout, ops::file(&ryi.file))
                 .map_err(|error| std::io::Error::other(error.to_string()).into());
         }
-        return cli_auto::run(ryi, &mut stdin.lock(), &mut stdout.lock())
+        return cli_auto::run(ryi, &mut stdin.lock(), &mut stdout)
             .map_err(|error| std::io::Error::other(error.to_string()).into());
     }
     let (mut cli, tier) = match ryi.cmd {
         None => (ryi.file, Tier::Files),
         Some(Cmd::Fast(fast)) => (FileArgs::from(fast), Tier::Fast),
-        Some(Cmd::Slow(slow)) => return run_slow(slow),
-        Some(Cmd::Scip(args)) => return run_scip(args),
-        Some(Cmd::Ingest(args)) => return run_ingest(args),
-        Some(Cmd::Schema) => {
-            print_schema();
-            return Ok(());
-        }
-        Some(Cmd::Trail(args)) => return print_trail(args.runs),
+        Some(Cmd::Slow(slow)) => return run_slow(slow, None),
+        Some(Cmd::Scip(args)) => return run_scip(args, None),
+        Some(Cmd::Ingest(args)) => return run_ingest(args, None),
+        Some(Cmd::Schema) => return print_schema(&mut std::io::stdout().lock()),
+        Some(Cmd::Trail(args)) => return print_trail(args.runs, &mut std::io::stdout().lock()),
         Some(Cmd::Watch(args)) => return watch::run(args),
         Some(Cmd::Diff(args)) => return or_exit_2(diff::run(args)),
         Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
@@ -517,9 +535,73 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     output.finish()
 }
 
-fn run_ingest(args: IngestArgs) -> Result<(), Box<dyn std::error::Error>> {
+/// The transport calls the same verb bodies as the CLI, without parsing a
+/// second process's arguments or applying CLI exit codes to the server.
+fn run_verb(ryi: Ryi, writer: Box<dyn Write + Send>) -> Result<(), Box<dyn std::error::Error>> {
+    TRANSPORT_HOOK.get_or_init(|| {
+        let prior = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            if !info.payload().is::<TransportExit>() { prior(info); }
+        }));
+    });
+    TRANSPORT_OP.with(|active| active.set(true));
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| run_verb_inner(ryi, writer)));
+    TRANSPORT_OP.with(|active| active.set(false));
+    match result {
+        Ok(result) => result,
+        Err(payload) => match payload.downcast::<TransportExit>() {
+            Ok(exit) => Err(format!("ryi exited {}", exit.0).into()),
+            Err(payload) => std::panic::resume_unwind(payload),
+        },
+    }
+}
+
+fn run_verb_inner(ryi: Ryi, mut writer: Box<dyn Write + Send>) -> Result<(), Box<dyn std::error::Error>> {
+    match ryi.cmd {
+        None => run_file_verb(ryi.file, Tier::Files, writer),
+        Some(Cmd::Fast(args)) => run_file_verb(FileArgs::from(args), Tier::Fast, writer),
+        Some(Cmd::Slow(args)) => run_slow(args, Some(writer)),
+        Some(Cmd::Scip(args)) => run_scip(args, Some(writer)),
+        Some(Cmd::Ingest(args)) => run_ingest(args, Some(writer)),
+        Some(Cmd::Schema) => print_schema(&mut writer),
+        Some(Cmd::Trail(args)) => print_trail(args.runs, &mut writer),
+        Some(Cmd::Watch(args)) => watch::run(args),
+        Some(Cmd::Diff(args)) => diff::run(args),
+        Some(Cmd::Graph(args)) => graph::run(args),
+        Some(Cmd::Query(args)) => query::run(args).map_err(Into::into),
+        Some(Cmd::Move(args)) => source_move::run(args).map_err(Into::into),
+        Some(Cmd::Cleave(args)) => cleave::run(args).map_err(Into::into),
+        Some(Cmd::Rename(args)) => source_rename::run(args).map_err(|error| error.to_string().into()),
+        Some(Cmd::Region(args)) => region_writer::run(args)
+            .and_then(|code| if code == 0 { Ok(code) } else { Err(region_writer::RegionError { message: format!("region exited {code}"), exit: code }) })
+            .map(|_| ())
+            .map_err(|error| error.message.into()),
+    }
+}
+
+fn run_file_verb(mut cli: FileArgs, tier: Tier, writer: Box<dyn Write + Send>) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(secs) = cli.scip_timeout.filter(|secs| *secs > 0) {
+        std::env::set_var("SPREFA_SCIP_TIMEOUT_SECS", secs.to_string());
+    }
+    cli.paths = inputs::expand(&cli.inputs)?;
+    let root_only = cli.scip_deps || cli.deps || cli.package_deps;
+    if cli.paths.is_empty() && !root_only {
+        return Err("ryi: no inputs; pass files, directories, globs, - or --entry".into());
+    }
+    if cli.scip_index.is_some() && cli.inputs.root.is_none() {
+        return Err("--scip-index needs --root".into());
+    }
+    let mut output = sqlite::Output::with_writer(cli.sqlite.as_deref(), writer, true)?;
+    extract_to(&cli, tier, &mut output)?;
+    output.finish()
+}
+
+fn run_ingest(args: IngestArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
     check_ingest_paths(&args.paths);
-    let mut output = sqlite::Output::new(args.sqlite.as_deref())?;
+    let mut output = match writer {
+        Some(writer) => sqlite::Output::with_writer(args.sqlite.as_deref(), writer, true)?,
+        None => sqlite::Output::new(args.sqlite.as_deref())?,
+    };
     stream_ingest(&args.paths, &mut output)?;
     output.finish()
 }
@@ -890,8 +972,9 @@ fn bench(
 /// `ryi schema` prints the library's own wire contract. The text lives in
 /// `sprefa_extract::wire::SCHEMA`, not here, so a library consumer can read the
 /// same contract without shelling out to this binary.
-fn print_schema() {
-    let _ = emit(&schema_text());
+fn print_schema(out: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
+    emit(out, &schema_text())?;
+    Ok(())
 }
 
 /// The reverse door. Every file is one stream, so line numbers in a stop run
