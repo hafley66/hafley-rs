@@ -30,7 +30,7 @@ pub fn build(language: &Language, scm: &str) -> Result<QueryExt, QueryExtError> 
         relations,
         fields,
         emit_literals,
-    ) = split::read_and_parse_predicates(&user)?;
+    ) = split::read_and_parse_predicates(language, &user)?;
     let kinds = build::query_new_per_kind(language, &kind_names)?;
     let names = build::intern_names(&user);
     Ok(QueryExt {

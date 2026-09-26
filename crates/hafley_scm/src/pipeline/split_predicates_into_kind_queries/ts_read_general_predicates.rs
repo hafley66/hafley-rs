@@ -1,4 +1,4 @@
-use tree_sitter::{Query, QueryPredicate, QueryPredicateArg};
+use tree_sitter::{Language, Query, QueryPredicate, QueryPredicateArg};
 
 use super::parse_into_predicate::parse_into_predicate;
 use crate::types::{EmitFieldSpec, EmitSource, EmitSpec, Predicate, QueryExtError};
@@ -15,7 +15,10 @@ type ParsedPredicates = (
 );
 
 /// ts: `user.general_predicates(i)` per pattern; unknown operator or bad arity is an error.
-pub fn read_and_parse_predicates(user: &Query) -> Result<ParsedPredicates, QueryExtError> {
+pub fn read_and_parse_predicates(
+    language: &Language,
+    user: &Query,
+) -> Result<ParsedPredicates, QueryExtError> {
     let mut predicates = Vec::new();
     let mut kinds = Vec::new();
     let mut predicate_kinds = Vec::new();
@@ -37,6 +40,7 @@ pub fn read_and_parse_predicates(user: &Query) -> Result<ParsedPredicates, Query
                 continue;
             }
             predicates.push(parse_into_predicate(
+                language,
                 pattern as u16,
                 found,
                 &mut kinds,

@@ -1,10 +1,14 @@
-use tree_sitter::{QueryPredicate, QueryPredicateArg};
+use tree_sitter::{Language, QueryPredicate, QueryPredicateArg};
 
 use crate::types::{Predicate, PredicateKind, QueryExtError, Stop, Walk};
 
 /// One `QueryPredicate` -> one `Predicate`, appending its kind string to `kinds`
 /// when that string is new. `kinds` is the deduped kind table the stage returns.
+/// `#has?` / `#not-has?`: `@capture kind+ [neighbor|end]`.
+/// `#has-ancestor?` / `#not-has-ancestor?`: `@capture kind+ [neighbor|end]`.
+/// `#has-parent?` / `#not-has-parent?`: `@capture kind+`.
 pub fn parse_into_predicate(
+    language: &Language,
     pattern: u16,
     found: &QueryPredicate,
     kinds: &mut Vec<Box<str>>,
@@ -50,7 +54,7 @@ pub fn parse_into_predicate(
                 negated,
             })
         }
-        "has-ancestor?" | "has-parent?" => {
+        "has?" | "has-ancestor?" | "has-parent?" => {
             if args.is_empty()
                 || args
                     .iter()
@@ -60,7 +64,7 @@ pub fn parse_into_predicate(
             }
             let mut stop = Stop::End;
             let mut kind_args = args;
-            if bare == "has-ancestor?" && kind_args.len() > 1 {
+            if bare != "has-parent?" && kind_args.len() > 1 {
                 if let QueryPredicateArg::String(last) = &kind_args[kind_args.len() - 1] {
                     if last.as_ref() == "neighbor" || last.as_ref() == "end" {
                         stop = if last.as_ref() == "neighbor" {
@@ -80,6 +84,11 @@ pub fn parse_into_predicate(
                 let QueryPredicateArg::String(kind) = arg else {
                     unreachable!()
                 };
+                if language.id_for_node_kind(kind, true) == 0 {
+                    return Err(QueryExtError::UnknownOperator(format!(
+                        "{operator} (unknown kind '{kind}' in pattern {pattern})"
+                    )));
+                }
                 let index = match kinds.iter().position(|seen| seen.as_ref() == kind.as_ref()) {
                     Some(index) => index,
                     None => {
@@ -91,6 +100,8 @@ pub fn parse_into_predicate(
             }
             let walk = if bare == "has-parent?" {
                 Walk::Parent
+            } else if bare == "has?" {
+                Walk::Descendant
             } else {
                 Walk::Ancestor
             };
@@ -100,39 +111,6 @@ pub fn parse_into_predicate(
                 kind: PredicateKind::Node {
                     kinds: start..predicate_kinds.len() as u16,
                     walk,
-                    stop,
-                },
-                negated,
-            })
-        }
-        "has?" => {
-            let (kind, stop) = match args {
-                [QueryPredicateArg::String(kind)] => (kind, Stop::End),
-                [QueryPredicateArg::String(kind), QueryPredicateArg::String(stop)] => {
-                    let stop = if stop.as_ref() == "neighbor" {
-                        Stop::Neighbor
-                    } else {
-                        Stop::End
-                    };
-                    (kind, stop)
-                }
-                _ => return Err(arity(found.args.len())),
-            };
-            let index = match kinds.iter().position(|seen| seen.as_ref() == kind.as_ref()) {
-                Some(index) => index,
-                None => {
-                    kinds.push(kind.clone());
-                    kinds.len() - 1
-                }
-            };
-            let start = predicate_kinds.len() as u16;
-            predicate_kinds.push(index as u16);
-            Ok(Predicate {
-                pattern,
-                capture,
-                kind: PredicateKind::Node {
-                    kinds: start..predicate_kinds.len() as u16,
-                    walk: Walk::Descendant,
                     stop,
                 },
                 negated,
