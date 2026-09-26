@@ -26,6 +26,7 @@ Item owner(PathTypeRepr t) {
 
 from PathTypeRepr t, ItemNode target, Item o
 where
+  t.fromSource() and target.fromSource() and
   target = resolvePath(t.getPath()) and
   (target instanceof Struct or target instanceof Enum or
    target instanceof Trait or target instanceof TypeAlias) and

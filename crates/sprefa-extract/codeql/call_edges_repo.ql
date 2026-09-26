@@ -4,6 +4,7 @@ import codeql.rust.internal.PathResolution
 
 from AstNode site, ItemNode target, Function source
 where
+  site.fromSource() and target.fromSource() and
   not site.isInMacroExpansion() and
   (target = site.(Call).getStaticTarget() or
    target = site.(StructExpr).getStruct()) and
