@@ -120,20 +120,24 @@ fn self_struct_constructors_bind_to_the_enclosing_impl_type() {
 
 #[test]
 fn path_module_super_calls_bind_to_the_declaring_parent() {
-    let scratch = tempfile::tempdir().unwrap();
-    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
-    ryi(&["fast", &format!("{LADDER}/src"), "--sqlite", &fast]);
-    let conn = rusqlite::Connection::open(&fast).unwrap();
-    let rows: Vec<(String, String)> = conn
-        .prepare("select distinct callee_path, callee_name from resolved_edge where caller_path like '%/deep/_11_path_module.rs' and caller_name = 'path_module_probe' order by callee_path, callee_name")
-        .unwrap()
-        .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-        .unwrap()
-        .collect::<Result<_, _>>()
-        .unwrap();
-    assert_eq!(rows.len(), 1);
-    assert!(rows[0].0.ends_with("/call_ladder/src/lib.rs"));
-    assert_eq!(rows[0].1, "exit");
+    let relative = format!("{LADDER}/src");
+    let absolute = std::fs::canonicalize(&relative).unwrap().to_string_lossy().into_owned();
+    for src in [relative, absolute] {
+        let scratch = tempfile::tempdir().unwrap();
+        let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+        ryi(&["fast", &src, "--sqlite", &fast]);
+        let conn = rusqlite::Connection::open(&fast).unwrap();
+        let rows: Vec<(String, String)> = conn
+            .prepare("select distinct callee_path, callee_name from resolved_edge where caller_path like '%/deep/_11_path_module.rs' and caller_name = 'path_module_probe' order by callee_path, callee_name")
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+            .unwrap()
+            .collect::<Result<_, _>>()
+            .unwrap();
+        assert_eq!(rows.len(), 1, "{src}");
+        assert!(rows[0].0.ends_with("/call_ladder/src/lib.rs"), "{src}: {rows:?}");
+        assert_eq!(rows[0].1, "exit");
+    }
 }
 
 #[test]

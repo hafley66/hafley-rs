@@ -320,17 +320,7 @@ fn normalize_join(dir: &str, literal: &str) -> String {
     } else {
         format!("{dir}/{literal}")
     };
-    let mut parts: Vec<&str> = Vec::new();
-    for part in combined.split('/') {
-        match part {
-            "" | "." => {}
-            ".." => {
-                parts.pop();
-            }
-            other => parts.push(other),
-        }
-    }
-    parts.join("/")
+    lexical(std::path::Path::new(&combined))
 }
 
 // ── the module plane proper ──────────────────────────────────────────────────
@@ -518,6 +508,8 @@ pub struct RustModuleIndex {
     paths: HashMap<ContentId, String>,
     /// Corpus-relative module path per file, `#[path]` overrides applied.
     module_paths: HashMap<String, Vec<String>>,
+    /// An explicitly displaced module's declaring file, retained for `super`.
+    path_parents: HashMap<String, Vec<String>>,
     /// Crate identifier -> library root file, for `own_crate::x` paths.
     crate_libs: HashMap<String, String>,
     /// Module path's LAST segment -> candidate files, the fan-out filter
@@ -748,6 +740,8 @@ impl RustModuleIndex {
                 let Some(literal) = path_attr else { continue };
                 let target = normalize_join(dir, literal);
                 if index.blobs.contains_key(&target) {
+                    let parents = index.path_parents.entry(target.clone()).or_default();
+                    if !parents.contains(path) { parents.push(path.clone()); }
                     let mut segments = module_segments(path);
                     segments.push(name.clone());
                     index.module_paths.insert(target, segments);
@@ -1499,6 +1493,14 @@ impl RustModuleIndex {
     ) -> HomeFile {
         if qualifier.is_empty() {
             return HomeFile::None;
+        }
+        if qualifier.len() == 1 && qualifier[0] == "super" {
+            if let Some(parents) = self.path_parents.get(from) {
+                return match parents.as_slice() {
+                    [parent] => HomeFile::Unique(parent.clone()),
+                    _ => HomeFile::Ambiguous,
+                };
+            }
         }
         if let [only] = qualifier {
             if self
