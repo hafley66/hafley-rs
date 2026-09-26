@@ -34,3 +34,8 @@ The declarations and many direct uses were renamed. The root re-export `pub use 
 ### 2026-09-27T02:37:30Z · @codex
 
 Current ryii reproduced the batch failure on copied soopy: exit 0 then three E0432 imports. Library-root selection and public-glob forwarding now rename the bindings and consumers; the same batch exits 0 and cargo check --all-targets --offline passes. t_5_rename_rust passed (19 tests).
+## Root cause and fix
+
+With both `src/lib.rs` and `src/main.rs`, `owning_root` assigned sibling module files to the main crate on a same-directory tie. The library re-export and its consumers then failed to resolve to the declarations. Prefer the library root for shared module files, while each root file still owns itself. The two-row `rust_rename/reexport` fixture pins the expected library binding and consumer output.
+
+Fix commit: `dfd51554`.

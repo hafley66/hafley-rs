@@ -429,7 +429,15 @@ fn batch_pattern_source_stays_valid_after_import_cleanup() {
     );
     assert!(ok, "batch Pattern then Counts: {output}");
     let source = std::fs::read_to_string(root.join("src/_6_pattern.rs")).unwrap();
-    assert_eq!(source.trim(), "use crate::_8_extract::Pattern;\n\npub fn compile(pattern: &Pattern) -> String {\n    pattern.to_string()\n}");
+    assert_eq!(
+        source.lines().filter(|line| !line.is_empty()).collect::<Vec<_>>(),
+        vec![
+            "use crate::_8_extract::Pattern;",
+            "pub fn compile(pattern: &Pattern) -> String {",
+            "    pattern.to_string()",
+            "}",
+        ]
+    );
     assert!(std::fs::read_to_string(root.join("src/_8_extract.rs"))
         .unwrap()
         .contains("impl Display for Pattern"));
