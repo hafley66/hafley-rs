@@ -488,8 +488,7 @@ impl Arm<'_> {
         match answer {
             Err(_) if deadline.expired() => {
                 // @eprintln-ok: CLI-UX stop, off the fact stream, exit 3.
-                eprintln!("graph: query exceeded {secs}s");
-                crate::exit(3);
+                Err(crate::RyiExit::new(3, format!("graph: query exceeded {secs}s")).into())
             }
             answer => answer,
         }

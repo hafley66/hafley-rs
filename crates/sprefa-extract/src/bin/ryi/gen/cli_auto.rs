@@ -27,6 +27,8 @@ pub struct Ryi {
 
 #[derive(clap::Subcommand, Debug)]
 pub enum Cmd {
+  #[doc = "Serve the HTTP contract"]
+  Serve(ServeArgs),
   #[doc = "Syntax-only whole-project facts (no compiler)"]
   Fast(FastArgs),
   #[doc = "The SCIP oracle written as fast's tables"]
@@ -60,6 +62,7 @@ pub enum Cmd {
 
 pub fn run(cli: Ryi, input: &mut dyn BufRead, out: &mut dyn Write) -> OpResult<()> {
   match cli.cmd {
+          Some(Cmd::Serve(_)) => { return Err(crate::ops_auto::OpError("serve cannot run as an operation".into(), 2)); }
           Some(Cmd::Fast(args)) => { write_stream(out, crate::ops::fast(&args))?; }
           Some(Cmd::Slow(args)) => { write_stream(out, crate::ops::slow(&args))?; }
           Some(Cmd::Scip(args)) => { write_stream(out, crate::ops::scip(&args))?; }

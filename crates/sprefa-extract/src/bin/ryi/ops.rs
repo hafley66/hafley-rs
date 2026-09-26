@@ -93,7 +93,7 @@ fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> mpsc::Receiver<Op
         let result = (|| -> OpResult<()> {
             let argv = argv?;
             let ryi = crate::Ryi::try_parse_from(std::iter::once(OsString::from("ryi")).chain(argv))
-                .map_err(|error| OpError(error.to_string()))?;
+                .map_err(|error| OpError(error.to_string(), 2))?;
             let (reader, writer) = UnixStream::pair()?;
             let sink = writer.try_clone()?;
             let _gate = captures_stdout.then(|| STDOUT_GATE.get_or_init(|| Mutex::new(())).lock().unwrap());
@@ -120,7 +120,10 @@ fn produce<A: clap::Args + Serialize>(verb: &str, args: &A) -> mpsc::Receiver<Op
                     }
                 }
             });
-            let outcome = crate::run_verb(ryi, Box::new(sink)).map_err(|error| OpError(error.to_string()));
+            let outcome = crate::run_verb(ryi, Box::new(sink)).map_err(|error| {
+                let message = if error.message.is_empty() { format!("ryi exited {}", error.code) } else { error.message };
+                OpError(message, error.code)
+            });
             drop(restore);
             let _ = rows.join();
             outcome

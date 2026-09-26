@@ -1,6 +1,5 @@
 use axum::Json;
 use axum::body::Body;
-use axum::body::Bytes;
 use axum::extract::Path;
 use axum::http::HeaderMap;
 use axum::http::StatusCode;
@@ -13,6 +12,7 @@ use futures_util::StreamExt;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
 use std::path::PathBuf;
+use std::io::{Seek, Write};
 
 use crate::models::inputs::Inputs;
 use crate::ops_auto::CleaveArgs;
@@ -32,38 +32,58 @@ use crate::ops_auto::SlowArgs;
 use crate::ops_auto::TrailArgs;
 use crate::ops_auto::WatchArgs;
 
-impl IntoResponse for OpError {
-    fn into_response(self) -> Response {
-        (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": self.0}))).into_response()
+fn error_status(code: i32) -> StatusCode {
+    match code {
+        2 => StatusCode::BAD_REQUEST,
+        3 | 5..=7 => StatusCode::UNPROCESSABLE_ENTITY,
+        4 => StatusCode::NOT_FOUND,
+        _ => StatusCode::INTERNAL_SERVER_ERROR,
     }
 }
 
-fn jsonl_response(produce: impl FnOnce(&mut dyn FnMut(OpResult<Vec<u8>>) -> bool) + Send + 'static) -> Response {
-    let (tx, rx) = tokio::sync::mpsc::channel::<Result<Bytes, std::io::Error>>(64);
-    tokio::task::spawn_blocking(move || {
+impl IntoResponse for OpError {
+    fn into_response(self) -> Response {
+        (error_status(self.1), Json(serde_json::json!({"error": self.0, "code": self.1}))).into_response()
+    }
+}
+
+async fn jsonl_response(produce: impl FnOnce(&mut dyn FnMut(OpResult<Vec<u8>>) -> bool) + Send + 'static) -> Response {
+    let result = tokio::task::spawn_blocking(move || -> OpResult<(std::fs::File, Option<i32>)> {
+        let mut spool = tempfile::tempfile()?;
         let mut rows = 0u64;
-        let mut failed = false;
-        let mut connected = true;
+        let mut failed = None;
+        let mut write_error = None;
         produce(&mut |line| {
             let mut bytes = match line {
                 Ok(bytes) => { rows += 1; bytes }
                 Err(error) => {
-                    failed = true;
-                    serde_json::to_vec(&serde_json::json!({"error": error.0})).expect("error row serializes")
+                    failed = Some(error.1);
+                    serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes")
                 }
             };
             bytes.push(b'\n');
-            connected = tx.blocking_send(Ok(Bytes::from(bytes))).is_ok();
-            connected && !failed
+            if let Err(error) = spool.write_all(&bytes) {
+                write_error = Some(error);
+                return false;
+            }
+            failed.is_none()
         });
-        if connected {
-            let mut complete = serde_json::to_vec(&serde_json::json!({"complete": !failed, "rows": rows})).expect("completion row serializes");
-            complete.push(b'\n');
-            let _ = tx.blocking_send(Ok(Bytes::from(complete)));
+        if let Some(error) = write_error { return Err(OpError::from(error)); }
+        let mut complete = serde_json::to_vec(&serde_json::json!({"complete": failed.is_none(), "rows": rows})).expect("completion row serializes");
+        complete.push(b'\n');
+        spool.write_all(&complete)?;
+        spool.rewind()?;
+        Ok((spool, failed))
+    }).await;
+    match result {
+        Ok(Ok((spool, failed))) => {
+            let status = failed.map_or(StatusCode::OK, error_status);
+            let stream = tokio_util::io::ReaderStream::new(tokio::fs::File::from_std(spool));
+            (status, [(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
         }
-    });
-    let stream = futures_util::stream::unfold(rx, |mut rx| async move { rx.recv().await.map(|chunk| (chunk, rx)) });
-    ([(CONTENT_TYPE, "application/x-ndjson")], Body::from_stream(stream)).into_response()
+        Ok(Err(error)) => error.into_response(),
+        Err(error) => OpError::from(error).into_response(),
+    }
 }
 
 fn jsonl_input<T: DeserializeOwned + Send + 'static>(body: Body) -> impl Iterator<Item = OpResult<T>> + Send {
@@ -103,7 +123,7 @@ pub async fn fast(Query(query): Query<FastQuery>, Json(body): Json<Inputs>) -> R
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -133,7 +153,7 @@ pub async fn slow(Query(query): Query<SlowQuery>, Json(body): Json<Inputs>) -> R
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -173,7 +193,7 @@ pub async fn scip(Query(query): Query<ScipQuery>, Json(body): Json<Inputs>) -> R
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -223,7 +243,7 @@ pub async fn graph(Query(query): Query<GraphQuery>, Json(body): Json<Inputs>) ->
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -349,7 +369,7 @@ pub async fn query(Query(query): Query<QueryQuery>, Json(body): Json<Inputs>) ->
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Default, Debug)]
@@ -404,7 +424,7 @@ pub async fn watch(Query(query): Query<WatchQuery>) -> Response {
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -434,7 +454,7 @@ pub async fn diff(Query(query): Query<DiffQuery>) -> Response {
               break;
           }
       }
-  })
+  }).await
 }
 
 #[derive(Deserialize, Debug)]
@@ -447,7 +467,7 @@ pub struct IngestQuery {
 pub async fn ingest(Query(query): Query<IngestQuery>, headers: HeaderMap, body: Body) -> OpResult<Json<serde_json::Value>> {
   let args = IngestArgs {
       paths: query.paths,
-      trace: headers.get("X-Trace").and_then(|v| v.to_str().ok()).map(|v| v.parse::<String>()).transpose().map_err(|e| OpError(e.to_string()))?,
+      trace: headers.get("X-Trace").and_then(|v| v.to_str().ok()).map(|v| v.parse::<String>()).transpose().map_err(|e| OpError(e.to_string(), 1))?,
       sqlite: query.sqlite,
   };
   let input = jsonl_input::<serde_json::Value>(body);
@@ -492,4 +512,29 @@ pub fn router() -> axum::Router {
       .route("/ingest", post(ingest))
       .route("/schema", post(schema))
       .route("/trail/{runs}", post(trail))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use http_body_util::BodyExt as _;
+
+    #[tokio::test]
+    async fn error_after_a_data_row_still_sets_http_status() {
+        let response = jsonl_response(|emit| {
+            assert!(emit(Ok(br#"{"record":"first"}"#.to_vec())));
+            assert!(!emit(Err(OpError("late failure".into(), 3))));
+        }).await;
+        assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+        let body = response.into_body().collect().await.expect("response body").to_bytes();
+        let rows: Vec<serde_json::Value> = body.split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).expect("JSONL row"))
+            .collect();
+        assert_eq!(rows, vec![
+            serde_json::json!({"record": "first"}),
+            serde_json::json!({"error": "late failure", "code": 3}),
+            serde_json::json!({"complete": false, "rows": 1}),
+        ]);
+    }
 }

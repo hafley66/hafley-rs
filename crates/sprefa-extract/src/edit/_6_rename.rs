@@ -123,7 +123,7 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
         // The plan is out and the tree is settled; a `RenameError` would add a
         // message line to stderr for a run that did not fail.
         let _ = std::io::stdout().flush();
-        super::exit(ABSTAINED);
+        return Err(RenameError { message: String::new(), exit: ABSTAINED });
     }
     Ok(())
 }

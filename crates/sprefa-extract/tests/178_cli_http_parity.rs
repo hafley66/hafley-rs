@@ -217,3 +217,39 @@ async fn cli_router_and_unix_socket_share_the_contract() {
     println!("{no_child}");
     assert_eq!(no_child, row("fast", "nochild", &fast_cli, &root, scratch.path()), "proof body: {}", String::from_utf8_lossy(&proof_body));
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn operation_error_has_http_status_and_server_accepts_next_request() {
+    let scratch = tempfile::tempdir().expect("error scratch");
+    let socket = scratch.path().join("errors.sock");
+    let server = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .args(["serve", "--listen", &format!("unix:{}", socket.display())])
+        .env("DL_TRAIL", "0")
+        .stdout(Stdio::null()).stderr(Stdio::piped())
+        .spawn().expect("start error server");
+    let _server = Server(server);
+    for _ in 0..200 {
+        if socket.exists() { break; }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    assert!(socket.exists(), "error socket bound");
+
+    let (status, body) = socket_response(
+        &socket,
+        "/scip?indexer=not-a-language",
+        r#"{"paths":[],"patterns":[],"entry":[]}"#,
+    ).await;
+    assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
+    let rows: Vec<serde_json::Value> = body.split(|byte| *byte == b'\n')
+        .filter(|line| !line.is_empty())
+        .map(|line| serde_json::from_slice(line).expect("JSON error row"))
+        .collect();
+    assert_eq!(rows.len(), 2);
+    assert_eq!(rows[0]["code"], 2);
+    assert!(rows[0]["error"].as_str().unwrap().contains("unknown language"));
+    assert_eq!(rows[1], json!({"complete": false, "rows": 0}));
+
+    let (next_status, next_body) = socket_response(&socket, "/schema", "").await;
+    assert_eq!(next_status, axum::http::StatusCode::OK);
+    let _: serde_json::Value = serde_json::from_slice(&next_body).expect("next JSON response");
+}

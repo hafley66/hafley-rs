@@ -30,10 +30,10 @@ const IMPORTED_TRAITS: [&str; 16] = [
 
 const SCOPE: &str ="not supported: cross-language cleave, moving a type with its impl blocks";
 
-pub fn run(cli: CleaveArgs) -> Result<(), String> {
+pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
         return Err(
-            "--verify needs --commit".to_string(),
+            "--verify needs --commit".to_string().into(),
         );
     }
     if let Some(list) = cli.list.as_deref() {
@@ -117,7 +117,7 @@ pub fn run(cli: CleaveArgs) -> Result<(), String> {
 
 /// `--list`: every row planned in order over ONE corpus walk and ONE resolve,
 /// each row reading the texts the rows before it wrote, landed as ONE stage.
-fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
+fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
     let rows = read_cleave_list(list)?;
     let (first, _) = split_target(&rows[0].0)?;
     let root = plan_root(cli.root.as_ref(), &first)?;
@@ -133,7 +133,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
             return Err(format!(
                 "{}#{} has ungraded names; the batch stops before any write",
                 plan.rows.src, plan.rows.item
-            ));
+            ).into());
         }
         for row in &plan.source.specifiers {
             if plan.source.refs_outside(&row.name, &[]) > 0 {
@@ -175,7 +175,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), String> {
                         let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
                         let count = journal.restore(&root, &state, &[])?;
                         println!("verify failed (rc={reason}): rolled back {count} files");
-                        super::exit(3);
+                        return Err(crate::RyiExit::new(3, String::new()));
                     }
                 }
             }
@@ -444,7 +444,7 @@ fn verify_after_commit(
     state: &Path,
     command: Option<&str>,
     journal: &VerifyJournal,
-) -> Result<(), String> {
+) -> Result<(), crate::RyiExit> {
     let Some(command) = command else {
         return Ok(());
     };
@@ -454,7 +454,7 @@ fn verify_after_commit(
             let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
             let count = journal.restore(&plan.root, state, &[])?;
             println!("verify failed (rc={reason}): rolled back {count} files");
-            super::exit(3);
+            return Err(crate::RyiExit::new(3, String::new()));
         }
     }
     Ok(())

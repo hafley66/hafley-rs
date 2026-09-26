@@ -14,6 +14,12 @@ using Clap;
 @afterHelp("Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nBuild: git hash: $SPREFA_BUILD_GIT_HASH, datetime: $SPREFA_BUILD_DATETIME")
 namespace Ryi;
 
+/** Serve the HTTP contract */
+op serve(
+  /** Listen on HOST:PORT or unix:/PATH */
+  @valueName("HOST:PORT|unix:/PATH") @query listen: string,
+): void;
+
 /** Syntax-only whole-project facts (no compiler) */
 @route("/fast")
 @post

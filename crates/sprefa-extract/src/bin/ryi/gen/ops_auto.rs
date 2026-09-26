@@ -3,11 +3,11 @@ use std::path::PathBuf;
 use crate::models::inputs::Inputs;
 
 #[derive(Debug)]
-pub struct OpError(pub String);
+pub struct OpError(pub String, pub i32);
 
 impl<E: std::error::Error> From<E> for OpError {
     fn from(e: E) -> Self {
-        OpError(e.to_string())
+        OpError(e.to_string(), 1)
     }
 }
 
@@ -364,4 +364,11 @@ pub struct TrailArgs {
   #[doc = "Runs to print"]
   #[arg(default_value_t = 5, value_name = "N")]
   pub runs: usize,
+}
+
+#[derive(clap::Args, Debug, Clone, serde::Serialize)]
+pub struct ServeArgs {
+  #[doc = "Listen on HOST:PORT or unix:/PATH"]
+  #[arg(long, value_name = "HOST:PORT|unix:/PATH")]
+  pub listen: String,
 }

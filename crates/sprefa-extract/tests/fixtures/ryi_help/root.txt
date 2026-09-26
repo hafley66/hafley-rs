@@ -4,6 +4,7 @@ Usage: ryi [OPTIONS] [PATH]...
        ryi <COMMAND>
 
 Commands:
+  serve   Serve the HTTP contract
   fast    Syntax-only whole-project facts (no compiler)
   slow    The SCIP oracle written as fast's tables
   scip    Raw SCIP index rows

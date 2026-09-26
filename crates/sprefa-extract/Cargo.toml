@@ -243,7 +243,7 @@ optional = true
 
 [dependencies.tokio]
 version = "1"
-features = ["macros", "rt-multi-thread", "net", "sync"]
+features = ["macros", "rt-multi-thread", "net", "sync", "fs"]
 optional = true
 
 [dependencies.futures-util]

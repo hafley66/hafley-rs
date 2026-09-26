@@ -27,10 +27,10 @@ fn plan_of(cli: &MoveArgs) -> Result<Vec<Plan>, String> {
     }
 }
 
-pub fn run(cli: MoveArgs) -> Result<(), String> {
+pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
         return Err(
-            "--verify needs --commit".to_string(),
+            "--verify needs --commit".to_string().into(),
         );
     }
     let plan = plan_of(&cli)?;
@@ -135,7 +135,7 @@ fn verify_after_commit(
     journals: &[VerifyJournal],
     swept: &[Vec<String>],
     verify_cwd: &Option<PathBuf>,
-) -> Result<(), String> {
+) -> Result<(), crate::RyiExit> {
     let Some(command) = command else {
         return Ok(());
     };
@@ -146,7 +146,7 @@ fn verify_after_commit(
                 return Err(format!(
                     "--verify-cwd is not a directory: {}",
                     dir.display()
-                ));
+                ).into());
             }
             dir.canonicalize()
                 .map_err(|error| format!("canonicalize {}: {error}", dir.display()))?
@@ -165,7 +165,7 @@ fn verify_after_commit(
                 count += journals[index].restore(&plans[index].root, state, &swept[index])?;
             }
             println!("verify failed (rc={reason}): rolled back {count} files");
-            super::exit(3);
+            return Err(crate::RyiExit::new(3, String::new()));
         }
     }
     Ok(())
