@@ -12,7 +12,7 @@ with rows as (
   union all
   select 'call', caller_path, caller_name, kind, callee_path, callee_name, resolution_origin from resolved_edge)
 select group_concat(line, char(10)) from (
-  select printf('%-4s %-19s %-14s -> %-27s %s', plane, substr(src, instr(src, 'crate_scope/') + 12), owner,
+  select printf('%-4s %-19s %-11s -> %-27s %s', plane, substr(src, instr(src, 'crate_scope/') + 12), owner,
                 substr(dst, instr(dst, 'crate_scope/') + 12) || ':' || target, origin) line
   from rows where src like '%crate_scope/app/src/%' order by 1)";
 
@@ -33,6 +33,7 @@ fn a_bare_name_binds_only_inside_the_crate_and_its_dependencies() {
         "\
 call app/src/lib.rs      calls       -> lib_a/src/lib.rs:only_a_fn  corpus_unique
 call app/src/lib.rs      calls       -> lib_a/src/lib.rs:shared_fn  corpus_unique
+call app/src/lib.rs      calls       -> lib_a/src/lib.rs:shared_fn  module_plane
 type app/src/lib.rs      hidden_twin -> lib_a/src/lib.rs:Shared     corpus_unique
 type app/src/lib.rs      one         -> lib_a/src/lib.rs:OnlyA      corpus_unique
 type app/src/lib.rs      same_file_wins -> app/src/lib.rs:Twice        same_file"

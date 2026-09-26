@@ -213,7 +213,7 @@ fn resolve_type_dst(
         || segments
             .last()
             .is_some_and(|last| modules.is_some_and(|m| m.names_a_module(last)));
-    module_scoped_type(index, paths, own_path, &segments, trailing)
+    module_scoped_type(index, modules, paths, own_path, &segments, trailing)
         .map(|(blob, span)| (blob, span, ResolutionOrigin::ModulePlane))
         .or_else(|| {
             in_corpus
@@ -285,20 +285,25 @@ fn unique_declared_type(
 /// whose file's module path ends in `qualifier`, unique blob only.
 fn module_scoped_type(
     index: Option<&DefIndex>,
+    modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
     paths: Option<&PathIndex>,
     own_path: Option<&str>,
     qualifier: &[&str],
     name: &str,
 ) -> Option<(ContentId, Span)> {
     let paths = paths?;
-    let want = module_target(own_path?, qualifier)?;
+    let from = own_path?;
+    let want = module_target(from, qualifier)?;
     let sites: Vec<&DefSite> = corpus_defs(index?, name)
         .iter()
         .filter(|site| site.family == FamilyTag::Type)
         .filter(|site| {
             paths
                 .get(&site.blob)
-                .is_some_and(|path| want.covers(&module_segments(path)))
+                .is_some_and(|path| {
+                    want.covers(&module_segments(path))
+                        && modules.is_none_or(|m| m.sees_path(from, path))
+                })
         })
         .collect();
     match sites.as_slice() {

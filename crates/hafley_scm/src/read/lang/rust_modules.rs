@@ -1033,7 +1033,7 @@ impl RustModuleIndex {
             .collect();
         for head in heads {
             match self.crate_libs.get(head) {
-                Some(lib) if lib != path => rows.push(module_row(head, lib.clone())),
+                Some(lib) if lib != path && self.sees_path(path, lib) => rows.push(module_row(head, lib.clone())),
                 _ => {}
             }
         }
@@ -1083,24 +1083,31 @@ impl RustModuleIndex {
     /// one its manifest lists as a path dependency. A file in no crate is
     /// unscoped; a crated file never sees a def outside every crate.
     pub fn sees(&self, from: &str, target: &ContentId) -> bool {
+        self.paths.get(target).is_some_and(|path| self.sees_path(from, path))
+    }
+
+    /// Path version for module lookups, before a target has become a blob.
+    pub fn sees_path(&self, from: &str, target: &str) -> bool {
         let Some(own) = self.crate_dirs.get(from) else {
             return true;
         };
-        let Some(target_crate) = self.paths.get(target).and_then(|path| self.crate_dirs.get(path)) else {
+        let Some(target_crate) = self.crate_dirs.get(target) else {
             return false;
         };
         target_crate == own || self.crate_deps.get(own).is_some_and(|deps| deps.contains(target_crate))
     }
 
-    /// Whether `path` binds `local` with a `use` from a crate the corpus does
-    /// not hold (`use serde_json::Value;`): the name is external there.
+    /// Whether `path` binds `local` with a `use` from a crate it cannot see.
     pub fn binds_external(&self, path: &str, local: &str) -> bool {
+        if !self.crate_dirs.contains_key(path) {
+            return false;
+        }
         self.facts.get(path).is_some_and(|facts| {
             facts.uses.iter().any(|binding| {
                 binding.local == local
                     && binding.qualifier.first().is_some_and(|root| {
                         !matches!(root.as_str(), "crate" | "self" | "super")
-                            && !self.crate_libs.contains_key(root.as_str())
+                            && self.crate_libs.get(root).is_none_or(|lib| !self.sees_path(path, lib))
                     })
             })
         })
@@ -1298,12 +1305,15 @@ impl RustModuleIndex {
                 return home;
             }
             if let Some(lib) = self.crate_libs.get(&qualifier[0]) {
+                if !self.sees_path(from, lib) {
+                    return HomeFile::External;
+                }
                 if qualifier.len() == 1 {
                     return HomeFile::Unique(lib.clone());
                 }
                 let mut full = module_segments(lib);
                 full.extend(qualifier[1..].iter().cloned());
-                return self.exact_module(&full);
+                return self.exact_module(from, &full);
             }
         }
         let refs: Vec<&str> = qualifier.iter().map(String::as_str).collect();
@@ -1321,7 +1331,7 @@ impl RustModuleIndex {
             .into_iter()
             .flatten()
             .filter(|path| {
-                self.module_paths
+                self.sees_path(from, path) && self.module_paths
                     .get(*path)
                     .is_some_and(|segments| target.covers(segments))
             })
@@ -1334,11 +1344,11 @@ impl RustModuleIndex {
     }
 
     /// The files whose module path IS `full`, settled by the kink-4 rule.
-    fn exact_module(&self, full: &[String]) -> HomeFile {
+    fn exact_module(&self, from: &str, full: &[String]) -> HomeFile {
         let hits: Vec<&String> = self
             .module_paths
             .iter()
-            .filter(|(_, segments)| segments.as_slice() == full)
+            .filter(|(path, segments)| self.sees_path(from, path) && segments.as_slice() == full)
             .map(|(path, _)| path)
             .collect();
         match hits.as_slice() {
@@ -1362,7 +1372,7 @@ impl RustModuleIndex {
         }
         let mut full = module_segments(from);
         full.extend(qualifier.iter().cloned());
-        Some(self.exact_module(&full))
+        Some(self.exact_module(from, &full))
     }
 
     /// A bare head a `use` binding names; a binding from outside the crate
@@ -1400,7 +1410,7 @@ impl RustModuleIndex {
                 } else {
                     let mut full = module_segments(&file);
                     full.extend(qualifier[1..].iter().cloned());
-                    self.exact_module(&full)
+                    self.exact_module(from, &full)
                 }
             }
             Resolution::Ambiguous => HomeFile::Ambiguous,

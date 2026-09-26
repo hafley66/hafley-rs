@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use lib_b::OnlyB as HiddenB;
 
 pub struct Twice;
 pub mod again;
@@ -18,8 +19,14 @@ pub fn external(_p: PathBuf) {}
 
 pub fn decoy(_d: DecoyOnly) {}
 
+pub fn inaccessible_import(_b: HiddenB) {}
+
+pub fn inaccessible_path(_b: lib_b::OnlyB) {}
+
 pub fn calls() {
     only_a_fn();
     shared_fn();
     only_b_fn();
+    lib_b::only_b_fn();
+    lib_a::shared_fn();
 }

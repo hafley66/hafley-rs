@@ -124,6 +124,7 @@ impl RustSource {
     /// only defs whose file spells a module path ending in `a::b` are candidates.
     pub fn call_name_match_in_module(
         index: &DefIndex,
+        modules: Option<&crate::read::lang::rust_modules::RustModuleIndex>,
         paths: &PathIndex,
         from: &str,
         qualifier: &[&str],
@@ -135,7 +136,10 @@ impl RustSource {
             .filter(|site| {
                 paths
                     .get(&site.blob)
-                    .is_some_and(|path| want.covers(&module_segments(path)))
+                    .is_some_and(|path| {
+                        want.covers(&module_segments(path))
+                            && modules.is_none_or(|m| m.sees_path(from, path))
+                    })
             })
             .collect();
         let mut blobs: Vec<&ContentId> = Vec::new();
@@ -571,7 +575,7 @@ impl Resolve<CallF> for RustSource {
                                 ))
                             }
                             _ => RustSource::call_name_match_in_module(
-                                def_index, paths, from, &qualifier, callee,
+                                def_index, modules, paths, from, &qualifier, callee,
                             )
                             .map(|(blob, span)| {
                                 (
