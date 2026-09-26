@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use crate::models::inputs::Inputs;
 
-#[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
+#[derive(Debug, Clone, Serialize, Deserialize, clap::Args, Default)]
 pub struct FileArgs {
   #[command(flatten)]
   pub inputs: Inputs,

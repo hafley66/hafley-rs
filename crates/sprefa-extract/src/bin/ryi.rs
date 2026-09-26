@@ -46,6 +46,18 @@ use sprefa_extract::{
     ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
+#[path = "ryi/gen/models/mod.rs"]
+mod models;
+
+#[path = "ryi/gen/ops_auto.rs"]
+mod ops_auto;
+
+#[path = "ryi/gen/cli_auto.rs"]
+mod cli_auto;
+
+#[path = "ryi/ops.rs"]
+mod ops;
+
 #[path = "ryi/0_cli.rs"]
 mod cli;
 

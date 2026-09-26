@@ -2,7 +2,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Serialize, Deserialize, clap::Args)]
+#[derive(Debug, Clone, Serialize, Deserialize, clap::Args, Default)]
 pub struct Inputs {
   #[doc = "Files, directories, or globs; - reads a path list from stdin"]
   #[arg(value_name = "PATH")]
