@@ -135,6 +135,28 @@ fn rust_rename_matches_the_hand_written_after() {
     );
 }
 
+/// Two sequential rows cross `lib.rs` re-exports while `main.rs` shares the
+/// source directory. Both root bindings and their consumer follow the names.
+#[test]
+fn batch_renames_library_reexports_with_a_main_target() {
+    let fixture = fixture("reexport", "batch");
+    let list = fixture.state.join("batch.tsv");
+    std::fs::write(&list, "src/_1_pattern.rs\tPattern\tGlobPattern\nsrc/_0_types.rs\tRepositoryId\tRepoIdentity\n").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+        .arg("rename")
+        .arg("--list")
+        .arg(&list)
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .arg("--commit")
+        .output()
+        .expect("rename batch runs");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert_eq!(diff_rq(&fixture.root, &tree("reexport", "after")), Vec::<String>::new());
+}
+
 /// `use crate::util::*;` puts the symbol in a scope that writes the bare name
 /// with no clause naming it: exit 6 at the `use` item, and the tree keeps its bytes.
 #[test]
