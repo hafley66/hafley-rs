@@ -41,7 +41,7 @@ fn residual_type_candidates_have_declared_targets() {
     ).unwrap().query_map([], |row| Ok(format!("{} {} -> {}:{}",
         row.get::<_, String>(0)?, row.get::<_, String>(1)?,
         row.get::<_, String>(2)?, row.get::<_, String>(3)?)))
-    ).unwrap().collect::<Result<_, _>>().unwrap();
+    .unwrap().collect::<Result<_, _>>().unwrap();
     assert_eq!(rows.join("\n"), "\
 generic NestedGeneric -> _15_residual.rs:ResidualTarget
 impl Residual -> _15_residual.rs:AliasSlot

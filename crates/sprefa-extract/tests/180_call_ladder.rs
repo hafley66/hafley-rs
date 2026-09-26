@@ -46,7 +46,7 @@ fn qualified_new_uses_its_declaring_type() {
          order by caller_site_start, target_file, callee_name"
     ).unwrap().query_map([], |row| Ok(format!("{} -> {}:{}",
         row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))
-    ).unwrap().collect::<Result<_, _>>().unwrap();
+    .unwrap().collect::<Result<_, _>>().unwrap();
     assert_eq!(rows.join("\n"), "choose_left -> _0_left.rs:new");
 }
 
@@ -64,7 +64,7 @@ fn contextual_default_uses_its_type_impl() {
          order by caller_site_start, target_file, callee_name"
     ).unwrap().query_map([], |row| Ok(format!("{} -> {}:{}",
         row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?)))
-    ).unwrap().collect::<Result<_, _>>().unwrap();
+    .unwrap().collect::<Result<_, _>>().unwrap();
     assert_eq!(rows.join("\n"), "\
 default_probe -> _0_left.rs:Defaults
 default_probe -> _0_left.rs:default

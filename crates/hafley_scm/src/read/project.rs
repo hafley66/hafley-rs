@@ -2298,7 +2298,7 @@ impl<'a> TargetIndex<'a> {
             } else {
                 by_blob.insert(&input.blob, input);
             }
-            by_path.insert(&input.path, input);
+            by_path.insert(input.path.as_str(), input);
             if let Some(bundle) = input.output.call.as_ref() {
                 call_names.insert(&input.blob, span_names(bundle, &input.output.strings));
             }
