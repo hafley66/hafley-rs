@@ -4666,6 +4666,12 @@ impl TsSource {
         let call = output.call.as_ref()?;
         let node = def_named(call, &output.strings, callee)?;
         let span = call.node(node).span;
+        // Identical generated peers have the same declaration span in each
+        // blob. A new same-named declaration at a different span keeps the
+        // corpus name ambiguous (the mutation battery's duplicate rule).
+        if sites.iter().any(|site| site.span != span) {
+            return None;
+        }
         let site = sites
             .iter()
             .find(|site| Some(&site.blob) == own && site.span == span)?;
