@@ -1164,6 +1164,15 @@ impl RustModuleIndex {
 
     /// Path version for module lookups, before a target has become a blob.
     pub fn sees_path(&self, from: &str, target: &str) -> bool {
+        fn fixture(path: &str) -> Option<(&str, &str)> {
+            path.split_once("/tests/fixtures/")
+                .and_then(|(root, rest)| rest.split('/').next().map(|name| (root, name)))
+        }
+        match (fixture(from), fixture(target)) {
+            (Some(a), Some(b)) if a != b => return false,
+            (Some(_), None) | (None, Some(_)) => return false,
+            _ => {}
+        }
         let Some(own) = self.crate_dirs.get(from) else {
             return true;
         };

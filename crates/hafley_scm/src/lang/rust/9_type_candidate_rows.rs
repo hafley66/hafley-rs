@@ -76,7 +76,11 @@ fn collect(items: &[syn::Item], line_starts: &[u32], groups: &mut Vec<TypeCandid
             syn::Item::Type(item) => {
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
-                candidates.extend(type_refs(&item.ty).into_iter().map(|to| TypeCandidateRow {
+                candidates.extend(type_refs(&item.ty).into_iter().filter(|to| {
+                    !item.generics.params.iter().any(|param| {
+                        matches!(param, GenericParam::Type(param) if param.ident.to_string() == *to)
+                    })
+                }).map(|to| TypeCandidateRow {
                     to,
                     kind: TypeCandidateKind::Uses,
                 }));

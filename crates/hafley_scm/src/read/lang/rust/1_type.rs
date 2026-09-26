@@ -261,6 +261,12 @@ fn name_match_type_dst(
     if modules.zip(own_path).is_some_and(|(m, from)| m.binds_external(from, name)) {
         return None;
     }
+    // These bare names are supplied by the Rust prelude. A same-file
+    // declaration or an explicit import above can shadow them; an unrelated
+    // corpus declaration cannot.
+    if matches!(name, "Result" | "Box") {
+        return None;
+    }
     unique_declared_type(index, modules, own_path, name)
         .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique))
 }

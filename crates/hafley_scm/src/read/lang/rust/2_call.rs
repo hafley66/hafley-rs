@@ -643,7 +643,10 @@ impl Resolve<CallF> for RustSource {
             let callable = |blob: &ContentId, span: Span| {
                 !modules.is_some_and(|m| m.is_collapsed(blob, span) || m.is_alias(blob, span))
             };
-            let name_t = name_t.filter(|(blob, span, _, _)| callable(blob, *span));
+            let name_t = name_t.filter(|(blob, span, _, _)| {
+                callable(blob, *span)
+                    && modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, blob))
+            });
             // The syntax tier's whole answer for this site: the name match and
             // scip folded the way they fold when no checker runs.
             let syntax_t = |name_t: Option<(ContentId, Span, CallEdgeKind, ResolutionOrigin)>| {

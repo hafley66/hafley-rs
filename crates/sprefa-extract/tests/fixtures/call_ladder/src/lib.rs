@@ -3,3 +3,4 @@ pub mod _1_none;
 pub mod _2_one;
 pub mod _3_many;
 pub mod _4_nested;
+pub mod _5_scope;

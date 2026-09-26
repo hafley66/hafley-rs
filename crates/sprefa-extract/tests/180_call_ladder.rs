@@ -45,6 +45,13 @@ fn call_ladder_fast_and_slow() {
     let conn = rusqlite::Connection::open(&fast).unwrap();
     conn.execute("attach ?1 as slow", [&slow]).unwrap();
     let table: String = conn.query_row(TABLE, [], |row| row.get(0)).unwrap();
+    let foreign_output: i64 = conn.query_row(
+        "select count(*) from resolved_edge where caller_name = 'external_receiver' \
+         and callee_name = 'output' and callee_path like '%/_5_foreign/src/lib.rs'",
+        [],
+        |row| row.get(0),
+    ).unwrap();
+    assert_eq!(foreign_output, 0);
     assert_eq!(table, "\
 _2_one.rs     104 free_call          -> _0_types.rs:free_zero  fs
 _2_one.rs     166 inherent_call      -> _0_types.rs:ping       fs

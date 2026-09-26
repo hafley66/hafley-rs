@@ -91,3 +91,27 @@ _4_nested.rs param    projection    -> _0_types.rs:Out fs
 _4_nested.rs uses     Nest          -> _4_nested.rs:Nest fs"
     );
 }
+
+#[test]
+fn type_scope_ladder_keeps_prelude_result_external() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
+    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let ladder = "tests/fixtures/type_ladder_scope";
+    let src = format!("{ladder}/src");
+    let index = format!("{ladder}/index.scip");
+    ryi(&["fast", &src, "--sqlite", &fast]);
+    ryi(&["slow", &src, "--root", ladder, "--scip-index", &index, "--no-checker", "--sqlite", &slow]);
+
+    let conn = rusqlite::Connection::open(&fast).unwrap();
+    conn.execute("attach ?1 as slow", [&slow]).unwrap();
+    let rows: (i64, i64, i64) = conn.query_row(
+        "select
+           (select count(*) from resolved_type_edge where owner_name = 'prelude_result' and target_name = 'Result'),
+           (select count(*) from resolved_type_edge where owner_name = 'local_result' and target_name = 'Result'),
+           (select count(*) from slow.resolved_type_edge where owner_name = 'local_result' and target_name = 'Result')",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).unwrap();
+    assert_eq!(rows, (0, 1, 1));
+}
