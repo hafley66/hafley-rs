@@ -61,7 +61,8 @@ pub struct Store {
 /// 33 = historical peer messages (`said LIKE 'Another Claude session sent a
 /// message:%'`) stored as `user` are reclassified to `meta`.
 /// 35 = agent_turn.source_class distinguishes human input from harness injection.
-pub const SCHEMA_VERSION: i64 = 35;
+/// 36 = favorite-context and project-membership SQL views.
+pub const SCHEMA_VERSION: i64 = 36;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -767,6 +768,7 @@ impl Store {
                 self.connection.execute_batch(
                     "CREATE INDEX IF NOT EXISTS idx_live_last_seen ON agent_live(last_seen_ts);",
                 )?;
+                self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
                 self.stamp_version()?;
                 return Ok(());
             }
@@ -1081,6 +1083,10 @@ impl Store {
                 }
                 self.connection.execute_batch("PRAGMA user_version = 35;")?;
             }
+            if self.schema_version()? < 36 {
+                self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
+                self.connection.execute_batch("PRAGMA user_version = 36;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1116,6 +1122,7 @@ impl Store {
         self.connection.execute_batch(SCHEMA)?;
         self.connection.execute_batch(MAILBOX_SCHEMA)?;
         self.connection.execute_batch(COST_VIEW_SCHEMA)?;
+        self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
         self.restore_user_authored(&carried)?;
@@ -4234,6 +4241,171 @@ SELECT t.session_id,
   JOIN agent_session s ON s.session_id = t.session_id
   LEFT JOIN dict_cwd cwd ON cwd.id = COALESCE(t.cwd_id, s.cwd_id);
 ";
+
+/// Context views retain source ordinals while presenting conversational rows.
+/// `v_favorite` resolves the current harness/session/assistant/turn spelling
+/// and Instant's historical turn/session/turn spelling; free-form and opaque
+/// sources stay visible with null anchors.
+pub(crate) const CONTEXT_VIEW_SCHEMA: &str = r#"
+CREATE VIEW IF NOT EXISTS v_conversational_turn AS
+SELECT turn.session_id,
+       session.value AS session,
+       turn.turn,
+       role.value AS role,
+       turn.said AS body,
+       turn.ts,
+       cwd.value AS cwd,
+       turn.source_class
+  FROM agent_turn turn
+  JOIN dict_session session ON session.id = turn.session_id
+  JOIN dict_role role ON role.id = turn.role_id
+  LEFT JOIN agent_session session_row ON session_row.session_id = turn.session_id
+  LEFT JOIN dict_cwd cwd ON cwd.id = COALESCE(turn.cwd_id, session_row.cwd_id)
+ WHERE role.value IN ('user', 'assistant')
+   AND NOT (role.value = 'user' AND turn.source_class = 'harness');
+
+CREATE VIEW IF NOT EXISTS v_message AS
+SELECT current.session,
+       current.turn,
+       (SELECT COUNT(*)
+          FROM v_conversational_turn counted
+         WHERE counted.session_id = current.session_id
+           AND counted.turn <= current.turn) AS n,
+       current.role,
+       current.body,
+       current.ts,
+       current.cwd,
+       current.source_class,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM v_conversational_turn previous
+          WHERE previous.session_id = current.session_id
+            AND previous.role = 'user' AND previous.turn < current.turn
+       ) THEN (
+         SELECT COUNT(*)
+           FROM v_conversational_turn counted
+          WHERE counted.session_id = current.session_id
+            AND counted.turn <= (
+              SELECT MAX(previous.turn)
+                FROM v_conversational_turn previous
+               WHERE previous.session_id = current.session_id
+                 AND previous.role = 'user'
+                 AND previous.turn < current.turn
+            )
+       ) END AS prev_user_n,
+       CASE WHEN EXISTS (
+         SELECT 1 FROM v_conversational_turn previous
+          WHERE previous.session_id = current.session_id
+            AND previous.role = 'assistant' AND previous.turn < current.turn
+       ) THEN (
+         SELECT COUNT(*)
+           FROM v_conversational_turn counted
+          WHERE counted.session_id = current.session_id
+            AND counted.turn <= (
+              SELECT MAX(previous.turn)
+                FROM v_conversational_turn previous
+               WHERE previous.session_id = current.session_id
+                 AND previous.role = 'assistant'
+                 AND previous.turn < current.turn
+            )
+       ) END AS prev_assistant_n
+  FROM v_conversational_turn current;
+CREATE VIEW IF NOT EXISTS v_favorite AS
+WITH source_parts AS (
+  SELECT favorite.favorite_id AS id,
+         favorite.note,
+         markdown.body,
+         favorite.source,
+         instr(favorite.source, ':') AS harness_end,
+         instr(favorite.source, ':assistant:') AS turn_start,
+         CASE WHEN substr(favorite.source, 1, 5) = 'turn:'
+              THEN instr(substr(favorite.source, 6), ':') + 5
+         END AS legacy_turn_start
+    FROM agent_favorite favorite
+    JOIN markdown_cache markdown ON markdown.markdown_id = favorite.markdown_id
+), parsed AS (
+  SELECT id, note, body, source,
+         CASE WHEN legacy_turn_start > 5
+              THEN substr(source, 6, legacy_turn_start - 6)
+              WHEN harness_end > 0 AND turn_start > harness_end
+                    AND substr(source, 1, harness_end - 1)
+                        IN ('claude', 'codex', 'kimi', 'opencode', 'omp')
+              THEN substr(source, harness_end + 1, turn_start - harness_end - 1)
+         END AS session,
+         CASE WHEN legacy_turn_start > 5
+                    AND length(substr(source, legacy_turn_start + 1)) > 0
+                    AND substr(source, legacy_turn_start + 1) NOT GLOB '*[^0-9]*'
+              THEN CAST(substr(source, legacy_turn_start + 1) AS INTEGER)
+              WHEN turn_start > 0
+                    AND length(substr(source, turn_start + length(':assistant:'))) > 0
+                    AND substr(source, turn_start + length(':assistant:')) NOT GLOB '*[^0-9]*'
+              THEN CAST(substr(source, turn_start + length(':assistant:')) AS INTEGER)
+         END AS turn
+    FROM source_parts
+)
+SELECT parsed.id, parsed.note, parsed.body, parsed.source,
+       parsed.session, parsed.turn, message.n, message.source_class
+  FROM parsed
+  LEFT JOIN v_message message
+    ON message.session = parsed.session
+   AND message.turn = parsed.turn
+   AND message.role = 'assistant';
+
+CREATE VIEW IF NOT EXISTS v_session_project AS
+WITH projects AS (
+  SELECT DISTINCT cwd AS project
+    FROM v_turn_cwd
+   WHERE cwd IS NOT NULL AND cwd <> ''
+  UNION
+  SELECT DISTINCT cwd.value AS project
+    FROM agent_session session
+    JOIN dict_cwd cwd ON cwd.id = session.cwd_id
+   WHERE cwd.value <> ''
+), session_paths AS (
+  SELECT session_id, cwd AS path
+    FROM v_turn_cwd
+   WHERE cwd IS NOT NULL AND cwd <> ''
+  UNION
+  SELECT session.session_id, cwd.value AS path
+    FROM agent_session session
+    JOIN dict_cwd cwd ON cwd.id = session.cwd_id
+   WHERE cwd.value <> ''
+), touch_paths AS (
+  SELECT touch.session_id,
+         CASE WHEN substr(path.value, 1, 1) = '/' THEN path.value
+              WHEN turn_cwd.cwd IS NOT NULL
+                THEN rtrim(turn_cwd.cwd, '/') || '/' || path.value
+              ELSE path.value
+         END AS path
+    FROM agent_touch touch
+    JOIN dict_path path ON path.id = touch.path_id
+    LEFT JOIN v_turn_cwd turn_cwd
+      ON turn_cwd.session_id = touch.session_id AND turn_cwd.turn = touch.turn
+), memberships AS (
+  SELECT session.session_id, projects.project, 'cwd' AS evidence
+    FROM session_paths session
+    JOIN projects ON session.path = projects.project
+      OR (substr(session.path, 1, length(projects.project)) = projects.project
+          AND (substr(projects.project, -1, 1) = '/'
+               OR substr(session.path, length(projects.project) + 1, 1) = '/'))
+  UNION ALL
+  SELECT touch.session_id, projects.project, 'touch' AS evidence
+    FROM touch_paths touch
+    JOIN projects ON touch.path = projects.project
+      OR (substr(touch.path, 1, length(projects.project)) = projects.project
+          AND (substr(projects.project, -1, 1) = '/'
+               OR substr(touch.path, length(projects.project) + 1, 1) = '/'))
+)
+SELECT session.value AS session,
+       memberships.project,
+       CASE WHEN MAX(memberships.evidence = 'cwd') AND MAX(memberships.evidence = 'touch')
+              THEN 'cwd+touch'
+            WHEN MAX(memberships.evidence = 'cwd') THEN 'cwd'
+            ELSE 'touch'
+       END AS evidence
+  FROM memberships
+  JOIN dict_session session ON session.id = memberships.session_id
+ GROUP BY session.value, memberships.project;
+"#;
 
 /// Schema v26, a one-time backfill. Every mailbox row a door already took but
 /// nothing stamped: the pre-fix send paths recorded the landing and left
@@ -7376,6 +7548,332 @@ mod tests {
         );
         drop(store);
         let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn context_views_keep_source_ordinals_and_project_evidence() {
+        let (path, store) = fresh_store("context-views");
+        store
+            .upsert_session_row("session-a", "claude", "a", Some("/work/project"), None, 1)
+            .unwrap();
+        store
+            .upsert_session_row(
+                "session-b",
+                "claude",
+                "b",
+                Some("/work/project-old"),
+                None,
+                1,
+            )
+            .unwrap();
+        store
+            .upsert_session_row("session-c", "claude", "c", Some("/work/other"), None, 1)
+            .unwrap();
+        store
+            .write_turn_classified("session-a", 10, 1, "user", "typed request", None, "human")
+            .unwrap();
+        store
+            .write_turn_classified(
+                "session-a",
+                11,
+                2,
+                "assistant",
+                "repeated explanation",
+                None,
+                "harness",
+            )
+            .unwrap();
+        store
+            .write_turn_classified("session-a", 12, 3, "tool", "tool payload", None, "harness")
+            .unwrap();
+        store
+            .write_turn_classified(
+                "session-a",
+                13,
+                4,
+                "user",
+                "injected envelope",
+                None,
+                "harness",
+            )
+            .unwrap();
+        store
+            .write_turn_classified(
+                "session-a",
+                14,
+                5,
+                "assistant",
+                "repeated explanation",
+                None,
+                "harness",
+            )
+            .unwrap();
+        store
+            .write_turn_classified(
+                "session-a",
+                15,
+                6,
+                "user",
+                "uncertain provenance",
+                None,
+                "unknown",
+            )
+            .unwrap();
+        store
+            .write_turn_classified("session-b", 1, 1, "user", "other project", None, "human")
+            .unwrap();
+        store
+            .write_turn_classified(
+                "session-c",
+                1,
+                1,
+                "user",
+                "touch-only project",
+                None,
+                "human",
+            )
+            .unwrap();
+        store
+            .write_turn_classified(
+                "session-c",
+                2,
+                2,
+                "assistant",
+                "touch-only explanation",
+                None,
+                "harness",
+            )
+            .unwrap();
+        store
+            .add_touch(
+                "session-a",
+                11,
+                2,
+                "/work/project/src/lib.rs",
+                "read",
+                "Read",
+            )
+            .unwrap();
+        store
+            .add_touch(
+                "session-b",
+                1,
+                1,
+                "/work/project-old/src/lib.rs",
+                "read",
+                "Read",
+            )
+            .unwrap();
+        for (turn, touched_path) in [
+            (1, "/work/project/src/other.rs"),
+            (2, "/work/project/src/third.rs"),
+        ] {
+            store
+                .add_touch("session-c", turn, turn, touched_path, "read", "Read")
+                .unwrap();
+        }
+
+        let rows: Vec<(i64, String, String, Option<i64>, Option<i64>)> = store
+            .connection
+            .prepare(
+                "SELECT turn, role, source_class, prev_user_n, prev_assistant_n
+                   FROM v_message WHERE session = 'session-a' ORDER BY n",
+            )
+            .unwrap()
+            .query_map([], |row| {
+                Ok((
+                    row.get(0)?,
+                    row.get(1)?,
+                    row.get(2)?,
+                    row.get(3)?,
+                    row.get(4)?,
+                ))
+            })
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            rows,
+            [
+                (10, "user".into(), "human".into(), None, None),
+                (11, "assistant".into(), "harness".into(), Some(1), None),
+                (14, "assistant".into(), "harness".into(), Some(1), Some(2)),
+                (15, "user".into(), "unknown".into(), Some(1), Some(3)),
+            ]
+        );
+
+        let favorite = store
+            .favorite_add(
+                "repeated explanation",
+                Some("context"),
+                "claude:session-a:assistant:11",
+                7,
+            )
+            .unwrap();
+        let unsupported = store
+            .favorite_add(
+                "range is ambiguous",
+                None,
+                "claude:session-a:assistant:10-14",
+                8,
+            )
+            .unwrap();
+        let legacy = store
+            .favorite_add("legacy anchor", None, "turn:session-a:14", 9)
+            .unwrap();
+        let touch_only = store
+            .favorite_add("touch-only favorite", None, "turn:session-c:2", 10)
+            .unwrap();
+        let favorite_anchor: (Option<String>, Option<i64>, Option<i64>, Option<String>) = store
+            .connection
+            .query_row(
+                "SELECT session, turn, n, source_class FROM v_favorite WHERE id = ?1",
+                [favorite],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+            )
+            .unwrap();
+        assert_eq!(
+            favorite_anchor,
+            (
+                Some("session-a".into()),
+                Some(11),
+                Some(2),
+                Some("harness".into())
+            )
+        );
+        let legacy_anchor: (Option<String>, Option<i64>, Option<i64>) = store
+            .connection
+            .query_row(
+                "SELECT session, turn, n FROM v_favorite WHERE id = ?1",
+                [legacy],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(legacy_anchor, (Some("session-a".into()), Some(14), Some(3)));
+        let unresolved: (Option<String>, Option<i64>, Option<i64>) = store
+            .connection
+            .query_row(
+                "SELECT session, turn, n FROM v_favorite WHERE id = ?1",
+                [unsupported],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(unresolved, (Some("session-a".into()), None, None));
+
+        let memberships: Vec<(String, String, String)> = store
+            .connection
+            .prepare(
+                "SELECT session, project, evidence FROM v_session_project ORDER BY project, session",
+            )
+            .unwrap()
+            .query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert_eq!(
+            memberships,
+            [
+                ("session-c".into(), "/work/other".into(), "cwd".into()),
+                (
+                    "session-a".into(),
+                    "/work/project".into(),
+                    "cwd+touch".into()
+                ),
+                ("session-c".into(), "/work/project".into(), "touch".into()),
+                (
+                    "session-b".into(),
+                    "/work/project-old".into(),
+                    "cwd+touch".into()
+                ),
+            ]
+        );
+        let favorite_count: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM v_favorite favorite
+                   JOIN v_session_project project USING (session)
+                  WHERE favorite.id = ?1 AND project.project = '/work/project'",
+                [favorite],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(favorite_count, 1);
+        let touch_favorite_count: i64 = store
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM v_favorite favorite
+                   JOIN v_session_project project USING (session)
+                  WHERE favorite.id = ?1 AND project.project = '/work/project'",
+                [touch_only],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(touch_favorite_count, 1);
+
+        let plan: Vec<String> = store
+            .connection
+            .prepare(
+                "EXPLAIN QUERY PLAN SELECT n FROM v_message
+                   WHERE session = 'session-a' ORDER BY n LIMIT 5",
+            )
+            .unwrap()
+            .query_map([], |row| row.get(3))
+            .unwrap()
+            .collect::<std::result::Result<_, _>>()
+            .unwrap();
+        assert!(
+            plan.iter()
+                .any(|line| line.contains("SEARCH turn USING PRIMARY KEY")),
+            "session window must seek the agent_turn session key: {plan:?}"
+        );
+        assert!(
+            plan.iter().all(|line| !line.contains("SCAN turn")),
+            "session window must not scan every agent_turn row: {plan:?}"
+        );
+
+        store.rebuild().unwrap();
+        for view in ["v_message", "v_favorite", "v_session_project"] {
+            let exists: i64 = store
+                .connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name=?1",
+                    [view],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 1, "{view} survives store rebuild");
+        }
+        store
+            .connection
+            .execute_batch(
+                "DROP VIEW v_message;
+                 DROP VIEW v_favorite;
+                 DROP VIEW v_session_project;
+                 DROP VIEW v_conversational_turn;
+                 PRAGMA user_version = 35;",
+            )
+            .unwrap();
+        drop(store);
+        let migrated = Store::open(path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), super::SCHEMA_VERSION);
+        for view in [
+            "v_conversational_turn",
+            "v_message",
+            "v_favorite",
+            "v_session_project",
+        ] {
+            let exists: i64 = migrated
+                .connection
+                .query_row(
+                    "SELECT COUNT(*) FROM sqlite_master WHERE type='view' AND name=?1",
+                    [view],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(exists, 1, "v36 migration installs {view}");
+        }
+        drop(migrated);
+        let _ = std::fs::remove_file(path);
     }
 
     #[test]
