@@ -21,7 +21,9 @@ use agent_client_protocol::schema::v1::{
     WaitForTerminalExitRequest, WaitForTerminalExitResponse,
 };
 use agent_client_protocol::schema::ProtocolVersion;
-use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection};
+use agent_client_protocol::{
+    AcpAgent, AcpAgentConfig, Agent, ConnectionTo, LineDirection, UntypedMessage,
+};
 use anyhow::{Context, Result};
 use boop_store::session::ModelSpec;
 use tracing::{debug, info, warn};
@@ -78,6 +80,10 @@ pub fn adapter_command(adapter: &[&str], executable: Option<&str>) -> Vec<String
     command
 }
 
+fn adapter_supports_midturn_steering(adapter: &[&str]) -> bool {
+    adapter == CODEX_ADAPTER
+}
+
 /// How long the opening handshake (spawn, `initialize`, session) may take.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(120);
 
@@ -85,6 +91,7 @@ const OPEN_TIMEOUT: Duration = Duration::from_secs(120);
 #[derive(Debug)]
 enum Command {
     Prompt(String),
+    Steer(String, Sender<std::result::Result<Delivery, String>>),
     Cancel,
     Close,
 }
@@ -110,12 +117,21 @@ pub struct AcpChannel {
     /// Tool calls the agent reported, drained by the supervisor mid-turn.
     tool_calls: Arc<Mutex<Vec<ToolCallFact>>>,
     turn_running: bool,
+    codex_steering: bool,
 }
 
 impl AcpChannel {
     /// Spawn `command` as an ACP agent and open one session, blocking until
     /// the session id is known or the handshake fails.
     pub fn open(spec: &ChannelSpec, command: &[String]) -> Result<AcpChannel> {
+        Self::open_with_steering(spec, command, false)
+    }
+
+    fn open_with_steering(
+        spec: &ChannelSpec,
+        command: &[String],
+        codex_steering: bool,
+    ) -> Result<AcpChannel> {
         let (program, args) = command
             .split_first()
             .context("an acp channel needs a command to spawn")?;
@@ -162,6 +178,7 @@ impl AcpChannel {
                         .map(|effort| effort.as_str().to_owned())
                 }),
             resume: spec.resume.clone(),
+            codex_steering,
             clock: Arc::clone(&last_update_ms),
             tool_calls: Arc::clone(&tool_calls),
         };
@@ -184,6 +201,7 @@ impl AcpChannel {
             last_update_ms,
             tool_calls,
             turn_running: false,
+            codex_steering,
         };
         match channel.notes.recv_timeout(OPEN_TIMEOUT) {
             Ok(Note::Opened(session)) => {
@@ -211,7 +229,11 @@ impl AcpChannel {
     /// Open one of the roster adapters. The roster rows are `&[&str]`, so a
     /// caller names a const instead of building a `Vec<String>`.
     pub fn open_adapter(spec: &ChannelSpec, adapter: &[&str]) -> Result<AcpChannel> {
-        AcpChannel::open(spec, &adapter_command(adapter, spec.executable.as_deref()))
+        AcpChannel::open_with_steering(
+            spec,
+            &adapter_command(adapter, spec.executable.as_deref()),
+            adapter_supports_midturn_steering(adapter),
+        )
     }
 }
 
@@ -241,9 +263,21 @@ impl LaneChannel for AcpChannel {
     }
 
     fn steer(&mut self, _text: &str) -> Result<Delivery> {
-        // ACP has no mid-turn prompt: `session/prompt` is one request per turn
-        // and a second one before the first resolves is out of protocol.
-        Ok(Delivery::NextTurn)
+        if !self.codex_steering {
+            // ACP has no general mid-turn prompt. Codex ACP exposes its
+            // `_session/steering` extension for the Codex turn queue.
+            return Ok(Delivery::NextTurn);
+        }
+        let (reply, response) = std::sync::mpsc::channel();
+        self.commands
+            .send(Command::Steer(_text.to_owned(), reply))
+            .map_err(|_| anyhow::anyhow!("the acp connection is closed"))?;
+        response
+            .recv_timeout(Duration::from_secs(10))
+            .map_err(|error| {
+                anyhow::anyhow!("the Codex ACP steering request did not answer: {error}")
+            })?
+            .map_err(anyhow::Error::msg)
     }
 
     fn next_event(&mut self, timeout: std::time::Duration) -> Result<Option<TurnEvent>> {
@@ -307,6 +341,7 @@ struct SessionPlan {
     model: Option<String>,
     effort: Option<String>,
     resume: Option<String>,
+    codex_steering: bool,
     clock: Arc<AtomicU64>,
     tool_calls: Arc<Mutex<Vec<ToolCallFact>>>,
 }
@@ -339,6 +374,7 @@ async fn connect(
     commands: tokio::sync::mpsc::UnboundedReceiver<Command>,
     notes: Sender<Note>,
 ) -> Result<(), agent_client_protocol::Error> {
+    let codex_steering = plan.codex_steering;
     let clock = Arc::clone(&plan.clock);
     let observed_calls = Arc::clone(&plan.tool_calls);
     let turn_receipt = Arc::new(Mutex::new(TurnReceipt::default()));
@@ -458,28 +494,55 @@ async fn connect(
         .connect_with(agent, async move |connection: ConnectionTo<Agent>| {
             let session = handshake(&connection, &plan).await?;
             let _ = notes.send(Note::Opened(session.0.to_string()));
-            while let Some(command) = commands.recv().await {
+            'commands: while let Some(command) = commands.recv().await {
                 match command {
                     Command::Prompt(text) => {
                         *turn_receipt.lock().expect("turn receipt mutex poisoned") =
                             TurnReceipt::default();
-                        let outcome = connection
+                        let mut request = Box::pin(connection
                             .send_request(PromptRequest::new(
                                 session.clone(),
                                 vec![text.into()],
                             ))
                             .block_task()
-                            .await
-                            .map(|response| response.stop_reason);
-                        let receipt = std::mem::take(
-                            &mut *turn_receipt.lock().expect("turn receipt mutex poisoned"),
                         );
-                        if notes
-                            .send(Note::Turn(turn_verdict(outcome, Some(receipt))))
-                            .is_err()
-                        {
-                            break;
+                        loop {
+                            tokio::select! {
+                                outcome = &mut request => {
+                                    let receipt = std::mem::take(
+                                        &mut *turn_receipt.lock().expect("turn receipt mutex poisoned"),
+                                    );
+                                    if notes.send(Note::Turn(turn_verdict(
+                                        outcome.map(|response| response.stop_reason),
+                                        Some(receipt),
+                                    ))).is_err() {
+                                        break 'commands;
+                                    }
+                                    break;
+                                }
+                                command = commands.recv() => match command {
+                                    Some(Command::Steer(text, reply)) if codex_steering => {
+                                        let result = codex_steer(&connection, &session, &text)
+                                            .await
+                                            .map_err(|error| error.to_string());
+                                        let _ = reply.send(result);
+                                    }
+                                    Some(Command::Steer(_, reply)) => {
+                                        let _ = reply.send(Ok(Delivery::NextTurn));
+                                    }
+                                    Some(Command::Cancel) => {
+                                        connection.send_notification(CancelNotification::new(session.clone()))?;
+                                    }
+                                    Some(Command::Close) | None => break 'commands,
+                                    Some(Command::Prompt(_)) => {
+                                        warn!("acp channel received a second prompt while one is running");
+                                    }
+                                }
+                            }
                         }
+                    }
+                    Command::Steer(_, reply) => {
+                        let _ = reply.send(Ok(Delivery::NextTurn));
                     }
                     Command::Cancel => {
                         connection.send_notification(CancelNotification::new(session.clone()))?;
@@ -490,6 +553,27 @@ async fn connect(
             Ok(())
         })
         .await
+}
+
+async fn codex_steer(
+    connection: &ConnectionTo<Agent>,
+    session: &SessionId,
+    text: &str,
+) -> Result<Delivery, agent_client_protocol::Error> {
+    let request = UntypedMessage::new(
+        "_session/steering",
+        serde_json::json!({"sessionId": session.0, "prompt": [text]}),
+    )?;
+    let response = connection.send_request(request).block_task().await?;
+    match response["outcome"].as_str() {
+        Some("injected" | "startedNewTurn") => Ok(Delivery::MidTurn),
+        Some("failed") => Ok(Delivery::NextTurn),
+        outcome => {
+            let mut error = agent_client_protocol::Error::internal_error();
+            error.message = format!("Codex ACP steering returned unexpected outcome {outcome:?}");
+            Err(error)
+        }
+    }
 }
 
 /// The JSON-RPC error a failed terminal call answers with. The default
@@ -1120,6 +1204,7 @@ mod tests {
             last_update_ms: Arc::new(AtomicU64::new(0)),
             tool_calls: Arc::new(Mutex::new(Vec::new())),
             turn_running: false,
+            codex_steering: false,
         }
     }
 
@@ -1143,6 +1228,10 @@ mod tests {
         }
         assert_eq!(CLAUDE_ADAPTER[0], "npx");
         assert_eq!(CODEX_ADAPTER[0], "npx");
+        assert!(adapter_supports_midturn_steering(CODEX_ADAPTER));
+        for adapter in [CLAUDE_ADAPTER, KIMI_ADAPTER, OMP_ADAPTER, OPENCODE_ADAPTER] {
+            assert!(!adapter_supports_midturn_steering(adapter));
+        }
         assert_eq!(KIMI_ADAPTER, ["kimi", "acp"]);
         assert_eq!(OMP_ADAPTER, ["omp", "acp"]);
     }
@@ -1179,9 +1268,7 @@ mod tests {
         assert!(adapter_command(&[], Some("ccz")).is_empty());
     }
 
-    /// RECEIPT for the capability flip: claude and kimi advertised
-    /// `send_midflight` on their old transports and cannot on this one, so
-    /// every steer is held for the next turn.
+    /// ACP agents without the Codex steering extension retain turn-boundary delivery.
     #[test]
     fn no_text_reaches_a_turn_already_in_flight() {
         let mut channel = idle_channel();
@@ -1578,5 +1665,80 @@ while True:
     fn an_unknown_terminal_id_answers_an_error_rather_than_wedging_the_turn() {
         let error = report()["missing_terminal"]["error"].as_str().unwrap();
         assert_eq!(error, "no terminal term_404");
+    }
+}
+
+#[cfg(test)]
+mod codex_steering_wire_tests {
+    use super::*;
+
+    const FAKE_CODEX_ACP: &str = r#"
+import json, sys
+
+def send(value):
+    sys.stdout.write(json.dumps(value) + "\n")
+    sys.stdout.flush()
+
+session = "ses_steer"
+prompt_id = None
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    frame = json.loads(line)
+    method = frame.get("method")
+    if method == "initialize":
+        send({"jsonrpc":"2.0", "id":frame["id"], "result":{
+            "protocolVersion":1, "agentCapabilities":{}, "authMethods":[]}})
+    elif method == "session/new":
+        send({"jsonrpc":"2.0", "id":frame["id"], "result":{"sessionId":session}})
+    elif method == "session/prompt":
+        prompt_id = frame["id"]
+    elif method == "_session/steering":
+        with open(sys.argv[1], "w") as report:
+            json.dump(frame["params"], report)
+        send({"jsonrpc":"2.0", "id":frame["id"], "result":{"outcome":"injected"}})
+        send({"jsonrpc":"2.0", "id":prompt_id, "result":{"stopReason":"end_turn"}})
+    elif "id" in frame:
+        send({"jsonrpc":"2.0", "id":frame["id"], "result":{}})
+"#;
+
+    #[test]
+    fn codex_steering_extension_admits_mail_during_an_active_prompt() {
+        let root = std::env::temp_dir().join(format!("boop-acp-steer-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let script = root.join("fake_codex_acp.py");
+        let report = root.join("steer.json");
+        std::fs::write(&script, FAKE_CODEX_ACP).unwrap();
+        let spec = ChannelSpec {
+            model: None,
+            effort: None,
+            cwd: root.clone(),
+            resume: None,
+            lane: None,
+            executable: None,
+        };
+        let command = vec![
+            "python3".to_owned(),
+            script.display().to_string(),
+            report.display().to_string(),
+        ];
+        let mut channel = AcpChannel::open_with_steering(&spec, &command, true).unwrap();
+        channel.start_turn("hold this turn open").unwrap();
+        assert_eq!(
+            channel.steer("worker completed").unwrap(),
+            Delivery::MidTurn
+        );
+        assert!(channel
+            .next_event(Duration::from_secs(1))
+            .unwrap()
+            .is_some());
+        channel.close().unwrap();
+
+        let params: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&report).unwrap()).unwrap();
+        assert_eq!(params["sessionId"], "ses_steer");
+        assert_eq!(params["prompt"], serde_json::json!(["worker completed"]));
     }
 }

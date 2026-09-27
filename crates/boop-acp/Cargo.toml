@@ -26,8 +26,9 @@ tracing.workspace = true
 agent-client-protocol = "2.0.0"
 # The ACP connection is async and `LaneChannel` is sync, so one current-thread
 # runtime per channel drives it on its own thread. `rt` and `sync` only: the
-# reactor under the ACP crate is async-io's, not tokio's.
-tokio = { version = "1", features = ["rt", "sync"] }
+# `select!` keeps the active prompt readable while steering commands arrive;
+# the reactor under the ACP crate is async-io's, not tokio's.
+tokio = { version = "1", features = ["macros", "rt", "sync"] }
 # `terminal/kill` has to reach the whole command tree, and a process-group
 # signal is the only call that does; std stops at the direct child.
 libc = "0.2"
