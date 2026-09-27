@@ -115,7 +115,10 @@ fn duplicate_spans_collapse_to_one_edit() {
     let action = replace_action(
         source.clone(),
         soopy::ContentId::blake3(SRC.as_bytes()),
-        vec![edit_at(&source, 12, b"bar()"), edit_at(&source, 12, b"bar()")],
+        vec![
+            edit_at(&source, 12, b"bar()"),
+            edit_at(&source, 12, b"bar()"),
+        ],
     );
 
     assert_eq!(spans(&action), vec![(12, 17, "bar()".to_string())]);

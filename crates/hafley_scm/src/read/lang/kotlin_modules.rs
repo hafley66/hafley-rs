@@ -18,7 +18,9 @@ use crate::read::family::SpecifierKind;
 use crate::read::lang::ts_resolve::{ImportRow, ResolvedImportKind};
 use crate::read::shape::Strings;
 
-use super::kotlin::{kt_first_child, kt_header_facts, kt_header_facts_from_arena, kt_parse, kt_text};
+use super::kotlin::{
+    kt_first_child, kt_header_facts, kt_header_facts_from_arena, kt_parse, kt_text,
+};
 
 // ── phase-2 facts ────────────────────────────────────────────────────────────
 
@@ -53,7 +55,9 @@ pub fn kt_module_facts(path: &str, content: &[u8]) -> Option<KtModuleFacts> {
     let mut strings = Strings::new();
     let mut raw = Vec::new();
     let package = kt_header_facts(&tree, src, &mut strings, &mut raw).map(|(_, name)| name);
-    Some(kt_module_facts_from_parts(root, src, &strings, raw, package))
+    Some(kt_module_facts_from_parts(
+        root, src, &strings, raw, package,
+    ))
 }
 
 pub fn kt_module_facts_from_arena(
@@ -64,8 +68,8 @@ pub fn kt_module_facts_from_arena(
 ) -> KtModuleFacts {
     let mut strings = Strings::new();
     let mut raw = Vec::new();
-    let package = kt_header_facts_from_arena(src, query, arena, &mut strings, &mut raw)
-        .map(|(_, name)| name);
+    let package =
+        kt_header_facts_from_arena(src, query, arena, &mut strings, &mut raw).map(|(_, name)| name);
     kt_module_facts_from_parts(root, src, &strings, raw, package)
 }
 

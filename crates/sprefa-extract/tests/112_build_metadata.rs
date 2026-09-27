@@ -73,7 +73,10 @@ fn build_metadata_tracks_source_and_checked_out_branch() {
     .expect("manifest");
     std::fs::write(
         root.join("build.rs"),
-        format!("{}\nfn main() {{ run(); }}\n", include_str!("../build/0_metadata.rs")),
+        format!(
+            "{}\nfn main() {{ run(); }}\n",
+            include_str!("../build/0_metadata.rs")
+        ),
     )
     .expect("build script");
     std::fs::write(
@@ -155,9 +158,17 @@ fn excluded_crates_resolve_from_a_nested_worktree() {
     for excluded in &excludes {
         let crate_dir = worktree.join(excluded);
         std::fs::create_dir_all(crate_dir.join("src/bin")).expect("crate dir");
-        std::fs::copy(repo.join(excluded).join("Cargo.toml"), crate_dir.join("Cargo.toml"))
-            .expect("crate manifest");
-        for stub in ["src/lib.rs", "src/main.rs", "src/bin/extract.rs", "build.rs"] {
+        std::fs::copy(
+            repo.join(excluded).join("Cargo.toml"),
+            crate_dir.join("Cargo.toml"),
+        )
+        .expect("crate manifest");
+        for stub in [
+            "src/lib.rs",
+            "src/main.rs",
+            "src/bin/extract.rs",
+            "build.rs",
+        ] {
             std::fs::write(crate_dir.join(stub), "fn main() {}\n").expect("target stub");
         }
         for sibling in path_dependencies(&crate_dir) {
@@ -175,7 +186,13 @@ fn excluded_crates_resolve_from_a_nested_worktree() {
             std::fs::write(dep_dir.join("src/lib.rs"), "").expect("sibling lib");
         }
         let output = Command::new("cargo")
-            .args(["metadata", "--no-deps", "--offline", "--format-version", "1"])
+            .args([
+                "metadata",
+                "--no-deps",
+                "--offline",
+                "--format-version",
+                "1",
+            ])
             .current_dir(&crate_dir)
             .output()
             .expect("run cargo metadata");
@@ -187,7 +204,10 @@ fn excluded_crates_resolve_from_a_nested_worktree() {
         let stdout = String::from_utf8_lossy(&output.stdout);
         let expected_root = crate_dir.canonicalize().expect("crate dir exists");
         assert!(
-            stdout.contains(&format!("\"workspace_root\":\"{}\"", expected_root.display())),
+            stdout.contains(&format!(
+                "\"workspace_root\":\"{}\"",
+                expected_root.display()
+            )),
             "{excluded}: workspace_root is not the crate itself"
         );
     }

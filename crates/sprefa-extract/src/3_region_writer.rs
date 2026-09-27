@@ -92,10 +92,15 @@ fn read_generated(path: &Path) -> Result<String, RegionError> {
             Some(input) => std::fs::read_to_string(input.path()),
             None => {
                 let mut generated = String::new();
-                std::io::stdin().read_to_string(&mut generated).map(|_| generated)
+                std::io::stdin()
+                    .read_to_string(&mut generated)
+                    .map(|_| generated)
             }
         };
-        read.map_err(|error| RegionError { message: format!("read generated stdin: {error}"), exit: 2 })
+        read.map_err(|error| RegionError {
+            message: format!("read generated stdin: {error}"),
+            exit: 2,
+        })
     } else {
         std::fs::read_to_string(path).map_err(|error| RegionError {
             message: format!("read generated {}: {error}", path.display()),

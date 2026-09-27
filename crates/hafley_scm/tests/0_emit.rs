@@ -19,17 +19,31 @@ fn emits_capture_and_literal_fields_into_one_arena() {
     let group = query.field_id("group").unwrap();
     let span = query.field_id("span").unwrap();
     let callee = query.field_id("callee").unwrap();
-    let rows = arena.emitted.iter().map(|row| {
-        let value = |key| row.get(&arena, key).unwrap().text(src, &query).unwrap();
-        let source = matches!(row.get(&arena, callee), Some(EmittedValue::Bytes(_)));
-        (row.file, query.relations[row.relation as usize].as_ref(), value(group), value(span), value(callee), source)
-    }).collect::<Vec<_>>();
-    assert_eq!(rows, [
-        (0, "call.site", "foo()", "foo", "foo", true),
-        (0, "call.site", "a + b", "+", "plus", false),
-        (1, "call.site", "foo()", "foo", "foo", true),
-        (1, "call.site", "a + b", "+", "plus", false),
-    ]);
+    let rows = arena
+        .emitted
+        .iter()
+        .map(|row| {
+            let value = |key| row.get(&arena, key).unwrap().text(src, &query).unwrap();
+            let source = matches!(row.get(&arena, callee), Some(EmittedValue::Bytes(_)));
+            (
+                row.file,
+                query.relations[row.relation as usize].as_ref(),
+                value(group),
+                value(span),
+                value(callee),
+                source,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        rows,
+        [
+            (0, "call.site", "foo()", "foo", "foo", true),
+            (0, "call.site", "a + b", "+", "plus", false),
+            (1, "call.site", "foo()", "foo", "foo", true),
+            (1, "call.site", "a + b", "+", "plus", false),
+        ]
+    );
 }
 
 #[test]
@@ -41,5 +55,8 @@ fn emit_rejects_incomplete_and_duplicate_fields() {
         Err(QueryExtError::Arity { operator, got: 2 }) if operator == "emit!"
     ));
     let duplicate = "((identifier) @name (#emit! \"call.site\" \"name\" @name \"name\" @name))";
-    assert!(matches!(hafley_scm::build(&language, duplicate), Err(QueryExtError::DuplicateField(_))));
+    assert!(matches!(
+        hafley_scm::build(&language, duplicate),
+        Err(QueryExtError::DuplicateField(_))
+    ));
 }

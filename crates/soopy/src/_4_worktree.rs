@@ -134,7 +134,8 @@ fn walk_bases(root: &std::path::Path, patterns: &[Pattern]) -> Vec<std::path::Pa
             } else {
                 &literal[..]
             };
-            dirs.iter().fold(root.to_path_buf(), |path, part| path.join(part))
+            dirs.iter()
+                .fold(root.to_path_buf(), |path, part| path.join(part))
         })
         .collect();
     if bases.is_empty() {

@@ -17,7 +17,12 @@ pub struct ExpandedCallDefRow {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ExpandedCallKind { Free, Method, Lambda, ConstInit }
+pub enum ExpandedCallKind {
+    Free,
+    Method,
+    Lambda,
+    ConstInit,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ExpandedCallSiteRow {
@@ -33,7 +38,11 @@ pub struct ExpandedCallRows {
     pub macros: Vec<(Range<u32>, String)>,
 }
 
-pub fn expanded_call_rows(src: &str, query: &QueryExt, language: &tree_sitter::Language) -> ExpandedCallRows {
+pub fn expanded_call_rows(
+    src: &str,
+    query: &QueryExt,
+    language: &tree_sitter::Language,
+) -> ExpandedCallRows {
     let Some(expanded) = expand_file(src) else {
         return ExpandedCallRows::default();
     };
@@ -68,7 +77,11 @@ pub fn expanded_call_rows(src: &str, query: &QueryExt, language: &tree_sitter::L
     for row in sites.const_inits {
         if expanded.is_macro_span(row.range.clone()) {
             if let Some(range) = expanded.map_span(row.range) {
-                rows.defs.push(ExpandedCallDefRow { range, kind: ExpandedCallKind::ConstInit, name: Some(row.name) });
+                rows.defs.push(ExpandedCallDefRow {
+                    range,
+                    kind: ExpandedCallKind::ConstInit,
+                    name: Some(row.name),
+                });
             }
         }
     }
@@ -83,6 +96,10 @@ pub fn expanded_call_rows(src: &str, query: &QueryExt, language: &tree_sitter::L
             }
         }
     }
-    rows.macros = expanded.macro_sites().into_iter().map(|(range, name)| (range, name.to_owned())).collect();
+    rows.macros = expanded
+        .macro_sites()
+        .into_iter()
+        .map(|(range, name)| (range, name.to_owned()))
+        .collect();
     rows
 }

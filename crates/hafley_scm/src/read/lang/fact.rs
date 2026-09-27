@@ -197,7 +197,6 @@ impl FactSet {
     pub fn values(&self) -> impl Iterator<Item = &str> {
         self.values.iter().map(String::as_str)
     }
-
 }
 
 /// dl6 rel and column names are `[A-Za-z0-9_]`; anything else is rejected

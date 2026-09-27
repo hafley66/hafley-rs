@@ -27,7 +27,8 @@ fn scip_facts_takes_a_root_directory() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args([
-            "scip", "--raw",
+            "scip",
+            "--raw",
             "--root",
             root.to_str().unwrap(),
             "--scip-index",
@@ -180,7 +181,8 @@ fn scip_timeout_caps_the_scip_build_flag() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .env("PATH", fake_path(&bin))
         .args([
-            "scip", "--raw",
+            "scip",
+            "--raw",
             "--scip-build",
             "--root",
             root.to_str().unwrap(),

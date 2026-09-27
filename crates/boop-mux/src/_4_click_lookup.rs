@@ -59,15 +59,23 @@ pub struct FsLookup {
 pub fn cmd_click_lookup(hit: &PaneHit, token: &str, doc: Option<&Path>, home: &str) -> FsLookup {
     let roots = click_roots(&hit.pane_current_path, &[], &[]);
     match doc {
-        Some(doc) => FsLookup { result: resolve_fs_in_doc(token, doc, &roots, home), roots: doc_roots(doc, &roots) },
-        None => FsLookup { result: resolve_fs(token, &roots, home), roots },
+        Some(doc) => FsLookup {
+            result: resolve_fs_in_doc(token, doc, &roots, home),
+            roots: doc_roots(doc, &roots),
+        },
+        None => FsLookup {
+            result: resolve_fs(token, &roots, home),
+            roots,
+        },
     }
 }
 
 /// A clicked token with its quotes stripped and its line reference split off.
 /// `None` for a token that is empty either way.
 pub fn clean_token(token: &str) -> Option<(String, Option<u32>)> {
-    let clean = token.trim().trim_matches(|c| c == '\'' || c == '"' || c == '`');
+    let clean = token
+        .trim()
+        .trim_matches(|c| c == '\'' || c == '"' || c == '`');
     if clean.is_empty() {
         return None;
     }
@@ -96,11 +104,22 @@ fn source_of(via: &RootVia) -> &'static str {
 
 /// Joins in order: the pane's own roots (cwd, session cwds, checkouts), then
 /// ancestors up to `home`. The first path on disk wins.
-fn local_join(rel: &str, roots: &[Root], cwd: &str, repo_root: Option<&str>, home: &str) -> Option<(String, &'static str)> {
+fn local_join(
+    rel: &str,
+    roots: &[Root],
+    cwd: &str,
+    repo_root: Option<&str>,
+    home: &str,
+) -> Option<(String, &'static str)> {
     let tail = rel.strip_prefix("./").unwrap_or(rel);
     let mut tried: Vec<(String, &'static str)> = roots
         .iter()
-        .filter(|root| matches!(root.via, RootVia::Document | RootVia::PaneCwd | RootVia::SessionCwd | RootVia::GitToplevel))
+        .filter(|root| {
+            matches!(
+                root.via,
+                RootVia::Document | RootVia::PaneCwd | RootVia::SessionCwd | RootVia::GitToplevel
+            )
+        })
         .map(|root| (join(&root.dir, tail), source_of(&root.via)))
         .collect();
     for candidate in crawl_candidates(rel, cwd, repo_root, home, MAX_RUNGS) {
@@ -108,7 +127,9 @@ fn local_join(rel: &str, roots: &[Root], cwd: &str, repo_root: Option<&str>, hom
             tried.push(candidate);
         }
     }
-    tried.into_iter().find(|(path, _)| std::fs::symlink_metadata(path).is_ok())
+    tried
+        .into_iter()
+        .find(|(path, _)| std::fs::symlink_metadata(path).is_ok())
 }
 
 /// The token under every other worktree of the pane's repositories. One hit
@@ -118,7 +139,9 @@ fn worktree_join(rel: &str, roots: &[Root], line: Option<u32>) -> Option<Resolve
     let mut paths = Vec::new();
     let mut worktrees = Vec::new();
     for root in roots {
-        let RootVia::Worktree(name) = &root.via else { continue };
+        let RootVia::Worktree(name) = &root.via else {
+            continue;
+        };
         let candidate = join(&root.dir, tail);
         if std::fs::symlink_metadata(&candidate).is_ok() {
             paths.push(candidate);
@@ -128,12 +151,21 @@ fn worktree_join(rel: &str, roots: &[Root], line: Option<u32>) -> Option<Resolve
     match paths.len() {
         0 => None,
         1 => Some(ResolveResult::Hit {
-            reference: ResolvedRef { path: paths.remove(0), line, source: "worktree" },
+            reference: ResolvedRef {
+                path: paths.remove(0),
+                line,
+                source: "worktree",
+            },
         }),
         _ => {
             paths.truncate(MAX_CHOICES);
             worktrees.truncate(MAX_CHOICES);
-            Some(ResolveResult::Choices { paths, line, via: "worktree", worktrees })
+            Some(ResolveResult::Choices {
+                paths,
+                line,
+                via: "worktree",
+                worktrees,
+            })
         }
     }
 }
@@ -149,18 +181,31 @@ fn sibling_join(rel: &str, toplevel: Option<&str>, line: Option<u32>) -> Option<
         let candidate = join(&repo, tail);
         if std::fs::symlink_metadata(&candidate).is_ok() {
             paths.push(candidate);
-            repos.push(repo.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default());
+            repos.push(
+                repo.file_name()
+                    .map(|name| name.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            );
         }
     }
     match paths.len() {
         0 => None,
         1 => Some(ResolveResult::Hit {
-            reference: ResolvedRef { path: paths.remove(0), line, source: "sibling" },
+            reference: ResolvedRef {
+                path: paths.remove(0),
+                line,
+                source: "sibling",
+            },
         }),
         _ => {
             paths.truncate(MAX_CHOICES);
             repos.truncate(MAX_CHOICES);
-            Some(ResolveResult::Choices { paths, line, via: "sibling", worktrees: repos })
+            Some(ResolveResult::Choices {
+                paths,
+                line,
+                via: "sibling",
+                worktrees: repos,
+            })
         }
     }
 }
@@ -191,16 +236,26 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
             None => fallback.to_owned(),
         }
     };
-    let mut groups = vec![ExactGroup { label: label(&own, "cwd"), dir: own.clone(), source: "search" }];
+    let mut groups = vec![ExactGroup {
+        label: label(&own, "cwd"),
+        dir: own.clone(),
+        source: "search",
+    }];
     let own_checkouts: Vec<PathBuf> = worktrees.iter().map(|(dir, _)| canonical(dir)).collect();
     for root in roots {
-        let RootVia::Worktree(name) = &root.via else { continue };
+        let RootVia::Worktree(name) = &root.via else {
+            continue;
+        };
         // Only the pane repository's own checkouts: a pane outside any repo
         // otherwise walks every worktree of every repo its sessions touched.
         if !own_checkouts.contains(&canonical(&root.dir)) {
             continue;
         }
-        groups.push(ExactGroup { label: label(&root.dir, &format!("worktree {name}")), dir: root.dir.clone(), source: "worktree" });
+        groups.push(ExactGroup {
+            label: label(&root.dir, &format!("worktree {name}")),
+            dir: root.dir.clone(),
+            source: "worktree",
+        });
     }
     let mut seen: Vec<PathBuf> = groups.iter().map(|group| canonical(&group.dir)).collect();
     seen.extend(worktrees.iter().map(|(dir, _)| canonical(dir)));
@@ -209,8 +264,15 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
         if seen.contains(&canonical(&repo)) {
             continue;
         }
-        let name = repo.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default();
-        groups.push(ExactGroup { label: format!("sibling {name}"), dir: repo, source: "sibling" });
+        let name = repo
+            .file_name()
+            .map(|name| name.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        groups.push(ExactGroup {
+            label: format!("sibling {name}"),
+            dir: repo,
+            source: "sibling",
+        });
     }
     groups
 }
@@ -226,11 +288,20 @@ struct ExactMatch {
 /// belongs to the deepest group containing it. A worktree row at the same
 /// checkout-relative path as a group-0 row is that file on another branch and
 /// drops out.
-fn exact_matches(rel: &str, groups: &[ExactGroup], ranked: std::ops::Range<usize>) -> Vec<ExactMatch> {
-    let under = |path: &str, dir: &Path| path.strip_prefix(&format!("{}/", trim_slash(&dir.to_string_lossy()))).map(str::to_owned);
+fn exact_matches(
+    rel: &str,
+    groups: &[ExactGroup],
+    ranked: std::ops::Range<usize>,
+) -> Vec<ExactMatch> {
+    let under = |path: &str, dir: &Path| {
+        path.strip_prefix(&format!("{}/", trim_slash(&dir.to_string_lossy())))
+            .map(str::to_owned)
+    };
     // One walker thread per core across all checkouts, never a pool per checkout.
     let next = std::sync::atomic::AtomicUsize::new(ranked.start);
-    let workers = std::thread::available_parallelism().map_or(4, |n| n.get()).min(ranked.len().max(1));
+    let workers = std::thread::available_parallelism()
+        .map_or(4, |n| n.get())
+        .min(ranked.len().max(1));
     let mut indexes: Vec<(usize, Arc<Vec<IndexEntry>>)> = std::thread::scope(|scope| {
         let pool: Vec<_> = (0..workers)
             .map(|_| {
@@ -246,7 +317,9 @@ fn exact_matches(rel: &str, groups: &[ExactGroup], ranked: std::ops::Range<usize
                 })
             })
             .collect();
-        pool.into_iter().flat_map(|worker| worker.join().unwrap_or_default()).collect()
+        pool.into_iter()
+            .flat_map(|worker| worker.join().unwrap_or_default())
+            .collect()
     });
     indexes.sort_by_key(|(index, _)| *index);
     let mut found: Vec<ExactMatch> = Vec::new();
@@ -261,7 +334,11 @@ fn exact_matches(rel: &str, groups: &[ExactGroup], ranked: std::ops::Range<usize
                 .filter(|(_, group)| under(&path, &group.dir).is_some())
                 .max_by_key(|(_, group)| group.dir.as_os_str().len())
                 .map_or(index, |(owner, _)| owner);
-            found.push(ExactMatch { path, tail, group: owner });
+            found.push(ExactMatch {
+                path,
+                tail,
+                group: owner,
+            });
         }
     }
     let first: Vec<String> = found
@@ -280,23 +357,39 @@ fn exact_matches(rel: &str, groups: &[ExactGroup], ranked: std::ops::Range<usize
 
 /// One match, or one whole-tail match among several, opens; several are a
 /// choice, tagged by checkout when they span more than one.
-fn answer_exact(found: Vec<ExactMatch>, groups: &[ExactGroup], line: Option<u32>) -> Option<ResolveResult> {
+fn answer_exact(
+    found: Vec<ExactMatch>,
+    groups: &[ExactGroup],
+    line: Option<u32>,
+) -> Option<ResolveResult> {
     let tails: Vec<&ExactMatch> = found.iter().filter(|found| found.tail).collect();
     if found.len() == 1 || tails.len() == 1 {
         let only = tails.first().copied().unwrap_or(&found[0]);
         return Some(ResolveResult::Hit {
-            reference: ResolvedRef { path: only.path.clone(), line, source: groups[only.group].source },
+            reference: ResolvedRef {
+                path: only.path.clone(),
+                line,
+                source: groups[only.group].source,
+            },
         });
     }
     if found.is_empty() {
         return None;
     }
-    let mut labels: Vec<String> = found.iter().map(|found| groups[found.group].label.clone()).collect();
+    let mut labels: Vec<String> = found
+        .iter()
+        .map(|found| groups[found.group].label.clone())
+        .collect();
     let spans = labels.iter().any(|label| label != &labels[0]);
     let mut paths: Vec<String> = found.into_iter().map(|found| found.path).collect();
     paths.truncate(MAX_CHOICES);
     labels.truncate(MAX_CHOICES);
-    Some(ResolveResult::Choices { paths, line, via: "exact", worktrees: if spans { labels } else { Vec::new() } })
+    Some(ResolveResult::Choices {
+        paths,
+        line,
+        via: "exact",
+        worktrees: if spans { labels } else { Vec::new() },
+    })
 }
 
 /// A token resolved against the click's roots. `roots[0]` is the pane cwd.
@@ -315,11 +408,18 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
             return ResolveResult::Miss;
         }
         return ResolveResult::Hit {
-            reference: ResolvedRef { path: rel, line, source: "absolute" },
+            reference: ResolvedRef {
+                path: rel,
+                line,
+                source: "absolute",
+            },
         };
     }
 
-    let cwd = roots.first().map(|root| root.dir.to_string_lossy().into_owned()).unwrap_or_default();
+    let cwd = roots
+        .first()
+        .map(|root| root.dir.to_string_lossy().into_owned())
+        .unwrap_or_default();
     let repo_root = repo_root_for(&cwd);
     let search_root = repo_root.clone().unwrap_or_else(|| cwd.clone());
 
@@ -330,14 +430,20 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
         let entries = index_for(Path::new(&search_root));
         return match unique_dir_named(&rel, &entries) {
             Some(path) => ResolveResult::Hit {
-                reference: ResolvedRef { path, line: None, source: "fuzzy" },
+                reference: ResolvedRef {
+                    path,
+                    line: None,
+                    source: "fuzzy",
+                },
             },
             None => ResolveResult::Miss,
         };
     }
 
     if let Some((path, source)) = local_join(&rel, roots, &cwd, repo_root.as_deref(), home) {
-        return ResolveResult::Hit { reference: ResolvedRef { path, line, source } };
+        return ResolveResult::Hit {
+            reference: ResolvedRef { path, line, source },
+        };
     }
     if let Some(found) = worktree_join(&rel, roots, line) {
         return found;
@@ -346,7 +452,13 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
     for root in roots.iter().filter(|root| root.via == RootVia::Touched) {
         let candidate = join(&root.dir, tail);
         if std::fs::symlink_metadata(&candidate).is_ok() {
-            return ResolveResult::Hit { reference: ResolvedRef { path: candidate, line, source: "touched" } };
+            return ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: candidate,
+                    line,
+                    source: "touched",
+                },
+            };
         }
     }
     if let Some(found) = sibling_join(&rel, repo_root.as_deref(), line) {
@@ -363,7 +475,10 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
     // directory in it stays with the pane's checkout while any rung there
     // answers. Sibling repositories rank only a token with a directory in it.
     let groups = exact_groups(&search_root, roots);
-    let checkouts = groups.iter().filter(|group| group.source != "sibling").count();
+    let checkouts = groups
+        .iter()
+        .filter(|group| group.source != "sibling")
+        .count();
     let bare = !tail.trim_end_matches('/').contains('/');
     let ranked = if bare { 0..checkouts } else { 0..1 };
     if let Some(found) = answer_exact(exact_matches(&rel, &groups, ranked), &groups, line) {
@@ -376,19 +491,32 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
     let ignored = under_indexed_dirs(&rel, &entries);
     if ignored.len() == 1 {
         return ResolveResult::Hit {
-            reference: ResolvedRef { path: ignored[0].clone(), line, source: "ignored" },
+            reference: ResolvedRef {
+                path: ignored[0].clone(),
+                line,
+                source: "ignored",
+            },
         };
     }
     if ignored.len() > 1 {
         let mut paths = ignored;
         paths.truncate(MAX_CHOICES);
-        return ResolveResult::Choices { paths, line, via: "exact", worktrees: Vec::new() };
+        return ResolveResult::Choices {
+            paths,
+            line,
+            via: "exact",
+            worktrees: Vec::new(),
+        };
     }
 
     for candidate in sibling_candidates(&rel, &cwd, repo_root.as_deref(), home, MAX_RUNGS) {
         if std::fs::symlink_metadata(&candidate).is_ok() {
             return ResolveResult::Hit {
-                reference: ResolvedRef { path: candidate, line, source: "sibling" },
+                reference: ResolvedRef {
+                    path: candidate,
+                    line,
+                    source: "sibling",
+                },
             };
         }
     }
@@ -396,7 +524,9 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
     // The tail under another worktree or a sibling repository's subdirectory:
     // `plugins/files/1_FileTree.tsx` printed from `<sibling>/src`.
     if !bare {
-        if let Some(found) = answer_exact(exact_matches(&rel, &groups, 1..groups.len()), &groups, line) {
+        if let Some(found) =
+            answer_exact(exact_matches(&rel, &groups, 1..groups.len()), &groups, line)
+        {
             return found;
         }
     }
@@ -408,7 +538,12 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
         if rel.contains('/') {
             let repos = git_probe_repos(&rel, &cwd, repo_root.as_deref(), home);
             if let Some((repo, rev, subject)) = git_absent(&rel, &repos) {
-                return ResolveResult::Absent { repo, rev, path: rel, subject };
+                return ResolveResult::Absent {
+                    repo,
+                    rev,
+                    path: rel,
+                    subject,
+                };
             }
         }
         return ResolveResult::Miss;
@@ -431,10 +566,19 @@ pub fn doc_join(token: &str, doc: &Path) -> Option<ResolveResult> {
     }
     let own = doc_roots(doc, &[]);
     let tail = rel.strip_prefix("./").unwrap_or(&rel);
-    for root in own.iter().filter(|root| matches!(root.via, RootVia::Document | RootVia::GitToplevel)) {
+    for root in own
+        .iter()
+        .filter(|root| matches!(root.via, RootVia::Document | RootVia::GitToplevel))
+    {
         let candidate = join(&root.dir, tail);
         if std::fs::symlink_metadata(&candidate).is_ok() {
-            return Some(ResolveResult::Hit { reference: ResolvedRef { path: candidate, line, source: source_of(&root.via) } });
+            return Some(ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: candidate,
+                    line,
+                    source: source_of(&root.via),
+                },
+            });
         }
     }
     worktree_join(&rel, &own, line)
@@ -452,7 +596,12 @@ mod tests {
     use super::*;
 
     fn pane(cwd: &str) -> PaneHit {
-        PaneHit { pane: String::new(), pane_current_path: PathBuf::from(cwd), pane_col: 0, pane_row: 0 }
+        PaneHit {
+            pane: String::new(),
+            pane_current_path: PathBuf::from(cwd),
+            pane_col: 0,
+            pane_row: 0,
+        }
     }
 
     fn resolve_with(token: &str, cwd: &str, home: &str) -> ResolveResult {
@@ -486,11 +635,19 @@ mod tests {
         );
         let cwd = root.to_string_lossy().into_owned();
         let result = resolve_with("out/timeline.txt", &cwd, &cwd);
-        let expected = lab.join("out").join("timeline.txt").to_string_lossy().into_owned();
+        let expected = lab
+            .join("out")
+            .join("timeline.txt")
+            .to_string_lossy()
+            .into_owned();
         assert_eq!(
             result,
             ResolveResult::Hit {
-                reference: ResolvedRef { path: expected, line: None, source: "ignored" }
+                reference: ResolvedRef {
+                    path: expected,
+                    line: None,
+                    source: "ignored"
+                }
             }
         );
         let _ = std::fs::remove_dir_all(&root);
@@ -584,7 +741,11 @@ mod tests {
         assert_eq!(
             resolve(&tree, "TODO.md", &cwd),
             ResolveResult::Hit {
-                reference: ResolvedRef { path: tree.path("TODO.md"), line: None, source: "ancestor" },
+                reference: ResolvedRef {
+                    path: tree.path("TODO.md"),
+                    line: None,
+                    source: "ancestor"
+                },
             }
         );
     }
@@ -659,9 +820,23 @@ mod tests {
         let cwd = tree.path("projects/instant/src");
 
         // The token is relative to sprefa's root, so no ancestor join reaches it.
-        let joins = crawl_candidates("plans/bench/STUDY.md", &cwd, None, &tree.0.to_string_lossy(), 8);
-        let _ = sibling_candidates("plans/bench/STUDY.md", &cwd, None, &tree.0.to_string_lossy(), 8);
-        assert!(joins.iter().all(|(path, _)| std::fs::symlink_metadata(path).is_err()));
+        let joins = crawl_candidates(
+            "plans/bench/STUDY.md",
+            &cwd,
+            None,
+            &tree.0.to_string_lossy(),
+            8,
+        );
+        let _ = sibling_candidates(
+            "plans/bench/STUDY.md",
+            &cwd,
+            None,
+            &tree.0.to_string_lossy(),
+            8,
+        );
+        assert!(joins
+            .iter()
+            .all(|(path, _)| std::fs::symlink_metadata(path).is_err()));
 
         assert_eq!(
             resolve(&tree, "plans/bench/STUDY.md", &cwd),
@@ -690,7 +865,12 @@ mod tests {
         let cwd = tree.path("projects/instant");
 
         match resolve(&tree, "plans/STUDY.md", &cwd) {
-            ResolveResult::Absent { repo, rev: found, path, subject } => {
+            ResolveResult::Absent {
+                repo,
+                rev: found,
+                path,
+                subject,
+            } => {
                 assert_eq!(repo, tree.path("projects/sprefa"));
                 assert_eq!(found, rev);
                 assert_eq!(path, "plans/STUDY.md");
@@ -718,7 +898,11 @@ mod tests {
         assert_eq!(
             resolve(&tree, &second, &cwd),
             ResolveResult::Hit {
-                reference: ResolvedRef { path: second, line: None, source: "absolute" },
+                reference: ResolvedRef {
+                    path: second,
+                    line: None,
+                    source: "absolute"
+                },
             }
         );
     }
@@ -756,9 +940,29 @@ mod tests {
         git_in(&trunk, &["init", "-q", "-b", "main"]);
         git_in(&trunk, &["add", "-A"]);
         git_in(&trunk, &["commit", "-qm", "site"]);
-        git_in(&trunk, &["worktree", "add", "-q", "-b", "feat", base.join("projects/trunk-feat").to_str().unwrap()]);
+        git_in(
+            &trunk,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "feat",
+                base.join("projects/trunk-feat").to_str().unwrap(),
+            ],
+        );
         put(&base.join("projects/trunk-feat/docs/index.html"));
-        git_in(&trunk, &["worktree", "add", "-q", "-b", "chore/x", trunk.join(".boop-worktrees/chore/x").to_str().unwrap()]);
+        git_in(
+            &trunk,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "chore/x",
+                trunk.join(".boop-worktrees/chore/x").to_str().unwrap(),
+            ],
+        );
         put(&trunk.join(".boop-worktrees/chore/x/plans/p/index.html"));
         let sibling = base.join("projects/instant");
         put(&sibling.join("src/plugins/files/1_FileTree.tsx"));
@@ -807,7 +1011,12 @@ mod tests {
     fn a_tail_under_a_sibling_repository_subdirectory_resolves_there() {
         let (_scratch, base) = lane_tree();
         let hit = pane(&base.join("projects/trunk").to_string_lossy());
-        let lookup = cmd_click_lookup(&hit, "plugins/files/1_FileTree.tsx:12", None, &base.to_string_lossy());
+        let lookup = cmd_click_lookup(
+            &hit,
+            "plugins/files/1_FileTree.tsx:12",
+            None,
+            &base.to_string_lossy(),
+        );
         assert_eq!(
             debug_under(&base, &lookup.result),
             r#"Hit {
@@ -872,19 +1081,30 @@ mod tests {
     #[test]
     fn serializes_the_shape_the_renderer_expects() {
         let hit = ResolveResult::Hit {
-            reference: ResolvedRef { path: "/a/b.ts".into(), line: Some(9), source: "cwd" },
+            reference: ResolvedRef {
+                path: "/a/b.ts".into(),
+                line: Some(9),
+                source: "cwd",
+            },
         };
         assert_eq!(
             serde_json::to_string(&hit).unwrap(),
             r#"{"kind":"hit","ref":{"path":"/a/b.ts","line":9,"source":"cwd"}}"#
         );
-        let choices =
-            ResolveResult::Choices { paths: vec!["/a/b.ts".into()], line: None, via: "fuzzy", worktrees: Vec::new() };
+        let choices = ResolveResult::Choices {
+            paths: vec!["/a/b.ts".into()],
+            line: None,
+            via: "fuzzy",
+            worktrees: Vec::new(),
+        };
         assert_eq!(
             serde_json::to_string(&choices).unwrap(),
             r#"{"kind":"choices","paths":["/a/b.ts"],"via":"fuzzy"}"#
         );
-        assert_eq!(serde_json::to_string(&ResolveResult::Miss).unwrap(), r#"{"kind":"miss"}"#);
+        assert_eq!(
+            serde_json::to_string(&ResolveResult::Miss).unwrap(),
+            r#"{"kind":"miss"}"#
+        );
         let absent = ResolveResult::Absent {
             repo: "/r".into(),
             rev: "abc".into(),

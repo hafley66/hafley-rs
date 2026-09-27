@@ -39,30 +39,53 @@ pub fn project_kotlin_call(
         let span = emitted.span().bytes().expect("call.def span is captured");
         let span = capture_span(span.start, span.end);
         let def = defs.entry(span).or_insert_with(DefCapture::default);
-        def.name = def.name.take().or_else(|| emitted.name()
-            .and_then(|name| name.text(src, query))
-            .map(str::to_string));
-        def.body_end = def.body_end.or_else(|| emitted.body()
-            .and_then(hafley_scm::EmittedValue::bytes)
-            .map(|body| body.end));
-        def.kind = Some(emitted.kind().text(src, query)
-            .expect("call.def kind is utf8").to_string());
+        def.name = def.name.take().or_else(|| {
+            emitted
+                .name()
+                .and_then(|name| name.text(src, query))
+                .map(str::to_string)
+        });
+        def.body_end = def.body_end.or_else(|| {
+            emitted
+                .body()
+                .and_then(hafley_scm::EmittedValue::bytes)
+                .map(|body| body.end)
+        });
+        def.kind = Some(
+            emitted
+                .kind()
+                .text(src, query)
+                .expect("call.def kind is utf8")
+                .to_string(),
+        );
     }
 
     for emitted in generated::CallScope::rows(arena) {
         let span = emitted.span().bytes().expect("call.scope span is captured");
         let span = capture_span(span.start, span.end);
-        let kind = emitted.kind().text(src, query).expect("call.scope kind is utf8");
-        let scope = scopes.entry(span).or_insert_with(|| (kind.to_string(), None));
-        scope.1 = scope.1.take().or_else(|| emitted.name()
-            .and_then(|name| name.text(src, query))
-            .map(str::to_string));
+        let kind = emitted
+            .kind()
+            .text(src, query)
+            .expect("call.scope kind is utf8");
+        let scope = scopes
+            .entry(span)
+            .or_insert_with(|| (kind.to_string(), None));
+        scope.1 = scope.1.take().or_else(|| {
+            emitted
+                .name()
+                .and_then(|name| name.text(src, query))
+                .map(str::to_string)
+        });
     }
 
     for emitted in generated::CallSite::rows(arena) {
-        let group_bytes = emitted.group().bytes()
+        let group_bytes = emitted
+            .group()
+            .bytes()
             .expect("call.site group is a source span");
-        let span_bytes = emitted.span().bytes()
+        let span_bytes = emitted
+            .span()
+            .bytes()
             .expect("call.site span is a source span");
         let group = capture_span(group_bytes.start, group_bytes.end);
         let span = capture_span(span_bytes.start, span_bytes.end);

@@ -2918,12 +2918,7 @@ impl Store {
     /// Persist the tmux session that owns an observed pane. Pane ids alone do
     /// not encode their session, so a liveness writer supplies this fact from
     /// its explicit multiplexer observation.
-    pub fn record_tmux_session(
-        &self,
-        session: &str,
-        ts: u64,
-        tmux_session: &str,
-    ) -> Result<()> {
+    pub fn record_tmux_session(&self, session: &str, ts: u64, tmux_session: &str) -> Result<()> {
         let sid = self.session_id(session)?;
         self.connection.execute(
             "INSERT INTO agent_live(session_id, last_seen_ts, tmux_session)

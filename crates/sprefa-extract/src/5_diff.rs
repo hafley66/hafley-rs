@@ -84,12 +84,13 @@ fn resolve_at(
     options: &Options,
     revision: &str,
 ) -> Result<Side, Box<dyn std::error::Error>> {
-    let (snapshot, (facts, scratch)) = reader.with_revision(
-        revision,
-        &options.patterns,
-        None,
-        |paths, scratch| Ok((resolve_project(&resolve_request(paths, options, scratch))?, scratch.to_path_buf())),
-    )?;
+    let (snapshot, (facts, scratch)) =
+        reader.with_revision(revision, &options.patterns, None, |paths, scratch| {
+            Ok((
+                resolve_project(&resolve_request(paths, options, scratch))?,
+                scratch.to_path_buf(),
+            ))
+        })?;
     Ok(Side {
         sha: snapshot.sha,
         files: snapshot.files,
@@ -105,7 +106,11 @@ fn revision_path(side: &Side, path: &str) -> String {
         .unwrap_or_else(|_| path.to_string())
 }
 
-fn resolve_request<'a>(paths: &'a [PathBuf], options: &Options, scratch: &'a Path) -> ResolveRequest<'a> {
+fn resolve_request<'a>(
+    paths: &'a [PathBuf],
+    options: &Options,
+    scratch: &'a Path,
+) -> ResolveRequest<'a> {
     ResolveRequest {
         paths,
         arms: options.arms,
@@ -125,7 +130,10 @@ impl Options {
         let patterns = if args.patterns.is_empty() {
             crate::watch::default_patterns()
         } else {
-            args.patterns.into_iter().map(|glob| soopy::Pattern(glob.into())).collect()
+            args.patterns
+                .into_iter()
+                .map(|glob| soopy::Pattern(glob.into()))
+                .collect()
         };
         Ok(Options {
             root: args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
@@ -155,11 +163,7 @@ fn parse_arms(families: &[String]) -> Result<ResolveArms, Box<dyn std::error::Er
         match family.as_str() {
             "call" => arms.call = true,
             "type" | "types" => arms.types = true,
-            unknown => {
-                return Err(
-                    format!("--arms {unknown}: use call or type").into(),
-                )
-            }
+            unknown => return Err(format!("--arms {unknown}: use call or type").into()),
         }
     }
     Ok(arms)
@@ -919,7 +923,10 @@ fn unresolved_rows(a: &Side, b: &Side, counts: &mut Counts) -> Vec<DiffRow> {
     rows
 }
 
-fn write_jsonl(rows: &[(u8, String, String, DiffRow)], writer: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
+fn write_jsonl(
+    rows: &[(u8, String, String, DiffRow)],
+    writer: &mut dyn Write,
+) -> Result<(), Box<dyn std::error::Error>> {
     let mut output = std::io::BufWriter::with_capacity(256 * 1024, writer);
     for (_, _, _, row) in rows {
         serde_json::to_writer(&mut output, row)?;

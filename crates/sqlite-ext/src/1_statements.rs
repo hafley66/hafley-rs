@@ -112,7 +112,6 @@ pub fn open(phase: impl AsRef<str>, object: &str, sql: &str, prepared: &'static 
         }
         Statement { span }
     }
-
 }
 
 #[track_caller]
@@ -138,7 +137,8 @@ pub fn exec<P: Params>(
     let statement = open(phase, object, sql, FRESH);
     let _entered = statement.enter();
     let mut prepared = {
-        let _prepare = tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = false).entered();
+        let _prepare =
+            tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = false).entered();
         tracing::debug!("prepare_start");
         let result = db.prepare(sql);
         tracing::debug!(success = result.is_ok(), error = ?result.as_ref().err(), "prepare_end");
@@ -164,7 +164,8 @@ pub fn exec_cached<P: Params>(
     let statement = open(phase, object, sql, CACHED);
     let _entered = statement.enter();
     let mut prepared = {
-        let _prepare = tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = true).entered();
+        let _prepare =
+            tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = true).entered();
         tracing::debug!("prepare_start");
         let result = db.prepare_cached(sql);
         tracing::debug!(success = result.is_ok(), error = ?result.as_ref().err(), "prepare_end");
@@ -191,7 +192,8 @@ pub fn query<T, P: Params, F: FnOnce(&Row<'_>) -> Result<T>>(
     let statement = open(phase, object, sql, FRESH);
     let _entered = statement.enter();
     let mut prepared = {
-        let _prepare = tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = false).entered();
+        let _prepare =
+            tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = false).entered();
         tracing::debug!("prepare_start");
         let result = db.prepare(sql);
         tracing::debug!(success = result.is_ok(), error = ?result.as_ref().err(), "prepare_end");
@@ -218,7 +220,8 @@ pub fn query_cached<T, P: Params, F: FnOnce(&Row<'_>) -> Result<T>>(
     let statement = open(phase, object, sql, CACHED);
     let _entered = statement.enter();
     let mut prepared = {
-        let _prepare = tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = true).entered();
+        let _prepare =
+            tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = true).entered();
         tracing::debug!("prepare_start");
         let result = db.prepare_cached(sql);
         tracing::debug!(success = result.is_ok(), error = ?result.as_ref().err(), "prepare_end");
@@ -245,7 +248,8 @@ pub fn query_map<T, P: Params, F: FnMut(&Row<'_>) -> Result<T>>(
     let statement = open(phase, object, sql, FRESH);
     let _entered = statement.enter();
     let mut prepared = {
-        let _prepare = tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = false).entered();
+        let _prepare =
+            tracing::debug_span!("prepare", sql, sql_bytes = sql.len(), cached = false).entered();
         tracing::debug!("prepare_start");
         let result = db.prepare(sql);
         tracing::debug!(success = result.is_ok(), error = ?result.as_ref().err(), "prepare_end");
@@ -253,7 +257,9 @@ pub fn query_map<T, P: Params, F: FnMut(&Row<'_>) -> Result<T>>(
     };
     let _execute = tracing::debug_span!("execute").entered();
     tracing::debug!("execute_start");
-    let result = prepared.query_map(params, f).and_then(|rows| rows.collect::<Result<Vec<T>>>());
+    let result = prepared
+        .query_map(params, f)
+        .and_then(|rows| rows.collect::<Result<Vec<T>>>());
     tracing::debug!(rows = ?result.as_ref().ok().map(Vec::len), error = ?result.as_ref().err(), "execute_end");
     let rows = result?;
     statement.rows(rows.len());
@@ -305,21 +311,77 @@ mod tests {
         let _guard = tracing_subscriber::registry().with(layer).set_default();
         let db = Connection::open_in_memory()?;
         exec(&db, "declare", "telemetry", "CREATE TABLE t(x UNIQUE)", [])?;
-        exec_cached(&db, "maintain", "telemetry", "INSERT INTO t VALUES(?1)", [7])?;
-        assert!(exec_cached(&db, "maintain", "telemetry", "INSERT INTO t VALUES(?1)", [7]).is_err());
-        assert!(exec(&db, "maintain", "telemetry", "INSERT INTO missing VALUES(1)", []).is_err());
-        assert_eq!(query(&db, "maintain", "telemetry", "SELECT x FROM t", [], |r| r.get::<_, i64>(0))?, 7);
-        assert_eq!(query_cached(&db, "maintain", "telemetry", "SELECT count(*) FROM t", [], |r| r.get::<_, i64>(0))?, 1);
-        assert_eq!(query_map(&db, "maintain", "telemetry", "SELECT x FROM t", [], |r| r.get::<_, i64>(0))?, vec![7]);
-        let events = recorder.event_sums("sqlite_ext::statements", tracing::Level::DEBUG, "stmt", "object", Some("message"));
-        let counts = events.into_iter().map(|((object, message), sums)| {
-            assert_eq!(object, "telemetry");
-            (message, sums.events)
-        }).collect::<std::collections::BTreeMap<_, _>>();
-        assert_eq!(counts, std::collections::BTreeMap::from([
-            ("execute_end".into(), 6), ("execute_start".into(), 6),
-            ("prepare_end".into(), 7), ("prepare_start".into(), 7),
-        ]));
+        exec_cached(
+            &db,
+            "maintain",
+            "telemetry",
+            "INSERT INTO t VALUES(?1)",
+            [7],
+        )?;
+        assert!(exec_cached(
+            &db,
+            "maintain",
+            "telemetry",
+            "INSERT INTO t VALUES(?1)",
+            [7]
+        )
+        .is_err());
+        assert!(exec(
+            &db,
+            "maintain",
+            "telemetry",
+            "INSERT INTO missing VALUES(1)",
+            []
+        )
+        .is_err());
+        assert_eq!(
+            query(&db, "maintain", "telemetry", "SELECT x FROM t", [], |r| r
+                .get::<_, i64>(
+                0
+            ))?,
+            7
+        );
+        assert_eq!(
+            query_cached(
+                &db,
+                "maintain",
+                "telemetry",
+                "SELECT count(*) FROM t",
+                [],
+                |r| r.get::<_, i64>(0)
+            )?,
+            1
+        );
+        assert_eq!(
+            query_map(&db, "maintain", "telemetry", "SELECT x FROM t", [], |r| r
+                .get::<_, i64>(
+                0
+            ))?,
+            vec![7]
+        );
+        let events = recorder.event_sums(
+            "sqlite_ext::statements",
+            tracing::Level::DEBUG,
+            "stmt",
+            "object",
+            Some("message"),
+        );
+        let counts = events
+            .into_iter()
+            .map(|((object, message), sums)| {
+                assert_eq!(object, "telemetry");
+                (message, sums.events)
+            })
+            .collect::<std::collections::BTreeMap<_, _>>();
+        assert_eq!(
+            counts,
+            std::collections::BTreeMap::from([
+                ("execute_end".into(), 6),
+                ("execute_start".into(), 6),
+                ("prepare_end".into(), 7),
+                ("prepare_start".into(), 7),
+            ])
+        );
         let spans = recorder.counts();
         assert_eq!(spans.instances["prepare"], 7);
         assert_eq!(spans.instances["execute"], 6);

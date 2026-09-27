@@ -22,7 +22,9 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
             stdin_read = true;
             let stdin = std::io::stdin();
             let reader: Box<dyn BufRead + '_> = match crate::ops::request_input_file() {
-                Some(input) => Box::new(std::io::BufReader::new(input.reopen().map_err(|error| format!("stdin: {error}"))?)),
+                Some(input) => Box::new(std::io::BufReader::new(
+                    input.reopen().map_err(|error| format!("stdin: {error}"))?,
+                )),
                 None => Box::new(stdin.lock()),
             };
             for line in reader.lines() {
@@ -66,7 +68,10 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
         } else {
             files
         };
-        let root = inputs.root.clone().unwrap_or_else(|| project_dir(&inputs.entry[0]));
+        let root = inputs
+            .root
+            .clone()
+            .unwrap_or_else(|| project_dir(&inputs.entry[0]));
         files = sprefa_extract::reach_files(&root, &universe, &inputs.entry, inputs.depth)
             .map_err(|error| error.to_string())?;
     }
@@ -101,7 +106,8 @@ pub fn git_root_of_cwd() -> Result<PathBuf, Box<dyn std::error::Error>> {
 /// Every roster-claimed file under `dir` that matches `patterns` (relative to
 /// `dir`; empty means all), spelled `dir` joined with its path below `dir`.
 fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
-    let discovered = sprefa_extract::trace::stage_span("discover").in_scope(|| soopy::discover(dir));
+    let discovered =
+        sprefa_extract::trace::stage_span("discover").in_scope(|| soopy::discover(dir));
     let mut found: Vec<PathBuf> = match discovered {
         Ok(repository) => {
             let absolute = std::fs::canonicalize(dir)
@@ -121,7 +127,10 @@ fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
             let globs: Vec<SourcePattern> = if patterns.is_empty() {
                 vec![SourcePattern(prefixed("**"))]
             } else {
-                patterns.iter().map(|glob| SourcePattern(prefixed(glob))).collect()
+                patterns
+                    .iter()
+                    .map(|glob| SourcePattern(prefixed(glob)))
+                    .collect()
             };
             // Expansion keeps paths only; the worktree stamp is never read, so
             // it costs no `git rev-parse` / `git status`.
@@ -140,7 +149,8 @@ fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
                     let rest = if below.is_empty() {
                         path.as_str()
                     } else {
-                        path.strip_prefix(&below).map_or(path.as_str(), |rest| rest.trim_start_matches('/'))
+                        path.strip_prefix(&below)
+                            .map_or(path.as_str(), |rest| rest.trim_start_matches('/'))
                     };
                     joined(dir, rest)
                 })
@@ -150,7 +160,10 @@ fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
             let mut root = soopy::DirectoryRoot::open(dir)
                 .map_err(|error| format!("{}: {error:#}", dir.display()))?;
             let query = soopy::FileQuery {
-                patterns: patterns.iter().map(|glob| SourcePattern(glob.clone())).collect(),
+                patterns: patterns
+                    .iter()
+                    .map(|glob| SourcePattern(glob.clone()))
+                    .collect(),
             };
             root.snapshot(&query)
                 .map_err(|error| format!("{}: {error:#}", dir.display()))?
@@ -193,7 +206,10 @@ fn split_glob(token: &str) -> (PathBuf, String) {
     }
     if rest.is_empty() {
         // Every component was literal; the last one names the glob target.
-        if let Some(last) = base.file_name().map(|name| name.to_string_lossy().to_string()) {
+        if let Some(last) = base
+            .file_name()
+            .map(|name| name.to_string_lossy().to_string())
+        {
             base.pop();
             rest.push(last);
         }
@@ -210,7 +226,11 @@ fn project_dir(entry: &Path) -> PathBuf {
     let start = entry.parent().unwrap_or(Path::new("."));
     let mut dir = Some(start);
     while let Some(at) = dir {
-        let at_or_dot = if at.as_os_str().is_empty() { Path::new(".") } else { at };
+        let at_or_dot = if at.as_os_str().is_empty() {
+            Path::new(".")
+        } else {
+            at
+        };
         if ["Cargo.toml", "package.json", "go.mod"]
             .iter()
             .any(|marker| at_or_dot.join(marker).is_file())

@@ -41,7 +41,9 @@ pub struct KtBindPlan {
 impl KtBindPlan {
     /// The owner type of the member def at `span`, when this file declares it.
     pub fn owner_of(&self, span: Span) -> Option<&str> {
-        self.owners.get(&(span.start, span.end())).map(String::as_str)
+        self.owners
+            .get(&(span.start, span.end()))
+            .map(String::as_str)
     }
 
     /// The written type of member `member` on owner `owner` declared here.
@@ -61,19 +63,22 @@ impl KtBindPlan {
         self.owners.values().any(|owner| owner == ty)
             || self.fields.keys().any(|(owner, _)| owner == ty)
     }
-
 }
 
 static PLAN_CACHE: LazyLock<Mutex<HashMap<ContentId, Arc<KtBindPlan>>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
 pub fn kt_bind_plan_of(blob: &ContentId) -> Option<Arc<KtBindPlan>> {
-    let guard = PLAN_CACHE.lock().unwrap_or_else(|poison| poison.into_inner());
+    let guard = PLAN_CACHE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     guard.get(blob).cloned()
 }
 
 fn kt_bind_plan_store(blob: ContentId, plan: KtBindPlan) {
-    let mut guard = PLAN_CACHE.lock().unwrap_or_else(|poison| poison.into_inner());
+    let mut guard = PLAN_CACHE
+        .lock()
+        .unwrap_or_else(|poison| poison.into_inner());
     guard.insert(blob, Arc::new(plan));
 }
 
@@ -165,8 +170,8 @@ impl<'a> ReceiverWalk<'a> {
     }
 
     fn class_decl(&mut self, node: Node) {
-        let Some(name) = kt_first_child(node, "type_identifier")
-            .map(|n| kt_text(n, self.src).to_string())
+        let Some(name) =
+            kt_first_child(node, "type_identifier").map(|n| kt_text(n, self.src).to_string())
         else {
             self.walk_children(node);
             return;
@@ -640,10 +645,7 @@ fn fn_bounds(node: Node, src: &[u8]) -> HashMap<String, String> {
 /// nothing else trails. Any other shape is not a one-hop field chain.
 fn nav_parts<'a>(nav: Node<'a>, src: &'a [u8]) -> (Option<Node<'a>>, Option<String>, bool) {
     let mut cursor = nav.walk();
-    let kids: Vec<Node> = nav
-        .children(&mut cursor)
-        .filter(|n| n.is_named())
-        .collect();
+    let kids: Vec<Node> = nav.children(&mut cursor).filter(|n| n.is_named()).collect();
     let mut base: Option<Node> = None;
     let mut member: Option<String> = None;
     let mut suffixes = 0usize;
@@ -660,9 +662,8 @@ fn nav_parts<'a>(nav: Node<'a>, src: &'a [u8]) -> (Option<Node<'a>>, Option<Stri
             _ => return (None, None, true),
         }
     }
-    let shaped = suffixes == 1
-        && base.is_some_and(|b| b.kind() == "simple_identifier")
-        && member.is_some();
+    let shaped =
+        suffixes == 1 && base.is_some_and(|b| b.kind() == "simple_identifier") && member.is_some();
     if shaped {
         (base, member, false)
     } else {

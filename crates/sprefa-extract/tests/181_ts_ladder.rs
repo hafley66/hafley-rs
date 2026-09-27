@@ -11,22 +11,26 @@ const TABLE: &str = "
 with f as (
   select distinct replace(owner_path, rtrim(owner_path, replace(owner_path, '/', '')), '') file,
     case when kind = 'impl' then 'heritage' else kind end kind, owner_name owner,
-    replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') || ':' || target_name target
+    case when target_path like '%/duplicates/%' then substr(target_path, instr(target_path, 'duplicates/'))
+      else replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') end || ':' || target_name target
   from resolved_type_edge
   union
   select distinct replace(caller_path, rtrim(caller_path, replace(caller_path, '/', '')), ''),
     'call', caller_name,
-    replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') || ':' || callee_name
+    case when callee_path like '%/duplicates/%' then substr(callee_path, instr(callee_path, 'duplicates/'))
+      else replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') end || ':' || callee_name
   from resolved_edge
 ), s as (
   select distinct replace(owner_path, rtrim(owner_path, replace(owner_path, '/', '')), '') file,
     case when kind = 'implements' then 'heritage' else kind end kind, owner_name owner,
-    replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') || ':' || target_name target
+    case when target_path like '%/duplicates/%' then substr(target_path, instr(target_path, 'duplicates/'))
+      else replace(target_path, rtrim(target_path, replace(target_path, '/', '')), '') end || ':' || target_name target
   from slow.resolved_type_edge
   union
   select distinct replace(caller_path, rtrim(caller_path, replace(caller_path, '/', '')), ''),
     'call', caller_name,
-    replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') || ':' || callee_name
+    case when callee_path like '%/duplicates/%' then substr(callee_path, instr(callee_path, 'duplicates/'))
+      else replace(callee_path, rtrim(callee_path, replace(callee_path, '/', '')), '') end || ':' || callee_name
   from slow.resolved_edge
 ), u as (select * from f union select * from s)
 select group_concat(line, char(10)) from (
@@ -52,14 +56,29 @@ fn ryi(args: &[&str]) {
 #[test]
 fn ts_ladder_fast_and_slow() {
     let scratch = tempfile::tempdir().unwrap();
-    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
-    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let fast = scratch
+        .path()
+        .join("fast.db")
+        .to_string_lossy()
+        .into_owned();
+    let slow = scratch
+        .path()
+        .join("slow.db")
+        .to_string_lossy()
+        .into_owned();
     let src = format!("{LADDER}/src");
     let index = format!("{LADDER}/index.scip");
     ryi(&["fast", &src, "--sqlite", &fast]);
     ryi(&[
-        "slow", &src, "--root", LADDER, "--scip-index", &index,
-        "--no-checker", "--sqlite", &slow,
+        "slow",
+        &src,
+        "--root",
+        LADDER,
+        "--scip-index",
+        &index,
+        "--no-checker",
+        "--sqlite",
+        &slow,
     ]);
 
     let conn = rusqlite::Connection::open(&fast).unwrap();
@@ -68,13 +87,37 @@ fn ts_ladder_fast_and_slow() {
     assert_eq!(
         table,
         "\
+0_types.ts   param     execute      -> 0_types.ts:Result      f-
+0_types.ts   returns   execute      -> 0_types.ts:Result      f-
+0_use.ts     call      invoke       -> 0_types.ts:execute     f-
+0_use.ts     call      invokeHolder -> 0_types.ts:execute     f-
+0_use.ts     field     Holder       -> 0_types.ts:EnginePort  f-
+0_use.ts     field     Runner       -> 0_types.ts:EnginePort  f-
+0_use.ts     param     constructor  -> 0_types.ts:EnginePort  f-
+0_use.ts     param     forward      -> 0_types.ts:EnginePort  f-
+0_use.ts     param     invoke       -> 0_types.ts:EnginePort  f-
+0_use.ts     param     invokeHolder -> 0_use.ts:Holder        f-
+0_use.ts     param     use          -> 0_types.ts:EnginePort  f-
+0_use.ts     returns   forward      -> 0_types.ts:EnginePort  f-
+0_use.ts     returns   use          -> 0_types.ts:EnginePort  f-
+1_main.ts    call      useShared    -> duplicates/b/0_shared.ts:shared f-
+_0_types.ts  generic   Box          -> _0_types.ts:T          f-
+_0_types.ts  param     ping         -> _0_types.ts:Base       f-
 _0_types.ts  returns   makeService  -> _0_types.ts:Service    fs
+_0_types.ts  returns   ping         -> _0_types.ts:Base       f-
 _11_duplicate.ts param     duplicate    -> _5_peer_a.ts:Peer      fs
 _11_duplicate.ts returns   duplicate    -> _5_peer_a.ts:Peer      fs
 _14_static_use.ts call      runStatic    -> _13_static.ts:load     fs
-_15_private.ts call      usePrivate   -> _15_private.ts:clashPriv -s
-_17_export.ts call      useExported  -> _17_export.ts:clashPub -s
+_15_private.ts call      usePrivate   -> _15_private.ts:clashPriv fs
+_17_export.ts call      useExported  -> _17_export.ts:clashPub fs
 _19_local_a.ts call      useLocalTwin -> _19_local_a.ts:localTwin fs
+_21_local_peer.ts call      useLocalHelper -> _21_local_peer.ts:helper f-
+_23_type_params.ts generic   Boxed        -> _23_type_params.ts:T   f-
+_23_type_params.ts generic   echo         -> _23_type_params.ts:T   f-
+_23_type_params.ts generic   identity     -> _23_type_params.ts:T   f-
+_23_type_params.ts generic   makeHolder   -> _23_type_params.ts:T   f-
+_23_type_params.ts generic   makeHolder   -> _23_type_params.ts:U   f-
+_24_bind_args.ts call      arrival_statement -> _24_bind_args.ts:bind_args f-
 _2_one.ts    call      one          -> _0_types.ts:Service    f-
 _2_one.ts    call      one          -> _0_types.ts:ping       fs
 _2_one.ts    param     one          -> _0_types.ts:Base       fs
@@ -82,6 +125,7 @@ _2_one.ts    returns   one          -> _0_types.ts:Base       fs
 _3_many.ts   call      many         -> _0_types.ts:makeService fs
 _3_many.ts   call      many         -> _0_types.ts:ping       fs
 _3_many.ts   generic   many         -> _0_types.ts:Base       fs
+_3_many.ts   generic   many         -> _3_many.ts:T           f-
 _3_many.ts   heritage  Child        -> _0_types.ts:Service    fs
 _3_many.ts   param     many         -> _0_types.ts:Box        fs
 _3_many.ts   returns   many         -> _0_types.ts:Base       fs
@@ -89,9 +133,13 @@ _4_nested.ts call      reexported   -> _2_one.ts:one          fs
 _4_nested.ts call      run          -> _0_types.ts:ping       fs
 _4_nested.ts call      run          -> _3_many.ts:Child       f-
 _4_nested.ts call      run          -> _3_many.ts:many        fs
+_4_nested.ts generic   run          -> _0_types.ts:Base       f-
+_4_nested.ts generic   run          -> _4_nested.ts:T         f-
 _4_nested.ts heritage  Nested       -> _0_types.ts:Service    fs
 _4_nested.ts param     reexported   -> _0_types.ts:Base       fs
+_4_nested.ts param     run          -> _0_types.ts:Box        f-
 _4_nested.ts returns   reexported   -> _0_types.ts:Base       fs
+_4_nested.ts returns   run          -> _0_types.ts:Base       f-
 _5_peer_a.ts call      useA         -> _5_peer_a.ts:same      fs
 _5_peer_a.ts param     same         -> _5_peer_a.ts:Peer      fs
 _5_peer_a.ts param     useA         -> _5_peer_a.ts:Peer      fs

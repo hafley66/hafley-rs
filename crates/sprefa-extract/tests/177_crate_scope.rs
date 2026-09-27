@@ -19,13 +19,28 @@ select group_concat(line, char(10)) from (
 #[test]
 fn a_bare_name_binds_only_inside_the_crate_and_its_dependencies() {
     let scratch = tempfile::tempdir().unwrap();
-    let db = scratch.path().join("scope.db").to_string_lossy().into_owned();
+    let db = scratch
+        .path()
+        .join("scope.db")
+        .to_string_lossy()
+        .into_owned();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args(["fast", "tests/fixtures/crate_scope", "--pattern", "*.rs", "--sqlite", &db])
+        .args([
+            "fast",
+            "tests/fixtures/crate_scope",
+            "--pattern",
+            "*.rs",
+            "--sqlite",
+            &db,
+        ])
         .env("RUST_LOG", "off")
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let conn = rusqlite::Connection::open(&db).unwrap();
     let table: String = conn.query_row(TABLE, [], |row| row.get(0)).unwrap();
     assert_eq!(

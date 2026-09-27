@@ -50,9 +50,18 @@ fn load_store(
             project_root: revision_root.or(cli.inputs.root.as_deref()),
             scip_records: ScipRecords::default(),
             occurrence_text: false,
-            rust_checker: cli.rust_checker.then_some(cli.inputs.root.as_deref()).flatten(),
-            ts_checker: cli.ts_checker.then_some(cli.inputs.root.as_deref()).flatten(),
-            go_checker: cli.go_checker.then_some(cli.inputs.root.as_deref()).flatten(),
+            rust_checker: cli
+                .rust_checker
+                .then_some(cli.inputs.root.as_deref())
+                .flatten(),
+            ts_checker: cli
+                .ts_checker
+                .then_some(cli.inputs.root.as_deref())
+                .flatten(),
+            go_checker: cli
+                .go_checker
+                .then_some(cli.inputs.root.as_deref())
+                .flatten(),
             witness: true,
         };
         resolve_project_with_tsi_tiers(&request)?
@@ -115,8 +124,10 @@ impl Lines {
                     .as_ref()
                     .and_then(|root| fs::read(root.join(path)).ok())
             });
-            self.tables
-                .insert(path.to_string(), content.map(|bytes| newline_offsets(&bytes)));
+            self.tables.insert(
+                path.to_string(),
+                content.map(|bytes| newline_offsets(&bytes)),
+            );
         }
         self.tables[path]
             .as_ref()
@@ -209,10 +220,12 @@ fn plane_edges(
              \"target_name\", {}, NULL FROM \"resolved_type_edge\"",
             grade_sql("\"resolution_origin\"")
         ),
-        "flow" => "SELECT \"_row\", \"from_blob\", printf('%d:%d', \"from__start\", \"from__end\"), \
+        "flow" => {
+            "SELECT \"_row\", \"from_blob\", printf('%d:%d', \"from__start\", \"from__end\"), \
                    \"to_blob\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
                    FROM \"flow_edge\""
-            .to_string(),
+                .to_string()
+        }
         _ => unreachable!("only fixed graph planes reach this query"),
     };
     let mut statement = connection.prepare(&sql)?;
@@ -263,7 +276,10 @@ fn first_discovery(
                 }
                 let mut path = witness.clone();
                 path.push(edge.row);
-                if level.get(&edge.dst).is_some_and(|best| best.witness <= path) {
+                if level
+                    .get(&edge.dst)
+                    .is_some_and(|best| best.witness <= path)
+                {
                     continue;
                 }
                 level.insert(
@@ -283,7 +299,13 @@ fn first_discovery(
         }
         frontier = level
             .values()
-            .map(|found| (found.node.clone(), found.witness.clone(), found.origin.clone()))
+            .map(|found| {
+                (
+                    found.node.clone(),
+                    found.witness.clone(),
+                    found.origin.clone(),
+                )
+            })
             .collect();
         found.extend(level);
     }
@@ -352,11 +374,18 @@ fn paths(
 /// Flow identity is a content digest and byte span. The seed uses the final
 /// @ to separate the digest from START:END.
 fn flow_seed(seed: &str) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
-    let (blob, span) = seed.rsplit_once('@').ok_or("flow seed must be BLOB@START:END")?;
-    let (start, end) = span.split_once(':').ok_or("flow seed must be BLOB@START:END")?;
+    let (blob, span) = seed
+        .rsplit_once('@')
+        .ok_or("flow seed must be BLOB@START:END")?;
+    let (start, end) = span
+        .split_once(':')
+        .ok_or("flow seed must be BLOB@START:END")?;
     let start: u32 = start.parse()?;
     let end: u32 = end.parse()?;
-    Ok(BTreeSet::from([(blob.to_string(), Some(format!("{start}:{end}")))]))
+    Ok(BTreeSet::from([(
+        blob.to_string(),
+        Some(format!("{start}:{end}")),
+    )]))
 }
 
 #[derive(Default)]
@@ -376,7 +405,10 @@ impl GradeSplit {
     }
 }
 
-fn emit_rows(rows: &[FlatFact], output: &mut dyn std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
+fn emit_rows(
+    rows: &[FlatFact],
+    output: &mut dyn std::io::Write,
+) -> Result<(), Box<dyn std::error::Error>> {
     for row in rows {
         writeln!(output, "{}", serde_json::to_string(row)?)?;
     }
@@ -385,8 +417,18 @@ fn emit_rows(rows: &[FlatFact], output: &mut dyn std::io::Write) -> Result<(), B
 
 fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
     if compared {
-        let added = rows.iter().filter(|row| matches!(row, FlatFact::GraphPathChange { change, .. } if change == "added")).count();
-        eprintln!("{} path changes: {} added, {} removed", rows.len(), added, rows.len() - added);
+        let added = rows
+            .iter()
+            .filter(
+                |row| matches!(row, FlatFact::GraphPathChange { change, .. } if change == "added"),
+            )
+            .count();
+        eprintln!(
+            "{} path changes: {} added, {} removed",
+            rows.len(),
+            added,
+            rows.len() - added
+        );
         return;
     }
     if matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_)) {
@@ -450,12 +492,18 @@ impl Arm<'_> {
             Arm::Callers(name) => edges(connection, CALLERS_SQL, name, lines),
             Arm::Uses(name) => edges(connection, USES_SQL, name, lines),
             Arm::From(name) => nodes(connection, name, deadline, lines),
-            Arm::CallPath(name) => {
-                paths(connection, "call", |edges| Ok(named_starts(edges, name)), deadline)
-            }
-            Arm::TypePath(name) => {
-                paths(connection, "type", |edges| Ok(named_starts(edges, name)), deadline)
-            }
+            Arm::CallPath(name) => paths(
+                connection,
+                "call",
+                |edges| Ok(named_starts(edges, name)),
+                deadline,
+            ),
+            Arm::TypePath(name) => paths(
+                connection,
+                "type",
+                |edges| Ok(named_starts(edges, name)),
+                deadline,
+            ),
             Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed), deadline),
         }
     }
@@ -510,7 +558,11 @@ fn ask_at(
         Some(selected),
         |paths, scratch| {
             let database = load_store(paths, arm.arms(), cli, Some(scratch), sqlite)?;
-            let rows = arm.ask_within(database.connection(), cli.timeout, Some(scratch.to_path_buf()))?;
+            let rows = arm.ask_within(
+                database.connection(),
+                cli.timeout,
+                Some(scratch.to_path_buf()),
+            )?;
             database.close()?;
             Ok(rows)
         },
@@ -544,10 +596,7 @@ fn path_keys(rows: &[FlatFact]) -> BTreeSet<PathKey> {
         .collect()
 }
 
-fn changed_paths(
-    before: (&str, &[FlatFact]),
-    after: (&str, &[FlatFact]),
-) -> Vec<FlatFact> {
+fn changed_paths(before: (&str, &[FlatFact]), after: (&str, &[FlatFact])) -> Vec<FlatFact> {
     let left = path_keys(before.1);
     let right = path_keys(after.1);
     let change = |key: &PathKey, label: &str, revision: &str| FlatFact::GraphPathChange {
@@ -576,7 +625,10 @@ pub fn run(cli: GraphArgs) -> Result<(), Box<dyn std::error::Error>> {
     run_to(cli, &mut std::io::stdout().lock())
 }
 
-pub fn run_to(cli: GraphArgs, output: &mut dyn std::io::Write) -> Result<(), Box<dyn std::error::Error>> {
+pub fn run_to(
+    cli: GraphArgs,
+    output: &mut dyn std::io::Write,
+) -> Result<(), Box<dyn std::error::Error>> {
     let arm = match (
         &cli.callers,
         &cli.uses,
@@ -594,9 +646,7 @@ pub fn run_to(cli: GraphArgs, output: &mut dyn std::io::Write) -> Result<(), Box
         _ => unreachable!("the clap ArgGroup requires one of the six"),
     };
     let rows = if let Some(revision) = &cli.at {
-        let root = fs::canonicalize(
-            cli.inputs.root.as_ref().expect("clap requires the root"),
-        )?;
+        let root = fs::canonicalize(cli.inputs.root.as_ref().expect("clap requires the root"))?;
         let selected: Vec<PathBuf> = cli
             .inputs
             .paths
@@ -604,9 +654,15 @@ pub fn run_to(cli: GraphArgs, output: &mut dyn std::io::Write) -> Result<(), Box
             .map(PathBuf::from)
             .map(|path| {
                 if path.is_absolute() {
-                    path.strip_prefix(&root).map(Path::to_path_buf).map_err(|_| {
-                        format!("graph path {} is outside {}", path.display(), root.display())
-                    })
+                    path.strip_prefix(&root)
+                        .map(Path::to_path_buf)
+                        .map_err(|_| {
+                            format!(
+                                "graph path {} is outside {}",
+                                path.display(),
+                                root.display()
+                            )
+                        })
                 } else if path == Path::new(".") {
                     Ok(PathBuf::new())
                 } else {
@@ -621,8 +677,7 @@ pub fn run_to(cli: GraphArgs, output: &mut dyn std::io::Write) -> Result<(), Box
                 if !matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_)) {
                     return Err("--compare requires --call-path, --type-path or --flow-path".into());
                 }
-                let (other_sha, after) =
-                    ask_at(&mut reader, other, &selected, &cli, &arm, None)?;
+                let (other_sha, after) = ask_at(&mut reader, other, &selected, &cli, &arm, None)?;
                 changed_paths((&sha, &before), (&other_sha, &after))
             }
             None => before,

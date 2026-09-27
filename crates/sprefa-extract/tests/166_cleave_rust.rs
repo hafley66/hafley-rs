@@ -369,10 +369,8 @@ fn a_failed_verify_rolls_the_rust_tree_back() {
         .expect("cleave binary runs");
     assert_eq!(output.status.code(), Some(3), "a failed verify exits 3");
     assert_eq!(before, read(&fixture, "src/util.rs"), "the rollback held");
-    let trail = rusqlite::Connection::open(
-        fixture.root.parent().unwrap().join(".agent/dl6.db"),
-    )
-    .expect("verify failure wrote the run trail");
+    let trail = rusqlite::Connection::open(fixture.root.parent().unwrap().join(".agent/dl6.db"))
+        .expect("verify failure wrote the run trail");
     let rows: i64 = trail
         .query_row(
             "SELECT count(*) FROM extract_run WHERE argv LIKE '%ryii cleave % --commit --verify %'",
@@ -400,12 +398,19 @@ fn qualified_calls_reexports_and_relative_uses_survive_a_cleave() {
     )
     .unwrap();
     git(&fixture.root, &["add", "-A"]);
-    cleave(&fixture, &["src/lib.rs#target", "src/config.rs", "--commit"]);
+    cleave(
+        &fixture,
+        &["src/lib.rs#target", "src/config.rs", "--commit"],
+    );
     assert!(read(&fixture, "src/app.rs").contains("crate::config::target(dir)"));
     let lib = read(&fixture, "src/lib.rs");
     assert!(lib.contains("pub use log::log_line;"), "{lib}");
-    assert!(read(&fixture, "src/config.rs").contains("use crate::log::log_line as note;")
-        || read(&fixture, "src/config.rs").contains("crate::log"), "{}", read(&fixture, "src/config.rs"));
+    assert!(
+        read(&fixture, "src/config.rs").contains("use crate::log::log_line as note;")
+            || read(&fixture, "src/config.rs").contains("crate::log"),
+        "{}",
+        read(&fixture, "src/config.rs")
+    );
     cargo_check(&fixture);
 }
 
@@ -463,12 +468,18 @@ pub fn describe(stop: &Stop) -> String {
         "{stops}"
     );
     assert!(stops.contains("impl fmt::Display for Stop"), "{stops}");
-    assert!(stops.contains("impl std::error::Error for Stop {}"), "{stops}");
+    assert!(
+        stops.contains("impl std::error::Error for Stop {}"),
+        "{stops}"
+    );
     assert!(stops.contains("use std::fmt;"), "{stops}");
     let util = read(&fixture, "src/util.rs");
     assert!(!util.contains("Why a plan stops"), "{util}");
     assert!(!util.contains("impl fmt::Display"), "{util}");
-    assert!(util.contains("    use std::fmt::Write;\n    let mut out"), "{util}");
+    assert!(
+        util.contains("    use std::fmt::Write;\n    let mut out"),
+        "{util}"
+    );
     let lib = read(&fixture, "src/lib.rs");
     assert!(lib.contains("pub use util::describe;"), "{lib}");
     assert!(lib.contains("pub use crate::stops::Stop;"), "{lib}");

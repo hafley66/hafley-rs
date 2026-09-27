@@ -36,13 +36,13 @@ use crate::types::LangKind;
 
 mod cross;
 
-pub use cross::cargo_package;
 use crate::edit_seams::ImportRef;
 use crate::edit_seams::ImportRefKind;
-use crate::edit_seams::Respell;
 use crate::edit_seams::Rehome;
 use crate::edit_seams::RehomeManifests;
 use crate::edit_seams::RehomePlanCheck;
+use crate::edit_seams::Respell;
+pub use cross::cargo_package;
 use hafley_scm::span::Span;
 
 /// The macros whose first argument names a file, resolved against the directory
@@ -943,7 +943,9 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
         let Some((_, laid)) = module_path(rel, roots) else {
             continue;
         };
-        let here = moves.get(rel).map_or(laid, |relocation| relocation.old_path.clone());
+        let here = moves
+            .get(rel)
+            .map_or(laid, |relocation| relocation.old_path.clone());
         if moving {
             let there = match moves.get(rel) {
                 Some(relocation) => Some(relocation.new_path.clone()),
@@ -953,7 +955,8 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
                 let Some(there) = there.as_deref() else {
                     break;
                 };
-                let Some((span, written, replacement)) = rebase_relative(&moves, &here, there, run, text)
+                let Some((span, written, replacement)) =
+                    rebase_relative(&moves, &here, there, run, text)
                 else {
                     continue;
                 };
@@ -975,9 +978,9 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
         // qualifier is as absolute as `crate` is inside the lib.
         let lib_ident = cargo_package(cx, rel).map(|package| package.2);
         for run in runs {
-            let own_lib = lib_ident.as_deref().is_some_and(|ident| {
-                run.idents.first().map(String::as_str) == Some(ident)
-            });
+            let own_lib = lib_ident
+                .as_deref()
+                .is_some_and(|ident| run.idents.first().map(String::as_str) == Some(ident));
             let edited = match own_lib {
                 true => {
                     let mut as_crate = run.clone();
@@ -1054,7 +1057,9 @@ fn publish_ancestors(
             let name = &ancestors[depth - 1];
             let Some((file, text)) = parent_files(&root, &ancestors[..depth - 1])
                 .into_iter()
-                .find_map(|candidate| editable(cx, &candidate).and_then(|rel| Some((rel.clone(), cx.text(&rel)?))))
+                .find_map(|candidate| {
+                    editable(cx, &candidate).and_then(|rel| Some((rel.clone(), cx.text(&rel)?)))
+                })
             else {
                 continue;
             };
@@ -1421,7 +1426,10 @@ fn rebase_relative(
         len: last.start + last.len - first.start,
     };
     let written = slice(source, span)?;
-    let replacement = std::iter::once("crate".to_string()).chain(mapped).collect::<Vec<_>>().join("::");
+    let replacement = std::iter::once("crate".to_string())
+        .chain(mapped)
+        .collect::<Vec<_>>()
+        .join("::");
     Some((span, written, replacement))
 }
 

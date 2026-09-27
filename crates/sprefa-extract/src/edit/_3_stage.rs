@@ -238,7 +238,11 @@ pub fn print_previews(previews: &[soopy::FilePreview], prefix: &str) {
     print_previews_with(previews, prefix, |line| println!("{line}"));
 }
 
-pub fn print_previews_with(previews: &[soopy::FilePreview], prefix: &str, mut emit: impl FnMut(String)) {
+pub fn print_previews_with(
+    previews: &[soopy::FilePreview],
+    prefix: &str,
+    mut emit: impl FnMut(String),
+) {
     for preview in previews {
         let before = preview_path(preview.path_before.as_ref());
         let after = preview_path(preview.path_after.as_ref());

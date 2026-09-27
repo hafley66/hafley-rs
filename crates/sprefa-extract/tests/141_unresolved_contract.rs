@@ -68,7 +68,10 @@ fn no_unresolved_row_leaves_its_file_column_null() {
             |r| r.get(0),
         )
         .unwrap();
-    assert!(total >= 7, "expected phase-1 and phase-2 rows both: {total}");
+    assert!(
+        total >= 7,
+        "expected phase-1 and phase-2 rows both: {total}"
+    );
     assert_eq!(null_path, 0, "every unresolved row must name its file");
 }
 

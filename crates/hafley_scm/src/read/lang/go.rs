@@ -29,10 +29,10 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use super::fallback::cst_bundle;
 use super::go_modules::{is_exported, GoModuleIndex};
 use crate::read::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
-    DfParam, DocFact, DocTag, MethodOwner, ProjectEdge, ReceiverBinding, ReceiverOutcome,
-    ResolutionOrigin, SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind,
-    TypeEntityKind, TypeF, TypeSig,
+    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind, DfParam,
+    DocFact, DocTag, MethodOwner, ProjectEdge, ReceiverBinding, ReceiverOutcome, ResolutionOrigin,
+    SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF,
+    TypeSig,
 };
 use crate::read::project::ResolveDrop;
 use crate::read::rows::{Edge, FamilyBundle, Node};
@@ -41,7 +41,7 @@ use crate::read::seams::{
     containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::read::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{PathIndex, ScipIndex, UnresolvedReason};
 

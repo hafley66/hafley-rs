@@ -60,7 +60,11 @@ fn drops(names: &[&str]) -> Vec<(String, String, String)> {
         .filter(|row| row["record"] == "unresolved" && row["family"] == "call")
         .map(|row| {
             (
-                text(row, "path").rsplit('/').next().unwrap_or("").to_string(),
+                text(row, "path")
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
                 text(row, "detail"),
                 text(row, "reason"),
             )
@@ -134,10 +138,9 @@ fn free_call_keeps_name_match() {
     // sites bind to use.ts's own defs.
     let rows = edges(&["defs.ts", "use.ts"]);
     assert!(
-        rows.iter()
-            .any(|(callee, file, origin)| callee == "push"
-                && file == "use.ts"
-                && origin == "corpus_unique"),
+        rows.iter().any(|(callee, file, origin)| callee == "push"
+            && file == "use.ts"
+            && origin == "corpus_unique"),
         "{rows:?}"
     );
     assert_eq!(

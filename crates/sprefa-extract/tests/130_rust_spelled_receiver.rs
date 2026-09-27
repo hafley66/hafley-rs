@@ -105,13 +105,13 @@ fn trait_bound_generic_receiver_binds() {
     // span: it must cover the trait's `run` signature, never the inherent one.
     // Rust callee_start is the IDENT (`def_span` at rust.rs:1547); kotlin's is
     // the declaration keyword (`node_span` at kotlin.rs:168).
-    let src = std::fs::read_to_string(format!(
-        "{}/{SRC}/proj.rs",
-        env!("CARGO_MANIFEST_DIR")
-    ))
-    .expect("fixture readable");
+    let src = std::fs::read_to_string(format!("{}/{SRC}/proj.rs", env!("CARGO_MANIFEST_DIR")))
+        .expect("fixture readable");
     let trait_start = src.find("    fn run(&self) -> u32;").expect("trait fn") + "    fn ".len();
-    let trait_span = (trait_start as u64, (trait_start + "run(&self) -> u32".len()) as u64);
+    let trait_span = (
+        trait_start as u64,
+        (trait_start + "run(&self) -> u32".len()) as u64,
+    );
     let inherent_start = src.find("pub fn run(&self)").expect("inherent fn") + "pub fn ".len();
     assert_ne!(trait_span.0, inherent_start as u64);
     let spans: Vec<(u64, u64)> = run(&["proj.rs"])
@@ -125,7 +125,11 @@ fn trait_bound_generic_receiver_binds() {
             )
         })
         .collect();
-    assert_eq!(spans, vec![trait_span], "inherent fn starts at {inherent_start}");
+    assert_eq!(
+        spans,
+        vec![trait_span],
+        "inherent fn starts at {inherent_start}"
+    );
 }
 
 fn drops(names: &[&str]) -> Vec<(String, String)> {
@@ -144,7 +148,9 @@ fn shadowed_call_does_not_bind_free_fn() {
     // never the free `fn project` in free.rs: zero edges, drop `inferred`.
     let rows = edges(&["shadow.rs", "free.rs"]);
     assert!(
-        !rows.iter().any(|(_, callee, file, _)| callee == "project" && file == "free"),
+        !rows
+            .iter()
+            .any(|(_, callee, file, _)| callee == "project" && file == "free"),
         "{rows:?}"
     );
     let drops = drops(&["shadow.rs", "free.rs"]);

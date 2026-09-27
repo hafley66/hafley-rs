@@ -7,11 +7,11 @@ mod walk;
 #[cfg(feature = "rust_syn")]
 pub mod lang;
 
-pub mod cst;
-pub mod span;
 pub mod atoms;
+pub mod cst;
 #[cfg(feature = "read")]
 pub mod read;
+pub mod span;
 pub use types::*;
 
 use tree_sitter::{Language, Query, Tree};
@@ -21,8 +21,16 @@ use pipeline::{build_query_ext as build, run_over_file_tree as run};
 
 pub fn build(language: &Language, scm: &str) -> Result<QueryExt, QueryExtError> {
     let user = Query::new(language, scm).map_err(QueryExtError::Parse)?;
-    let (predicates, kind_names, predicate_kinds, literals, emits, relations, fields, emit_literals) =
-        split::read_and_parse_predicates(&user)?;
+    let (
+        predicates,
+        kind_names,
+        predicate_kinds,
+        literals,
+        emits,
+        relations,
+        fields,
+        emit_literals,
+    ) = split::read_and_parse_predicates(&user)?;
     let kinds = build::query_new_per_kind(language, &kind_names)?;
     let names = build::intern_names(&user);
     Ok(QueryExt {

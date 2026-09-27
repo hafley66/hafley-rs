@@ -17,46 +17,51 @@
 #![allow(dead_code)]
 
 pub use hafley_scm::read::*;
-#[path = "edit/_2_drain.rs"] pub mod drain;
-#[path = "edit/_1_move_cx.rs"] pub mod move_cx;
-#[path = "edit/_4_move_scip.rs"] pub mod move_scip;
-#[path = "edit/_3_stage.rs"] pub mod move_stage;
-#[path = "edit/_1_rename_cx.rs"] pub mod rename_cx;
+#[path = "edit/_2_drain.rs"]
+pub mod drain;
+pub mod edit;
+#[path = "edit/_0_seams.rs"]
+pub mod edit_seams;
+#[path = "edit/_1_move_cx.rs"]
+pub mod move_cx;
+#[path = "edit/_4_move_scip.rs"]
+pub mod move_scip;
+#[path = "edit/_3_stage.rs"]
+pub mod move_stage;
+#[path = "edit/_1_rename_cx.rs"]
+pub mod rename_cx;
 /// The run trail rides the same subscriber the `cli` feature installs.
 #[cfg(feature = "cli")]
 pub mod trail;
-#[path = "edit/_0_seams.rs"] pub mod edit_seams;
-pub mod edit;
+pub use crate::edit::cleave_for;
+pub use crate::edit::cleaves;
+pub use crate::edit::rehome_for;
+pub use crate::edit::rehomes;
+pub use crate::edit::rename_for;
+pub use crate::edit::renames;
+pub use crate::edit_seams::Cleave;
+pub use crate::edit_seams::Edit;
+pub use crate::edit_seams::ImportRef;
+pub use crate::edit_seams::ImportRefKind;
+pub use crate::edit_seams::RefRole;
+pub use crate::edit_seams::Rehome;
+pub use crate::edit_seams::RehomeArm;
+pub use crate::edit_seams::RehomeManifests;
+pub use crate::edit_seams::RehomePlanCheck;
+pub use crate::edit_seams::RehomeShim;
+pub use crate::edit_seams::RehomeTextSpellings;
+pub use crate::edit_seams::Rename;
+pub use crate::edit_seams::RenameStop;
+pub use crate::edit_seams::Respell;
+pub use crate::edit_seams::SymbolRef;
+pub use crate::edit_seams::SymbolSeat;
 pub use drain::{
-    bind_action, directory_path, directory_source, replace_action, source_rel,
-    stage_edits,
+    bind_action, directory_path, directory_source, replace_action, source_rel, stage_edits,
 };
+pub use edit::ts_rehome::{build_paths, compiled_spellings, BuildPaths};
 pub use move_cx::{dirname, join_rel, normalize, relative_between, MoveCx, SKIP_DIRS};
 pub use move_scip::{
     scip_import_sites, verify_import_refs, ScipDisagreement, ScipSite, MISSED_BY_IMPL,
     UNKNOWN_TO_SCIP,
 };
 pub use rename_cx::{RenameCx, RenameRequest};
-pub use crate::edit_seams::ImportRef;
-pub use crate::edit_seams::ImportRefKind;
-pub use crate::edit_seams::Respell;
-pub use crate::edit_seams::Edit;
-pub use crate::edit_seams::Cleave;
-pub use crate::edit_seams::Rehome;
-pub use crate::edit_seams::RehomeManifests;
-pub use crate::edit_seams::RehomeShim;
-pub use crate::edit_seams::RehomeTextSpellings;
-pub use crate::edit_seams::RehomePlanCheck;
-pub use crate::edit_seams::RehomeArm;
-pub use crate::edit_seams::SymbolRef;
-pub use crate::edit_seams::RefRole;
-pub use crate::edit_seams::SymbolSeat;
-pub use crate::edit_seams::RenameStop;
-pub use crate::edit_seams::Rename;
-pub use crate::edit::rehomes;
-pub use crate::edit::renames;
-pub use crate::edit::rehome_for;
-pub use crate::edit::rename_for;
-pub use crate::edit::cleaves;
-pub use crate::edit::cleave_for;
-pub use edit::ts_rehome::{build_paths, compiled_spellings, BuildPaths};

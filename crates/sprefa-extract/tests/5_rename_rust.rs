@@ -268,7 +268,11 @@ fn list_commit_is_atomic_across_rows() {
         stderr.contains("src/twins.rs declares Wyll more than once"),
         "the stop names the twin row:\n{stderr}"
     );
-    assert_eq!(output.status.code(), Some(3), "Ambiguous exits 3:\n{stderr}");
+    assert_eq!(
+        output.status.code(),
+        Some(3),
+        "Ambiguous exits 3:\n{stderr}"
+    );
     let entries = diff_rq(&fixture.root, &tree("macro", "before"));
     assert!(
         entries.is_empty(),
@@ -282,7 +286,11 @@ fn list_commit_is_atomic_across_rows() {
 fn list_rows_read_earlier_edits() {
     let fixture = fixture("local", "chained_list");
     let list = fixture.state.join("renames.tsv");
-    std::fs::write(&list, "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n").unwrap();
+    std::fs::write(
+        &list,
+        "src/util.rs\tHelper\tTool\nsrc/util.rs\tTool\tInstrument\n",
+    )
+    .unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["rename", "--list"])
         .arg(&list)
@@ -293,10 +301,15 @@ fn list_rows_read_earlier_edits() {
         .arg("--commit")
         .output()
         .unwrap();
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     for rel in ["src/util.rs", "src/lib.rs"] {
         let actual = std::fs::read_to_string(fixture.root.join(rel)).unwrap();
-        let expected = std::fs::read_to_string(tree("local", "after").join(rel)).unwrap()
+        let expected = std::fs::read_to_string(tree("local", "after").join(rel))
+            .unwrap()
             .replace("Tool", "Instrument");
         assert_eq!(actual, expected, "{rel}");
     }
@@ -391,7 +404,12 @@ fn re_aim_path_deps(source: &Path, manifest: &Path) {
 #[test]
 fn path_attr_places_the_file_and_renames_its_seats() {
     let fixture = fixture("path", "commit");
-    rename_verb(&fixture, "src/elsewhere/impl.rs#Helper", "Tool", &["--commit"]);
+    rename_verb(
+        &fixture,
+        "src/elsewhere/impl.rs#Helper",
+        "Tool",
+        &["--commit"],
+    );
     let entries = diff_rq(&fixture.root, &tree("path", "after"));
     assert!(
         entries.is_empty(),
@@ -412,7 +430,10 @@ fn field_seats_rename_through_the_receiver_plane() {
     let fixture = fixture("field", "commit");
     let text = std::fs::read_to_string(tree("field", "before").join("src/util.rs"))
         .expect("field fixture text");
-    let at = text.find("size").expect("size field in fixture").to_string();
+    let at = text
+        .find("size")
+        .expect("size field in fixture")
+        .to_string();
     rename_verb(
         &fixture,
         "src/util.rs#size",
@@ -557,7 +578,10 @@ fn new_fixture_crates_pass_cargo_check() {
         if case == "field" {
             let text = std::fs::read_to_string(fixture.root.join("src/util.rs"))
                 .expect("field fixture text");
-            let at = text.find("size").expect("size field in fixture").to_string();
+            let at = text
+                .find("size")
+                .expect("size field in fixture")
+                .to_string();
             rename_verb(&fixture, target, new, &["--at", &at, "--commit"]);
         } else {
             rename_verb(&fixture, target, new, &["--commit"]);
@@ -593,10 +617,15 @@ fn scip_rows(stdout: &str) -> Vec<String> {
 #[test]
 fn scip_verify_agrees_on_the_field_fixture() {
     let fixture = fixture("field", "scip");
-    let index = ScipRust.build(&fixture.root).expect("rust-analyzer scip index");
+    let index = ScipRust
+        .build(&fixture.root)
+        .expect("rust-analyzer scip index");
     let text = std::fs::read_to_string(tree("field", "before").join("src/util.rs"))
         .expect("field fixture text");
-    let at = text.find("size").expect("size field in fixture").to_string();
+    let at = text
+        .find("size")
+        .expect("size field in fixture")
+        .to_string();
     let stdout = rename_verb(
         &fixture,
         "src/util.rs#size",
@@ -621,7 +650,9 @@ fn scip_verify_agrees_on_the_field_fixture() {
 #[test]
 fn scip_verify_agrees_on_the_variant_fixture() {
     let fixture = fixture("variant", "scip");
-    let index = ScipRust.build(&fixture.root).expect("rust-analyzer scip index");
+    let index = ScipRust
+        .build(&fixture.root)
+        .expect("rust-analyzer scip index");
     let stdout = rename_verb(
         &fixture,
         "src/lib.rs#Old",

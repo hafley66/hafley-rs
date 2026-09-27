@@ -7,11 +7,11 @@
 //! front-end.
 //! @comment-ok: module header, the seam list every lang file opens with
 
+use crate::edit_seams::ImportRef;
+use crate::edit_seams::Rehome;
+use crate::edit_seams::Respell;
 use crate::lang::prolog::PrologSource;
 use crate::move_cx::MoveCx;
-use crate::edit_seams::ImportRef;
-use crate::edit_seams::Respell;
-use crate::edit_seams::Rehome;
 
 impl Rehome for PrologSource {
     fn import_refs(&self, _cx: &MoveCx) -> Vec<ImportRef> {

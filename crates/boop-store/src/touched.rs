@@ -47,7 +47,9 @@ impl Store {
               WHERE t.session_id IN ids
               ORDER BY t.ts DESC, t.turn DESC LIMIT {limit}"
         ))?;
-        for path in statement.query_map(rusqlite::params_from_iter(params.iter()), |row| row.get::<_, String>(0))? {
+        for path in statement.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            row.get::<_, String>(0)
+        })? {
             push_distinct(&mut touched.paths, path?);
         }
         let mut statement = connection.prepare(&format!(
@@ -63,7 +65,9 @@ impl Store {
                 WHERE a.session_id IN ids)
              ORDER BY tier, at DESC"
         ))?;
-        for cwd in statement.query_map(rusqlite::params_from_iter(params.iter()), |row| row.get::<_, String>(0))? {
+        for cwd in statement.query_map(rusqlite::params_from_iter(params.iter()), |row| {
+            row.get::<_, String>(0)
+        })? {
             push_distinct(&mut touched.cwds, cwd?.trim_end_matches('/').to_owned());
         }
         Ok(touched)
@@ -81,7 +85,8 @@ impl Store {
               GROUP BY a.session_id
               ORDER BY MAX(COALESCE(t.ts, a.started_ts, 0)) DESC LIMIT {limit}"
         ))?;
-        let rows = statement.query_map([cwd.trim_end_matches('/')], |row| row.get::<_, String>(0))?;
+        let rows =
+            statement.query_map([cwd.trim_end_matches('/')], |row| row.get::<_, String>(0))?;
         Ok(rows.collect::<rusqlite::Result<_>>()?)
     }
 }
@@ -114,8 +119,14 @@ mod tests {
                 cwds: vec!["/repo-wt".into(), "/repo".into()],
             }
         );
-        assert_eq!(store.session_touched(&[], 2000).unwrap(), SessionTouched::default());
-        assert_eq!(store.sessions_in_cwd("/repo/", 3).unwrap(), vec!["sess".to_owned()]);
+        assert_eq!(
+            store.session_touched(&[], 2000).unwrap(),
+            SessionTouched::default()
+        );
+        assert_eq!(
+            store.sessions_in_cwd("/repo/", 3).unwrap(),
+            vec!["sess".to_owned()]
+        );
         let _ = std::fs::remove_dir_all(dir);
     }
 

@@ -15,19 +15,24 @@
 use std::io::Write;
 use std::os::fd::FromRawFd;
 use std::path::PathBuf;
-use std::sync::{Arc, OnceLock};
 use std::sync::atomic::AtomicBool;
+use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
-static GLOBAL_ALLOCATOR: cap::Cap<mimalloc::MiMalloc> = cap::Cap::new(mimalloc::MiMalloc, usize::MAX);
+static GLOBAL_ALLOCATOR: cap::Cap<mimalloc::MiMalloc> =
+    cap::Cap::new(mimalloc::MiMalloc, usize::MAX);
 
 /// Heap ceiling: RYI_MAX_MEM_MB (default and maximum 2048). Past it an
 /// allocation fails and the process aborts instead of eating the machine.
 #[cfg(feature = "mimalloc")]
 fn cap_memory() {
-    let mb: usize = std::env::var("RYI_MAX_MEM_MB").ok().and_then(|v| v.parse().ok()).unwrap_or(2048).clamp(1, 2048);
+    let mb: usize = std::env::var("RYI_MAX_MEM_MB")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(2048)
+        .clamp(1, 2048);
     let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
 }
 
@@ -37,17 +42,18 @@ use sprefa_extract::schema::schema_text;
 use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
-    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl,
-    diet_scip_jsonl, dispatch, file_fact_with_content_id, flatten_cfg_each, flatten_each,
-    line_start_fact_with_content_id, newline_offsets, package_edges_jsonl,
-    resolve_project_jsonl, resolve_project_with_raw, scip_facts_jsonl,
-    scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl, scip_index_location,
-    size_skip_fact, slow_project, slow_project_with_raw, sorted_lines, source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest,
-    ScipFamilyRequest, ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
+    cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, dispatch,
+    file_fact_with_content_id, flatten_cfg_each, flatten_each, line_start_fact_with_content_id,
+    newline_offsets, package_edges_jsonl, resolve_project_jsonl, resolve_project_with_raw,
+    scip_facts_jsonl, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
+    scip_index_location, size_skip_fact, slow_project, slow_project_with_raw, sorted_lines,
+    source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest, ScipFamilyRequest,
+    ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
 
 pub use ryi_proto::{cli_auto, daemon_auto, models, ops_auto};
 
+#[rustfmt::skip]
 #[path = "ryi/gen/server_auto.rs"]
 mod server_auto;
 
@@ -72,7 +78,6 @@ use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
 
 #[path = "ryi/1_inputs.rs"]
 mod inputs;
-
 
 #[path = "../0_query.rs"]
 mod query;
@@ -102,12 +107,12 @@ mod source_rename;
 mod cleave;
 
 fn file_args_from_fast(fast: FastArgs) -> FileArgs {
-        FileArgs {
-            inputs: fast.inputs,
-            sqlite: fast.sqlite,
-            lines: fast.lines,
-            ..FileArgs::default()
-        }
+    FileArgs {
+        inputs: fast.inputs,
+        sqlite: fast.sqlite,
+        lines: fast.lines,
+        ..FileArgs::default()
+    }
 }
 
 /// What the parsed command runs: per-file extraction (or a root-flag mode),
@@ -119,7 +124,10 @@ enum Tier {
 }
 
 /// `ryi slow`: the SCIP oracle over the inputs, written as fast's tables.
-fn run_slow(slow: SlowArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
+fn run_slow(
+    slow: SlowArgs,
+    writer: Option<Box<dyn Write + Send>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if slow.scip_timeout == Some(0) {
         return Err("--scip-timeout must be a positive number of seconds".into());
     }
@@ -170,13 +178,19 @@ fn run_slow(slow: SlowArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
 
 /// `ryi scip`: ensure the root's SCIP index and stream it raw: v5's `scip_*`
 /// relations, or with `--raw` the index records themselves.
-fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
+fn run_scip(
+    args: ScipArgs,
+    writer: Option<Box<dyn Write + Send>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(lang) = args.indexer.as_deref() {
         if !sprefa_extract::indexer_langs().contains(&lang) {
-            return Err(RyiExit::new(2, format!(
-                "--indexer {lang}: unknown language; known: {}",
-                sprefa_extract::indexer_langs().join(", ")
-            ))
+            return Err(RyiExit::new(
+                2,
+                format!(
+                    "--indexer {lang}: unknown language; known: {}",
+                    sprefa_extract::indexer_langs().join(", ")
+                ),
+            )
             .into());
         }
     }
@@ -216,7 +230,11 @@ fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
         output.line(&line)?;
     }
     let index_location = has_index
-        .then(|| args.scip_index.clone().or_else(|| scip_index_location(&request)))
+        .then(|| {
+            args.scip_index
+                .clone()
+                .or_else(|| scip_index_location(&request))
+        })
         .flatten();
     if let Some(path) = index_location {
         // @eprintln-ok: CLI-UX location line, deliberately off the fact stream.
@@ -227,9 +245,16 @@ fn run_scip(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(),
 
 /// `ryi scip --raw`: every record the index carries, over `--scip-index` or an
 /// index `--scip-build` makes for the inputs' language.
-fn run_scip_raw(args: ScipArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
+fn run_scip_raw(
+    args: ScipArgs,
+    writer: Option<Box<dyn Write + Send>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let _budget = IndexBudget::scoped_override(args.scip_timeout.filter(|secs| *secs > 0));
-    let root = args.inputs.root.clone().ok_or("ryi scip --raw needs --root")?;
+    let root = args
+        .inputs
+        .root
+        .clone()
+        .ok_or("ryi scip --raw needs --root")?;
     let files = match inputs::expand(&args.inputs) {
         Ok(files) => files,
         Err(error) => {
@@ -281,11 +306,17 @@ fn register_line_tables(cli: &FileArgs, output: &mut sqlite::Output) {
 /// symlink whose existence probe can fail under process churn, so it passes.
 fn check_ingest_paths(paths: &[PathBuf]) -> RyiResult<()> {
     for path in paths {
-        if path == std::path::Path::new("/dev/stdin") || path == std::path::Path::new("-") || path.exists() {
+        if path == std::path::Path::new("/dev/stdin")
+            || path == std::path::Path::new("-")
+            || path.exists()
+        {
             continue;
         }
         // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
-        return Err(RyiExit::new(2, format!("ryi: {} does not exist", path.display())));
+        return Err(RyiExit::new(
+            2,
+            format!("ryi: {} does not exist", path.display()),
+        ));
     }
     Ok(())
 }
@@ -310,7 +341,10 @@ type RyiResult<T> = Result<T, RyiExit>;
 
 impl RyiExit {
     fn new(code: i32, message: impl Into<String>) -> Self {
-        Self { code, message: message.into() }
+        Self {
+            code,
+            message: message.into(),
+        }
     }
 
     fn boxed(error: Box<dyn std::error::Error>) -> Self {
@@ -330,7 +364,9 @@ impl std::fmt::Display for RyiExit {
 impl std::error::Error for RyiExit {}
 
 impl From<String> for RyiExit {
-    fn from(message: String) -> Self { Self::new(2, message) }
+    fn from(message: String) -> Self {
+        Self::new(2, message)
+    }
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -338,7 +374,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     cap_memory();
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
         return server_auto::daemon(
-            || { let _ = sprefa_extract::trace::install(); },
+            || {
+                let _ = sprefa_extract::trace::install();
+            },
             hafley_observe::flush_trace,
             hafley_observe::finish_trace,
         );
@@ -352,9 +390,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(error) if is_broken_pipe(error.as_ref()) => Ok(()),
         Err(error) => {
             let exit_error = RyiExit::boxed(error);
-            if !exit_error.message.is_empty() { eprintln!("{}", exit_error.message); }
+            if !exit_error.message.is_empty() {
+                eprintln!("{}", exit_error.message);
+            }
             exit(exit_error.code);
-        },
+        }
     };
     if let Some(state) = summary {
         if matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
@@ -403,20 +443,26 @@ fn print_trail(runs: usize, out: &mut dyn Write) -> Result<(), Box<dyn std::erro
         return Ok(());
     }
     for report in reports {
-        emit(out, &format!(
-            "run {} {} wall {}ms load {:.2} -> {:.2} argv {}",
-            report.id,
-            report.started,
-            report.wall_ms,
-            report.load_start,
-            report.load_end,
-            report.argv,
-        ))?;
+        emit(
+            out,
+            &format!(
+                "run {} {} wall {}ms load {:.2} -> {:.2} argv {}",
+                report.id,
+                report.started,
+                report.wall_ms,
+                report.load_start,
+                report.load_end,
+                report.argv,
+            ),
+        )?;
         for (lang, phase, files, calls, rows, bytes, micros) in report.phases {
-            emit(out, &format!(
-                "  {lang:<10} {phase:<14} files {files:>6} calls {calls:>8} \
+            emit(
+                out,
+                &format!(
+                    "  {lang:<10} {phase:<14} files {files:>6} calls {calls:>8} \
                  rows {rows:>10} bytes {bytes:>12} us {micros:>12}"
-            ))?;
+                ),
+            )?;
         }
     }
     Ok(())
@@ -445,11 +491,17 @@ fn emit(out: &mut dyn Write, line: &str) -> Result<(), std::io::Error> {
 }
 
 /// Preserve a handler's exit code across the CLI boundary.
-fn or_exit_2<E: std::fmt::Display + 'static>(result: Result<(), E>) -> Result<(), Box<dyn std::error::Error>> {
+fn or_exit_2<E: std::fmt::Display + 'static>(
+    result: Result<(), E>,
+) -> Result<(), Box<dyn std::error::Error>> {
     result.map_err(|error| {
         let any = &error as &dyn std::any::Any;
-        let code = any.downcast_ref::<RyiExit>()
-            .or_else(|| any.downcast_ref::<Box<dyn std::error::Error>>()?.downcast_ref::<RyiExit>())
+        let code = any
+            .downcast_ref::<RyiExit>()
+            .or_else(|| {
+                any.downcast_ref::<Box<dyn std::error::Error>>()?
+                    .downcast_ref::<RyiExit>()
+            })
             .map_or(2, |exit| exit.code);
         Box::new(RyiExit::new(code, error.to_string())) as Box<dyn std::error::Error>
     })
@@ -459,18 +511,25 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
     let format_first = argv.get(1).is_some_and(|arg| arg == "--format")
         && argv.get(2).is_some_and(|arg| arg == "jsonl")
-        && argv.get(3).and_then(|arg| arg.to_str()).is_some_and(|name| {
-            Ryi::command().get_subcommands().any(|sub| sub.get_name() == name)
-        });
+        && argv
+            .get(3)
+            .and_then(|arg| arg.to_str())
+            .is_some_and(|name| {
+                Ryi::command()
+                    .get_subcommands()
+                    .any(|sub| sub.get_name() == name)
+            });
     if format_first {
         let flag = argv.remove(1);
         let value = argv.remove(1);
         argv.insert(2, flag);
         argv.insert(3, value);
     }
-    let ryi = match Ryi::command().name(daemon_auto::SERVER_BIN)
+    let ryi = match Ryi::command()
+        .name(daemon_auto::SERVER_BIN)
         .try_get_matches_from(argv)
-        .and_then(|matches| Ryi::from_arg_matches(&matches)) {
+        .and_then(|matches| Ryi::from_arg_matches(&matches))
+    {
         Ok(ryi) => ryi,
         Err(error) => {
             let _ = error.print();
@@ -485,7 +544,9 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         // The format adapter consumes the in-process operation while that
         // operation owns stdout. Write its envelope through the original fd.
         let fd = unsafe { libc::dup(libc::STDOUT_FILENO) };
-        if fd < 0 { return Err(std::io::Error::last_os_error().into()); }
+        if fd < 0 {
+            return Err(std::io::Error::last_os_error().into());
+        }
         let original = unsafe { std::fs::File::from_raw_fd(fd) };
         let mut stdout = std::io::BufWriter::with_capacity(256 * 1024, original);
         if ryi.cmd.is_none() {
@@ -537,7 +598,11 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     drop(expanding);
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
-        return Err(RyiExit::new(2, "ryi: no inputs; pass files, directories, globs, - or --entry").into());
+        return Err(RyiExit::new(
+            2,
+            "ryi: no inputs; pass files, directories, globs, - or --entry",
+        )
+        .into());
     }
     if cli.scip_index.is_some() && cli.inputs.root.is_none() {
         return Err("--scip-index needs --root".into());
@@ -554,20 +619,35 @@ fn write_formatted_rows(
     let mut count = 0u64;
     for row in rows {
         match row {
-            Ok(bytes) => { out.write_all(&bytes)?; count += 1; }
+            Ok(bytes) => {
+                out.write_all(&bytes)?;
+                count += 1;
+            }
             Err(error) => {
-                emit(out, &serde_json::json!({"error": error.0, "code": error.1}).to_string())?;
+                emit(
+                    out,
+                    &serde_json::json!({"error": error.0, "code": error.1}).to_string(),
+                )?;
                 return Err(RyiExit::new(error.1, "").into());
             }
         }
     }
-    emit(out, &serde_json::json!({"complete": true, "rows": count}).to_string())?;
+    emit(
+        out,
+        &serde_json::json!({"complete": true, "rows": count}).to_string(),
+    )?;
     Ok(())
 }
 
-fn write_formatted_one(out: &mut dyn Write, row: ops_auto::OpResult<Vec<u8>>) -> Result<(), Box<dyn std::error::Error>> {
+fn write_formatted_one(
+    out: &mut dyn Write,
+    row: ops_auto::OpResult<Vec<u8>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     match row {
-        Ok(bytes) => { out.write_all(&bytes)?; Ok(()) }
+        Ok(bytes) => {
+            out.write_all(&bytes)?;
+            Ok(())
+        }
         Err(error) => Err(RyiExit::new(error.1, error.0).into()),
     }
 }
@@ -593,7 +673,11 @@ fn run_formatted(ryi: Ryi, out: &mut dyn Write) -> Result<(), Box<dyn std::error
 }
 
 /// The transport and CLI use the same handler results.
-fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<AtomicBool>>) -> RyiResult<()> {
+fn run_verb(
+    ryi: Ryi,
+    mut writer: Box<dyn Write + Send>,
+    cancelled: Option<Arc<AtomicBool>>,
+) -> RyiResult<()> {
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
         Some(Cmd::Fast(args)) => run_file_verb(file_args_from_fast(args), Tier::Fast, writer),
@@ -611,18 +695,35 @@ fn run_verb(ryi: Ryi, mut writer: Box<dyn Write + Send>, cancelled: Option<Arc<A
         Some(Cmd::Rename(args)) => source_rename::run(args)
             .map_err(|error| RyiExit::new(error.exit, error.to_string()).into()),
         Some(Cmd::Region(args)) => region_writer::run(args)
-            .and_then(|code| if code == 0 { Ok(()) } else { Err(region_writer::RegionError { message: format!("region exited {code}"), exit: code }) })
+            .and_then(|code| {
+                if code == 0 {
+                    Ok(())
+                } else {
+                    Err(region_writer::RegionError {
+                        message: format!("region exited {code}"),
+                        exit: code,
+                    })
+                }
+            })
             .map_err(|error| RyiExit::new(error.exit, error.message).into()),
     };
     result.map_err(RyiExit::boxed)
 }
 
-fn run_file_verb(mut cli: FileArgs, tier: Tier, writer: Box<dyn Write + Send>) -> Result<(), Box<dyn std::error::Error>> {
+fn run_file_verb(
+    mut cli: FileArgs,
+    tier: Tier,
+    writer: Box<dyn Write + Send>,
+) -> Result<(), Box<dyn std::error::Error>> {
     let _budget = IndexBudget::scoped_override(cli.scip_timeout.filter(|secs| *secs > 0));
     cli.paths = inputs::expand(&cli.inputs)?;
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
-        return Err(RyiExit::new(2, "ryi: no inputs; pass files, directories, globs, - or --entry").into());
+        return Err(RyiExit::new(
+            2,
+            "ryi: no inputs; pass files, directories, globs, - or --entry",
+        )
+        .into());
     }
     if cli.scip_index.is_some() && cli.inputs.root.is_none() {
         return Err("--scip-index needs --root".into());
@@ -632,7 +733,10 @@ fn run_file_verb(mut cli: FileArgs, tier: Tier, writer: Box<dyn Write + Send>) -
     output.finish()
 }
 
-fn run_ingest(args: IngestArgs, writer: Option<Box<dyn Write + Send>>) -> Result<(), Box<dyn std::error::Error>> {
+fn run_ingest(
+    args: IngestArgs,
+    writer: Option<Box<dyn Write + Send>>,
+) -> Result<(), Box<dyn std::error::Error>> {
     check_ingest_paths(&args.paths)?;
     let mut output = match writer {
         Some(writer) => sqlite::Output::with_writer(args.sqlite.as_deref(), writer, true)?,
@@ -653,7 +757,9 @@ fn extract_to(
                 output.source_fact(raw.path, raw.content_id, &raw.fact)
             })?;
             output.clear_source()?;
-            for fact in facts { output.fact(&fact)?; }
+            for fact in facts {
+                output.fact(&fact)?;
+            }
             return Ok(());
         }
         if cli.lines {
@@ -661,7 +767,9 @@ fn extract_to(
         }
         let lines = diet_scip_jsonl(&cli.paths)?;
         let _write = sprefa_extract::trace::stage_span("write").entered();
-        for line in lines { output.line(&line)?; }
+        for line in lines {
+            output.line(&line)?;
+        }
         return Ok(());
     }
 
@@ -752,10 +860,7 @@ fn extract_file(
     // The cfg plane is derived AFTER the flatten, so its rows would land past
     // the coverage rows and outside the numbering.
     if cli.witness && cfg {
-        return Err(
-            "--witness does not support --kinds cfg"
-                .into(),
-        );
+        return Err("--witness does not support --kinds cfg".into());
     }
     if cli.bench {
         bench(&path_str, &content, mask, cfg)?;
@@ -780,14 +885,8 @@ fn scip_request(cli: &FileArgs) -> Result<ResolveRequest<'_>, String> {
             .rust_checker
             .then(|| cli.inputs.root.as_deref())
             .flatten(),
-        ts_checker: cli
-            .ts_checker
-            .then(|| cli.inputs.root.as_deref())
-            .flatten(),
-        go_checker: cli
-            .go_checker
-            .then(|| cli.inputs.root.as_deref())
-            .flatten(),
+        ts_checker: cli.ts_checker.then(|| cli.inputs.root.as_deref()).flatten(),
+        go_checker: cli.go_checker.then(|| cli.inputs.root.as_deref()).flatten(),
         witness: cli.witness,
     })
 }
@@ -1015,18 +1114,21 @@ fn stream_ingest(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut lines: Vec<String> = Vec::new();
     for path in paths {
-        let text = if path == std::path::Path::new("-") || path == std::path::Path::new("/dev/stdin") {
-            match ops::request_input_file() {
-                Some(input) => std::fs::read_to_string(input.path())?,
-                None if path == std::path::Path::new("-") => {
-                    use std::io::Read as _;
-                    let mut text = String::new();
-                    std::io::stdin().read_to_string(&mut text)?;
-                    text
+        let text =
+            if path == std::path::Path::new("-") || path == std::path::Path::new("/dev/stdin") {
+                match ops::request_input_file() {
+                    Some(input) => std::fs::read_to_string(input.path())?,
+                    None if path == std::path::Path::new("-") => {
+                        use std::io::Read as _;
+                        let mut text = String::new();
+                        std::io::stdin().read_to_string(&mut text)?;
+                        text
+                    }
+                    None => std::fs::read_to_string(path)?,
                 }
-                None => std::fs::read_to_string(path)?,
-            }
-        } else { std::fs::read_to_string(path)? };
+            } else {
+                std::fs::read_to_string(path)?
+            };
         lines.extend(text.lines().map(str::to_string));
     }
     match ingest(lines.into_iter()) {

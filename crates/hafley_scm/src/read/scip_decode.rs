@@ -157,7 +157,9 @@ pub fn prune_index(input: &Path, out: &Path, prefix: &str) -> Result<usize, Scip
         .map_err(|e| ScipError::Parse(format!("read {}: {e}", input.display())))?;
     let mut index = proto::Index::decode(bytes.as_slice())
         .map_err(|e| ScipError::Parse(format!("protobuf decode {}: {e}", input.display())))?;
-    index.documents.retain(|doc| doc.relative_path.starts_with(prefix));
+    index
+        .documents
+        .retain(|doc| doc.relative_path.starts_with(prefix));
     index.external_symbols.clear();
     for doc in &mut index.documents {
         doc.text.clear();

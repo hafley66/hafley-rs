@@ -6,12 +6,12 @@ use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
 use super::{first_object, json_literal, node_string, quote_of, specifier_refs};
+use crate::edit_seams::ImportRef;
+use crate::edit_seams::ImportRefKind;
 use crate::manifests::{fold_package_edges, Manifest, ManifestKind};
 use crate::move_cx::{dirname, join_rel, relative_between, MoveCx};
 use crate::types::LangKind;
 use crate::wire::FlatFact;
-use crate::edit_seams::ImportRef;
-use crate::edit_seams::ImportRefKind;
 use hafley_scm::span::Span;
 
 /// A manifest edit: one dependency a package.json gains.
@@ -48,7 +48,10 @@ fn packages(cx: &MoveCx) -> &'static Vec<TsPackage> {
         .files()
         .iter()
         .filter(|rel| rel.as_str() == "package.json" || rel.ends_with("/package.json"))
-        .filter(|rel| !rel.split('/').any(|part| part == "node_modules" || part == "dist"))
+        .filter(|rel| {
+            !rel.split('/')
+                .any(|part| part == "node_modules" || part == "dist")
+        })
         .filter_map(|manifest| read_package(cx, manifest))
         .collect();
     let leaked: &'static Vec<TsPackage> = Box::leak(Box::new(found));
@@ -68,7 +71,9 @@ fn read_package(cx: &MoveCx, manifest: &str) -> Option<TsPackage> {
         .collect();
     let mut exports = Vec::new();
     match value.get("exports") {
-        Some(serde_json::Value::String(target)) => exports.push((".".to_string(), join_rel(&dir, target))),
+        Some(serde_json::Value::String(target)) => {
+            exports.push((".".to_string(), join_rel(&dir, target)))
+        }
         Some(serde_json::Value::Object(map)) => {
             for (key, target) in map {
                 collect_exports(key, target, &dir, &mut exports);
@@ -92,7 +97,12 @@ fn read_package(cx: &MoveCx, manifest: &str) -> Option<TsPackage> {
     })
 }
 
-fn collect_exports(key: &str, value: &serde_json::Value, dir: &str, out: &mut Vec<(String, String)>) {
+fn collect_exports(
+    key: &str,
+    value: &serde_json::Value,
+    dir: &str,
+    out: &mut Vec<(String, String)>,
+) {
     match value {
         serde_json::Value::String(target) => out.push((key.to_string(), join_rel(dir, target))),
         serde_json::Value::Object(conditions) => {
@@ -112,7 +122,9 @@ fn package_of<'a>(packages: &'a [TsPackage], rel: &str) -> Option<&'a TsPackage>
 }
 
 fn strip_ts_extension(rel: &str) -> &str {
-    for extension in [".d.ts", ".tsx", ".ts", ".mts", ".cts", ".jsx", ".js", ".mjs", ".cjs"] {
+    for extension in [
+        ".d.ts", ".tsx", ".ts", ".mts", ".cts", ".jsx", ".js", ".mjs", ".cjs",
+    ] {
         if let Some(stem) = rel.strip_suffix(extension) {
             return stem;
         }
@@ -171,9 +183,9 @@ pub(super) fn respell(
     let crossing_after = from_after.dir != to_after.dir;
     let crossing_before = from_before != to_before;
     let names_package = !relative_spec
-        && packages
-            .iter()
-            .any(|package| module == package.name || module.starts_with(&format!("{}/", package.name)));
+        && packages.iter().any(|package| {
+            module == package.name || module.starts_with(&format!("{}/", package.name))
+        });
     let quote = quote_of(&reference.text);
     if crossing_after && (!crossing_before || names_package) {
         return Some(format!("{quote}{}{quote}", package_spec(to_after, aimed)));
@@ -222,14 +234,21 @@ fn build_dep_plan(cx: &MoveCx, specifier_refs: &[ImportRef]) -> DepPlan {
     let packages = packages(cx);
     // (importer manifest) -> (dependency names, evidence file)
     let mut needs: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
-    for reference in specifier_refs.iter().filter(|r| r.kind == ImportRefKind::Import) {
+    for reference in specifier_refs
+        .iter()
+        .filter(|r| r.kind == ImportRefKind::Import)
+    {
         let importer_after = cx.after(&reference.importer);
         let aimed = cx.after(&reference.target);
-        if cx.destination(&reference.importer).is_none() && cx.destination(&reference.target).is_none() {
+        if cx.destination(&reference.importer).is_none()
+            && cx.destination(&reference.target).is_none()
+        {
             continue;
         }
-        let (Some(from), Some(to)) = (package_of(packages, importer_after), package_of(packages, aimed))
-        else {
+        let (Some(from), Some(to)) = (
+            package_of(packages, importer_after),
+            package_of(packages, aimed),
+        ) else {
             continue;
         };
         if from.dir == to.dir || from.deps.contains(&to.name) {
@@ -244,13 +263,19 @@ fn build_dep_plan(cx: &MoveCx, specifier_refs: &[ImportRef]) -> DepPlan {
     if needs.is_empty() {
         return plan;
     }
-    let protocol = match packages.iter().any(|package| package.text.contains("\"workspace:")) {
+    let protocol = match packages
+        .iter()
+        .any(|package| package.text.contains("\"workspace:"))
+    {
         true => "workspace:*",
         false => "*",
     };
     let mut added: Vec<(String, String, String)> = Vec::new();
     for (manifest, names) in &needs {
-        let Some(package) = packages.iter().find(|package| &package.manifest == manifest) else {
+        let Some(package) = packages
+            .iter()
+            .find(|package| &package.manifest == manifest)
+        else {
             continue;
         };
         let pairs: Vec<(String, String)> = names
@@ -258,15 +283,19 @@ fn build_dep_plan(cx: &MoveCx, specifier_refs: &[ImportRef]) -> DepPlan {
             .map(|(name, _)| (name.clone(), protocol.to_string()))
             .collect();
         let Some((offset, text)) = dependency_insertion(&package.text, &pairs) else {
-            plan.errors.push(format!("{manifest}: cannot place a dependencies entry"));
+            plan.errors
+                .push(format!("{manifest}: cannot place a dependencies entry"));
             continue;
         };
         let receipt = names
             .iter()
-            .map(|(name, evidence)| format!("dep {manifest}: + \"{name}\": \"{protocol}\" (for {evidence})"))
+            .map(|(name, evidence)| {
+                format!("dep {manifest}: + \"{name}\": \"{protocol}\" (for {evidence})")
+            })
             .collect::<Vec<_>>()
             .join("\n");
-        plan.edits.insert((manifest.clone(), offset), (text, receipt));
+        plan.edits
+            .insert((manifest.clone(), offset), (text, receipt));
         for (name, evidence) in names {
             if let Some(to) = packages.iter().find(|package| &package.name == name) {
                 added.push((manifest.clone(), to.manifest.clone(), evidence.clone()));
@@ -282,7 +311,9 @@ fn build_dep_plan(cx: &MoveCx, specifier_refs: &[ImportRef]) -> DepPlan {
 /// Where the new `dependencies` pairs go and the text that carries them.
 fn dependency_insertion(text: &str, pairs: &[(String, String)]) -> Option<(u32, String)> {
     let mut parser = tree_sitter::Parser::new();
-    parser.set_language(&tree_sitter_json::LANGUAGE.into()).ok()?;
+    parser
+        .set_language(&tree_sitter_json::LANGUAGE.into())
+        .ok()?;
     let tree = parser.parse(text, None)?;
     let source = text.as_bytes();
     let root = first_object(tree.root_node())?;
@@ -294,13 +325,18 @@ fn dependency_insertion(text: &str, pairs: &[(String, String)]) -> Option<(u32, 
     let written = |indent: &str| -> String {
         pairs
             .iter()
-            .map(|(name, version)| format!("{indent}{}: {}", json_literal(name), json_literal(version)))
+            .map(|(name, version)| {
+                format!("{indent}{}: {}", json_literal(name), json_literal(version))
+            })
             .collect::<Vec<_>>()
             .join(",\n")
     };
     let indent_of = |at: usize| -> String {
         let line = text[..at].rfind('\n').map_or(0, |found| found + 1);
-        text[line..at].chars().take_while(|ch| ch.is_whitespace()).collect()
+        text[line..at]
+            .chars()
+            .take_while(|ch| ch.is_whitespace())
+            .collect()
     };
     for pair in &members {
         let key = pair.child_by_field_name("key")?;

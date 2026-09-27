@@ -1,9 +1,9 @@
 use crate::cli::WatchArgs;
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::time::Duration;
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
+use std::time::Duration;
 
 use rusqlite::{params, Connection};
 use serde::{Deserialize, Serialize};
@@ -195,18 +195,26 @@ pub fn run_to(
 
     let mut generation = 1u64;
     loop {
-        if cancelled.as_ref().is_some_and(|flag| flag.load(Ordering::Acquire)) {
+        if cancelled
+            .as_ref()
+            .is_some_and(|flag| flag.load(Ordering::Acquire))
+        {
             return Ok(());
         }
         let deltas = match &mut input {
-            ChangeInput::Events(watcher) => match watcher.recv_timeout(Duration::from_millis(250))? {
-                Some(deltas) => deltas,
-                None => continue,
-            },
+            ChangeInput::Events(watcher) => {
+                match watcher.recv_timeout(Duration::from_millis(250))? {
+                    Some(deltas) => deltas,
+                    None => continue,
+                }
+            }
             ChangeInput::Poll(previous) => {
                 let mut remaining = Duration::from_millis(options.poll_ms);
                 while !remaining.is_zero() {
-                    if cancelled.as_ref().is_some_and(|flag| flag.load(Ordering::Acquire)) {
+                    if cancelled
+                        .as_ref()
+                        .is_some_and(|flag| flag.load(Ordering::Acquire))
+                    {
                         return Ok(());
                     }
                     let step = remaining.min(Duration::from_millis(250));
@@ -477,7 +485,10 @@ impl Options {
         let patterns = if args.patterns.is_empty() {
             default_patterns()
         } else {
-            args.patterns.into_iter().map(|glob| soopy::Pattern(glob.into())).collect()
+            args.patterns
+                .into_iter()
+                .map(|glob| soopy::Pattern(glob.into()))
+                .collect()
         };
         Ok(Options {
             root: args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
@@ -492,8 +503,21 @@ impl Options {
 
 pub(crate) fn default_patterns() -> Vec<soopy::Pattern> {
     [
-        "**/*.rs", "**/*.ts", "**/*.tsx", "**/*.js", "**/*.jsx", "**/*.go", "**/*.py", "**/*.kt",
-        "**/*.kts", "**/*.dl7", "**/*.pl", "**/*.gd", "**/*.lisp", "**/*.lsp", "**/*.cl",
+        "**/*.rs",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.jsx",
+        "**/*.go",
+        "**/*.py",
+        "**/*.kt",
+        "**/*.kts",
+        "**/*.dl7",
+        "**/*.pl",
+        "**/*.gd",
+        "**/*.lisp",
+        "**/*.lsp",
+        "**/*.cl",
         "**/*.asd",
     ]
     .into_iter()

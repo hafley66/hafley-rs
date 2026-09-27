@@ -297,7 +297,11 @@ fn user_prompt_marker_wins_when_assistant_quotes_the_prompt() {
 
     let assistant_only = locate_visible_turns(
         &[line("❯ quoted syntax in an assistant answer", 8)],
-        &[turn(3, "assistant", "❯ quoted syntax in an assistant answer")],
+        &[turn(
+            3,
+            "assistant",
+            "❯ quoted syntax in an assistant answer",
+        )],
     );
     assert_eq!(assistant_only[0].turn, 3);
 }

@@ -62,7 +62,11 @@ fn drops(names: &[&str]) -> Vec<(String, String, String)> {
         .filter(|row| row["record"] == "unresolved" && row["family"] == "call")
         .map(|row| {
             (
-                text(row, "path").rsplit('/').next().unwrap_or("").to_string(),
+                text(row, "path")
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
                 text(row, "detail"),
                 text(row, "reason"),
             )
@@ -127,10 +131,9 @@ fn free_call_keeps_name_match() {
     // sites are cut off.
     let rows = edges(&["lib.kt", "use.kt"]);
     assert!(
-        rows.iter()
-            .any(|(callee, file, origin, _)| callee == "sole"
-                && file == "use.kt"
-                && (*origin == "module_plane" || *origin == "corpus_unique")),
+        rows.iter().any(|(callee, file, origin, _)| callee == "sole"
+            && file == "use.kt"
+            && (*origin == "module_plane" || *origin == "corpus_unique")),
         "{rows:?}"
     );
 }

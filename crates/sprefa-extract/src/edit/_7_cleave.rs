@@ -7,34 +7,46 @@ use crate::cli::CleaveArgs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
-use sprefa_extract::move_stage::{
-    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
-    VerifyJournal,
-};
-use sprefa_extract::{
-    directory_path, directory_source, dispatch, flatten_each, cleave_for, normalize,
-    replace_action, resolve_project, scm_facts, FamilyMask, FlatFact, MoveCx, Cleave,
-    ResolveArms, ResolveRequest, Respell, ScipMode, ScipRecords, Span,
-};
+use sprefa_extract::edit_seams::CleaveDrag;
 use sprefa_extract::edit_seams::CleavePlan;
 use sprefa_extract::edit_seams::CleaveSpecifier;
-use sprefa_extract::edit_seams::CleaveDrag;
+use sprefa_extract::move_stage::{
+    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit,
+    state_root, Mirror, VerifyJournal,
+};
+use sprefa_extract::{
+    cleave_for, directory_path, directory_source, dispatch, flatten_each, normalize,
+    replace_action, resolve_project, scm_facts, Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms,
+    ResolveRequest, Respell, ScipMode, ScipRecords, Span,
+};
 
 const PRODUCER: &str = "extract-cleave";
 
 /// Outside-the-corpus traits a method call needs imported (no prelude entry).
 const IMPORTED_TRAITS: [&str; 16] = [
-    "Read", "Write", "BufRead", "Seek", "FromStr", "Hash", "Hasher", "Error", "Borrow",
-    "BorrowMut", "FromIterator", "Extend", "Any", "Itertools", "Future", "Stream",
+    "Read",
+    "Write",
+    "BufRead",
+    "Seek",
+    "FromStr",
+    "Hash",
+    "Hasher",
+    "Error",
+    "Borrow",
+    "BorrowMut",
+    "FromIterator",
+    "Extend",
+    "Any",
+    "Itertools",
+    "Future",
+    "Stream",
 ];
 
-const SCOPE: &str ="not supported: cross-language cleave, moving a type with its impl blocks";
+const SCOPE: &str = "not supported: cross-language cleave, moving a type with its impl blocks";
 
 pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
-        return Err(
-            "--verify needs --commit".to_string().into(),
-        );
+        return Err("--verify needs --commit".to_string().into());
     }
     if let Some(list) = cli.list.as_deref() {
         return run_list(&cli, list);
@@ -45,7 +57,9 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
     crate::outln!("root {}", plan.root.display());
     crate::outln!(
         "plan {}#{} -> {}",
-        plan.rows.src, plan.rows.item, plan.rows.dest
+        plan.rows.src,
+        plan.rows.item,
+        plan.rows.dest
     );
     if !plan.rows.unresolved.is_empty() {
         for name in &plan.rows.unresolved {
@@ -61,7 +75,10 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
     for row in &plan.rows.travelling {
         crate::outln!(
             "travel {} from {} as {} ({})",
-            row.name, row.module, row.dest_module, row.kind
+            row.name,
+            row.module,
+            row.dest_module,
+            row.kind
         );
     }
     for row in &plan.rows.orphans {
@@ -133,7 +150,8 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
             return Err(format!(
                 "{}#{} has ungraded names; the batch stops before any write",
                 plan.rows.src, plan.rows.item
-            ).into());
+            )
+            .into());
         }
         for row in &plan.source.specifiers {
             if plan.source.refs_outside(&row.name, &[]) > 0 {
@@ -172,7 +190,8 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
                 match run_verify_command(&root, command)? {
                     Some(0) => crate::outln!("verify ok"),
                     code => {
-                        let reason = code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
+                        let reason =
+                            code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
                         let count = journal.restore(&root, &state, &[])?;
                         crate::outln!("verify failed (rc={reason}): rolled back {count} files");
                         return Err(crate::RyiExit::new(3, String::new()));
@@ -202,22 +221,34 @@ fn drop_batch_unused_imports(
 ) -> Result<(), String> {
     for (rel, candidates) in imported_before {
         let Some(arm) = cleave_for(rel) else { continue };
-        if arm.imports_visible_to_children(cx, rel) { continue }
+        if arm.imports_visible_to_children(cx, rel) {
+            continue;
+        }
         let facts = FileFacts::open(cx, rel, true)?;
         let mut text = facts.text.clone();
         for (module, names) in facts.modules() {
-            let kept: Vec<String> = names.iter().filter(|name| {
-                !candidates.contains(&(module.clone(), (*name).clone()))
-                    || facts.refs_outside(name, &[]) > 0
-                    || facts.method_scope(name, imports.maybe_trait(cx, rel, name), &[])
-                    || facts.specifiers.iter().any(|row| row.name == **name && row.module == module && facts.reexports(row.span))
-            }).cloned().collect();
-            if kept.len() == names.len() { continue }
+            let kept: Vec<String> = names
+                .iter()
+                .filter(|name| {
+                    !candidates.contains(&(module.clone(), (*name).clone()))
+                        || facts.refs_outside(name, &[]) > 0
+                        || facts.method_scope(name, imports.maybe_trait(cx, rel, name), &[])
+                        || facts.specifiers.iter().any(|row| {
+                            row.name == **name && row.module == module && facts.reexports(row.span)
+                        })
+                })
+                .cloned()
+                .collect();
+            if kept.len() == names.len() {
+                continue;
+            }
             if let Some(edit) = arm.edit_import(&text, &kept, &module) {
                 text = apply(&text, &edit);
             }
         }
-        if text != facts.text { cx.overlay(rel, text) }
+        if text != facts.text {
+            cx.overlay(rel, text)
+        }
     }
     Ok(())
 }
@@ -297,21 +328,36 @@ fn read_cleave_list(path: &Path) -> Result<Vec<(String, PathBuf)>, String> {
 
 /// Files whose own specifier rows import `item` by SRC's module path, which a
 /// resolve can miss: a test crate's package spelling, or a nested `use` beside a re-export.
-fn package_callers(cx: &MoveCx, arm: &dyn Cleave, src: &str, item: &str, known: &[String]) -> Result<Vec<String>, String> {
+fn package_callers(
+    cx: &MoveCx,
+    arm: &dyn Cleave,
+    src: &str,
+    item: &str,
+    known: &[String],
+) -> Result<Vec<String>, String> {
     let mut out = Vec::new();
     for rel in cx.files() {
-        if rel == src || known.contains(rel) || cleave_for(rel).map(|other| other.name()) != Some(arm.name()) {
+        if rel == src
+            || known.contains(rel)
+            || cleave_for(rel).map(|other| other.name()) != Some(arm.name())
+        {
             continue;
         }
         let spelled = arm.spell_module(cx, rel, src);
         let Some(text) = cx.text(rel) else {
             continue;
         };
-        if !text.contains(&format!("{spelled}::{item}")) && !text.contains(&format!("{spelled}::{{")) {
+        if !text.contains(&format!("{spelled}::{item}"))
+            && !text.contains(&format!("{spelled}::{{"))
+        {
             continue;
         }
         let facts = FileFacts::open(cx, rel, false)?;
-        if facts.specifiers.iter().any(|row| row.name == item && module_key(item, &row.module) == spelled) {
+        if facts
+            .specifiers
+            .iter()
+            .any(|row| row.name == item && module_key(item, &row.module) == spelled)
+        {
             out.push(rel.clone());
         }
     }
@@ -323,16 +369,28 @@ fn package_callers(cx: &MoveCx, arm: &dyn Cleave, src: &str, item: &str, known: 
 fn use_statement(text: &str, offset: u32) -> Option<(usize, usize)> {
     let before = &text[..offset as usize];
     let keyword = before.rfind("use ")?;
-    let line_start = before[..keyword].rfind('\n').map_or(0, |newline| newline + 1);
-    let indent = text[line_start..].len() - text[line_start..].trim_start_matches([' ', '\t']).len();
+    let line_start = before[..keyword]
+        .rfind('\n')
+        .map_or(0, |newline| newline + 1);
+    let indent =
+        text[line_start..].len() - text[line_start..].trim_start_matches([' ', '\t']).len();
     Some((line_start + indent, indent))
 }
 
 /// Every `pub use SRC::*;` another file writes, answered with a `pub use
 /// DEST::ITEM;` line after it, so paths through that glob keep resolving.
-fn glob_reexports(cx: &MoveCx, arm: &dyn Cleave, src: &str, dest: &str, item: &str) -> Vec<(String, Span, String)> {
+fn glob_reexports(
+    cx: &MoveCx,
+    arm: &dyn Cleave,
+    src: &str,
+    dest: &str,
+    item: &str,
+) -> Vec<(String, Span, String)> {
     let forms = |spelled: &str| {
-        [format!("pub use {spelled}::*;"), format!("pub use {}::*;", spelled.trim_start_matches("crate::"))]
+        [
+            format!("pub use {spelled}::*;"),
+            format!("pub use {}::*;", spelled.trim_start_matches("crate::")),
+        ]
     };
     let mut out = Vec::new();
     for rel in cx.files() {
@@ -346,14 +404,26 @@ fn glob_reexports(cx: &MoveCx, arm: &dyn Cleave, src: &str, dest: &str, item: &s
             continue;
         }
         let dest_spelled = arm.spell_module(cx, rel, dest);
-        if forms(&dest_spelled).iter().any(|form| text.contains(form.as_str())) {
+        if forms(&dest_spelled)
+            .iter()
+            .any(|form| text.contains(form.as_str()))
+        {
             continue;
         }
-        let Some(at) = forms(&arm.spell_module(cx, rel, src)).iter().find_map(|form| text.find(form.as_str())) else {
+        let Some(at) = forms(&arm.spell_module(cx, rel, src))
+            .iter()
+            .find_map(|form| text.find(form.as_str()))
+        else {
             continue;
         };
-        let line_end = text[at..].find('\n').map_or(text.len(), |newline| at + newline + 1);
-        out.push((rel.clone(), Span::anchor(line_end as u32), format!("pub use {dest_spelled}::{item};\n")));
+        let line_end = text[at..]
+            .find('\n')
+            .map_or(text.len(), |newline| at + newline + 1);
+        out.push((
+            rel.clone(),
+            Span::anchor(line_end as u32),
+            format!("pub use {dest_spelled}::{item};\n"),
+        ));
     }
     out
 }
@@ -362,16 +432,27 @@ fn glob_reexports(cx: &MoveCx, arm: &dyn Cleave, src: &str, dest: &str, item: &s
 /// (`#[serde(with = "arc_str")]`); each path's head is a free name there.
 fn serde_paths(text: &str) -> Vec<(String, Span)> {
     let mut out = Vec::new();
-    for key in ["with = \"", "serialize_with = \"", "deserialize_with = \"", "default = \""] {
+    for key in [
+        "with = \"",
+        "serialize_with = \"",
+        "deserialize_with = \"",
+        "default = \"",
+    ] {
         for (at, _) in text.match_indices(key) {
             let line_start = text[..at].rfind('\n').map_or(0, |newline| newline + 1);
             if !text[line_start..at].contains("serde(") {
                 continue;
             }
             let start = at + key.len();
-            let head: String = text[start..].chars().take_while(|ch| ch.is_alphanumeric() || *ch == '_').collect();
+            let head: String = text[start..]
+                .chars()
+                .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
+                .collect();
             if !head.is_empty() {
-                out.push((head.clone(), span_of(start as u32, (start + head.len()) as u32)));
+                out.push((
+                    head.clone(),
+                    span_of(start as u32, (start + head.len()) as u32),
+                ));
             }
         }
     }
@@ -381,10 +462,12 @@ fn serde_paths(text: &str) -> Vec<(String, Span)> {
 /// A top-level `mod name { .. }` block, whole lines: scope rows carry no
 /// declaration for an inline module, and a serde path can name one.
 fn inline_mod(text: &str, name: &str) -> Option<Decl> {
-    let (start, exported) = ["\npub mod ", "\npub(crate) mod ", "\nmod "].iter().find_map(|head| {
-        let at = text.find(&format!("{head}{name} {{"))? + 1;
-        Some((at, head.contains("pub")))
-    })?;
+    let (start, exported) = ["\npub mod ", "\npub(crate) mod ", "\nmod "]
+        .iter()
+        .find_map(|head| {
+            let at = text.find(&format!("{head}{name} {{"))? + 1;
+            Some((at, head.contains("pub")))
+        })?;
     let open = start + text[start..].find('{')?;
     let mut depth = 0usize;
     for (offset, ch) in text[open..].char_indices() {
@@ -394,8 +477,14 @@ fn inline_mod(text: &str, name: &str) -> Option<Decl> {
                 depth -= 1;
                 if depth == 0 {
                     let end = open + offset + 1;
-                    let end = text[end..].find('\n').map_or(text.len(), |newline| end + newline + 1);
-                    return Some(Decl { name: name.to_string(), span: span_of(start as u32, end as u32), exported });
+                    let end = text[end..]
+                        .find('\n')
+                        .map_or(text.len(), |newline| end + newline + 1);
+                    return Some(Decl {
+                        name: name.to_string(),
+                        span: span_of(start as u32, end as u32),
+                        exported,
+                    });
                 }
             }
             _ => {}
@@ -419,12 +508,23 @@ fn overlay_scratch() -> PathBuf {
 
 /// The plan rows a batch prints per row before its one stage.
 fn print_plan(plan: &Plan) {
-    crate::outln!("plan {}#{} -> {}", plan.rows.src, plan.rows.item, plan.rows.dest);
+    crate::outln!(
+        "plan {}#{} -> {}",
+        plan.rows.src,
+        plan.rows.item,
+        plan.rows.dest
+    );
     for name in &plan.rows.unresolved {
         crate::outln!("ungraded {name}");
     }
     for row in &plan.rows.travelling {
-        crate::outln!("travel {} from {} as {} ({})", row.name, row.module, row.dest_module, row.kind);
+        crate::outln!(
+            "travel {} from {} as {} ({})",
+            row.name,
+            row.module,
+            row.dest_module,
+            row.kind
+        );
     }
     for row in &plan.rows.orphans {
         crate::outln!("orphan {} from {}", row.name, row.module);
@@ -574,7 +674,13 @@ impl Plan {
     }
 
     /// One row planned over a corpus walk and a resolve another row may share.
-    fn build_with(cx: MoveCx, imports: &Imports, target: &str, dest: &Path, drag: bool) -> Result<Self, String> {
+    fn build_with(
+        cx: MoveCx,
+        imports: &Imports,
+        target: &str,
+        dest: &Path,
+        drag: bool,
+    ) -> Result<Self, String> {
         let root = cx.root().to_path_buf();
         let (src, item) = split_target(target)?;
         let src = within_root(&root, &anchor_file_in(&cx, &src)?)?;
@@ -672,18 +778,27 @@ impl Plan {
             };
             let already_dest = imports.target(&src, &row.name) == Some(dest.as_str())
                 || module_key(&row.name, &row.module) == arm.spell_module(&cx, &src, &dest);
-            if source.refs_in(&row.name, &moving) > 0 && !dest_bound.contains(row.name.as_str()) && !already_dest {
+            if source.refs_in(&row.name, &moving) > 0
+                && !dest_bound.contains(row.name.as_str())
+                && !already_dest
+            {
                 travelling.push(plan_row.clone());
             }
             if source.refs_outside(&row.name, &moving) == 0
                 && !source.reexports(row.span)
-                && !source.method_scope(&row.name, imports.maybe_trait(&cx, &src, &row.name), &moving)
+                && !source.method_scope(
+                    &row.name,
+                    imports.maybe_trait(&cx, &src, &row.name),
+                    &moving,
+                )
             {
                 orphans.push(plan_row);
             }
         }
         for glob in source.specifiers.iter().filter(|row| row.glob) {
-            let line_start = source.text[..glob.span.start as usize].rfind('\n').map_or(0, |newline| newline + 1);
+            let line_start = source.text[..glob.span.start as usize]
+                .rfind('\n')
+                .map_or(0, |newline| newline + 1);
             if source.text[line_start..].starts_with(char::is_whitespace) {
                 continue;
             }
@@ -730,7 +845,9 @@ impl Plan {
                     continue;
                 }
                 let dest_module = arm.spell_module(&cx, &dest, &parent);
-                let kind = if carried.contains(&(decl.name.clone(), module_key(&decl.name, &dest_module))) {
+                let kind = if carried
+                    .contains(&(decl.name.clone(), module_key(&decl.name, &dest_module)))
+                {
                     "carried"
                 } else {
                     "relative"
@@ -800,7 +917,9 @@ impl Plan {
                 dragged
                     .iter()
                     .filter(|row| row.action == "exported")
-                    .filter(|row| !carried.contains(&(row.name.clone(), module_key(&row.name, &src_module))))
+                    .filter(|row| {
+                        !carried.contains(&(row.name.clone(), module_key(&row.name, &src_module)))
+                    })
                     .map(|row| (row.name.clone(), src_module.clone())),
             );
         for (name, module) in wanted {
@@ -844,9 +963,7 @@ impl Plan {
             .iter()
             .map(|span| source.slice(*span).to_string())
             .collect();
-        if !item_decl.exported
-            && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty())
-        {
+        if !item_decl.exported && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty()) {
             if let Some(first) = moving_text.first_mut() {
                 if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
                     *first = apply(first, &edit);
@@ -899,15 +1016,23 @@ impl Plan {
     fn land(&self) -> Result<BTreeMap<String, (String, Vec<(Span, u32)>)>, String> {
         let mut by_file: BTreeMap<String, Vec<Respell>> = BTreeMap::new();
         for respell in self.respells() {
-            by_file.entry(respell.file.clone()).or_default().push(respell);
+            by_file
+                .entry(respell.file.clone())
+                .or_default()
+                .push(respell);
         }
         let mut out = BTreeMap::new();
         for (rel, edits) in by_file {
             let mut text = self.cx.text(&rel).ok_or_else(|| format!("read {rel}"))?;
-            let shifts: Vec<(Span, u32)> =
-                edits.iter().map(|edit| (edit.span, edit.text.len() as u32)).collect();
+            let shifts: Vec<(Span, u32)> = edits
+                .iter()
+                .map(|edit| (edit.span, edit.text.len() as u32))
+                .collect();
             for edit in edits.iter().rev() {
-                text.replace_range(edit.span.start as usize..edit.span.end() as usize, &edit.text);
+                text.replace_range(
+                    edit.span.start as usize..edit.span.end() as usize,
+                    &edit.text,
+                );
             }
             out.insert(rel, (text, shifts));
         }
@@ -953,11 +1078,10 @@ impl Plan {
             });
         }
         for (rel, span) in &self.qualified {
-            let Some(written) = self
-                .cx
-                .text(rel)
-                .and_then(|text| text.get(span.start as usize..span.end() as usize).map(str::to_string))
-            else {
+            let Some(written) = self.cx.text(rel).and_then(|text| {
+                text.get(span.start as usize..span.end() as usize)
+                    .map(str::to_string)
+            }) else {
                 continue;
             };
             let module = written.rsplit_once("::").map_or("", |(module, _)| module);
@@ -968,7 +1092,10 @@ impl Plan {
                 self.arm.spell_module(&self.cx, rel, &self.rows.dest),
             );
             out.push(Respell {
-                receipt: Some(format!("path {rel}: {written} -> {spelling}::{}", self.rows.item)),
+                receipt: Some(format!(
+                    "path {rel}: {written} -> {spelling}::{}",
+                    self.rows.item
+                )),
                 file: rel.clone(),
                 span: *span,
                 text: format!("{spelling}::{}", self.rows.item),
@@ -1007,7 +1134,12 @@ impl Plan {
                 .collect()
         };
         let mut edits: Vec<Respell> = Vec::new();
-        for row in self.rows.dragged.iter().filter(|row| row.action == "exported") {
+        for row in self
+            .rows
+            .dragged
+            .iter()
+            .filter(|row| row.action == "exported")
+        {
             let Some(edit) = self.arm.edit_export(&self.source.text, row.span, true) else {
                 continue;
             };
@@ -1041,7 +1173,9 @@ impl Plan {
             }
         }
         if self.source.refs_outside(&self.rows.item, &moving) > 0 {
-            let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);
+            let module = self
+                .arm
+                .spell_module(&self.cx, &self.rows.src, &self.rows.dest);
             if let Some(edit) = self.arm.edit_import(
                 &self.source.text,
                 std::slice::from_ref(&self.rows.item),
@@ -1071,7 +1205,9 @@ impl Plan {
         // becomes that cut's replacement, so the two never overlap.
         for edit in edits {
             let host = out.iter_mut().find(|cut| {
-                edit.span.len == 0 && cut.span.start <= edit.span.start && edit.span.start < cut.span.end()
+                edit.span.len == 0
+                    && cut.span.start <= edit.span.start
+                    && edit.span.start < cut.span.end()
             });
             match host {
                 Some(cut) => {
@@ -1128,7 +1264,10 @@ impl Plan {
             if !names.contains(&self.rows.item) {
                 continue;
             }
-            let kept: Vec<String> = names.into_iter().filter(|name| *name != self.rows.item).collect();
+            let kept: Vec<String> = names
+                .into_iter()
+                .filter(|name| *name != self.rows.item)
+                .collect();
             if let Some(edit) = self.arm.edit_import(&block, &kept, &module) {
                 block = apply(&block, &edit);
             }
@@ -1145,11 +1284,13 @@ impl Plan {
             if *rel == self.rows.dest {
                 continue;
             }
-            let top_level = !rel.ends_with(".rs") || facts.specifiers.iter().any(|row| {
-                row.name == self.rows.item
-                    && row.module == *module
-                    && use_statement(&facts.text, row.span.start).is_some_and(|(_, indent)| indent == 0)
-            });
+            let top_level = !rel.ends_with(".rs")
+                || facts.specifiers.iter().any(|row| {
+                    row.name == self.rows.item
+                        && row.module == *module
+                        && use_statement(&facts.text, row.span.start)
+                            .is_some_and(|(_, indent)| indent == 0)
+                });
             if !top_level {
                 out.extend(self.nested_respells(rel, facts));
                 continue;
@@ -1213,19 +1354,34 @@ impl Plan {
             if indent_len == 0 || !seen.insert(at) {
                 continue;
             }
-            let end = facts.text[at..].find(';').map_or(facts.text.len(), |semi| at + semi + 1);
+            let end = facts.text[at..]
+                .find(';')
+                .map_or(facts.text.len(), |semi| at + semi + 1);
             let statement = format!("{}\n", &facts.text[at..end]);
             let within = |start: u32| at as u32 <= start && (start as usize) < end;
             let kept: Vec<String> = facts
                 .specifiers
                 .iter()
-                .filter(|other| within(other.span.start) && other.module == row.module && other.name != *item)
+                .filter(|other| {
+                    within(other.span.start) && other.module == row.module && other.name != *item
+                })
                 .map(|other| other.name.clone())
                 .collect();
-            let spelling = as_written(&self.cx, &self.rows.dest, &row.module, self.arm.spell_module(&self.cx, rel, &self.rows.dest));
+            let spelling = as_written(
+                &self.cx,
+                &self.rows.dest,
+                &row.module,
+                self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+            );
             let edits = [
                 self.arm.edit_import(&statement, &kept, &row.module),
-                self.arm.edit_import_like(&statement, std::slice::from_ref(item), &spelling, item, &row.module),
+                self.arm.edit_import_like(
+                    &statement,
+                    std::slice::from_ref(item),
+                    &spelling,
+                    item,
+                    &row.module,
+                ),
             ];
             for edit in edits.into_iter().flatten() {
                 let at_line_start = statement[..edit.span.start as usize].ends_with('\n');
@@ -1248,7 +1404,10 @@ impl Plan {
                 };
                 out.push(Respell {
                     file: rel.to_string(),
-                    span: Span { start: start as u32, len: len as u32 },
+                    span: Span {
+                        start: start as u32,
+                        len: len as u32,
+                    },
                     text,
                     receipt: Some(format!("caller {rel}: nested use of {item} -> {spelling}")),
                 });
@@ -1335,7 +1494,10 @@ impl Plan {
                     module,
                     self.arm.spell_module(&self.cx, rel, &self.rows.dest),
                 );
-                !matches!(spelling.split("::").next(), Some("crate" | "self" | "super"))
+                !matches!(
+                    spelling.split("::").next(),
+                    Some("crate" | "self" | "super")
+                )
             });
         match foreign {
             true => self.arm.publish_module(&self.cx, &self.rows.dest),
@@ -1414,7 +1576,12 @@ fn absorb(text: &str, cuts: Vec<Span>) -> Vec<Span> {
             widen(bytes, cut);
         }
         merged = merge(merged);
-        if before == merged.iter().map(|cut| (cut.start, cut.len)).collect::<Vec<_>>() {
+        if before
+            == merged
+                .iter()
+                .map(|cut| (cut.start, cut.len))
+                .collect::<Vec<_>>()
+        {
             return merged;
         }
     }
@@ -1500,8 +1667,15 @@ impl Imports {
                 ..
             } = fact
             {
-                if let (Some(caller), Some(target)) = (rel_of(root, caller_path), rel_of(root, callee_path)) {
-                    calls.push((caller, span_of(*caller_site_start, *caller_site_end), target, callee.clone()));
+                if let (Some(caller), Some(target)) =
+                    (rel_of(root, caller_path), rel_of(root, callee_path))
+                {
+                    calls.push((
+                        caller,
+                        span_of(*caller_site_start, *caller_site_end),
+                        target,
+                        callee.clone(),
+                    ));
                 }
                 continue;
             }
@@ -1516,7 +1690,8 @@ impl Imports {
             else {
                 continue;
             };
-            let (Some(importer), Some(target)) = (rel_of(root, src_path), rel_of(root, target_path))
+            let (Some(importer), Some(target)) =
+                (rel_of(root, src_path), rel_of(root, target_path))
             else {
                 continue;
             };
@@ -1533,10 +1708,18 @@ impl Imports {
         let (src, dest, item) = (&plan.rows.src, &plan.rows.dest, &plan.rows.item);
         let mut added = Vec::new();
         for row in &plan.rows.travelling {
-            if let Some((_, _, target, declared, _)) =
-                self.names.iter().find(|(from, bound, ..)| from == src && *bound == row.name)
+            if let Some((_, _, target, declared, _)) = self
+                .names
+                .iter()
+                .find(|(from, bound, ..)| from == src && *bound == row.name)
             {
-                added.push((dest.clone(), row.name.clone(), target.clone(), declared.clone(), false));
+                added.push((
+                    dest.clone(),
+                    row.name.clone(),
+                    target.clone(),
+                    declared.clone(),
+                    false,
+                ));
             }
         }
         for row in self.names.iter_mut() {
@@ -1545,7 +1728,8 @@ impl Imports {
             }
         }
         self.names.extend(added);
-        self.names.push((src.clone(), item.clone(), dest.clone(), item.clone(), false));
+        self.names
+            .push((src.clone(), item.clone(), dest.clone(), item.clone(), false));
         self.calls.retain_mut(|(caller, span, target, callee)| {
             if *target == *src && callee == item {
                 *target = dest.clone();
@@ -1557,7 +1741,9 @@ impl Imports {
             for (edited, new_len) in shifts {
                 if edited.end() <= span.start && !(edited.len == 0 && edited.start == span.start) {
                     delta += *new_len as i64 - edited.len as i64;
-                } else if edited.start < span.end() && span.start < edited.end().max(edited.start + 1) {
+                } else if edited.start < span.end()
+                    && span.start < edited.end().max(edited.start + 1)
+                {
                     return false;
                 }
             }
@@ -1569,13 +1755,19 @@ impl Imports {
     /// Whether `name` in `importer` can be a trait: its corpus declaration says
     /// `trait`, or it reaches no corpus file and nothing rules it out.
     fn maybe_trait(&self, cx: &MoveCx, importer: &str, name: &str) -> bool {
-        let Some((_, _, target, declared, _)) = self.names.iter().find(|(from, bound, ..)| from == importer && bound == name) else {
+        let Some((_, _, target, declared, _)) = self
+            .names
+            .iter()
+            .find(|(from, bound, ..)| from == importer && bound == name)
+        else {
             return IMPORTED_TRAITS.contains(&name) || name.ends_with("Ext");
         };
         cx.text(target).is_some_and(|text| {
-            text.match_indices(&format!("trait {declared}")).any(|(at, found)| {
-                !text[at + found.len()..].starts_with(|ch: char| ch.is_alphanumeric() || ch == '_')
-            })
+            text.match_indices(&format!("trait {declared}"))
+                .any(|(at, found)| {
+                    !text[at + found.len()..]
+                        .starts_with(|ch: char| ch.is_alphanumeric() || ch == '_')
+                })
         })
     }
 
@@ -1588,7 +1780,10 @@ impl Imports {
             .filter(|(caller, _, target, callee)| target == src && callee == item && caller != src)
             .filter(|(caller, span, _, _)| {
                 cx.text(caller)
-                    .and_then(|text| text.get(span.start as usize..span.end() as usize).map(str::to_string))
+                    .and_then(|text| {
+                        text.get(span.start as usize..span.end() as usize)
+                            .map(str::to_string)
+                    })
                     .is_some_and(|written| written.contains("::") && written.ends_with(item))
             })
             .map(|(caller, span, _, _)| (caller.clone(), *span))
@@ -1707,11 +1902,7 @@ impl FileFacts {
                     callee,
                     callee_path,
                     ..
-                } => sites.push((
-                    callee,
-                    span_of(span.start, span.end),
-                    callee_path.is_some(),
-                )),
+                } => sites.push((callee, span_of(span.start, span.end), callee_path.is_some())),
                 _ => {}
             }
             Ok(())
@@ -1774,7 +1965,9 @@ impl FileFacts {
             .map(str::trim_start)
             .find(|line| !line.is_empty() && !line.starts_with("//") && !line.starts_with("#["))
             .unwrap_or_default();
-        statement.starts_with("pub ") || statement.starts_with("pub(") || statement.starts_with("export ")
+        statement.starts_with("pub ")
+            || statement.starts_with("pub(")
+            || statement.starts_with("export ")
     }
 
     /// The file's bytes under `span`, empty when the span is off the end.
@@ -1901,8 +2094,7 @@ fn scope_rows(
     text: &str,
 ) -> Result<(Vec<Decl>, Vec<(String, Span)>, Vec<(String, Span)>), String> {
     let path = cx.materialize(rel, &overlay_scratch())?;
-    let facts =
-        scm_facts(&[path]).map_err(|error| format!("scope rows for {rel}: {error}"))?;
+    let facts = scm_facts(&[path]).map_err(|error| format!("scope rows for {rel}: {error}"))?;
     let (top_level, root_children) = root_item_spans(rel, text)?;
     let mut decls: Vec<Decl> = Vec::new();
     let mut free = Vec::new();
@@ -1939,7 +2131,10 @@ fn scope_rows(
             // through a `use HashMap`: only a path's first segment is free.
             FlatFact::FreeNameRow {
                 name, start, end, ..
-            } if !text.get(..*start as usize).is_some_and(|before| before.trim_end().ends_with("::")) => {
+            } if !text
+                .get(..*start as usize)
+                .is_some_and(|before| before.trim_end().ends_with("::")) =>
+            {
                 free.push((name.clone(), span_of(*start, *end)))
             }
             _ => {}
@@ -1982,7 +2177,10 @@ fn impl_self(text: &str) -> Option<String> {
     }
     let head = head[generics_end..].trim();
     let target = head.rsplit_once(" for ").map_or(head, |(_, ty)| ty).trim();
-    let target = target.trim_start_matches('&').trim_start_matches("mut ").trim();
+    let target = target
+        .trim_start_matches('&')
+        .trim_start_matches("mut ")
+        .trim();
     let name: String = target
         .rsplit("::")
         .next()?
@@ -2068,7 +2266,11 @@ fn root_item_spans(
                 kind,
                 span,
                 ..
-            } if matches!(kind.as_str(), "lexical_declaration" | "variable_declaration") => {
+            } if matches!(
+                kind.as_str(),
+                "lexical_declaration" | "variable_declaration"
+            ) =>
+            {
                 variable_lists.insert((span.start, span.end));
             }
             FlatFact::Edge {
@@ -2097,17 +2299,21 @@ fn root_item_spans(
         .map(|(_, to)| *to)
         .collect();
     let mut items = direct.clone();
-    items.extend(children.iter().filter_map(|(from, to)| {
-        (direct.contains(from) && exports.contains(from)).then_some(*to)
-    }));
+    items.extend(
+        children.iter().filter_map(|(from, to)| {
+            (direct.contains(from) && exports.contains(from)).then_some(*to)
+        }),
+    );
     let visible_lists: BTreeSet<(u32, u32)> = items
         .iter()
         .filter(|span| variable_lists.contains(span))
         .copied()
         .collect();
-    items.extend(children.into_iter().filter_map(|(from, to)| {
-        visible_lists.contains(&from).then_some(to)
-    }));
+    items.extend(
+        children
+            .into_iter()
+            .filter_map(|(from, to)| visible_lists.contains(&from).then_some(to)),
+    );
     Ok((items, root_children))
 }
 
@@ -2193,7 +2399,10 @@ fn plan_root(requested: Option<&PathBuf>, src: &Path) -> Result<PathBuf, String>
 /// SRC as `anchor_file` finds it, or a file an earlier batch row created.
 fn anchor_file_in(cx: &MoveCx, path: &Path) -> Result<PathBuf, String> {
     let unborn = canonical_unborn(&absolute(path)?);
-    match cx.rel(&unborn).is_some_and(|rel| cx.overlaid().contains_key(&rel)) {
+    match cx
+        .rel(&unborn)
+        .is_some_and(|rel| cx.overlaid().contains_key(&rel))
+    {
         true => Ok(unborn),
         false => anchor_file(path),
     }
@@ -2308,7 +2517,9 @@ fn cross_package_stop(
         users.push((src.to_string(), from.clone()));
     }
     let back = dest_imports.iter().any(|(module, _)| {
-        module == &from.2 || module.starts_with(&format!("{}::", from.2)) || module.starts_with(&format!("{}/", from.2))
+        module == &from.2
+            || module.starts_with(&format!("{}::", from.2))
+            || module.starts_with(&format!("{}/", from.2))
     });
     for (user, package) in &users {
         if package.0 == to.0 {
@@ -2335,7 +2546,13 @@ fn cross_package_stop(
             "rust" => matches!(key, "std" | "core" | "alloc" | "crate" | "self" | "super"),
             _ => key.starts_with("node:") || key.starts_with('.'),
         };
-        if builtin || key == to.2 || to.3.iter().any(|dep| dep == key || dep.replace('-', "_") == key) {
+        if builtin
+            || key == to.2
+            || to
+                .3
+                .iter()
+                .any(|dep| dep == key || dep.replace('-', "_") == key)
+        {
             continue;
         }
         return Err(format!(

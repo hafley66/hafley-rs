@@ -87,13 +87,7 @@ fn rows() -> Vec<Value> {
         .collect()
 }
 
-fn has_call(
-    calls: &[Call],
-    caller: &str,
-    callee: &str,
-    target: &str,
-    origin: &str,
-) -> bool {
+fn has_call(calls: &[Call], caller: &str, callee: &str, target: &str, origin: &str) -> bool {
     calls.iter().any(|(c, callee_name, target_file, origin_)| {
         c == caller && callee_name == callee && target_file == target && origin_ == origin
     })

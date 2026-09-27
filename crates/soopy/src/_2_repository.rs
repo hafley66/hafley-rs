@@ -31,14 +31,22 @@ pub fn discover(start: impl AsRef<Path>) -> Result<Repository> {
 /// `discover` read off `.git` / `gitdir:` / `commondir`, hashed as `open` hashes
 /// git's answers; `None` (env override, unknown layout) hands the question to git.
 fn discover_on_disk(cwd: &Path) -> Option<Repository> {
-    if ["GIT_DIR", "GIT_WORK_TREE", "GIT_COMMON_DIR", "GIT_CEILING_DIRECTORIES"]
-        .iter()
-        .any(|name| std::env::var_os(name).is_some())
+    if [
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_CEILING_DIRECTORIES",
+    ]
+    .iter()
+    .any(|name| std::env::var_os(name).is_some())
     {
         return None;
     }
     let cwd = std::fs::canonicalize(cwd).ok()?;
-    let root = cwd.ancestors().find(|dir| dir.join(".git").exists())?.to_path_buf();
+    let root = cwd
+        .ancestors()
+        .find(|dir| dir.join(".git").exists())?
+        .to_path_buf();
     let dot_git = root.join(".git");
     let git_dir = if dot_git.is_dir() {
         dot_git
@@ -124,8 +132,10 @@ mod disk_discovery {
             .args(["rev-parse", "--show-toplevel"])
             .output()
             .expect("git runs");
-        let slow = open(PathBuf::from(String::from_utf8(output.stdout).expect("utf8").trim()))
-            .expect("git opens the repository");
+        let slow = open(PathBuf::from(
+            String::from_utf8(output.stdout).expect("utf8").trim(),
+        ))
+        .expect("git opens the repository");
         assert_eq!(fast, slow);
     }
 }

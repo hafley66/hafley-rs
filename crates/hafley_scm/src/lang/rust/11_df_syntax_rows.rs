@@ -9,13 +9,37 @@ use super::call_metadata_rows::{line_col_to_byte, primary_type};
 pub struct NodeRef(pub u32);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Span { pub start: u32, pub len: u32 }
-impl Span { pub fn end(self) -> u32 { self.start + self.len } }
+pub struct Span {
+    pub start: u32,
+    pub len: u32,
+}
+impl Span {
+    pub fn end(self) -> u32 {
+        self.start + self.len
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DfNodeKind {
-    Param, LetBind, VarRead, VarWrite, Lit, CallRes, New, Member,
-    Ret, Binop, Unop, Loop, If, Closure, Expr, Borrow, Break, Match, Block,
+    Param,
+    LetBind,
+    VarRead,
+    VarWrite,
+    Lit,
+    CallRes,
+    New,
+    Member,
+    Ret,
+    Binop,
+    Unop,
+    Loop,
+    If,
+    Closure,
+    Expr,
+    Borrow,
+    Break,
+    Match,
+    Block,
 }
 const BORROW: DfNodeKind = DfNodeKind::Borrow;
 const BREAK: DfNodeKind = DfNodeKind::Break;
@@ -23,53 +47,115 @@ const MATCH: DfNodeKind = DfNodeKind::Match;
 const BLOCK: DfNodeKind = DfNodeKind::Block;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Node { pub span: Span, pub kind: DfNodeKind, pub name: Option<String> }
+pub struct Node {
+    pub span: Span,
+    pub kind: DfNodeKind,
+    pub name: Option<String>,
+}
 impl Node {
-    fn new(span: Span, kind: DfNodeKind) -> Self { Self { span, kind, name: None } }
-    fn with_name(mut self, name: String) -> Self { self.name = Some(name); self }
+    fn new(span: Span, kind: DfNodeKind) -> Self {
+        Self {
+            span,
+            kind,
+            name: None,
+        }
+    }
+    fn with_name(mut self, name: String) -> Self {
+        self.name = Some(name);
+        self
+    }
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum DfEdgeKind { Direct }
+pub enum DfEdgeKind {
+    Direct,
+}
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Edge { pub src: NodeRef, pub dst: NodeRef }
-impl Edge { fn new(src: NodeRef, dst: NodeRef, _: DfEdgeKind) -> Self { Self { src, dst } } }
+pub struct Edge {
+    pub src: NodeRef,
+    pub dst: NodeRef,
+}
+impl Edge {
+    fn new(src: NodeRef, dst: NodeRef, _: DfEdgeKind) -> Self {
+        Self { src, dst }
+    }
+}
 
 #[derive(Default)]
 struct Strings;
-impl Strings { fn intern(&mut self, text: &str) -> String { text.to_owned() } }
+impl Strings {
+    fn intern(&mut self, text: &str) -> String {
+        text.to_owned()
+    }
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DfParam { pub node: NodeRef, pub pos: u32 }
+pub struct DfParam {
+    pub node: NodeRef,
+    pub pos: u32,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DfArg { pub call: NodeRef, pub pos: i64, pub arg: NodeRef }
+pub struct DfArg {
+    pub call: NodeRef,
+    pub pos: i64,
+    pub arg: NodeRef,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DfField { pub owner: NodeRef, pub name: String, pub value: NodeRef }
+pub struct DfField {
+    pub owner: NodeRef,
+    pub name: String,
+    pub value: NodeRef,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DfLit { pub node: NodeRef, pub kind: &'static str, pub text: String }
+pub struct DfLit {
+    pub node: NodeRef,
+    pub kind: &'static str,
+    pub text: String,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DfLoop { pub span: Span, pub var: Option<String>, pub collection: Option<String> }
+pub struct DfLoop {
+    pub span: Span,
+    pub var: Option<String>,
+    pub collection: Option<String>,
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DfAllocates { pub owner: Span }
-#[derive(Default, Clone, Debug, PartialEq, Eq)]
-pub struct DfAux {
-    pub params: Vec<DfParam>, pub args: Vec<DfArg>, pub fields: Vec<DfField>,
-    pub lits: Vec<DfLit>, pub loops: Vec<DfLoop>, pub allocates: Vec<DfAllocates>,
-    pub loop_collection_spans: Vec<(usize, u32, u32)>, pub allocator_hits: Vec<Span>,
+pub struct DfAllocates {
+    pub owner: Span,
 }
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
-pub struct DfSyntaxRows { pub nodes: Vec<Node>, pub edges: Vec<Edge>, pub aux: DfAux }
+pub struct DfAux {
+    pub params: Vec<DfParam>,
+    pub args: Vec<DfArg>,
+    pub fields: Vec<DfField>,
+    pub lits: Vec<DfLit>,
+    pub loops: Vec<DfLoop>,
+    pub allocates: Vec<DfAllocates>,
+    pub loop_collection_spans: Vec<(usize, u32, u32)>,
+    pub allocator_hits: Vec<Span>,
+}
+#[derive(Default, Clone, Debug, PartialEq, Eq)]
+pub struct DfSyntaxRows {
+    pub nodes: Vec<Node>,
+    pub edges: Vec<Edge>,
+    pub aux: DfAux,
+}
 
 fn syn_span(line_starts: &[u32], span: proc_macro2::Span) -> Span {
     let start = span.start();
     let end = span.end();
     let start = line_col_to_byte(line_starts, start.line as u32, start.column as u32);
     let end = line_col_to_byte(line_starts, end.line as u32, end.column as u32);
-    Span { start, len: end.saturating_sub(start) }
+    Span {
+        start,
+        len: end.saturating_sub(start),
+    }
 }
 fn def_span(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Span) -> Span {
     let first = syn_span(line_starts, start).start;
     let last = syn_span(line_starts, end).end();
-    Span { start: first, len: last.saturating_sub(first) }
+    Span {
+        start: first,
+        len: last.saturating_sub(first),
+    }
 }
 
 pub fn df_syntax_rows(parsed: &syn::File, file: &str, line_starts: &[u32]) -> DfSyntaxRows {
@@ -78,7 +164,6 @@ pub fn df_syntax_rows(parsed: &syn::File, file: &str, line_starts: &[u32]) -> Df
     project_df(parsed, file, line_starts, &mut strings, &mut rows);
     rows
 }
-
 
 // ════════════════════════════════════════════════════════════════════════════
 // DfF: intra-procedural value flow (nodes + Direct edges).

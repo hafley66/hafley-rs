@@ -51,12 +51,7 @@ const PRIMITIVE_CLASSES: &[&str] = &[
 
 /// Package-level declarations only: a declaration inside a function body is
 /// the checker's row.
-pub fn tsi_rows(
-    root: Node,
-    src: &[u8],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
+pub fn tsi_rows(root: Node, src: &[u8], strings: &mut Strings, sink: &mut FamilyBundle<TypeF>) {
     let span = crate::read::trace::phase_span("go", crate::read::trace::Phase::TsiSyntax);
     let _entered = span.enter();
     let mut names = TsiNames::new("go");

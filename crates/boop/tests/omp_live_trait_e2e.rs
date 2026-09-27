@@ -321,7 +321,10 @@ fn omp_command(
         .args(["--mail-dir"])
         .arg(scratch.mail())
         .arg("--");
-    child.args(&launch.args).args(extra_args).arg("--auto-approve");
+    child
+        .args(&launch.args)
+        .args(extra_args)
+        .arg("--auto-approve");
     child
 }
 

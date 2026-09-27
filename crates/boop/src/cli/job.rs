@@ -3541,13 +3541,13 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
                 pid,
                 route.tmux.as_deref(),
             );
-            if let Some(pane) = route.tmux.as_deref().filter(|target| target.starts_with('%')) {
+            if let Some(pane) = route
+                .tmux
+                .as_deref()
+                .filter(|target| target.starts_with('%'))
+            {
                 if let Some(session) = tmux::mux().session_of_pane(None, pane) {
-                    let _ = store.record_tmux_session(
-                        observed,
-                        boop::channel::now_ms(),
-                        &session,
-                    );
+                    let _ = store.record_tmux_session(observed, boop::channel::now_ms(), &session);
                 }
             }
             if observed != lane {

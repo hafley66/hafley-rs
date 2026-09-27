@@ -3,7 +3,9 @@
 
 use std::path::Path;
 
-use boop_mux::{clean_token, doc_join, doc_roots, resolve_fs, ResolveResult, ResolvedRef, Root, MAX_CHOICES};
+use boop_mux::{
+    clean_token, doc_join, doc_roots, resolve_fs, ResolveResult, ResolvedRef, Root, MAX_CHOICES,
+};
 use boop_store::SessionTouched;
 
 /// What the pane's agent sessions touched: every path (newest first) and every
@@ -16,7 +18,10 @@ pub struct AgentEvidence {
 
 impl AgentEvidence {
     pub fn from_touched(touched: &SessionTouched, boundary: &str) -> Self {
-        AgentEvidence { dirs: evidence_dirs(&touched.paths, &touched.cwds, boundary), paths: touched.paths.clone() }
+        AgentEvidence {
+            dirs: evidence_dirs(&touched.paths, &touched.cwds, boundary),
+            paths: touched.paths.clone(),
+        }
     }
 }
 
@@ -66,12 +71,21 @@ pub fn resolve_from_evidence(rel: &str, evidence: &AgentEvidence) -> Option<Reso
     touched.retain(|path| std::fs::symlink_metadata(path).is_ok());
     if touched.len() == 1 {
         return Some(ResolveResult::Hit {
-            reference: ResolvedRef { path: touched.remove(0), line: None, source: "touched" },
+            reference: ResolvedRef {
+                path: touched.remove(0),
+                line: None,
+                source: "touched",
+            },
         });
     }
     if touched.len() > 1 {
         touched.truncate(MAX_CHOICES);
-        return Some(ResolveResult::Choices { paths: touched, line: None, via: "exact", worktrees: Vec::new() });
+        return Some(ResolveResult::Choices {
+            paths: touched,
+            line: None,
+            via: "exact",
+            worktrees: Vec::new(),
+        });
     }
     for dir in &evidence.dirs {
         let candidate = Path::new(dir).join(tail);
@@ -99,7 +113,17 @@ pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence
                 ResolveResult::Hit { reference } => ResolveResult::Hit {
                     reference: ResolvedRef { line, ..reference },
                 },
-                ResolveResult::Choices { paths, via, worktrees, .. } => ResolveResult::Choices { paths, line, via, worktrees },
+                ResolveResult::Choices {
+                    paths,
+                    via,
+                    worktrees,
+                    ..
+                } => ResolveResult::Choices {
+                    paths,
+                    line,
+                    via,
+                    worktrees,
+                },
                 other => other,
             };
         }
@@ -110,7 +134,13 @@ pub fn resolve(token: &str, roots: &[Root], home: &str, evidence: &AgentEvidence
 /// A token written in the markdown document at `doc`. The document's own
 /// roots answer first (`boop_mux::doc_join`); anything else runs the ladder
 /// over the document's roots followed by `roots`.
-pub fn resolve_in_doc(token: &str, doc: &Path, roots: &[Root], home: &str, evidence: &AgentEvidence) -> ResolveResult {
+pub fn resolve_in_doc(
+    token: &str,
+    doc: &Path,
+    roots: &[Root],
+    home: &str,
+    evidence: &AgentEvidence,
+) -> ResolveResult {
     doc_join(token, doc).unwrap_or_else(|| resolve(token, &doc_roots(doc, roots), home, evidence))
 }
 
@@ -122,7 +152,12 @@ mod tests {
     use std::path::PathBuf;
 
     fn pane(cwd: &str) -> PaneHit {
-        PaneHit { pane: String::new(), pane_current_path: PathBuf::from(cwd), pane_col: 0, pane_row: 0 }
+        PaneHit {
+            pane: String::new(),
+            pane_current_path: PathBuf::from(cwd),
+            pane_col: 0,
+            pane_row: 0,
+        }
     }
 
     fn resolve_with(token: &str, cwd: &str, home: &str, evidence: &AgentEvidence) -> ResolveResult {
@@ -141,7 +176,11 @@ mod tests {
         std::fs::create_dir_all(lab.join("out")).unwrap();
         std::fs::write(lab.join("out").join("timeline.txt"), "t\n").unwrap();
         std::fs::write(lab.join("out").join("perfetto.png"), "p\n").unwrap();
-        let touched = lab.join("out").join("perfetto.png").to_string_lossy().into_owned();
+        let touched = lab
+            .join("out")
+            .join("perfetto.png")
+            .to_string_lossy()
+            .into_owned();
         let boundary = root.to_string_lossy().into_owned();
         let evidence = AgentEvidence {
             dirs: evidence_dirs(&[touched.clone()], &[], &boundary),
@@ -161,7 +200,11 @@ mod tests {
             hit,
             ResolveResult::Hit {
                 reference: ResolvedRef {
-                    path: lab.join("out").join("timeline.txt").to_string_lossy().into_owned(),
+                    path: lab
+                        .join("out")
+                        .join("timeline.txt")
+                        .to_string_lossy()
+                        .into_owned(),
                     line: Some(3),
                     source: "touched",
                 }
@@ -171,7 +214,11 @@ mod tests {
         assert_eq!(
             exact,
             ResolveResult::Hit {
-                reference: ResolvedRef { path: touched, line: None, source: "touched" }
+                reference: ResolvedRef {
+                    path: touched,
+                    line: None,
+                    source: "touched"
+                }
             }
         );
         let _ = std::fs::remove_dir_all(&root);

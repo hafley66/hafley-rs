@@ -721,14 +721,41 @@ fn ts_scenarios() -> Vec<Scenario> {
     ]
 }
 
-/// FINDING F4: a second free-fn step in dup.ts leaves generator.ts's
-/// main -> step edge alive, same dst, origin still corpus_unique. The same
-/// shape holds for a duplicated method (this.tidy in known_receiver), so it
-/// is not a function-vs-method bucketing artifact.
+/// TypeScript function declarations bind bare calls in their own module
+/// scope. A second free-fn step in dup.ts does not shadow generator.ts's
+/// `main -> step` binding.
 #[test]
 fn duplicate_def_ts() {
     let (base, after) = run(&ts_scenarios()[0]);
-    assert_duplicate_def(&base, &after, "step");
+    assert!(
+        base.calls.iter().any(|edge| {
+            edge.caller_path == "generator.ts"
+                && edge.caller_name.as_deref() == Some("main")
+                && edge.callee_path == "generator.ts"
+                && edge.callee_name.as_deref() == Some("step")
+                && edge.origin == SAME_FILE
+        }),
+        "fixture drifted: no same-file generator.ts main -> step binding in base: {:?}",
+        base.calls_to("step")
+    );
+    assert!(
+        after.calls.iter().all(|edge| {
+            edge.origin != CORPUS_UNIQUE || edge.callee_name.as_deref() != Some("step")
+        }),
+        "corpus_unique edge to step survived the duplicate definition: {:?}",
+        after.calls_to("step")
+    );
+    assert!(
+        after.calls.iter().any(|edge| {
+            edge.caller_path == "generator.ts"
+                && edge.caller_name.as_deref() == Some("main")
+                && edge.callee_path == "generator.ts"
+                && edge.callee_name.as_deref() == Some("step")
+                && edge.origin == SAME_FILE
+        }),
+        "same-file generator.ts main -> step binding did not survive: {:?}",
+        after.calls_to("step")
+    );
 }
 
 /// Invariant 2, member shape: the tidy method leaves the class for a free fn
@@ -761,9 +788,9 @@ fn relocation_ts() {
     );
 }
 
-/// Invariant 4 over every ts mutation. TS legs mint no `same_file` call
-/// edges (a same-file bare call lands on the corpus_unique leg), so the
-/// conserved set is empty and this pins that it stays empty.
+/// Invariant 4 over every ts mutation. A same-file bare call binds its
+/// module-scope declaration with origin `same_file`; those edges are
+/// conserved across every mutation.
 #[test]
 fn origin_conservation_ts() {
     for scenario in ts_scenarios() {

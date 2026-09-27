@@ -11,7 +11,11 @@ fn from_path_routes_the_roster_grammars_and_delegates_the_rest() {
     assert_eq!(RyiLang::from_path("a.markdown"), Some(RyiLang::Markdown));
     assert_eq!(RyiLang::from_path("p.gd"), Some(RyiLang::Gdscript));
     for lisp in ["l.lisp", "l.lsp", "l.cl", "l.asd"] {
-        assert_eq!(RyiLang::from_path(lisp), Some(RyiLang::Commonlisp), "{lisp}");
+        assert_eq!(
+            RyiLang::from_path(lisp),
+            Some(RyiLang::Commonlisp),
+            "{lisp}"
+        );
     }
     for (path, lang) in [
         ("a.rs", RyiLang::Rust),
@@ -53,7 +57,12 @@ fn every_lang_name_round_trips_through_the_yaml_spelling() {
         RyiLang::Yaml,
     ];
     for lang in langs {
-        assert_eq!(RyiLang::parse_name(&lang.name()), Some(lang), "{}", lang.name());
+        assert_eq!(
+            RyiLang::parse_name(&lang.name()),
+            Some(lang),
+            "{}",
+            lang.name()
+        );
     }
     assert_eq!(RyiLang::parse_name("not-a-grammar"), None);
 }
@@ -67,10 +76,17 @@ fn parse_name_answers_the_alias_table() {
     assert_eq!(RyiLang::parse_name("kt"), Some(RyiLang::Kotlin));
     assert_eq!(RyiLang::parse_name("py"), Some(RyiLang::Python));
     assert_eq!(RyiLang::parse_name("md"), Some(RyiLang::Markdown));
-    assert_eq!(RyiLang::parse_name("md_inline"), Some(RyiLang::MarkdownInline));
+    assert_eq!(
+        RyiLang::parse_name("md_inline"),
+        Some(RyiLang::MarkdownInline)
+    );
     assert_eq!(RyiLang::parse_name("gd"), Some(RyiLang::Gdscript));
     for lisp in ["lisp", "cl"] {
-        assert_eq!(RyiLang::parse_name(lisp), Some(RyiLang::Commonlisp), "{lisp}");
+        assert_eq!(
+            RyiLang::parse_name(lisp),
+            Some(RyiLang::Commonlisp),
+            "{lisp}"
+        );
     }
     assert_eq!(RyiLang::parse_name("html"), Some(RyiLang::Html));
     assert_eq!(RyiLang::parse_name("htm"), Some(RyiLang::Html));

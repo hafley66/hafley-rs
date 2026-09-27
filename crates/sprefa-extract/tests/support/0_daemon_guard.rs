@@ -19,10 +19,16 @@ impl DaemonGuard {
         }
     }
 
-    pub fn socket(&self) -> &Path { &self.socket }
+    pub fn socket(&self) -> &Path {
+        &self.socket
+    }
 
     pub fn pid(&self) -> Option<i32> {
-        std::fs::read_to_string(&self.pid_file).ok()?.trim().parse().ok()
+        std::fs::read_to_string(&self.pid_file)
+            .ok()?
+            .trim()
+            .parse()
+            .ok()
     }
 
     pub fn alive(pid: i32) -> bool {
@@ -38,17 +44,25 @@ impl DaemonGuard {
     }
 
     pub fn stop(&mut self) -> bool {
-        if self.stopped { return true; }
+        if self.stopped {
+            return true;
+        }
         let pid = self.pid();
         if let Ok(mut stream) = std::os::unix::net::UnixStream::connect(&self.socket) {
-            let _ = stream.write_all(b"POST /__shutdown HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n");
+            let _ = stream.write_all(
+                b"POST /__shutdown HTTP/1.1\r\nHost: localhost\r\nContent-Length: 0\r\n\r\n",
+            );
         }
         if let Some(pid) = pid {
             if !Self::wait_for_exit(pid, Duration::from_secs(2)) {
-                unsafe { libc::kill(pid, libc::SIGTERM); }
+                unsafe {
+                    libc::kill(pid, libc::SIGTERM);
+                }
             }
             if !Self::wait_for_exit(pid, Duration::from_secs(2)) {
-                unsafe { libc::kill(pid, libc::SIGKILL); }
+                unsafe {
+                    libc::kill(pid, libc::SIGKILL);
+                }
             }
             let exited = Self::wait_for_exit(pid, Duration::from_secs(2));
             if exited {
@@ -64,5 +78,7 @@ impl DaemonGuard {
 }
 
 impl Drop for DaemonGuard {
-    fn drop(&mut self) { let _ = self.stop(); }
+    fn drop(&mut self) {
+        let _ = self.stop();
+    }
 }

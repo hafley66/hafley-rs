@@ -5,8 +5,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, ContentId, RyiOutput, FamilyMask, FileSet,
-    IndexBag, ManifestMap, MarkdownSource, NodeRef, ProjectCx, ProjectDigest, Resolve, Span,
+    build_def_index, content_id_of, dispatch, ContentId, FamilyMask, FileSet, IndexBag,
+    ManifestMap, MarkdownSource, NodeRef, ProjectCx, ProjectDigest, Resolve, RyiOutput, Span,
     TypeEdgeKind, TypeF,
 };
 

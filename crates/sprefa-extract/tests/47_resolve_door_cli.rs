@@ -6,8 +6,8 @@ use std::process::{Command, Output};
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, ContentId, RyiOutput, FamilyMask, FileSet,
-    IndexBag, ManifestMap, MarkdownSource, ProjectCx, ProjectDigest, Resolve, TypeF,
+    build_def_index, content_id_of, dispatch, ContentId, FamilyMask, FileSet, IndexBag,
+    ManifestMap, MarkdownSource, ProjectCx, ProjectDigest, Resolve, RyiOutput, TypeF,
 };
 
 const MD: &str = "tests/fixtures/markdown/doc_node.md";
@@ -153,7 +153,11 @@ fn resolve_cli_names_a_class_constructor_callee() {
 #[test]
 fn resolve_cli_expands_a_directory_and_names_a_missing_path() {
     let output = extract(&["--resolve", "tests/fixtures/ts/scip"]);
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     let rows = String::from_utf8_lossy(&output.stdout);
     assert!(
         rows.contains(r#""caller_path":"tests/fixtures/ts/scip/"#),
@@ -164,7 +168,8 @@ fn resolve_cli_expands_a_directory_and_names_a_missing_path() {
     assert_eq!(missing.status.code(), Some(2), "an argument error exits 2");
     let stderr = String::from_utf8_lossy(&missing.stderr);
     assert!(
-        stderr.contains("ryi: tests/fixtures/ts/nope does not exist\n") && !stderr.contains("Custom {"),
+        stderr.contains("ryi: tests/fixtures/ts/nope does not exist\n")
+            && !stderr.contains("Custom {"),
         "{stderr}"
     );
 }

@@ -82,7 +82,11 @@ fn ryi(args: &[&str]) {
         .env("RUST_LOG", "off")
         .output()
         .expect("run ryi");
-    assert!(output.status.success(), "ryi {args:?}: {}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "ryi {args:?}: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 }
 
 /// Type edges keyed by (owner, kind, target): both tiers, fast only, slow only.
@@ -117,7 +121,8 @@ fn tiers() -> (tempfile::TempDir, rusqlite::Connection) {
     ]);
 
     let conn = rusqlite::Connection::open(&fast).expect("open fast.db");
-    conn.execute("attach ?1 as slow", [slow.to_string_lossy()]).expect("attach slow.db");
+    conn.execute("attach ?1 as slow", [slow.to_string_lossy()])
+        .expect("attach slow.db");
     (scratch, conn)
 }
 
@@ -126,7 +131,11 @@ fn grade() -> BTreeMap<String, Counts> {
     let mut statement = conn.prepare(GRADE).expect("grade sql");
     let rows = statement
         .query_map([], |row| {
-            Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?, row.get::<_, i64>(2)? as usize))
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i64>(2)? as usize,
+            ))
         })
         .expect("grade rows");
     let mut by_bucket: BTreeMap<String, Counts> = BTreeMap::new();
@@ -161,7 +170,12 @@ fn fast_matches_slow_on_soopy_at_the_pinned_rate() {
     let cells: Vec<usize> = pinned
         .lines()
         .nth(1)
-        .map(|line| line.split('\t').skip(1).map(|cell| cell.parse().expect("pin cell")).collect())
+        .map(|line| {
+            line.split('\t')
+                .skip(1)
+                .map(|cell| cell.parse().expect("pin cell"))
+                .collect()
+        })
         .unwrap_or_default();
 
     if matches!(std::env::var("RATCHET_BUMP").as_deref(), Ok("1")) {
@@ -174,8 +188,11 @@ fn fast_matches_slow_on_soopy_at_the_pinned_rate() {
             ],
             _ => [total.tp, total.wrong_target, total.overbound, total.miss],
         };
-        std::fs::write(&pin_path, format!("{header}soopy\t{tp}\t{wrong}\t{over}\t{miss}\n"))
-            .expect("write pin");
+        std::fs::write(
+            &pin_path,
+            format!("{header}soopy\t{tp}\t{wrong}\t{over}\t{miss}\n"),
+        )
+        .expect("write pin");
         return;
     }
 
@@ -183,9 +200,21 @@ fn fast_matches_slow_on_soopy_at_the_pinned_rate() {
         panic!("tests/RATCHET_SITES.tsv has no soopy row: run once with RATCHET_BUMP=1");
     };
     assert!(total.tp >= *tp, "tp fell: {} < pinned {tp}", total.tp);
-    assert!(total.wrong_target <= *wrong, "wrong_target rose: {} > pinned {wrong}", total.wrong_target);
-    assert!(total.overbound <= *over, "overbound rose: {} > pinned {over}", total.overbound);
-    assert!(total.miss <= *miss, "miss rose: {} > pinned {miss}", total.miss);
+    assert!(
+        total.wrong_target <= *wrong,
+        "wrong_target rose: {} > pinned {wrong}",
+        total.wrong_target
+    );
+    assert!(
+        total.overbound <= *over,
+        "overbound rose: {} > pinned {over}",
+        total.overbound
+    );
+    assert!(
+        total.miss <= *miss,
+        "miss rose: {} > pinned {miss}",
+        total.miss
+    );
 }
 
 #[test]
@@ -193,7 +222,11 @@ fn fast_type_edges_match_slow_on_soopy_at_the_pinned_rate() {
     let (_scratch, conn) = tiers();
     let (both, fast_only, slow_only): (usize, usize, usize) = conn
         .query_row(TYPE_GRADE, [], |row| {
-            Ok((row.get::<_, i64>(0)? as usize, row.get::<_, i64>(1)? as usize, row.get::<_, i64>(2)? as usize))
+            Ok((
+                row.get::<_, i64>(0)? as usize,
+                row.get::<_, i64>(1)? as usize,
+                row.get::<_, i64>(2)? as usize,
+            ))
         })
         .expect("type grade");
     eprintln!("type edges: both {both}, fast only {fast_only}, slow only {slow_only}");
@@ -203,23 +236,37 @@ fn fast_type_edges_match_slow_on_soopy_at_the_pinned_rate() {
     let cells: Vec<usize> = pinned
         .lines()
         .nth(1)
-        .map(|line| line.split('\t').skip(1).map(|cell| cell.parse().expect("pin cell")).collect())
+        .map(|line| {
+            line.split('\t')
+                .skip(1)
+                .map(|cell| cell.parse().expect("pin cell"))
+                .collect()
+        })
         .unwrap_or_default();
     if matches!(std::env::var("RATCHET_BUMP").as_deref(), Ok("1")) {
         let [b, f, s] = match cells.as_slice() {
             [b, f, s] => [(*b).max(both), (*f).min(fast_only), (*s).min(slow_only)],
             _ => [both, fast_only, slow_only],
         };
-        std::fs::write(&pin_path, format!("corpus\tboth\tfast_only\tslow_only\nsoopy\t{b}\t{f}\t{s}\n"))
-            .expect("write pin");
+        std::fs::write(
+            &pin_path,
+            format!("corpus\tboth\tfast_only\tslow_only\nsoopy\t{b}\t{f}\t{s}\n"),
+        )
+        .expect("write pin");
         return;
     }
     let [b, f, s] = cells.as_slice() else {
         panic!("tests/RATCHET_TYPES.tsv has no soopy row: run once with RATCHET_BUMP=1");
     };
     assert!(both >= *b, "type edges both fell: {both} < pinned {b}");
-    assert!(fast_only <= *f, "fast-only type edges rose: {fast_only} > pinned {f}");
-    assert!(slow_only <= *s, "slow-only type edges rose: {slow_only} > pinned {s}");
+    assert!(
+        fast_only <= *f,
+        "fast-only type edges rose: {fast_only} > pinned {f}"
+    );
+    assert!(
+        slow_only <= *s,
+        "slow-only type edges rose: {slow_only} > pinned {s}"
+    );
 }
 
 /// `regen.sh` runs this with `RATCHET_INDEX` naming a fresh rust-analyzer index

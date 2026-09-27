@@ -216,7 +216,10 @@ fn spaced_text(node: SyntaxNode) -> String {
 /// `failed` holds the (definition, call) texts whose expansion already erred:
 /// an unexpanded call survives into every later pass, and matching it again
 /// is deterministic and can cost hundreds of milliseconds.
-fn expand_pass(text: &str, failed: &mut HashSet<(String, String)>) -> Vec<(Range<u32>, String, String)> {
+fn expand_pass(
+    text: &str,
+    failed: &mut HashSet<(String, String)>,
+) -> Vec<(Range<u32>, String, String)> {
     let parsed = SourceFile::parse(text, Edition::CURRENT);
     let root = parsed.syntax_node();
     let mut defs = HashMap::new();
@@ -232,7 +235,8 @@ fn expand_pass(text: &str, failed: &mut HashSet<(String, String)>) -> Vec<(Range
         let Some((def_tt, def_text)) = defs.get(&inv.name) else {
             continue;
         };
-        let call_text = &text[u32::from(inv.range.start()) as usize..u32::from(inv.range.end()) as usize];
+        let call_text =
+            &text[u32::from(inv.range.start()) as usize..u32::from(inv.range.end()) as usize];
         let key = (def_text.clone(), call_text.to_string());
         if failed.contains(&key) {
             continue;
@@ -339,7 +343,11 @@ fn apply_pass(
 
 /// The (span, name) an invocation at `range` reports: its own verbatim
 /// position and its own name, or whatever the enclosing macro chunk carries.
-fn invocation_origin(old_chunks: &[Chunk], range: Range<u32>, own_name: &str) -> (Range<u32>, String) {
+fn invocation_origin(
+    old_chunks: &[Chunk],
+    range: Range<u32>,
+    own_name: &str,
+) -> (Range<u32>, String) {
     for c in old_chunks {
         if c.start() <= range.start && range.end <= c.end() {
             return match c {
@@ -353,10 +361,7 @@ fn invocation_origin(old_chunks: &[Chunk], range: Range<u32>, own_name: &str) ->
             };
         }
     }
-    (
-        range,
-        own_name.to_string(),
-    )
+    (range, own_name.to_string())
 }
 
 /// Expand every LOCAL `macro_rules!` invocation in `content` to a fixpoint.

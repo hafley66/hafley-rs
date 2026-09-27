@@ -14,7 +14,11 @@ fn type_name(name: &str) -> String {
         .filter(|part| !part.is_empty())
         .map(|part| {
             let mut chars = part.chars();
-            format!("{}{}", chars.next().unwrap().to_ascii_uppercase(), chars.as_str())
+            format!(
+                "{}{}",
+                chars.next().unwrap().to_ascii_uppercase(),
+                chars.as_str()
+            )
         })
         .collect()
 }
@@ -29,7 +33,9 @@ fn generate_kotlin_scm() {
     for (relation_id, relation) in query.relations.iter().enumerate() {
         let name = type_name(relation);
         assert!(!name.is_empty(), "emitted relation needs an identifier");
-        let fields: Vec<u16> = query.emits.iter()
+        let fields: Vec<u16> = query
+            .emits
+            .iter()
             .filter(|emit| emit.relation as usize == relation_id)
             .flat_map(|emit| emit.fields.iter().map(|field| field.key))
             .collect();
@@ -39,10 +45,16 @@ fn generate_kotlin_scm() {
         code.push_str(&format!(
             "impl<'a> {name}<'a> {{\n  pub(crate) fn rows(arena: &'a hafley_scm::MatchArena) -> impl Iterator<Item = Self> + 'a {{ arena.emitted.iter().filter(|fact| fact.relation == {relation_id}).map(move |fact| Self {{ fact, arena }}) }}\n"
         ));
-        for field_id in fields.iter().copied().collect::<std::collections::BTreeSet<_>>() {
+        for field_id in fields
+            .iter()
+            .copied()
+            .collect::<std::collections::BTreeSet<_>>()
+        {
             let field_name = ident(&query.fields[field_id as usize]);
             assert!(!field_name.is_empty(), "emitted field needs an identifier");
-            let required = query.emits.iter()
+            let required = query
+                .emits
+                .iter()
                 .filter(|emit| emit.relation as usize == relation_id)
                 .all(|emit| emit.fields.iter().any(|field| field.key == field_id));
             if required {

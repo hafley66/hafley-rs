@@ -6,19 +6,19 @@ use std::collections::{BTreeMap, BTreeSet};
 use rayon::prelude::*;
 use syn::spanned::Spanned;
 
-use crate::lang::rust::{build_line_starts, syn_span};
-use crate::lang::rust_modules::CargoManifest;
 use super::{
     crate_roots, insert_decls, is_manifest, line_after, natural_paths, relocate_scan, slice,
     whole_lines, FileScan, RelocateEdit, RelocatePlan, Relocation, SegRun, MOD_PATH,
     MOD_RELOCATE_OUT, WIDEN_VIS,
 };
+use crate::edit_seams::ImportRefKind;
+use crate::lang::rust::{build_line_starts, syn_span};
+use crate::lang::rust_modules::CargoManifest;
 use crate::manifests::{fold_package_edges, Manifest, ManifestKind};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
 use crate::types::LangKind;
 use crate::wire::FlatFact;
-use crate::edit_seams::ImportRefKind;
 use hafley_scm::span::Span;
 
 /// A manifest edit: one dependency line (or table) a package gains.
@@ -77,10 +77,7 @@ fn package_of<'a>(packages: &'a [Package], rel: &str) -> Option<&'a Package> {
 }
 
 /// The Cargo package holding `rel`: (dir, package name, crate ident, dependency keys).
-pub fn cargo_package(
-    cx: &MoveCx,
-    rel: &str,
-) -> Option<(String, String, String, BTreeSet<String>)> {
+pub fn cargo_package(cx: &MoveCx, rel: &str) -> Option<(String, String, String, BTreeSet<String>)> {
     let packages = packages(cx);
     let package = package_of(&packages, rel)?;
     let deps = dep_specs(&package.text)
@@ -106,12 +103,12 @@ pub(super) fn active(cx: &MoveCx) -> bool {
         return false;
     }
     let packages = packages(cx);
-    moved.iter().any(|(old, new)| {
-        match (package_of(&packages, old), package_of(&packages, new)) {
+    moved.iter().any(
+        |(old, new)| match (package_of(&packages, old), package_of(&packages, new)) {
             (Some(from), Some(to)) => from.dir != to.dir,
             _ => false,
-        }
-    })
+        },
+    )
 }
 
 // ── the per-file scan cross mode adds ───────────────────────────────────────
@@ -236,9 +233,7 @@ impl ExtraWalk<'_> {
             syn::Visibility::Restricted(_) => {
                 let span = self.span_of(vis.span());
                 match slice(self.source, span) {
-                    Some(written) if written.starts_with("pub") => {
-                        (false, span, "pub".to_string())
-                    }
+                    Some(written) if written.starts_with("pub") => (false, span, "pub".to_string()),
                     _ => return,
                 }
             }
@@ -303,7 +298,15 @@ impl<'ast> syn::visit::Visit<'ast> for ExtraWalk<'_> {
 
     fn visit_item_struct(&mut self, node: &'ast syn::ItemStruct) {
         let name = node.ident.to_string();
-        self.push_vis(&node.vis, node.span(), &node.attrs, name.clone(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            name.clone(),
+            None,
+            VisKind::Item,
+            "",
+        );
         if let syn::Fields::Named(fields) = &node.fields {
             for field in &fields.named {
                 let Some(ident) = &field.ident else { continue };
@@ -321,27 +324,75 @@ impl<'ast> syn::visit::Visit<'ast> for ExtraWalk<'_> {
     }
 
     fn visit_item_enum(&mut self, node: &'ast syn::ItemEnum) {
-        self.push_vis(&node.vis, node.span(), &node.attrs, node.ident.to_string(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            node.ident.to_string(),
+            None,
+            VisKind::Item,
+            "",
+        );
     }
 
     fn visit_item_union(&mut self, node: &'ast syn::ItemUnion) {
-        self.push_vis(&node.vis, node.span(), &node.attrs, node.ident.to_string(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            node.ident.to_string(),
+            None,
+            VisKind::Item,
+            "",
+        );
     }
 
     fn visit_item_const(&mut self, node: &'ast syn::ItemConst) {
-        self.push_vis(&node.vis, node.span(), &node.attrs, node.ident.to_string(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            node.ident.to_string(),
+            None,
+            VisKind::Item,
+            "",
+        );
     }
 
     fn visit_item_static(&mut self, node: &'ast syn::ItemStatic) {
-        self.push_vis(&node.vis, node.span(), &node.attrs, node.ident.to_string(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            node.ident.to_string(),
+            None,
+            VisKind::Item,
+            "",
+        );
     }
 
     fn visit_item_type(&mut self, node: &'ast syn::ItemType) {
-        self.push_vis(&node.vis, node.span(), &node.attrs, node.ident.to_string(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            node.ident.to_string(),
+            None,
+            VisKind::Item,
+            "",
+        );
     }
 
     fn visit_item_trait(&mut self, node: &'ast syn::ItemTrait) {
-        self.push_vis(&node.vis, node.span(), &node.attrs, node.ident.to_string(), None, VisKind::Item, "");
+        self.push_vis(
+            &node.vis,
+            node.span(),
+            &node.attrs,
+            node.ident.to_string(),
+            None,
+            VisKind::Item,
+            "",
+        );
     }
 
     fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
@@ -451,13 +502,19 @@ fn use_leaves(
         }
         syn::UseTree::Name(leaf) => emit(
             prefix,
-            Some((leaf.ident.to_string(), syn_span(line_starts, leaf.ident.span()))),
+            Some((
+                leaf.ident.to_string(),
+                syn_span(line_starts, leaf.ident.span()),
+            )),
             None,
             false,
         ),
         syn::UseTree::Rename(leaf) => emit(
             prefix,
-            Some((leaf.ident.to_string(), syn_span(line_starts, leaf.ident.span()))),
+            Some((
+                leaf.ident.to_string(),
+                syn_span(line_starts, leaf.ident.span()),
+            )),
             Some(leaf.rename.to_string()),
             false,
         ),
@@ -504,13 +561,17 @@ fn module_tree(roots: &[String], scans: &BTreeMap<String, &Scanned>) -> BTreeMap
         );
         let mut pending = vec![root.clone()];
         while let Some(rel) = pending.pop() {
-            let Some(scanned) = scans.get(&rel) else { continue };
+            let Some(scanned) = scans.get(&rel) else {
+                continue;
+            };
             let node = tree[&rel].clone();
             for (index, decl) in scanned.scan.decls.iter().enumerate() {
                 let base = decl
                     .chain
                     .iter()
-                    .fold(child_dir(&rel, node.owns_dir), |dir, block| join_rel(&dir, block));
+                    .fold(child_dir(&rel, node.owns_dir), |dir, block| {
+                        join_rel(&dir, block)
+                    });
                 let target = match &decl.attr {
                     Some((_, value)) if decl.chain.is_empty() => {
                         Some(join_rel(dirname(&rel), value))
@@ -689,15 +750,16 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
         (root.to_string(), path.to_vec())
     };
 
-    let is_moved = |root: &str, path: &[String]| {
-        prefix_map.contains_key(&(root.to_string(), path.to_vec()))
-    };
+    let is_moved =
+        |root: &str, path: &[String]| prefix_map.contains_key(&(root.to_string(), path.to_vec()));
 
     // Every file's position once the batch lands, and the reverse index.
     let after_of = |rel: &str| -> Option<(String, Vec<String>)> {
         match by_old.get(rel) {
             Some(one) => Some((one.new_root.clone(), one.new_path.clone())),
-            None => tree.get(rel).map(|node| (node.root.clone(), node.path.clone())),
+            None => tree
+                .get(rel)
+                .map(|node| (node.root.clone(), node.path.clone())),
         }
     };
     let mut file_at: BTreeMap<(String, Vec<String>), String> = BTreeMap::new();
@@ -710,7 +772,15 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
     let lifted: BTreeSet<(String, String)> = moved
         .iter()
         .filter(|one| one.lift)
-        .map(|one| (one.decl_item.as_ref().map(|d| d.0.clone()).unwrap_or_default(), one.name.clone()))
+        .map(|one| {
+            (
+                one.decl_item
+                    .as_ref()
+                    .map(|d| d.0.clone())
+                    .unwrap_or_default(),
+                one.name.clone(),
+            )
+        })
         .collect();
 
     // Children each file declares, before and after.
@@ -755,7 +825,9 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
 
     for (rel, scanned) in &scans {
         let Some(node) = tree.get(rel) else { continue };
-        let Some((after_root, after_here)) = after_of(rel) else { continue };
+        let Some((after_root, after_here)) = after_of(rel) else {
+            continue;
+        };
         let moving = by_old.contains_key(rel.as_str());
         let before_children = &children_before[rel.as_str()];
         let after_children = &children_after[rel];
@@ -783,14 +855,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
             for leaf in &decl.leaves {
                 let reading = read_path(&before, &leaf.idents, &decl.chain, relative_ok, true);
                 let outcome = reading.as_ref().and_then(|reading| {
-                    note_crossing(
-                        &mut crossings,
-                        rel,
-                        &after_root,
-                        moving,
-                        reading,
-                        &map_path,
-                    );
+                    note_crossing(&mut crossings, rel, &after_root, moving, reading, &map_path);
                     respell_reading(
                         reading,
                         &leaf.idents,
@@ -807,7 +872,10 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 });
                 if reading.is_none() && moving {
                     if let Some(first) = leaf.idents.first() {
-                        externals.entry(rel.clone()).or_default().insert(first.clone());
+                        externals
+                            .entry(rel.clone())
+                            .or_default()
+                            .insert(first.clone());
                     }
                 }
                 outcomes.push(outcome);
@@ -815,9 +883,13 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
             if outcomes.iter().all(Option::is_none) {
                 continue;
             }
-            if decl.grouped || decl.leaves.iter().zip(&outcomes).any(|(leaf, outcome)| {
-                outcome.as_ref().is_some_and(|(cut, _)| !contiguous(text, &leaf.spans[..*cut]))
-            }) {
+            if decl.grouped
+                || decl.leaves.iter().zip(&outcomes).any(|(leaf, outcome)| {
+                    outcome
+                        .as_ref()
+                        .is_some_and(|(cut, _)| !contiguous(text, &leaf.spans[..*cut]))
+                })
+            {
                 let replacement = rewrite_use(decl, &outcomes, text);
                 plan.edits.insert(
                     (rel.clone(), decl.span.start),
@@ -834,7 +906,9 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 continue;
             }
             for (leaf, outcome) in decl.leaves.iter().zip(outcomes) {
-                let Some((cut, replacement)) = outcome else { continue };
+                let Some((cut, replacement)) = outcome else {
+                    continue;
+                };
                 push_run_edit(&mut plan, rel, text, &leaf.spans[..cut], replacement);
             }
         }
@@ -843,20 +917,34 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
         for run in scanned.runs.iter().filter(|run| !run.from_use) {
             let relative_ok = !run.in_block;
             // `pub(crate)` / `pub(super)` walk as a bare qualifier path.
-            if run.idents.iter().all(|ident| matches!(ident.as_str(), "crate" | "self" | "super")) {
+            if run
+                .idents
+                .iter()
+                .all(|ident| matches!(ident.as_str(), "crate" | "self" | "super"))
+            {
                 continue;
             }
             let Some(reading) = read_path(&before, &run.idents, &[], relative_ok, false) else {
                 if moving && !run.in_block {
                     if let Some(first) = run.idents.first() {
                         if run.idents.len() > 1 {
-                            externals.entry(rel.clone()).or_default().insert(first.clone());
+                            externals
+                                .entry(rel.clone())
+                                .or_default()
+                                .insert(first.clone());
                         }
                     }
                 }
                 continue;
             };
-            note_crossing(&mut crossings, rel, &after_root, moving, &reading, &map_path);
+            note_crossing(
+                &mut crossings,
+                rel,
+                &after_root,
+                moving,
+                &reading,
+                &map_path,
+            );
             if reading.via_use {
                 continue;
             }
@@ -885,7 +973,9 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
     // Lifted decls leave their parents; the new parents gain theirs.
     let mut relocations: BTreeMap<String, Relocation> = BTreeMap::new();
     for one in moved.iter().filter(|one| one.lift) {
-        let Some((parent, span, text)) = &one.decl_item else { continue };
+        let Some((parent, span, text)) = &one.decl_item else {
+            continue;
+        };
         plan.edits.insert(
             (parent.clone(), span.start),
             RelocateEdit {
@@ -923,8 +1013,14 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
     for crossing in &crossings {
         let Some(module_len) = (1..=crossing.path.len())
             .rev()
-            .find(|len| file_at.contains_key(&(crossing.root.clone(), crossing.path[..*len].to_vec())))
-            .or_else(|| file_at.contains_key(&(crossing.root.clone(), Vec::new())).then_some(0))
+            .find(|len| {
+                file_at.contains_key(&(crossing.root.clone(), crossing.path[..*len].to_vec()))
+            })
+            .or_else(|| {
+                file_at
+                    .contains_key(&(crossing.root.clone(), Vec::new()))
+                    .then_some(0)
+            })
         else {
             continue;
         };
@@ -938,7 +1034,9 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 continue;
             }
             let Some(node) = tree.get(file) else { continue };
-            let Some((parent, _)) = &node.decl else { continue };
+            let Some((parent, _)) = &node.decl else {
+                continue;
+            };
             let name = crossing.path[len - 1].clone();
             widen_named(
                 &mut plan,
@@ -953,15 +1051,30 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 &name,
             );
         }
-        let Some(file) = file_at.get(&(crossing.root.clone(), crossing.path[..module_len].to_vec()))
+        let Some(file) =
+            file_at.get(&(crossing.root.clone(), crossing.path[..module_len].to_vec()))
         else {
             continue;
         };
         let rest = &crossing.path[module_len..];
         for index in 0..rest.len() {
-            widen_named(&mut plan, &mut widened, &scans, file, &rest[..index], &rest[index]);
+            widen_named(
+                &mut plan,
+                &mut widened,
+                &scans,
+                file,
+                &rest[..index],
+                &rest[index],
+            );
             if index + 1 < rest.len() {
-                widen_member(&mut plan, &mut widened, &scans, file, &rest[index], &rest[index + 1]);
+                widen_member(
+                    &mut plan,
+                    &mut widened,
+                    &scans,
+                    file,
+                    &rest[index],
+                    &rest[index + 1],
+                );
             }
         }
         touched_targets
@@ -993,7 +1106,9 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
         }
     }
     for (file, from) in &touched_targets {
-        let Some(target) = scans.get(file) else { continue };
+        let Some(target) = scans.get(file) else {
+            continue;
+        };
         let texts: Vec<&str> = from
             .iter()
             .filter_map(|rel| scans.get(rel).map(|scanned| scanned.text.as_str()))
@@ -1025,9 +1140,14 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
             .to_string();
         let from = packages.iter().find(|p| &p.manifest == from_manifest);
         let to = packages.iter().find(|p| &p.manifest == to_manifest);
-        let (Some(from), Some(to)) = (from, to) else { continue };
+        let (Some(from), Some(to)) = (from, to) else {
+            continue;
+        };
         let specs = dep_specs(&from.text);
-        if specs.iter().any(|spec| spec.key == to.name || spec.key.replace('-', "_") == to.ident) {
+        if specs
+            .iter()
+            .any(|spec| spec.key == to.name || spec.key.replace('-', "_") == to.ident)
+        {
             continue;
         }
         // Copy the spec an origin package already writes, else a path dep.
@@ -1048,7 +1168,11 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 relative_between(&from.dir, &to.dir)
             )
         });
-        let section = if *dev { "dev-dependencies" } else { "dependencies" };
+        let section = if *dev {
+            "dev-dependencies"
+        } else {
+            "dependencies"
+        };
         stage_dep(&mut inserts, from, section, &line, &evidence);
         if !dev {
             let shown: Vec<&str> = uses.iter().take(12).map(String::as_str).collect();
@@ -1061,10 +1185,13 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
         }
     }
     for (rel, names) in &externals {
-        let Some(one) = by_old.get(rel.as_str()) else { continue };
-        let (Some(origin), Some(dest)) =
-            (package_of(&packages, &one.old), package_of(&packages, &one.new))
-        else {
+        let Some(one) = by_old.get(rel.as_str()) else {
+            continue;
+        };
+        let (Some(origin), Some(dest)) = (
+            package_of(&packages, &one.old),
+            package_of(&packages, &one.new),
+        ) else {
             continue;
         };
         if origin.dir == dest.dir {
@@ -1116,8 +1243,12 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
 
     insert_decls(cx, &relocations, &BTreeSet::new(), &mut plan);
     for one in &moved {
-        let from = package_of(&packages, &one.old).map(|p| p.name.as_str()).unwrap_or("?");
-        let to = package_of(&packages, &one.new).map(|p| p.name.as_str()).unwrap_or("?");
+        let from = package_of(&packages, &one.old)
+            .map(|p| p.name.as_str())
+            .unwrap_or("?");
+        let to = package_of(&packages, &one.new)
+            .map(|p| p.name.as_str())
+            .unwrap_or("?");
         if from != to {
             if let Some(edit) = plan.edits.values_mut().find(|edit| {
                 edit.kind == MOD_RELOCATE_OUT && edit.target == one.old && edit.receipt.is_none()
@@ -1195,8 +1326,8 @@ fn respell_reading(
         return None;
     }
     let (want_root, want_path) = map_path(&reading.root, &reading.abs[..span_len]);
-    let still = read_path(after, &idents[..cut], chain, true, from_use)
-        .map(|read| (read.root, read.abs));
+    let still =
+        read_path(after, &idents[..cut], chain, true, from_use).map(|read| (read.root, read.abs));
     if still.as_ref() == Some(&(want_root.clone(), want_path.clone())) {
         return None;
     }
@@ -1232,7 +1363,13 @@ fn contiguous(text: &str, spans: &[Span]) -> bool {
     })
 }
 
-fn push_run_edit(plan: &mut RelocatePlan, rel: &str, text: &str, spans: &[Span], replacement: String) {
+fn push_run_edit(
+    plan: &mut RelocatePlan,
+    rel: &str,
+    text: &str,
+    spans: &[Span],
+    replacement: String,
+) {
     let (Some(first), Some(last)) = (spans.first(), spans.last()) else {
         return;
     };
@@ -1240,7 +1377,9 @@ fn push_run_edit(plan: &mut RelocatePlan, rel: &str, text: &str, spans: &[Span],
         start: first.start,
         len: last.start + last.len - first.start,
     };
-    let Some(written) = slice(text, span) else { return };
+    let Some(written) = slice(text, span) else {
+        return;
+    };
     if written == replacement {
         return;
     }
@@ -1396,14 +1535,14 @@ fn widen_named(
     chain: &[String],
     name: &str,
 ) {
-    let Some(scanned) = scans.get(file) else { return };
+    let Some(scanned) = scans.get(file) else {
+        return;
+    };
     let found: Vec<&VisItem> = scanned
         .extras
         .vis
         .iter()
-        .filter(|item| {
-            item.kind == VisKind::Item && item.name == name && item.chain == chain
-        })
+        .filter(|item| item.kind == VisKind::Item && item.name == name && item.chain == chain)
         .collect();
     for item in found {
         widen_item(plan, widened, scanned, item);
@@ -1418,15 +1557,15 @@ fn widen_member(
     owner: &str,
     name: &str,
 ) {
-    let Some(scanned) = scans.get(file) else { return };
+    let Some(scanned) = scans.get(file) else {
+        return;
+    };
     let found: Vec<&VisItem> = scanned
         .extras
         .vis
         .iter()
         .filter(|item| {
-            item.kind != VisKind::Item
-                && item.name == name
-                && item.owner.as_deref() == Some(owner)
+            item.kind != VisKind::Item && item.name == name && item.owner.as_deref() == Some(owner)
         })
         .collect();
     for item in found {
@@ -1452,7 +1591,14 @@ fn place_moves(
         }
         owners
             .entry(child_dir(rel, node.owns_dir))
-            .or_insert_with(|| (rel.clone(), rel.clone(), node.root.clone(), node.path.clone()));
+            .or_insert_with(|| {
+                (
+                    rel.clone(),
+                    rel.clone(),
+                    node.root.clone(),
+                    node.path.clone(),
+                )
+            });
     }
     let mut pending: Vec<(&String, &String)> = cx
         .moved()
@@ -1465,17 +1611,22 @@ fn place_moves(
         let mut rest = Vec::new();
         for (old, new) in pending {
             let dest_dir = dirname(new).to_string();
-            let Some((parent_pre, parent_after, root, parent_path)) = owners.get(&dest_dir).cloned()
+            let Some((parent_pre, parent_after, root, parent_path)) =
+                owners.get(&dest_dir).cloned()
             else {
                 rest.push((old, new));
                 continue;
             };
             let node = &tree[old];
             let Some((decl_parent, index)) = &node.decl else {
-                plan.errors.push(format!("{old} is a crate root; a move cannot carry one across crates"));
+                plan.errors.push(format!(
+                    "{old} is a crate root; a move cannot carry one across crates"
+                ));
                 continue;
             };
-            let Some(decl) = scans.get(decl_parent).and_then(|scanned| scanned.scan.decls.get(*index))
+            let Some(decl) = scans
+                .get(decl_parent)
+                .and_then(|scanned| scanned.scan.decls.get(*index))
             else {
                 continue;
             };
@@ -1498,9 +1649,14 @@ fn place_moves(
             let owns_dir = stem(new) == "mod" || decl.attr.is_some() || !natural;
             let mut new_path = parent_path.clone();
             new_path.push(decl.name.clone());
-            owners
-                .entry(child_dir(new, owns_dir))
-                .or_insert_with(|| ((*old).clone(), (*new).clone(), root.clone(), new_path.clone()));
+            owners.entry(child_dir(new, owns_dir)).or_insert_with(|| {
+                (
+                    (*old).clone(),
+                    (*new).clone(),
+                    root.clone(),
+                    new_path.clone(),
+                )
+            });
             let decl_item = scans.get(decl_parent).and_then(|scanned| {
                 whole_lines(&scanned.text, decl.item)
                     .map(|(span, text)| (decl_parent.clone(), span, text))
@@ -1538,7 +1694,10 @@ fn place_moves(
     // A module carries its subtree: every child it declares moves with it.
     for one in &placed {
         for (rel, node) in tree {
-            if node.decl.as_ref().is_some_and(|(parent, _)| parent == &one.old)
+            if node
+                .decl
+                .as_ref()
+                .is_some_and(|(parent, _)| parent == &one.old)
                 && cx.destination(rel).is_none()
             {
                 plan.errors.push(format!(
@@ -1645,7 +1804,9 @@ fn toml_tables(text: &str) -> Vec<TomlTable> {
                     );
                 }
                 "pair" => {
-                    let Some(key) = part.named_child(0) else { continue };
+                    let Some(key) = part.named_child(0) else {
+                        continue;
+                    };
                     let key = String::from_utf8_lossy(&source[key.start_byte()..key.end_byte()])
                         .trim_matches('"')
                         .to_string();
@@ -1686,7 +1847,10 @@ fn reaim_spec(spec: &str, from_dir: &str, to_dir: &str) -> String {
     }
     if let Some(at) = out.find("path") {
         let tail = &out[at..];
-        if let (Some(open), true) = (tail.find('"'), tail[..tail.find('"').unwrap_or(0)].contains('=')) {
+        if let (Some(open), true) = (
+            tail.find('"'),
+            tail[..tail.find('"').unwrap_or(0)].contains('='),
+        ) {
             let value_start = at + open + 1;
             if let Some(close) = out[value_start..].find('"') {
                 let written = out[value_start..value_start + close].to_string();
@@ -1726,13 +1890,18 @@ fn stage_dep(
         return;
     }
     if header && entry.0.is_empty() {
-        let lead = if package.text.ends_with('\n') { "\n" } else { "\n\n" };
+        let lead = if package.text.ends_with('\n') {
+            "\n"
+        } else {
+            "\n\n"
+        };
         entry.0.push(format!("{lead}[{section}]"));
     }
     entry.0.push(line.to_string());
-    entry
-        .1
-        .push(format!("dep {}: + {line} (for {evidence})", package.manifest));
+    entry.1.push(format!(
+        "dep {}: + {line} (for {evidence})",
+        package.manifest
+    ));
 }
 
 /// The first dependency cycle one of the `added` edges closes, spelled for the

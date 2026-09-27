@@ -115,10 +115,17 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                 for child in &item.items {
                     match child {
                         syn::TraitItem::Type(assoc) => rows.entities.push(named(
-                            assoc.ident.span(), assoc.ident.to_string(), TypeEntityKind::Alias, line_starts,
+                            assoc.ident.span(),
+                            assoc.ident.to_string(),
+                            TypeEntityKind::Alias,
+                            line_starts,
                         )),
                         syn::TraitItem::Fn(method) if method.default.is_some() => {
-                            rows.entities.push(callable(&method.sig, TypeEntityKind::Method, line_starts));
+                            rows.entities.push(callable(
+                                &method.sig,
+                                TypeEntityKind::Method,
+                                line_starts,
+                            ));
                         }
                         _ => {}
                     }

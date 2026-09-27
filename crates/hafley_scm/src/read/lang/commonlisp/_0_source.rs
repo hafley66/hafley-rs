@@ -11,7 +11,7 @@ use crate::read::family::{CstEdgeKind, CstF};
 use crate::read::lang::extract_lang::RyiLang;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::shape::{NodeRef, Span, Strings};
-use crate::read::source::{RyiOutput, FamilyMask, Source};
+use crate::read::source::{FamilyMask, RyiOutput, Source};
 use crate::read::trace;
 
 #[derive(Default)]
@@ -65,7 +65,9 @@ impl Source for CommonlispSource {
     /// is unclaimed elsewhere in the roster and is not `.clj`/`.cljc` (Clojure,
     /// which has no front-end here) or `.cls` (Visual Basic, claimed by no
     fn matches(&self, path: &str) -> bool {
-        path.ends_with(".lisp") || path.ends_with(".lsp") || path.ends_with(".cl")
+        path.ends_with(".lisp")
+            || path.ends_with(".lsp")
+            || path.ends_with(".cl")
             || path.ends_with(".asd")
     }
 

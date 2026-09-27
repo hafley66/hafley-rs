@@ -26,13 +26,13 @@ use serde::Serialize;
 
 use crate::read::lang::extract_lang::RyiLang;
 
-pub use soopy::ContentId;
-use hafley_scm::span::Span;
-use hafley_scm::atoms::NameId;
-use hafley_scm::atoms::Strings;
-use hafley_scm::atoms::NodeRef;
 use hafley_scm::atoms::FamilyTag;
+use hafley_scm::atoms::NameId;
+use hafley_scm::atoms::NodeRef;
 use hafley_scm::atoms::ProjectDigest;
+use hafley_scm::atoms::Strings;
+use hafley_scm::span::Span;
+pub use soopy::ContentId;
 // ════════════════════════════════════════════════════════════════════════════
 // S1 ATOMS
 // ════════════════════════════════════════════════════════════════════════════
@@ -364,7 +364,8 @@ impl TsiNames {
     /// A fresh id with an origin and no name-table entry.
     pub fn anonymous(&mut self, span: Span) -> u32 {
         let id = self.sink.fresh_id();
-        self.sink.fact("tsi.type", vec![crate::read::tsi::Arg::Id(id)]);
+        self.sink
+            .fact("tsi.type", vec![crate::read::tsi::Arg::Id(id)]);
         self.sink.fact(
             "tsi.origin",
             vec![
@@ -730,6 +731,8 @@ impl SpecifierKind {
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CallFAux {
     pub sites: Vec<CallSite>,
+    /// Rust struct update expression type for `Default::default()` sites.
+    pub expected_types: Vec<(Span, NameId)>,
     pub specifiers: Vec<Specifier>,
     /// Runtime-computed edge markers (dynamic import / computed member call /
     /// spread call args). Port of v5 `UnresolvedRef`.
@@ -2674,9 +2677,7 @@ pub struct SpanOut {
     pub end: u32,
 }
 
-fn deserialize_graph_root_span<'de, D>(
-    deserializer: D,
-) -> Result<Option<SpanOut>, D::Error>
+fn deserialize_graph_root_span<'de, D>(deserializer: D) -> Result<Option<SpanOut>, D::Error>
 where
     D: serde::Deserializer<'de>,
 {

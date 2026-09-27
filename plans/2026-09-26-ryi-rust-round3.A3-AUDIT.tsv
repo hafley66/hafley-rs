@@ -1,0 +1,68 @@
+corpus	source	owner	target	target_name	verdict
+root	crates/boop/src/cli/acpx.rs	closure@1429	crates/boop-acp/src/channel/1_acpx.rs	route_agent	correct: source call
+root	crates/boop/src/cli/acpx.rs	run_foreground	crates/boop-acp/src/channel/1_acpx.rs	route_agent	correct: source call
+root	crates/boop/src/cli/mail.rs	closure@34676	crates/boop-harness/src/door/0_claude_hooks.rs	install	correct: source call
+root	crates/boop/src/cli/mail.rs	closure@34676	crates/boop-harness/src/door/0_claude_hooks.rs	uninstall	correct: source call
+root	crates/boop/src/cli/mail.rs	write_inbox_hooks	crates/boop-harness/src/door/0_claude_hooks.rs	install	correct: source call
+root	crates/boop/src/cli/mail.rs	write_inbox_hooks	crates/boop-harness/src/door/0_claude_hooks.rs	uninstall	correct: source call
+root	crates/hafley-observe/tests/event_sums_by_ancestor.rs	closure@2222	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/event_sums_by_ancestor.rs	closure@371	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/event_sums_by_ancestor.rs	events_outside_the_ancestor_group_under_the_empty_key	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/event_sums_by_ancestor.rs	run	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	cached_statement_counters_describe_each_execution	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	cached_statement_counters_describe_each_execution	crates/hafley-observe/src/5_sqlite.rs	silence	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	closure@1325	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	closure@1325	crates/hafley-observe/src/5_sqlite.rs	silence	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	closure@3435	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	closure@3435	crates/hafley-observe/src/5_sqlite.rs	silence	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	warnings_for	crates/hafley-observe/src/5_sqlite.rs	instrument	correct: source call
+root	crates/hafley-observe/tests/sqlite_statement_counters.rs	warnings_for	crates/hafley-observe/src/5_sqlite.rs	silence	correct: source call
+root	crates/hafley_scm/src/read/lang/fact.rs	closure@5726	crates/hafley_scm/src/read/lang/fact.rs	FactSet	correct: struct literal
+root	crates/hafley_scm/src/read/lang/fact.rs	load_by	crates/hafley_scm/src/read/lang/fact.rs	FactSet	correct: struct literal
+sprefa	src/bin/ryi.rs	closure@21957	src/3_region_writer.rs	RegionError	correct: struct literal
+sprefa	src/bin/ryi.rs	run_verb_inner	src/3_region_writer.rs	RegionError	correct: struct literal
+sprefa	src/edit/_0_seams.rs	moved_names	src/edit/_1_move_cx.rs	dirname	correct: source call
+sprefa	src/edit/_0_seams.rs	moved_names	src/edit/_1_move_cx.rs	owned_by	correct: source call
+sprefa	src/edit/_0_seams.rs	moved_names	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/kotlin_rehome.rs	plans	src/edit/_1_move_cx.rs	owned_by	correct: source call
+sprefa	src/edit/prolog_rename.rs	closure@2796	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/prolog_rename.rs	open	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/prolog_rename.rs	symbol_refs	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rehome.rs	is_mod_rs	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rehome.rs	module_dir	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rehome/cross.rs	child_dir	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rehome/cross.rs	module_tree	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rehome/cross.rs	place_moves	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rename.rs	closure@81284	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/rust_rename.rs	manifests	src/edit/_1_move_cx.rs	stem	correct: source call
+sprefa	src/edit/ts_rehome.rs	is_ts_file	src/edit/_1_move_cx.rs	owned_by	correct: source call
+sprefa	src/edit/ts_rehome/cross.rs	closure@7845	src/edit/_1_move_cx.rs	owned_by	correct: source call
+sprefa	src/edit/ts_rehome/cross.rs	dep_plan	src/edit/_1_move_cx.rs	owned_by	correct: source call
+sprefa	tests/fixtures/call_ladder/src/deep/_11_path_module.rs	path_module_probe	tests/fixtures/call_ladder/src/lib.rs	exit	correct: super::exit() call
+sprefa-type	tests/fixtures/call_ladder/src/_10_self_constructor.rs	First	tests/fixtures/call_ladder/src/_10_self_constructor.rs	First	correct: impl self type
+sprefa-type	tests/fixtures/call_ladder/src/_10_self_constructor.rs	Second	tests/fixtures/call_ladder/src/_10_self_constructor.rs	Second	correct: impl self type
+sprefa-type	tests/fixtures/call_ladder/src/_10_self_constructor.rs	first	tests/fixtures/call_ladder/src/_10_self_constructor.rs	First	correct: Self return and constructor
+sprefa-type	tests/fixtures/call_ladder/src/_10_self_constructor.rs	first_rows	tests/fixtures/call_ladder/src/_10_self_constructor.rs	First	correct: First annotation and constructor
+sprefa-type	tests/fixtures/call_ladder/src/_10_self_constructor.rs	second	tests/fixtures/call_ladder/src/_10_self_constructor.rs	Second	correct: Self return and constructor
+sprefa-type	tests/fixtures/call_ladder/src/_10_self_constructor.rs	second_rows	tests/fixtures/call_ladder/src/_10_self_constructor.rs	Second	correct: Second annotation and constructor
+sprefa-type	tests/fixtures/rust_findings/variant_names/user.rs	alpha_user	tests/fixtures/rust_findings/variant_names/alpha.rs	Alpha	correct: Alpha return type
+sprefa-type-sample	src/0_graph.rs	ask_at	src/bin/ryi/0_revision.rs	RevisionReader	correct: source type use
+sprefa-type-sample	src/0_graph.rs	ask_at	src/bin/ryi/gen/ops_auto.rs	GraphArgs	correct: source type use
+sprefa-type-sample	src/0_graph.rs	load_store	src/bin/ryi/0_sqlite.rs	Database	correct: source type use
+sprefa-type-sample	src/0_graph.rs	load_store	src/bin/ryi/gen/ops_auto.rs	GraphArgs	correct: source type use
+sprefa-type-sample	src/0_graph.rs	run	src/bin/ryi/gen/ops_auto.rs	GraphArgs	correct: source type use
+sprefa-type-sample	src/0_query.rs	run	src/bin/ryi/gen/ops_auto.rs	QueryArgs	correct: source type use
+sprefa-type-sample	src/3_region_writer.rs	run	src/bin/ryi/gen/ops_auto.rs	RegionArgs	correct: source type use
+sprefa-type-sample	src/4_watch.rs	from_args	src/bin/ryi/gen/ops_auto.rs	WatchArgs	correct: source type use
+sprefa-type-sample	src/4_watch.rs	run	src/bin/ryi/gen/ops_auto.rs	WatchArgs	correct: source type use
+sprefa-type-sample	src/5_diff.rs	from_args	src/bin/ryi/gen/ops_auto.rs	DiffArgs	correct: source type use
+sprefa-type-sample	src/5_diff.rs	resolve_at	src/bin/ryi/0_revision.rs	RevisionReader	correct: source type use
+sprefa-type-sample	src/5_diff.rs	run	src/bin/ryi/gen/ops_auto.rs	DiffArgs	correct: source type use
+sprefa-type-sample	src/bin/ryi/0a_bind.rs	serialize_struct	src/bin/ryi/0a_bind.rs	RowWriter	correct: source type use
+sprefa-type-sample	src/bin/ryi/1_inputs.rs	expand	src/bin/ryi/gen/models/inputs.rs	Inputs	correct: source type use
+sprefa-type-sample	src/bin/ryi/1_inputs.rs	root	src/bin/ryi/gen/models/inputs.rs	Inputs	correct: source type use
+sprefa-type-sample	src/bin/ryi/gen/cli_auto.rs	Cmd	src/bin/ryi/gen/ops_auto.rs	CleaveArgs	correct: source type use
+sprefa-type-sample	src/bin/ryi/gen/cli_auto.rs	Cmd	src/bin/ryi/gen/ops_auto.rs	DiffArgs	correct: source type use
+sprefa-type-sample	src/bin/ryi/gen/cli_auto.rs	Cmd	src/bin/ryi/gen/ops_auto.rs	FastArgs	correct: source type use
+sprefa-type-sample	src/bin/ryi/gen/cli_auto.rs	Cmd	src/bin/ryi/gen/ops_auto.rs	GraphArgs	correct: source type use
+sprefa-type-sample	src/bin/ryi/gen/cli_auto.rs	Cmd	src/bin/ryi/gen/ops_auto.rs	IngestArgs	correct: source type use

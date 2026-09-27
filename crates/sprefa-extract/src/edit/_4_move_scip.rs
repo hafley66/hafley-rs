@@ -7,10 +7,10 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::edit_seams::ImportRef;
 use crate::move_cx::MoveCx;
 use crate::scip::{byte_range_at, LineTable};
 use crate::types::{OccurrenceRole, ScipIndex};
-use crate::edit_seams::ImportRef;
 use hafley_scm::span::Span;
 
 /// A ref the index carries and the impl did not answer with.

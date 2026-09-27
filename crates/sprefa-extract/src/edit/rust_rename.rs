@@ -21,24 +21,24 @@
 //! granularity only; an owner segment (`Owner { .. }`, `Kind::Old`) never
 //! reaches through a block-scoped `use`. @comment-ok: module header waiver
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::rc::Rc;
 
 use syn::spanned::Spanned;
 
+use crate::edit_seams::RefRole;
+use crate::edit_seams::Rename;
+use crate::edit_seams::RenameStop;
+use crate::edit_seams::Respell;
+use crate::edit_seams::SymbolRef;
+use crate::edit_seams::SymbolSeat;
 use crate::lang::rust::{build_line_starts, syn_span, RustSource};
 use crate::lang::rust_modules::CargoManifest;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
-use crate::edit_seams::Respell;
-use crate::edit_seams::SymbolRef;
-use crate::edit_seams::RefRole;
-use crate::edit_seams::SymbolSeat;
-use crate::edit_seams::RenameStop;
-use crate::edit_seams::Rename;
-use hafley_scm::span::Span;
 use hafley_scm::atoms::{NameId, Strings};
+use hafley_scm::span::Span;
 
 impl Rename for RustSource {
     fn symbol_refs(
@@ -56,9 +56,7 @@ impl Rename for RustSource {
         let at_root: Vec<&Decl> = anchor
             .decls
             .iter()
-            .filter(|decl| {
-                decl.chain.is_empty() && decl.block.is_none() && !decl.kind.is_member()
-            })
+            .filter(|decl| decl.chain.is_empty() && decl.block.is_none() && !decl.kind.is_member())
             .collect();
         let declaration = match (request.at, at_root.as_slice(), anchor.decls.as_slice()) {
             (_, _, []) => return Err(not_found(request)),
@@ -85,8 +83,10 @@ impl Rename for RustSource {
             .map(|home| module_of(home, &declaration.chain))
             .collect();
         let nameable = corpus.nameable(&anchor_modules);
-        let reexports =
-            corpus.reexports(&nameable, (request.anchor.clone(), declaration.chain.clone()));
+        let reexports = corpus.reexports(
+            &nameable,
+            (request.anchor.clone(), declaration.chain.clone()),
+        );
 
         let mut refs = vec![SymbolRef {
             file: request.anchor.clone(),
@@ -103,8 +103,18 @@ impl Rename for RustSource {
                 .unwrap_or_default();
             for home in corpus.homes_of(rel) {
                 corpus.harvest(
-                    rel, home, scan, &line_starts, &nameable, &reexports, anchored,
-                    &declaration.kind, &anchor_modules, request, &mut refs, &mut seats,
+                    rel,
+                    home,
+                    scan,
+                    &line_starts,
+                    &nameable,
+                    &reexports,
+                    anchored,
+                    &declaration.kind,
+                    &anchor_modules,
+                    request,
+                    &mut refs,
+                    &mut seats,
                 );
             }
         }
@@ -273,7 +283,9 @@ impl Corpus {
                 syn::visit::Visit::visit_file(&mut scan, parsed);
                 scan.out.field_sites = field_sites(parsed, &line_starts, old);
                 scan.out
-            }) else { continue };
+            }) else {
+                continue;
+            };
             homes.insert(
                 rel.to_string(),
                 path_mods
@@ -455,10 +467,14 @@ impl Corpus {
             }
         }
         let inside_shadow_block = |blocks: &[Span], span: Span| {
-            blocks.iter().any(|block| block.start <= span.start && span.end() <= block.end())
+            blocks
+                .iter()
+                .any(|block| block.start <= span.start && span.end() <= block.end())
         };
         let inside_local_block = |blocks: &[Span], span: Span| {
-            blocks.iter().any(|block| block.start <= span.start && span.end() <= block.end())
+            blocks
+                .iter()
+                .any(|block| block.start <= span.start && span.end() <= block.end())
         };
         for leaf in &scan.uses {
             let reaches = self
@@ -510,9 +526,10 @@ impl Corpus {
                     }
                     Some(block) => shadow_blocks.push(block),
                 },
-                LeafKind::Glob if reaches => {
-                    globs.entry(&leaf.chain).or_default().push((leaf.item, leaf.block))
-                }
+                LeafKind::Glob if reaches => globs
+                    .entry(&leaf.chain)
+                    .or_default()
+                    .push((leaf.item, leaf.block)),
                 // A glob of a scope that binds the name re-exposes it here; the
                 // glob itself has no token to rewrite.
                 LeafKind::Glob
@@ -531,7 +548,13 @@ impl Corpus {
             if !path.prefix.is_empty() {
                 let variant = match anchor_kind {
                     DeclKind::Variant { owner } => self.owner_reach(
-                        home, &path.chain, &path.prefix, owner, anchor_modules, nameable, scan,
+                        home,
+                        &path.chain,
+                        &path.prefix,
+                        owner,
+                        anchor_modules,
+                        nameable,
+                        scan,
                     ),
                     _ => false,
                 };
@@ -545,7 +568,8 @@ impl Corpus {
                 continue;
             }
             if local_ours.iter().any(|(chain, block)| {
-                *chain == path.chain.as_slice() && block.start <= path.span.start
+                *chain == path.chain.as_slice()
+                    && block.start <= path.span.start
                     && path.span.end() <= block.end()
             }) {
                 refs.push(seat(rel, path.span, path.role, &request.old));
@@ -564,7 +588,9 @@ impl Corpus {
             // A glob whose scope never writes the bare name survives the rename
             // untouched, so only a scope that writes it stops.
             for (span, bound) in globs.get(path.chain.as_slice()).into_iter().flatten() {
-                if bound.is_some_and(|block| block.start > path.span.start || path.span.end() > block.end()) {
+                if bound.is_some_and(|block| {
+                    block.start > path.span.start || path.span.end() > block.end()
+                }) {
                     continue;
                 }
                 seats.push(SymbolSeat {
@@ -582,7 +608,11 @@ impl Corpus {
         if let DeclKind::Field { owner } = anchor_kind {
             for site in &scan.field_sites {
                 match site {
-                    FieldSite::Access { span, ty: Some(ty), write } if ty == owner => {
+                    FieldSite::Access {
+                        span,
+                        ty: Some(ty),
+                        write,
+                    } if ty == owner => {
                         let role = match write {
                             true => RefRole::Write,
                             false => RefRole::Read,
@@ -596,17 +626,23 @@ impl Corpus {
                         reaches: String::new(),
                         form: "untyped field",
                     }),
-                    FieldSite::Owner { span, chain, prefix, owner: site_owner, pattern, .. }
-                        if site_owner == owner
-                            && self.owner_reach(
-                                home,
-                                chain,
-                                &owner_path(prefix, site_owner),
-                                owner,
-                                anchor_modules,
-                                nameable,
-                                scan,
-                            ) =>
+                    FieldSite::Owner {
+                        span,
+                        chain,
+                        prefix,
+                        owner: site_owner,
+                        pattern,
+                        ..
+                    } if site_owner == owner
+                        && self.owner_reach(
+                            home,
+                            chain,
+                            &owner_path(prefix, site_owner),
+                            owner,
+                            anchor_modules,
+                            nameable,
+                            scan,
+                        ) =>
                     {
                         let role = match pattern {
                             true => RefRole::Read,
@@ -642,7 +678,9 @@ impl Corpus {
                 continue;
             }
             for (span, bound) in globs.get(token.chain.as_slice()).into_iter().flatten() {
-                if bound.is_some_and(|block| block.start > token.span.start || token.span.end() > block.end()) {
+                if bound.is_some_and(|block| {
+                    block.start > token.span.start || token.span.end() > block.end()
+                }) {
                     continue;
                 }
                 seats.push(SymbolSeat {
@@ -683,11 +721,14 @@ impl Corpus {
             if token.prefix.is_some() || token.member {
                 continue;
             }
-            if shadowed.contains(token.chain.as_slice()) || inside_local_block(&scan.locals, token.span) {
+            if shadowed.contains(token.chain.as_slice())
+                || inside_local_block(&scan.locals, token.span)
+            {
                 continue;
             }
             let locally = local_ours.iter().any(|(chain, block)| {
-                *chain == token.chain.as_slice() && block.start <= token.span.start
+                *chain == token.chain.as_slice()
+                    && block.start <= token.span.start
                     && token.span.end() <= block.end()
             });
             if ours.contains(token.chain.as_slice()) || locally {
@@ -695,7 +736,9 @@ impl Corpus {
                 continue;
             }
             for (span, bound) in globs.get(token.chain.as_slice()).into_iter().flatten() {
-                if bound.is_some_and(|block| block.start > token.span.start || token.span.end() > block.end()) {
+                if bound.is_some_and(|block| {
+                    block.start > token.span.start || token.span.end() > block.end()
+                }) {
                     continue;
                 }
                 seats.push(SymbolSeat {
@@ -861,9 +904,13 @@ enum DeclKind {
     /// Declared in an `impl` or `trait` block, so call sites spell it as a method.
     Method,
     /// A named field of the struct/union/variant `owner`.
-    Field { owner: String },
+    Field {
+        owner: String,
+    },
     /// A variant of the enum `owner`.
-    Variant { owner: String },
+    Variant {
+        owner: String,
+    },
 }
 
 impl DeclKind {
@@ -958,7 +1005,12 @@ impl Scan<'_> {
     fn declare_fields(&mut self, fields: &syn::FieldsNamed, owner: &str) {
         for field in &fields.named {
             if let Some(ident) = &field.ident {
-                self.declare(ident, DeclKind::Field { owner: owner.to_string() });
+                self.declare(
+                    ident,
+                    DeclKind::Field {
+                        owner: owner.to_string(),
+                    },
+                );
             }
         }
     }
@@ -967,12 +1019,8 @@ impl Scan<'_> {
     /// token context. A rewrite can now enter, so every span is `exact`-checked.
     fn tokens(&mut self, stream: proc_macro2::TokenStream) {
         let trees: Vec<proc_macro2::TokenTree> = stream.into_iter().collect();
-        let is_colon = |tree: Option<&proc_macro2::TokenTree>| {
-            matches!(tree, Some(proc_macro2::TokenTree::Punct(punct)) if punct.as_char() == ':')
-        };
-        let is_dot = |tree: Option<&proc_macro2::TokenTree>| {
-            matches!(tree, Some(proc_macro2::TokenTree::Punct(punct)) if punct.as_char() == '.')
-        };
+        let is_colon = |tree: Option<&proc_macro2::TokenTree>| matches!(tree, Some(proc_macro2::TokenTree::Punct(punct)) if punct.as_char() == ':');
+        let is_dot = |tree: Option<&proc_macro2::TokenTree>| matches!(tree, Some(proc_macro2::TokenTree::Punct(punct)) if punct.as_char() == '.');
         for (index, tree) in trees.iter().enumerate() {
             match tree {
                 proc_macro2::TokenTree::Ident(ident) if ident == self.old => {
@@ -1021,9 +1069,7 @@ impl Scan<'_> {
 /// The `::`-joined segments before `trees[index]`, walking back while
 /// `ident : :` precedes the cursor: `crate::air::` yields `[crate, air]`.
 fn path_prefix(trees: &[proc_macro2::TokenTree], index: usize) -> Vec<String> {
-    let colon = |trees: &[proc_macro2::TokenTree], at: usize| {
-        matches!(trees.get(at), Some(proc_macro2::TokenTree::Punct(punct)) if punct.as_char() == ':')
-    };
+    let colon = |trees: &[proc_macro2::TokenTree], at: usize| matches!(trees.get(at), Some(proc_macro2::TokenTree::Punct(punct)) if punct.as_char() == ':');
     let mut prefix = Vec::new();
     let mut cursor = index;
     while cursor >= 3 {
@@ -1121,7 +1167,12 @@ fn field_sites(parsed: &syn::File, line_starts: &[u32], old: &str) -> Vec<FieldS
         write: false,
         out: Vec::new(),
     };
-    field_tables(&parsed.items, &mut walk.rets, &mut walk.assoc_rets, &mut walk.fields);
+    field_tables(
+        &parsed.items,
+        &mut walk.rets,
+        &mut walk.assoc_rets,
+        &mut walk.fields,
+    );
     syn::visit::Visit::visit_file(&mut walk, parsed);
     walk.out
 }
@@ -1162,7 +1213,8 @@ fn field_tables(
                 let struct_name = s.ident.to_string();
                 if let syn::Fields::Named(named) = &s.fields {
                     for field in &named.named {
-                        if let (Some(field_name), Some(ty)) = (&field.ident, principal_ty(&field.ty))
+                        if let (Some(field_name), Some(ty)) =
+                            (&field.ident, principal_ty(&field.ty))
                         {
                             fields
                                 .entry((struct_name.clone(), field_name.to_string()))
@@ -1285,7 +1337,9 @@ impl FieldWalk<'_> {
             }
             syn::Expr::MethodCall(call) => {
                 let receiver = self.value_ty(&call.receiver)?;
-                self.assoc_rets.get(&(receiver, call.method.to_string())).cloned()
+                self.assoc_rets
+                    .get(&(receiver, call.method.to_string()))
+                    .cloned()
             }
             // `let h = Helper { .. }` types h by the literal's owner.
             syn::Expr::Struct(literal) => {
@@ -1379,7 +1433,13 @@ impl FieldWalk<'_> {
 
     /// Records an `Owner { .. }` site: the owner segment as written and the
     /// segments before it, for the owner law to judge.
-    fn push_owner(&mut self, path: &syn::Path, ident: &proc_macro2::Ident, shorthand: bool, pattern: bool) {
+    fn push_owner(
+        &mut self,
+        path: &syn::Path,
+        ident: &proc_macro2::Ident,
+        shorthand: bool,
+        pattern: bool,
+    ) {
         let segments: Vec<String> = path
             .segments
             .iter()
@@ -1459,9 +1519,7 @@ impl<'ast> syn::visit::Visit<'ast> for FieldWalk<'_> {
                 syn::Pat::Ident(inner) => Some((
                     inner.ident.to_string(),
                     principal_ty(&pat.ty)
-                        .or_else(|| {
-                            self.init_ty(node.init.as_ref().map(|init| init.expr.as_ref()))
-                        })
+                        .or_else(|| self.init_ty(node.init.as_ref().map(|init| init.expr.as_ref())))
                         .map(TypeBinding::Named)
                         .unwrap_or(TypeBinding::Unknown),
                 )),
@@ -1848,7 +1906,12 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     fn visit_item_enum(&mut self, node: &'ast syn::ItemEnum) {
         let owner = node.ident.to_string();
         for variant in &node.variants {
-            self.declare(&variant.ident, DeclKind::Variant { owner: owner.clone() });
+            self.declare(
+                &variant.ident,
+                DeclKind::Variant {
+                    owner: owner.clone(),
+                },
+            );
             let variant_owner = variant.ident.to_string();
             if let syn::Fields::Named(named) = &variant.fields {
                 self.declare_fields(named, &variant_owner);
@@ -1976,10 +2039,7 @@ fn path_attrs(attrs: &[syn::Attribute], line_starts: &[u32]) -> Vec<(Span, Strin
 
 /// The files a `#[path = ".."]` decl names, to every module each is: the literal
 /// reads against the declaring file's dir; a file two decls name is two modules.
-fn path_module_table(
-    cx: &RenameCx,
-    roots: &BTreeSet<String>,
-) -> BTreeMap<String, Vec<ModuleId>> {
+fn path_module_table(cx: &RenameCx, roots: &BTreeSet<String>) -> BTreeMap<String, Vec<ModuleId>> {
     let mut named: BTreeMap<String, Vec<ModuleId>> = BTreeMap::new();
     for rel in cx.files_of(&RustSource) {
         let Some(text) = cx.text(rel) else {
@@ -1994,7 +2054,15 @@ fn path_module_table(
         };
         let line_starts = build_line_starts(&text);
         let home = module_path(rel, roots);
-        path_decls(&parsed.items, &[], rel, &home, roots, &line_starts, &mut named);
+        path_decls(
+            &parsed.items,
+            &[],
+            rel,
+            &home,
+            roots,
+            &line_starts,
+            &mut named,
+        );
     }
     for routes in named.values_mut() {
         let mut seen = BTreeSet::new();

@@ -204,7 +204,8 @@ impl Collector {
             source = %change.table,
             sign = change.sign.as_integer(),
             columns = change.values.len(),
-        ).entered();
+        )
+        .entered();
         self.counts.update += 1;
         if change.values.len() > self.width {
             return Err(schema::error(format!(
@@ -222,7 +223,11 @@ impl Collector {
         if room {
             self.staged_bytes += bytes;
             self.staged.push(change);
-            tracing::trace!(staged = self.staged.len(), staged_bytes = self.staged_bytes, "collector_staged");
+            tracing::trace!(
+                staged = self.staged.len(),
+                staged_bytes = self.staged_bytes,
+                "collector_staged"
+            );
             return Ok(());
         }
         self.spilled_rows += 1;
@@ -299,7 +304,8 @@ impl Collector {
             collector = %self.name,
             staged = self.staged.len(),
             spilled = self.spilled_rows,
-        ).entered();
+        )
+        .entered();
         self.counts.sync += 1;
         let staged = std::mem::take(&mut self.staged);
         let spilled = self.spilled_rows;

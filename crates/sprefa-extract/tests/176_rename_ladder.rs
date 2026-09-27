@@ -31,8 +31,15 @@ const SYMBOLS: [(&str, &str); 21] = [
 ];
 
 fn run(program: &str, args: &[&str], dir: &Path, envs: &[(&str, &Path)]) -> (bool, String) {
-    let output = Command::new(program).args(args).current_dir(dir).envs(envs.iter().copied()).env("RUST_LOG", "off").output().unwrap();
-    let text = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+    let output = Command::new(program)
+        .args(args)
+        .current_dir(dir)
+        .envs(envs.iter().copied())
+        .env("RUST_LOG", "off")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stdout).into_owned()
+        + &String::from_utf8_lossy(&output.stderr);
     (output.status.success(), text)
 }
 
@@ -64,27 +71,63 @@ fn every_ladder_rename_compiles() {
         let root = scratch.path().join(format!("{index}"));
         let state = scratch.path().join(format!("{index}.state"));
         copy_tree(&fixtures.join(fixture), &root);
-        for args in [&["init", "-q", "."][..], &["add", "-A"], &["-c", "user.email=l@l", "-c", "user.name=l", "commit", "-qm", "l"]] {
+        for args in [
+            &["init", "-q", "."][..],
+            &["add", "-A"],
+            &[
+                "-c",
+                "user.email=l@l",
+                "-c",
+                "user.name=l",
+                "commit",
+                "-qm",
+                "l",
+            ],
+        ] {
             assert!(run("git", args, &root, &[]).0);
         }
         let anchor = format!("{}/src/{file}#{symbol}", root.display());
         let renamed = format!("{symbol}Zz");
         let (root_arg, state_arg) = (root.to_string_lossy(), state.to_string_lossy());
-        let mut args = vec!["rename", &anchor, &renamed, "--root", &root_arg, "--state", &state_arg, "--commit"];
+        let mut args = vec![
+            "rename", &anchor, &renamed, "--root", &root_arg, "--state", &state_arg, "--commit",
+        ];
         args.extend(flag);
         let (_, plan) = run(env!("CARGO_BIN_EXE_ryii"), &args, &root, &[]);
         let uses: usize = plan
             .lines()
-            .filter_map(|line| line.strip_suffix(" uses")?.rsplit(' ').next()?.parse::<usize>().ok())
+            .filter_map(|line| {
+                line.strip_suffix(" uses")?
+                    .rsplit(' ')
+                    .next()?
+                    .parse::<usize>()
+                    .ok()
+            })
             .sum();
-        let diff = plan.lines().find_map(|line| line.strip_prefix("scip-verify disagreements=")).unwrap_or("-").to_string();
-        let (ok, check) = run("cargo", &["check", "--offline", "-q"], &root, &[("CARGO_TARGET_DIR", &target)]);
+        let diff = plan
+            .lines()
+            .find_map(|line| line.strip_prefix("scip-verify disagreements="))
+            .unwrap_or("-")
+            .to_string();
+        let (ok, check) = run(
+            "cargo",
+            &["check", "--offline", "-q"],
+            &root,
+            &[("CARGO_TARGET_DIR", &target)],
+        );
         let check = match ok {
             true => "ok".to_string(),
-            false => check.lines().find(|line| line.starts_with("error")).unwrap_or("FAIL").to_string(),
+            false => check
+                .lines()
+                .find(|line| line.starts_with("error"))
+                .unwrap_or("FAIL")
+                .to_string(),
         };
         let label = format!("{fixture}/{file}#{symbol} {}", flag.unwrap_or(""));
-        table.push(format!("{:<44} {uses:>4} {diff:>4}  {check}", label.trim_end()));
+        table.push(format!(
+            "{:<44} {uses:>4} {diff:>4}  {check}",
+            label.trim_end()
+        ));
     }
     assert_eq!(
         table.join("\n"),

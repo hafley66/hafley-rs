@@ -35,15 +35,19 @@ fn status_rows_above(status: &str, position: &str) -> u16 {
 pub fn parse_pane_at(text: &str, col: u16, row: u16) -> Option<PaneHit> {
     for line in text.lines() {
         let fields: Vec<&str> = line.splitn(10, '\t').collect();
-        let [pane, left, top, width, height, active, zoomed, status, position, path] = fields[..] else {
+        let [pane, left, top, width, height, active, zoomed, status, position, path] = fields[..]
+        else {
             continue;
         };
         if zoomed == "1" && active != "1" {
             continue;
         }
-        let (Ok(left), Ok(top), Ok(width), Ok(height)) =
-            (left.parse::<u16>(), top.parse::<u16>(), width.parse::<u16>(), height.parse::<u16>())
-        else {
+        let (Ok(left), Ok(top), Ok(width), Ok(height)) = (
+            left.parse::<u16>(),
+            top.parse::<u16>(),
+            width.parse::<u16>(),
+            height.parse::<u16>(),
+        ) else {
             continue;
         };
         let Some(window_row) = row.checked_sub(status_rows_above(status, position)) else {
@@ -82,9 +86,24 @@ mod tests {
         assert_eq!(
             hits,
             vec![
-                Some(PaneHit { pane: "%1".into(), pane_current_path: "/repo/main".into(), pane_col: 5, pane_row: 3 }),
-                Some(PaneHit { pane: "%2".into(), pane_current_path: "/repo/wt".into(), pane_col: 4, pane_row: 0 }),
-                Some(PaneHit { pane: "%2".into(), pane_current_path: "/repo/wt".into(), pane_col: 38, pane_row: 11 }),
+                Some(PaneHit {
+                    pane: "%1".into(),
+                    pane_current_path: "/repo/main".into(),
+                    pane_col: 5,
+                    pane_row: 3
+                }),
+                Some(PaneHit {
+                    pane: "%2".into(),
+                    pane_current_path: "/repo/wt".into(),
+                    pane_col: 4,
+                    pane_row: 0
+                }),
+                Some(PaneHit {
+                    pane: "%2".into(),
+                    pane_current_path: "/repo/wt".into(),
+                    pane_col: 38,
+                    pane_row: 11
+                }),
                 Some(PaneHit {
                     pane: "%3".into(),
                     pane_current_path: "/Users/me/projects/sqlite_ivm".into(),
@@ -104,7 +123,12 @@ mod tests {
         assert_eq!(parse_pane_at(top, 0, 0), None);
         assert_eq!(
             parse_pane_at(top, 0, 1),
-            Some(PaneHit { pane: "%1".into(), pane_current_path: "/a".into(), pane_col: 0, pane_row: 0 })
+            Some(PaneHit {
+                pane: "%1".into(),
+                pane_current_path: "/a".into(),
+                pane_col: 0,
+                pane_row: 0
+            })
         );
         let two = "%1\t0\t0\t80\t22\t1\t0\t2\ttop\t/a\n";
         assert_eq!(parse_pane_at(two, 3, 2).map(|hit| hit.pane_row), Some(0));
@@ -112,13 +136,20 @@ mod tests {
 
     #[test]
     fn a_zoomed_window_hits_only_its_active_pane() {
-        let zoomed = "%1\t0\t0\t40\t24\t0\t1\ton\tbottom\t/a\n%2\t0\t0\t80\t24\t1\t1\ton\tbottom\t/b\n";
-        assert_eq!(parse_pane_at(zoomed, 5, 5).map(|hit| hit.pane), Some("%2".into()));
+        let zoomed =
+            "%1\t0\t0\t40\t24\t0\t1\ton\tbottom\t/a\n%2\t0\t0\t80\t24\t1\t1\ton\tbottom\t/b\n";
+        assert_eq!(
+            parse_pane_at(zoomed, 5, 5).map(|hit| hit.pane),
+            Some("%2".into())
+        );
     }
 
     #[test]
     fn a_path_with_a_tab_survives_the_split() {
         let text = "%1\t0\t0\t80\t24\t1\t0\ton\tbottom\t/odd\tdir\n";
-        assert_eq!(parse_pane_at(text, 0, 0).map(|hit| hit.pane_current_path), Some("/odd\tdir".into()));
+        assert_eq!(
+            parse_pane_at(text, 0, 0).map(|hit| hit.pane_current_path),
+            Some("/odd\tdir".into())
+        );
     }
 }

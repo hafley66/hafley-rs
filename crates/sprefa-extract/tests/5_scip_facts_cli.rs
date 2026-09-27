@@ -149,7 +149,8 @@ fn scip_record_narrows_the_stream_to_the_requested_kinds() {
 fn an_unknown_scip_record_kind_is_a_named_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args([
-            "scip", "--raw",
+            "scip",
+            "--raw",
             "--records",
             "scip_occurrances",
             "--root",
@@ -252,12 +253,7 @@ fn diagnostics_and_signatures_reach_the_wire() {
 fn scip_rel_facts(extra: &[&str]) -> String {
     let mut args = vec!["scip", "--raw"];
     args.extend_from_slice(extra);
-    args.extend_from_slice(&[
-        "--root",
-        SCIP_REL_ROOT,
-        "--scip-build",
-        SCIP_REL_SOURCE,
-    ]);
+    args.extend_from_slice(&["--root", SCIP_REL_ROOT, "--scip-build", SCIP_REL_SOURCE]);
     run(&args)
 }
 
@@ -275,12 +271,7 @@ fn without_metadata(facts: &str) -> String {
 #[test]
 fn scip_facts_without_an_index_is_a_named_error() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args([
-            "scip", "--raw",
-            "--root",
-            SCIP_REL_ROOT,
-            SCIP_REL_SOURCE,
-        ])
+        .args(["scip", "--raw", "--root", SCIP_REL_ROOT, SCIP_REL_SOURCE])
         .output()
         .expect("extract binary runs");
     assert!(!output.status.success());
@@ -381,7 +372,8 @@ fn scip_deps_folds_the_index_into_file_edges() {
 #[test]
 fn scip_deps_never_joins_on_document_scoped_local_symbols() {
     let facts = run(&[
-        "scip", "--raw",
+        "scip",
+        "--raw",
         "--root",
         "tests/fixtures/ts",
         "--scip-build",

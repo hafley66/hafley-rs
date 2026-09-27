@@ -9,78 +9,200 @@ mod daemon_guard;
 mod t_0_prolog;
 #[path = "0_sqlite.rs"]
 mod t_0_sqlite;
+#[path = "100_rust_call_scm_production.rs"]
+mod t_100_rust_call_scm_production;
+#[path = "100_tsi_intersection.rs"]
+mod t_100_tsi_intersection;
+#[path = "101_rust_const_init_collection.rs"]
+mod t_101_rust_const_init_collection;
+#[path = "101_ts_semantic_tsi.rs"]
+mod t_101_ts_semantic_tsi;
+#[path = "102_rust_semantic_tsi.rs"]
+mod t_102_rust_semantic_tsi;
+#[path = "103_trail.rs"]
+mod t_103_trail;
+#[path = "104_tier_decline_diagnostic.rs"]
+mod t_104_tier_decline_diagnostic;
+#[path = "105_resolve_syntax_tsi.rs"]
+mod t_105_resolve_syntax_tsi;
+#[path = "106_rust_syntax_graph.rs"]
+mod t_106_rust_syntax_graph;
+#[path = "107_rust_checker_features.rs"]
+mod t_107_rust_checker_features;
+#[path = "108_rust_checker_walk_by_file.rs"]
+mod t_108_rust_checker_walk_by_file;
+#[path = "109_rust_checker_site_cost.rs"]
+mod t_109_rust_checker_site_cost;
+#[path = "10_source_tree.rs"]
+mod t_10_source_tree;
+#[path = "110_tsi_name.rs"]
+mod t_110_tsi_name;
+#[path = "111_cli_identity.rs"]
+mod t_111_cli_identity;
+#[path = "111_ts_syntax_graph.rs"]
+mod t_111_ts_syntax_graph;
+#[path = "112_build_metadata.rs"]
+mod t_112_build_metadata;
+#[path = "112_go_syntax_graph.rs"]
+mod t_112_go_syntax_graph;
+#[path = "113_ts_module_edges.rs"]
+mod t_113_ts_module_edges;
+#[path = "114_go_graph_grind.rs"]
+mod t_114_go_graph_grind;
+#[path = "115_rust_type_grind.rs"]
+mod t_115_rust_type_grind;
+#[path = "116_rust_call_grind.rs"]
+mod t_116_rust_call_grind;
+#[path = "117_python_syntax_graph.rs"]
+mod t_117_python_syntax_graph;
+#[path = "118_python_call_grind.rs"]
+mod t_118_python_call_grind;
+#[path = "119_kotlin_syntax_graph.rs"]
+mod t_119_kotlin_syntax_graph;
+#[path = "11_markdown.rs"]
+mod t_11_markdown;
+#[path = "124_cfg_python_prolog.rs"]
+mod t_124_cfg_python_prolog;
+#[path = "125_markdown_links_fences.rs"]
+mod t_125_markdown_links_fences;
+#[path = "126_python_modules.rs"]
+mod t_126_python_modules;
+#[path = "127_kotlin_modules.rs"]
+mod t_127_kotlin_modules;
+#[path = "128_scip_relationship_conforms.rs"]
+mod t_128_scip_relationship_conforms;
+#[path = "129_go_checker_tier.rs"]
+mod t_129_go_checker_tier;
+#[path = "129_scip_external_coverage.rs"]
+mod t_129_scip_external_coverage;
+#[path = "12_df_identity.rs"]
+mod t_12_df_identity;
+#[path = "130_rust_spelled_receiver.rs"]
+mod t_130_rust_spelled_receiver;
+#[path = "131_kotlin_module_resolve.rs"]
+mod t_131_kotlin_module_resolve;
+#[path = "133_go_binding_legs.rs"]
+mod t_133_go_binding_legs;
+#[path = "134_ts_binding_legs.rs"]
+mod t_134_ts_binding_legs;
+#[path = "135_untyped_receiver_rust.rs"]
+mod t_135_untyped_receiver_rust;
+#[path = "136_untyped_receiver_ts.rs"]
+mod t_136_untyped_receiver_ts;
+#[path = "137_kotlin_receiver_legs.rs"]
+mod t_137_kotlin_receiver_legs;
+#[path = "138_untyped_receiver_kotlin.rs"]
+mod t_138_untyped_receiver_kotlin;
+#[path = "13_flow_join.rs"]
+mod t_13_flow_join;
+#[path = "141_unresolved_contract.rs"]
+mod t_141_unresolved_contract;
+#[path = "142_lines_flag.rs"]
+mod t_142_lines_flag;
+#[path = "143_default_call_plane.rs"]
+mod t_143_default_call_plane;
+#[path = "145_query_predicate_scope.rs"]
+mod t_145_query_predicate_scope;
+#[path = "145a_query_scm_dogfood.rs"]
+mod t_145a_query_scm_dogfood;
+#[path = "146_rename_stop_lines.rs"]
+mod t_146_rename_stop_lines;
+#[path = "147_rename_path_union.rs"]
+mod t_147_rename_path_union;
+#[path = "148_rename_abstain_ts.rs"]
+mod t_148_rename_abstain_ts;
+#[path = "149_graph_callers_ts.rs"]
+mod t_149_graph_callers_ts;
+#[path = "14_df_identity_go_kotlin.rs"]
+mod t_14_df_identity_go_kotlin;
+#[path = "150_fast_scm_kotlin.rs"]
+mod t_150_fast_scm_kotlin;
+#[path = "155_cleave_ts.rs"]
+mod t_155_cleave_ts;
+#[path = "156_cleave_play.rs"]
+mod t_156_cleave_play;
+#[path = "157_fast_scm_rows.rs"]
+mod t_157_fast_scm_rows;
+#[path = "158_fast_scm_kotlin.rs"]
+mod t_158_fast_scm_kotlin;
+#[path = "159_fast_scm_judge.rs"]
+mod t_159_fast_scm_judge;
+#[path = "15_typegraph_d2.rs"]
+mod t_15_typegraph_d2;
+#[path = "160_fast_scm_ts.rs"]
+mod t_160_fast_scm_ts;
+#[path = "161_fast_scm_ratchet.rs"]
+mod t_161_fast_scm_ratchet;
+#[path = "162_graph_views_sql.rs"]
+mod t_162_graph_views_sql;
+#[path = "163_graph_from_ts.rs"]
+mod t_163_graph_from_ts;
+#[path = "164_graph_uses_ts.rs"]
+mod t_164_graph_uses_ts;
+#[path = "165_graph_kotlin.rs"]
+mod t_165_graph_kotlin;
+#[path = "166_cleave_rust.rs"]
+mod t_166_cleave_rust;
+#[path = "166_graph_tsi_evidence.rs"]
+mod t_166_graph_tsi_evidence;
+#[path = "167_graph_paths.rs"]
+mod t_167_graph_paths;
+#[path = "168_graph_revision.rs"]
+mod t_168_graph_revision;
+#[path = "169_graph_uses_rust.rs"]
+mod t_169_graph_uses_rust;
+#[path = "16_python.rs"]
+mod t_16_python;
+#[path = "170_ratchet_sites_rust.rs"]
+mod t_170_ratchet_sites_rust;
+#[path = "171_reach_entry.rs"]
+mod t_171_reach_entry;
+#[path = "172_graph_slow.rs"]
+mod t_172_graph_slow;
+#[path = "173_move_cross_crate.rs"]
+mod t_173_move_cross_crate;
+#[path = "173_rust_export_cycle.rs"]
+mod t_173_rust_export_cycle;
+#[path = "174_type_ladder.rs"]
+mod t_174_type_ladder;
+#[path = "175_cleave_ladder.rs"]
+mod t_175_cleave_ladder;
+#[path = "176_rename_ladder.rs"]
+mod t_176_rename_ladder;
+#[path = "177_crate_scope.rs"]
+mod t_177_crate_scope;
+#[path = "178_cli_http_parity.rs"]
+mod t_178_cli_http_parity;
+#[path = "178_generated_contract.rs"]
+mod t_178_generated_contract;
+#[path = "178_ryi_help.rs"]
+mod t_178_ryi_help;
+#[path = "179_codeql_baseline.rs"]
+mod t_179_codeql_baseline;
+#[path = "17_cfg_first_plane.rs"]
+mod t_17_cfg_first_plane;
+#[path = "180_call_ladder.rs"]
+mod t_180_call_ladder;
+#[path = "181_server_modes.rs"]
+mod t_181_server_modes;
+#[path = "181_ts_ladder.rs"]
+mod t_181_ts_ladder;
+#[path = "182_client_daemon.rs"]
+mod t_182_client_daemon;
+#[path = "18_df_aux_fields_lits.rs"]
+mod t_18_df_aux_fields_lits;
+#[path = "19_docs_lang_arms.rs"]
+mod t_19_docs_lang_arms;
+#[path = "1_move.rs"]
+mod t_1_move;
+#[path = "1_resolve_cli.rs"]
+mod t_1_resolve_cli;
 #[path = "1a_prolog_refs.rs"]
 mod t_1a_prolog_refs;
 #[path = "1a_resolve_raw.rs"]
 mod t_1a_resolve_raw;
 #[path = "1b_prolog_metacall.rs"]
 mod t_1b_prolog_metacall;
-#[path = "1_move.rs"]
-mod t_1_move;
-#[path = "1_resolve_cli.rs"]
-mod t_1_resolve_cli;
-#[path = "2_df_aux_cli.rs"]
-mod t_2_df_aux_cli;
-#[path = "2_move_refs.rs"]
-mod t_2_move_refs;
-#[path = "3_move_rust.rs"]
-mod t_3_move_rust;
-#[path = "4_capability_parity.rs"]
-mod t_4_capability_parity;
-#[path = "4_move_kotlin.rs"]
-mod t_4_move_kotlin;
-#[path = "4_rename_ts.rs"]
-mod t_4_rename_ts;
-#[path = "5_move_scip.rs"]
-mod t_5_move_scip;
-#[path = "5_rename_rust.rs"]
-mod t_5_rename_rust;
-#[path = "5_scip_facts_cli.rs"]
-mod t_5_scip_facts_cli;
-#[path = "6_document_formats.rs"]
-mod t_6_document_formats;
-#[path = "6_kind_vocab.rs"]
-mod t_6_kind_vocab;
-#[path = "6_occurrence_text_cli.rs"]
-mod t_6_occurrence_text_cli;
-#[path = "7_diet_deps_cli.rs"]
-mod t_7_diet_deps_cli;
-#[path = "7_import_ref_kind.rs"]
-mod t_7_import_ref_kind;
-#[path = "7_rename_kotlin.rs"]
-mod t_7_rename_kotlin;
-#[path = "8_rename_prolog.rs"]
-mod t_8_rename_prolog;
-#[path = "8_scip_families_cli.rs"]
-mod t_8_scip_families_cli;
-#[path = "9a_query_blob_door.rs"]
-mod t_9a_query_blob_door;
-#[path = "9_large_file_bounds.rs"]
-mod t_9_large_file_bounds;
-#[path = "9_query_cli.rs"]
-mod t_9_query_cli;
-#[path = "9_size_skip.rs"]
-mod t_9_size_skip;
-#[path = "10_source_tree.rs"]
-mod t_10_source_tree;
-#[path = "11_markdown.rs"]
-mod t_11_markdown;
-#[path = "12_df_identity.rs"]
-mod t_12_df_identity;
-#[path = "13_flow_join.rs"]
-mod t_13_flow_join;
-#[path = "14_df_identity_go_kotlin.rs"]
-mod t_14_df_identity_go_kotlin;
-#[path = "15_typegraph_d2.rs"]
-mod t_15_typegraph_d2;
-#[path = "16_python.rs"]
-mod t_16_python;
-#[path = "17_cfg_first_plane.rs"]
-mod t_17_cfg_first_plane;
-#[path = "18_df_aux_fields_lits.rs"]
-mod t_18_df_aux_fields_lits;
-#[path = "19_docs_lang_arms.rs"]
-mod t_19_docs_lang_arms;
 #[path = "20_unresolved.rs"]
 mod t_20_unresolved;
 #[path = "21_kotlin_type_plane.rs"]
@@ -107,6 +229,10 @@ mod t_27_blob_cache;
 mod t_28_package_edges;
 #[path = "29_data_family.rs"]
 mod t_29_data_family;
+#[path = "2_df_aux_cli.rs"]
+mod t_2_df_aux_cli;
+#[path = "2_move_refs.rs"]
+mod t_2_move_refs;
 #[path = "30_rust_mod_scope_owner.rs"]
 mod t_30_rust_mod_scope_owner;
 #[path = "31_owned_region.rs"]
@@ -127,6 +253,8 @@ mod t_36_drain;
 mod t_37_fact_set;
 #[path = "39_ts_specifiers.rs"]
 mod t_39_ts_specifiers;
+#[path = "3_move_rust.rs"]
+mod t_3_move_rust;
 #[path = "40_ts_resolve.rs"]
 mod t_40_ts_resolve;
 #[path = "41_move_ts.rs"]
@@ -149,6 +277,12 @@ mod t_47_resolve_door_cli;
 mod t_48_kotlin_operator_calls;
 #[path = "49_rust_resolve_scaling.rs"]
 mod t_49_rust_resolve_scaling;
+#[path = "4_capability_parity.rs"]
+mod t_4_capability_parity;
+#[path = "4_move_kotlin.rs"]
+mod t_4_move_kotlin;
+#[path = "4_rename_ts.rs"]
+mod t_4_rename_ts;
 #[path = "50_cli_crawl_defects.rs"]
 mod t_50_cli_crawl_defects;
 #[path = "51_go_package_resolve.rs"]
@@ -171,6 +305,12 @@ mod t_57_rust_module_plane;
 mod t_58_rust_mbe;
 #[path = "59_rust_scip_macros.rs"]
 mod t_59_rust_scip_macros;
+#[path = "5_move_scip.rs"]
+mod t_5_move_scip;
+#[path = "5_rename_rust.rs"]
+mod t_5_rename_rust;
+#[path = "5_scip_facts_cli.rs"]
+mod t_5_scip_facts_cli;
 #[path = "60_rust_corpus_scope.rs"]
 mod t_60_rust_corpus_scope;
 #[path = "61_own_blob.rs"]
@@ -195,6 +335,12 @@ mod t_68_rust_receivers;
 mod t_69_go_promoted;
 #[path = "69_ts_closure_mirror.rs"]
 mod t_69_ts_closure_mirror;
+#[path = "6_document_formats.rs"]
+mod t_6_document_formats;
+#[path = "6_kind_vocab.rs"]
+mod t_6_kind_vocab;
+#[path = "6_occurrence_text_cli.rs"]
+mod t_6_occurrence_text_cli;
 #[path = "70_ts_init_receivers.rs"]
 mod t_70_ts_init_receivers;
 #[path = "71_go_residual.rs"]
@@ -237,6 +383,12 @@ mod t_79_rust_type_alias;
 mod t_79_rust_type_dump;
 #[path = "79_rust_variant_payload.rs"]
 mod t_79_rust_variant_payload;
+#[path = "7_diet_deps_cli.rs"]
+mod t_7_diet_deps_cli;
+#[path = "7_import_ref_kind.rs"]
+mod t_7_import_ref_kind;
+#[path = "7_rename_kotlin.rs"]
+mod t_7_rename_kotlin;
 #[path = "80_py_args.rs"]
 mod t_80_py_args;
 #[path = "80_py_assignments.rs"]
@@ -251,6 +403,10 @@ mod t_80_py_exceptions;
 mod t_80_py_module_caller;
 #[path = "80_rust_impl_owner.rs"]
 mod t_80_rust_impl_owner;
+#[path = "8_rename_prolog.rs"]
+mod t_8_rename_prolog;
+#[path = "8_scip_families_cli.rs"]
+mod t_8_scip_families_cli;
 #[path = "90_mutation_battery.rs"]
 mod t_90_mutation_battery;
 #[path = "91_origin_column.rs"]
@@ -271,170 +427,14 @@ mod t_97_ingest;
 mod t_98_resolve_witness;
 #[path = "99_syntax_tsi_rows.rs"]
 mod t_99_syntax_tsi_rows;
-#[path = "100_rust_call_scm_production.rs"]
-mod t_100_rust_call_scm_production;
-#[path = "100_tsi_intersection.rs"]
-mod t_100_tsi_intersection;
-#[path = "101_rust_const_init_collection.rs"]
-mod t_101_rust_const_init_collection;
-#[path = "101_ts_semantic_tsi.rs"]
-mod t_101_ts_semantic_tsi;
-#[path = "102_rust_semantic_tsi.rs"]
-mod t_102_rust_semantic_tsi;
-#[path = "103_trail.rs"]
-mod t_103_trail;
-#[path = "104_tier_decline_diagnostic.rs"]
-mod t_104_tier_decline_diagnostic;
-#[path = "105_resolve_syntax_tsi.rs"]
-mod t_105_resolve_syntax_tsi;
-#[path = "106_rust_syntax_graph.rs"]
-mod t_106_rust_syntax_graph;
-#[path = "107_rust_checker_features.rs"]
-mod t_107_rust_checker_features;
-#[path = "108_rust_checker_walk_by_file.rs"]
-mod t_108_rust_checker_walk_by_file;
-#[path = "109_rust_checker_site_cost.rs"]
-mod t_109_rust_checker_site_cost;
-#[path = "110_tsi_name.rs"]
-mod t_110_tsi_name;
-#[path = "111_cli_identity.rs"]
-mod t_111_cli_identity;
-#[path = "111_ts_syntax_graph.rs"]
-mod t_111_ts_syntax_graph;
-#[path = "112_build_metadata.rs"]
-mod t_112_build_metadata;
-#[path = "112_go_syntax_graph.rs"]
-mod t_112_go_syntax_graph;
-#[path = "113_ts_module_edges.rs"]
-mod t_113_ts_module_edges;
-#[path = "114_go_graph_grind.rs"]
-mod t_114_go_graph_grind;
-#[path = "115_rust_type_grind.rs"]
-mod t_115_rust_type_grind;
-#[path = "116_rust_call_grind.rs"]
-mod t_116_rust_call_grind;
-#[path = "117_python_syntax_graph.rs"]
-mod t_117_python_syntax_graph;
-#[path = "118_python_call_grind.rs"]
-mod t_118_python_call_grind;
-#[path = "119_kotlin_syntax_graph.rs"]
-mod t_119_kotlin_syntax_graph;
-#[path = "124_cfg_python_prolog.rs"]
-mod t_124_cfg_python_prolog;
-#[path = "125_markdown_links_fences.rs"]
-mod t_125_markdown_links_fences;
-#[path = "126_python_modules.rs"]
-mod t_126_python_modules;
-#[path = "127_kotlin_modules.rs"]
-mod t_127_kotlin_modules;
-#[path = "128_scip_relationship_conforms.rs"]
-mod t_128_scip_relationship_conforms;
-#[path = "129_go_checker_tier.rs"]
-mod t_129_go_checker_tier;
-#[path = "129_scip_external_coverage.rs"]
-mod t_129_scip_external_coverage;
-#[path = "130_rust_spelled_receiver.rs"]
-mod t_130_rust_spelled_receiver;
-#[path = "131_kotlin_module_resolve.rs"]
-mod t_131_kotlin_module_resolve;
-#[path = "133_go_binding_legs.rs"]
-mod t_133_go_binding_legs;
-#[path = "134_ts_binding_legs.rs"]
-mod t_134_ts_binding_legs;
-#[path = "135_untyped_receiver_rust.rs"]
-mod t_135_untyped_receiver_rust;
-#[path = "136_untyped_receiver_ts.rs"]
-mod t_136_untyped_receiver_ts;
-#[path = "137_kotlin_receiver_legs.rs"]
-mod t_137_kotlin_receiver_legs;
-#[path = "138_untyped_receiver_kotlin.rs"]
-mod t_138_untyped_receiver_kotlin;
-#[path = "141_unresolved_contract.rs"]
-mod t_141_unresolved_contract;
-#[path = "142_lines_flag.rs"]
-mod t_142_lines_flag;
-#[path = "143_default_call_plane.rs"]
-mod t_143_default_call_plane;
-#[path = "145a_query_scm_dogfood.rs"]
-mod t_145a_query_scm_dogfood;
-#[path = "145_query_predicate_scope.rs"]
-mod t_145_query_predicate_scope;
-#[path = "146_rename_stop_lines.rs"]
-mod t_146_rename_stop_lines;
-#[path = "147_rename_path_union.rs"]
-mod t_147_rename_path_union;
-#[path = "148_rename_abstain_ts.rs"]
-mod t_148_rename_abstain_ts;
-#[path = "149_graph_callers_ts.rs"]
-mod t_149_graph_callers_ts;
-#[path = "150_fast_scm_kotlin.rs"]
-mod t_150_fast_scm_kotlin;
-#[path = "155_cleave_ts.rs"]
-mod t_155_cleave_ts;
-#[path = "156_cleave_play.rs"]
-mod t_156_cleave_play;
-#[path = "157_fast_scm_rows.rs"]
-mod t_157_fast_scm_rows;
-#[path = "158_fast_scm_kotlin.rs"]
-mod t_158_fast_scm_kotlin;
-#[path = "159_fast_scm_judge.rs"]
-mod t_159_fast_scm_judge;
-#[path = "160_fast_scm_ts.rs"]
-mod t_160_fast_scm_ts;
-#[path = "161_fast_scm_ratchet.rs"]
-mod t_161_fast_scm_ratchet;
-#[path = "162_graph_views_sql.rs"]
-mod t_162_graph_views_sql;
-#[path = "163_graph_from_ts.rs"]
-mod t_163_graph_from_ts;
-#[path = "164_graph_uses_ts.rs"]
-mod t_164_graph_uses_ts;
-#[path = "165_graph_kotlin.rs"]
-mod t_165_graph_kotlin;
-#[path = "166_cleave_rust.rs"]
-mod t_166_cleave_rust;
-#[path = "166_graph_tsi_evidence.rs"]
-mod t_166_graph_tsi_evidence;
-#[path = "167_graph_paths.rs"]
-mod t_167_graph_paths;
-#[path = "168_graph_revision.rs"]
-mod t_168_graph_revision;
-#[path = "169_graph_uses_rust.rs"]
-mod t_169_graph_uses_rust;
-#[path = "170_ratchet_sites_rust.rs"]
-mod t_170_ratchet_sites_rust;
-#[path = "171_reach_entry.rs"]
-mod t_171_reach_entry;
-#[path = "172_graph_slow.rs"]
-mod t_172_graph_slow;
-#[path = "173_move_cross_crate.rs"]
-mod t_173_move_cross_crate;
-#[path = "173_rust_export_cycle.rs"]
-mod t_173_rust_export_cycle;
-#[path = "174_type_ladder.rs"]
-mod t_174_type_ladder;
-#[path = "175_cleave_ladder.rs"]
-mod t_175_cleave_ladder;
-#[path = "176_rename_ladder.rs"]
-mod t_176_rename_ladder;
-#[path = "177_crate_scope.rs"]
-mod t_177_crate_scope;
-#[path = "178_cli_http_parity.rs"]
-mod t_178_cli_http_parity;
-#[path = "178_generated_contract.rs"]
-mod t_178_generated_contract;
-#[path = "178_ryi_help.rs"]
-mod t_178_ryi_help;
-#[path = "179_codeql_baseline.rs"]
-mod t_179_codeql_baseline;
-#[path = "180_call_ladder.rs"]
-mod t_180_call_ladder;
-#[path = "181_server_modes.rs"]
-mod t_181_server_modes;
-#[path = "181_ts_ladder.rs"]
-mod t_181_ts_ladder;
-#[path = "182_client_daemon.rs"]
-mod t_182_client_daemon;
+#[path = "9_large_file_bounds.rs"]
+mod t_9_large_file_bounds;
+#[path = "9_query_cli.rs"]
+mod t_9_query_cli;
+#[path = "9_size_skip.rs"]
+mod t_9_size_skip;
+#[path = "9a_query_blob_door.rs"]
+mod t_9a_query_blob_door;
 #[path = "bench_normal_form.rs"]
 mod t_bench_normal_form;
 #[path = "golden_parity.rs"]

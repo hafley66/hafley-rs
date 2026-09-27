@@ -102,7 +102,8 @@ fn move_args(fixture: &Fixture, old: &str, new: &str, extra: &[&str]) -> Vec<Str
 }
 
 fn read(fixture: &Fixture, rel: &str) -> String {
-    std::fs::read_to_string(fixture.root.join(rel)).unwrap_or_else(|error| panic!("read {rel}: {error}"))
+    std::fs::read_to_string(fixture.root.join(rel))
+        .unwrap_or_else(|error| panic!("read {rel}: {error}"))
 }
 
 fn stdout(output: &Output) -> String {
@@ -139,7 +140,12 @@ fn a_file_crosses_crates_with_paths_manifests_and_visibility() {
     commit(&fixture, &[]);
     let table = stdout(&ryi(
         &fixture,
-        &move_args(&fixture, "alpha/src/shapes.rs", "beta/src/3_shapes.rs", &["--commit"]),
+        &move_args(
+            &fixture,
+            "alpha/src/shapes.rs",
+            "beta/src/3_shapes.rs",
+            &["--commit"],
+        ),
     ));
     let receipts: Vec<&str> = table
         .lines()
@@ -253,7 +259,12 @@ fn a_move_that_closes_a_dependency_cycle_is_a_named_stop() {
     );
     let output = ryi(
         &fixture,
-        &move_args(&fixture, "alpha/src/shapes.rs", "beta/src/shapes.rs", &["--commit"]),
+        &move_args(
+            &fixture,
+            "alpha/src/shapes.rs",
+            "beta/src/shapes.rs",
+            &["--commit"],
+        ),
     );
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(
@@ -294,7 +305,10 @@ fn a_cleave_across_crates_spells_the_callers_with_the_crate() {
     commit(&fixture, &[]);
     let args = vec![
         "cleave".to_string(),
-        format!("{}#perimeter", fixture.root.join("alpha/src/shapes.rs").display()),
+        format!(
+            "{}#perimeter",
+            fixture.root.join("alpha/src/shapes.rs").display()
+        ),
         fixture.root.join("beta/src/base.rs").display().to_string(),
         "--commit".to_string(),
     ];
@@ -311,7 +325,8 @@ fn a_cleave_across_crates_spells_the_callers_with_the_crate() {
          area(&circle) + crate::shapes::area(&circle) + circle.radius + perimeter(1.0)\n\
          }\n"
     );
-    assert!(read(&fixture, "beta/src/base.rs").ends_with("pub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"));
+    assert!(read(&fixture, "beta/src/base.rs")
+        .ends_with("pub fn perimeter(radius: f64) -> f64 {\n    radius * 6.0\n}\n"));
     cargo_check(&fixture);
 }
 
@@ -351,7 +366,10 @@ fn a_batch_carries_a_module_and_its_child_across_crates() {
         "--commit".to_string(),
     ];
     stdout(&ryi(&fixture, &args));
-    assert_eq!(read(&fixture, "beta/src/lib.rs"), "pub mod base;\npub mod shapes;\n");
+    assert_eq!(
+        read(&fixture, "beta/src/lib.rs"),
+        "pub mod base;\npub mod shapes;\n"
+    );
     assert_eq!(
         read(&fixture, "beta/src/shapes/inner.rs"),
         "pub(crate) fn depth() -> u32 {\n    super::super::shapes::perimeter(1.0) as u32\n}\n"
@@ -390,8 +408,15 @@ fn a_cleave_into_a_new_numbered_file_declares_it() {
     commit(&fixture, &[]);
     let cross = vec![
         "cleave".to_string(),
-        format!("{}#perimeter", fixture.root.join("alpha/src/shapes.rs").display()),
-        fixture.root.join("beta/src/4_round.rs").display().to_string(),
+        format!(
+            "{}#perimeter",
+            fixture.root.join("alpha/src/shapes.rs").display()
+        ),
+        fixture
+            .root
+            .join("beta/src/4_round.rs")
+            .display()
+            .to_string(),
         "--commit".to_string(),
     ];
     stdout(&ryi(&fixture, &cross));
@@ -409,8 +434,15 @@ fn a_cleave_into_a_new_file_of_the_same_crate_declares_it() {
     commit(&fixture, &[]);
     let args = vec![
         "cleave".to_string(),
-        format!("{}#perimeter", fixture.root.join("alpha/src/shapes.rs").display()),
-        fixture.root.join("alpha/src/round.rs").display().to_string(),
+        format!(
+            "{}#perimeter",
+            fixture.root.join("alpha/src/shapes.rs").display()
+        ),
+        fixture
+            .root
+            .join("alpha/src/round.rs")
+            .display()
+            .to_string(),
         "--commit".to_string(),
     ];
     stdout(&ryi(&fixture, &args));
@@ -428,7 +460,10 @@ fn a_cleave_that_would_cycle_is_a_named_stop() {
     commit(&fixture, &[]);
     let args = vec![
         "cleave".to_string(),
-        format!("{}#area", fixture.root.join("alpha/src/shapes.rs").display()),
+        format!(
+            "{}#area",
+            fixture.root.join("alpha/src/shapes.rs").display()
+        ),
         fixture.root.join("beta/src/base.rs").display().to_string(),
     ];
     let output = ryi(&fixture, &args);
@@ -451,7 +486,10 @@ fn a_cleave_carrying_a_third_party_import_needs_it_in_dest() {
     );
     let args = vec![
         "cleave".to_string(),
-        format!("{}#tagged", fixture.root.join("alpha/src/tagged.rs").display()),
+        format!(
+            "{}#tagged",
+            fixture.root.join("alpha/src/tagged.rs").display()
+        ),
         fixture.root.join("beta/src/base.rs").display().to_string(),
     ];
     let output = ryi(&fixture, &args);
@@ -474,8 +512,15 @@ fn a_name_spelled_through_its_full_path_carries_no_import() {
     );
     let args = vec![
         "cleave".to_string(),
-        format!("{}#fresh", fixture.root.join("alpha/src/tagged.rs").display()),
-        fixture.root.join("alpha/src/fresh.rs").display().to_string(),
+        format!(
+            "{}#fresh",
+            fixture.root.join("alpha/src/tagged.rs").display()
+        ),
+        fixture
+            .root
+            .join("alpha/src/fresh.rs")
+            .display()
+            .to_string(),
         "--commit".to_string(),
     ];
     stdout(&ryi(&fixture, &args));
@@ -493,10 +538,17 @@ fn a_ts_file_crosses_packages_with_package_specifiers_and_a_dependency() {
     commit(&fixture, &[]);
     let table = stdout(&ryi(
         &fixture,
-        &move_args(&fixture, "packages/a/src/shape.ts", "packages/b/src/shape.ts", &["--commit"]),
+        &move_args(
+            &fixture,
+            "packages/a/src/shape.ts",
+            "packages/b/src/shape.ts",
+            &["--commit"],
+        ),
     ));
     assert!(
-        table.contains("dep packages/a/package.json: + \"@ws/b\": \"*\" (for packages/a/src/util.ts)"),
+        table.contains(
+            "dep packages/a/package.json: + \"@ws/b\": \"*\" (for packages/a/src/util.ts)"
+        ),
         "{table}"
     );
     assert_eq!(
@@ -525,7 +577,12 @@ fn a_ts_move_that_closes_a_package_cycle_is_a_named_stop() {
     );
     let output = ryi(
         &fixture,
-        &move_args(&fixture, "packages/a/src/shape.ts", "packages/b/src/shape.ts", &[]),
+        &move_args(
+            &fixture,
+            "packages/a/src/shape.ts",
+            "packages/b/src/shape.ts",
+            &[],
+        ),
     );
     assert_eq!(output.status.code(), Some(2));
     assert_eq!(

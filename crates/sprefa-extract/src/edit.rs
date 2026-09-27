@@ -8,14 +8,14 @@ pub mod rust_rename;
 pub mod ts_mutate;
 pub mod ts_rehome;
 pub mod ts_rename;
+use crate::edit_seams::Cleave;
+use crate::edit_seams::RehomeArm;
+use crate::edit_seams::Rename;
 use crate::lang::kotlin::KotlinSource;
 use crate::lang::prolog::PrologSource;
 use crate::lang::rust::RustSource;
-use crate::lang::ts::TsSource;
-use crate::edit_seams::RehomeArm;
-use crate::edit_seams::Rename;
 use crate::lang::source_for;
-use crate::edit_seams::Cleave;
+use crate::lang::ts::TsSource;
 
 /// The `Rehome` roster: one impl per language `extract move` can rehome, in
 /// `sources()` order. A language with no impl here is a named stop, never a

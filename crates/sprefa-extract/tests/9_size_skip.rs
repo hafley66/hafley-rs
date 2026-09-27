@@ -143,10 +143,7 @@ fn under_ceiling_is_unchanged() {
 /// record nothing can declare a column for.
 #[test]
 fn schema_declares_the_record() {
-    let out = Command::new(EXTRACT)
-        .arg("schema")
-        .output()
-        .expect("spawn");
+    let out = Command::new(EXTRACT).arg("schema").output().expect("spawn");
     let schema = String::from_utf8(out.stdout).expect("utf8");
     assert!(
         schema.contains("record=size_skip"),

@@ -7,8 +7,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use anyhow::Result;
 
-use crate::Registry;
 use crate::harness::HarnessId;
+use crate::Registry;
 
 /// What a live session is doing at the moment it was observed.
 #[derive(Copy, Clone, Eq, PartialEq, Debug)]
@@ -163,20 +163,34 @@ pub fn off_tmux_sessions<'a>(
         .filter_map(|session| session.pid.map(|pid| (session, pid)))
         .collect();
     let pids: Vec<u32> = candidates.iter().map(|(_, pid)| *pid).collect();
-    let ttys = if pids.is_empty() { Default::default() } else { tty_of(&pids) };
+    let ttys = if pids.is_empty() {
+        Default::default()
+    } else {
+        tty_of(&pids)
+    };
     candidates
         .into_iter()
         .filter_map(|(session, pid)| {
             let tty = ttys.get(&pid)?;
-            (tty != "??" && !pane_ttys.contains(tty)).then(|| OffTmuxSession { session, tty: tty.clone() })
+            (tty != "??" && !pane_ttys.contains(tty)).then(|| OffTmuxSession {
+                session,
+                tty: tty.clone(),
+            })
         })
         .collect()
 }
 
 /// Terminal of each pid, one `ps` call for the whole set.
 pub fn ps_ttys(pids: &[u32]) -> std::collections::HashMap<u32, String> {
-    let list = pids.iter().map(u32::to_string).collect::<Vec<_>>().join(",");
-    let Ok(out) = std::process::Command::new("ps").args(["-o", "pid=,tty=", "-p", &list]).output() else {
+    let list = pids
+        .iter()
+        .map(u32::to_string)
+        .collect::<Vec<_>>()
+        .join(",");
+    let Ok(out) = std::process::Command::new("ps")
+        .args(["-o", "pid=,tty=", "-p", &list])
+        .output()
+    else {
         return Default::default();
     };
     String::from_utf8_lossy(&out.stdout)
@@ -395,26 +409,79 @@ mod tests {
             scope,
             ..session(id, pane)
         };
-        let omp = Listed(vec![at(HarnessId::Omp, "omp-off", Some(10), None, LiveSessionScope::Root)]);
+        let omp = Listed(vec![at(
+            HarnessId::Omp,
+            "omp-off",
+            Some(10),
+            None,
+            LiveSessionScope::Root,
+        )]);
         let claude = Listed(vec![
-            at(HarnessId::Claude, "in-pane", Some(11), Some("%4"), LiveSessionScope::Root),
-            at(HarnessId::Claude, "pane-tty", Some(12), None, LiveSessionScope::Unknown),
-            at(HarnessId::Claude, "no-terminal", Some(13), None, LiveSessionScope::Root),
-            at(HarnessId::Claude, "child", Some(14), None, LiveSessionScope::Child),
-            at(HarnessId::Claude, "no-pid", None, None, LiveSessionScope::Root),
+            at(
+                HarnessId::Claude,
+                "in-pane",
+                Some(11),
+                Some("%4"),
+                LiveSessionScope::Root,
+            ),
+            at(
+                HarnessId::Claude,
+                "pane-tty",
+                Some(12),
+                None,
+                LiveSessionScope::Unknown,
+            ),
+            at(
+                HarnessId::Claude,
+                "no-terminal",
+                Some(13),
+                None,
+                LiveSessionScope::Root,
+            ),
+            at(
+                HarnessId::Claude,
+                "child",
+                Some(14),
+                None,
+                LiveSessionScope::Child,
+            ),
+            at(
+                HarnessId::Claude,
+                "no-pid",
+                None,
+                None,
+                LiveSessionScope::Root,
+            ),
         ]);
         let panes = std::collections::HashSet::from(["ttys002".to_string()]);
         let mut asked = Vec::new();
-        let found = off_tmux_sessions([&omp as &dyn LiveSessions, &claude].into_iter(), &panes, |pids| {
-            asked = pids.to_vec();
-            [(10, "ttys023"), (12, "ttys002"), (13, "??")]
-                .into_iter()
-                .map(|(pid, tty)| (pid, tty.to_string()))
-                .collect()
-        });
+        let found = off_tmux_sessions(
+            [&omp as &dyn LiveSessions, &claude].into_iter(),
+            &panes,
+            |pids| {
+                asked = pids.to_vec();
+                [(10, "ttys023"), (12, "ttys002"), (13, "??")]
+                    .into_iter()
+                    .map(|(pid, tty)| (pid, tty.to_string()))
+                    .collect()
+            },
+        );
         assert_eq!(
-            (asked, found.iter().map(|off| (off.session.harness, off.session.session_id.as_str(), off.tty.as_str())).collect::<Vec<_>>()),
-            (vec![10, 12, 13], vec![(HarnessId::Omp, "omp-off", "ttys023")])
+            (
+                asked,
+                found
+                    .iter()
+                    .map(|off| (
+                        off.session.harness,
+                        off.session.session_id.as_str(),
+                        off.tty.as_str()
+                    ))
+                    .collect::<Vec<_>>()
+            ),
+            (
+                vec![10, 12, 13],
+                vec![(HarnessId::Omp, "omp-off", "ttys023")]
+            )
         );
     }
 

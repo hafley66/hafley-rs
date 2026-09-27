@@ -32,7 +32,11 @@ pub struct Root {
 /// The ordered, canonically deduped roots for a click whose pane sits in
 /// `pane_cwd`. `session_cwds` are where the pane's agent sessions ran;
 /// `touched_dirs` are the checkouts (or directories) holding files they touched.
-pub fn click_roots(pane_cwd: &Path, session_cwds: &[PathBuf], touched_dirs: &[PathBuf]) -> Vec<Root> {
+pub fn click_roots(
+    pane_cwd: &Path,
+    session_cwds: &[PathBuf],
+    touched_dirs: &[PathBuf],
+) -> Vec<Root> {
     let mut roots = Roots::default();
     roots.push(pane_cwd.to_path_buf(), RootVia::PaneCwd);
     for cwd in session_cwds {
@@ -66,7 +70,11 @@ pub fn click_roots(pane_cwd: &Path, session_cwds: &[PathBuf], touched_dirs: &[Pa
 /// (the click's own roots) follows, deduped against them.
 pub fn doc_roots(doc: &Path, rest: &[Root]) -> Vec<Root> {
     let mut roots = Roots::default();
-    let dir = if doc.is_dir() { Some(doc) } else { doc.parent() };
+    let dir = if doc.is_dir() {
+        Some(doc)
+    } else {
+        doc.parent()
+    };
     if let Some(dir) = dir {
         roots.push(dir.to_path_buf(), RootVia::Document);
         if let Some(top) = repo_root_for(&dir.to_string_lossy()).map(PathBuf::from) {
@@ -129,8 +137,14 @@ pub fn worktrees_of(toplevel: &Path) -> Vec<(PathBuf, String)> {
         return Vec::new();
     };
     let common = std::fs::canonicalize(&common).unwrap_or(common);
-    let stamp = std::fs::metadata(common.join("worktrees")).and_then(|meta| meta.modified()).ok();
-    if let Some((at, list)) = worktree_cache().lock().ok().and_then(|cache| cache.get(&common).cloned()) {
+    let stamp = std::fs::metadata(common.join("worktrees"))
+        .and_then(|meta| meta.modified())
+        .ok();
+    if let Some((at, list)) = worktree_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(&common).cloned())
+    {
         if at == stamp {
             return list;
         }
@@ -164,8 +178,13 @@ pub fn repos_beside(toplevel: &Path) -> Vec<PathBuf> {
     let Some(parent) = toplevel.parent() else {
         return Vec::new();
     };
-    let stamp = std::fs::metadata(parent).and_then(|meta| meta.modified()).ok();
-    let cached = beside_cache().lock().ok().and_then(|cache| cache.get(parent).cloned());
+    let stamp = std::fs::metadata(parent)
+        .and_then(|meta| meta.modified())
+        .ok();
+    let cached = beside_cache()
+        .lock()
+        .ok()
+        .and_then(|cache| cache.get(parent).cloned());
     let list = match cached {
         Some((at, list)) if at == stamp => list,
         _ => {
@@ -212,7 +231,9 @@ pub fn parse_worktree_list(text: &str) -> Vec<(PathBuf, String)> {
             continue;
         }
         let name = branch.unwrap_or_else(|| {
-            path.file_name().map(|name| name.to_string_lossy().into_owned()).unwrap_or_default()
+            path.file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default()
         });
         out.push((path, name));
     }
@@ -240,7 +261,16 @@ mod tests {
     fn rel(roots: &[Root], base: &Path) -> Vec<(String, RootVia)> {
         roots
             .iter()
-            .map(|root| (root.dir.strip_prefix(base).unwrap_or(&root.dir).display().to_string(), root.via.clone()))
+            .map(|root| {
+                (
+                    root.dir
+                        .strip_prefix(base)
+                        .unwrap_or(&root.dir)
+                        .display()
+                        .to_string(),
+                    root.via.clone(),
+                )
+            })
             .collect()
     }
 
@@ -256,12 +286,28 @@ mod tests {
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-qm", "n"]);
-        git(&repo, &["worktree", "add", "-q", "-b", "feat", base.join("repo-feat").to_str().unwrap()]);
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "feat",
+                base.join("repo-feat").to_str().unwrap(),
+            ],
+        );
         std::fs::create_dir_all(base.join("pane")).unwrap();
 
         let rest = vec![
-            Root { dir: base.join("pane"), via: RootVia::PaneCwd },
-            Root { dir: repo.clone(), via: RootVia::SessionCwd },
+            Root {
+                dir: base.join("pane"),
+                via: RootVia::PaneCwd,
+            },
+            Root {
+                dir: repo.clone(),
+                via: RootVia::SessionCwd,
+            },
         ];
         let roots = doc_roots(&repo.join("plans/notes.md"), &rest);
         assert_eq!(
@@ -277,7 +323,10 @@ mod tests {
         let at_root = doc_roots(&repo.join("README.md"), &[]);
         assert_eq!(
             rel(&at_root, &base),
-            vec![("repo".into(), RootVia::Document), ("repo-feat".into(), RootVia::Worktree("feat".into()))]
+            vec![
+                ("repo".into(), RootVia::Document),
+                ("repo-feat".into(), RootVia::Worktree("feat".into()))
+            ]
         );
     }
 }

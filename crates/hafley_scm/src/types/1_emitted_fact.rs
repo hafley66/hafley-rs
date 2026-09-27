@@ -36,7 +36,9 @@ impl EmittedValue {
 
     pub fn text<'a>(&self, src: &'a [u8], query: &'a super::QueryExt) -> Option<&'a str> {
         match self {
-            Self::Bytes(bytes) => std::str::from_utf8(&src[bytes.start as usize..bytes.end as usize]).ok(),
+            Self::Bytes(bytes) => {
+                std::str::from_utf8(&src[bytes.start as usize..bytes.end as usize]).ok()
+            }
             Self::Literal(index) => Some(&query.emit_literals[*index as usize]),
         }
     }

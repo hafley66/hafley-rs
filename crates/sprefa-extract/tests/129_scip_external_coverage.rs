@@ -87,12 +87,7 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
 
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args([
-            "scip",
-            "--scip-index",
-            index_path.to_str().unwrap(),
-            ROOT,
-        ])
+        .args(["scip", "--scip-index", index_path.to_str().unwrap(), ROOT])
         .output()
         .expect("ryi starts");
     assert!(
@@ -124,7 +119,8 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
     let raw_output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .args([
-            "scip", "--raw",
+            "scip",
+            "--raw",
             "--root",
             root.to_str().unwrap(),
             "--scip-index",

@@ -3,8 +3,8 @@
 use std::collections::{HashMap, HashSet};
 use std::io::{BufWriter, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use serde::Serialize;
@@ -40,6 +40,9 @@ pub struct Database {
     binder: bind::Binder,
     started: Instant,
     bind_time: Duration,
+    export_span: tracing::Span,
+    bind_span: tracing::Span,
+    _export_guard: tracing::span::EnteredSpan,
 }
 
 const BATCH_BYTES: usize = 8 * 1024 * 1024;
@@ -166,7 +169,9 @@ impl Database {
 
     /// The connection the graph views are queried through.
     pub fn connection(&self) -> &Connection {
-        self.slot.get().expect("Database::flush lands rows before a query")
+        self.slot
+            .get()
+            .expect("Database::flush lands rows before a query")
     }
 
     /// Land every pending row so a query on this connection sees it.
@@ -178,17 +183,15 @@ impl Database {
     /// Commit, and publish the staging file when there is one. Returns the
     /// published path so `finish` can report it; silent otherwise.
     pub fn close(mut self) -> Result<Option<PathBuf>> {
-        let closing = Instant::now();
         self.flush()?;
-        let insert_time = self.binder.insert_time();
+        self.binder
+            .record_profile(&self.bind_span, self.bind_time.as_secs_f64());
         let connection = std::mem::replace(&mut self.slot, bind::Slot::Moving).into_local()?;
         connection.execute_batch("COMMIT;")?;
         connection.close().map_err(|(_, error)| error)?;
-        if std::env::var_os("RYI_SQLITE_PHASES").is_some() {
-            eprintln!("sqlite phases: bind={:.3}s insert={:.3}s index_build=0.000s close={:.3}s total={:.3}s",
-                self.bind_time.as_secs_f64(), insert_time.as_secs_f64(),
-                closing.elapsed().as_secs_f64(), self.started.elapsed().as_secs_f64());
-        }
+        self.export_span.record("rows", self.rows);
+        self.export_span
+            .record("seconds", self.started.elapsed().as_secs_f64());
         let (Some(temporary), Some(destination)) = (self.temporary, self.destination) else {
             return Ok(None);
         };
@@ -204,14 +207,33 @@ impl Database {
         threaded: bool,
     ) -> Result<Self> {
         let started = Instant::now();
+        let export_span = tracing::info_span!(
+            "sqlite_export_total",
+            rows = tracing::field::Empty,
+            seconds = tracing::field::Empty,
+        );
+        let bind_span = tracing::debug_span!(
+            parent: &export_span,
+            "sqlite_bind_phase",
+            seconds = tracing::field::Empty,
+            dispatch_meta_lookup_seconds = tracing::field::Empty,
+        );
+        let export_guard = export_span.clone().entered();
         connection.set_prepared_statement_cache_capacity(4 * writers::TABLE_COUNT);
         connection.busy_timeout(Duration::from_secs(5))?;
         // A private staging file: nothing reads it before the commit and the
         // publish, and a failed run discards it, so no journal and no fsync.
-        connection.execute_batch(
-            "PRAGMA page_size=4096; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
+        let page_size = std::env::var("RYI_SQLITE_PAGE_SIZE")
+            .ok()
+            .and_then(|v| v.parse::<usize>().ok())
+            .unwrap_or(65536);
+        if ![4096, 16384, 32768, 65536].contains(&page_size) {
+            return Err("RYI_SQLITE_PAGE_SIZE must be 4096, 16384, 32768, or 65536".into());
+        }
+        connection.execute_batch(&format!(
+            "PRAGMA page_size={page_size}; PRAGMA foreign_keys=ON; PRAGMA journal_mode=OFF; PRAGMA synchronous=OFF; \
              PRAGMA cache_size=-16384; PRAGMA temp_store=MEMORY; BEGIN IMMEDIATE;",
-        )?;
+        ))?;
         connection.execute_batch(DDL)?;
         connection.execute_batch(&span_lines_view_sql(&connection)?)?;
         connection.execute_batch(&graph_views_sql())?;
@@ -230,6 +252,9 @@ impl Database {
             max_batch_rows,
             started,
             bind_time: Duration::ZERO,
+            export_span,
+            bind_span,
+            _export_guard: export_guard,
         })
     }
 
@@ -290,8 +315,11 @@ impl Database {
     /// table's buffer. Pending writer rows land first: both number off `rows`.
     pub fn bind_row(&mut self, row: &impl Serialize) -> Result<()> {
         self.flush_pending()?;
-        self.rows = self.rows.checked_add(1).ok_or("SQLite row counter overflow")?;
-        let started = Instant::now();
+        self.rows = self
+            .rows
+            .checked_add(1)
+            .ok_or("SQLite row counter overflow")?;
+        let started = self.binder.profiling_enabled().then(Instant::now);
         let result = self.binder.push(
             &mut self.slot,
             self.rows,
@@ -299,7 +327,9 @@ impl Database {
             self.content_id.as_deref(),
             row,
         );
-        self.bind_time += started.elapsed();
+        if let Some(started) = started {
+            self.bind_time += started.elapsed();
+        }
         result
     }
 
@@ -393,8 +423,8 @@ impl<W: Write> Write for CountingWriter<W> {
         self.inner.flush()
     }
 }
- pub struct Output {
-     pub database: Option<Database>,
+pub struct Output {
+    pub database: Option<Database>,
     stdout: BufWriter<CountingWriter<Box<dyn Write + Send>>>,
     streaming: bool,
     /// Line tables by the key a row names its file with: the `path` field in
@@ -410,13 +440,17 @@ impl<W: Write> Write for CountingWriter<W> {
     /// Where a row's `path` loads from when its table is not registered:
     /// `ryi scip` and `ryi slow` read their documents against.
     line_root: Option<PathBuf>,
- }
+}
 impl Output {
     pub fn new(path: Option<&Path>) -> Result<Self> {
         Self::with_writer(path, Box::new(std::io::stdout()), false)
     }
 
-    pub fn with_writer(path: Option<&Path>, writer: Box<dyn Write + Send>, streaming: bool) -> Result<Self> {
+    pub fn with_writer(
+        path: Option<&Path>,
+        writer: Box<dyn Write + Send>,
+        streaming: bool,
+    ) -> Result<Self> {
         Ok(Self {
             database: path.map(Database::create).transpose()?,
             stdout: BufWriter::with_capacity(
@@ -453,28 +487,28 @@ impl Output {
     pub fn stdout_bytes(&self) -> u64 {
         self.stdout.get_ref().bytes
     }
-     pub fn line(&mut self, line: &str) -> Result<()> {
-         if let Some(db) = &mut self.database {
-             let fact = serde_json::from_slice::<writers::Fact>(line.as_bytes())?;
-             return db.insert_fact(fact, line.len());
-         }
+    pub fn line(&mut self, line: &str) -> Result<()> {
+        if let Some(db) = &mut self.database {
+            let fact = serde_json::from_slice::<writers::Fact>(line.as_bytes())?;
+            return db.insert_fact(fact, line.len());
+        }
         self.write_stdout(line.as_bytes())
-     }
-     pub fn source_fact(
-         &mut self,
-         path: &str,
-         content_id: &sprefa_extract::ContentId,
-         fact: &impl Serialize,
-     ) -> Result<()> {
-         let db = self
-             .database
-             .as_mut()
-             .ok_or("source facts require a SQLite output")?;
-         if db.input_path.as_deref() != Some(path) {
-             db.source(path, content_id.to_string())?;
-         }
-         db.bind_row(fact)
-     }
+    }
+    pub fn source_fact(
+        &mut self,
+        path: &str,
+        content_id: &sprefa_extract::ContentId,
+        fact: &impl Serialize,
+    ) -> Result<()> {
+        let db = self
+            .database
+            .as_mut()
+            .ok_or("source facts require a SQLite output")?;
+        if db.input_path.as_deref() != Some(path) {
+            db.source(path, content_id.to_string())?;
+        }
+        db.bind_row(fact)
+    }
     pub fn clear_source(&mut self) -> Result<()> {
         if let Some(db) = &mut self.database {
             db.clear_source()?;
@@ -491,10 +525,7 @@ impl Output {
     /// decoration applies, in which case the record is parsed, decorated, and
     /// re-serialized (key order then follows the JSON map, not the struct).
     fn write_stdout(&mut self, encoded: &[u8]) -> Result<()> {
-        if !self.line_tables.is_empty()
-            || self.line_offsets.is_some()
-            || self.line_root.is_some()
-        {
+        if !self.line_tables.is_empty() || self.line_offsets.is_some() || self.line_root.is_some() {
             if let Ok(text) = std::str::from_utf8(encoded) {
                 // Owned spans suffix their keys (caller_site_start), so the
                 // prefilter matches both the plain key and the suffix form.
@@ -517,7 +548,7 @@ impl Output {
             self.stdout.flush()?;
         }
         Ok(())
-     }
+    }
     /// Decorate one record against the file it names. A `path` that resolves
     /// to a table wins (data rows also carry a `path`: their JSON dot-path,
     /// which resolves to nothing); otherwise the per-file verbs' current
@@ -586,25 +617,26 @@ impl Output {
         let full = self.line_root.as_deref()?.join(path);
         let content = std::fs::read(full).ok()?;
         let offsets = Arc::new(sprefa_extract::newline_offsets(&content));
-        self.line_tables.insert(path.to_string(), Arc::clone(&offsets));
+        self.line_tables
+            .insert(path.to_string(), Arc::clone(&offsets));
         Some(offsets)
-     }
-     pub fn flush(&mut self) -> Result<()> {
-         if let Some(db) = &mut self.database {
-             db.flush()?;
-         }
-         self.stdout.flush()?;
-         Ok(())
-     }
-     pub fn finish(mut self) -> Result<()> {
-         self.stdout.flush()?;
-         if let Some(db) = self.database {
-             db.finish_to(&mut self.stdout)?;
-         }
-         self.stdout.flush()?;
-         Ok(())
-     }
- }
+    }
+    pub fn flush(&mut self) -> Result<()> {
+        if let Some(db) = &mut self.database {
+            db.flush()?;
+        }
+        self.stdout.flush()?;
+        Ok(())
+    }
+    pub fn finish(mut self) -> Result<()> {
+        self.stdout.flush()?;
+        if let Some(db) = self.database {
+            db.finish_to(&mut self.stdout)?;
+        }
+        self.stdout.flush()?;
+        Ok(())
+    }
+}
 
 /// Span pairs whose owning file is another field of the same row: the pair
 /// decorates against that field's table, one decoration per owning path.

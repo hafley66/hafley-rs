@@ -8,8 +8,8 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::move_stage::{
-    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit, state_root, Mirror,
-    VerifyJournal,
+    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit,
+    state_root, Mirror, VerifyJournal,
 };
 use sprefa_extract::{
     directory_path, directory_source, dirname, drain::source_rel, normalize, rehome_for, rehomes,
@@ -29,9 +29,7 @@ fn plan_of(cli: &MoveArgs) -> Result<Vec<Plan>, String> {
 
 pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
-        return Err(
-            "--verify needs --commit".to_string().into(),
-        );
+        return Err("--verify needs --commit".to_string().into());
     }
     let plan = plan_of(&cli)?;
     let state = state_root(cli.state.as_deref())?;
@@ -143,10 +141,7 @@ fn verify_after_commit(
         Some(dir) => {
             let dir = absolute(dir)?;
             if !dir.is_dir() {
-                return Err(format!(
-                    "--verify-cwd is not a directory: {}",
-                    dir.display()
-                ).into());
+                return Err(format!("--verify-cwd is not a directory: {}", dir.display()).into());
             }
             dir.canonicalize()
                 .map_err(|error| format!("canonicalize {}: {error}", dir.display()))?

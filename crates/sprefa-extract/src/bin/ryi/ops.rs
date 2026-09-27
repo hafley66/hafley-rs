@@ -7,11 +7,17 @@ use std::sync::{mpsc, Arc, Mutex};
 use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
-    CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError, OpResult,
-    QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs, WatchArgs,
+    CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError,
+    OpResult, QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs,
+    WatchArgs,
 };
 
-fn command(cmd: Cmd) -> Ryi { Ryi { cmd: Some(cmd), file: FileArgs::default() } }
+fn command(cmd: Cmd) -> Ryi {
+    Ryi {
+        cmd: Some(cmd),
+        file: FileArgs::default(),
+    }
+}
 
 struct RowSink {
     tx: mpsc::SyncSender<OpResult<Vec<u8>>>,
@@ -22,7 +28,8 @@ struct RowSink {
 impl RowSink {
     fn flush_pending(&mut self) -> std::io::Result<()> {
         if !self.pending.is_empty() {
-            self.tx.send(Ok(std::mem::take(&mut self.pending)))
+            self.tx
+                .send(Ok(std::mem::take(&mut self.pending)))
                 .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
         }
         Ok(())
@@ -47,7 +54,8 @@ impl Write for RowSink {
             self.pending.extend_from_slice(&remaining[..size]);
             remaining = &remaining[size..];
             if self.pending.len() == 64 * 1024 {
-                self.tx.send(Ok(std::mem::take(&mut self.pending)))
+                self.tx
+                    .send(Ok(std::mem::take(&mut self.pending)))
                     .map_err(|_| std::io::Error::from(std::io::ErrorKind::BrokenPipe))?;
             }
         }
@@ -55,7 +63,11 @@ impl Write for RowSink {
     }
 
     fn flush(&mut self) -> std::io::Result<()> {
-        if self.chunked { Ok(()) } else { self.flush_pending() }
+        if self.chunked {
+            Ok(())
+        } else {
+            self.flush_pending()
+        }
     }
 }
 
@@ -89,12 +101,20 @@ struct RequestContextGuard {
 
 impl Drop for RequestContextGuard {
     fn drop(&mut self) {
-        REQUEST_ROOT.with(|slot| { slot.replace(self.root.take()); });
-        REQUEST_DIAGNOSTICS.with(|slot| { slot.replace(self.diagnostics.take()); });
+        REQUEST_ROOT.with(|slot| {
+            slot.replace(self.root.take());
+        });
+        REQUEST_DIAGNOSTICS.with(|slot| {
+            slot.replace(self.diagnostics.take());
+        });
     }
 }
 
-pub(crate) fn with_request_context<T>(root: PathBuf, diagnostics: Option<Diagnostics>, run: impl FnOnce() -> T) -> T {
+pub(crate) fn with_request_context<T>(
+    root: PathBuf,
+    diagnostics: Option<Diagnostics>,
+    run: impl FnOnce() -> T,
+) -> T {
     let guard = RequestContextGuard {
         root: REQUEST_ROOT.with(|slot| slot.replace(Some(root))),
         diagnostics: REQUEST_DIAGNOSTICS.with(|slot| slot.replace(diagnostics)),
@@ -108,11 +128,16 @@ struct RequestInputGuard(Option<Arc<tempfile::NamedTempFile>>);
 
 impl Drop for RequestInputGuard {
     fn drop(&mut self) {
-        REQUEST_INPUT.with(|slot| { slot.replace(self.0.take()); });
+        REQUEST_INPUT.with(|slot| {
+            slot.replace(self.0.take());
+        });
     }
 }
 
-pub(crate) fn with_request_input<T>(input: Option<Arc<tempfile::NamedTempFile>>, run: impl FnOnce() -> T) -> T {
+pub(crate) fn with_request_input<T>(
+    input: Option<Arc<tempfile::NamedTempFile>>,
+    run: impl FnOnce() -> T,
+) -> T {
     let guard = RequestInputGuard(REQUEST_INPUT.with(|slot| slot.replace(input)));
     let result = run();
     drop(guard);
@@ -126,15 +151,22 @@ pub(crate) fn request_input_file() -> Option<Arc<tempfile::NamedTempFile>> {
 pub(crate) fn print_diagnostic(args: std::fmt::Arguments<'_>) {
     let captured = REQUEST_DIAGNOSTICS.with(|slot| {
         let value = slot.borrow();
-        value.as_ref().map(|diagnostics| {
-            let _ = writeln!(diagnostics.lock().unwrap(), "{args}");
-        }).is_some()
+        value
+            .as_ref()
+            .map(|diagnostics| {
+                let _ = writeln!(diagnostics.lock().unwrap(), "{args}");
+            })
+            .is_some()
     });
-    if !captured { let _ = writeln!(std::io::stderr().lock(), "{args}"); }
+    if !captured {
+        let _ = writeln!(std::io::stderr().lock(), "{args}");
+    }
 }
 
 pub(crate) fn request_root() -> PathBuf {
-    REQUEST_ROOT.with(|slot| slot.borrow().clone()).unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
+    REQUEST_ROOT
+        .with(|slot| slot.borrow().clone())
+        .unwrap_or_else(|| std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")))
 }
 
 pub(crate) fn print_line(args: std::fmt::Arguments<'_>) {
@@ -168,11 +200,15 @@ struct Rows {
 
 impl Iterator for Rows {
     type Item = OpResult<Vec<u8>>;
-    fn next(&mut self) -> Option<Self::Item> { self.rx.recv().ok() }
+    fn next(&mut self) -> Option<Self::Item> {
+        self.rx.recv().ok()
+    }
 }
 
 impl Drop for Rows {
-    fn drop(&mut self) { self.cancelled.store(true, Ordering::Release); }
+    fn drop(&mut self) {
+        self.cancelled.store(true, Ordering::Release);
+    }
 }
 
 fn produce(ryi: Ryi) -> Rows {
@@ -182,23 +218,38 @@ fn produce(ryi: Ryi) -> Rows {
     let request_root = request_root();
     let diagnostics = REQUEST_DIAGNOSTICS.with(|slot| slot.borrow().clone());
     let request_input = request_input_file();
-    let chunked = REQUEST_ROOT.with(|slot| slot.borrow().is_some()) && !matches!(&ryi.cmd, Some(Cmd::Watch(_)));
+    let chunked = REQUEST_ROOT.with(|slot| slot.borrow().is_some())
+        && !matches!(&ryi.cmd, Some(Cmd::Watch(_)));
     std::thread::spawn(move || {
-        let result = with_request_input(request_input, || with_request_context(request_root, diagnostics, || -> OpResult<()> {
-            let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new(), chunked })));
-            OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
-            let outcome = crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled)).map_err(|error| {
-                let message = if error.message.is_empty() { format!("ryi exited {}", error.code) } else { error.message };
-                OpError(message, error.code)
-            });
-            OP_SINK.with(|slot| *slot.borrow_mut() = None);
-            sink.0.lock().unwrap().flush_pending()?;
-            if let Some(error) = OP_WRITE_ERROR.with(|failure| failure.borrow_mut().take()) {
-                return Err(OpError::from(error));
-            }
-            outcome
-        }));
-        if let Err(error) = result { let _ = tx.send(Err(error)); }
+        let result = with_request_input(request_input, || {
+            with_request_context(request_root, diagnostics, || -> OpResult<()> {
+                let sink = SharedSink(Arc::new(Mutex::new(RowSink {
+                    tx: tx.clone(),
+                    pending: Vec::new(),
+                    chunked,
+                })));
+                OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
+                let outcome =
+                    crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled))
+                        .map_err(|error| {
+                            let message = if error.message.is_empty() {
+                                format!("ryi exited {}", error.code)
+                            } else {
+                                error.message
+                            };
+                            OpError(message, error.code)
+                        });
+                OP_SINK.with(|slot| *slot.borrow_mut() = None);
+                sink.0.lock().unwrap().flush_pending()?;
+                if let Some(error) = OP_WRITE_ERROR.with(|failure| failure.borrow_mut().take()) {
+                    return Err(OpError::from(error));
+                }
+                outcome
+            })
+        });
+        if let Err(error) = result {
+            let _ = tx.send(Err(error));
+        }
     });
     Rows { rx, cancelled }
 }
@@ -215,28 +266,61 @@ fn one(ryi: Ryi) -> OpResult<Vec<u8>> {
     Ok(output)
 }
 
-pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Fast(args.clone()))) }
-pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { file(&args.args) }
+pub fn fast(args: &FastArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Fast(args.clone())))
+}
+pub fn extract(args: &ExtractArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    file(&args.args)
+}
 pub fn file(args: &FileArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     let mut args = args.clone();
     args.format = None;
-    stream(Ryi { cmd: None, file: args })
+    stream(Ryi {
+        cmd: None,
+        file: args,
+    })
 }
-pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Slow(args.clone()))) }
-pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Scip(args.clone()))) }
-pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Graph(args.clone()))) }
-pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Query(args.clone()))) }
-pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Watch(args.clone()))) }
-pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> { stream(command(Cmd::Diff(args.clone()))) }
+pub fn slow(args: &SlowArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Slow(args.clone())))
+}
+pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Scip(args.clone())))
+}
+pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Graph(args.clone())))
+}
+pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Query(args.clone())))
+}
+pub fn watch(args: &WatchArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Watch(args.clone())))
+}
+pub fn diff(args: &DiffArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Diff(args.clone())))
+}
 
-pub fn cleave(args: &CleaveArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Cleave(args.clone()))) }
-pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Move(args.clone()))) }
-pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Rename(args.clone()))) }
-pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Region(args.clone()))) }
-pub fn schema(_args: &SchemaArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Schema)) }
-pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Trail(args.clone()))) }
+pub fn cleave(args: &CleaveArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Cleave(args.clone())))
+}
+pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Move(args.clone())))
+}
+pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Rename(args.clone())))
+}
+pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Region(args.clone())))
+}
+pub fn schema(_args: &SchemaArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Schema))
+}
+pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Trail(args.clone())))
+}
 
-pub fn ingest(args: &IngestArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Ingest(args.clone()))) }
+pub fn ingest(args: &IngestArgs) -> OpResult<Vec<u8>> {
+    one(command(Cmd::Ingest(args.clone())))
+}
 
 #[cfg(test)]
 mod tests {
@@ -246,17 +330,31 @@ mod tests {
     fn dropped_response_cancels_and_closes_its_row_sink() {
         let (tx, rx) = mpsc::sync_channel(1);
         let cancelled = Arc::new(AtomicBool::new(false));
-        let rows = Rows { rx, cancelled: Arc::clone(&cancelled) };
+        let rows = Rows {
+            rx,
+            cancelled: Arc::clone(&cancelled),
+        };
         drop(rows);
         assert!(cancelled.load(Ordering::Acquire));
-        let mut sink = RowSink { tx, pending: Vec::new(), chunked: false };
-        assert_eq!(sink.write_all(b"row\n").unwrap_err().kind(), std::io::ErrorKind::BrokenPipe);
+        let mut sink = RowSink {
+            tx,
+            pending: Vec::new(),
+            chunked: false,
+        };
+        assert_eq!(
+            sink.write_all(b"row\n").unwrap_err().kind(),
+            std::io::ErrorKind::BrokenPipe
+        );
     }
 
     #[test]
     fn daemon_rows_cross_the_channel_in_64_kib_chunks() {
         let (tx, rx) = mpsc::sync_channel(2);
-        let mut sink = RowSink { tx, pending: Vec::new(), chunked: true };
+        let mut sink = RowSink {
+            tx,
+            pending: Vec::new(),
+            chunked: true,
+        };
         for _ in 0..1023 {
             sink.write_all(&[b'x'; 64]).unwrap();
             sink.flush().unwrap();

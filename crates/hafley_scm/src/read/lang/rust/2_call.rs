@@ -43,9 +43,18 @@ fn same_file_call_match(
     let span = call
         .nodes
         .iter()
-        .filter(|node| node.name.is_some_and(|id| output.strings.lookup(id) == callee))
+        .filter(|node| {
+            node.name
+                .is_some_and(|id| output.strings.lookup(id) == callee)
+        })
         .map(|node| node.span)
-        .find(|span| !call.aux.method_owners.iter().any(|owner| owner.span == *span))?;
+        .find(|span| {
+            !call
+                .aux
+                .method_owners
+                .iter()
+                .any(|owner| owner.span == *span)
+        })?;
     // Every def spliced out of one macro expansion carries the macro call's
     // span, so a span several names share cannot name one target.
     let shared = call.nodes.iter().any(|node| {
@@ -103,7 +112,10 @@ impl RustSource {
         if let Some(found) = same_file_call_match(output, index, own, callee) {
             return Some(found);
         }
-        let sites: Vec<&DefSite> = corpus_defs(index, callee).iter().filter(|site| sees(&site.blob)).collect();
+        let sites: Vec<&DefSite> = corpus_defs(index, callee)
+            .iter()
+            .filter(|site| sees(&site.blob))
+            .collect();
         let mut blobs: Vec<ContentId> = Vec::new();
         for site in &sites {
             if !blobs.contains(&site.blob) {
@@ -134,12 +146,10 @@ impl RustSource {
         let sites: Vec<&DefSite> = corpus_defs(index, callee)
             .iter()
             .filter(|site| {
-                paths
-                    .get(&site.blob)
-                    .is_some_and(|path| {
-                        want.covers(&module_segments(path))
-                            && modules.is_none_or(|m| m.sees_path(from, path))
-                    })
+                paths.get(&site.blob).is_some_and(|path| {
+                    want.covers(&module_segments(path))
+                        && modules.is_none_or(|m| m.sees_path(from, path))
+                })
             })
             .collect();
         let mut blobs: Vec<&ContentId> = Vec::new();
@@ -452,9 +462,14 @@ impl Resolve<CallF> for RustSource {
                     ReceiverOutcome::Named(name) => Some(output.strings.lookup(*name).to_string()),
                     _ => None,
                 })
-                .or_else(|| modules.zip(own_path)
-                    .and_then(|(modules, path)| modules.call_result_receiver_type(path, site.span))
-                    .map(str::to_string));
+                .or_else(|| {
+                    modules
+                        .zip(own_path)
+                        .and_then(|(modules, path)| {
+                            modules.call_result_receiver_type(path, site.span)
+                        })
+                        .map(str::to_string)
+                });
             let recv_t = recv_named.as_ref().and_then(|ty| {
                 modules
                     .and_then(|m| {
@@ -496,7 +511,26 @@ impl Resolve<CallF> for RustSource {
                     assoc_path_type(site.callee_path.map(|id| output.strings.lookup(id))).and_then(
                         |ty| {
                             modules
-                                .and_then(|m| m.impl_target(&ty, callee, own_path))
+                                .and_then(|m| {
+                                    let qualified = site
+                                        .callee_path
+                                        .map(|id| output.strings.lookup(id))
+                                        .and_then(|path| {
+                                            let segments = path.split("::").collect::<Vec<_>>();
+                                            (segments.len() > 2).then(|| {
+                                                segments[..segments.len() - 2]
+                                                    .iter()
+                                                    .map(|segment| (*segment).to_string())
+                                                    .collect::<Vec<_>>()
+                                            })
+                                        });
+                                    match qualified {
+                                        Some(qualifier) => own_path.and_then(|from| {
+                                            m.qualified_impl_target(from, &qualifier, &ty, callee)
+                                        }),
+                                        None => m.impl_target(&ty, callee, own_path),
+                                    }
+                                })
                                 .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
                                 // 0 impls and a variant of the enum: the path names
                                 // the enum itself.
@@ -542,6 +576,50 @@ impl Resolve<CallF> for RustSource {
                     })
                     .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve))
             });
+            // In an impl, `Self { .. }` constructs the impl's own type. The
+            // call site spells `Self`, while its callable def spells the type.
+            let self_constructor = (callee == "Self" && site.callee_path.is_none())
+                .then(|| self_impl_type(call, &output.strings, caller))
+                .flatten()
+                .and_then(|ty| {
+                    let own = own.as_ref()?;
+                    corpus_defs(def_index, &ty)
+                        .iter()
+                        .find(|def| def.blob == *own && def.family == FamilyTag::Type)
+                        .map(|def| (def.blob.clone(), def.span))
+                })
+                .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
+            let expected_default = (callee == "default"
+                && site
+                    .callee_path
+                    .map(|id| output.strings.lookup(id) == "Default::default")
+                    .unwrap_or(false))
+            .then(|| {
+                call.aux
+                    .expected_types
+                    .iter()
+                    .find(|(span, _)| *span == site.span)
+            })
+            .flatten()
+            .and_then(|(_, ty)| {
+                modules.and_then(|m| {
+                    let path = output.strings.lookup(*ty);
+                    let segments = path.split("::").collect::<Vec<_>>();
+                    let name = segments.last().copied()?;
+                    if segments.len() > 1 {
+                        let qualifier = segments[..segments.len() - 1]
+                            .iter()
+                            .map(|segment| (*segment).to_string())
+                            .collect::<Vec<_>>();
+                        own_path.and_then(|from| {
+                            m.qualified_impl_target(from, &qualifier, name, callee)
+                        })
+                    } else {
+                        m.impl_target(name, callee, own_path)
+                    }
+                })
+            })
+            .map(|(blob, span)| (blob, span, CallEdgeKind::NameResolve));
             // Each leg names ITSELF: `kind` is `name_resolve` for nearly all
             // of them, so only the origin separates the receiver plane from the
             // module plane from the corpus-wide guess.
@@ -558,6 +636,10 @@ impl Resolve<CallF> for RustSource {
                 None
             } else if recv_inferred {
                 None
+            } else if callee == "Self" {
+                tag(self_constructor, ResolutionOrigin::SelfType)
+            } else if expected_default.is_some() {
+                tag(expected_default, ResolutionOrigin::SelfType)
             } else {
                 match (qualifier, own_path, paths) {
                     (Some(qualifier), Some(from), Some(paths)) => {
@@ -569,14 +651,15 @@ impl Resolve<CallF> for RustSource {
                             .map(|m| m.module_call(from, &segments, callee))
                             .unwrap_or(crate::read::lang::rust_modules::ModuleCallTarget::Miss)
                         {
-                            crate::read::lang::rust_modules::ModuleCallTarget::Target(blob, span) => {
-                                Some((
-                                    blob,
-                                    span,
-                                    CallEdgeKind::NameResolve,
-                                    ResolutionOrigin::ModulePlane,
-                                ))
-                            }
+                            crate::read::lang::rust_modules::ModuleCallTarget::Target(
+                                blob,
+                                span,
+                            ) => Some((
+                                blob,
+                                span,
+                                CallEdgeKind::NameResolve,
+                                ResolutionOrigin::ModulePlane,
+                            )),
                             _ => RustSource::call_name_match_in_module(
                                 def_index, modules, paths, from, &qualifier, callee,
                             )
@@ -618,23 +701,33 @@ impl Resolve<CallF> for RustSource {
                             })
                         })
                         .or_else(|| {
-                            if modules.zip(own_path).is_some_and(|(m, from)| m.binds_external(from, callee)) {
+                            if modules
+                                .zip(own_path)
+                                .is_some_and(|(m, from)| m.binds_external(from, callee))
+                            {
                                 return None;
                             }
                             let sees = |blob: &ContentId| {
                                 modules.zip(own_path).map_or(true, |(m, from)| {
-                                    m.sees(from, blob) && !m.private_import_target(from, callee, blob)
+                                    m.sees(from, blob)
+                                        && !m.private_import_target(from, callee, blob)
                                 })
                             };
-                            RustSource::call_name_match_seen(output, def_index, own.as_ref(), callee, sees)
-                                .map(|(blob, span)| {
-                                    (
-                                        blob,
-                                        span,
-                                        CallEdgeKind::NameResolve,
-                                        ResolutionOrigin::CorpusUnique,
-                                    )
-                                })
+                            RustSource::call_name_match_seen(
+                                output,
+                                def_index,
+                                own.as_ref(),
+                                callee,
+                                sees,
+                            )
+                            .map(|(blob, span)| {
+                                (
+                                    blob,
+                                    span,
+                                    CallEdgeKind::NameResolve,
+                                    ResolutionOrigin::CorpusUnique,
+                                )
+                            })
                         }),
                 }
             };
@@ -647,7 +740,9 @@ impl Resolve<CallF> for RustSource {
             };
             let name_t = name_t.filter(|(blob, span, _, _)| {
                 callable(blob, *span)
-                    && modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, blob))
+                    && modules
+                        .zip(own_path)
+                        .map_or(true, |(m, from)| m.sees(from, blob))
             });
             // The syntax tier's whole answer for this site: the name match and
             // scip folded the way they fold when no checker runs.
@@ -904,11 +999,7 @@ fn enclosing_named_def(sorted: &[(Span, NodeRef)], site: Span) -> Option<NodeRef
 
 /// A proc_macro2 span pair -> v6 byte Span covering `[start.start, end.end)`.
 /// The def span covers the whole callable body for span-containment resolution.
-pub fn def_span(
-    line_starts: &[u32],
-    start: proc_macro2::Span,
-    end: proc_macro2::Span,
-) -> Span {
+pub fn def_span(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Span) -> Span {
     let start_lc = start.start();
     let end_lc = end.end();
     let start_byte = line_col_to_byte(line_starts, start_lc.line as u32, start_lc.column as u32);
@@ -991,12 +1082,30 @@ pub(super) fn project_call(
 ) {
     // Defs snapshot before the walk: a CONST_INIT is minted only when its
     // initializer's calls escape the engine's own def spans.
-    let defs: Vec<std::ops::Range<u32>> = sink.nodes.iter().map(|node| node.span.start..node.span.end()).collect();
+    let defs: Vec<std::ops::Range<u32>> = sink
+        .nodes
+        .iter()
+        .map(|node| node.span.start..node.span.end())
+        .collect();
     let rows = call_site_rows(parsed, line_starts, &defs);
+    sink.aux
+        .expected_types
+        .extend(rows.expected_types.iter().map(|(range, ty)| {
+            (
+                Span {
+                    start: range.start,
+                    len: range.end - range.start,
+                },
+                strings.intern(ty),
+            )
+        }));
     // Mint the CONST_INIT defs in walk order, before metadata reads the node
     // set: a gated const's cfg row is admitted by its own CONST_INIT node.
     for row in rows.const_inits {
-        let span = Span { start: row.range.start, len: row.range.end - row.range.start };
+        let span = Span {
+            start: row.range.start,
+            len: row.range.end - row.range.start,
+        };
         sink.nodes
             .push(Node::new(span, CONST_INIT).with_name(strings.intern(&row.name)));
     }
@@ -1010,7 +1119,10 @@ pub(super) fn project_call(
     }
     for site in rows.sites {
         sink.aux.sites.push(CallSite {
-            span: Span { start: site.range.start, len: site.range.end - site.range.start },
+            span: Span {
+                start: site.range.start,
+                len: site.range.end - site.range.start,
+            },
             callee: strings.intern(&site.callee),
             callee_path: site.callee_path.map(|path| strings.intern(&path)),
         });
@@ -1038,8 +1150,12 @@ fn module_specifiers(
                 name: strings.intern(&row.name),
                 kind: match row.kind {
                     hafley_scm::lang::rust::ModuleSpecifierKind::Named => SpecifierKind::Named,
-                    hafley_scm::lang::rust::ModuleSpecifierKind::Namespace => SpecifierKind::Namespace,
-                    hafley_scm::lang::rust::ModuleSpecifierKind::Reexport => SpecifierKind::Reexport,
+                    hafley_scm::lang::rust::ModuleSpecifierKind::Namespace => {
+                        SpecifierKind::Namespace
+                    }
+                    hafley_scm::lang::rust::ModuleSpecifierKind::Reexport => {
+                        SpecifierKind::Reexport
+                    }
                 },
                 module: Some(strings.intern(&row.module)),
                 imported: None,
@@ -1047,7 +1163,11 @@ fn module_specifiers(
     );
 }
 
-pub(super) fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: &mut FamilyBundle<CallF>) {
+pub(super) fn splice_macro_expansions(
+    src: &str,
+    strings: &mut Strings,
+    bundle: &mut FamilyBundle<CallF>,
+) {
     use hafley_scm::lang::rust::ExpandedCallKind;
 
     let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
@@ -1059,7 +1179,13 @@ pub(super) fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: 
             ExpandedCallKind::Lambda => CallKind::Lambda,
             ExpandedCallKind::ConstInit => CONST_INIT,
         };
-        let mut node = Node::new(Span { start: row.range.start, len: row.range.end - row.range.start }, kind);
+        let mut node = Node::new(
+            Span {
+                start: row.range.start,
+                len: row.range.end - row.range.start,
+            },
+            kind,
+        );
         if let Some(name) = row.name {
             node = node.with_name(strings.intern(&name));
         }
@@ -1067,14 +1193,20 @@ pub(super) fn splice_macro_expansions(src: &str, strings: &mut Strings, bundle: 
     }
     for row in rows.sites {
         bundle.aux.sites.push(CallSite {
-            span: Span { start: row.range.start, len: row.range.end - row.range.start },
+            span: Span {
+                start: row.range.start,
+                len: row.range.end - row.range.start,
+            },
             callee: strings.intern(&row.callee),
             callee_path: row.callee_path.map(|path| strings.intern(&path)),
         });
     }
     for (range, name) in rows.macros {
         bundle.aux.macro_sites.push(MacroSite {
-            span: Span { start: range.start, len: range.end - range.start },
+            span: Span {
+                start: range.start,
+                len: range.end - range.start,
+            },
             macro_name: strings.intern(&name),
             source: MacroSiteSource::Mbe,
         });

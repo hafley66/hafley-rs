@@ -1,0 +1,8 @@
+{
+  "name": "ladder-consumer",
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "ladder-engine": "link:../engine"
+  }
+}

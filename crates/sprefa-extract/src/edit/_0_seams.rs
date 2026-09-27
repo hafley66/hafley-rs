@@ -1,10 +1,10 @@
-use crate::types::LangKind;
 use crate::move_cx::MoveCx;
+use crate::rename_cx::{RenameCx, RenameRequest};
+use crate::types::LangKind;
 use crate::types::Source;
+use hafley_scm::span::Span;
 use std::collections::BTreeSet;
 use std::fmt;
-use crate::rename_cx::{RenameCx, RenameRequest};
-use hafley_scm::span::Span;
 
 /// One import-shaped reference a move respells. `literal` and `text` cover it
 /// AS WRITTEN, quotes included: a respell reproduces the quote style.
@@ -167,7 +167,13 @@ pub trait Cleave: Source + Sync + Send {
 
     /// `module` as SRC wrote it, respelled for DEST when it is relative to
     /// SRC's own module (Rust `use child::X`). None: spell the target file.
-    fn respell_relative(&self, _cx: &MoveCx, _src: &str, _dest: &str, _module: &str) -> Option<String> {
+    fn respell_relative(
+        &self,
+        _cx: &MoveCx,
+        _src: &str,
+        _dest: &str,
+        _module: &str,
+    ) -> Option<String> {
         None
     }
 }

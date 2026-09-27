@@ -240,7 +240,10 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
     // it; the DP pairs a source line with one row, so claim the continuation rows too.
     let mut wrapped: Vec<Hit> = Vec::with_capacity(hits.len());
     for (index, hit) in hits.iter().enumerate() {
-        wrapped.push(Hit { line: hit.line.clone(), source_index: hit.source_index });
+        wrapped.push(Hit {
+            line: hit.line.clone(),
+            source_index: hit.source_index,
+        });
         let next_hit_start = hits.get(index + 1).map(|next| next.line.start);
         let Some(mut at) = rows.iter().position(|row| row.line.start == hit.line.start) else {
             continue;
@@ -252,7 +255,10 @@ fn monotonic_turn_match(screen: &[ScreenRow], source: &Source) -> Option<TurnMat
             {
                 break;
             }
-            wrapped.push(Hit { line: row.line.clone(), source_index: hit.source_index });
+            wrapped.push(Hit {
+                line: row.line.clone(),
+                source_index: hit.source_index,
+            });
             at += 1;
         }
     }

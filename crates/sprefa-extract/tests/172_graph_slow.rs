@@ -47,7 +47,14 @@ fn slow_callers_answer_from_the_index_and_grade_plus() {
 fn a_zero_second_timeout_is_refused() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args(["graph", "--timeout", "0", "--callers", "x", "tests/fixtures/graph_ts"])
+        .args([
+            "graph",
+            "--timeout",
+            "0",
+            "--callers",
+            "x",
+            "tests/fixtures/graph_ts",
+        ])
         .output()
         .expect("graph binary runs");
     assert_eq!(output.status.code(), Some(2));

@@ -10,7 +10,7 @@
 //! and the empty rows stay empty, which is what the aligner must ignore.
 
 use boop_turnstrip::{
-    drawn_at_all, drawn_as_tool, kind_of, layout, layout_pinned, measure, place_window,
+    drawn_as_tool, drawn_at_all, kind_of, layout, layout_pinned, measure, place_window,
     recent_layout, relative_layout, rows_of, samples_from, window_of, Layout, ListedTurn, Mode,
     Options, Placement, RecentStrip, RelativeStrip, TurnKind, TurnRow, Viewport,
     DEFAULT_RECENT_MAX, KINDS,
@@ -537,7 +537,11 @@ fn moves_every_square_by_the_rows_a_scroll_moved() {
     // row, and the tool turn above it draws a tiny square on the window's first
     // row, where the reader met it.
     let tail = at(40, 24);
-    assert_eq!(of(&tail, "t3"), Some(0.0), "a tool draws at its first visible row");
+    assert_eq!(
+        of(&tail, "t3"),
+        Some(0.0),
+        "a tool draws at its first visible row"
+    );
     assert_eq!(
         of(&tail, "a2"),
         None,
@@ -617,7 +621,10 @@ fn a_dense_run_of_tools_compresses_to_the_tool_budget_newest_first() {
         );
     }
     for square in tools {
-        assert_eq!(square.scale, 0.35, "a tool square draws at the fixed tool scale");
+        assert_eq!(
+            square.scale, 0.35,
+            "a tool square draws at the fixed tool scale"
+        );
         assert!(!square.active, "a tool is never active");
     }
 }
@@ -659,7 +666,13 @@ fn a_conversation_square_inside_a_tool_run_keeps_its_own_row_and_gap() {
     // them.
     assert_eq!(
         ids,
-        [("t0", 0.0), ("a1", 4.0), ("a2", 6.0), ("t3", 10.0), ("t4", 12.0)]
+        [
+            ("t0", 0.0),
+            ("a1", 4.0),
+            ("a2", 6.0),
+            ("t3", 10.0),
+            ("t4", 12.0)
+        ]
     );
 }
 
@@ -668,7 +681,12 @@ fn recent_mode_lists_no_tool() {
     // The recency list is the conversation's: a chatty tool run takes no place
     // in it, whatever the store hands over.
     let listed = listed_of(&many_tools(10));
-    let strip = recent_layout(&listed, None, Viewport { top: 0, bottom: 40 }, &Options::default());
+    let strip = recent_layout(
+        &listed,
+        None,
+        Viewport { top: 0, bottom: 40 },
+        &Options::default(),
+    );
     assert_eq!(strip.squares.len(), 0);
     // And a recent strip with a conversation turn lists that turn only, never
     // the tool that flew beside it.
@@ -676,7 +694,12 @@ fn recent_mode_lists_no_tool() {
         spec("a1", "assistant", (0, 1), 1, &[0]),
         spec("t2", "tool", (2, 3), 1, &[2]),
     ]);
-    let strip = recent_layout(&mixed, None, Viewport { top: 0, bottom: 40 }, &Options::default());
+    let strip = recent_layout(
+        &mixed,
+        None,
+        Viewport { top: 0, bottom: 40 },
+        &Options::default(),
+    );
     assert_eq!(
         strip
             .squares
@@ -998,8 +1021,7 @@ fn conversation_draws_in_both_modes_and_tools_only_in_relative() {
         &Options::default(),
     );
     assert!(
-        banded
-            .squares()[..banded.band()]
+        banded.squares()[..banded.band()]
             .iter()
             .all(|square| drawn_at_all(square.kind)),
         "the band holds the conversation too"

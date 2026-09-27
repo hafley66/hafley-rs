@@ -194,17 +194,18 @@ fn receiver_of(
                 let ts::Expression::Identifier(namespace) = &member.object else {
                     return None;
                 };
-                facts.namespace_imports.contains(namespace.name.as_str()).then(|| {
-                    TypeBinding::Decl(format!("{}.{}", namespace.name, member.property.name))
-                })
+                facts
+                    .namespace_imports
+                    .contains(namespace.name.as_str())
+                    .then(|| {
+                        TypeBinding::Decl(format!("{}.{}", namespace.name, member.property.name))
+                    })
             }
             _ => None,
         },
         // `this` inside a class names the class as the receiver; a field read
         // `this.f` hops through the field's declared type at the resolve leg.
-        ts::Expression::ThisExpression(_) => {
-            this_type.map(|name| TypeBinding::Decl(name.clone()))
-        }
+        ts::Expression::ThisExpression(_) => this_type.map(|name| TypeBinding::Decl(name.clone())),
         _ => None,
     }
 }
@@ -339,8 +340,12 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
     fn visit_import_declaration(&mut self, import: &ts::ImportDeclaration<'a>) {
         if let Some(specifiers) = &import.specifiers {
             for specifier in specifiers {
-                if let ts::ImportDeclarationSpecifier::ImportNamespaceSpecifier(namespace) = specifier {
-                    self.facts.namespace_imports.insert(namespace.local.name.to_string());
+                if let ts::ImportDeclarationSpecifier::ImportNamespaceSpecifier(namespace) =
+                    specifier
+                {
+                    self.facts
+                        .namespace_imports
+                        .insert(namespace.local.name.to_string());
                 }
             }
         }
@@ -509,16 +514,20 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
                 let binding = match init {
                     ts::Expression::NewExpression(new_expr) => match &new_expr.callee {
                         ts::Expression::Identifier(id) => TypeBinding::Decl(id.name.to_string()),
-                        ts::Expression::StaticMemberExpression(member) => {
-                            match &member.object {
-                                ts::Expression::Identifier(namespace)
-                                    if self.facts.namespace_imports.contains(namespace.name.as_str()) =>
-                                {
-                                    TypeBinding::Decl(format!("{}.{}", namespace.name, member.property.name))
-                                }
-                                _ => TypeBinding::Inferred,
+                        ts::Expression::StaticMemberExpression(member) => match &member.object {
+                            ts::Expression::Identifier(namespace)
+                                if self
+                                    .facts
+                                    .namespace_imports
+                                    .contains(namespace.name.as_str()) =>
+                            {
+                                TypeBinding::Decl(format!(
+                                    "{}.{}",
+                                    namespace.name, member.property.name
+                                ))
                             }
-                        }
+                            _ => TypeBinding::Inferred,
+                        },
                         _ => TypeBinding::Inferred,
                     },
                     ts::Expression::CallExpression(call) => {
