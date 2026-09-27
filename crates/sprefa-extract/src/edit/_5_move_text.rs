@@ -28,7 +28,10 @@ pub fn report(cx: &MoveCx) {
     for hit in scan(cx, &skip_file, &|_, _| false, &per_move) {
         crate::outln!(
             "text-ref {}:{} {} -> {}",
-            hit.file, hit.line, hit.matched, hit.proposed
+            hit.file,
+            hit.line,
+            hit.matched,
+            hit.proposed
         );
     }
 }
@@ -59,7 +62,10 @@ pub fn report_rename(
     for hit in scan(cx, &|_| false, &skip_line, &[spellings]) {
         crate::outln!(
             "text-ref {}:{} {} -> {}",
-            hit.file, hit.line, hit.matched, hit.proposed
+            hit.file,
+            hit.line,
+            hit.matched,
+            hit.proposed
         );
     }
 }

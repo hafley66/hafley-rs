@@ -16,7 +16,11 @@ const FILES: &[&str] = &[
 ];
 
 fn rows() -> Vec<Value> {
-    let mut args: Vec<String> = vec!["--resolve".to_string(), "--arms".to_string(), "call".to_string()];
+    let mut args: Vec<String> = vec![
+        "--resolve".to_string(),
+        "--arms".to_string(),
+        "call".to_string(),
+    ];
     args.extend(FILES.iter().map(|name| name.to_string()));
     let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
@@ -64,7 +68,13 @@ fn drops() -> Vec<(String, u32, u32, String, String)> {
         .filter(|row| row["record"] == "unresolved")
         .map(|row| {
             (
-                row["path"].as_str().unwrap_or("").rsplit('/').next().unwrap_or("").to_string(),
+                row["path"]
+                    .as_str()
+                    .unwrap_or("")
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
                 row["span"]["start"].as_u64().unwrap_or(0) as u32,
                 row["span"]["end"].as_u64().unwrap_or(0) as u32,
                 row["reason"].as_str().unwrap_or("").to_string(),
@@ -80,7 +90,9 @@ fn drops() -> Vec<(String, u32, u32, String, String)> {
 fn def_start(stem: &str, marker: &str) -> u32 {
     let path = format!("tests/fixtures/kotlin_receivers/{stem}");
     let content = std::fs::read_to_string(&path).expect("fixture reads");
-    let at = content.find(marker).unwrap_or_else(|| panic!("{marker:?} in {path}"));
+    let at = content
+        .find(marker)
+        .unwrap_or_else(|| panic!("{marker:?} in {path}"));
     at as u32
 }
 

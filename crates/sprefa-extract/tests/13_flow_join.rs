@@ -5,8 +5,8 @@
 //! inputs.
 
 use sprefa_extract::{
-    flow_edges, CallEdgeKind, CallF, ContentId, DfArg, DfF, DfNodeKind, DfParam, RyiOutput,
-    FamilyBundle, FlowEdgeKind, Node, NodeRef, ProjectEdge, ResolutionOrigin, Span,
+    flow_edges, CallEdgeKind, CallF, ContentId, DfArg, DfF, DfNodeKind, DfParam, FamilyBundle,
+    FlowEdgeKind, Node, NodeRef, ProjectEdge, ResolutionOrigin, RyiOutput, Span,
 };
 
 fn span(start: u32, len: u32) -> Span {

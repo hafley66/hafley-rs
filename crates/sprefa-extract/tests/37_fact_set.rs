@@ -61,8 +61,8 @@ fn load_joins_the_stored_text_once() {
 
 #[test]
 fn every_value_comes_back_through_the_str_join() {
-    let facts = FactSet::load(&seeded(&["beta()", "gamma()", "delta()"]), REL, COLUMN)
-        .expect("preload");
+    let facts =
+        FactSet::load(&seeded(&["beta()", "gamma()", "delta()"]), REL, COLUMN).expect("preload");
     let mut values: Vec<&str> = facts.values().collect();
     values.sort_unstable();
     assert_eq!(

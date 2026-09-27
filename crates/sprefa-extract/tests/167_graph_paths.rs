@@ -36,7 +36,10 @@ fn call_paths_carry_one_edge_id_per_hop() {
             )
         })
         .collect();
-    assert_eq!(paths, [("chainB", 1, 1), ("chainC", 2, 2), ("chainD", 3, 3)]);
+    assert_eq!(
+        paths,
+        [("chainB", 1, 1), ("chainC", 2, 2), ("chainD", 3, 3)]
+    );
     assert!(rows.iter().all(|row| row["plane"] == "call"));
 }
 
@@ -93,6 +96,8 @@ fn flow_paths_follow_derived_interprocedural_edges() {
         .collect();
     assert!(!rows.is_empty());
     assert!(rows.iter().all(|row| row["plane"] == "flow"));
-    assert!(rows.iter().all(|row| row["witness"].as_array().unwrap().len()
-        == row["depth"].as_u64().unwrap() as usize));
+    assert!(rows
+        .iter()
+        .all(|row| row["witness"].as_array().unwrap().len()
+            == row["depth"].as_u64().unwrap() as usize));
 }

@@ -19,21 +19,21 @@ use oxc_span::GetSpan;
 use oxc_syntax::reference::Reference;
 use oxc_syntax::symbol::SymbolId;
 
+use crate::edit_seams::ImportRefKind;
+use crate::edit_seams::RefRole;
+use crate::edit_seams::Rehome;
+use crate::edit_seams::Rename;
+use crate::edit_seams::RenameAbstain;
+use crate::edit_seams::RenameStop;
+use crate::edit_seams::Respell;
+use crate::edit_seams::SymbolRef;
+use crate::edit_seams::SymbolSeat;
 use crate::lang::rust::build_line_starts;
 use crate::lang::ts::{OxcParser, TsSource};
 use crate::move_cx::MoveCx;
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::seams::Parser;
 use crate::types::UnresolvedReason;
-use crate::edit_seams::ImportRefKind;
-use crate::edit_seams::Respell;
-use crate::edit_seams::Rehome;
-use crate::edit_seams::SymbolRef;
-use crate::edit_seams::RefRole;
-use crate::edit_seams::SymbolSeat;
-use crate::edit_seams::RenameAbstain;
-use crate::edit_seams::RenameStop;
-use crate::edit_seams::Rename;
 use hafley_scm::span::Span;
 
 impl Rename for TsSource {

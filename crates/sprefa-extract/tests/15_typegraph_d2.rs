@@ -95,7 +95,11 @@ fn shape_count(board: &Path) -> usize {
 #[test]
 fn every_emitted_board_compiles_and_reads_wide() {
     let out = scratch("src");
-    let stdout = run_example("../hafley_scm/src/read", "../hafley_scm/src/read/types.rs::RyiOutput", &out);
+    let stdout = run_example(
+        "../hafley_scm/src/read",
+        "../hafley_scm/src/read/types.rs::RyiOutput",
+        &out,
+    );
 
     let files = boards(&out);
     assert!(

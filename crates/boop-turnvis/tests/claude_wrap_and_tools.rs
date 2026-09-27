@@ -3,7 +3,11 @@
 use boop_turnvis::{locate_visible_turns, BoopTurn, LogicalLine};
 
 fn line(row: usize, text: &str) -> LogicalLine {
-    LogicalLine { text: text.to_owned(), start: row, end: row }
+    LogicalLine {
+        text: text.to_owned(),
+        start: row,
+        end: row,
+    }
 }
 
 fn turn(turn: i64, said: &str) -> BoopTurn {
@@ -31,7 +35,12 @@ fn wrapped_reply_keeps_its_rows() {
     ];
     let found: Vec<String> = locate_visible_turns(&screen, &turns)
         .iter()
-        .map(|t| format!("{} anchor {}..{} buffer {}..{} {:?}", t.turn, t.anchor_start, t.anchor_end, t.buffer_start, t.buffer_end, t.confidence))
+        .map(|t| {
+            format!(
+                "{} anchor {}..{} buffer {}..{} {:?}",
+                t.turn, t.anchor_start, t.anchor_end, t.buffer_start, t.buffer_end, t.confidence
+            )
+        })
         .collect();
     assert_eq!(found.join("\n"), "518 anchor 0..2 buffer 0..2 Anchored");
 }

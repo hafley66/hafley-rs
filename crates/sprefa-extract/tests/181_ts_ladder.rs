@@ -56,14 +56,29 @@ fn ryi(args: &[&str]) {
 #[test]
 fn ts_ladder_fast_and_slow() {
     let scratch = tempfile::tempdir().unwrap();
-    let fast = scratch.path().join("fast.db").to_string_lossy().into_owned();
-    let slow = scratch.path().join("slow.db").to_string_lossy().into_owned();
+    let fast = scratch
+        .path()
+        .join("fast.db")
+        .to_string_lossy()
+        .into_owned();
+    let slow = scratch
+        .path()
+        .join("slow.db")
+        .to_string_lossy()
+        .into_owned();
     let src = format!("{LADDER}/src");
     let index = format!("{LADDER}/index.scip");
     ryi(&["fast", &src, "--sqlite", &fast]);
     ryi(&[
-        "slow", &src, "--root", LADDER, "--scip-index", &index,
-        "--no-checker", "--sqlite", &slow,
+        "slow",
+        &src,
+        "--root",
+        LADDER,
+        "--scip-index",
+        &index,
+        "--no-checker",
+        "--sqlite",
+        &slow,
     ]);
 
     let conn = rusqlite::Connection::open(&fast).unwrap();

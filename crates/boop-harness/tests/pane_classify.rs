@@ -1,7 +1,9 @@
 //! pane::classify on stored turns, and the frame those turns project onto a claude screen.
 
 use boop_harness::pane::{classify, project, Layout, Mode, Options};
-use boop_mux::{rows_from_capture, History, Screen, TerminalSize, TerminalSnapshot, TerminalTarget};
+use boop_mux::{
+    rows_from_capture, History, Screen, TerminalSize, TerminalSnapshot, TerminalTarget,
+};
 use boop_store::ident::{project_transcript, sync_session_with, Store, TurnQuery};
 use boop_store::rows::TurnRow;
 use boop_turnstrip::ToolGap;
@@ -32,7 +34,10 @@ fn boop_envelopes_change_presentation_only() {
     let mut shown = raw.clone();
     classify(&store, &mut shown).unwrap();
     assert_eq!(
-        shown.iter().map(|row| (row.role.as_str(), row.said.as_str())).collect::<Vec<_>>(),
+        shown
+            .iter()
+            .map(|row| (row.role.as_str(), row.said.as_str()))
+            .collect::<Vec<_>>(),
         [
             ("user", "actual user content\nsecond line"),
             ("meta", ""),
@@ -41,7 +46,10 @@ fn boop_envelopes_change_presentation_only() {
             ("user", texts[4]),
         ]
     );
-    assert_eq!(raw.iter().map(|row| row.said.as_str()).collect::<Vec<_>>(), texts);
+    assert_eq!(
+        raw.iter().map(|row| row.said.as_str()).collect::<Vec<_>>(),
+        texts
+    );
 }
 
 #[test]
@@ -67,11 +75,16 @@ fn claude_mixed_blocks_preserve_text_tools_and_usage_provenance() {
         project_transcript(store, session, cursor.offset)
     })
     .unwrap();
-    let query = TurnQuery { session: Some("fixture".into()), ..Default::default() };
+    let query = TurnQuery {
+        session: Some("fixture".into()),
+        ..Default::default()
+    };
     let mut rows = store.turn_rows(&query).unwrap();
     classify(&store, &mut rows).unwrap();
     assert_eq!(
-        rows.iter().map(|row| (row.turn, row.role.as_str(), row.said.as_str())).collect::<Vec<_>>(),
+        rows.iter()
+            .map(|row| (row.turn, row.role.as_str(), row.said.as_str()))
+            .collect::<Vec<_>>(),
         [
             (1, "user", "okay now try"),
             (2, "thinking", ""),
@@ -81,13 +94,21 @@ fn claude_mixed_blocks_preserve_text_tools_and_usage_provenance() {
             (6, "tool", "mcp__bewpp__page_navigate"),
             (7, "thinking", ""),
             (8, "tool", "Bash"),
-            (9, "assistant", "Blocked at the extension. Navigation requires site permission."),
+            (
+                9,
+                "assistant",
+                "Blocked at the extension. Navigation requires site permission."
+            ),
             (10, "assistant", "Reading the extension configuration."),
             (11, "tool", "Read"),
             (12, "assistant", ""),
         ]
     );
-    assert_eq!(store.turn_rows(&query).unwrap()[1].role, "assistant", "presentation leaves the ledger unchanged");
+    assert_eq!(
+        store.turn_rows(&query).unwrap()[1].role,
+        "assistant",
+        "presentation leaves the ledger unchanged"
+    );
 
     let screen = [
         "❯ okay now try",
@@ -99,22 +120,50 @@ fn claude_mixed_blocks_preserve_text_tools_and_usage_provenance() {
         "⏺ Reading the extension configuration.",
     ];
     let text: String = screen.iter().map(|row| format!("{row}\n")).collect();
-    let size = TerminalSize { columns: 100, rows: screen.len() as u16 };
+    let size = TerminalSize {
+        columns: 100,
+        rows: screen.len() as u16,
+    };
     let snapshot = TerminalSnapshot {
-        target: TerminalTarget { host: "tmux".into(), terminal: "%1".into(), incarnation: 1 },
+        target: TerminalTarget {
+            host: "tmux".into(),
+            terminal: "%1".into(),
+            incarnation: 1,
+        },
         generation: 0,
         size,
         screen: Screen::Primary,
-        history: History::Retained { rows: 0, capacity: 2000 },
+        history: History::Retained {
+            rows: 0,
+            capacity: 2000,
+        },
         cursor: None,
         scroll: 0,
         rows: rows_from_capture(&text, &text, size),
     };
-    let frame = project(&snapshot, "fixture", rows, &Default::default(), &Options { mode: Mode::Recent, ..Default::default() });
+    let frame = project(
+        &snapshot,
+        "fixture",
+        rows,
+        &Default::default(),
+        &Options {
+            mode: Mode::Recent,
+            ..Default::default()
+        },
+    );
     let layout = frame.layout.unwrap();
     assert_eq!(
-        layout.squares().iter().map(|square| (square.id.as_str(), square.active)).collect::<Vec<_>>(),
-        [("fixture:1", true), ("fixture:9", true), ("fixture:10", true), ("fixture:12", false)]
+        layout
+            .squares()
+            .iter()
+            .map(|square| (square.id.as_str(), square.active))
+            .collect::<Vec<_>>(),
+        [
+            ("fixture:1", true),
+            ("fixture:9", true),
+            ("fixture:10", true),
+            ("fixture:12", false)
+        ]
     );
     let tool = frame.turns.iter().find(|turn| turn.role == "tool").unwrap();
     assert_eq!((tool.turn, tool.anchor_start, tool.anchor_end), (8, 2, 2));
@@ -123,6 +172,11 @@ fn claude_mixed_blocks_preserve_text_tools_and_usage_provenance() {
     };
     assert_eq!(
         recent.gap,
-        Some(ToolGap { before_id: Some("fixture:1".into()), after_id: Some("fixture:9".into()), start_row: 2, end_row: 2 })
+        Some(ToolGap {
+            before_id: Some("fixture:1".into()),
+            after_id: Some("fixture:9".into()),
+            start_row: 2,
+            end_row: 2
+        })
     );
 }

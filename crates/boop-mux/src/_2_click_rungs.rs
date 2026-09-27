@@ -41,10 +41,15 @@ pub fn split_line_ref(token: &str) -> (String, Option<u32>) {
     let (head, tail) = token.split_at(colon);
     let numbers: Vec<&str> = tail[1..].split(['-', ',']).map(str::trim).collect();
     let spans = tail[1..].matches('-').count();
-    let is_line = numbers.iter().all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+    let is_line = numbers
+        .iter()
+        .all(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
         && (spans == 0 || (spans == 1 && numbers.len() == 2));
     // `C:\src` drive letters and `http://host:8080` are not line references.
-    let is_url_port = head.split("://").nth(1).is_some_and(|rest| !rest.contains('/'));
+    let is_url_port = head
+        .split("://")
+        .nth(1)
+        .is_some_and(|rest| !rest.contains('/'));
     if !is_line || head.is_empty() || head.len() == 1 || is_url_port {
         return (token.to_string(), None);
     }
@@ -89,7 +94,11 @@ pub fn ancestors_of(cwd: &str, boundary: &str, max: usize) -> Vec<String> {
     if start.is_empty() || start == "/" {
         return Vec::new();
     }
-    let stop = if boundary.is_empty() { "/" } else { trim_slash(boundary) };
+    let stop = if boundary.is_empty() {
+        "/"
+    } else {
+        trim_slash(boundary)
+    };
     let inside = start == stop || start.starts_with(&format!("{stop}/"));
     let mut out = Vec::new();
     let mut dir = start.to_string();
@@ -190,7 +199,10 @@ pub fn rank_exact(rel: &str, entries: &[IndexEntry]) -> Vec<(String, bool)> {
         })
         .collect();
     scored.sort_by(|a, b| a.0.cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(b.2)));
-    scored.into_iter().map(|(rank, _, path)| (path.to_string(), rank == 0)).collect()
+    scored
+        .into_iter()
+        .map(|(rank, _, path)| (path.to_string(), rank == 0))
+        .collect()
 }
 
 /// `rel` joined to each indexed directory, kept when it exists on disk. This is
@@ -211,7 +223,12 @@ pub fn under_indexed_dirs(rel: &str, entries: &[IndexEntry]) -> Vec<String> {
                 .then(|| candidate.to_string_lossy().into_owned())
         })
         .collect();
-    found.sort_by(|a, b| a.matches('/').count().cmp(&b.matches('/').count()).then(a.cmp(b)));
+    found.sort_by(|a, b| {
+        a.matches('/')
+            .count()
+            .cmp(&b.matches('/').count())
+            .then(a.cmp(b))
+    });
     found.dedup();
     found
 }
@@ -234,7 +251,12 @@ pub fn rank_fuzzy(query: &str, entries: &[IndexEntry], limit: usize) -> Vec<(Str
         .rsplit('/')
         .next()
         .and_then(|name| name.rsplit_once('.'))
-        .filter(|(stem, ext)| !stem.is_empty() && !ext.is_empty() && ext.len() <= 16 && ext.chars().all(|c| c.is_ascii_alphanumeric()))
+        .filter(|(stem, ext)| {
+            !stem.is_empty()
+                && !ext.is_empty()
+                && ext.len() <= 16
+                && ext.chars().all(|c| c.is_ascii_alphanumeric())
+        })
         .map(|(_, ext)| format!(".{}", ext.to_ascii_lowercase()));
     let haystack: Vec<&str> = entries
         .iter()
@@ -268,7 +290,13 @@ pub fn rank_fuzzy(query: &str, entries: &[IndexEntry], limit: usize) -> Vec<(Str
     // fzf's own tiebreakers: score, then the shorter candidate, then the name.
     hits.sort_by(|a, b| {
         b.1.cmp(&a.1)
-            .then(entries[a.0].path.matches('/').count().cmp(&entries[b.0].path.matches('/').count()))
+            .then(
+                entries[a.0]
+                    .path
+                    .matches('/')
+                    .count()
+                    .cmp(&entries[b.0].path.matches('/').count()),
+            )
             .then(entries[a.0].path.len().cmp(&entries[b.0].path.len()))
             .then(entries[a.0].path.cmp(&entries[b.0].path))
     });
@@ -311,7 +339,9 @@ pub fn sibling_candidates(
     let mut out = Vec::new();
     let start = repo_root.unwrap_or(cwd);
     for ancestor in ancestors_of(start, boundary, max) {
-        let Ok(children) = std::fs::read_dir(&ancestor) else { continue };
+        let Ok(children) = std::fs::read_dir(&ancestor) else {
+            continue;
+        };
         let mut seen = 0;
         for child in children.flatten() {
             seen += 1;
@@ -333,11 +363,18 @@ pub fn sibling_candidates(
 
 /// Repos worth asking git about: a checkout whose first path segment exists, so
 /// `plans/x.md` only questions repos that actually have a `plans` directory.
-pub(crate) fn git_probe_repos(rel: &str, cwd: &str, repo_root: Option<&str>, boundary: &str) -> Vec<String> {
+pub(crate) fn git_probe_repos(
+    rel: &str,
+    cwd: &str,
+    repo_root: Option<&str>,
+    boundary: &str,
+) -> Vec<String> {
     let head = rel.split('/').next().unwrap_or(rel);
     let mut repos: Vec<String> = repo_root.map(|r| vec![r.to_string()]).unwrap_or_default();
     for ancestor in ancestors_of(cwd, boundary, MAX_RUNGS) {
-        let Ok(children) = std::fs::read_dir(&ancestor) else { continue };
+        let Ok(children) = std::fs::read_dir(&ancestor) else {
+            continue;
+        };
         for child in children.flatten().take(MAX_SIBLINGS) {
             let path = child.path();
             if !path.join(".git").exists() || !path.join(head).is_dir() {
@@ -356,7 +393,12 @@ pub(crate) fn git_probe_repos(rel: &str, cwd: &str, repo_root: Option<&str>, bou
 }
 
 pub fn git_out(repo: &str, args: &[&str]) -> Option<String> {
-    let output = std::process::Command::new("git").arg("-C").arg(repo).args(args).output().ok()?;
+    let output = std::process::Command::new("git")
+        .arg("-C")
+        .arg(repo)
+        .args(args)
+        .output()
+        .ok()?;
     if !output.status.success() {
         return None;
     }
@@ -367,7 +409,9 @@ pub fn git_out(repo: &str, args: &[&str]) -> Option<String> {
 /// or fetched but never checked out. Answers with the newest commit holding it.
 pub fn git_absent(rel: &str, repos: &[String]) -> Option<(String, String, String)> {
     for repo in repos {
-        let Some(revs) = git_out(repo, &["rev-list", "--all", "--", rel]) else { continue };
+        let Some(revs) = git_out(repo, &["rev-list", "--all", "--", rel]) else {
+            continue;
+        };
         // The newest commit touching a path can be the one that deleted it, so
         // walk back until a revision still holds the blob.
         for rev in revs.lines().take(MAX_GIT_REVS) {
@@ -420,12 +464,18 @@ pub(crate) fn index_with(root: &Path, threads: usize) -> Arc<Vec<IndexEntry>> {
     let found = Mutex::new(Vec::new());
     walker.build_parallel().run(|| {
         Box::new(|result| {
-            let Ok(entry) = result else { return WalkState::Continue };
-            let Some(file_type) = entry.file_type() else { return WalkState::Continue };
+            let Ok(entry) = result else {
+                return WalkState::Continue;
+            };
+            let Some(file_type) = entry.file_type() else {
+                return WalkState::Continue;
+            };
             if entry.path() == root {
                 return WalkState::Continue;
             }
-            let Ok(mut found) = found.lock() else { return WalkState::Quit };
+            let Ok(mut found) = found.lock() else {
+                return WalkState::Quit;
+            };
             if found.len() >= INDEX_CAP {
                 return WalkState::Quit;
             }
@@ -463,7 +513,9 @@ pub fn home_dir() -> String {
 /// `~/…` trusted, since only the renderer expands it before opening.
 pub(crate) fn absolute_on_disk(rel: &str, home: &str) -> bool {
     match rel.strip_prefix("~/") {
-        Some(tail) => !home.is_empty() && std::fs::symlink_metadata(Path::new(home).join(tail)).is_ok(),
+        Some(tail) => {
+            !home.is_empty() && std::fs::symlink_metadata(Path::new(home).join(tail)).is_ok()
+        }
         None => std::fs::symlink_metadata(rel).is_ok(),
     }
 }
@@ -500,7 +552,10 @@ mod tests {
     }
 
     fn dir(path: &str) -> IndexEntry {
-        IndexEntry { is_dir: true, ..file(path) }
+        IndexEntry {
+            is_dir: true,
+            ..file(path)
+        }
     }
 
     fn index() -> Vec<IndexEntry> {
@@ -530,15 +585,24 @@ mod tests {
             file(&format!("{REPO}/lab/out/by-tests.md")),
         ];
         let hits = rank_fuzzy("out/by-test.md", &entries, 20);
-        assert_eq!(hits.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(), vec![format!("{REPO}/lab/out/by-tests.md").as_str()]);
+        assert_eq!(
+            hits.iter().map(|(p, _)| p.as_str()).collect::<Vec<_>>(),
+            vec![format!("{REPO}/lab/out/by-tests.md").as_str()]
+        );
         assert!(rank_fuzzy("out/by-test.txt", &entries, 20).is_empty());
     }
 
     #[test]
     fn splits_a_line_reference() {
-        assert_eq!(split_line_ref("src/main.ts:214"), ("src/main.ts".into(), Some(214)));
+        assert_eq!(
+            split_line_ref("src/main.ts:214"),
+            ("src/main.ts".into(), Some(214))
+        );
         assert_eq!(split_line_ref("main.ts"), ("main.ts".into(), None));
-        assert_eq!(split_line_ref("http://host:8080"), ("http://host:8080".into(), None));
+        assert_eq!(
+            split_line_ref("http://host:8080"),
+            ("http://host:8080".into(), None)
+        );
         assert_eq!(split_line_ref("C:8"), ("C:8".into(), None));
     }
 
@@ -558,7 +622,8 @@ mod tests {
             "a.rs:7,,8",
             "http://host:80-81",
         ];
-        let split: Vec<(String, Option<u32>)> = forms.iter().map(|form| split_line_ref(form)).collect();
+        let split: Vec<(String, Option<u32>)> =
+            forms.iter().map(|form| split_line_ref(form)).collect();
         assert_eq!(
             split,
             vec![
@@ -567,7 +632,10 @@ mod tests {
                 ("rust_modules.rs".into(), Some(1105)),
                 ("2_call.rs".into(), Some(561)),
                 ("2_call.rs".into(), Some(561)),
-                ("hafley_scm/src/lang/rust/10_module_resolution_rows.rs".into(), Some(123)),
+                (
+                    "hafley_scm/src/lang/rust/10_module_resolution_rows.rs".into(),
+                    Some(123)
+                ),
                 ("a.rs:7-".into(), None),
                 ("a.rs:-7".into(), None),
                 ("a.rs:7,,8".into(), None),
@@ -597,8 +665,14 @@ mod tests {
                 HOME.to_string(),
             ]
         );
-        assert_eq!(ancestors_of(&format!("{REPO}/src"), HOME, 1), vec![format!("{REPO}/src")]);
-        assert_eq!(ancestors_of("/tmp/e2e/src", HOME, 8), vec!["/tmp/e2e/src", "/tmp/e2e", "/tmp"]);
+        assert_eq!(
+            ancestors_of(&format!("{REPO}/src"), HOME, 1),
+            vec![format!("{REPO}/src")]
+        );
+        assert_eq!(
+            ancestors_of("/tmp/e2e/src", HOME, 8),
+            vec!["/tmp/e2e/src", "/tmp/e2e", "/tmp"]
+        );
         assert!(ancestors_of("/", HOME, 8).is_empty());
     }
 
@@ -618,11 +692,16 @@ mod tests {
 
     #[test]
     fn reaches_a_sibling_repo_and_leaves_absolutes_alone() {
-        let paths: Vec<String> =
-            crawl_candidates("instant-lanes/README.md", &format!("{REPO}/src"), Some(REPO), HOME, 8)
-                .into_iter()
-                .map(|(path, _)| path)
-                .collect();
+        let paths: Vec<String> = crawl_candidates(
+            "instant-lanes/README.md",
+            &format!("{REPO}/src"),
+            Some(REPO),
+            HOME,
+            8,
+        )
+        .into_iter()
+        .map(|(path, _)| path)
+        .collect();
         assert!(paths.contains(&format!("{HOME}/projects/instant-lanes/README.md")));
         assert_eq!(
             crawl_candidates("/a/b.ts", &format!("{REPO}/src"), Some(REPO), HOME, 8),
@@ -663,11 +742,20 @@ mod tests {
     #[test]
     fn fzf_finds_abbreviated_names_and_folders() {
         let entries = index();
-        assert_eq!(rank_fuzzy("prevew.ts", &entries, 5)[0].0, format!("{REPO}/src/preview.ts"));
-        let mdpanel: Vec<String> = rank_fuzzy("mdpanel", &entries, 5).into_iter().map(|(p, _)| p).collect();
+        assert_eq!(
+            rank_fuzzy("prevew.ts", &entries, 5)[0].0,
+            format!("{REPO}/src/preview.ts")
+        );
+        let mdpanel: Vec<String> = rank_fuzzy("mdpanel", &entries, 5)
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
         assert_eq!(
             mdpanel,
-            vec![format!("{REPO}/e2e/MdPanel.tsx"), format!("{REPO}/src/mdview/MdPanel.tsx")]
+            vec![
+                format!("{REPO}/e2e/MdPanel.tsx"),
+                format!("{REPO}/src/mdview/MdPanel.tsx")
+            ]
         );
         assert_eq!(
             rank_fuzzy("patchset-diff", &entries, 5)[0].0,
@@ -690,7 +778,10 @@ mod tests {
             unique_dir_named("patchset-diff", &entries),
             Some(format!("{REPO}/packages/patchset-diff"))
         );
-        assert_eq!(unique_dir_named("mdview", &entries), Some(format!("{REPO}/src/mdview")));
+        assert_eq!(
+            unique_dir_named("mdview", &entries),
+            Some(format!("{REPO}/src/mdview"))
+        );
         assert_eq!(unique_dir_named("e2e", &entries), None);
         assert_eq!(unique_dir_named("MdPanel.tsx", &entries), None);
     }

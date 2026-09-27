@@ -30,16 +30,16 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::edit_seams::RefRole;
+use crate::edit_seams::Rename;
+use crate::edit_seams::RenameStop;
+use crate::edit_seams::Respell;
+use crate::edit_seams::SymbolRef;
+use crate::edit_seams::SymbolSeat;
 use crate::lang::prolog::PrologSource;
 use crate::lang::rust::build_line_starts;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
-use crate::edit_seams::Respell;
-use crate::edit_seams::SymbolRef;
-use crate::edit_seams::RefRole;
-use crate::edit_seams::SymbolSeat;
-use crate::edit_seams::RenameStop;
-use crate::edit_seams::Rename;
 use hafley_scm::span::Span;
 
 impl Rename for PrologSource {
@@ -71,8 +71,17 @@ impl Rename for PrologSource {
                 .map(|text| build_line_starts(&text))
                 .unwrap_or_default();
             corpus.harvest(
-                rel, scan, &line_starts, key, anchored, visible, &qualifier, &exporting,
-                request, &mut refs, &mut seats,
+                rel,
+                scan,
+                &line_starts,
+                key,
+                anchored,
+                visible,
+                &qualifier,
+                &exporting,
+                request,
+                &mut refs,
+                &mut seats,
             );
         }
         if let Some(stop) = corpus.inexact(&request.anchor, &refs) {

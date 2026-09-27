@@ -4,7 +4,11 @@
 
 use std::process::Command;
 
-fn graph(path: &str, arm: (&str, &str), extra: &[&str]) -> (tempfile::TempDir, rusqlite::Connection) {
+fn graph(
+    path: &str,
+    arm: (&str, &str),
+    extra: &[&str],
+) -> (tempfile::TempDir, rusqlite::Connection) {
     let state = tempfile::tempdir().expect("temporary state directory");
     let destination = state.path().join("graph.db");
     let mut command = Command::new(env!("CARGO_BIN_EXE_ryi-server"));
@@ -20,8 +24,7 @@ fn graph(path: &str, arm: (&str, &str), extra: &[&str]) -> (tempfile::TempDir, r
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    let connection = rusqlite::Connection::open(&destination)
-        .expect("state store opens");
+    let connection = rusqlite::Connection::open(&destination).expect("state store opens");
     (state, connection)
 }
 
@@ -62,7 +65,12 @@ fn scip_type_relationships_reach_the_graph_store() {
     let (_state, connection) = graph(
         "tests/fixtures/scip_relationship/shapes.go",
         ("--uses", "Speaker"),
-        &["--root", root, "--scip-index", "tests/fixtures/scip_relationship/index.scip"],
+        &[
+            "--root",
+            root,
+            "--scip-index",
+            "tests/fixtures/scip_relationship/index.scip",
+        ],
     );
     let pairs: Vec<(String, String)> = connection
         .prepare(
@@ -74,7 +82,13 @@ fn scip_type_relationships_reach_the_graph_store() {
         .unwrap()
         .collect::<rusqlite::Result<_>>()
         .unwrap();
-    assert_eq!(pairs, [("Cat".into(), "Speaker".into()), ("Dog".into(), "Speaker".into())]);
+    assert_eq!(
+        pairs,
+        [
+            ("Cat".into(), "Speaker".into()),
+            ("Dog".into(), "Speaker".into())
+        ]
+    );
 }
 
 #[cfg(feature = "rust-checker")]

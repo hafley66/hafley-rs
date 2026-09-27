@@ -330,7 +330,8 @@ fn reach_of(capability: LibraryCapability, scip_index: &Path) -> CliReach {
         // not be proving retention.
         ScipFacts => CliReach::Emits {
             args: strings(&[
-                "scip", "--raw",
+                "scip",
+                "--raw",
                 "--root",
                 "tests/fixtures/scip_rel",
                 "--scip-build",

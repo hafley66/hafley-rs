@@ -70,7 +70,14 @@ fn reach_answers_over_a_kotlin_corpus() {
     let names: Vec<&str> = rows.iter().map(|row| field(row, "name")).collect();
     assert_eq!(
         names,
-        vec!["appHelper", "lone", "spin", "shared", "makeWidget", "Widget"]
+        vec![
+            "appHelper",
+            "lone",
+            "spin",
+            "shared",
+            "makeWidget",
+            "Widget"
+        ]
     );
 }
 

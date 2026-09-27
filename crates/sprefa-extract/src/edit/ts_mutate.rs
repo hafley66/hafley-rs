@@ -7,11 +7,11 @@ use crate::move_cx::{dirname, relative_between};
 use crate::source::{FamilyMask, Source};
 use crate::wire::{flatten_each, FlatFact};
 
-use crate::lang::ts::TsSource;
-use crate::edit_seams::Edit;
 use crate::edit_seams::Cleave;
-use hafley_scm::span::Span;
+use crate::edit_seams::Edit;
+use crate::lang::ts::TsSource;
 use hafley_scm::atoms::FamilyTag;
+use hafley_scm::span::Span;
 
 /// The extensions a module spelling drops.
 const EXTENSIONS: [&str; 6] = ["ts", "tsx", "mts", "cts", "js", "mjs"];
@@ -26,12 +26,18 @@ impl Cleave for TsSource {
             if rest.starts_with([' ', '\t']) {
                 let len = (rest.len() - rest.trim_start_matches([' ', '\t']).len() + 6) as u32;
                 return (!on).then(|| Edit {
-                    span: Span { start: at as u32, len },
+                    span: Span {
+                        start: at as u32,
+                        len,
+                    },
                     text: String::new(),
                 });
             }
         }
-        let decl = Span { start: at as u32, len: decl.end().saturating_sub(at as u32) };
+        let decl = Span {
+            start: at as u32,
+            len: decl.end().saturating_sub(at as u32),
+        };
         let head = text.get(..at)?;
         let carried = head.trim_end_matches([' ', '\t']).ends_with("export");
         match (on, carried) {
@@ -60,7 +66,11 @@ impl Cleave for TsSource {
                 return None;
             }
             let quote = statements.first().map_or('"', |row| row.quote);
-            let at = statements.iter().map(|row| row.span.end()).max().unwrap_or(0);
+            let at = statements
+                .iter()
+                .map(|row| row.span.end())
+                .max()
+                .unwrap_or(0);
             return Some(Edit {
                 span: Span::anchor(at),
                 text: import_line(names, module, quote),
@@ -140,7 +150,10 @@ fn imports(source: &TsSource, text: &str) -> Vec<Statement> {
         Ok(())
     });
     let mut statements: Vec<Statement> = Vec::new();
-    for (_, _, span) in nodes.iter().filter(|(kind, _, _)| kind == "import_statement") {
+    for (_, _, span) in nodes
+        .iter()
+        .filter(|(kind, _, _)| kind == "import_statement")
+    {
         let held = |wanted: &str| -> Option<Span> {
             nodes
                 .iter()

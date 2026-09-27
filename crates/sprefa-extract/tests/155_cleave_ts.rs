@@ -160,7 +160,10 @@ fn names(plan: &serde_json::Value, key: &str) -> Vec<String> {
 fn plan_partitions_the_three_file_step_trace() {
     let fixture = fixture("basic", "plan");
     let before = digest(&fixture.root);
-    let stdout = cleave(&fixture, &["src/util.ts#loadConfig", "src/config.ts", "--json"]);
+    let stdout = cleave(
+        &fixture,
+        &["src/util.ts#loadConfig", "src/config.ts", "--json"],
+    );
     let plan = plan_of(&stdout);
 
     assert_eq!(plan["record"], "cleave_plan");
@@ -277,13 +280,22 @@ fn drag_decides_moving_not_whether_the_helper_is_reachable() {
         &["src/util.ts#loadConfig", "src/config.ts", "--json"],
     ));
     assert_eq!(names(&plan, "dragged"), ["slug"]);
-    assert_eq!(actions(&plan), ["exported"], "no --drag exports, never moves");
+    assert_eq!(
+        actions(&plan),
+        ["exported"],
+        "no --drag exports, never moves"
+    );
     assert_eq!(plan["drag_iterations"], 1);
 
     let dragged = fixture("drag", "on");
     let plan = plan_of(&cleave(
         &dragged,
-        &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
+        &[
+            "src/util.ts#loadConfig",
+            "src/config.ts",
+            "--drag",
+            "--json",
+        ],
     ));
     assert_eq!(names(&plan, "dragged"), ["slug"]);
     assert_eq!(actions(&plan), ["moved"], "1 drag candidate under --drag");
@@ -295,7 +307,12 @@ fn a_helper_the_source_still_uses_is_exported_not_moved() {
     let fixture = fixture("drag_shared", "split");
     let plan = plan_of(&cleave(
         &fixture,
-        &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
+        &[
+            "src/util.ts#loadConfig",
+            "src/config.ts",
+            "--drag",
+            "--json",
+        ],
     ));
     assert_eq!(names(&plan, "dragged"), ["pad", "slug"]);
     assert_eq!(actions(&plan), ["exported", "moved"]);
@@ -310,7 +327,10 @@ fn a_helper_the_source_still_uses_is_exported_not_moved() {
         ],
     );
     let util = std::fs::read_to_string(fixture.root.join("src/util.ts")).unwrap();
-    assert!(util.contains("export function pad("), "pad gained an export");
+    assert!(
+        util.contains("export function pad("),
+        "pad gained an export"
+    );
     assert!(!util.contains("function slug("), "slug left");
     assert_eq!(occurrences(&fixture, "src/config.ts", "function slug("), 1);
     assert_eq!(
@@ -338,7 +358,12 @@ fn the_drag_fixpoint_reports_its_pass_count() {
     let fixture = fixture("drag_two_level", "fixpoint");
     let plan = plan_of(&cleave(
         &fixture,
-        &["src/util.ts#loadConfig", "src/config.ts", "--drag", "--json"],
+        &[
+            "src/util.ts#loadConfig",
+            "src/config.ts",
+            "--drag",
+            "--json",
+        ],
     ));
     assert_eq!(names(&plan, "dragged"), ["slug", "tidy"]);
     assert_eq!(

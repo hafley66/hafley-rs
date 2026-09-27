@@ -146,13 +146,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
     );
     assert_eq!(
         block.next().map(str::trim_end),
-        Some(
-            format!(
-                "  try: ryi --kinds cst {}",
-                unknown.display()
-            )
-            .as_str(),
-        ),
+        Some(format!("  try: ryi --kinds cst {}", unknown.display()).as_str(),),
     );
     assert_eq!(
         block.next(),
@@ -173,11 +167,7 @@ fn zero_facts_prints_the_disclosure_block_and_exits_zero() {
         "a grammar-less extension discloses the no-Source branch: {stderr}"
     );
 
-    let html = write_fixture(
-        &dir,
-        "flat.html",
-        "<html><body><p>text</p></body></html>\n",
-    );
+    let html = write_fixture(&dir, "flat.html", "<html><body><p>text</p></body></html>\n");
     let output = ryi(&[html.to_str().expect("utf8 path")]);
     assert!(output.status.success());
     assert!(output.stdout.is_empty());

@@ -226,7 +226,10 @@ fn a_file_with_one_route_plans_exactly_as_before() {
         read(&fixture, "src/lib.rs"),
         "#[path = \"elsewhere/impl.rs\"]\nmod util;\nuse crate::util::Renamed;\n\npub fn build() -> Renamed {\n    Renamed\n}\n"
     );
-    assert_eq!(read(&fixture, "src/elsewhere/impl.rs"), "pub struct Renamed;\n");
+    assert_eq!(
+        read(&fixture, "src/elsewhere/impl.rs"),
+        "pub struct Renamed;\n"
+    );
 }
 
 /// Only the double reach is planned now: another `Dynamic` cause still exits 6

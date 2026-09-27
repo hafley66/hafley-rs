@@ -10,6 +10,7 @@ use std::fmt;
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
+use sprefa_extract::edit_seams::RenameAbstain;
 use sprefa_extract::move_stage::{
     content_id, print_previews_with as print_previews, stage_and_commit, state_root, Mirror,
 };
@@ -17,7 +18,6 @@ use sprefa_extract::{
     directory_source, normalize, rename_for, renames, replace_action, RenameCx, RenameRequest,
     RenameStop, Respell, SymbolRef,
 };
-use sprefa_extract::edit_seams::RenameAbstain;
 
 #[path = "_6_rename_verify.rs"]
 mod rename_verify;
@@ -123,7 +123,10 @@ pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
         // The plan is out and the tree is settled; a `RenameError` would add a
         // message line to stderr for a run that did not fail.
         crate::ops::flush_line();
-        return Err(RenameError { message: String::new(), exit: ABSTAINED });
+        return Err(RenameError {
+            message: String::new(),
+            exit: ABSTAINED,
+        });
     }
     Ok(())
 }
@@ -219,7 +222,11 @@ impl Plan {
                         .iter()
                         .filter(|row| row.side == rename_verify::DisagreementSide::ScipOnly)
                         .count();
-                    receipts.push(format!("scip-merge {} sites from {}", added, index.display()));
+                    receipts.push(format!(
+                        "scip-merge {} sites from {}",
+                        added,
+                        index.display()
+                    ));
                 }
                 Some(rows)
             }
@@ -290,20 +297,34 @@ impl Plan {
             let arm = rename_for(&request.anchor).ok_or_else(|| {
                 plan_error(format!("ryi rename does not support {}", request.anchor))
             })?;
-            let (found, declined) = arm.symbol_refs_and_abstains(&cx, request).map_err(stop_error)?;
+            let (found, declined) = arm
+                .symbol_refs_and_abstains(&cx, request)
+                .map_err(stop_error)?;
             verify_spans(&cx, &found)?;
             let edits = respells_for(&cx, request, &found, &mut receipts)?;
             rewritten.extend(rewritten_lines(&cx, &edits)?);
             let mut by_file: BTreeMap<String, Vec<Respell>> = BTreeMap::new();
-            for edit in edits { by_file.entry(edit.file.clone()).or_default().push(edit) }
+            for edit in edits {
+                by_file.entry(edit.file.clone()).or_default().push(edit)
+            }
             for (rel, mut edits) in by_file {
                 edits.sort_by_key(|edit| edit.span.start);
-                if edits.windows(2).any(|pair| pair[0].span.end() > pair[1].span.start) {
-                    return Err(plan_error(format!("{rel}: rename rows claim overlapping spans")));
+                if edits
+                    .windows(2)
+                    .any(|pair| pair[0].span.end() > pair[1].span.start)
+                {
+                    return Err(plan_error(format!(
+                        "{rel}: rename rows claim overlapping spans"
+                    )));
                 }
-                let mut text = cx.text(&rel).ok_or_else(|| plan_error(format!("read {rel}")))?;
+                let mut text = cx
+                    .text(&rel)
+                    .ok_or_else(|| plan_error(format!("read {rel}")))?;
                 for edit in edits.iter().rev() {
-                    text.replace_range(edit.span.start as usize..edit.span.end() as usize, &edit.text);
+                    text.replace_range(
+                        edit.span.start as usize..edit.span.end() as usize,
+                        &edit.text,
+                    );
                 }
                 cx.overlay(rel, text);
             }
@@ -312,24 +333,44 @@ impl Plan {
         }
         let identity = soopy::SourceRoot::open_directory(&root)
             .map_err(|error| plan_error(format!("open root {}: {error}", root.display())))?
-            .directory().identity.clone();
+            .directory()
+            .identity
+            .clone();
         let producer = soopy::ActionProducer::unordered(PRODUCER);
         let mut stage = Vec::new();
         for (rel, text) in cx.overlaid() {
             let source = directory_source(&identity, rel);
-            let old = std::fs::read(root.join(rel)).map_err(|error| plan_error(format!("read {rel}: {error}")))?;
+            let old = std::fs::read(root.join(rel))
+                .map_err(|error| plan_error(format!("read {rel}: {error}")))?;
             stage.push(replace_action(
                 source.clone(),
                 content_id(&root, rel).map_err(plan_error)?,
                 vec![soopy::TextEdit {
-                    range: soopy::ActionSpan { source, start: 0, end: old.len() as u64 },
+                    range: soopy::ActionSpan {
+                        source,
+                        start: 0,
+                        end: old.len() as u64,
+                    },
                     replacement: text.as_bytes().to_vec(),
                     producer: producer.clone(),
                 }],
             ));
         }
-        let stages = if stage.is_empty() { Vec::new() } else { vec![stage] };
-        Ok(Self { root, cx, refs, stages, abstains, rewritten, receipts, disagreements: None })
+        let stages = if stage.is_empty() {
+            Vec::new()
+        } else {
+            vec![stage]
+        };
+        Ok(Self {
+            root,
+            cx,
+            refs,
+            stages,
+            abstains,
+            rewritten,
+            receipts,
+            disagreements: None,
+        })
     }
 }
 
@@ -402,7 +443,9 @@ fn respells(
         out.extend(respells_for(cx, request, found, receipts)?);
     }
     out.sort_by(|left, right| {
-        left.file.cmp(&right.file).then(left.span.start.cmp(&right.span.start))
+        left.file
+            .cmp(&right.file)
+            .then(left.span.start.cmp(&right.span.start))
     });
     Ok(out)
 }
@@ -415,31 +458,31 @@ fn respells_for(
 ) -> Result<Vec<Respell>, RenameError> {
     let mut claimed: BTreeMap<(String, u32), (&'static str, String)> = BTreeMap::new();
     let mut out: Vec<Respell> = Vec::new();
-        for reference in found {
-            let Some(arm) = rename_for(&reference.file) else {
+    for reference in found {
+        let Some(arm) = rename_for(&reference.file) else {
+            continue;
+        };
+        let Some(respell) = arm.respell_symbol(cx, request, reference) else {
+            continue;
+        };
+        let key = (respell.file.clone(), respell.span.start);
+        if let Some((other, text)) = claimed.get(&key) {
+            if *other == arm.name() && *text == respell.text {
                 continue;
-            };
-            let Some(respell) = arm.respell_symbol(cx, request, reference) else {
-                continue;
-            };
-            let key = (respell.file.clone(), respell.span.start);
-            if let Some((other, text)) = claimed.get(&key) {
-                if *other == arm.name() && *text == respell.text {
-                    continue;
-                }
-                return Err(plan_error(format!(
-                    "{} byte {} is claimed by both the {other} and the {} rename arms",
-                    respell.file,
-                    respell.span.start,
-                    arm.name()
-                )));
             }
-            claimed.insert(key, (arm.name(), respell.text.clone()));
-            if let Some(receipt) = respell.receipt.clone() {
-                receipts.push(receipt);
-            }
-            out.push(respell);
+            return Err(plan_error(format!(
+                "{} byte {} is claimed by both the {other} and the {} rename arms",
+                respell.file,
+                respell.span.start,
+                arm.name()
+            )));
         }
+        claimed.insert(key, (arm.name(), respell.text.clone()));
+        if let Some(receipt) = respell.receipt.clone() {
+            receipts.push(receipt);
+        }
+        out.push(respell);
+    }
     out.sort_by(|left, right| {
         left.file
             .cmp(&right.file)
@@ -457,8 +500,7 @@ fn requested_renames(cli: &RenameArgs) -> Result<Vec<(PathBuf, String, String)>,
         (Some(list), None, None) => {
             if cli.at.is_some() {
                 return Err(plan_error(
-                    "--at cannot be combined with --list"
-                        .to_string(),
+                    "--at cannot be combined with --list".to_string(),
                 ));
             }
             read_rename_list(list)

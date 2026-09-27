@@ -7,13 +7,28 @@ use std::path::Path;
 use std::process::Command;
 
 const CASES: [(&str, &[&str]); 7] = [
-    ("0 whole-file item to a new file", &["src/_2_dest.rs#Existing", "src/_3_new.rs"]),
-    ("1 docs, derive, pub use, re-export importer", &["src/_1_src.rs#Documented", "src/_2_dest.rs"]),
-    ("many impl, trait method, test crate importer", &["src/_1_src.rs#Plain", "src/_2_dest.rs"]),
+    (
+        "0 whole-file item to a new file",
+        &["src/_2_dest.rs#Existing", "src/_3_new.rs"],
+    ),
+    (
+        "1 docs, derive, pub use, re-export importer",
+        &["src/_1_src.rs#Documented", "src/_2_dest.rs"],
+    ),
+    (
+        "many impl, trait method, test crate importer",
+        &["src/_1_src.rs#Plain", "src/_2_dest.rs"],
+    ),
     ("batch all three rows", &["--list", "LIST"]),
-    ("batch glob re-export, inline super glob, nested test use", &["--list", "GLOB"]),
+    (
+        "batch glob re-export, inline super glob, nested test use",
+        &["--list", "GLOB"],
+    ),
     ("batch drops SRC imports made unused", &["--list", "STALE"]),
-    ("multiline use retains member layout", &["src/_1_src.rs#Documented", "src/_2_dest.rs"]),
+    (
+        "multiline use retains member layout",
+        &["src/_1_src.rs#Documented", "src/_2_dest.rs"],
+    ),
 ];
 
 const GLOB: &str = "src/_4_types.rs#Span4	src/_6_moved.rs
@@ -21,11 +36,19 @@ src/_4_types.rs#Req4	src/_6_moved.rs
 ";
 
 const LIST: &str = "src/_2_dest.rs#Existing\tsrc/_3_new.rs\nsrc/_1_src.rs#Documented\tsrc/_2_dest.rs\nsrc/_1_src.rs#Plain\tsrc/_2_dest.rs\n";
-const STALE: &str = "src/_1_src.rs#Documented\tsrc/_2_dest.rs\nsrc/_1_src.rs#Plain\tsrc/_2_dest.rs\n";
+const STALE: &str =
+    "src/_1_src.rs#Documented\tsrc/_2_dest.rs\nsrc/_1_src.rs#Plain\tsrc/_2_dest.rs\n";
 
 fn run(program: &str, args: &[&str], dir: &Path, target: &Path) -> (bool, String) {
-    let output = Command::new(program).args(args).current_dir(dir).env("CARGO_TARGET_DIR", target).env("RUST_LOG", "off").output().unwrap();
-    let text = String::from_utf8_lossy(&output.stdout).into_owned() + &String::from_utf8_lossy(&output.stderr);
+    let output = Command::new(program)
+        .args(args)
+        .current_dir(dir)
+        .env("CARGO_TARGET_DIR", target)
+        .env("RUST_LOG", "off")
+        .output()
+        .unwrap();
+    let text = String::from_utf8_lossy(&output.stdout).into_owned()
+        + &String::from_utf8_lossy(&output.stderr);
     (output.status.success(), text)
 }
 
@@ -67,10 +90,28 @@ fn cleave_ladder() {
             text.push_str("\npub struct Marker;\n");
             std::fs::write(base, text).unwrap();
             let src = root.join("src/_1_src.rs");
-            let text = std::fs::read_to_string(&src).unwrap().replace("    Show,\n", "    Show,\n    Marker,\n");
-            std::fs::write(src, format!("{text}\npub fn marker() -> Marker {{ Marker }}\n")).unwrap();
+            let text = std::fs::read_to_string(&src)
+                .unwrap()
+                .replace("    Show,\n", "    Show,\n    Marker,\n");
+            std::fs::write(
+                src,
+                format!("{text}\npub fn marker() -> Marker {{ Marker }}\n"),
+            )
+            .unwrap();
         }
-        for args in [&["init", "-q", "."][..], &["add", "-A"], &["-c", "user.email=l@l", "-c", "user.name=l", "commit", "-qm", "l"]] {
+        for args in [
+            &["init", "-q", "."][..],
+            &["add", "-A"],
+            &[
+                "-c",
+                "user.email=l@l",
+                "-c",
+                "user.name=l",
+                "commit",
+                "-qm",
+                "l",
+            ],
+        ] {
             assert!(run("git", args, &root, &target).0);
         }
         let mut args = vec!["cleave".to_string()];
@@ -90,17 +131,41 @@ fn cleave_ladder() {
         let (cleaved, text) = run(env!("CARGO_BIN_EXE_ryi-server"), &args, &root, &target);
         assert!(cleaved, "{label}: {text}");
         run("git", &["add", "-A"], &root, &target);
-        let (checked, check) = run("cargo", &["check", "--offline", "--all-targets", "-q", "--message-format", "short"], &root, &target);
+        let (checked, check) = run(
+            "cargo",
+            &[
+                "check",
+                "--offline",
+                "--all-targets",
+                "-q",
+                "--message-format",
+                "short",
+            ],
+            &root,
+            &target,
+        );
         let check = match checked {
             true => "ok".to_string(),
-            false => check.lines().find(|line| line.contains("error")).unwrap_or("FAIL").to_string(),
+            false => check
+                .lines()
+                .find(|line| line.contains("error"))
+                .unwrap_or("FAIL")
+                .to_string(),
         };
         out.push(format!("## {label}: check {check}"));
-        let (_, diff) = run("git", &["diff", "--cached", "-U0", "--no-color"], &root, &target);
+        let (_, diff) = run(
+            "git",
+            &["diff", "--cached", "-U0", "--no-color"],
+            &root,
+            &target,
+        );
         for line in diff.lines() {
             if let Some(file) = line.strip_prefix("+++ b/") {
                 out.push(format!("  {file}"));
-            } else if (line.starts_with('+') || line.starts_with('-')) && !line.starts_with("+++") && !line.starts_with("---") {
+            } else if (line.starts_with('+') || line.starts_with('-'))
+                && !line.starts_with("+++")
+                && !line.starts_with("---")
+            {
                 out.push(format!("    {line}"));
             }
         }

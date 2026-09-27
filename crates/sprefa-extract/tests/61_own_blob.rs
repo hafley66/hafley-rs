@@ -6,8 +6,8 @@
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, own_blob, ContentId, RyiOutput, FamilyMask,
-    FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest,
+    build_def_index, content_id_of, dispatch, own_blob, ContentId, FamilyMask, FileSet, IndexBag,
+    ManifestMap, ProjectCx, ProjectDigest, RyiOutput,
 };
 
 const A_PATH: &str = "tests/fixtures/own_blob/own_blob_a.rs";

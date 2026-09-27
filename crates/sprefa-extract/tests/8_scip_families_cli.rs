@@ -564,13 +564,11 @@ fn missing_and_invalid_explicit_family_indexes_fail_without_rebuilding() {
 
 #[test]
 fn explicit_index_requires_project_root_outside_the_scip_family() {
-    for args in [
-        vec![
-            "--scip-index",
-            "tests/fixtures/scip_relationship/fixture.scip",
-            TS_TRIO[0],
-        ],
-    ] {
+    for args in [vec![
+        "--scip-index",
+        "tests/fixtures/scip_relationship/fixture.scip",
+        TS_TRIO[0],
+    ]] {
         let output = raw(&args);
         assert!(
             !output.status.success(),
@@ -708,9 +706,15 @@ fn family_rebuilds_for_content_edits_and_new_or_deleted_sources() {
 
     let root_arg = root.to_str().expect("utf-8 root");
     let built = scip_family(root_arg, &cache, &[]);
-    assert!(built.contains("\"record\":\"scip_index\",\"reused\":false"), "{built}");
+    assert!(
+        built.contains("\"record\":\"scip_index\",\"reused\":false"),
+        "{built}"
+    );
     let reused = scip_family(root_arg, &cache, &[]);
-    assert!(reused.contains("\"record\":\"scip_index\",\"reused\":true"), "{reused}");
+    assert!(
+        reused.contains("\"record\":\"scip_index\",\"reused\":true"),
+        "{reused}"
+    );
 
     let original_mtime = std::fs::metadata(&source)
         .expect("source metadata")
@@ -722,16 +726,25 @@ fn family_rebuilds_for_content_edits_and_new_or_deleted_sources() {
         .set_times(std::fs::FileTimes::new().set_modified(original_mtime))
         .expect("restore source mtime");
     let edited = scip_family(root_arg, &cache, &[]);
-    assert!(edited.contains("\"record\":\"scip_index\",\"reused\":false"), "{edited}");
+    assert!(
+        edited.contains("\"record\":\"scip_index\",\"reused\":false"),
+        "{edited}"
+    );
 
     let added_path = root.join("b.ts");
     std::fs::write(&added_path, "export const b = 3;\n").expect("added source");
     let added = scip_family(root_arg, &cache, &[]);
-    assert!(added.contains("\"record\":\"scip_index\",\"reused\":false"), "{added}");
+    assert!(
+        added.contains("\"record\":\"scip_index\",\"reused\":false"),
+        "{added}"
+    );
 
     std::fs::remove_file(&added_path).expect("removed source");
     let removed = scip_family(root_arg, &cache, &[]);
-    assert!(removed.contains("\"record\":\"scip_index\",\"reused\":false"), "{removed}");
+    assert!(
+        removed.contains("\"record\":\"scip_index\",\"reused\":false"),
+        "{removed}"
+    );
 }
 
 /// AN EXISTING INDEX WINS UNTOUCHED (v5's first move). The second run over the
@@ -966,7 +979,8 @@ fn the_scip_family_never_reuses_the_passthrough_occurrence_tag() {
     // The passthrough row that owns the tag is still reachable, still carrying
     // byte spans, and is what a consumer joins to rebuild either v5 row.
     let passthrough = run(&[
-        "scip", "--raw",
+        "scip",
+        "--raw",
         "--records",
         "scip_occurrence",
         "--root",

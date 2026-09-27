@@ -23,15 +23,18 @@ mod _1_pane_at;
 pub use _1_pane_at::{parse_pane_at, PaneHit};
 mod _2_click_rungs;
 pub use _2_click_rungs::{
-    ancestors_of, clear_index_cache, crawl_candidates, git_absent, git_out, home_dir, looks_like_path, rank_exact,
-    rank_fuzzy, repo_root_for, repo_root_of, sibling_candidates, split_line_ref, under_indexed_dirs, unique_dir_named,
-    IndexEntry, MAX_CHOICES,
+    ancestors_of, clear_index_cache, crawl_candidates, git_absent, git_out, home_dir,
+    looks_like_path, rank_exact, rank_fuzzy, repo_root_for, repo_root_of, sibling_candidates,
+    split_line_ref, under_indexed_dirs, unique_dir_named, IndexEntry, MAX_CHOICES,
 };
 mod _3_click_roots;
-pub use _3_click_roots::{click_roots, doc_roots, parse_worktree_list, repos_beside, worktrees_of, Root, RootVia};
+pub use _3_click_roots::{
+    click_roots, doc_roots, parse_worktree_list, repos_beside, worktrees_of, Root, RootVia,
+};
 mod _4_click_lookup;
 pub use _4_click_lookup::{
-    clean_token, cmd_click_lookup, doc_join, resolve_fs, resolve_fs_in_doc, FsLookup, ResolveResult, ResolvedRef,
+    clean_token, cmd_click_lookup, doc_join, resolve_fs, resolve_fs_in_doc, FsLookup,
+    ResolveResult, ResolvedRef,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -141,12 +144,23 @@ pub trait Multiplexer {
     /// none of it. `above` asks for that many history rows above the rows the
     /// reader sees, so a scrolled pane still carries its window plus `above`.
     /// `None` means tmux is unreachable or the target is unknown.
-    fn pane_snapshot(&self, _socket: Option<&str>, _target: &str, _above: u32) -> Option<TerminalSnapshot> {
+    fn pane_snapshot(
+        &self,
+        _socket: Option<&str>,
+        _target: &str,
+        _above: u32,
+    ) -> Option<TerminalSnapshot> {
         None
     }
     /// The pane of `session`'s active window under client cell `col`,`row`
     /// (zero-based, status line included). `None`: unreachable, unknown, or a border.
-    fn pane_at(&self, _socket: Option<&str>, _session: &str, _col: u16, _row: u16) -> Option<PaneHit> {
+    fn pane_at(
+        &self,
+        _socket: Option<&str>,
+        _session: &str,
+        _col: u16,
+        _row: u16,
+    ) -> Option<PaneHit> {
         None
     }
     /// Spawn a detached tmux session with a shell command.
@@ -436,7 +450,12 @@ impl Multiplexer for Tmux {
     /// carries tmux's own wrap flags for the same rows. They race under live
     /// output, which is what `generation` is for — this source has no memory of
     /// its last answer, so it reports `0` and callers compare with `grid_eq`.
-    fn pane_snapshot(&self, socket: Option<&str>, target: &str, above: u32) -> Option<TerminalSnapshot> {
+    fn pane_snapshot(
+        &self,
+        socket: Option<&str>,
+        target: &str,
+        above: u32,
+    ) -> Option<TerminalSnapshot> {
         let mut facts_builder = tmux_command(socket);
         let facts_output = facts_builder
             .args([
@@ -481,7 +500,11 @@ impl Multiplexer for Tmux {
             History::Unavailable => 0,
         };
         while rows.len() < held as usize + facts.size.rows as usize {
-            rows.push(TerminalRow { viewport_row: rows.len() as u16, text: String::new(), wraps_previous: false });
+            rows.push(TerminalRow {
+                viewport_row: rows.len() as u16,
+                text: String::new(),
+                wraps_previous: false,
+            });
         }
         Some(TerminalSnapshot {
             target: TerminalTarget {
@@ -500,9 +523,19 @@ impl Multiplexer for Tmux {
     }
 
     fn pane_at(&self, socket: Option<&str>, session: &str, col: u16, row: u16) -> Option<PaneHit> {
-        let target = if session.starts_with('%') { session.to_owned() } else { exact_target(session) };
+        let target = if session.starts_with('%') {
+            session.to_owned()
+        } else {
+            exact_target(session)
+        };
         let output = tmux_command(socket)
-            .args(["list-panes", "-t", &target, "-F", _1_pane_at::PANE_AT_FORMAT])
+            .args([
+                "list-panes",
+                "-t",
+                &target,
+                "-F",
+                _1_pane_at::PANE_AT_FORMAT,
+            ])
             .output()
             .ok()?;
         if !output.status.success() {
@@ -1011,7 +1044,10 @@ fn parse_snapshot_facts(text: &str) -> Option<SnapshotFacts> {
         },
         cursor: Some((cursor_x, cursor_y)),
         // Empty outside copy mode.
-        scroll: fields.get(9).and_then(|value| value.trim().parse().ok()).unwrap_or(0),
+        scroll: fields
+            .get(9)
+            .and_then(|value| value.trim().parse().ok())
+            .unwrap_or(0),
     })
 }
 
@@ -1155,16 +1191,39 @@ mod tests {
         let name = session_name();
         server.create_session(&name);
         let tmux = |args: &[&str]| {
-            let status = Command::new("tmux").arg("-L").arg(&server.socket).args(args).status().unwrap();
+            let status = Command::new("tmux")
+                .arg("-L")
+                .arg(&server.socket)
+                .args(args)
+                .status()
+                .unwrap();
             assert!(status.success(), "tmux {args:?}");
         };
-        tmux(&["resize-window", "-t", &format!("={name}"), "-x", "80", "-y", "24"]);
+        tmux(&[
+            "resize-window",
+            "-t",
+            &format!("={name}"),
+            "-x",
+            "80",
+            "-y",
+            "24",
+        ]);
         tmux(&["split-window", "-h", "-t", &format!("={name}:"), "-c", "/"]);
-        let left = mux().pane_at(Some(&server.socket), &name, 0, 0).expect("left pane");
-        let right = mux().pane_at(Some(&server.socket), &name, 79, 5).expect("right pane");
+        let left = mux()
+            .pane_at(Some(&server.socket), &name, 0, 0)
+            .expect("left pane");
+        let right = mux()
+            .pane_at(Some(&server.socket), &name, 79, 5)
+            .expect("right pane");
         assert_ne!(left.pane, right.pane);
-        assert_eq!((right.pane_current_path.to_str(), right.pane_row), (Some("/"), 5));
-        assert_eq!(mux().pane_at(Some(&server.socket), "no-such-session", 0, 0), None);
+        assert_eq!(
+            (right.pane_current_path.to_str(), right.pane_row),
+            (Some("/"), 5)
+        );
+        assert_eq!(
+            mux().pane_at(Some(&server.socket), "no-such-session", 0, 0),
+            None
+        );
     }
 
     #[test]
@@ -1488,12 +1547,18 @@ mod tests {
         let name = session_name();
         server.create_session(&name);
         send_keys(&server.socket, &name, "seq 1 300");
-        poll_snapshot(&server.socket, &name, 100, |snapshot| snapshot.rows.iter().any(|row| row.text == "300"));
+        poll_snapshot(&server.socket, &name, 100, |snapshot| {
+            snapshot.rows.iter().any(|row| row.text == "300")
+        });
         // The shell's next prompt lands after `300`: wait for two equal grids.
-        let mut live = mux().pane_snapshot(Some(&server.socket), &name, 100).unwrap();
+        let mut live = mux()
+            .pane_snapshot(Some(&server.socket), &name, 100)
+            .unwrap();
         loop {
             std::thread::sleep(std::time::Duration::from_millis(100));
-            let next = mux().pane_snapshot(Some(&server.socket), &name, 100).unwrap();
+            let next = mux()
+                .pane_snapshot(Some(&server.socket), &name, 100)
+                .unwrap();
             if next.grid_eq(&live) {
                 break;
             }
@@ -1502,19 +1567,33 @@ mod tests {
         let window = live.window().expect("a live pane has a window");
         assert_eq!(live.scroll, 0);
         assert_eq!(window.top, 100, "100 history rows sit above the window");
-        assert_eq!(window.bottom as usize, live.rows.len() - 1, "a live window is the tail");
+        assert_eq!(
+            window.bottom as usize,
+            live.rows.len() - 1,
+            "a live window is the tail"
+        );
         let last = live.rows.iter().position(|row| row.text == "300").unwrap() as i64;
-        assert!(window.top <= last && last <= window.bottom, "the newest output is on screen");
+        assert!(
+            window.top <= last && last <= window.bottom,
+            "the newest output is on screen"
+        );
 
         let copy = |args: &[&str]| {
-            let status = Command::new("tmux").args(["-L", &server.socket]).args(args).status().unwrap();
+            let status = Command::new("tmux")
+                .args(["-L", &server.socket])
+                .args(args)
+                .status()
+                .unwrap();
             assert!(status.success(), "tmux {args:?}");
         };
         copy(&["copy-mode", "-t", &name]);
         copy(&["send-keys", "-t", &name, "-X", "-N", "50", "scroll-up"]);
         let scrolled = poll_snapshot(&server.socket, &name, 100, |snapshot| snapshot.scroll == 50);
         let moved = scrolled.window().expect("a scrolled pane has a window");
-        assert_eq!(moved.top, 100, "history still reaches 100 rows over the reader's window");
+        assert_eq!(
+            moved.top, 100,
+            "history still reaches 100 rows over the reader's window"
+        );
         assert_eq!(
             scrolled.rows[moved.bottom as usize].text,
             live.rows[(window.bottom - 50) as usize].text,

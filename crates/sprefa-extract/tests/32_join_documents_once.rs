@@ -5,8 +5,8 @@
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use sprefa_extract::{
-    build_def_index, content_id_of, CallF, RyiOutput, FamilyMask, FileSet, IndexBag,
-    ManifestMap, ProjectCx, ProjectDigest, Resolve, RustSource, ScipDocument, ScipIndex, Source,
+    build_def_index, content_id_of, CallF, FamilyMask, FileSet, IndexBag, ManifestMap, ProjectCx,
+    ProjectDigest, Resolve, RustSource, RyiOutput, ScipDocument, ScipIndex, Source,
 };
 
 const FILES: [(&str, &str); 3] = [

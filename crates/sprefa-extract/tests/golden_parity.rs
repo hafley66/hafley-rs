@@ -32,10 +32,10 @@ use std::sync::{Arc, Mutex};
 
 use sprefa_extract::{
     build_def_index, byte_range_cached, containing_def_site, content_id_of, covering_def,
-    definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, CallF, ContentId,
-    NodeRef, ProjectEdge, RyiOutput, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap,
-    ProjectCx, ProjectDigest, PythonSource, Resolve, RustSource, ScipGo, ScipRust, ScipSource,
-    ScipTypescript, Span, TsSource, TypeF, ZERO_CONTENT_ID,
+    definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, CallF,
+    ContentId, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap, NodeRef,
+    ProjectCx, ProjectDigest, ProjectEdge, PythonSource, Resolve, RustSource, RyiOutput, ScipGo,
+    ScipRust, ScipSource, ScipTypescript, Span, TsSource, TypeF, ZERO_CONTENT_ID,
 };
 
 struct Case {
@@ -1928,7 +1928,13 @@ fn origin_of(
     dst: &(ContentId, Span),
     kind: CallEdgeKind,
 ) -> Option<&'static str> {
-    let key = (caller.0, dst.1.start, dst.1.end(), kind.as_str(), dst.0.clone());
+    let key = (
+        caller.0,
+        dst.1.start,
+        dst.1.end(),
+        kind.as_str(),
+        dst.0.clone(),
+    );
     edge_origin.get(&key).copied()
 }
 
@@ -1968,7 +1974,9 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
     static TSV_LOCK: Mutex<()> = Mutex::new(());
     // A floor assertion panics while holding the guard; the next caller
     // takes the poisoned lock rather than inheriting the failure.
-    let _guard = TSV_LOCK.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+    let _guard = TSV_LOCK
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
     let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/RATCHET.tsv");
     let parse = |text: &str| {
         text.lines()
@@ -1978,7 +1986,13 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
                 let f: Vec<&str> = line.split('\t').collect();
                 assert_eq!(f.len(), 5, "RATCHET.tsv row needs 5 columns: {line}");
                 let cell = |i: usize| f[i].parse::<usize>().expect("RATCHET.tsv cell");
-                (f[0].to_string(), f[1].to_string(), cell(2), cell(3), cell(4))
+                (
+                    f[0].to_string(),
+                    f[1].to_string(),
+                    cell(2),
+                    cell(3),
+                    cell(4),
+                )
             })
             .collect::<Vec<_>>()
     };

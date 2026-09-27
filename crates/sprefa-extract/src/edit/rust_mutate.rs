@@ -7,11 +7,11 @@ use crate::move_cx::MoveCx;
 use crate::source::{FamilyMask, Source};
 use crate::wire::{flatten_each, FlatFact};
 
-use crate::lang::rust::RustSource;
-use crate::edit_seams::Edit;
 use crate::edit_seams::Cleave;
-use hafley_scm::span::Span;
+use crate::edit_seams::Edit;
+use crate::lang::rust::RustSource;
 use hafley_scm::atoms::FamilyTag;
+use hafley_scm::span::Span;
 
 /// The path the parse is told it is reading. Only the extension is consulted.
 const PARSE_AS: &str = "cleave.rs";
@@ -26,7 +26,10 @@ const DIRECTORY_STEMS: [&str; 3] = ["mod", "lib", "main"];
 impl Cleave for RustSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
         let at = past_trivia(text, decl.start as usize);
-        let decl = Span { start: at as u32, len: decl.end().saturating_sub(at as u32) };
+        let decl = Span {
+            start: at as u32,
+            len: decl.end().saturating_sub(at as u32),
+        };
         let tail = text.get(at..)?;
         let visibility_len = if tail.starts_with("pub ") {
             Some(4)
@@ -41,7 +44,10 @@ impl Cleave for RustSource {
                 text: "pub ".to_string(),
             }),
             (false, Some(len)) => Some(Edit {
-                span: Span { start: decl.start, len: len as u32 },
+                span: Span {
+                    start: decl.start,
+                    len: len as u32,
+                },
                 text: String::new(),
             }),
             _ => None,
@@ -57,7 +63,10 @@ impl Cleave for RustSource {
                 .find(|leaf| leaf.path == module)
                 .or_else(|| leaves.iter().find(|leaf| leaf.prefix == module))?;
             if held.prefix == module {
-                return Some(Edit { span: held.line, text: String::new() });
+                return Some(Edit {
+                    span: held.line,
+                    text: String::new(),
+                });
             }
             return Some(drop_leaf(text, &leaves, held));
         }
@@ -70,8 +79,13 @@ impl Cleave for RustSource {
             if same_line && extra {
                 let original = slice(text, first.line);
                 if original.contains('\n') {
-                    if let Some(preserved) = preserve_use_list(original, first.line.start, &listed, names) {
-                        return Some(Edit { span: first.line, text: preserved });
+                    if let Some(preserved) =
+                        preserve_use_list(original, first.line.start, &listed, names)
+                    {
+                        return Some(Edit {
+                            span: first.line,
+                            text: preserved,
+                        });
                     }
                 }
                 return Some(Edit {
@@ -120,7 +134,10 @@ impl Cleave for RustSource {
     fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String {
         let to = module_parts(cx, to_path);
         if let Some(ident) = foreign_crate(cx, from_path, to_path) {
-            return std::iter::once(ident).chain(to).collect::<Vec<_>>().join("::");
+            return std::iter::once(ident)
+                .chain(to)
+                .collect::<Vec<_>>()
+                .join("::");
         }
         let siblings = parent_of(&module_parts(cx, from_path)) == parent_of(&to);
         match (siblings, to.len() > 1) {
@@ -162,7 +179,9 @@ impl Cleave for RustSource {
             .iter()
             .filter(|item| matches!(item, syn::Item::Mod(module) if module.content.is_none()))
             .last()
-            .map(|item| crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).end());
+            .map(|item| {
+                crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).end()
+            });
         let at = match last_mod {
             Some(end) => text[end as usize..]
                 .find('\n')
@@ -171,12 +190,20 @@ impl Cleave for RustSource {
                 .items
                 .first()
                 .map(|item| {
-                    let start = crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).start as usize;
+                    let start = crate::lang::rust::syn_span(
+                        &line_starts,
+                        syn::spanned::Spanned::span(item),
+                    )
+                    .start as usize;
                     text[..start].rfind('\n').map_or(0, |found| found + 1)
                 })
                 .unwrap_or(text.len()),
         };
-        let lead = if at == text.len() && !text.is_empty() && !text.ends_with('\n') { "\n" } else { "" };
+        let lead = if at == text.len() && !text.is_empty() && !text.ends_with('\n') {
+            "\n"
+        } else {
+            ""
+        };
         Some((
             parent,
             Edit {
@@ -202,12 +229,17 @@ impl Cleave for RustSource {
     fn publish_module(&self, cx: &MoveCx, dest: &str) -> Option<(String, Edit)> {
         let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
         let name = module_parts(cx, dest).pop()?;
-        for parent in parent_candidates(dir).into_iter().filter(|candidate| cx.contains(candidate)) {
+        for parent in parent_candidates(dir)
+            .into_iter()
+            .filter(|candidate| cx.contains(candidate))
+        {
             let text = cx.text(&parent)?;
             let parsed = syn::parse_file(&text).ok()?;
             let line_starts = crate::lang::rust::build_line_starts(&text);
             let Some(module) = parsed.items.iter().find_map(|item| match item {
-                syn::Item::Mod(module) if module.ident == name && module.content.is_none() => Some(module),
+                syn::Item::Mod(module) if module.ident == name && module.content.is_none() => {
+                    Some(module)
+                }
                 _ => None,
             }) else {
                 continue;
@@ -215,7 +247,10 @@ impl Cleave for RustSource {
             let edit = match &module.vis {
                 syn::Visibility::Public(_) => return None,
                 syn::Visibility::Restricted(restricted) => Edit {
-                    span: crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(restricted)),
+                    span: crate::lang::rust::syn_span(
+                        &line_starts,
+                        syn::spanned::Spanned::span(restricted),
+                    ),
                     text: "pub".to_string(),
                 },
                 syn::Visibility::Inherited => Edit {
@@ -233,18 +268,29 @@ impl Cleave for RustSource {
     fn imports_visible_to_children(&self, cx: &MoveCx, src: &str) -> bool {
         cx.text(src)
             .and_then(|text| syn::parse_file(&text).ok())
-            .is_some_and(|file| file.items.iter().any(|item| matches!(item, syn::Item::Mod(_))))
+            .is_some_and(|file| {
+                file.items
+                    .iter()
+                    .any(|item| matches!(item, syn::Item::Mod(_)))
+            })
     }
 }
 
 /// Remove complete member lines from a multiline brace list while retaining
 /// the indentation, commas, and brace layout of every member that stays.
-fn preserve_use_list(original: &str, start: u32, leaves: &[&Leaf], names: &[String]) -> Option<String> {
+fn preserve_use_list(
+    original: &str,
+    start: u32,
+    leaves: &[&Leaf],
+    names: &[String],
+) -> Option<String> {
     let mut removed = Vec::new();
     for leaf in leaves.iter().filter(|leaf| !names.contains(&leaf.leaf)) {
         let at = (leaf.span.start - start) as usize;
         let line_start = original[..at].rfind('\n').map_or(0, |newline| newline + 1);
-        let line_end = original[at..].find('\n').map_or(original.len(), |newline| at + newline + 1);
+        let line_end = original[at..]
+            .find('\n')
+            .map_or(original.len(), |newline| at + newline + 1);
         let line = original[line_start..line_end].trim();
         if line != leaf.leaf && line != format!("{},", leaf.leaf) {
             return None;
@@ -365,10 +411,12 @@ fn parent_of(parts: &[String]) -> &[String] {
 fn wanted(names: &[String], module: &str) -> Vec<String> {
     names
         .iter()
-        .map(|name| match module == name || module.ends_with(&format!("::{name}")) {
-            true => module.to_string(),
-            false => format!("{module}::{name}"),
-        })
+        .map(
+            |name| match module == name || module.ends_with(&format!("::{name}")) {
+                true => module.to_string(),
+                false => format!("{module}::{name}"),
+            },
+        )
         .collect()
 }
 
@@ -461,8 +509,10 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
         let members: Vec<Span> = nodes
             .iter()
             .filter(|(kind, at)| {
-                matches!(kind.as_str(), "identifier" | "type_identifier" | "scoped_identifier")
-                    && inside(*at, list)
+                matches!(
+                    kind.as_str(),
+                    "identifier" | "type_identifier" | "scoped_identifier"
+                ) && inside(*at, list)
                     && !nodes.iter().any(|(held, outer)| {
                         held == "scoped_identifier" && inside(*at, *outer) && *outer != *at
                     })
@@ -500,10 +550,16 @@ fn drop_leaf(source: &str, leaves: &[Leaf], held: &Leaf) -> Edit {
     if !kept.is_empty() {
         let line = slice(source, held.line);
         if line.contains('\n') {
-            let listed: Vec<&Leaf> = leaves.iter().filter(|leaf| leaf.line == held.line).collect();
+            let listed: Vec<&Leaf> = leaves
+                .iter()
+                .filter(|leaf| leaf.line == held.line)
+                .collect();
             let names: Vec<String> = kept.iter().map(|name| (*name).to_string()).collect();
             if let Some(preserved) = preserve_use_list(line, held.line.start, &listed, &names) {
-                return Edit { span: held.line, text: preserved };
+                return Edit {
+                    span: held.line,
+                    text: preserved,
+                };
             }
         }
     }

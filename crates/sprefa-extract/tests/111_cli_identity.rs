@@ -45,16 +45,17 @@ fn slow_decodes_a_saved_index() {
     let root = "tests/fixtures/scip_rel";
     let cache = scratch("slow-cache");
     let index = cache.join("index.scip");
-    std::fs::copy(
-        "tests/fixtures/scip_relationship/fixture.scip",
-        &index,
-    )
-    .expect("saved SCIP fixture");
+    std::fs::copy("tests/fixtures/scip_relationship/fixture.scip", &index)
+        .expect("saved SCIP fixture");
     let set = sprefa_extract::source_set_for_root(std::path::Path::new(root)).expect("source set");
     sprefa_extract::record_index_set(&index, &set);
     let cache = cache.to_string_lossy();
     let slow = extract(&["scip", "--scip-cache", &cache, root]);
-    assert!(slow.status.success(), "{}", String::from_utf8_lossy(&slow.stderr));
+    assert!(
+        slow.status.success(),
+        "{}",
+        String::from_utf8_lossy(&slow.stderr)
+    );
     assert!(
         String::from_utf8_lossy(&slow.stdout).contains("\"record\":\"scip_def\""),
         "slow must decode the saved index"
@@ -68,16 +69,24 @@ fn slow_reads_a_named_indexer_from_its_separate_cache() {
     let picked_cache = cache.join("indexer-typescript");
     std::fs::create_dir_all(&picked_cache).expect("picked cache directory");
     let index = picked_cache.join("index.scip");
-    std::fs::copy(
-        "tests/fixtures/scip_relationship/fixture.scip",
-        &index,
-    )
-    .expect("saved picked SCIP fixture");
+    std::fs::copy("tests/fixtures/scip_relationship/fixture.scip", &index)
+        .expect("saved picked SCIP fixture");
     let set = sprefa_extract::source_set_for_root(std::path::Path::new(root)).expect("source set");
     sprefa_extract::record_index_set(&index, &set);
     let cache = cache.to_string_lossy();
-    let slow = extract(&["scip", "--indexer", "typescript", "--scip-cache", &cache, root]);
-    assert!(slow.status.success(), "{}", String::from_utf8_lossy(&slow.stderr));
+    let slow = extract(&[
+        "scip",
+        "--indexer",
+        "typescript",
+        "--scip-cache",
+        &cache,
+        root,
+    ]);
+    assert!(
+        slow.status.success(),
+        "{}",
+        String::from_utf8_lossy(&slow.stderr)
+    );
     assert!(
         String::from_utf8_lossy(&slow.stdout).contains("\"record\":\"scip_def\""),
         "slow must decode the picked indexer's saved index"

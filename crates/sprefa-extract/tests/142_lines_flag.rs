@@ -11,7 +11,8 @@ use std::process::Command;
 
 /// `const α = 1;` newlines at 13, `function hop...` ends at 56, one call on
 /// line 3. The α characters are where byte cols and character cols disagree.
-const TS_FIXTURE: &str = "const \u{3b1} = 1;\nfunction hop(n: number) { return n + \u{3b1}; }\nhop(\u{3b1});\n";
+const TS_FIXTURE: &str =
+    "const \u{3b1} = 1;\nfunction hop(n: number) { return n + \u{3b1}; }\nhop(\u{3b1});\n";
 /// The TS fixture's newline offsets: end of each of the first two lines and
 /// the trailing newline.
 const TS_OFFSETS: [u32; 3] = [13, 56, 65];
@@ -64,8 +65,10 @@ fn assert_decorated(value: &Value, offsets: &[u32]) {
                 assert_eq!(map.get("col"), Some(&Value::from(col)), "col at {value}");
                 assert!(end >= start);
             } else {
-                assert!(!map.contains_key("line") && !map.contains_key("col"),
-                    "decoration escaped a non-span object: {value}");
+                assert!(
+                    !map.contains_key("line") && !map.contains_key("col"),
+                    "decoration escaped a non-span object: {value}"
+                );
             }
             for child in map.values() {
                 assert_decorated(child, offsets);
@@ -127,7 +130,11 @@ fn col_counts_bytes_not_characters() {
     // two bytes past the α, so its byte col is 28 where a character col
     // would say 27.
     let dir = scratch("ryi-lines-bytes");
-    let fixture = write_fixture(&dir, "fixture.json", "{\"first\": \"\u{3b1}\", \"second\": \"\u{3b2}\"}\n");
+    let fixture = write_fixture(
+        &dir,
+        "fixture.json",
+        "{\"first\": \"\u{3b1}\", \"second\": \"\u{3b2}\"}\n",
+    );
     let output = ryi(&["--kinds", "data", "--lines", &fixture.to_string_lossy()]);
     assert_eq!(
         stdout_lines(&output),
@@ -155,14 +162,15 @@ fn sqlite_arm_writes_line_start_and_the_view_joins_it() {
     assert!(output.status.success());
     let connection = rusqlite::Connection::open(&database).expect("open export");
     let (path, digest, offsets): (String, String, String) = connection
-        .query_row(
-            "SELECT path, digest, offsets FROM line_start",
-            [],
-            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
-        )
+        .query_row("SELECT path, digest, offsets FROM line_start", [], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
         .expect("one line_start row");
     assert_eq!(path, fixture.to_string_lossy());
-    assert_eq!(digest, "blake3:5aaf58237f593b49a71d78bc09924050d18f011bafe1b4c396f00dc3322da450");
+    assert_eq!(
+        digest,
+        "blake3:5aaf58237f593b49a71d78bc09924050d18f011bafe1b4c396f00dc3322da450"
+    );
     assert_eq!(offsets, "[13,56,65]");
     let line: u32 = connection
         .query_row(
@@ -181,7 +189,11 @@ fn sqlite_arm_without_the_flag_leaves_line_start_empty() {
     let dir = scratch("ryi-lines-gate");
     let fixture = write_fixture(&dir, "fixture.ts", TS_FIXTURE);
     let database = dir.join("facts.db");
-    let output = ryi(&["--sqlite", &database.to_string_lossy(), &fixture.to_string_lossy()]);
+    let output = ryi(&[
+        "--sqlite",
+        &database.to_string_lossy(),
+        &fixture.to_string_lossy(),
+    ]);
     assert!(output.status.success());
     let connection = rusqlite::Connection::open(&database).expect("open export");
     let rows: i64 = connection
@@ -230,7 +242,10 @@ fn resolve_decorates_rows_by_their_own_path() {
         match value.get("record").and_then(Value::as_str) {
             Some("unresolved") => {
                 saw_unresolved = true;
-                assert_eq!(value["path"], Value::from(b_path.to_string_lossy().as_ref()));
+                assert_eq!(
+                    value["path"],
+                    Value::from(b_path.to_string_lossy().as_ref())
+                );
                 assert_decorated(&value, &offsets_b);
             }
             Some("resolved_import") => {
@@ -314,7 +329,10 @@ fn resolve_decorates_edge_spans_by_their_owning_path() {
                 }
                 "resolved_type_edge" => {
                     saw_type_edge = true;
-                    &[("owner_path", "owner_start"), ("target_path", "target_start")]
+                    &[
+                        ("owner_path", "owner_start"),
+                        ("target_path", "target_start"),
+                    ]
                 }
                 _ => &[],
             };
@@ -380,5 +398,8 @@ fn diet_scip_decorates_edge_spans_by_their_owning_path() {
             saw_decorated_edge = true;
         }
     }
-    assert!(saw_decorated_edge, "the fixture must emit resolved_edge rows");
+    assert!(
+        saw_decorated_edge,
+        "the fixture must emit resolved_edge rows"
+    );
 }

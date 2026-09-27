@@ -714,7 +714,12 @@ fn scip_verify_without_merge_never_changes_the_plan() {
         &verified,
         &format!("{EXPORTS_ANCHOR}#Foo"),
         "Baz",
-        &["--verify-scip", &index_arg(&index), "--no-scip-merge", "--commit"],
+        &[
+            "--verify-scip",
+            &index_arg(&index),
+            "--no-scip-merge",
+            "--commit",
+        ],
     );
     let plain = fixture_plus("scip_same_off", "src/ns.ts", NAMESPACE_IMPORTER);
     let without = rename_verb(

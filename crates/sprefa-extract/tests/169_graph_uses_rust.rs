@@ -9,12 +9,7 @@ use serde_json::Value;
 fn rust_function_and_method_signatures_are_type_uses() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .args([
-            "graph",
-            "--uses",
-            "Widget",
-            "tests/fixtures/graph_rust",
-        ])
+        .args(["graph", "--uses", "Widget", "tests/fixtures/graph_rust"])
         .output()
         .expect("graph binary runs");
     assert!(

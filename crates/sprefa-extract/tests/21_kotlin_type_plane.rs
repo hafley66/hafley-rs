@@ -11,8 +11,8 @@ use std::collections::BTreeSet;
 use std::sync::Arc;
 
 use sprefa_extract::{
-    build_def_index, content_id_of, dispatch, ContentId, RyiOutput, FamilyMask, FileSet,
-    IndexBag, KotlinSource, ManifestMap, ProjectCx, ProjectDigest, Resolve, Span, TypeF,
+    build_def_index, content_id_of, dispatch, ContentId, FamilyMask, FileSet, IndexBag,
+    KotlinSource, ManifestMap, ProjectCx, ProjectDigest, Resolve, RyiOutput, Span, TypeF,
 };
 
 struct Case {

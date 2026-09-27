@@ -17,7 +17,10 @@ fn type_ladder_codeql_baseline() {
         .arg("rust")
         .env("RYI_BIN", env!("CARGO_BIN_EXE_ryi-server"))
         .env("RYI_CODEQL_OUT", scratch.path())
-        .env("RYI_CODEQL_CSV", manifest.join("tests/fixtures/codeql_baseline/type_ladder"))
+        .env(
+            "RYI_CODEQL_CSV",
+            manifest.join("tests/fixtures/codeql_baseline/type_ladder"),
+        )
         .output()
         .expect("run baseline script");
     assert!(
@@ -33,5 +36,8 @@ fn type_ladder_codeql_baseline() {
         .collect::<Vec<_>>()
         .join("\n")
         + "\n";
-    assert_eq!(table, include_str!("fixtures/codeql_baseline/type_ladder.txt"));
+    assert_eq!(
+        table,
+        include_str!("fixtures/codeql_baseline/type_ladder.txt")
+    );
 }

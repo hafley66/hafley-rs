@@ -130,9 +130,11 @@ impl MoveCx {
         };
         let path = scratch.join(rel);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent).map_err(|error| format!("mkdir {}: {error}", parent.display()))?;
+            std::fs::create_dir_all(parent)
+                .map_err(|error| format!("mkdir {}: {error}", parent.display()))?;
         }
-        std::fs::write(&path, text).map_err(|error| format!("write {}: {error}", path.display()))?;
+        std::fs::write(&path, text)
+            .map_err(|error| format!("write {}: {error}", path.display()))?;
         Ok(path)
     }
 
@@ -183,8 +185,12 @@ pub fn walk_files(root: &Path) -> Result<Vec<String>, String> {
         .build();
     for entry in walk {
         let entry = entry.map_err(|error| format!("walk {}: {error}", root.display()))?;
-        if !entry.file_type().is_some_and(|kind| kind.is_file()) { continue }
-        if let Some(rel) = rel_of(root, entry.path()) { files.push(rel) }
+        if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+            continue;
+        }
+        if let Some(rel) = rel_of(root, entry.path()) {
+            files.push(rel)
+        }
     }
     files.sort();
     Ok(files)

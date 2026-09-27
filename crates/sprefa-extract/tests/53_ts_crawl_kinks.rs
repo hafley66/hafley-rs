@@ -259,4 +259,3 @@ fn a_local_named_as_an_argument_mints_no_reference_row() {
 }
 
 // ── kink 5: --scip-facts needs a git worktree ───────────────────────────────
-

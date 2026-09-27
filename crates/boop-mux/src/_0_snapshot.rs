@@ -93,7 +93,10 @@ impl TerminalSnapshot {
         }
         let scroll = (self.scroll as usize).min(len - height);
         let bottom = (len - 1 - scroll) as i64;
-        Some(Viewport { top: bottom - height as i64 + 1, bottom })
+        Some(Viewport {
+            top: bottom - height as i64 + 1,
+            bottom,
+        })
     }
 
     /// Whether two snapshots carry the same grid, size, screen, history and
@@ -287,11 +290,18 @@ mod tests {
     fn grid(len: usize, height: u16, scroll: u32) -> TerminalSnapshot {
         let text: String = (0..len).map(|row| format!("r{row}\n")).collect();
         TerminalSnapshot {
-            target: TerminalTarget { host: "tmux".into(), terminal: "%1".into(), incarnation: 1 },
+            target: TerminalTarget {
+                host: "tmux".into(),
+                terminal: "%1".into(),
+                incarnation: 1,
+            },
             generation: 0,
             size: size(40, height),
             screen: Screen::Primary,
-            history: History::Retained { rows: len as u32, capacity: 2000 },
+            history: History::Retained {
+                rows: len as u32,
+                capacity: 2000,
+            },
             cursor: None,
             scroll,
             rows: rows_from_capture(&text, &text, size(40, height)),
@@ -300,11 +310,29 @@ mod tests {
 
     #[test]
     fn the_window_is_the_tail_shifted_up_by_the_scroll() {
-        assert_eq!(grid(100, 20, 0).window(), Some(Viewport { top: 80, bottom: 99 }));
-        assert_eq!(grid(100, 20, 30).window(), Some(Viewport { top: 50, bottom: 69 }));
+        assert_eq!(
+            grid(100, 20, 0).window(),
+            Some(Viewport {
+                top: 80,
+                bottom: 99
+            })
+        );
+        assert_eq!(
+            grid(100, 20, 30).window(),
+            Some(Viewport {
+                top: 50,
+                bottom: 69
+            })
+        );
         // A scroll past the captured history stops at the capture's top.
-        assert_eq!(grid(100, 20, 500).window(), Some(Viewport { top: 0, bottom: 19 }));
+        assert_eq!(
+            grid(100, 20, 500).window(),
+            Some(Viewport { top: 0, bottom: 19 })
+        );
         // A grid shorter than the pane pads to the pane, so the window is all of it.
-        assert_eq!(grid(5, 20, 0).window(), Some(Viewport { top: 0, bottom: 19 }));
+        assert_eq!(
+            grid(5, 20, 0).window(),
+            Some(Viewport { top: 0, bottom: 19 })
+        );
     }
 }

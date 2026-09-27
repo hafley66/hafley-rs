@@ -7,7 +7,9 @@ use std::path::Path;
 
 use sprefa_extract::scip::{byte_range_at, LineTable};
 use sprefa_extract::scip_decode::load_index;
-use sprefa_extract::{OccurrenceRole, RefRole, RenameCx, RenameRequest, ScipIndex, Span, SymbolRef};
+use sprefa_extract::{
+    OccurrenceRole, RefRole, RenameCx, RenameRequest, ScipIndex, Span, SymbolRef,
+};
 
 /// One span in the corpus, as both sides of the diff spell it.
 type Site = (String, u32, u32);
@@ -112,7 +114,10 @@ pub fn merge_scip(
         let rows = verify_against_scip(cx, &index, request, found)?;
         if merge {
             for row in &rows {
-                let span = Span { start: row.start, len: row.end - row.start };
+                let span = Span {
+                    start: row.start,
+                    len: row.end - row.start,
+                };
                 match row.side {
                     DisagreementSide::ScipOnly => found.push(SymbolRef {
                         file: row.file.clone(),
@@ -125,12 +130,18 @@ pub fn merge_scip(
                     DisagreementSide::PlanOnly => {}
                 }
             }
-            found.sort_by(|left, right| (&left.file, left.span.start).cmp(&(&right.file, right.span.start)));
+            found.sort_by(|left, right| {
+                (&left.file, left.span.start).cmp(&(&right.file, right.span.start))
+            });
         }
         out.extend(rows);
     }
     out.sort_by(|left, right| {
-        (&left.file, left.start, left.side.as_str()).cmp(&(&right.file, right.start, right.side.as_str()))
+        (&left.file, left.start, left.side.as_str()).cmp(&(
+            &right.file,
+            right.start,
+            right.side.as_str(),
+        ))
     });
     Ok(out)
 }

@@ -129,7 +129,10 @@ fn root_source_set_tracks_content_and_path_changes_without_mtime() {
 
     std::fs::create_dir_all(root.join("target")).expect("build directory");
     std::fs::write(root.join("target/generated.ts"), "generated").expect("build output");
-    assert_eq!(removed.digest(), source_set_for_root(&root).unwrap().digest());
+    assert_eq!(
+        removed.digest(),
+        source_set_for_root(&root).unwrap().digest()
+    );
 }
 
 #[cfg(unix)]
@@ -180,7 +183,10 @@ fn a_replaced_index_cannot_reuse_its_old_source_sidecar() {
     let index = place_fake_index(&cache);
     let set = set_of(&[("a.rs", "digest-a")]);
     record_index_set(&index, &set);
-    assert_eq!(index_path_for_set(&root, &cache, Some(set.digest())), Some(index.clone()));
+    assert_eq!(
+        index_path_for_set(&root, &cache, Some(set.digest())),
+        Some(index.clone())
+    );
 
     std::fs::write(&index, b"different index bytes").expect("replace index");
     assert_eq!(index_path_for_set(&root, &cache, Some(set.digest())), None);

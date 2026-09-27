@@ -71,19 +71,30 @@ fn the_typescript_definitions_agree_with_scip_typescript() {
     let mut causes: BTreeMap<&str, Vec<String>> = BTreeMap::new();
     for key in &scip_only {
         let symbol = &scip[key];
-        causes
-            .entry(cause(symbol, key))
-            .or_default()
-            .push(format!("{} {}-{} {:?} {symbol}", key.0, key.2, key.3, key.1));
+        causes.entry(cause(symbol, key)).or_default().push(format!(
+            "{} {}-{} {:?} {symbol}",
+            key.0, key.2, key.3, key.1
+        ));
     }
     let listing = causes
         .iter()
-        .map(|(cause, rows)| format!("  {} scip-only: {cause}\n    {}", rows.len(), rows.join("\n    ")))
+        .map(|(cause, rows)| {
+            format!(
+                "  {} scip-only: {cause}\n    {}",
+                rows.len(),
+                rows.join("\n    ")
+            )
+        })
         .collect::<Vec<_>>()
         .join("\n");
     // @eprintln-ok: the judge prints its split, the way the lab REPORT does.
     eprintln!("ryi fast vs scip-typescript over {ROOT}");
-    eprintln!("  both {} scm-only {} scip-only {}", both.len(), scm_only.len(), scip_only.len());
+    eprintln!(
+        "  both {} scm-only {} scip-only {}",
+        both.len(),
+        scm_only.len(),
+        scip_only.len()
+    );
     eprintln!("{listing}");
 
     assert!(
@@ -116,10 +127,7 @@ fn scm_definitions() -> BTreeMap<Key, String> {
     let files = ts_files();
     let mut args: Vec<String> = vec!["fast".to_string()];
     args.extend(files.iter().map(|path| path.to_string_lossy().to_string()));
-    let rows = ryi(
-        &args.iter().map(String::as_str).collect::<Vec<_>>(),
-        "fast",
-    );
+    let rows = ryi(&args.iter().map(String::as_str).collect::<Vec<_>>(), "fast");
     let prefix = format!("{ROOT}/");
     rows.iter()
         .filter(|row| row["record"] == "occurrence" && row["role"] == "def")
@@ -168,7 +176,8 @@ fn collect(path: &Path, files: &mut Vec<PathBuf>) {
 fn scip_definitions() -> BTreeMap<Key, String> {
     let rows = ryi(
         &[
-            "scip", "--raw",
+            "scip",
+            "--raw",
             "--scip-build",
             "--occurrence-text",
             "--records",
@@ -194,10 +203,8 @@ fn scip_definitions() -> BTreeMap<Key, String> {
 }
 
 fn ryi(args: &[&str], slug: &str) -> Vec<Value> {
-    let trace: PathBuf = std::env::temp_dir().join(format!(
-        "ryi-159-{slug}-{}.json",
-        std::process::id()
-    ));
+    let trace: PathBuf =
+        std::env::temp_dir().join(format!("ryi-159-{slug}-{}.json", std::process::id()));
     let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(args)
         .env("HAFLEY_TRACE", trace)

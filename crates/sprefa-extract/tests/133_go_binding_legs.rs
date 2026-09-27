@@ -63,7 +63,10 @@ fn bind<'a>(
 fn a_field_read_binds_the_member_on_the_field_type() {
     let edges = resolved_edges();
     let edge = bind(&edges, "fieldCase", "Method").expect("fieldCase -> Method");
-    assert_eq!(edge.3, "receiver", "field leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "field leg must bind through the receiver"
+    );
 }
 
 /// `x := NewFoo(); x.Bar()`: the declared result type *Foo carries Bar.
@@ -71,7 +74,10 @@ fn a_field_read_binds_the_member_on_the_field_type() {
 fn a_constructor_return_binds_the_member_on_the_result_type() {
     let edges = resolved_edges();
     let edge = bind(&edges, "ctorCase", "Bar").expect("ctorCase -> Bar");
-    assert_eq!(edge.3, "receiver", "ctor-return leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "ctor-return leg must bind through the receiver"
+    );
 }
 
 /// `func f(p Proj) { p.Project() }`: the interface parameter binds the
@@ -80,7 +86,10 @@ fn a_constructor_return_binds_the_member_on_the_result_type() {
 fn an_interface_parameter_binds_the_interface_method() {
     let edges = resolved_edges();
     let edge = bind(&edges, "ifaceCase", "Project").expect("ifaceCase -> Project");
-    assert_eq!(edge.3, "receiver", "interface leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "interface leg must bind through the receiver"
+    );
 }
 
 /// The same three legs fire cross-file: same package directory, no import.
@@ -97,7 +106,9 @@ fn the_legs_fire_cross_file_without_an_import() {
         "cross-file ctor-return leg must bind through the receiver"
     );
     assert_eq!(
-        bind(&edges, "callIface", "Project").expect("callIface -> Project").3,
+        bind(&edges, "callIface", "Project")
+            .expect("callIface -> Project")
+            .3,
         "receiver",
         "cross-file interface leg must bind through the receiver"
     );

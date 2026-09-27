@@ -47,8 +47,7 @@ fn collect_files(path: &Path, files: &mut Vec<PathBuf>) {
 }
 
 fn call_rows(path: &Path, index: usize) -> Vec<String> {
-    let trace =
-        std::env::temp_dir().join(format!("ryi-150-{index}-{}.json", std::process::id()));
+    let trace = std::env::temp_dir().join(format!("ryi-150-{index}-{}.json", std::process::id()));
     let output = Command::new(env!("CARGO_BIN_EXE_ryi-server"))
         .args(["--kinds", "call"])
         .arg(path)

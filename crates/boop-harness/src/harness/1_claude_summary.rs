@@ -30,7 +30,16 @@ pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<Vi
 }
 
 /// Input keys the claude TUI prints inside `Name(…)`, in the order it prefers them.
-const TOOL_HEADER_KEYS: &[&str] = &["command", "file_path", "notebook_path", "path", "pattern", "url", "query", "prompt"];
+const TOOL_HEADER_KEYS: &[&str] = &[
+    "command",
+    "file_path",
+    "notebook_path",
+    "path",
+    "pattern",
+    "url",
+    "query",
+    "prompt",
+];
 
 /// Rows the claude TUI draws for a stored turn besides its `said`: a tool call's
 /// `Name(arg)` header (from `arg`, or from an assistant `[Name] {json}` line).
@@ -46,12 +55,17 @@ pub fn screen_lines(role: &str, said: &str, arg: Option<&str>) -> Vec<String> {
 fn headers(name: &str, arg: &str) -> Vec<String> {
     let first = arg.split('\n').next().unwrap_or_default();
     let home = home_relative(first).map(|home| format!("{name}({home})"));
-    std::iter::once(format!("{name}({first})")).chain(home).collect()
+    std::iter::once(format!("{name}({first})"))
+        .chain(home)
+        .collect()
 }
 
 /// `[Name] {json}` (the harness reader's tool line) → its headers.
 fn json_headers(line: &str) -> Vec<String> {
-    let Some((name, json)) = line.strip_prefix('[').and_then(|rest| rest.split_once("] ")) else {
+    let Some((name, json)) = line
+        .strip_prefix('[')
+        .and_then(|rest| rest.split_once("] "))
+    else {
         return Vec::new();
     };
     TOOL_HEADER_KEYS
@@ -82,7 +96,9 @@ fn json_string_field(json: &str, key: &str) -> Option<String> {
 
 /// `/Users/<name>/…` and `/home/<name>/…` as the TUI prints them: `~/…`.
 fn home_relative(path: &str) -> Option<String> {
-    let rest = path.strip_prefix("/Users/").or_else(|| path.strip_prefix("/home/"))?;
+    let rest = path
+        .strip_prefix("/Users/")
+        .or_else(|| path.strip_prefix("/home/"))?;
     let (_, tail) = rest.split_once('/')?;
     Some(format!("~/{tail}"))
 }

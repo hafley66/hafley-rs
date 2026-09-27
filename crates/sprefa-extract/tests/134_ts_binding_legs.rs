@@ -64,7 +64,10 @@ fn bind<'a>(
 fn a_field_read_binds_the_member_on_the_field_type() {
     let edges = resolved_edges();
     let edge = bind(&edges, "run", "m").expect("run -> m");
-    assert_eq!(edge.3, "receiver", "field leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "field leg must bind through the receiver"
+    );
 }
 
 /// `const x = makeFoo(); x.bar()`: the declared return type Foo carries bar.
@@ -72,7 +75,10 @@ fn a_field_read_binds_the_member_on_the_field_type() {
 fn a_constructor_return_binds_the_member_on_the_result_type() {
     let edges = resolved_edges();
     let edge = bind(&edges, "ctorCase", "bar").expect("ctorCase -> bar");
-    assert_eq!(edge.3, "receiver", "ctor-return leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "ctor-return leg must bind through the receiver"
+    );
 }
 
 /// `function f<P extends Proj>(p: P)`: the constraint names the interface the
@@ -81,7 +87,10 @@ fn a_constructor_return_binds_the_member_on_the_result_type() {
 fn a_generic_bound_binds_the_member_on_the_constraint_interface() {
     let edges = resolved_edges();
     let edge = bind(&edges, "ifaceCase", "project").expect("ifaceCase -> project");
-    assert_eq!(edge.3, "receiver", "generic-bound leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "generic-bound leg must bind through the receiver"
+    );
 }
 
 /// The ctor-return leg fires cross-file through an import.
@@ -89,7 +98,10 @@ fn a_generic_bound_binds_the_member_on_the_constraint_interface() {
 fn the_ctor_return_leg_fires_cross_file() {
     let edges = resolved_edges();
     let edge = bind(&edges, "crossFileCtor", "bar").expect("crossFileCtor -> bar");
-    assert_eq!(edge.3, "receiver", "cross-file ctor leg must bind through the receiver");
+    assert_eq!(
+        edge.3, "receiver",
+        "cross-file ctor leg must bind through the receiver"
+    );
 }
 
 /// `ifaceCase<Impl>(new Impl())` in use.ts: the explicit type argument leaves
@@ -98,8 +110,12 @@ fn the_ctor_return_leg_fires_cross_file() {
 #[test]
 fn a_generic_call_binds_the_imported_fn_across_files() {
     let edges = resolved_edges();
-    let edge = bind(&edges, "crossFileGeneric", "ifaceCase").expect("crossFileGeneric -> ifaceCase");
-    assert_eq!(edge.3, "module_plane", "the import leg binds the generic fn");
+    let edge =
+        bind(&edges, "crossFileGeneric", "ifaceCase").expect("crossFileGeneric -> ifaceCase");
+    assert_eq!(
+        edge.3, "module_plane",
+        "the import leg binds the generic fn"
+    );
     assert!(
         !edges
             .iter()

@@ -58,10 +58,7 @@ fn document_format_coverage_is_what_the_cli_claims() {
         if !family.is_empty() {
             command.args(["--kinds", family]);
         }
-        let output = command
-            .arg(&path)
-            .output()
-            .expect("extract binary runs");
+        let output = command.arg(&path).output().expect("extract binary runs");
         // An unhandled extension is EXIT 0 WITH NO OUTPUT, never an error. That
         // is the documented contract and it is what lets a caller sweep a mixed
         // tree without filtering by extension first.
@@ -89,4 +86,3 @@ fn document_format_coverage_is_what_the_cli_claims() {
     }
     std::fs::remove_dir_all(&dir).ok();
 }
-

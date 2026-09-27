@@ -25,16 +25,16 @@
 
 use std::collections::BTreeMap;
 
-use crate::lang::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
-use crate::lang::KotlinSource;
-use crate::lang::rust::build_line_starts;
-use crate::rename_cx::{RenameCx, RenameRequest};
+use crate::edit_seams::RefRole;
+use crate::edit_seams::Rename;
+use crate::edit_seams::RenameStop;
 use crate::edit_seams::Respell;
 use crate::edit_seams::SymbolRef;
-use crate::edit_seams::RefRole;
 use crate::edit_seams::SymbolSeat;
-use crate::edit_seams::RenameStop;
-use crate::edit_seams::Rename;
+use crate::lang::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
+use crate::lang::rust::build_line_starts;
+use crate::lang::KotlinSource;
+use crate::rename_cx::{RenameCx, RenameRequest};
 use hafley_scm::span::Span;
 
 impl Rename for KotlinSource {
@@ -78,7 +78,15 @@ impl Rename for KotlinSource {
                 .text(rel)
                 .map(|text| build_line_starts(&text))
                 .unwrap_or_default();
-            harvest(rel, scan, &line_starts, request, &anchor, &mut refs, &mut stops);
+            harvest(
+                rel,
+                scan,
+                &line_starts,
+                request,
+                &anchor,
+                &mut refs,
+                &mut stops,
+            );
         }
         if !stops.is_empty() {
             return Err(RenameStop::Dynamic(stops));

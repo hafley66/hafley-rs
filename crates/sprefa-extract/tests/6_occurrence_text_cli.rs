@@ -29,12 +29,7 @@ fn run(args: &[&str]) -> String {
 fn scip_rel_facts(extra: &[&str]) -> String {
     let mut args = vec!["scip", "--raw"];
     args.extend_from_slice(extra);
-    args.extend_from_slice(&[
-        "--root",
-        SCIP_REL_ROOT,
-        "--scip-build",
-        SCIP_REL_SOURCE,
-    ]);
+    args.extend_from_slice(&["--root", SCIP_REL_ROOT, "--scip-build", SCIP_REL_SOURCE]);
     run(&args)
 }
 

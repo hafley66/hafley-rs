@@ -9,7 +9,11 @@ fn files(root: &Path, dir: &Path, found: &mut Vec<PathBuf>) {
         if path.is_dir() {
             files(root, &path, found);
         } else {
-            found.push(path.strip_prefix(root).expect("generated relative path").to_path_buf());
+            found.push(
+                path.strip_prefix(root)
+                    .expect("generated relative path")
+                    .to_path_buf(),
+            );
         }
     }
 }
@@ -26,11 +30,24 @@ fn committed_generated_contract_matches_just_gen_cli() {
         .arg(fresh.path())
         .output()
         .expect("run just gen-cli");
-    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
     for (name, committed) in [
-        ("server", Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bin/ryi/gen")),
-        ("client", Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi/src/gen")),
-        ("proto", Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi-proto/src/gen")),
+        (
+            "server",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bin/ryi/gen"),
+        ),
+        (
+            "client",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi/src/gen"),
+        ),
+        (
+            "proto",
+            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi-proto/src/gen"),
+        ),
     ] {
         let staged = fresh.path().join(name);
         let mut expected = Vec::new();
@@ -49,5 +66,4 @@ fn committed_generated_contract_matches_just_gen_cli() {
             );
         }
     }
-
 }

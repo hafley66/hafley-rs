@@ -64,7 +64,10 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
             row.insert("line".into(), found.line.into());
             row.insert("end_line".into(), found.end_line.into());
             output
-                .line(&serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))?)
+                .line(
+                    &serde_json::to_string(&row)
+                        .map_err(|error| format!("query output: {error}"))?,
+                )
                 .map_err(|error| error.to_string())?;
         }
     }

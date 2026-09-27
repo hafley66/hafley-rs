@@ -15,7 +15,7 @@ use std::sync::{Arc, Mutex};
 
 use sprefa_extract::{
     cache::{self, CacheKey},
-    content_id_of, dispatch, source_for, RyiOutput, FamilyMask,
+    content_id_of, dispatch, source_for, FamilyMask, RyiOutput,
 };
 
 fn lock() -> std::sync::MutexGuard<'static, ()> {

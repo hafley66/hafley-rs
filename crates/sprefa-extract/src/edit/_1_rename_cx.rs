@@ -7,14 +7,14 @@
 //! method free of a field it ignores. Same walker, same `SKIP_DIRS`, same
 //! root-relative spelling law (`move_cx.rs:26,45,158`).
 
-use std::path::{Path, PathBuf};
-use std::collections::BTreeMap;
-use std::cell::RefCell;
-use std::rc::Rc;
 use hafley_scm::atoms::Strings;
+use std::cell::RefCell;
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
+use std::rc::Rc;
 
-use crate::move_cx::walk_files;
 use crate::edit_seams::Rename;
+use crate::move_cx::walk_files;
 
 /// Whether the roster hands `rel` to `rename`.
 pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {
@@ -86,7 +86,9 @@ impl RenameCx {
     }
 
     pub fn read(&self, rel: &str) -> Option<Vec<u8>> {
-        self.overlay.get(rel).map(|text| text.as_bytes().to_vec())
+        self.overlay
+            .get(rel)
+            .map(|text| text.as_bytes().to_vec())
             .or_else(|| std::fs::read(self.abs(rel)).ok())
     }
 

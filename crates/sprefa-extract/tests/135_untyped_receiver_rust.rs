@@ -61,7 +61,11 @@ fn drops(names: &[&str]) -> Vec<(String, String, String)> {
         .filter(|row| row["record"] == "unresolved" && row["family"] == "call")
         .map(|row| {
             (
-                text(row, "path").rsplit('/').next().unwrap_or("").to_string(),
+                text(row, "path")
+                    .rsplit('/')
+                    .next()
+                    .unwrap_or("")
+                    .to_string(),
                 text(row, "detail"),
                 text(row, "reason"),
             )
@@ -127,17 +131,15 @@ fn free_call_keeps_name_match() {
     // stay reachable for free names.
     let rows = edges(&["lib.rs", "use.rs"]);
     assert!(
-        rows.iter()
-            .any(|(callee, file, origin, _)| callee == "push"
-                && file == "use.rs"
-                && origin == "same_file"),
+        rows.iter().any(|(callee, file, origin, _)| callee == "push"
+            && file == "use.rs"
+            && origin == "same_file"),
         "{rows:?}"
     );
     assert!(
-        rows.iter()
-            .any(|(callee, file, origin, _)| callee == "mk"
-                && file == "use.rs"
-                && origin == "same_file"),
+        rows.iter().any(|(callee, file, origin, _)| callee == "mk"
+            && file == "use.rs"
+            && origin == "same_file"),
         "{rows:?}"
     );
 }
