@@ -31,7 +31,9 @@ The detailed archaeology, type proposal, library survey, lifecycle, and implemen
 - [x] Commit supports Git worktrees and directories without Git.
 - [x] Partial multi-file application has a typed journal and recovery path.
 - [x] DL6 can derive proposals and consume commit receipts without owning filesystem mechanics.
-- [ ] Scale gates cover large edit sets, large files, and many repositories.
+- [ ] Large edit set measurement: `just perf-source-mutations files=1000 edits_per_file=100 bytes_per_file=4096 receipt=target/perf-source-mutations/100k-edits.json` (100,000 edits).
+- [ ] Large file measurement: `just perf-source-mutations files=1 edits_per_file=100 bytes_per_file=16777216 receipt=target/perf-source-mutations/16mib-file.json` (one 16 MiB source file).
+- [ ] Many-repository refresh measurement: `cargo run --release -p soopy --example 6_multi_repo_refresh -- --repositories 100 --rounds 3 --concurrency 4`.
 
 ## Tests Run
 
@@ -42,4 +44,4 @@ The detailed archaeology, type proposal, library survey, lifecycle, and implemen
 
 ## Repro receipt
 
-2026-09-26: scale acceptance remains unchecked for large edit sets, large files, and many repositories; this epic stays open until those gates have receipts.
+2026-09-26: the remaining gates are measurement runs; the exact 100,000-edit, 16 MiB-file, and 100-repository commands are listed above. Status remains open until each has a receipt.
