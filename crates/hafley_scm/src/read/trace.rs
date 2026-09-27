@@ -575,7 +575,7 @@ mod sink {
     }
 
     /// stdout is the fact stream and is diffed byte for byte, so every span goes
-    /// to stderr. The shared executable convention is warn by default, with
+    /// to stderr. The shared executable convention defaults to INFO spans, with
     /// `RUST_LOG` selecting more or less detail and `HAFLEY_LOG_FORMAT` selecting
     /// human or JSON rendering. `DL_TRACE_SUMMARY` remains an independent summary
     /// layer over the same spans.
@@ -585,7 +585,7 @@ mod sink {
         let want_summary = !matches!(std::env::var("DL_TRAIL").as_deref(), Ok("0"))
             || matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
             || std::env::args().any(|arg| arg == "--bench");
-        // `info` is one line per file with its phase timings (user-set
+        // INFO is one line per file with its phase timings (user-set
         // 2026-09-18). `RUST_LOG` still overrides.
         let observability = hafley_observe::Config::from_env(
             "sprefa-extract",

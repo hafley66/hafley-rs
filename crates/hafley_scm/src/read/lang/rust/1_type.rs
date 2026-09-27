@@ -333,7 +333,11 @@ fn module_scoped_type(
 ) -> Option<(ContentId, Span)> {
     let paths = paths?;
     let from = own_path?;
-    let want = module_target(from, qualifier)?;
+    let want = module_target(
+        from,
+        qualifier,
+        modules.and_then(|index| index.crate_root_of(from)),
+    )?;
     let sites: Vec<&DefSite> = corpus_defs(index?, name)
         .iter()
         .filter(|site| site.family == FamilyTag::Type)

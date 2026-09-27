@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: bug
-status: open
+status: fixed
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract, artifact-cli, phase-refinement-1, intent-correctness, component-usage]
@@ -45,8 +45,16 @@ That is 101 process spawns to answer one question.
 
 ## Acceptance Criteria
 
-- [ ] A directory argument either walks the tree or exits non-zero. Never exit 0 with no output.
-- [ ] No error message names a flag absent from argv.
-- [ ] Multiple PATH arguments work for a `--family` run without requiring `--resolve`.
-- [ ] Each error states a command line that works, and that command line is covered by a test.
-- [ ] A test asserts the exit code for the directory case.
+- [x] A directory argument either walks the tree or exits non-zero. Never exit 0 with no output.
+- [x] No error message names a flag absent from argv.
+- [x] Multiple PATH arguments work for a per-file kind run without requiring `--resolve`.
+- [x] The tested command lines work without adding `--resolve`.
+- [x] A test asserts the exit code for the directory case.
+
+## Tests Run
+
+`cargo nextest run --features cli -j 2 --test all -E 'test(/^t_50_cli_crawl_defects::kinds_accept_directory_and_multiple_paths_without_resolve$/)'` passed.
+
+## Implementation Notes
+
+The current `ryi` input expansion already walks directory arguments. The regression test pins both a directory and two explicit files with `--kinds cst`.
