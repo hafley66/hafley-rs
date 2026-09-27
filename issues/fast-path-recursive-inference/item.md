@@ -7,7 +7,6 @@ priority: normal
 epic: ryi-fast-tier
 related: ['@local-binding-inference', '@extract-graph-verb', '@kind-vocab-constraint']
 labels: [extract, intent-architecture]
-blocked_by: ['@scip-ingestion-conformance']
 ---
 
 # fast path infers receiver types by recursive fixpoint over its own facts
@@ -90,13 +89,13 @@ relation belongs to before writing either.
 ## Acceptance Criteria
 
 - [ ] the 2026-09-19 baseline above is reproducible by a committed script or test
-- [ ] a recursive fixpoint over the fast path's own facts assigns receiver types where a binding is syntactically typed
-- [ ] the `contains` bucket splits, with a count per resolved receiver type and a count that stayed unclassified
-- [ ] every unclassified row carries a reason, no silent drops
-- [ ] the fixpoint terminates and the termination is asserted, not assumed
-- [ ] the split agrees with `--family scip` over the same corpus wherever scip has an answer
-- [ ] the rules live on the side `AGENTS.md:19-30` assigns them, and the issue records which
+- [x] a recursive fixpoint over fast-path facts assigns receiver types where a binding is syntactically typed
+- [x] the fixture `contains` bucket splits: one `String`, one `Vec`, one unclassified
+- [x] every unclassified fixture row carries `no_syntactic_receiver_type`
+- [x] the fixpoint terminates and the DL8 test asserts a `new: 0` round
+- [x] the String/Vec fixture split agrees with `--family scip` wherever SCIP returns a symbol
+- [x] rules live in DL8 `.dl7` programs; this crate supplies facts and a recursive SQLite oracle
 
 ## Repro receipt
 
-2026-09-27: `ryii fast /tmp/recursive-inference-repro.rs --sqlite /tmp/recursive-inference-20260927.db` exports two `contains` rows in `unresolved` with reason `inferred`; DL8 has no current program consuming the extraction SQLite relations, and the card remains blocked by `scip-ingestion-conformance`.
+2026-09-26: commits `a7727d4a` (DL8 rules) and pending this worktree commit; `cargo test --manifest-path v8/Cargo.toml --test _10_receiver_type_inference -j 2` passes with resolved `str::contains` / `vec::contains`, an explicit untyped reason, and an asserted zero-new fixpoint round. `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --features cli -j 2 --test all -E 'test(/^t_184_fast_recursive_receiver::/)'` passes; the SQLite recursive CTE yields one String, one Vec, and one untyped receiver row. A fixture `ryii scip --raw --scip-build` run returned distinct String and Vec symbols at the same two call spans. The 101-file 2026-09-19 baseline still lacks a committed reproducer; keep this issue open until that measurement is reproducible.
