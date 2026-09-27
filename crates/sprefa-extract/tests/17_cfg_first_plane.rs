@@ -91,6 +91,44 @@ const TS_DO_SOURCE: &str = r#"function spin(limit: number): number {
 }
 "#;
 
+const RUST_CATCH_SOURCE: &str = r#"fn parse_json(input: &str) {
+    std::panic::catch_unwind(|| {
+        may_throw();
+        panic!("invalid JSON");
+    });
+}
+"#;
+
+const GO_RECOVER_SOURCE: &str = r#"package p
+func parseJson(input string) {
+	defer func() { if recover() != nil { recoverHere() } }()
+	mayThrow()
+	panic("invalid JSON")
+}
+"#;
+
+const TS_THROW_SOURCE: &str = r#"function parseJson(stdout: string) {
+  try {
+    const text = stdout.trim();
+    if (!text) throw new Error("empty output");
+    return JSON.parse(text);
+  } catch (e) {
+    throw new Error("invalid JSON");
+  }
+}
+"#;
+
+const KOTLIN_THROW_SOURCE: &str = r#"fun parseJson(input: String): String {
+    try {
+        mayThrow()
+        throw RuntimeException("invalid JSON")
+    } catch (e: Exception) {
+        recoverHere()
+    }
+    return input
+}
+"#;
+
 /// One node rendered as `kind(first 28 chars of its own source text)`.
 fn label(source: &str, kind: &str, span: SpanOut) -> String {
     let text = &source[span.start as usize..span.end as usize];
@@ -228,6 +266,87 @@ fn ts_do_while_body_is_the_first_child() {
     );
 }
 
+fn throw_edges(path: &str, source: &str) -> BTreeSet<String> {
+    cfg_edges(path, source)
+        .into_iter()
+        .filter(|edge| edge.contains(" -throw-> "))
+        .collect()
+}
+
+#[test]
+fn ts_try_throw_and_calls_reach_the_catch_entry() {
+    let throws = throw_edges("parse.ts", TS_THROW_SOURCE);
+    assert!(throws.iter().any(|edge| edge.contains("stdout.trim()")));
+    assert!(throws.iter().any(|edge| edge.contains("JSON.parse(text)")));
+    assert!(throws.iter().any(|edge| edge.contains("throw new Error")));
+    assert!(
+        throws
+            .iter()
+            .filter(|edge| edge.contains("stdout.trim()")
+                || edge.contains("JSON.parse(text)")
+                || edge.contains("throw new Error(\"empty output\")"))
+            .all(|edge| edge.ends_with("stmt(e)")),
+        "try-body throws must reach catch parameter e: {throws:#?}"
+    );
+    assert!(
+        throws
+            .iter()
+            .any(|edge| edge.contains("throw new Error(\"invalid JSO")
+                && edge.ends_with("exit(function parseJson(stdout: s)")),
+        "a throw from the catch body must escape parseJson: {throws:#?}"
+    );
+}
+
+#[test]
+fn kotlin_try_throw_and_calls_reach_the_catch_entry() {
+    let throws = throw_edges("parse.kt", KOTLIN_THROW_SOURCE);
+    assert!(
+        throws.iter().any(|edge| edge.contains("mayThrow()")),
+        "{throws:#?}"
+    );
+    assert!(
+        throws
+            .iter()
+            .any(|edge| edge.contains("throw RuntimeException")),
+        "{throws:#?}"
+    );
+    assert_eq!(throws.len(), 2, "{throws:#?}");
+}
+
+#[test]
+fn rust_catch_unwind_receives_call_and_panic_edges() {
+    let throws = throw_edges("parse.rs", RUST_CATCH_SOURCE);
+    assert!(
+        throws.iter().any(|edge| edge.contains("may_throw()")),
+        "{throws:#?}"
+    );
+    assert!(
+        throws.iter().any(|edge| edge.contains("panic!(")),
+        "{throws:#?}"
+    );
+    assert!(
+        throws.iter().all(|edge| edge.contains("catch_unwind")),
+        "{throws:#?}"
+    );
+}
+
+#[test]
+fn go_deferred_recover_receives_call_and_panic_edges() {
+    let throws = throw_edges("parse.go", GO_RECOVER_SOURCE);
+    assert!(
+        throws.iter().any(|edge| edge.contains("mayThrow()")),
+        "{throws:#?}"
+    );
+    assert!(
+        throws.iter().any(|edge| edge.contains("panic(")),
+        "{throws:#?}"
+    );
+    assert!(
+        throws.iter().all(|edge| edge.ends_with("stmt(recover())")),
+        "{throws:#?}"
+    );
+}
+
 #[test]
 fn kotlin_when_and_jump_expression_edge_set() {
     expect(
@@ -248,7 +367,7 @@ fn kotlin_when_and_jump_expression_edge_set() {
             "stmt(0) -next-> ret(return -1)",
             "ret(return -1) -exit-> exit(fun walk(items: List<Int>): )",
             "branch(when (total) {) -arm-> ret(throw RuntimeException(\"x\"))",
-            "ret(throw RuntimeException(\"x\")) -exit-> exit(fun walk(items: List<Int>): )",
+            "ret(throw RuntimeException(\"x\")) -throw-> exit(fun walk(items: List<Int>): )",
             "branch(when (total) {) -exit-> exit(fun walk(items: List<Int>): )",
         ],
     );

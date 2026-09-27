@@ -1339,6 +1339,7 @@ pub enum CfgEdgeKind {
     Arm,
     Jump,
     Exit,
+    Throw,
 }
 
 impl CfgEdgeKind {
@@ -1348,6 +1349,7 @@ impl CfgEdgeKind {
             CfgEdgeKind::Arm => "arm",
             CfgEdgeKind::Jump => "jump",
             CfgEdgeKind::Exit => "exit",
+            CfgEdgeKind::Throw => "throw",
         }
     }
 }

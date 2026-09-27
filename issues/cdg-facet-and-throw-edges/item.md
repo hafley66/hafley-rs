@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: feature
-status: needs-decision
+status: open
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -44,12 +44,19 @@ exit   [2089,2419)
 `AGENTS.md:52` names taint and slicing the two highest-value next programs, and both ride control dependence. This is the prerequisite for both.
 
 ## Acceptance Criteria
-- [ ] a `throw` edge kind lands in the cfg vocabulary
-- [ ] `parseJson`'s catch clause has an incoming edge, rust/go/ts/kotlin each covered by a fixture
+- [x] a `throw` edge kind lands in the cfg vocabulary
+- [x] try-body throws and throwing calls reach the catch entry; rust/go/ts/kotlin each covered by a fixture
 - [ ] post-dominance computed from the cfg
 - [ ] CDG edges emitted under the existing `edge family=cfg` vocabulary, no new record kind
 - [ ] `extract graph --slice PATH:BYTE` returns a closed statement set on one fixture
 - [ ] `cargo test --features cli` green
+
+G1 repro receipt: `ryii --kinds cfg /tmp/cdg-throw-repro.ts` showed no incoming edge to `catch_clause` and sent the try-body throw to callable exit. The G1 fixture now asserts call-site and explicit throw edges into the catch entry; a throw from the catch body still reaches callable exit.
+
+G1 verification receipts:
+- `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --features cli -j 2 --offline --locked --test all` from `crates/sprefa-extract`: 1124 passed, 18 skipped.
+- `scripts/ryi-e2e.sh /Users/chrishafley/.cache/boop/cargo-target/release` from `crates/sprefa-extract`: 14/14 passed.
+- `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --workspace -j 2 -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'`: 1378 passed, 203 skipped, 1 leaky.
 
 ## Tests Run
 

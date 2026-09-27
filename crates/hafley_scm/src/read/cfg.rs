@@ -12,7 +12,7 @@
 //! Kotlin's `jump_expression` folds return/throw/break/continue into one kind
 //! (tree-sitter-kotlin-sg 0.4.1 grammar.js:1119-1126), so its row reads a token.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use crate::read::lang::source_for;
 use crate::read::rows::{Edge, FamilyBundle, Node};
@@ -53,6 +53,8 @@ pub enum CfgRole {
     Jump,
     /// return / throw / yield: control leaves the callable.
     Exit,
+    /// throw / panic: control leaves the current guarded region.
+    Throw,
     /// A goal naming the enclosing clause's own head: one statement plus a jump
     /// edge back to the Entry. Assigned only where the names agree.
     SelfCall,
@@ -77,7 +79,7 @@ pub enum RoleRule {
 
 use CfgRole::{
     Aggregate, Branch, Callable, Cases, Clause, DoLoop, Exit, Fork, Jump, Loop, Negation, SelfCall,
-    Seq, Try,
+    Seq, Throw, Try,
 };
 use RoleRule::{Fixed, LeadingKeyword, Named, Operator};
 
@@ -90,6 +92,15 @@ pub const RUST_ROLES: &[(&str, RoleRule)] = &[
     ("loop_expression", Fixed(Loop)),
     ("while_expression", Fixed(Loop)),
     ("for_expression", Fixed(Loop)),
+    ("try_block", Fixed(Try)),
+    ("call_expression", Named(&[("catch_unwind", Try)], None)),
+    (
+        "macro_invocation",
+        Named(
+            &[("panic", Throw), ("todo", Throw), ("unreachable", Throw)],
+            None,
+        ),
+    ),
     ("break_expression", Fixed(Jump)),
     ("continue_expression", Fixed(Jump)),
     ("return_expression", Fixed(Exit)),
@@ -111,6 +122,7 @@ pub const GO_ROLES: &[(&str, RoleRule)] = &[
     ("goto_statement", Fixed(Jump)),
     ("fallthrough_statement", Fixed(Jump)),
     ("return_statement", Fixed(Exit)),
+    ("call_expression", Named(&[("panic", Throw)], None)),
 ];
 
 /// tree-sitter-typescript 0.23.2 node kinds.
@@ -130,7 +142,8 @@ pub const TS_ROLES: &[(&str, RoleRule)] = &[
     ("break_statement", Fixed(Jump)),
     ("continue_statement", Fixed(Jump)),
     ("return_statement", Fixed(Exit)),
-    ("throw_statement", Fixed(Exit)),
+    ("try_statement", Fixed(Try)),
+    ("throw_statement", Fixed(Throw)),
     ("yield_expression", Fixed(Exit)),
 ];
 
@@ -144,6 +157,7 @@ pub const KOTLIN_ROLES: &[(&str, RoleRule)] = &[
     ("for_statement", Fixed(Loop)),
     ("while_statement", Fixed(Loop)),
     ("do_while_statement", Fixed(DoLoop)),
+    ("try_expression", Fixed(Try)),
     ("jump_expression", LeadingKeyword),
 ];
 
@@ -161,7 +175,7 @@ pub const PYTHON_ROLES: &[(&str, RoleRule)] = &[
     ("break_statement", Fixed(Jump)),
     ("continue_statement", Fixed(Jump)),
     ("return_statement", Fixed(Exit)),
-    ("raise_statement", Fixed(Exit)),
+    ("raise_statement", Fixed(Throw)),
     ("yield", Fixed(Exit)),
 ];
 
@@ -203,7 +217,8 @@ pub fn roles_for(lang: &str) -> Option<&'static [(&'static str, RoleRule)]> {
 /// leading word of the node's own source text.
 fn keyword_role(word: &str) -> Option<CfgRole> {
     match word {
-        "return" | "throw" | "yield" => Some(Exit),
+        "return" | "yield" => Some(Exit),
+        "throw" => Some(Throw),
         "break" | "continue" => Some(Jump),
         _ => None,
     }
@@ -277,6 +292,7 @@ struct LoopFrame {
 
 struct CfgBuild<'a> {
     cst: &'a FamilyBundle<CstF>,
+    strings: &'a Strings,
     content: &'a [u8],
     children: Vec<Vec<NodeRef>>,
     roles_by_node: Vec<Option<CfgRole>>,
@@ -284,6 +300,8 @@ struct CfgBuild<'a> {
     bundle: FamilyBundle<CfgF>,
     seen: HashSet<(u32, u32, u8)>,
     loops: Vec<LoopFrame>,
+    catches: Vec<NodeRef>,
+    caught_callables: HashMap<NodeRef, NodeRef>,
     entry: NodeRef,
     exit: NodeRef,
 }
@@ -324,7 +342,7 @@ impl<'a> CfgBuild<'a> {
                     .map(|(_, role)| *role),
                 Some(Named(table, fallback)) => table
                     .iter()
-                    .find(|(name, _)| *name == leading_name(content, node.span))
+                    .find(|(name, _)| *name == call_target_name(content, node.span))
                     .map(|(_, role)| *role)
                     .or(fallback),
                 None => None,
@@ -377,6 +395,7 @@ impl<'a> CfgBuild<'a> {
         }
         Self {
             cst,
+            strings,
             content,
             children,
             roles_by_node,
@@ -384,6 +403,8 @@ impl<'a> CfgBuild<'a> {
             bundle: FamilyBundle::default(),
             seen: HashSet::new(),
             loops: Vec::new(),
+            catches: Vec::new(),
+            caught_callables: HashMap::new(),
             entry: NodeRef(0),
             exit: NodeRef(0),
         }
@@ -435,7 +456,22 @@ impl<'a> CfgBuild<'a> {
             .copied()
             .filter(|child| self.span(*child).end() == span.end());
         let flow = match body {
-            Some(child) => self.link(child),
+            Some(child) => {
+                let recover = self.go_recover_target(child);
+                let target = recover.map(|node| self.node(self.span(node), CfgNodeKind::Stmt));
+                let target = target.or_else(|| self.caught_callables.get(&callable).copied());
+                if let Some(catch) = target {
+                    self.catches.push(catch);
+                    if recover.is_some() {
+                        self.throw_call_sites(child, catch, false);
+                    }
+                    let flow = self.link(child);
+                    self.catches.pop();
+                    flow
+                } else {
+                    self.link(child)
+                }
+            }
             None => Flow::default(),
         };
         self.close(entry, exit, flow);
@@ -469,6 +505,7 @@ impl<'a> CfgBuild<'a> {
         self.entry = entry;
         self.exit = exit;
         self.loops.clear();
+        self.catches.clear();
         (entry, exit)
     }
 
@@ -493,6 +530,48 @@ impl<'a> CfgBuild<'a> {
             stack.extend(kids);
         }
         found
+    }
+
+    fn go_recover_target(&self, body: NodeRef) -> Option<NodeRef> {
+        self.descendants(body).into_iter().find_map(|node| {
+            if self.strings.lookup(self.cst.nodes[node.0 as usize].kind) != "defer_statement" {
+                return None;
+            }
+            self.descendants(node).into_iter().find(|candidate| {
+                let kind = self
+                    .strings
+                    .lookup(self.cst.nodes[candidate.0 as usize].kind);
+                matches!(kind, "call_expression" | "call")
+                    && call_target_name(self.content, self.span(*candidate)) == "recover"
+            })
+        })
+    }
+
+    /// Add exceptional successors for call-shaped expressions inside the
+    /// guarded region. Nested callables and nested try regions own their calls.
+    fn throw_call_sites(&mut self, node: NodeRef, catch: NodeRef, include_throws: bool) {
+        let role = self.roles_by_node[node.0 as usize];
+        if matches!(role, Some(Callable | Try)) {
+            return;
+        }
+        if role == Some(Throw) {
+            if include_throws {
+                let thrown = self.node(self.span(node), CfgNodeKind::Ret);
+                self.edge(thrown, catch, CfgEdgeKind::Throw);
+            }
+            return;
+        }
+        let kind = self.strings.lookup(self.cst.nodes[node.0 as usize].kind);
+        if matches!(
+            kind,
+            "call_expression" | "call" | "new_expression" | "macro_invocation"
+        ) {
+            let site = self.node(self.span(node), CfgNodeKind::Stmt);
+            self.edge(site, catch, CfgEdgeKind::Throw);
+        }
+        for child in self.kids(node) {
+            self.throw_call_sites(child, catch, include_throws);
+        }
     }
 
     /// A role-free node is TRANSPARENT when its subtree holds a role (its
@@ -524,6 +603,15 @@ impl<'a> CfgBuild<'a> {
                 self.edge(ret, exit, CfgEdgeKind::Exit);
                 Flow {
                     entry: Some(ret),
+                    exits: Vec::new(),
+                }
+            }
+            Some(Throw) => {
+                let thrown = self.node(span, CfgNodeKind::Ret);
+                let target = self.catches.last().copied().unwrap_or(self.exit);
+                self.edge(thrown, target, CfgEdgeKind::Throw);
+                Flow {
+                    entry: Some(thrown),
                     exits: Vec::new(),
                 }
             }
@@ -700,9 +788,34 @@ impl<'a> CfgBuild<'a> {
         }
     }
 
-    /// The guarded body follows the try node; every handler (except, else,
-    /// finally) is an arm off it. Which statement raises is not modelled.
+    fn link_rust_catch_unwind(&mut self, node: NodeRef, span: Span) -> Flow {
+        let catch = self.node(span, CfgNodeKind::Stmt);
+        if let Some(closure) = self.descendants(node).into_iter().find(|candidate| {
+            self.strings
+                .lookup(self.cst.nodes[candidate.0 as usize].kind)
+                == "closure_expression"
+        }) {
+            if let Some(body) = self.kids(closure).last().copied() {
+                self.caught_callables.insert(closure, catch);
+                self.catches.push(catch);
+                self.throw_call_sites(body, catch, false);
+                self.catches.pop();
+            }
+        }
+        Flow {
+            entry: Some(catch),
+            exits: vec![catch],
+        }
+    }
+
+    /// The guarded body follows the try node; handlers are arms off it. Calls
+    /// and explicit throws in the body get exceptional successors to its catch.
     fn link_try(&mut self, node: NodeRef, span: Span) -> Flow {
+        if self.strings.lookup(self.cst.nodes[node.0 as usize].kind) == "call_expression"
+            && call_target_name(self.content, span) == "catch_unwind"
+        {
+            return self.link_rust_catch_unwind(node, span);
+        }
         let guard = self.node(span, CfgNodeKind::Branch);
         let kids = self.kids(node);
         let mut exits = Vec::new();
@@ -712,7 +825,30 @@ impl<'a> CfgBuild<'a> {
                 exits: vec![guard],
             };
         };
+        let handler_flows = handlers
+            .iter()
+            .map(|&handler| (handler, self.link(handler)))
+            .collect::<Vec<_>>();
+        let catch_target = handler_flows
+            .iter()
+            .find(|(handler, _)| {
+                matches!(
+                    self.strings.lookup(self.cst.nodes[handler.0 as usize].kind),
+                    "catch_clause" | "catch_block" | "except_clause"
+                )
+            })
+            .map(|(handler, flow)| {
+                flow.entry
+                    .unwrap_or_else(|| self.node(self.span(*handler), CfgNodeKind::Stmt))
+            });
+        if let Some(catch) = catch_target {
+            self.catches.push(catch);
+            self.throw_call_sites(body, catch, false);
+        }
         let inner = self.link(body);
+        if catch_target.is_some() {
+            self.catches.pop();
+        }
         match inner.entry {
             Some(entry) => {
                 self.edge(guard, entry, CfgEdgeKind::Next);
@@ -720,8 +856,7 @@ impl<'a> CfgBuild<'a> {
             }
             None => exits.push(guard),
         }
-        for &handler in handlers {
-            let flow = self.link(handler);
+        for (_, flow) in handler_flows {
             if let Some(entry) = flow.entry {
                 self.edge(guard, entry, CfgEdgeKind::Arm);
                 exits.extend(flow.exits);
@@ -745,6 +880,15 @@ fn leading_name(content: &[u8], span: Span) -> &str {
     leading_run(content, span, |byte| {
         byte.is_ascii_alphanumeric() || byte == b'_'
     })
+}
+
+/// The final path segment of a call-shaped node, without its argument list or
+/// macro `!`. Used for panic/recovery calls and Prolog's call-shaped roles.
+fn call_target_name(content: &[u8], span: Span) -> &str {
+    let text =
+        std::str::from_utf8(&content[span.start as usize..span.end() as usize]).unwrap_or("");
+    let head = text.split(['(', '!', ' ', '\n', '\t']).next().unwrap_or("");
+    head.rsplit("::").next().unwrap_or(head)
 }
 
 fn leading_run(content: &[u8], span: Span, keep: impl Fn(u8) -> bool) -> &str {
