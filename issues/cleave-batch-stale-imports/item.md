@@ -1,9 +1,9 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-27
 type: bug
 reporter: claude-lane-w
-status: open
+status: fixed
 priority: normal
 related: ['@cleave-real-crate-defects']
 ---
@@ -13,3 +13,9 @@ related: ['@cleave-real-crate-defects']
 ## Description
 
 Repro: a 10-row --list batch moving SourceSpan..GitEntryKind from crates/soopy/src/_0_types.rs into src/_0b_moved.rs (copy). Row k keeps 'use crate::_0b_moved::X;' in SRC because an item still in SRC uses X; a later row moves that user too, and nothing revisits the kept import. cargo check: 0 errors, 3 'unused import' warnings in src/_0_types.rs (SourceSpan, BytePosition, UntrackedFilePolicy). Expected: after the last row, drop SRC specifiers that name DEST and have no remaining free-name reference in SRC.
+
+## Resolution
+
+### 2026-09-27 · @codex
+
+Receipt: this queue commit adds `batch_drops_an_import_made_unused_by_a_later_row`; focused target passed (15 tests). The final import sweep was already present in `drop_batch_unused_imports`.

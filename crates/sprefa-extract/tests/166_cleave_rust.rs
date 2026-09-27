@@ -262,6 +262,34 @@ fn default_corpus_walk_skips_untracked_and_honors_gitignore() {
 }
 
 #[test]
+fn batch_drops_an_import_made_unused_by_a_later_row() {
+    let fixture = fixture("basic", "batch-stale-import");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod types;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/types.rs"),
+        "pub struct X;\npub struct A(pub X);\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+    let list = fixture.state.join("batch.tsv");
+    std::fs::write(
+        &list,
+        "src/types.rs#X\tsrc/moved.rs\nsrc/types.rs#A\tsrc/moved.rs\n",
+    )
+    .unwrap();
+
+    let stdout = cleave(&fixture, &["--list", list.to_str().unwrap()]);
+    assert!(
+        !stdout.contains("use crate::moved::X"),
+        "final batch preview retained the stale import:\n{stdout}"
+    );
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(
