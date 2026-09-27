@@ -26,7 +26,7 @@ def main() -> None:
         check=True,
     )
     if not EMITTER.is_file():
-        raise SystemExit(f"missing {EMITTER}; build @hafley/alloy-rs in HAFLEY_TSP")
+        raise SystemExit(f"missing {EMITTER}; build @hafley66/alloy-rs in HAFLEY_TSP")
     if len(sys.argv) > 1 and sys.argv[1]:
         staging = Path(sys.argv[1]).resolve()
         server_out = staging / "server"
