@@ -1,0 +1,2 @@
+crates/hafley_scm/src/pipeline/run_over_file_tree/test_predicates_per_candidate.rs	fn::holds_for_candidate	1
+crates/hafley_scm/src/read/2_slow.rs	fn::type_rows	1

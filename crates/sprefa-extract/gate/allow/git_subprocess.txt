@@ -1,0 +1,2 @@
+crates/sprefa-extract/src/bin/ryi.rs	fn::git_sha	1
+crates/sprefa-extract/src/edit/_1_move_cx.rs	fn::walk_files_with_untracked	1
