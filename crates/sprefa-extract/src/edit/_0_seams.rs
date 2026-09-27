@@ -189,6 +189,22 @@ pub trait Rehome: Source + Sync + Send {
     /// target may both move). None = unchanged.
     fn respell(&self, cx: &MoveCx, reference: &ImportRef) -> Option<Respell>;
 
+    /// Plans the language's whole move batch. The default handles each row
+    /// independently; languages with shared syntax facts can reuse one parse.
+    fn plan_respells(&self, cx: &MoveCx, extra_refs: &[ImportRef]) -> Vec<Respell> {
+        let mut respells: Vec<Respell> = self
+            .import_refs(cx)
+            .iter()
+            .filter_map(|reference| self.respell(cx, reference))
+            .collect();
+        respells.extend(
+            extra_refs
+                .iter()
+                .filter_map(|reference| self.respell(cx, reference)),
+        );
+        respells
+    }
+
     /// The file name whose stem stands for its directory ("mod" for Rust,
     /// "index" for TS). None: no directory-standing file in this language.
     fn directory_stem(&self) -> Option<&'static str> {
