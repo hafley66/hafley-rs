@@ -2,7 +2,8 @@
 
 use std::os::unix::fs::MetadataExt as _;
 use std::path::Path;
-use std::process::{Command, Output};
+use std::process::{Command, Output, Stdio};
+use std::io::Write as _;
 use std::time::{Duration, Instant};
 
 use crate::daemon_guard::DaemonGuard;
@@ -13,6 +14,16 @@ fn run(client: &Path, cache: &Path, args: &[&str], idle: Option<u64>, trace: Opt
         .env("RYI_IDLE_SECS", idle.unwrap_or(5).to_string());
     if let Some(path) = trace { command.env("HAFLEY_TRACE", path); }
     command.output().expect("client process")
+}
+
+fn run_stdin(binary: &Path, cache: Option<&Path>, args: &[&str], input: &[u8]) -> Output {
+    let mut command = Command::new(binary);
+    command.args(args).env("DL_TRAIL", "0").env("RUST_LOG", "off")
+        .stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped());
+    if let Some(cache) = cache { command.env("XDG_CACHE_HOME", cache).env("RYI_IDLE_SECS", "5"); }
+    let mut child = command.spawn().expect("stdin process");
+    child.stdin.take().expect("piped stdin").write_all(input).expect("write stdin bytes");
+    child.wait_with_output().expect("stdin process output")
 }
 
 #[test]
@@ -62,6 +73,29 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
     assert_eq!(first.stdout, plain.stdout, "direct and daemon stdout");
     let second = run(&client, &cache, &["fast", file], None, Some(&trace));
     assert_eq!(second.stdout, first.stdout, "second request on resident daemon");
+
+    let path_list = format!("{file}\n");
+    let direct_paths = run_stdin(&server, None, &["fast", "-"], path_list.as_bytes());
+    let daemon_paths = run_stdin(&client, Some(&cache), &["fast", "-"], path_list.as_bytes());
+    assert_eq!(daemon_paths.status.code(), direct_paths.status.code(), "raw path-list exit");
+    assert_eq!(daemon_paths.stdout, direct_paths.stdout, "raw path-list stdout");
+
+    let region = scratch.path().join("region.rs");
+    std::fs::write(&region, b"// sprefa:auto-begin demo\nraw generated text\nwith another line\n// sprefa:auto-end demo\n").unwrap();
+    let region = region.to_str().expect("UTF-8 region path");
+    let generated = b"raw generated text\nwith another line\n";
+    let region_args = ["region", region, "demo", "--generated", "-"];
+    let direct_region = run_stdin(&server, None, &region_args, generated);
+    let daemon_region = run_stdin(&client, Some(&cache), &region_args, generated);
+    assert_eq!(daemon_region.status.code(), direct_region.status.code(), "raw region exit");
+    assert_eq!(daemon_region.stdout, direct_region.stdout, "raw region stdout");
+
+    let ingest_bytes = std::fs::read(Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests/fixtures/tsi/foreign_probe.jsonl")).expect("TSI fixture bytes");
+    let direct_ingest = run_stdin(&server, None, &["ingest", "/dev/stdin"], &ingest_bytes);
+    let daemon_ingest = run_stdin(&client, Some(&cache), &["ingest", "/dev/stdin"], &ingest_bytes);
+    assert_eq!(daemon_ingest.status.code(), direct_ingest.status.code(), "raw ingest exit");
+    assert_eq!(daemon_ingest.stdout, direct_ingest.stdout, "raw ingest stdout");
     let unknown = scratch.path().join("unknown.extension");
     std::fs::write(&unknown, b"unrecognized source\n").expect("unknown fixture");
     let unknown = unknown.to_str().expect("UTF-8 unknown path");
@@ -114,7 +148,7 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
         .filter_map(|event| event["args"]["request_id"].as_u64()
             .or_else(|| event["args"]["request_id"].as_str()?.parse().ok()))
         .collect();
-    assert_eq!(requests.len(), 2, "two fast request spans in observe sink: {:?}", timeline.as_array().unwrap().iter().filter(|event| event["name"] == "daemon_request").take(8).collect::<Vec<_>>());
+    assert_eq!(requests.len(), 3, "three fast request spans in observe sink: {:?}", timeline.as_array().unwrap().iter().filter(|event| event["name"] == "daemon_request").take(8).collect::<Vec<_>>());
 
     let idle_cache = scratch.path().join("idle-cache");
     let mut idle = DaemonGuard::new(&idle_cache);

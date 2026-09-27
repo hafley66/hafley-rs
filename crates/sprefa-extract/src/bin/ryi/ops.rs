@@ -4,8 +4,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
 
-use serde_json::Value;
-
 use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
@@ -79,6 +77,7 @@ thread_local! {
     static OP_WRITE_ERROR: RefCell<Option<std::io::Error>> = const { RefCell::new(None) };
     static REQUEST_ROOT: RefCell<Option<PathBuf>> = const { RefCell::new(None) };
     static REQUEST_DIAGNOSTICS: RefCell<Option<Diagnostics>> = const { RefCell::new(None) };
+    static REQUEST_INPUT: RefCell<Option<Arc<tempfile::NamedTempFile>>> = const { RefCell::new(None) };
 }
 
 pub(crate) type Diagnostics = Arc<Mutex<Vec<u8>>>;
@@ -103,6 +102,25 @@ pub(crate) fn with_request_context<T>(root: PathBuf, diagnostics: Option<Diagnos
     let result = run();
     drop(guard);
     result
+}
+
+struct RequestInputGuard(Option<Arc<tempfile::NamedTempFile>>);
+
+impl Drop for RequestInputGuard {
+    fn drop(&mut self) {
+        REQUEST_INPUT.with(|slot| { slot.replace(self.0.take()); });
+    }
+}
+
+pub(crate) fn with_request_input<T>(input: Option<Arc<tempfile::NamedTempFile>>, run: impl FnOnce() -> T) -> T {
+    let guard = RequestInputGuard(REQUEST_INPUT.with(|slot| slot.replace(input)));
+    let result = run();
+    drop(guard);
+    result
+}
+
+pub(crate) fn request_input_file() -> Option<Arc<tempfile::NamedTempFile>> {
+    REQUEST_INPUT.with(|slot| slot.borrow().clone())
 }
 
 pub(crate) fn print_diagnostic(args: std::fmt::Arguments<'_>) {
@@ -163,9 +181,10 @@ fn produce(ryi: Ryi) -> Rows {
     let operation_cancelled = Arc::clone(&cancelled);
     let request_root = request_root();
     let diagnostics = REQUEST_DIAGNOSTICS.with(|slot| slot.borrow().clone());
+    let request_input = request_input_file();
     let chunked = REQUEST_ROOT.with(|slot| slot.borrow().is_some()) && !matches!(&ryi.cmd, Some(Cmd::Watch(_)));
     std::thread::spawn(move || {
-        let result = with_request_context(request_root, diagnostics, || -> OpResult<()> {
+        let result = with_request_input(request_input, || with_request_context(request_root, diagnostics, || -> OpResult<()> {
             let sink = SharedSink(Arc::new(Mutex::new(RowSink { tx: tx.clone(), pending: Vec::new(), chunked })));
             OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
             let outcome = crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled)).map_err(|error| {
@@ -178,7 +197,7 @@ fn produce(ryi: Ryi) -> Rows {
                 return Err(OpError::from(error));
             }
             outcome
-        });
+        }));
         if let Err(error) = result { let _ = tx.send(Err(error)); }
     });
     Rows { rx, cancelled }
@@ -217,21 +236,7 @@ pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Region(
 pub fn schema(_args: &SchemaArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Schema)) }
 pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Trail(args.clone()))) }
 
-pub fn ingest(args: &IngestArgs, input: impl Iterator<Item = OpResult<Value>>) -> OpResult<Vec<u8>> {
-    let mut staged = tempfile::NamedTempFile::new()?;
-    let mut received = false;
-    for value in input {
-        serde_json::to_writer(&mut staged, &value?)?;
-        staged.write_all(b"\n")?;
-        received = true;
-    }
-    if !received {
-        return one(command(Cmd::Ingest(args.clone())));
-    }
-    let mut args = args.clone();
-    args.paths = vec![staged.path().to_path_buf()];
-    one(command(Cmd::Ingest(args)))
-}
+pub fn ingest(args: &IngestArgs) -> OpResult<Vec<u8>> { one(command(Cmd::Ingest(args.clone()))) }
 
 #[cfg(test)]
 mod tests {

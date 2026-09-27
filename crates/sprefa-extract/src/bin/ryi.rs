@@ -281,7 +281,7 @@ fn register_line_tables(cli: &FileArgs, output: &mut sqlite::Output) {
 /// symlink whose existence probe can fail under process churn, so it passes.
 fn check_ingest_paths(paths: &[PathBuf]) -> RyiResult<()> {
     for path in paths {
-        if path == std::path::Path::new("/dev/stdin") || path.exists() {
+        if path == std::path::Path::new("/dev/stdin") || path == std::path::Path::new("-") || path.exists() {
             continue;
         }
         // @eprintln-ok: CLI-UX argument error, off the fact stream, exit 2.
@@ -482,7 +482,6 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             eprintln!("ryi: --format {format}: use jsonl");
             exit(2);
         }
-        let stdin = std::io::stdin();
         // The format adapter consumes the in-process operation while that
         // operation owns stdout. Write its envelope through the original fd.
         let fd = unsafe { libc::dup(libc::STDOUT_FILENO) };
@@ -492,7 +491,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         if ryi.cmd.is_none() {
             return write_formatted_rows(&mut stdout, ops::file(&ryi.file));
         }
-        return run_formatted(ryi, &mut stdin.lock(), &mut stdout);
+        return run_formatted(ryi, &mut stdout);
     }
     let (mut cli, tier) = match ryi.cmd {
         None => (ryi.file, Tier::Files),
@@ -573,7 +572,7 @@ fn write_formatted_one(out: &mut dyn Write, row: ops_auto::OpResult<Vec<u8>>) ->
     }
 }
 
-fn run_formatted(ryi: Ryi, input: &mut dyn std::io::BufRead, out: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
+fn run_formatted(ryi: Ryi, out: &mut dyn Write) -> Result<(), Box<dyn std::error::Error>> {
     match ryi.cmd {
         None => write_formatted_rows(out, ops::file(&ryi.file)),
         Some(Cmd::Fast(args)) => write_formatted_rows(out, ops::fast(&args)),
@@ -589,12 +588,7 @@ fn run_formatted(ryi: Ryi, input: &mut dyn std::io::BufRead, out: &mut dyn Write
         Some(Cmd::Region(args)) => write_formatted_one(out, ops::region(&args)),
         Some(Cmd::Schema) => write_formatted_one(out, ops::schema(&Default::default())),
         Some(Cmd::Trail(args)) => write_formatted_one(out, ops::trail(&args)),
-        Some(Cmd::Ingest(args)) => {
-            use std::io::BufRead as _;
-            let rows = input.lines().map(|line| line.map_err(ops_auto::OpError::from)
-                .and_then(|line| serde_json::from_str(&line).map_err(ops_auto::OpError::from)));
-            write_formatted_one(out, ops::ingest(&args, rows))
-        }
+        Some(Cmd::Ingest(args)) => write_formatted_one(out, ops::ingest(&args)),
     }
 }
 
@@ -1021,7 +1015,19 @@ fn stream_ingest(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut lines: Vec<String> = Vec::new();
     for path in paths {
-        lines.extend(std::fs::read_to_string(path)?.lines().map(str::to_string));
+        let text = if path == std::path::Path::new("-") || path == std::path::Path::new("/dev/stdin") {
+            match ops::request_input_file() {
+                Some(input) => std::fs::read_to_string(input.path())?,
+                None if path == std::path::Path::new("-") => {
+                    use std::io::Read as _;
+                    let mut text = String::new();
+                    std::io::stdin().read_to_string(&mut text)?;
+                    text
+                }
+                None => std::fs::read_to_string(path)?,
+            }
+        } else { std::fs::read_to_string(path)? };
+        lines.extend(text.lines().map(str::to_string));
     }
     match ingest(lines.into_iter()) {
         Ok(rows) => {

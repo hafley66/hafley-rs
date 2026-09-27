@@ -49,8 +49,8 @@ impl Request {
     }
 }
 
-fn resolve_paths(verb: &str, root: &Path, args: &mut serde_json::Value) {
-    let names: &[&str] = match verb {
+fn path_fields(verb: &str) -> &'static [&'static str] {
+    match verb {
         "extract" => &["paths", "entry", "root", "sqlite", "scip_index"],
         "fast" => &["paths", "entry", "root", "sqlite"],
         "slow" => &["paths", "entry", "root", "sqlite", "scip_index"],
@@ -67,7 +67,11 @@ fn resolve_paths(verb: &str, root: &Path, args: &mut serde_json::Value) {
         "schema" => &[],
         "trail" => &[],
         _ => &[],
-    };
+    }
+}
+
+fn resolve_paths(verb: &str, root: &Path, args: &mut serde_json::Value) {
+    let names = path_fields(verb);
     let Some(object) = args.as_object_mut() else { return };
     for name in names {
         let Some(value) = object.get_mut(*name) else { continue };
@@ -85,6 +89,42 @@ fn resolve_paths(verb: &str, root: &Path, args: &mut serde_json::Value) {
             _ => {}
         }
     }
+}
+
+pub fn request_uses_stdin(verb: &str, args: &serde_json::Value) -> bool {
+    let names: &[&str] = match verb {
+        "extract" => &["paths"],
+        "fast" => &["paths"],
+        "slow" => &["paths"],
+        "scip" => &["paths"],
+        "graph" => &["paths"],
+        "cleave" => &[],
+        "move" => &[],
+        "rename" => &[],
+        "query" => &["paths"],
+        "region" => &["generated"],
+        "watch" => &[],
+        "diff" => &[],
+        "ingest" => &["paths"],
+        "schema" => &[],
+        "trail" => &[],
+        _ => &[],
+    };
+    fn has_stdin(value: &serde_json::Value, names: &[&str]) -> bool {
+        match value {
+            serde_json::Value::Object(object) => object.iter().any(|(key, value)| {
+                if names.contains(&key.as_str()) {
+                    match value {
+                        serde_json::Value::String(path) => path == "-" || path == "/dev/stdin",
+                        serde_json::Value::Array(paths) => paths.iter().any(|path| path.as_str().is_some_and(|path| path == "-" || path == "/dev/stdin")),
+                        _ => false,
+                    }
+                } else { has_stdin(value, names) }
+            }),
+            _ => false,
+        }
+    }
+    has_stdin(args, names)
 }
 
 fn resolve_one(root: &Path, path: &mut String) {

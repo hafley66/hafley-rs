@@ -16,12 +16,16 @@ using Daemon;
 @afterHelp("Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nBuild: git hash: $SPREFA_BUILD_GIT_HASH, datetime: $SPREFA_BUILD_DATETIME")
 namespace Ryi;
 
+/** Unmodified stdin bytes, including newlines and non-JSON content. */
+model RawByteStream is HttpStream<bytes, "application/octet-stream", bytes>;
+
 /** Extract file facts with the root flags */
-op extract(args: FileArgs): JsonlStream<jsonValue>;
+op extract(args: FileArgs, @bodyRoot input: RawByteStream): JsonlStream<jsonValue>;
 
 /** Syntax-only whole-project facts (no compiler) */
 op fast(
   ...Inputs,
+  @bodyRoot input: RawByteStream,
 
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") sqlite?: path,
@@ -33,6 +37,7 @@ op fast(
 /** The SCIP oracle written as fast's tables */
 op slow(
   ...Inputs,
+  @bodyRoot input: RawByteStream,
 
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") sqlite?: path,
@@ -53,6 +58,7 @@ op slow(
 /** Raw SCIP index rows */
 op scip(
   ...Inputs,
+  @bodyRoot input: RawByteStream,
 
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") sqlite?: path,
@@ -89,6 +95,7 @@ op scip(
 @requiredOneOf(#["callers", "uses", "from", "call_path", "type_path", "flow_path"], "arm")
 op graph(
   ...Inputs,
+  @bodyRoot input: RawByteStream,
 
   /** Resolved call edges landing on NAME */
   @valueName("NAME") callers?: string,
@@ -245,6 +252,7 @@ op rename(
 /** Run a tree-sitter query over files */
 op query(
   ...Inputs,
+  @bodyRoot input: RawByteStream,
 
   /** Language name (default: from each file's extension) */
   lang?: string,
@@ -261,6 +269,7 @@ op query(
 
 /** Replace a generated region between sprefa markers */
 op region(
+  @bodyRoot input: RawByteStream,
   /** DL7 file holding the markers */
   @positional target: path,
   /** Marker id after sprefa:auto-begin / sprefa:auto-end */
@@ -310,7 +319,7 @@ op ingest(
   /** TSI JSONL files (/dev/stdin reads standard input) */
   @query @positional @valueName("PATH") @minItems(1) paths?: path[],
 
-  @bodyRoot input: JsonlStream<jsonValue>,
+  @bodyRoot input: RawByteStream,
 
   @skip @header("X-Trace") trace?: string,
 

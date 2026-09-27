@@ -20,7 +20,12 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
                 continue;
             }
             stdin_read = true;
-            for line in std::io::stdin().lock().lines() {
+            let stdin = std::io::stdin();
+            let reader: Box<dyn BufRead + '_> = match crate::ops::request_input_file() {
+                Some(input) => Box::new(std::io::BufReader::new(input.reopen().map_err(|error| format!("stdin: {error}"))?)),
+                None => Box::new(stdin.lock()),
+            };
+            for line in reader.lines() {
                 let line = line.map_err(|error| format!("stdin: {error}"))?;
                 let line = line.trim();
                 if !line.is_empty() {
