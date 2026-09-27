@@ -165,7 +165,7 @@ fn no_new_src_unit_test_reaches_the_machine_s_own_agent_root() {
         // Resolving a default path alone is read-only. Opening a store is the
         // operation that can create/migrate production data.
         let stores = text.contains("Store::default_path()")
-            && text.contains("Store::open")
+            && text.contains("Store::open(")
             && names_a_fixture
             && !pins_store;
 

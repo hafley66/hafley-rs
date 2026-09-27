@@ -8,17 +8,24 @@ use std::path::{Path, PathBuf};
 const BUDGET_LOOKBACK: usize = 6;
 
 const BUDGET_PREFIX: &str = "// budget:";
+const MAX_SOURCE_DIRECTORIES: usize = 100_000;
 
-fn rust_files(root: &Path) -> Vec<PathBuf> {
+fn rust_files(root: &Path) -> std::io::Result<Vec<PathBuf>> {
     let mut files = Vec::new();
     let mut pending = vec![root.to_path_buf()];
-    // budget: one directory entry per push; every pushed path comes from a
-    // bounded read_dir listing
-    while let Some(directory) = pending.pop() {
-        let Ok(entries) = fs::read_dir(&directory) else {
-            continue;
-        };
-        for entry in entries.flatten() {
+    let mut visited = 0;
+    // budget: MAX_SOURCE_DIRECTORIES visited paths; overflow returns an error
+    while !pending.is_empty() {
+        if visited == MAX_SOURCE_DIRECTORIES {
+            return Err(std::io::Error::other(format!(
+                "source tree exceeds {MAX_SOURCE_DIRECTORIES} directories"
+            )));
+        }
+        let directory = pending.pop().expect("nonempty pending stack");
+        visited += 1;
+        let entries = fs::read_dir(&directory)?;
+        for entry in entries {
+            let entry = entry?;
             let path = entry.path();
             if path.is_dir() {
                 pending.push(path);
@@ -28,7 +35,7 @@ fn rust_files(root: &Path) -> Vec<PathBuf> {
         }
     }
     files.sort();
-    files
+    Ok(files)
 }
 
 fn first_constant(budget: &str) -> Option<String> {
@@ -42,7 +49,7 @@ fn first_constant(budget: &str) -> Option<String> {
 #[test]
 fn every_loop_names_the_constant_that_bounds_it() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-    let files = rust_files(&root);
+    let files = rust_files(&root).expect("source tree stays within the directory bound");
     assert!(
         !files.is_empty(),
         "no sources found under {}",
