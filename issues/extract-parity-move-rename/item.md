@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: epic
-status: open
+status: needs-decision
 priority: normal
 labels: [extract]
 ---
@@ -17,3 +17,7 @@ Plan: crates/sprefa-extract/plans/2026-09-17-fast-slow-parity-and-move-rename.md
 - [ ] RATCHET.tsv wrong_target 0 on rust, ts, kotlin rows, on the sprefa bench corpora
 - [ ] kotlin receiver plane at the rust/ts bar (K1, K2, K3)
 - [ ] ts field rename and rust rename seats (lane E) land
+
+## Decisions
+
+Should Lane E Go/Python move and rename work resume under this epic, or be split into a separately prioritized item?
