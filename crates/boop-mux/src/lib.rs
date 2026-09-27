@@ -10,9 +10,12 @@
 
 use std::io::{BufRead, BufReader, Write};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context, Result};
 use tracing::{debug, warn};
+
+static NEXT_PASTE_BUFFER: AtomicU64 = AtomicU64::new(0);
 
 mod _0_snapshot;
 pub use _0_snapshot::{
@@ -191,6 +194,19 @@ pub trait Multiplexer {
 
     /// Kill one window, leaving the rest of its session intact.
     fn kill_window(&self, socket: Option<&str>, target: &str) -> Result<()>;
+
+    /// Send named tmux key names such as `Enter`, `C-u` or `Escape`.
+    fn send_key_named(&self, _socket: Option<&str>, _pane: &str, _key: &str) -> Result<()> {
+        anyhow::bail!("multiplexer does not support named keys")
+    }
+    /// Send text through tmux's bracketed paste buffer path.
+    fn send_text(&self, _socket: Option<&str>, _pane: &str, _text: &str) -> Result<()> {
+        anyhow::bail!("multiplexer does not support text paste")
+    }
+    /// Send literal text without interpreting it as tmux key names.
+    fn send_keys_literal(&self, _socket: Option<&str>, _pane: &str, _text: &str) -> Result<()> {
+        anyhow::bail!("multiplexer does not support literal keys")
+    }
 }
 
 /// The one `Multiplexer` implementation: tmux itself, driven by a mix of raw
@@ -715,6 +731,76 @@ impl Multiplexer for Tmux {
             );
         }
         debug!(target, "tmux kill-window completed");
+        Ok(())
+    }
+
+    fn send_key_named(&self, socket: Option<&str>, pane: &str, key: &str) -> Result<()> {
+        let output = tmux_command(socket)
+            .args(["send-keys", "-t", pane, key])
+            .output()
+            .context("tmux send-keys")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "tmux send-keys into {pane} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+        Ok(())
+    }
+
+    fn send_text(&self, socket: Option<&str>, pane: &str, text: &str) -> Result<()> {
+        let buffer = format!(
+            "boop-{}-{}",
+            std::process::id(),
+            NEXT_PASTE_BUFFER.fetch_add(1, Ordering::Relaxed)
+        );
+        let mut child = tmux_command(socket)
+            .args(["load-buffer", "-b", &buffer, "-"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context("spawn tmux load-buffer")?;
+        child
+            .stdin
+            .take()
+            .context("tmux load-buffer stdin")?
+            .write_all(text.as_bytes())
+            .context("write tmux paste buffer")?;
+        let loaded = child
+            .wait_with_output()
+            .context("wait for tmux load-buffer")?;
+        anyhow::ensure!(
+            loaded.status.success(),
+            "tmux load-buffer failed: {}",
+            String::from_utf8_lossy(&loaded.stderr).trim()
+        );
+
+        let pasted = tmux_command(socket)
+            .args(["paste-buffer", "-d", "-p", "-b", &buffer, "-t", pane])
+            .output()
+            .context("tmux paste-buffer")?;
+        if !pasted.status.success() {
+            let _ = tmux_command(socket)
+                .args(["delete-buffer", "-b", &buffer])
+                .output();
+            anyhow::bail!(
+                "tmux paste-buffer into {pane} failed: {}",
+                String::from_utf8_lossy(&pasted.stderr).trim()
+            );
+        }
+        Ok(())
+    }
+
+    fn send_keys_literal(&self, socket: Option<&str>, pane: &str, text: &str) -> Result<()> {
+        let output = tmux_command(socket)
+            .args(["send-keys", "-l", "-t", pane, text])
+            .output()
+            .context("tmux send-keys literal")?;
+        anyhow::ensure!(
+            output.status.success(),
+            "tmux send-keys literal into {pane} failed: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
         Ok(())
     }
 }
@@ -1434,7 +1520,6 @@ mod tests {
 
     /// A scratch pane that records every byte it is sent. `sink` waits for the
     /// pane to run before returning, so a send cannot race the redirect.
-    #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
     struct Sink {
         path: std::path::PathBuf,
     }
@@ -1632,20 +1717,19 @@ mod tests {
         }
     }
 
-    #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
-    fn sink(server: &TestServer, name: &str, bracketed: bool) -> Sink {
+    fn sink(server: &TestServer, name: &str) -> Sink {
         let path = std::env::temp_dir().join(format!(
             "boop-sink-{}-{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         let _ = std::fs::remove_file(&path);
-        // `printf '\033[?2004h'` is how an application asks tmux for
-        // bracketed paste; a plain `cat` pane never asks.
-        let command = match bracketed {
-            true => format!("sh -c 'printf \"\\033[?2004h\"; cat > {}'", path.display()),
-            false => format!("sh -c 'cat > {}'", path.display()),
-        };
+        // Raw mode records every byte. The escape sequence asks tmux for
+        // bracketed paste, which exercises the same mode used by a TUI.
+        let command = format!(
+            "sh -c 'stty raw -echo; printf \"\\033[?2004h\"; cat > {}'",
+            path.display()
+        );
         Tmux.new_detached_session(Some(&server.socket), name, "/tmp", &command)
             .expect("tmux installed and reachable to create the sink session");
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
@@ -1658,7 +1742,6 @@ mod tests {
     impl Sink {
         /// The bytes the pane has received, polled until they match `want` or
         /// the deadline passes; a mismatch returns what did arrive.
-        #[allow(dead_code)] // bracketed-paste sink scaffolding, no live test yet
         fn received(&self, want: &str) -> String {
             let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
             let mut last = String::new();
@@ -1677,5 +1760,24 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_file(&self.path);
         }
+    }
+
+    #[test]
+    fn user_paste_sends_text_through_a_scratch_tmux_server() {
+        if !tmux_on_path() {
+            eprintln!("skipping: tmux not on PATH");
+            return;
+        }
+        let server = TestServer::new();
+        let name = session_name();
+        let sink = sink(&server, &name);
+        let text = "first line\nsecond line";
+
+        Tmux.send_text(Some(&server.socket), &name, text)
+            .expect("paste into scratch pane");
+
+        let pasted = text.replace('\n', "\r");
+        let want = format!("\u{1b}[200~{pasted}\u{1b}[201~");
+        assert_eq!(sink.received(&want), want);
     }
 }

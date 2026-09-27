@@ -21,6 +21,7 @@ use anyhow::{bail, Context, Result};
 
 use boop::harness::HarnessId;
 use boop::registry::Registry;
+use boop::tmux::{Multiplexer, Tmux};
 use boop::{bus, live};
 
 use crate::cli::mail_dir;
@@ -88,22 +89,6 @@ fn write_pasteboard(path: &Path, class: &str) -> Result<()> {
     Ok(())
 }
 
-/// One `tmux send-keys` with as many keys as named: `["Escape", "Escape"]` is
-/// two key presses, a single `"Esc Esc"` argument would be one unknown key.
-pub(crate) fn send_keys(pane: &str, keys: &[&str], literal: bool) -> Result<()> {
-    let mut command = Command::new("tmux");
-    command.args(["send-keys", "-t", pane]);
-    if literal {
-        command.arg("-l");
-    }
-    command.args(keys);
-    let status = command.status().context("run tmux send-keys")?;
-    if !status.success() {
-        bail!("tmux send-keys into {pane} exited {status}");
-    }
-    Ok(())
-}
-
 #[allow(clippy::too_many_arguments)]
 pub(crate) fn run_paste(
     registry: &Registry,
@@ -153,7 +138,7 @@ pub(crate) fn run_paste(
     match plan(path, keys, as_path) {
         PastePlan::Image { class, keys } => {
             write_pasteboard(path, class)?;
-            send_keys(&pane, &[keys], false)?;
+            Tmux.send_key_named(None, &pane, keys)?;
             println!(
                 "pasted {} as {class} into {pane}: pasteboard + {keys}",
                 path.display()
@@ -161,7 +146,7 @@ pub(crate) fn run_paste(
         }
         PastePlan::PathText(text) => {
             let typed = format!("{text} ");
-            send_keys(&pane, &[&typed], true)?;
+            Tmux.send_keys_literal(None, &pane, &typed)?;
             println!("typed {text} into {pane} (no Enter)");
         }
     }

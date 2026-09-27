@@ -586,8 +586,8 @@ pub(crate) fn run_native_tui(
                 let screen = boop::tmux::mux().capture_pane(None, pane, None)?;
                 let rows = screen.lines().collect::<Vec<_>>();
                 if adapter.terminal_input_region(&rows).is_some() {
-                    crate::cli::paste::send_keys(pane, &[prompt], true)?;
-                    crate::cli::paste::send_keys(pane, &["Enter"], false)?;
+                    boop::tmux::mux().send_keys_literal(None, pane, &prompt)?;
+                    boop::tmux::mux().send_key_named(None, pane, "Enter")?;
                     pending_prompt = None;
                 }
             }

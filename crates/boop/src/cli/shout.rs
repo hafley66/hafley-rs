@@ -311,7 +311,8 @@ fn press_interrupt_keys(
         unreachable!()
     };
     let session = session.expect("interrupt_key verified the live session");
-    crate::cli::paste::send_keys(pane, &[key], false)
+    tmux::mux()
+        .send_key_named(None, pane, key)
         .with_context(|| format!("interrupt {name} in pane {pane}"))?;
     println!("interrupt-sent {name} in {pane} with {key}");
     match harness.door().notify_idle(&session, Duration::from_secs(2)) {
