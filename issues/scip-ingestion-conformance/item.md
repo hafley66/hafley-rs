@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-26
+updated: 2026-09-27
 type: feature
-status: needs-decision
+status: open
 priority: high
 epic: extract-parity-move-rename
 related: ['@k3-kotlin-scip-ratchet', '@fast-path-recursive-inference']
@@ -113,8 +113,8 @@ the same way a golden does.
 - [ ] a waiver list exists as data, each entry naming the field and the reason it is not ingested
 - [ ] a committed test prints instance coverage over a fixture index: ingested, dropped-with-reason, unclassified
 - [ ] the test fails when any symbol is dropped without a reason
-- [ ] external-crate symbols (`core`, `std`, `alloc`, third-party) are either ingested or waived with a written reason
-- [ ] `str::contains` and `Vec::contains` are distinguishable in the output, or the waiver says why not
+- [x] external-crate symbols (`core`, `std`, `alloc`, third-party) are either ingested or waived with a written reason
+- [x] `str::contains` and `Vec::contains` are distinguishable in the output, or the waiver says why not
 - [ ] one committed fixture index and one coverage assertion per SCIP-enabled language
 - [ ] the per-language conformance number is printable by one command, no ad-hoc script
 
@@ -128,4 +128,20 @@ the same way a golden does.
 
 2026-09-27: current release `ryii scip --raw --root crates/sprefa-extract/tests/fixtures/ratchet_soopy --scip-index crates/sprefa-extract/tests/fixtures/ratchet_soopy/index.scip` emits 1,921 `std`, 4,400 `core`, and 1,434 `alloc` mentions; the same command without `--raw` emits 0 external-crate mentions.
 
-Decision: ingest external-crate SCIP symbols, or record explicit waivers for external documents and narrow the conformance target?
+Decision: ingest external-crate SCIP symbols. SCIP is the oracle; waivers would discard its data.
+
+## External symbols slice (2026-09-27)
+
+SCIP global symbols referenced by occurrences now produce `scip_external_ref`
+rows when no corpus definition exists, even when the index omits
+`Index.external_symbols`. The committed rust-analyzer index in
+`tests/fixtures/ratchet_soopy` exercises this omission and asserts `core`,
+`std`, and `alloc` rows. The committed `scip_external` fixture pins distinct
+`str#contains().` and `Vec#contains().` symbols. The CLI/router parity receipt
+is updated from 220 to 228 rows for this index fixture.
+
+Verification: the new Rust fixture test, the contains target fixture test, and
+the CLI/router/socket parity test passed; the full sprefa-extract suite passed
+1,121 tests. The workspace suite is the remaining gate for this slice. Schema
+field coverage, per-language fixtures, and instance-level unclassified-drop
+accounting remain open.

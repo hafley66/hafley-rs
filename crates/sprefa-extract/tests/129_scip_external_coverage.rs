@@ -154,3 +154,48 @@ fn external_symbol_mentions_have_distinct_targets_and_a_coverage_receipt() {
         raw_external_symbols
     );
 }
+
+#[test]
+fn rust_analyzer_global_occurrences_reach_family_without_external_symbol_rows() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ratchet_soopy");
+    let index = load_index(&root.join("index.scip")).expect("committed SCIP index decodes");
+    assert!(
+        index.external_symbols.is_empty(),
+        "this fixture records external targets on occurrences only"
+    );
+
+    let family = v5_rel_rows(&index, &root, "ratchet_soopy");
+    let external: Vec<_> = family
+        .iter()
+        .filter_map(|row| match row {
+            FlatFact::ScipExternalRefRow { symbol, origin, .. } => {
+                Some((symbol.as_str(), origin.as_str()))
+            }
+            _ => None,
+        })
+        .collect();
+    println!(
+        "ratchet_soopy external SCIP rows: total={} core={} std={} alloc={}",
+        external.len(),
+        external
+            .iter()
+            .filter(|(_, origin)| origin.contains(" cargo core "))
+            .count(),
+        external
+            .iter()
+            .filter(|(_, origin)| origin.contains(" cargo std "))
+            .count(),
+        external
+            .iter()
+            .filter(|(_, origin)| origin.contains(" cargo alloc "))
+            .count(),
+    );
+    for crate_name in ["core", "std", "alloc"] {
+        assert!(
+            external
+                .iter()
+                .any(|(_, origin)| origin.contains(&format!(" cargo {crate_name} "))),
+            "missing SCIP external symbols for {crate_name}"
+        );
+    }
+}
