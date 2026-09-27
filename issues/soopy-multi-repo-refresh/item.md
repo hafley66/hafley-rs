@@ -3,7 +3,7 @@ created: 2026-08-16
 updated: 2026-09-26
 type: task
 assignee: luna
-status: obsolete
+status: open
 priority: high
 epic: soopy-staged-mutations
 labels: [domain-soopy, intent-performance]
@@ -35,4 +35,4 @@ Measure and bound Soopy memory, process count, and latency while many independen
 
 ## Repro receipt
 
-2026-09-26: current `ryii fast crates/soopy/src` exits 0 over 29 files; no repository-refresh operation or multi-repository memory defect is exposed by this command.
+2026-09-26: `ryii fast crates/soopy/src` exercises one worktree input only and records no multi-repository refresh rounds, child count, or RSS; the refresh scale gates remain unchecked.
