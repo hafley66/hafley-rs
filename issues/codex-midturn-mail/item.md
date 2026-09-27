@@ -2,7 +2,7 @@
 created: 2026-09-26
 updated: 2026-09-27
 type: bug
-status: in-progress
+status: fixed
 priority: high
 labels: [domain-boop]
 ---
@@ -32,11 +32,11 @@ Other ACP lane adapters retain their existing delivery behavior.
 
 - [x] A Codex ACP channel sends a hail through `_session/steering` during an
       active `session/prompt` request.
-- [ ] A successful steering response records a `steered` ladder row; a failed
+- [x] A successful steering response records a `steered` ladder row; a failed
       response records `steering-failed` with the error and keeps the hail for
       the next turn.
 - [x] Other ACP channel adapters retain turn-boundary delivery.
-- [ ] A live hail to an active Codex lane records `steered` and its text appears
+- [x] A live hail to an active Codex lane records `steered` and its text appears
       in that lane's Codex transcript.
 
 ## Tests Run
@@ -72,3 +72,11 @@ boundary. Its token `BOOP_MIDTURN_PROOF_20260927_A7F3` is now present in this
 turn's transcript, while the recorded ladder still has no `steered` transition.
 This confirms next-turn delivery only; the live mid-turn acceptance criterion
 remains open.
+
+### 2026-09-27 · @codex
+
+Live mid-turn proof: `m-df443652` reached the active turn before it ended. Its
+ladder records `appended` -> `held-for-turn-boundary` -> `claimed-by-supervisor`
+-> `steered` (`mid-turn steer accepted`) -> `submitted-to-harness` ->
+`accepted-by-harness` (`midturn`). The text appears in
+`~/.codex/sessions/2026/09/26/rollout-2026-09-26T20-39-17-01a0e04d-4dc0-72b0-9091-23519a5ecea6.jsonl:14628`.
