@@ -44,7 +44,7 @@ fn seed_result(dir: &std::path::Path, lane: &str, rc: i32) {
 
 fn seed_current_result(dir: &std::path::Path, lane: &str, rc: i32) {
     let row = serde_json::json!({
-        "id": "m-create-result",
+        "id": format!("m-create-result-{lane}"),
         "from": lane,
         "to": "sprefa-coordinator",
         "from_timestamp": boop::bus::now_iso(),
@@ -55,6 +55,34 @@ fn seed_current_result(dir: &std::path::Path, lane: &str, rc: i32) {
         "ref": null,
     });
     boop_store::testing::append_mail(&dir.join("boop.db"), &row);
+}
+
+#[test]
+fn bare_wait_joins_all_child_lanes_and_propagates_a_failure() {
+    let dir = mail_dir("wait-all");
+    for (lane, rc) in [("child-a", 0), ("child-b", 7)] {
+        boop_store::bus::write_route(
+            &dir,
+            lane,
+            &boop_store::bus::route_from_value(&serde_json::json!({
+                "kind": "lane",
+                "parent": "parent",
+            })),
+        )
+        .unwrap();
+        seed_current_result(&dir, lane, rc);
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args(["wait", "--as", "parent", "--mail-dir"])
+        .arg(&dir)
+        .boop_test_root(dir.join("home"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("child-a rc=0"), "{stdout}");
+    assert!(stdout.contains("child-b rc=7"), "{stdout}");
 }
 
 fn executable(name: &str) -> PathBuf {

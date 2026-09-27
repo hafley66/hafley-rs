@@ -20,7 +20,7 @@ use cli::control::run_native_tui;
 use cli::db::run_public_agent_command;
 use cli::db::{run_db, run_passthrough, sync_before_read};
 use cli::debug::{run_config, run_debug, run_lane_debug};
-use cli::job::{run_beep, run_lane_wait, run_wait};
+use cli::job::{run_beep, run_lane_wait, run_wait, run_wait_all_children};
 use cli::mail::{run_inbox, run_send, Outbound};
 #[cfg(feature = "agent-read")]
 use cli::me::{run_me_favorite, run_me_remind};
@@ -188,8 +188,8 @@ enum SubCmd {
     /// Block until mail lands: the reply to <id>, a lane's result row, or
     /// the next unread row addressed to you with --me.
     Wait {
-        /// A message id, or a registered lane's name. Omit and pass --me.
-        #[arg(value_name = "ID-OR-LANE", required_unless_present = "me")]
+        /// A message id or lane name. Omit to wait for all child lanes; use --me for the inbox.
+        #[arg(value_name = "ID-OR-LANE")]
         id: Option<String>,
         /// Wait for the next unread mail addressed to the caller.
         #[arg(long, conflicts_with = "id")]
@@ -551,13 +551,23 @@ fn run_cli(cli: Cli) -> Result<()> {
                 Some(id) if wait_target_is_a_lane(mail_dir.as_deref(), id) => {
                     run_lane_wait(mail_dir.as_deref(), id, wait_timeout)
                 }
-                _ => run_wait(
-                    id.as_deref(),
-                    me,
+                Some(id) => run_wait(
+                    Some(id),
+                    false,
                     as_name.as_deref(),
                     wait_timeout,
                     mail_dir.as_deref(),
                 ),
+                None if me => run_wait(
+                    None,
+                    true,
+                    as_name.as_deref(),
+                    wait_timeout,
+                    mail_dir.as_deref(),
+                ),
+                None => {
+                    run_wait_all_children(as_name.as_deref(), wait_timeout, mail_dir.as_deref())
+                }
             },
             SubCmd::Whoami {
                 json,

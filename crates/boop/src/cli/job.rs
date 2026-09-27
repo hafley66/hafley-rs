@@ -523,6 +523,66 @@ pub(crate) fn record_lane_mood(lane: &str, mood: &str) -> Result<()> {
 /// (notify lives in soopy), and a mail wait is measured in minutes.
 pub(crate) const WAIT_POLL: std::time::Duration = std::time::Duration::from_secs(1);
 
+/// Wait for every lane owned by the caller, then propagate the first nonzero
+/// child result. The timeout covers the whole set, not each lane separately.
+pub(crate) fn run_wait_all_children(
+    as_name: Option<&str>,
+    timeout_secs: u64,
+    mail_dir_arg: Option<&Path>,
+) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let parent = waiting_as(&dir, as_name)?;
+    let children = routes
+        .iter()
+        .filter(|(_, route)| route.parent.as_deref() == Some(parent.as_str()))
+        .filter(|(_, route)| route.kind == "lane")
+        .map(|(lane, _)| lane.clone())
+        .collect::<Vec<_>>();
+    if children.is_empty() {
+        line("no child lanes");
+        return Ok(());
+    }
+
+    let started = std::time::Instant::now();
+    let mut exit_code = 0;
+    for lane in children {
+        let deadline = if timeout_secs == 0 {
+            None
+        } else {
+            Some(std::time::Duration::from_secs(
+                timeout_secs.saturating_sub(started.elapsed().as_secs()),
+            ))
+        };
+        let outcome = wait_for_outcome(&dir, &lane, deadline, WAIT_POLL, &route_liveness);
+        let lane_rc = match outcome {
+            WaitOutcome::Result(rc) => {
+                line(&format!("{lane} rc={rc}"));
+                rc
+            }
+            WaitOutcome::Died => {
+                line(&format!("{lane} died without a result"));
+                3
+            }
+            WaitOutcome::TimedOut => {
+                line(&format!("wait timed out on {lane}"));
+                124
+            }
+        };
+        if exit_code == 0 && lane_rc != 0 {
+            exit_code = lane_rc;
+        }
+        if lane_rc == 124 {
+            exit_code = 124;
+            break;
+        }
+    }
+    if exit_code != 0 {
+        std::process::exit(exit_code);
+    }
+    Ok(())
+}
+
 pub(crate) fn run_wait(
     id: Option<&str>,
     me: bool,

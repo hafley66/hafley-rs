@@ -1,13 +1,12 @@
 ---
 created: 2026-08-19
-updated: 2026-09-26
+updated: 2026-09-27
 type: feature
-status: obsolete
+status: open
 priority: high
 epic: boop-process
 size: M
 blocked_by: ['@boop-crate-split']
-closed: 2026-09-26
 ---
 
 # boop job / boop mail / boop me: the job-control verb surface
@@ -19,11 +18,22 @@ The verb surface of `docs/design/boop-process.md` section 2: `boop job create|li
 ## Acceptance Criteria
 - [ ] every row of the section-2 table has its verb; `boop --help` lists exactly `job mail me db debug config host help`.
 - [ ] each old spelling is a hidden alias that prints one deprecation line to stderr and works.
-- [ ] tests: wait-all with two children (one fails, rc propagates), kill keeps the row / rm forgets, signal --children reaches two live children and skips a dead one, attach on a pane-less job is a named error, --timeout kills at N+poll.
+- [x] wait-all with two children (one fails, rc propagates).
+- [ ] kill keeps the row / rm forgets.
+- [ ] signal --children reaches two live children and skips a dead one.
+- [ ] attach on a pane-less job is a named error.
+- [ ] --timeout kills at N+poll.
 - [ ] `docs/design/boop-process.md` section 2 updated to match; `crates/boop/docs/*.md` verbs renamed.
 
-## Resolution
+## Reproduction on installed boop 0.0.10 (248dfdd3)
 
-### 2026-09-27T03:11:14Z · @issuectl
+`boop job --help` returned `unrecognized subcommand 'job'` before this change.
 
-Repro receipt (boop 0.0.10 49124370-dirty): `boop --help` exposes `beep` and `db`; `job`, `mail`, and `host` are absent, with current doctrine naming beep for drive/mail and db for reads.
+## Implementation receipt
+
+Bare `boop wait` now waits for every registered lane child of the caller, within
+one timeout budget, and exits with the first nonzero child rc. `boop wait
+--me` retains inbox behavior. The remaining namespace operations stay open.
+
+Test: `cargo nextest run -p boop -j 2 -E
+'test(bare_wait_joins_all_child_lanes_and_propagates_a_failure)'` passes.
