@@ -962,13 +962,11 @@ impl Store {
             )
             .optional()?;
         Ok(facts
-            .map(|(seen, pane, pid, tmux)| {
-                StoredLivenessFacts {
-                    last_seen_ts: seen.and_then(|value| u64::try_from(value).ok()),
-                    pane_alive: pane.map(|value| value != 0),
-                    pid_alive: pid.map(|value| value != 0),
-                    tmux_session: tmux,
-                }
+            .map(|(seen, pane, pid, tmux)| StoredLivenessFacts {
+                last_seen_ts: seen.and_then(|value| u64::try_from(value).ok()),
+                pane_alive: pane.map(|value| value != 0),
+                pid_alive: pid.map(|value| value != 0),
+                tmux_session: tmux,
             })
             .unwrap_or_default())
     }

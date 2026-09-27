@@ -1,40 +1,75 @@
 //! Rust TSI syntax facts from the caller's syn parse.
+use super::call_metadata_rows::{line_col_to_byte, path_name};
+use super::type_candidate_rows::bare_self_head;
+use super::type_entity_rows::strip_type;
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 use syn::punctuated::Punctuated;
-use syn::{Fields, GenericArgument, GenericParam, Path, PathArguments, ReturnType, Type, TypeParamBound};
-use super::call_metadata_rows::{line_col_to_byte, path_name};
-use super::type_entity_rows::strip_type;
-use super::type_candidate_rows::bare_self_head;
+use syn::{
+    Fields, GenericArgument, GenericParam, Path, PathArguments, ReturnType, Type, TypeParamBound,
+};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Span { pub start: u32, pub len: u32 }
+pub struct Span {
+    pub start: u32,
+    pub len: u32,
+}
 impl Span {
-    fn end(self) -> u32 { self.start + self.len }
-    fn empty() -> Self { Self { start: 0, len: 0 } }
+    fn end(self) -> u32 {
+        self.start + self.len
+    }
+    fn empty() -> Self {
+        Self { start: 0, len: 0 }
+    }
 }
 fn syn_span(line_starts: &[u32], span: proc_macro2::Span) -> Span {
     let start = span.start();
     let end = span.end();
     let start = line_col_to_byte(line_starts, start.line as u32, start.column as u32);
     let end = line_col_to_byte(line_starts, end.line as u32, end.column as u32);
-    Span { start, len: end.saturating_sub(start) }
+    Span {
+        start,
+        len: end.saturating_sub(start),
+    }
 }
-fn span_arg(span: Span) -> Arg { Arg::Span(String::new(), span.start, span.end()) }
+fn span_arg(span: Span) -> Arg {
+    Arg::Span(String::new(), span.start, span.end())
+}
 fn self_ty_head(ty: &Type, line_starts: &[u32]) -> Option<(Span, String)> {
     bare_self_head(ty, line_starts).map(|(range, name)| {
-        (Span { start: range.start, len: range.end - range.start }, name)
+        (
+            Span {
+                start: range.start,
+                len: range.end - range.start,
+            },
+            name,
+        )
     })
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum Arg { Id(u32), Span(String, u32, u32), Text(String), Int(i64), Atom(String) }
+pub enum Arg {
+    Id(u32),
+    Span(String, u32, u32),
+    Text(String),
+    Int(i64),
+    Atom(String),
+}
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TsiFactRow { pub fact: u32, pub relation: String, pub args: Vec<Arg> }
+pub struct TsiFactRow {
+    pub fact: u32,
+    pub relation: String,
+    pub args: Vec<Arg>,
+}
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct TsiSyntaxRows { pub facts: Vec<TsiFactRow>, pub interned: Vec<String> }
+pub struct TsiSyntaxRows {
+    pub facts: Vec<TsiFactRow>,
+    pub interned: Vec<String>,
+}
 
 #[derive(Default)]
-struct Strings { ordered: Vec<String> }
+struct Strings {
+    ordered: Vec<String>,
+}
 impl Strings {
     fn intern(&mut self, text: &str) -> String {
         self.ordered.push(text.to_owned());
@@ -42,11 +77,17 @@ impl Strings {
     }
 }
 #[derive(Default)]
-struct TsiNames { facts: Vec<TsiFactRow>, seen: HashMap<String, u32>, ids: u32 }
+struct TsiNames {
+    facts: Vec<TsiFactRow>,
+    seen: HashMap<String, u32>,
+    ids: u32,
+}
 impl TsiNames {
     fn named(&mut self, strings: &mut Strings, text: &str, span: Span) -> u32 {
         let key = strings.intern(text);
-        if let Some(&id) = self.seen.get(&key) { return id; }
+        if let Some(&id) = self.seen.get(&key) {
+            return id;
+        }
         let id = self.anonymous(span);
         self.seen.insert(key, id);
         self.name(id, text);
@@ -58,7 +99,10 @@ impl TsiNames {
     fn anonymous(&mut self, span: Span) -> u32 {
         let id = self.bare_id();
         self.fact("tsi.type", vec![Arg::Id(id)]);
-        self.fact("tsi.origin", vec![Arg::Id(id), Arg::Atom("rust".to_owned()), span_arg(span)]);
+        self.fact(
+            "tsi.origin",
+            vec![Arg::Id(id), Arg::Atom("rust".to_owned()), span_arg(span)],
+        );
         id
     }
     fn bare_id(&mut self) -> u32 {
@@ -67,11 +111,24 @@ impl TsiNames {
         id
     }
     fn fact(&mut self, relation: &'static str, args: Vec<Arg>) {
-        self.facts.push(TsiFactRow { fact: self.facts.len() as u32, relation: relation.to_owned(), args });
+        self.facts.push(TsiFactRow {
+            fact: self.facts.len() as u32,
+            relation: relation.to_owned(),
+            args,
+        });
     }
     fn edge(&mut self, owner: u32, label: &str, target: u32, position: i64) -> u32 {
         let id = self.bare_id();
-        self.fact("tsi.edge", vec![Arg::Id(id), Arg::Id(owner), Arg::Text(label.to_owned()), Arg::Id(target), Arg::Int(position)]);
+        self.fact(
+            "tsi.edge",
+            vec![
+                Arg::Id(id),
+                Arg::Id(owner),
+                Arg::Text(label.to_owned()),
+                Arg::Id(target),
+                Arg::Int(position),
+            ],
+        );
         id
     }
 }
@@ -104,9 +161,19 @@ pub fn tsi_syntax_rows(parsed: &syn::File, line_starts: &[u32]) -> TsiSyntaxRows
     let outer = TsiScope::new();
     let mut state = TsiState::default();
     for item in &parsed.items {
-        tsi_item(item, &outer, line_starts, &mut strings, &mut names, &mut state);
+        tsi_item(
+            item,
+            &outer,
+            line_starts,
+            &mut strings,
+            &mut names,
+            &mut state,
+        );
     }
-    TsiSyntaxRows { facts: names.facts, interned: strings.ordered }
+    TsiSyntaxRows {
+        facts: names.facts,
+        interned: strings.ordered,
+    }
 }
 
 fn tsi_item(

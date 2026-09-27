@@ -141,7 +141,9 @@ impl IndexBudget {
     pub fn scoped_override(secs: Option<u64>) -> ScopedIndexBudget {
         ScopedIndexBudget(REQUEST_BUDGET.with(|slot| {
             let previous = slot.get();
-            if let Some(secs) = secs { slot.set(Some(secs)); }
+            if let Some(secs) = secs {
+                slot.set(Some(secs));
+            }
             previous
         }))
     }
@@ -279,7 +281,10 @@ pub fn source_set_for_root(root: &Path) -> Result<IndexSet, String> {
     source_set_for_root_excluding(root, None)
 }
 
-fn source_set_for_root_excluding(root: &Path, cache_dir: Option<&Path>) -> Result<IndexSet, String> {
+fn source_set_for_root_excluding(
+    root: &Path,
+    cache_dir: Option<&Path>,
+) -> Result<IndexSet, String> {
     let cache_dir = cache_dir.map(Path::to_path_buf);
     let walk = WalkBuilder::new(root)
         .follow_links(true)
@@ -289,7 +294,10 @@ fn source_set_for_root_excluding(root: &Path, cache_dir: Option<&Path>) -> Resul
         .git_global(false)
         .git_exclude(false)
         .filter_entry(move |entry| {
-            if cache_dir.as_deref().is_some_and(|cache| entry.path() == cache) {
+            if cache_dir
+                .as_deref()
+                .is_some_and(|cache| entry.path() == cache)
+            {
                 return false;
             }
             let name = entry.file_name().to_string_lossy();
@@ -301,8 +309,15 @@ fn source_set_for_root_excluding(root: &Path, cache_dir: Option<&Path>) -> Resul
             }
             !matches!(
                 name.as_ref(),
-                ".git" | ".dl" | ".boop-worktrees" | ".worktrees" | "target"
-                    | "node_modules" | "dist" | "out" | "build"
+                ".git"
+                    | ".dl"
+                    | ".boop-worktrees"
+                    | ".worktrees"
+                    | "target"
+                    | "node_modules"
+                    | "dist"
+                    | "out"
+                    | "build"
             ) && !entry.path().join(".git").exists()
         })
         .build();
@@ -321,8 +336,12 @@ fn source_set_for_root_excluding(root: &Path, cache_dir: Option<&Path>) -> Resul
         let relative = path
             .strip_prefix(root)
             .map_err(|error| format!("relative path {}: {error}", path.display()))?;
-        let bytes = std::fs::read(path).map_err(|error| format!("read {}: {error}", path.display()))?;
-        files.push((relative.to_string_lossy().replace('\\', "/"), content_digest(&bytes)));
+        let bytes =
+            std::fs::read(path).map_err(|error| format!("read {}: {error}", path.display()))?;
+        files.push((
+            relative.to_string_lossy().replace('\\', "/"),
+            content_digest(&bytes),
+        ));
     }
     Ok(IndexSet::new(files))
 }
@@ -355,8 +374,7 @@ fn recorded_digest(index: &Path) -> Option<String> {
     let text = std::fs::read_to_string(sidecar_path(index)).ok()?;
     let sidecar = serde_json::from_str::<IndexSetSidecar>(&text).ok()?;
     let bytes = std::fs::read(index).ok()?;
-    (content_digest(&bytes) == sidecar.index_digest)
-        .then_some(sidecar.digest)
+    (content_digest(&bytes) == sidecar.index_digest).then_some(sidecar.digest)
 }
 
 fn content_digest(bytes: &[u8]) -> String {
@@ -539,7 +557,12 @@ fn ensure_index_picked_impl(
                     bin: "source-set",
                     reason: SkipReason::SourcesChanged,
                 });
-                return EnsureReport { index: None, reused: false, ran, skips };
+                return EnsureReport {
+                    index: None,
+                    reused: false,
+                    ran,
+                    skips,
+                };
             }
             Err(detail) => {
                 skips.push(IndexerSkip {
@@ -547,7 +570,12 @@ fn ensure_index_picked_impl(
                     bin: "source-set",
                     reason: SkipReason::Failed { detail },
                 });
-                return EnsureReport { index: None, reused: false, ran, skips };
+                return EnsureReport {
+                    index: None,
+                    reused: false,
+                    ran,
+                    skips,
+                };
             }
         }
     }

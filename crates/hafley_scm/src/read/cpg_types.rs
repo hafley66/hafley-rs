@@ -164,10 +164,6 @@ pub fn node_kind_or_stop(key: i64, type_id: i32) -> Result<CpgNodeKind, CpgImpor
     node_kind(type_id).ok_or(CpgImportError::UnknownNodeType { key, type_id })
 }
 
-pub fn edge_kind_or_stop(
-    src: i64,
-    dst: i64,
-    type_id: i32,
-) -> Result<CpgEdgeKind, CpgImportError> {
+pub fn edge_kind_or_stop(src: i64, dst: i64, type_id: i32) -> Result<CpgEdgeKind, CpgImportError> {
     edge_kind(type_id).ok_or(CpgImportError::UnknownEdgeType { src, dst, type_id })
 }

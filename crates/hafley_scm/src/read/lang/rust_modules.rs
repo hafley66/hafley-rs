@@ -95,84 +95,186 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
     }
     let text = std::str::from_utf8(content).ok()?;
     let parsed = hafley_scm::lang::rust::parse_rust_syntax(text).ok()?;
-    Some(rust_module_facts_from_parsed(&parsed.file, &parsed.line_starts))
+    Some(rust_module_facts_from_parsed(
+        &parsed.file,
+        &parsed.line_starts,
+    ))
 }
 
 /// The module facts off the extract pass's own syn parse, so no second parse.
 pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
-    let mut return_walk = ReturnReceiverWalk { line_starts, method_returns: Vec::new(), receivers: Vec::new() };
+    let mut return_walk = ReturnReceiverWalk {
+        line_starts,
+        method_returns: Vec::new(),
+        receivers: Vec::new(),
+    };
     syn::visit::visit_file(&mut return_walk, parsed);
-    let assoc_types = parsed.items.iter().filter_map(|item| {
-        let syn::Item::Trait(item) = item else { return None };
-        Some(item.items.iter().filter_map(|child| {
-            let syn::TraitItem::Type(assoc) = child else { return None };
-            let begin = assoc.ident.span().start();
-            let finish = assoc.ident.span().end();
-            let start = hafley_scm::lang::rust::line_col_to_byte(line_starts, begin.line as u32, begin.column as u32);
-            let end = hafley_scm::lang::rust::line_col_to_byte(line_starts, finish.line as u32, finish.column as u32);
-            Some((item.ident.to_string(), assoc.ident.to_string(), Span { start, len: end - start }))
-        }).collect::<Vec<_>>())
-    }).flatten().collect();
+    let assoc_types = parsed
+        .items
+        .iter()
+        .filter_map(|item| {
+            let syn::Item::Trait(item) = item else {
+                return None;
+            };
+            Some(
+                item.items
+                    .iter()
+                    .filter_map(|child| {
+                        let syn::TraitItem::Type(assoc) = child else {
+                            return None;
+                        };
+                        let begin = assoc.ident.span().start();
+                        let finish = assoc.ident.span().end();
+                        let start = hafley_scm::lang::rust::line_col_to_byte(
+                            line_starts,
+                            begin.line as u32,
+                            begin.column as u32,
+                        );
+                        let end = hafley_scm::lang::rust::line_col_to_byte(
+                            line_starts,
+                            finish.line as u32,
+                            finish.column as u32,
+                        );
+                        Some((
+                            item.ident.to_string(),
+                            assoc.ident.to_string(),
+                            Span {
+                                start,
+                                len: end - start,
+                            },
+                        ))
+                    })
+                    .collect::<Vec<_>>(),
+            )
+        })
+        .flatten()
+        .collect();
     RustModuleFacts {
-        uses: rows.uses.into_iter().map(|row| UseBinding {
-            local: row.local,
-            qualifier: row.qualifier,
-            asked: row.asked,
-            reexport: row.reexport,
-        }).collect(),
-        stars: rows.stars.into_iter().map(|row| StarImport {
-            qualifier: row.qualifier,
-            reexport: row.reexport,
-        }).collect(),
+        uses: rows
+            .uses
+            .into_iter()
+            .map(|row| UseBinding {
+                local: row.local,
+                qualifier: row.qualifier,
+                asked: row.asked,
+                reexport: row.reexport,
+            })
+            .collect(),
+        stars: rows
+            .stars
+            .into_iter()
+            .map(|row| StarImport {
+                qualifier: row.qualifier,
+                reexport: row.reexport,
+            })
+            .collect(),
         inline_mods: rows.inline_mods.into_iter().collect(),
         mod_decls: rows.mod_decls,
-        impls: rows.impls.into_iter().map(|row| ImplEntry {
-            self_type: row.self_type,
-            trait_name: row.trait_name,
-            methods: row.methods.into_iter().map(|(name, range)| (
-                name,
-                Span { start: range.start, len: range.end - range.start },
-            )).collect(),
-        }).collect(),
-        enums: rows.enums.into_iter().map(|row| (
-            row.name,
-            row.variants.into_iter().map(|(name, range)| (
-                name,
-                Span { start: range.start, len: range.end - range.start },
-            )).collect(),
-        )).collect(),
-        traits: rows.traits.into_iter().map(|row| TraitEntry {
-            name: row.name,
-            fns: row.methods.into_iter().map(|method| TraitFn {
-                name: method.name,
-                span: Span { start: method.range.start, len: method.range.end - method.range.start },
-                default: method.default,
-            }).collect(),
-        }).collect(),
+        impls: rows
+            .impls
+            .into_iter()
+            .map(|row| ImplEntry {
+                self_type: row.self_type,
+                trait_name: row.trait_name,
+                methods: row
+                    .methods
+                    .into_iter()
+                    .map(|(name, range)| {
+                        (
+                            name,
+                            Span {
+                                start: range.start,
+                                len: range.end - range.start,
+                            },
+                        )
+                    })
+                    .collect(),
+            })
+            .collect(),
+        enums: rows
+            .enums
+            .into_iter()
+            .map(|row| {
+                (
+                    row.name,
+                    row.variants
+                        .into_iter()
+                        .map(|(name, range)| {
+                            (
+                                name,
+                                Span {
+                                    start: range.start,
+                                    len: range.end - range.start,
+                                },
+                            )
+                        })
+                        .collect(),
+                )
+            })
+            .collect(),
+        traits: rows
+            .traits
+            .into_iter()
+            .map(|row| TraitEntry {
+                name: row.name,
+                fns: row
+                    .methods
+                    .into_iter()
+                    .map(|method| TraitFn {
+                        name: method.name,
+                        span: Span {
+                            start: method.range.start,
+                            len: method.range.end - method.range.start,
+                        },
+                        default: method.default,
+                    })
+                    .collect(),
+            })
+            .collect(),
         assoc_types,
         method_returns: return_walk.method_returns,
         call_result_receivers: return_walk.receivers,
-        aliases: rows.aliases.into_iter().map(|range| Span {
-            start: range.start,
-            len: range.end - range.start,
-        }).collect(),
-        private_defs: parsed.items.iter().filter_map(|item| match item {
-            syn::Item::Struct(item) => Some((&item.ident, &item.vis)),
-            syn::Item::Enum(item) => Some((&item.ident, &item.vis)),
-            syn::Item::Union(item) => Some((&item.ident, &item.vis)),
-            syn::Item::Type(item) => Some((&item.ident, &item.vis)),
-            syn::Item::Trait(item) => Some((&item.ident, &item.vis)),
-            syn::Item::Fn(item) => Some((&item.sig.ident, &item.vis)),
-            syn::Item::Const(item) => Some((&item.ident, &item.vis)),
-            syn::Item::Static(item) => Some((&item.ident, &item.vis)),
-            _ => None,
-        }).filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
-          .map(|(ident, _)| ident.to_string()).collect(),
-        macro_invocations: hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts)
+        aliases: rows
+            .aliases
             .into_iter()
-            .map(|row| (Span { start: row.range.start, len: row.range.end - row.range.start }, row.name))
+            .map(|range| Span {
+                start: range.start,
+                len: range.end - range.start,
+            })
             .collect(),
+        private_defs: parsed
+            .items
+            .iter()
+            .filter_map(|item| match item {
+                syn::Item::Struct(item) => Some((&item.ident, &item.vis)),
+                syn::Item::Enum(item) => Some((&item.ident, &item.vis)),
+                syn::Item::Union(item) => Some((&item.ident, &item.vis)),
+                syn::Item::Type(item) => Some((&item.ident, &item.vis)),
+                syn::Item::Trait(item) => Some((&item.ident, &item.vis)),
+                syn::Item::Fn(item) => Some((&item.sig.ident, &item.vis)),
+                syn::Item::Const(item) => Some((&item.ident, &item.vis)),
+                syn::Item::Static(item) => Some((&item.ident, &item.vis)),
+                _ => None,
+            })
+            .filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
+            .map(|(ident, _)| ident.to_string())
+            .collect(),
+        macro_invocations: hafley_scm::lang::rust::macro_invocation_rows_from_parsed(
+            parsed,
+            line_starts,
+        )
+        .into_iter()
+        .map(|row| {
+            (
+                Span {
+                    start: row.range.start,
+                    len: row.range.end - row.range.start,
+                },
+                row.name,
+            )
+        })
+        .collect(),
     }
 }
 
@@ -186,11 +288,20 @@ impl<'ast> syn::visit::Visit<'ast> for ReturnReceiverWalk<'_> {
     fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
         if let Some(owner) = hafley_scm::lang::rust::principal_ty(&item.self_ty) {
             for child in &item.items {
-                let syn::ImplItem::Fn(method) = child else { continue };
-                let syn::ReturnType::Type(_, ty) = &method.sig.output else { continue };
-                let Some(ret) = hafley_scm::lang::rust::principal_ty(ty) else { continue };
-                self.method_returns.push((owner.clone(), method.sig.ident.to_string(),
-                    if ret == "Self" { owner.clone() } else { ret }));
+                let syn::ImplItem::Fn(method) = child else {
+                    continue;
+                };
+                let syn::ReturnType::Type(_, ty) = &method.sig.output else {
+                    continue;
+                };
+                let Some(ret) = hafley_scm::lang::rust::principal_ty(ty) else {
+                    continue;
+                };
+                self.method_returns.push((
+                    owner.clone(),
+                    method.sig.ident.to_string(),
+                    if ret == "Self" { owner.clone() } else { ret },
+                ));
             }
         }
         syn::visit::visit_item_impl(self, item);
@@ -203,11 +314,24 @@ impl<'ast> syn::visit::Visit<'ast> for ReturnReceiverWalk<'_> {
                 if segments.len() >= 2 {
                     let begin = call.method.span().start();
                     let finish = call.method.span().end();
-                    let start = hafley_scm::lang::rust::line_col_to_byte(self.line_starts, begin.line as u32, begin.column as u32);
-                    let end = hafley_scm::lang::rust::line_col_to_byte(self.line_starts, finish.line as u32, finish.column as u32);
-                    self.receivers.push((Span { start, len: end - start },
+                    let start = hafley_scm::lang::rust::line_col_to_byte(
+                        self.line_starts,
+                        begin.line as u32,
+                        begin.column as u32,
+                    );
+                    let end = hafley_scm::lang::rust::line_col_to_byte(
+                        self.line_starts,
+                        finish.line as u32,
+                        finish.column as u32,
+                    );
+                    self.receivers.push((
+                        Span {
+                            start,
+                            len: end - start,
+                        },
                         segments[segments.len() - 2].ident.to_string(),
-                        segments[segments.len() - 1].ident.to_string()));
+                        segments[segments.len() - 1].ident.to_string(),
+                    ));
                 }
             }
         }
@@ -560,10 +684,17 @@ pub struct RustModuleIndex {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-enum TargetKind { Normal, Dev, Build }
+enum TargetKind {
+    Normal,
+    Dev,
+    Build,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct TargetScope { root: String, kind: TargetKind }
+struct TargetScope {
+    root: String,
+    kind: TargetKind,
+}
 
 #[derive(Default)]
 struct CrateDeps {
@@ -601,9 +732,15 @@ fn lexical(path: &std::path::Path) -> String {
 /// `Cargo.toml` with a `[package]`, read off disk once per directory. Only a
 /// member counts: under `src/`, a Cargo target root, or reached from one by
 /// `mod`. Nested packages use their own nearest manifest.
-fn crate_dirs_of(corpus: &[(String, ContentId)], files: &[(String, RustModuleFacts)]) -> HashMap<String, String> {
+fn crate_dirs_of(
+    corpus: &[(String, ContentId)],
+    files: &[(String, RustModuleFacts)],
+) -> HashMap<String, String> {
     let nearest = nearest_crate_dirs(corpus);
-    let facts: HashMap<&str, &RustModuleFacts> = files.iter().map(|(path, facts)| (path.as_str(), facts)).collect();
+    let facts: HashMap<&str, &RustModuleFacts> = files
+        .iter()
+        .map(|(path, facts)| (path.as_str(), facts))
+        .collect();
     let mut members: HashMap<String, String> = HashMap::new();
     let mut queue: Vec<String> = Vec::new();
     for (path, dir) in &nearest {
@@ -617,9 +754,14 @@ fn crate_dirs_of(corpus: &[(String, ContentId)], files: &[(String, RustModuleFac
         }
     }
     while let Some(file) = queue.pop() {
-        let Some(facts) = facts.get(file.as_str()) else { continue };
+        let Some(facts) = facts.get(file.as_str()) else {
+            continue;
+        };
         let dir = members[&file].clone();
-        let parent = std::path::Path::new(&file).parent().map(std::path::Path::to_path_buf).unwrap_or_default();
+        let parent = std::path::Path::new(&file)
+            .parent()
+            .map(std::path::Path::to_path_buf)
+            .unwrap_or_default();
         for (name, path_attr) in &facts.mod_decls {
             let candidates = match path_attr {
                 Some(literal) => vec![lexical(&parent.join(literal))],
@@ -669,23 +811,39 @@ fn target_scopes_of(
     crate_dirs: &HashMap<String, String>,
     crate_libs: &HashMap<String, String>,
 ) -> HashMap<String, HashSet<TargetScope>> {
-    let facts: HashMap<&str, &RustModuleFacts> = files.iter().map(|(path, facts)| (path.as_str(), facts)).collect();
+    let facts: HashMap<&str, &RustModuleFacts> = files
+        .iter()
+        .map(|(path, facts)| (path.as_str(), facts))
+        .collect();
     let mut scopes: HashMap<String, HashSet<TargetScope>> = HashMap::new();
     let mut queue = Vec::new();
     for (path, package) in crate_dirs {
-        let relative = std::path::Path::new(path).strip_prefix(package).ok()
+        let relative = std::path::Path::new(path)
+            .strip_prefix(package)
+            .ok()
             .map(|rel| rel.to_string_lossy().into_owned());
         let kind = relative.as_deref().and_then(target_kind).or_else(|| {
-            crate_libs.values().any(|lib| lib == path).then_some(TargetKind::Normal)
+            crate_libs
+                .values()
+                .any(|lib| lib == path)
+                .then_some(TargetKind::Normal)
         });
         if let Some(kind) = kind {
-            let scope = TargetScope { root: path.clone(), kind };
-            scopes.entry(path.clone()).or_default().insert(scope.clone());
+            let scope = TargetScope {
+                root: path.clone(),
+                kind,
+            };
+            scopes
+                .entry(path.clone())
+                .or_default()
+                .insert(scope.clone());
             queue.push((path.clone(), scope));
         }
     }
     while let Some((path, scope)) = queue.pop() {
-        let Some(module) = facts.get(path.as_str()) else { continue };
+        let Some(module) = facts.get(path.as_str()) else {
+            continue;
+        };
         for (name, path_attr) in &module.mod_decls {
             let candidates = match path_attr {
                 Some(literal) => vec![normalize_join(parent_dir(&path), literal)],
@@ -695,8 +853,14 @@ fn target_scopes_of(
                 }
             };
             for candidate in candidates {
-                if crate_dirs.get(&candidate) != crate_dirs.get(&path) { continue }
-                if scopes.entry(candidate.clone()).or_default().insert(scope.clone()) {
+                if crate_dirs.get(&candidate) != crate_dirs.get(&path) {
+                    continue;
+                }
+                if scopes
+                    .entry(candidate.clone())
+                    .or_default()
+                    .insert(scope.clone())
+                {
                     queue.push((candidate, scope.clone()));
                 }
                 break;
@@ -706,13 +870,27 @@ fn target_scopes_of(
     // A source file present in the corpus without a `mod` edge is assigned
     // to the package's default library or binary root when one is present.
     for (path, package) in crate_dirs {
-        if scopes.contains_key(path) { continue }
-        let relative = std::path::Path::new(path).strip_prefix(package).ok()
-            .map(|rel| rel.to_string_lossy().into_owned()).unwrap_or_default();
-        let roots = if let Some(bin) = relative.strip_prefix("src/bin/").and_then(|rest| rest.split('/').next()) {
-            vec![format!("{package}/src/bin/{bin}.rs"), format!("{package}/src/bin/{bin}/main.rs")]
+        if scopes.contains_key(path) {
+            continue;
+        }
+        let relative = std::path::Path::new(path)
+            .strip_prefix(package)
+            .ok()
+            .map(|rel| rel.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        let roots = if let Some(bin) = relative
+            .strip_prefix("src/bin/")
+            .and_then(|rest| rest.split('/').next())
+        {
+            vec![
+                format!("{package}/src/bin/{bin}.rs"),
+                format!("{package}/src/bin/{bin}/main.rs"),
+            ]
         } else if relative.starts_with("src/") {
-            vec![format!("{package}/src/lib.rs"), format!("{package}/src/main.rs")]
+            vec![
+                format!("{package}/src/lib.rs"),
+                format!("{package}/src/main.rs"),
+            ]
         } else {
             Vec::new()
         };
@@ -729,16 +907,19 @@ fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String>
     let mut known: HashMap<std::path::PathBuf, Option<String>> = HashMap::new();
     let mut out = HashMap::new();
     for (path, _) in corpus.iter().filter(|(path, _)| path.ends_with(".rs")) {
-        let found = std::path::Path::new(path).ancestors().skip(1).find_map(|dir| {
-            known
-                .entry(dir.to_path_buf())
-                .or_insert_with(|| {
-                    let text = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
-                    let manifest: serde_json::Value = basic_toml::from_str(&text).ok()?;
-                    manifest.get("package").map(|_| lexical(dir))
-                })
-                .clone()
-        });
+        let found = std::path::Path::new(path)
+            .ancestors()
+            .skip(1)
+            .find_map(|dir| {
+                known
+                    .entry(dir.to_path_buf())
+                    .or_insert_with(|| {
+                        let text = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
+                        let manifest: serde_json::Value = basic_toml::from_str(&text).ok()?;
+                        manifest.get("package").map(|_| lexical(dir))
+                    })
+                    .clone()
+            });
         if let Some(dir) = found {
             out.insert(path.clone(), dir);
         }
@@ -763,20 +944,33 @@ fn crate_deps_of(crate_dirs: &HashMap<String, String>) -> HashMap<String, CrateD
         });
         let mut deps = CrateDeps::default();
         for table in ["dependencies", "dev-dependencies", "build-dependencies"] {
-            let Some(entries) = manifest.get(table).and_then(|t| t.as_object()) else { continue };
+            let Some(entries) = manifest.get(table).and_then(|t| t.as_object()) else {
+                continue;
+            };
             for (name, spec) in entries {
-                let local = spec.get("path").and_then(|p| p.as_str()).map(|p| lexical(&base.join(p)));
+                let local = spec
+                    .get("path")
+                    .and_then(|p| p.as_str())
+                    .map(|p| lexical(&base.join(p)));
                 let inherited = || {
-                    spec.get("workspace").and_then(|w| w.as_bool()).filter(|w| *w)?;
+                    spec.get("workspace")
+                        .and_then(|w| w.as_bool())
+                        .filter(|w| *w)?;
                     let (root, table) = workspace.as_ref()?;
                     let path = table.get(name)?.get("path")?.as_str()?;
                     Some(lexical(&root.join(path)))
                 };
                 if let Some(dep) = local.or_else(inherited) {
                     match table {
-                        "dependencies" => { deps.normal.insert(dep); }
-                        "dev-dependencies" => { deps.dev.insert(dep); }
-                        "build-dependencies" => { deps.build.insert(dep); }
+                        "dependencies" => {
+                            deps.normal.insert(dep);
+                        }
+                        "dev-dependencies" => {
+                            deps.dev.insert(dep);
+                        }
+                        "build-dependencies" => {
+                            deps.build.insert(dep);
+                        }
                         _ => unreachable!(),
                     }
                 }
@@ -819,8 +1013,11 @@ impl RustModuleIndex {
         let crate_dirs = crate_dirs_of(corpus, &files);
         let crate_libs = crate_libs(corpus);
         let target_scopes = target_scopes_of(&files, &crate_dirs, &crate_libs);
-        let known_crate_idents = crate_dirs.values().filter_map(|dir| dir.rsplit('/').next())
-            .map(|name| name.replace('-', "_")).collect();
+        let known_crate_idents = crate_dirs
+            .values()
+            .filter_map(|dir| dir.rsplit('/').next())
+            .map(|name| name.replace('-', "_"))
+            .collect();
         let mut index = RustModuleIndex {
             crate_libs,
             crate_deps: crate_deps_of(&crate_dirs),
@@ -849,8 +1046,13 @@ impl RustModuleIndex {
                 let target = normalize_join(dir, literal);
                 if index.blobs.contains_key(&target) {
                     let parents = index.path_parents.entry(target.clone()).or_default();
-                    if !parents.contains(path) { parents.push(path.clone()); }
-                    displaced.entry(target).or_default().push((path.clone(), name.clone()));
+                    if !parents.contains(path) {
+                        parents.push(path.clone());
+                    }
+                    displaced
+                        .entry(target)
+                        .or_default()
+                        .push((path.clone(), name.clone()));
                 }
             }
         }
@@ -859,7 +1061,9 @@ impl RustModuleIndex {
             displaced: &HashMap<String, Vec<(String, String)>>,
             visiting: &mut HashSet<String>,
         ) -> Option<Vec<String>> {
-            if !visiting.insert(path.to_string()) { return None }
+            if !visiting.insert(path.to_string()) {
+                return None;
+            }
             let result = match displaced.get(path).map(Vec::as_slice) {
                 Some([(parent, name)]) => {
                     let mut segments = declared_segments(parent, displaced, visiting)?;
@@ -923,16 +1127,25 @@ impl RustModuleIndex {
                 continue;
             };
             for (owner, method, ret) in &facts.method_returns {
-                index.method_returns.entry((owner.clone(), method.clone()))
-                    .or_default().push(ret.clone());
+                index
+                    .method_returns
+                    .entry((owner.clone(), method.clone()))
+                    .or_default()
+                    .push(ret.clone());
             }
             for (span, owner, method) in &facts.call_result_receivers {
-                index.call_result_receivers.entry(path.clone()).or_default()
+                index
+                    .call_result_receivers
+                    .entry(path.clone())
+                    .or_default()
                     .insert(*span, (owner.clone(), method.clone()));
             }
             for (trait_name, slot, span) in &facts.assoc_types {
-                index.assoc_types.entry((trait_name.clone(), slot.clone()))
-                    .or_default().push((blob.clone(), *span));
+                index
+                    .assoc_types
+                    .entry((trait_name.clone(), slot.clone()))
+                    .or_default()
+                    .push((blob.clone(), *span));
             }
             for entry in &facts.impls {
                 index.impl_types.insert(entry.self_type.clone());
@@ -1022,10 +1235,20 @@ impl RustModuleIndex {
                     .copied()
                     .filter(|site| site.trait_name.is_none())
                     .collect();
-                let nearby: Vec<&ImplMethodTarget> = inherent.iter().copied().filter(|site| {
-                    caller.is_some_and(|from| self.paths.get(&site.blob).is_some_and(|path| path == from))
-                }).collect();
-                let inherent = if nearby.is_empty() { inherent.as_slice() } else { nearby.as_slice() };
+                let nearby: Vec<&ImplMethodTarget> = inherent
+                    .iter()
+                    .copied()
+                    .filter(|site| {
+                        caller.is_some_and(|from| {
+                            self.paths.get(&site.blob).is_some_and(|path| path == from)
+                        })
+                    })
+                    .collect();
+                let inherent = if nearby.is_empty() {
+                    inherent.as_slice()
+                } else {
+                    nearby.as_slice()
+                };
                 match inherent {
                     [one] => pick(one),
                     [] => {
@@ -1039,10 +1262,20 @@ impl RustModuleIndex {
                                 })
                             })
                             .collect();
-                        let nearby: Vec<&ImplMethodTarget> = survivors.iter().copied().filter(|site| {
-                            self.paths.get(&site.blob).is_some_and(|path| path == caller)
-                        }).collect();
-                        let survivors = if nearby.is_empty() { survivors.as_slice() } else { nearby.as_slice() };
+                        let nearby: Vec<&ImplMethodTarget> = survivors
+                            .iter()
+                            .copied()
+                            .filter(|site| {
+                                self.paths
+                                    .get(&site.blob)
+                                    .is_some_and(|path| path == caller)
+                            })
+                            .collect();
+                        let survivors = if nearby.is_empty() {
+                            survivors.as_slice()
+                        } else {
+                            nearby.as_slice()
+                        };
                         match survivors {
                             [one] => pick(one),
                             _ => None,
@@ -1064,7 +1297,9 @@ impl RustModuleIndex {
         method: &str,
     ) -> Option<(ContentId, Span)> {
         let (type_blob, _) = self.qualified_type_target(from, qualifier, self_type)?;
-        let sites = self.impl_methods.get(&(self_type.to_string(), method.to_string()))?;
+        let sites = self
+            .impl_methods
+            .get(&(self_type.to_string(), method.to_string()))?;
         let mut hits = sites.iter().filter(|site| site.blob == type_blob);
         let hit = hits.next()?;
         hits.next().is_none().then(|| (hit.blob.clone(), hit.span))
@@ -1091,11 +1326,7 @@ impl RustModuleIndex {
 
     /// The enum def a `T::f` constructor names when `f` is a variant of
     /// exactly one corpus enum `T`: the call binds the enum, not a method.
-    pub fn variant_ctor_target(
-        &self,
-        type_name: &str,
-        variant: &str,
-    ) -> Option<(ContentId, Span)> {
+    pub fn variant_ctor_target(&self, type_name: &str, variant: &str) -> Option<(ContentId, Span)> {
         let [(only, span)] = self
             .enum_variants
             .get(&(type_name.to_string(), variant.to_string()))?
@@ -1297,11 +1528,18 @@ impl RustModuleIndex {
             .uses
             .iter()
             .map(|binding| binding.qualifier.first().unwrap_or(&binding.asked).as_str())
-            .chain(facts.stars.iter().filter_map(|star| star.qualifier.first().map(String::as_str)))
+            .chain(
+                facts
+                    .stars
+                    .iter()
+                    .filter_map(|star| star.qualifier.first().map(String::as_str)),
+            )
             .collect();
         for head in heads {
             match self.crate_libs.get(head) {
-                Some(lib) if lib != path && self.sees_path(path, lib) => rows.push(module_row(head, lib.clone())),
+                Some(lib) if lib != path && self.sees_path(path, lib) => {
+                    rows.push(module_row(head, lib.clone()))
+                }
                 _ => {}
             }
         }
@@ -1324,7 +1562,10 @@ impl RustModuleIndex {
     pub fn target(&self, path: &str, local: &str) -> Option<(ContentId, Span)> {
         match self.explicit_binding(path, local) {
             Ok(Some(found)) => {
-                return self.sees_path(path, &found.target_path).then(|| callable_target(found)).flatten();
+                return self
+                    .sees_path(path, &found.target_path)
+                    .then(|| callable_target(found))
+                    .flatten();
             }
             Err(()) => return None,
             Ok(None) => {}
@@ -1352,7 +1593,9 @@ impl RustModuleIndex {
     /// Whether code in `from` can name a def in `target`: a shared Cargo
     /// target, or a path dependency available to that target kind.
     pub fn sees(&self, from: &str, target: &ContentId) -> bool {
-        self.paths.get(target).is_some_and(|path| self.sees_path(from, path))
+        self.paths
+            .get(target)
+            .is_some_and(|path| self.sees_path(from, path))
     }
 
     /// Path version for module lookups, before a target has become a blob.
@@ -1363,24 +1606,30 @@ impl RustModuleIndex {
         let Some(target_crate) = self.crate_dirs.get(target) else {
             return false;
         };
-        let Some(scopes) = self.target_scopes.get(from) else { return false };
+        let Some(scopes) = self.target_scopes.get(from) else {
+            return false;
+        };
         if target_crate == own {
-            let shares_target = self.target_scopes.get(target)
-                .is_some_and(|target_scopes| scopes.iter().any(|scope| target_scopes.contains(scope)));
+            let shares_target = self.target_scopes.get(target).is_some_and(|target_scopes| {
+                scopes.iter().any(|scope| target_scopes.contains(scope))
+            });
             let is_own_library = self.crate_libs.values().any(|library| {
                 library == target && self.crate_dirs.get(library).is_some_and(|dir| dir == own)
             });
             return shares_target || is_own_library;
         }
         self.crate_deps.get(own).is_some_and(|deps| {
-            scopes.iter().any(|scope| deps.allows(scope.kind, target_crate))
+            scopes
+                .iter()
+                .any(|scope| deps.allows(scope.kind, target_crate))
         })
     }
 
     /// Whether `path` binds `local` with a `use` from a crate it cannot see.
     pub fn binds_external(&self, path: &str, local: &str) -> bool {
         let uncrated = self.crate_dirs.get(path).is_none();
-        let sibling_lib = path.ends_with("/src/main.rs")
+        let sibling_lib = path
+            .ends_with("/src/main.rs")
             .then(|| format!("{}/lib.rs", parent_dir(path)));
         self.facts.get(path).is_some_and(|facts| {
             facts.uses.iter().any(|binding| {
@@ -1388,10 +1637,15 @@ impl RustModuleIndex {
                     && binding.qualifier.first().is_some_and(|root| {
                         !matches!(root.as_str(), "crate" | "self" | "super")
                             && !(uncrated && self.known_crate_idents.contains(root))
-                            && !(uncrated && sibling_lib.as_ref().is_some_and(|lib| {
-                                self.blobs.contains_key(lib) && self.target(lib, local).is_some()
-                            }))
-                            && self.crate_libs.get(root).is_none_or(|lib| !self.sees_path(path, lib))
+                            && !(uncrated
+                                && sibling_lib.as_ref().is_some_and(|lib| {
+                                    self.blobs.contains_key(lib)
+                                        && self.target(lib, local).is_some()
+                                }))
+                            && self
+                                .crate_libs
+                                .get(root)
+                                .is_none_or(|lib| !self.sees_path(path, lib))
                     })
             })
         })
@@ -1400,16 +1654,26 @@ impl RustModuleIndex {
     /// An unresolved `use crate_name::Name` cannot fall back to a private
     /// declaration elsewhere in that crate's corpus.
     pub fn private_import_target(&self, from: &str, local: &str, blob: &ContentId) -> bool {
-        let Some(target) = self.paths.get(blob) else { return false };
-        if !self.facts.get(target).is_some_and(|facts| facts.private_defs.contains(local)) {
+        let Some(target) = self.paths.get(blob) else {
+            return false;
+        };
+        if !self
+            .facts
+            .get(target)
+            .is_some_and(|facts| facts.private_defs.contains(local))
+        {
             return false;
         }
-        self.facts.get(from).is_some_and(|facts| facts.uses.iter().any(|binding| {
-            binding.local == local
-                && binding.qualifier.first().is_some_and(|root| {
-                    self.crate_libs.get(root).is_some_and(|lib| self.sees_path(from, lib))
-                })
-        }))
+        self.facts.get(from).is_some_and(|facts| {
+            facts.uses.iter().any(|binding| {
+                binding.local == local
+                    && binding.qualifier.first().is_some_and(|root| {
+                        self.crate_libs
+                            .get(root)
+                            .is_some_and(|lib| self.sees_path(from, lib))
+                    })
+            })
+        })
     }
 
     /// The blob of a corpus path.
@@ -1452,8 +1716,11 @@ impl RustModuleIndex {
         qualifier: &[String],
         name: &str,
     ) -> Option<(ContentId, Span)> {
-        let HomeFile::Unique(home) = self.home_file(from, qualifier, &mut Vec::new(), &mut Vec::new())
-            else { return None };
+        let HomeFile::Unique(home) =
+            self.home_file(from, qualifier, &mut Vec::new(), &mut Vec::new())
+        else {
+            return None;
+        };
         self.type_target(&home, name)
     }
 
@@ -1482,15 +1749,28 @@ impl RustModuleIndex {
         Some(declared.map_or((blob.clone(), span), |(span, _, _)| (blob, *span)))
     }
 
-    pub fn assoc_type_target(&self, from: &str, trait_path: &str, slot: &str) -> Option<(ContentId, Span)> {
-        let (trait_name, trait_def) = if let Some((module, trait_name)) = trait_path.rsplit_once("::") {
-            let qualifier = module.split("::").map(str::to_string).collect::<Vec<_>>();
-            (trait_name, self.qualified_type_target(from, &qualifier, trait_name)?)
-        } else {
-            (trait_path, self.type_target(from, trait_path)?)
-        };
-        let sites = self.assoc_types.get(&(trait_name.to_string(), slot.to_string()))?;
-        let visible = sites.iter().filter(|(blob, _)| blob == &trait_def.0 && self.sees(from, blob))
+    pub fn assoc_type_target(
+        &self,
+        from: &str,
+        trait_path: &str,
+        slot: &str,
+    ) -> Option<(ContentId, Span)> {
+        let (trait_name, trait_def) =
+            if let Some((module, trait_name)) = trait_path.rsplit_once("::") {
+                let qualifier = module.split("::").map(str::to_string).collect::<Vec<_>>();
+                (
+                    trait_name,
+                    self.qualified_type_target(from, &qualifier, trait_name)?,
+                )
+            } else {
+                (trait_path, self.type_target(from, trait_path)?)
+            };
+        let sites = self
+            .assoc_types
+            .get(&(trait_name.to_string(), slot.to_string()))?;
+        let visible = sites
+            .iter()
+            .filter(|(blob, _)| blob == &trait_def.0 && self.sees(from, blob))
             .collect::<Vec<_>>();
         match visible.as_slice() {
             [only] => Some((only.0.clone(), only.1)),
@@ -1501,7 +1781,9 @@ impl RustModuleIndex {
     pub fn call_result_receiver_type(&self, path: &str, site: Span) -> Option<&str> {
         let (owner, method) = self.call_result_receivers.get(path)?.get(&site)?;
         let returns = self.method_returns.get(&(owner.clone(), method.clone()))?;
-        let [only] = returns.as_slice() else { return None };
+        let [only] = returns.as_slice() else {
+            return None;
+        };
         Some(only)
     }
 
@@ -1706,26 +1988,39 @@ impl RustModuleIndex {
         let target = if matches!(refs[0], "self" | "super") {
             // A `#[path]` module's spelling can live outside its module
             // parent. Resolve `super` from its declared module path.
-            let mut base = self.module_paths.get(from).cloned().unwrap_or_else(|| module_segments(from));
+            let mut base = self
+                .module_paths
+                .get(from)
+                .cloned()
+                .unwrap_or_else(|| module_segments(from));
             let mut rest = refs.as_slice();
             while let Some(head) = rest.first() {
                 match *head {
                     "self" => {}
                     "super" => {
-                        if base.pop().is_none() { return HomeFile::None; }
+                        if base.pop().is_none() {
+                            return HomeFile::None;
+                        }
                     }
                     _ => break,
                 }
                 rest = &rest[1..];
             }
             base.extend(rest.iter().map(|segment| segment.replace('-', "_")));
-            ModuleTarget { suffix: base, crate_root: None }
+            ModuleTarget {
+                suffix: base,
+                crate_root: None,
+            }
         } else {
-            let Some(target) = module_target(from, &refs) else { return HomeFile::None; };
+            let Some(target) = module_target(from, &refs) else {
+                return HomeFile::None;
+            };
             target
         };
         if target.crate_root.is_some() && target.suffix.is_empty() {
-            let mut candidates = self.module_paths.iter()
+            let mut candidates = self
+                .module_paths
+                .iter()
                 .filter(|(path, segments)| {
                     self.sees_path(from, path)
                         && target.covers(segments)
@@ -1749,9 +2044,11 @@ impl RustModuleIndex {
             .into_iter()
             .flatten()
             .filter(|path| {
-                self.sees_path(from, path) && self.module_paths
-                    .get(*path)
-                    .is_some_and(|segments| target.covers(segments))
+                self.sees_path(from, path)
+                    && self
+                        .module_paths
+                        .get(*path)
+                        .is_some_and(|segments| target.covers(segments))
             })
             .collect();
         match candidates.as_slice() {
@@ -1849,12 +2146,7 @@ impl RustModuleIndex {
 
     /// The outcome of a module-qualified call `qualifier::callee` from
     /// `from`: a corpus def, an external module, or a miss.
-    pub fn module_call(
-        &self,
-        from: &str,
-        qualifier: &[String],
-        callee: &str,
-    ) -> ModuleCallTarget {
+    pub fn module_call(&self, from: &str, qualifier: &[String], callee: &str) -> ModuleCallTarget {
         if !matches!(qualifier[0].as_str(), "crate" | "self" | "super")
             && !qualifier[0].is_empty()
             && self.facts.get(from).is_none_or(|facts| {
@@ -1990,7 +2282,8 @@ impl RustModuleIndex {
     ) -> ExportTable {
         let mut starred = ExportTable::new();
         for star in stars {
-            let HomeFile::Unique(target) = self.home_file(file, &star.qualifier, &mut Vec::new(), stack)
+            let HomeFile::Unique(target) =
+                self.home_file(file, &star.qualifier, &mut Vec::new(), stack)
             else {
                 continue;
             };

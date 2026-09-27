@@ -15,9 +15,7 @@ type ParsedPredicates = (
 );
 
 /// ts: `user.general_predicates(i)` per pattern; unknown operator or bad arity is an error.
-pub fn read_and_parse_predicates(
-    user: &Query,
-) -> Result<ParsedPredicates, QueryExtError> {
+pub fn read_and_parse_predicates(user: &Query) -> Result<ParsedPredicates, QueryExtError> {
     let mut predicates = Vec::new();
     let mut kinds = Vec::new();
     let mut predicate_kinds = Vec::new();
@@ -47,7 +45,16 @@ pub fn read_and_parse_predicates(
             )?);
         }
     }
-    Ok((predicates, kinds, predicate_kinds, literals, emits, relations, fields, emit_literals))
+    Ok((
+        predicates,
+        kinds,
+        predicate_kinds,
+        literals,
+        emits,
+        relations,
+        fields,
+        emit_literals,
+    ))
 }
 
 fn intern(value: &str, names: &mut Vec<Box<str>>) -> u16 {
@@ -89,7 +96,10 @@ fn parse_emit(
             }
         };
         let key = intern(key, fields);
-        if emitted_fields.iter().any(|field: &EmitFieldSpec| field.key == key) {
+        if emitted_fields
+            .iter()
+            .any(|field: &EmitFieldSpec| field.key == key)
+        {
             return Err(QueryExtError::DuplicateField(key.to_string()));
         }
         emitted_fields.push(EmitFieldSpec { key, source });

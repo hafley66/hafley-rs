@@ -5,8 +5,8 @@ use std::collections::{BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 
 use crate::read::project::{
-    conformance_edges, scip_conformances, ProjectError, ProjectInput,
-    RawProjectFact, ResolveWithRawError,
+    conformance_edges, scip_conformances, ProjectError, ProjectInput, RawProjectFact,
+    ResolveWithRawError,
 };
 use crate::read::scip::{byte_range_at, join_documents, LineTable};
 use crate::read::scip_ensure::{default_cache_dir, ensure_index_picked_for_root, IndexBudget};
@@ -81,14 +81,22 @@ fn push_phase_one<E>(
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
     if let Some(file) = input.file.take() {
-        push_raw(RawProjectFact { path: &input.path, content_id: &input.blob, fact: file })
-            .map_err(ResolveWithRawError::RawSink)?;
+        push_raw(RawProjectFact {
+            path: &input.path,
+            content_id: &input.blob,
+            fact: file,
+        })
+        .map_err(ResolveWithRawError::RawSink)?;
     }
     crate::read::wire::flatten_each(input.output.as_ref(), None, &mut |mut fact| {
         if let FlatFact::Unresolved { path, .. } = &mut fact {
             path.get_or_insert_with(|| input.path.clone());
         }
-        push_raw(RawProjectFact { path: &input.path, content_id: &input.blob, fact })
+        push_raw(RawProjectFact {
+            path: &input.path,
+            content_id: &input.blob,
+            fact,
+        })
     })
     .map_err(ResolveWithRawError::RawSink)
 }
@@ -105,15 +113,26 @@ fn project_index(inputs: &[ProjectInput], root: &Path, index: ScipIndex) -> Vec<
     let root_buf = root.to_path_buf();
     let reader = move |relative: &str| std::fs::read(root_buf.join(relative)).ok();
     let joined = join_documents(&index, &reader);
-    let input_of_blob: HashMap<&ContentId, &ProjectInput> =
-        inputs.iter().rev().map(|input| (&input.blob, input)).collect();
+    let input_of_blob: HashMap<&ContentId, &ProjectInput> = inputs
+        .iter()
+        .rev()
+        .map(|input| (&input.blob, input))
+        .collect();
     let docs: HashMap<usize, Doc<'_>> = joined
         .iter()
         .enumerate()
         .filter_map(|(ix, entry)| {
             let (blob, content) = entry.as_ref()?;
             let input = *input_of_blob.get(blob)?;
-            Some((ix, Doc { ix, input, content, lines: LineTable::build(content) }))
+            Some((
+                ix,
+                Doc {
+                    ix,
+                    input,
+                    content,
+                    lines: LineTable::build(content),
+                },
+            ))
         })
         .collect();
     let mut order: Vec<&Doc<'_>> = docs.values().collect();
@@ -137,7 +156,10 @@ fn project_index(inputs: &[ProjectInput], root: &Path, index: ScipIndex) -> Vec<
         witness: false,
     };
     let _ = cx.indexes.scip_index.set(index);
-    facts.extend(conformance_edges(inputs, &scip_conformances(inputs, &cx, Some(root))));
+    facts.extend(conformance_edges(
+        inputs,
+        &scip_conformances(inputs, &cx, Some(root)),
+    ));
     facts
 }
 
@@ -153,7 +175,9 @@ fn occurrence_rows(index: &ScipIndex, doc: &Doc<'_>) -> Vec<FlatFact> {
     let path = &doc.input.path;
     let mut facts = Vec::new();
     for occurrence in &index.documents[doc.ix].occurrences {
-        let Some(span) = span_of(doc, index, occurrence.range) else { continue };
+        let Some(span) = span_of(doc, index, occurrence.range) else {
+            continue;
+        };
         let symbol = index.symbol(occurrence.symbol).to_string();
         let definition = occurrence.roles.contains(OccurrenceRole::DEFINITION);
         let decl = occurrence
@@ -211,8 +235,13 @@ fn refs_by_end(index: &ScipIndex, doc: &Doc<'_>) -> HashMap<u32, Vec<(u32, Symbo
         if occurrence.roles.contains(OccurrenceRole::DEFINITION) {
             continue;
         }
-        let Some(span) = span_of(doc, index, occurrence.range) else { continue };
-        by_end.entry(span.end()).or_default().push((span.start, occurrence.symbol));
+        let Some(span) = span_of(doc, index, occurrence.range) else {
+            continue;
+        };
+        by_end
+            .entry(span.end())
+            .or_default()
+            .push((span.start, occurrence.symbol));
     }
     by_end
 }
@@ -230,7 +259,9 @@ fn definitions(index: &ScipIndex, docs: &[&Doc<'_>]) -> Defs {
             {
                 continue;
             }
-            let Some(span) = span_of(doc, index, occurrence.range) else { continue };
+            let Some(span) = span_of(doc, index, occurrence.range) else {
+                continue;
+            };
             let here = (doc.input.path.clone(), span);
             defs.entry(occurrence.symbol)
                 .and_modify(|best| {
@@ -247,7 +278,9 @@ fn definitions(index: &ScipIndex, docs: &[&Doc<'_>]) -> Defs {
 /// One row per (call site, reference ending at the site's end): `resolved_edge`
 /// for a definition in the inputs, else `unresolved` local/external/no_occurrence.
 fn site_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
-    let Some(call) = doc.input.output.call.as_ref() else { return Vec::new() };
+    let Some(call) = doc.input.output.call.as_ref() else {
+        return Vec::new();
+    };
     let strings = &doc.input.output.strings;
     let path = &doc.input.path;
     let by_end = refs_by_end(index, doc);
@@ -273,7 +306,11 @@ fn site_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
             .map(|(_, symbol)| *symbol)
             .collect();
         if hits.is_empty() {
-            facts.push(unresolved(span, "no_occurrence", strings.lookup(site.callee).to_string()));
+            facts.push(unresolved(
+                span,
+                "no_occurrence",
+                strings.lookup(site.callee).to_string(),
+            ));
             continue;
         }
         for symbol in hits {
@@ -338,22 +375,41 @@ fn impl_self_bindings(index: &ScipIndex, doc: &Doc<'_>) -> Vec<ImplSelfBinding> 
         }
     }
 
-    let Ok(source) = std::str::from_utf8(doc.content) else { return Vec::new() };
-    let Ok(parsed) = hafley_scm::lang::rust::parse_rust_syntax(source) else { return Vec::new() };
-    let mut heads = Heads { lines: &parsed.line_starts, rows: Vec::new() };
+    let Ok(source) = std::str::from_utf8(doc.content) else {
+        return Vec::new();
+    };
+    let Ok(parsed) = hafley_scm::lang::rust::parse_rust_syntax(source) else {
+        return Vec::new();
+    };
+    let mut heads = Heads {
+        lines: &parsed.line_starts,
+        rows: Vec::new(),
+    };
     heads.visit_file(&parsed.file);
-    let header_symbols: HashMap<(u32, u32), SymbolId> = index.documents[doc.ix].occurrences.iter()
-        .filter(|occurrence| !occurrence.roles.contains(OccurrenceRole::DEFINITION)
-            && index.symbol(occurrence.symbol).ends_with('#'))
+    let header_symbols: HashMap<(u32, u32), SymbolId> = index.documents[doc.ix]
+        .occurrences
+        .iter()
+        .filter(|occurrence| {
+            !occurrence.roles.contains(OccurrenceRole::DEFINITION)
+                && index.symbol(occurrence.symbol).ends_with('#')
+        })
         .filter_map(|occurrence| {
             let span = span_of(doc, index, occurrence.range)?;
             Some(((span.start, span.end()), occurrence.symbol))
         })
         .collect();
-    heads.rows.into_iter().filter_map(|(block, head, name)| {
-        let symbol = *header_symbols.get(&(head.start, head.end()))?;
-        Some(ImplSelfBinding { block, name, symbol })
-    }).collect()
+    heads
+        .rows
+        .into_iter()
+        .filter_map(|(block, head, name)| {
+            let symbol = *header_symbols.get(&(head.start, head.end()))?;
+            Some(ImplSelfBinding {
+                block,
+                name,
+                symbol,
+            })
+        })
+        .collect()
 }
 
 fn impl_self_type_symbol(
@@ -367,10 +423,14 @@ fn impl_self_type_symbol(
     if !tail.is_empty() && !(tail.starts_with('[') && tail.ends_with(']')) {
         return None;
     }
-    bindings.iter()
-        .filter(|binding| binding.name == self_type
-            && binding.block.start <= site.start && site.end() <= binding.block.end()
-            && defs.contains_key(&binding.symbol))
+    bindings
+        .iter()
+        .filter(|binding| {
+            binding.name == self_type
+                && binding.block.start <= site.start
+                && site.end() <= binding.block.end()
+                && defs.contains_key(&binding.symbol)
+        })
         .min_by_key(|binding| binding.block.len)
         .map(|binding| binding.symbol)
 }
@@ -378,7 +438,9 @@ fn impl_self_type_symbol(
 /// One `resolved_type_edge` per parse type-edge candidate: the first type
 /// reference inside the owner spelling the candidate's name names the target.
 fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
-    let Some(types) = doc.input.output.types.as_ref() else { return Vec::new() };
+    let Some(types) = doc.input.output.types.as_ref() else {
+        return Vec::new();
+    };
     let strings = &doc.input.output.strings;
     let impl_bindings = impl_self_bindings(index, doc);
     let mut refs: Vec<(Span, SymbolId)> = index.documents[doc.ix]
@@ -423,18 +485,24 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
             crate::read::types::TypeEdgeKind::Impl => {
                 let name = text(&owner).unwrap_or_default();
                 refs.iter().find(|(span, _)| {
-                    text(span) == Some(bare.as_bytes()) && line_of(doc.content, *span).windows(name.len()).any(|w| w == name)
+                    text(span) == Some(bare.as_bytes())
+                        && line_of(doc.content, *span)
+                            .windows(name.len())
+                            .any(|w| w == name)
                 })
             }
             _ => refs.iter().find(|(span, symbol)| {
-                span.start >= owner.start && span.end() <= until
+                span.start >= owner.start
+                    && span.end() <= until
                     && (text(span) == Some(bare.as_bytes())
                         || (text(span) == Some(&b"Self"[..])
                             && descriptor_name(index.symbol(*symbol)).as_deref() == Some(bare)))
             }),
         };
         let Some(&(_, symbol)) = hit else { continue };
-        let Some((target_path, _)) = defs.get(&symbol) else { continue };
+        let Some((target_path, _)) = defs.get(&symbol) else {
+            continue;
+        };
         let kind = candidate.kind.as_str();
         if !seen.insert((owner.start, owner.end(), target_path.clone(), symbol, kind)) {
             continue;
@@ -456,7 +524,10 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
 
 /// The whole source line holding `span`.
 fn line_of(content: &[u8], span: Span) -> &[u8] {
-    let start = content[..span.start as usize].iter().rposition(|b| *b == b'\n').map_or(0, |at| at + 1);
+    let start = content[..span.start as usize]
+        .iter()
+        .rposition(|b| *b == b'\n')
+        .map_or(0, |at| at + 1);
     let end = content[span.end() as usize..]
         .iter()
         .position(|b| *b == b'\n')
@@ -494,7 +565,9 @@ fn caller_name(input: &ProjectInput, site: Span) -> Option<String> {
 /// `resolved_import` from specifier spans: one `module` row per target file,
 /// one `local` row per binding whose target is not a module.
 fn import_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
-    let Some(call) = doc.input.output.call.as_ref() else { return Vec::new() };
+    let Some(call) = doc.input.output.call.as_ref() else {
+        return Vec::new();
+    };
     let strings = &doc.input.output.strings;
     let path = &doc.input.path;
     let mut spans: Vec<(Span, SymbolId)> = index.documents[doc.ix]
@@ -516,9 +589,16 @@ fn import_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
             .iter()
             .rev()
             .find(|(span, _)| span.end() == outer.end())
-            .or_else(|| inside.iter().rev().find(|(_, symbol)| index.symbol(*symbol).ends_with('/')));
+            .or_else(|| {
+                inside
+                    .iter()
+                    .rev()
+                    .find(|(_, symbol)| index.symbol(*symbol).ends_with('/'))
+            });
         let Some(&(_, symbol)) = pick else { continue };
-        let Some((target_path, _)) = defs.get(&symbol).cloned() else { continue };
+        let Some((target_path, _)) = defs.get(&symbol).cloned() else {
+            continue;
+        };
         if target_path == *path {
             continue;
         }
@@ -555,7 +635,9 @@ fn import_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
 fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, ProjectError> {
     let present: BTreeSet<&str> = files
         .iter()
-        .filter_map(|path| crate::read::lang::source_for(&path.to_string_lossy()).map(|src| src.name()))
+        .filter_map(|path| {
+            crate::read::lang::source_for(&path.to_string_lossy()).map(|src| src.name())
+        })
         .collect();
     let compiled = |lang: &str| match lang {
         "rust" => cfg!(feature = "rust-checker"),
@@ -576,7 +658,11 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
     };
     let request = crate::read::project::ResolveRequest {
         paths: files,
-        arms: crate::read::project::ResolveArms { call: true, types: true, flow: false },
+        arms: crate::read::project::ResolveArms {
+            call: true,
+            types: true,
+            flow: false,
+        },
         scip: crate::read::project::ScipMode::Off,
         project_root: None,
         scip_records: crate::read::scip_rows::ScipRecords::all(),
@@ -586,15 +672,22 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
         go_checker: want("go"),
         witness: false,
     };
-    if request.rust_checker.is_none() && request.ts_checker.is_none() && request.go_checker.is_none() {
+    if request.rust_checker.is_none()
+        && request.ts_checker.is_none()
+        && request.go_checker.is_none()
+    {
         return Ok(Vec::new());
     }
     let checker = ResolutionOrigin::Checker.as_str();
     Ok(crate::read::project::resolve_project(&request)?
         .into_iter()
         .filter(|fact| match fact {
-            FlatFact::ResolvedEdge { resolution_origin, .. }
-            | FlatFact::ResolvedTypeEdge { resolution_origin, .. } => resolution_origin == checker,
+            FlatFact::ResolvedEdge {
+                resolution_origin, ..
+            }
+            | FlatFact::ResolvedTypeEdge {
+                resolution_origin, ..
+            } => resolution_origin == checker,
             _ => false,
         })
         .collect())
@@ -617,13 +710,19 @@ mod tests {
         let declared_elsewhere = ("declaration/Shared".to_string(), Span::anchor(7));
         let rows = [
             (Defs::from([(SymbolId(2), wrong_same_name.clone())]), None),
-            (Defs::from([
-                (SymbolId(1), declared_elsewhere),
-                (SymbolId(2), wrong_same_name),
-            ]), Some(SymbolId(1))),
+            (
+                Defs::from([
+                    (SymbolId(1), declared_elsewhere),
+                    (SymbolId(2), wrong_same_name),
+                ]),
+                Some(SymbolId(1)),
+            ),
         ];
         for (definitions, expected) in rows {
-            assert_eq!(impl_self_type_symbol(symbol, site, std::slice::from_ref(&header), &definitions), expected);
+            assert_eq!(
+                impl_self_type_symbol(symbol, site, std::slice::from_ref(&header), &definitions),
+                expected
+            );
         }
     }
 }

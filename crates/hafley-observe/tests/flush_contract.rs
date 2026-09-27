@@ -81,7 +81,11 @@ fn a_commit_point_is_what_writes_an_on_commit_sink() {
     for index in 0..ROWS {
         writer.write(row(index));
     }
-    assert_eq!(recorder.landed().len(), 0, "on-commit wrote before the commit");
+    assert_eq!(
+        recorder.landed().len(),
+        0,
+        "on-commit wrote before the commit"
+    );
 
     writer.flush();
     assert_eq!(recorder.landed().len(), ROWS, "the commit wrote the buffer");

@@ -208,7 +208,9 @@ fn screen(server: &str, session: &str) -> String {
 }
 
 fn session_alive(server: &str, session: &str) -> bool {
-    tmux(server, &["has-session", "-t", session]).status.success()
+    tmux(server, &["has-session", "-t", session])
+        .status
+        .success()
 }
 
 fn wait_for_screen(server: &str, case: &Case, session: &str, wanted: &str, label: &str) {

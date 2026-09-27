@@ -10,7 +10,7 @@ use std::sync::Arc;
 use crate::read::cache::{get_or_extract, CacheKey};
 use crate::read::lang::source_for;
 use crate::read::shape::{content_id_of, ContentId};
-use crate::read::source::{RyiOutput, FamilyMask};
+use crate::read::source::{FamilyMask, RyiOutput};
 
 thread_local! {
     /// The blob id the in-flight `Source::extract` was keyed on, tagged with the
@@ -49,7 +49,12 @@ pub fn extracting_blob(content: &[u8]) -> Option<ContentId> {
 /// no entry, so caching would only hold every file's output until exit.
 pub fn dispatch_uncached(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiOutput>> {
     let src = source_for(path)?;
-    let span = tracing::info_span!("extract_file", path, lang = src.name(), bytes = content.len());
+    let span = tracing::info_span!(
+        "extract_file",
+        path,
+        lang = src.name(),
+        bytes = content.len()
+    );
     let _entered = span.enter();
     let blob = content_id_of(content);
     EXTRACTING.with(|slot| {

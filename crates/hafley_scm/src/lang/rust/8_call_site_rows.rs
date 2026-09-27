@@ -193,8 +193,12 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
 }
 
 fn default_call(expr: &syn::Expr) -> Option<&syn::ExprCall> {
-    let syn::Expr::Call(call) = peel_parens(expr) else { return None };
-    let syn::Expr::Path(path) = peel_parens(&call.func) else { return None };
+    let syn::Expr::Call(call) = peel_parens(expr) else {
+        return None;
+    };
+    let syn::Expr::Path(path) = peel_parens(&call.func) else {
+        return None;
+    };
     (path.path.segments.len() == 2
         && path.path.segments[0].ident == "Default"
         && path.path.segments[1].ident == "default")

@@ -26,10 +26,21 @@ pub(crate) fn run_lane_squares(
     let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) else {
         anyhow::bail!("lane `{lane}` has no tmux session to read")
     };
-    let Some(session) = route.session_id.as_deref().filter(|session| !session.is_empty()) else {
+    let Some(session) = route
+        .session_id
+        .as_deref()
+        .filter(|session| !session.is_empty())
+    else {
         anyhow::bail!("lane `{lane}` route carries no session_id")
     };
-    let frame = pane::frame(tmux::mux(), socket, target, &open_store()?, session, &Options::default())?;
+    let frame = pane::frame(
+        tmux::mux(),
+        socket,
+        target,
+        &open_store()?,
+        session,
+        &Options::default(),
+    )?;
     match format {
         QueryFormat::Ndjson => line(&serde_json::to_string(&frame)?),
         QueryFormat::Text => emit_text(lane, &frame),
@@ -48,7 +59,12 @@ fn emit_text(lane: &str, frame: &pane::PaneFrame) {
     }
     line("role\tturn\tbuffer_start\tbuffer_end\tconfidence\tsaid");
     for turn in frame.pinned.iter().chain(&frame.turns) {
-        let said: String = turn.said.replace(['\n', '\r', '\t'], " ").chars().take(120).collect();
+        let said: String = turn
+            .said
+            .replace(['\n', '\r', '\t'], " ")
+            .chars()
+            .take(120)
+            .collect();
         line(&format!(
             "{}\t{}\t{}\t{}\t{:?}\t{}",
             turn.role, turn.turn, turn.buffer_start, turn.buffer_end, turn.confidence, said

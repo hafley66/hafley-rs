@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use crate::read::lang::source_for;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::shape::{NodeRef, Span, Strings};
-use crate::read::source::{RyiOutput, FamilyMask};
+use crate::read::source::{FamilyMask, RyiOutput};
 use crate::read::types::{CfgEdgeKind, CfgF, CfgNodeKind, CstEdgeKind, CstF};
 use crate::read::wire::{flatten_cfg, FlatFact};
 
@@ -238,11 +238,7 @@ pub fn build_cfg(
 
 /// The CFG of one already-extracted file, keyed on the path's language. None
 /// when no `Source` matches the path or the language has no kind_role rows.
-pub fn cfg_bundle(
-    path: &str,
-    output: &RyiOutput,
-    content: &[u8],
-) -> Option<FamilyBundle<CfgF>> {
+pub fn cfg_bundle(path: &str, output: &RyiOutput, content: &[u8]) -> Option<FamilyBundle<CfgF>> {
     let lang = source_for(path)?.name();
     let roles = roles_for(lang)?;
     let cst = output.cst.as_ref()?;

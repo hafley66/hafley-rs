@@ -15,7 +15,6 @@ use serde::Serialize;
 use serde_json::Value;
 use tree_sitter::Parser as TreeParser;
 
-
 /// A tree-sitter query keeps the native S-expression and explicit grammar name.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct TreeSitterQuery {

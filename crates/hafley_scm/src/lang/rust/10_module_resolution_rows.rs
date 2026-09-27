@@ -73,44 +73,83 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
                 walk_use_tree(&item.tree, reexport, &mut Vec::new(), rows);
             }
             syn::Item::Trait(item) => {
-                let methods = item.items.iter().filter_map(|child| {
-                    let syn::TraitItem::Fn(method) = child else { return None };
-                    let end = method.default.as_ref().map_or(method.sig.span(), |body| body.span());
-                    let (start, end) = def_range(line_starts, method.sig.ident.span(), end);
-                    Some(TraitMethodRow {
-                        name: method.sig.ident.to_string(),
-                        range: start..end,
-                        default: method.default.is_some(),
+                let methods = item
+                    .items
+                    .iter()
+                    .filter_map(|child| {
+                        let syn::TraitItem::Fn(method) = child else {
+                            return None;
+                        };
+                        let end = method
+                            .default
+                            .as_ref()
+                            .map_or(method.sig.span(), |body| body.span());
+                        let (start, end) = def_range(line_starts, method.sig.ident.span(), end);
+                        Some(TraitMethodRow {
+                            name: method.sig.ident.to_string(),
+                            range: start..end,
+                            default: method.default.is_some(),
+                        })
                     })
-                }).collect();
-                rows.traits.push(TraitMethodsRow { name: item.ident.to_string(), methods });
+                    .collect();
+                rows.traits.push(TraitMethodsRow {
+                    name: item.ident.to_string(),
+                    methods,
+                });
             }
             syn::Item::Mod(item) => match &item.content {
                 Some((_, inner)) => {
                     rows.inline_mods.push(item.ident.to_string());
                     collect(inner, line_starts, rows);
                 }
-                None => rows.mod_decls.push((item.ident.to_string(), mod_path_attr(&item.attrs))),
+                None => rows
+                    .mod_decls
+                    .push((item.ident.to_string(), mod_path_attr(&item.attrs))),
             },
             syn::Item::Enum(item) => {
-                let variants = item.variants.iter().filter_map(|variant| {
-                    variant_def_range(line_starts, variant)
-                        .map(|(start, end)| (variant.ident.to_string(), start..end))
-                }).collect();
-                rows.enums.push(EnumVariantsRow { name: item.ident.to_string(), variants });
+                let variants = item
+                    .variants
+                    .iter()
+                    .filter_map(|variant| {
+                        variant_def_range(line_starts, variant)
+                            .map(|(start, end)| (variant.ident.to_string(), start..end))
+                    })
+                    .collect();
+                rows.enums.push(EnumVariantsRow {
+                    name: item.ident.to_string(),
+                    variants,
+                });
             }
-            syn::Item::Type(item) => rows.aliases.push(span_range(line_starts, item.ident.span())),
+            syn::Item::Type(item) => rows
+                .aliases
+                .push(span_range(line_starts, item.ident.span())),
             syn::Item::Impl(item) => {
                 if let Some(self_type) = principal_ty(&item.self_ty) {
                     let trait_name = item.trait_.as_ref().and_then(|(_, path, _)| {
-                        path.segments.last().map(|segment| segment.ident.to_string())
+                        path.segments
+                            .last()
+                            .map(|segment| segment.ident.to_string())
                     });
-                    let methods = item.items.iter().filter_map(|child| {
-                        let syn::ImplItem::Fn(method) = child else { return None };
-                        let (start, end) = def_range(line_starts, method.sig.ident.span(), method.block.span());
-                        Some((method.sig.ident.to_string(), start..end))
-                    }).collect();
-                    rows.impls.push(ImplMethodsRow { self_type, trait_name, methods });
+                    let methods = item
+                        .items
+                        .iter()
+                        .filter_map(|child| {
+                            let syn::ImplItem::Fn(method) = child else {
+                                return None;
+                            };
+                            let (start, end) = def_range(
+                                line_starts,
+                                method.sig.ident.span(),
+                                method.block.span(),
+                            );
+                            Some((method.sig.ident.to_string(), start..end))
+                        })
+                        .collect();
+                    rows.impls.push(ImplMethodsRow {
+                        self_type,
+                        trait_name,
+                        methods,
+                    });
                 }
             }
             _ => {}
@@ -177,9 +216,18 @@ fn walk_use_tree(
             push_leaf(prefix, &leaf.ident.to_string(), None, reexport, rows);
         }
         syn::UseTree::Rename(leaf) => {
-            push_leaf(prefix, &leaf.ident.to_string(), Some(leaf.rename.to_string()), reexport, rows);
+            push_leaf(
+                prefix,
+                &leaf.ident.to_string(),
+                Some(leaf.rename.to_string()),
+                reexport,
+                rows,
+            );
         }
-        syn::UseTree::Glob(_) => rows.stars.push(StarImportRow { qualifier: prefix.clone(), reexport }),
+        syn::UseTree::Glob(_) => rows.stars.push(StarImportRow {
+            qualifier: prefix.clone(),
+            reexport,
+        }),
     }
 }
 
@@ -191,7 +239,9 @@ fn push_leaf(
     rows: &mut ModuleResolutionRows,
 ) {
     let (qualifier, asked) = if segment == "self" {
-        let Some((last, rest)) = prefix.split_last() else { return };
+        let Some((last, rest)) = prefix.split_last() else {
+            return;
+        };
         (rest.to_vec(), last.clone())
     } else {
         (prefix.to_vec(), segment.to_string())

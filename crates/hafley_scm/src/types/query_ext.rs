@@ -15,10 +15,16 @@ pub struct QueryExt {
 
 impl QueryExt {
     pub fn relation_id(&self, name: &str) -> Option<u16> {
-        self.relations.iter().position(|value| value.as_ref() == name).map(|index| index as u16)
+        self.relations
+            .iter()
+            .position(|value| value.as_ref() == name)
+            .map(|index| index as u16)
     }
 
     pub fn field_id(&self, name: &str) -> Option<u16> {
-        self.fields.iter().position(|value| value.as_ref() == name).map(|index| index as u16)
+        self.fields
+            .iter()
+            .position(|value| value.as_ref() == name)
+            .map(|index| index as u16)
     }
 }

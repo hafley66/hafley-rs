@@ -59,7 +59,9 @@ fn warnings_for(sql: &str) -> Vec<String> {
 fn an_unindexed_scan_reports_a_table_scan() {
     let warnings = warnings_for("SELECT value FROM unindexed WHERE value > 100");
     assert!(
-        warnings.iter().any(|w| w == StatementFinding::TableScan.as_str()),
+        warnings
+            .iter()
+            .any(|w| w == StatementFinding::TableScan.as_str()),
         "expected a table-scan finding, got {warnings:?}"
     );
 }
@@ -78,14 +80,20 @@ fn an_unindexed_order_by_reports_a_temporary_btree_sort() {
 #[test]
 fn an_indexed_lookup_reports_nothing() {
     let warnings = warnings_for("SELECT value FROM arrangement WHERE group_key = 'g'");
-    assert!(warnings.is_empty(), "expected no findings, got {warnings:?}");
+    assert!(
+        warnings.is_empty(),
+        "expected no findings, got {warnings:?}"
+    );
 }
 
 #[test]
 fn the_planner_account_names_the_temporary_btree() {
     let connection = seeded_connection();
-    let plan = query_plan(&connection, "SELECT value FROM unindexed ORDER BY value DESC")
-        .expect("query plan");
+    let plan = query_plan(
+        &connection,
+        "SELECT value FROM unindexed ORDER BY value DESC",
+    )
+    .expect("query plan");
     assert!(
         plan.iter().any(|step| step.contains("TEMP B-TREE")),
         "expected a temp b-tree step, got {plan:?}"
@@ -110,13 +118,17 @@ fn cached_statement_counters_describe_each_execution() {
         hafley_observe::sqlite::silence(&connection);
     });
     let storage = storage.lock();
-    let profiles = storage.all_events()
+    let profiles = storage
+        .all_events()
         .filter(|event| event.metadata().target() == "sqlite")
         .filter(|event| *event.metadata().level() == tracing::Level::DEBUG)
         .filter(|event| event.value("sql").is_some())
-        .filter_map(|event| event.value("vm_step").and_then(|v|v.as_int()))
+        .filter_map(|event| event.value("vm_step").and_then(|v| v.as_int()))
         .collect::<Vec<_>>();
     assert_eq!(profiles.len(), 2, "profile VM steps: {profiles:?}");
-    assert_eq!(profiles[0], profiles[1], "cached executions accumulated VM steps");
+    assert_eq!(
+        profiles[0], profiles[1],
+        "cached executions accumulated VM steps"
+    );
     assert!(profiles[0] > 0);
 }

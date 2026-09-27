@@ -91,7 +91,13 @@ fn cst_rows(
         |ix, parent, kind_id, start, end, name, named_children| {
             let kind_text = hafley_scm::cst::kind_name(&ts, kind_id);
             let kind = strings.intern(kind_text);
-            let mut node = Node::new(Span { start, len: end - start }, kind);
+            let mut node = Node::new(
+                Span {
+                    start,
+                    len: end - start,
+                },
+                kind,
+            );
             node.name = match name {
                 Some((name_start, name_end)) => {
                     Some(strings.intern(&src[name_start as usize..name_end as usize]))
@@ -102,7 +108,8 @@ fn cst_rows(
                 None if kinds.is_name_leaf_kind(kind_id)
                     || CALLEE_NAME_KINDS.contains(&kind_text) =>
                 {
-                    (named_children == 0).then(|| strings.intern(&src[start as usize..end as usize]))
+                    (named_children == 0)
+                        .then(|| strings.intern(&src[start as usize..end as usize]))
                 }
                 None => None,
             };
@@ -148,7 +155,9 @@ fn call_rows(
                     .parent()
                     .is_some_and(|parent| parent.is_named() && CALL_KINDS.contains(&parent.kind()));
             if !same_chain {
-                if let Some((callee, callee_path)) = callee_of(&node, src.as_bytes(), &kinds, strings) {
+                if let Some((callee, callee_path)) =
+                    callee_of(&node, src.as_bytes(), &kinds, strings)
+                {
                     bundle.aux.sites.push(CallSite {
                         span: Span {
                             start: node.start_byte() as u32,
@@ -285,8 +294,7 @@ fn callee_of(
         };
         let callee = strings.intern(node_text(&leaf, src));
         let seat_text = node_text(&seat, src);
-        let callee_path =
-            (seat_text != node_text(&leaf, src)).then(|| strings.intern(seat_text));
+        let callee_path = (seat_text != node_text(&leaf, src)).then(|| strings.intern(seat_text));
         return Some((callee, callee_path));
     }
     let mut leaves = Vec::new();

@@ -17,7 +17,9 @@
 //! extraction families, that one flattens a foreign tool's index. Both stay
 //! re-exported here so no import path moved.
 
-use crate::read::family::{CallF, CstEdgeKind, CstF, DfF, Family, FlowEdge, FlowF, ProjectEdge, TypeF};
+use crate::read::family::{
+    CallF, CstEdgeKind, CstF, DfF, Family, FlowEdge, FlowF, ProjectEdge, TypeF,
+};
 use crate::read::rows::FamilyBundle;
 pub use crate::read::schema::SCHEMA;
 pub use crate::read::scip_rows::{flatten_scip, scip_file_edges};

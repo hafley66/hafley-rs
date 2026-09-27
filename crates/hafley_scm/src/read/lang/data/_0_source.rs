@@ -9,7 +9,7 @@ use serde_json::{Map, Value};
 use crate::read::lang::fallback::FallbackSource;
 use crate::read::rows::FamilyBundle;
 use crate::read::shape::{Span, Strings};
-use crate::read::source::{RyiOutput, FamilyMask, Source};
+use crate::read::source::{FamilyMask, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{DataDoc, DataF, DataFAux, DataFormat, DataValueKind, DataValueRow};
 

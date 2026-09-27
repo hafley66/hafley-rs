@@ -410,7 +410,11 @@ mod tests {
             batch["turn:s1:9"].is_empty(),
             "a source nobody tagged keeps its place, empty"
         );
-        assert_eq!(batch.len(), 3, "the same source twice is one entry, trimmed");
+        assert_eq!(
+            batch.len(),
+            3,
+            "the same source twice is one entry, trimmed"
+        );
         for source in &asked {
             assert_eq!(
                 batch[source.trim()],

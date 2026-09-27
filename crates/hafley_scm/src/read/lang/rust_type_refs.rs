@@ -2,8 +2,8 @@
 
 use crate::read::types::TypeEdgeKind;
 
-pub use hafley_scm::lang::rust::{path_name, primary_type};
 pub use hafley_scm::lang::rust::{collect_path_args, type_refs};
+pub use hafley_scm::lang::rust::{path_name, primary_type};
 
 pub fn type_probe_key(name: &str, kind: TypeEdgeKind) -> (Option<&str>, &str) {
     // A Variant candidate's `to` is v5's synthetic `Enum::Variant` text, not a

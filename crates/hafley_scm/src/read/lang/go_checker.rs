@@ -11,7 +11,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use crate::read::shape::{FamilyTag, NodeRef};
-use crate::read::types::{CallEdgeKind, CallF, ContentId, DefIndex, DefSite, RyiOutput, ProjectEdge, ResolutionOrigin, TypeF};
+use crate::read::types::{
+    CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ProjectEdge, ResolutionOrigin, RyiOutput,
+    TypeF,
+};
 use hafley_scm::span::Span;
 
 /// One resolved reference. Offsets are the UTF-8 byte offset `to_span` writes,

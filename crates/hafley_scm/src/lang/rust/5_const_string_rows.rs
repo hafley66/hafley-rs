@@ -25,11 +25,14 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut Vec<ConstStringR
             }
             continue;
         }
-        let syn::Item::Const(item) = item else { continue };
+        let syn::Item::Const(item) = item else {
+            continue;
+        };
         let syn::Expr::Lit(syn::ExprLit {
             lit: syn::Lit::Str(value),
             ..
-        }) = &*item.expr else {
+        }) = &*item.expr
+        else {
             continue;
         };
         rows.push(ConstStringRow {

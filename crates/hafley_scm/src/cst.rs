@@ -90,17 +90,20 @@ pub fn walk_named_streaming(
 /// the tree's rows at once.
 pub fn walk_named(tree: &Tree) -> Vec<CstRow> {
     let mut out = Vec::new();
-    walk_named_streaming(tree, |ix, parent, kind_id, start, end, name, named_children| {
-        out.push(CstRow {
-            kind_id,
-            start,
-            end,
-            name,
-            named_children,
-            parent,
-        });
-        let _ = ix;
-    });
+    walk_named_streaming(
+        tree,
+        |ix, parent, kind_id, start, end, name, named_children| {
+            out.push(CstRow {
+                kind_id,
+                start,
+                end,
+                name,
+                named_children,
+                parent,
+            });
+            let _ = ix;
+        },
+    );
     out
 }
 
@@ -134,14 +137,21 @@ mod tests {
         let main = &rows[1];
         assert_eq!(kind_name(&rust, main.kind_id), "function_item");
         let (ns, ne) = main.name.expect("function_item names its name field");
-        assert_eq!(&b"fn main() { spark(); }"[ns as usize..ne as usize], b"main");
+        assert_eq!(
+            &b"fn main() { spark(); }"[ns as usize..ne as usize],
+            b"main"
+        );
         assert_eq!(main.parent, Some(0));
         assert_eq!(rows[0].parent, None);
         let call = rows
             .iter()
             .position(|row| kind_name(&rust, row.kind_id) == "call_expression")
             .unwrap();
-        assert_eq!(rows[call].parent, Some(5), "call reparents to its NEAREST named ancestor (expression_statement), not the root");
+        assert_eq!(
+            rows[call].parent,
+            Some(5),
+            "call reparents to its NEAREST named ancestor (expression_statement), not the root"
+        );
         assert_eq!(rows[call].name, None, "call_expression has no name field");
     }
 }

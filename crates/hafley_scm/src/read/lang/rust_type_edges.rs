@@ -2,13 +2,13 @@
 //! (field/variant/generic/impl/uses) that `Resolve<TypeF>` binds. Port of v5
 //! `edges_from`.
 
-use hafley_scm::lang::rust::{
-    type_candidate_rows, tsi_syntax_rows, TsiSyntaxArg, TypeCandidateKind, TypeCandidateOwner,
-};
 use crate::read::family::{ImplOwner, TypeEdgeCandidate, TypeEdgeKind, TypeF};
 use crate::read::rows::FamilyBundle;
 use crate::read::shape::{Span, Strings};
 use crate::read::tsi::{Arg, FactOut};
+use hafley_scm::lang::rust::{
+    tsi_syntax_rows, type_candidate_rows, TsiSyntaxArg, TypeCandidateKind, TypeCandidateOwner,
+};
 
 // ── type-edge candidates (the Resolve<TypeF> input) ───────────────
 //
@@ -32,7 +32,10 @@ pub fn edge_candidates(
             TypeCandidateOwner::Synthetic { range, name } => impl_owner_span(
                 sink,
                 strings,
-                Span { start: range.start, len: range.end - range.start },
+                Span {
+                    start: range.start,
+                    len: range.end - range.start,
+                },
                 &name,
             ),
             TypeCandidateOwner::Impl {
@@ -76,18 +79,28 @@ pub fn edge_candidates(
     let span = crate::read::trace::phase_span("rust", crate::read::trace::Phase::TsiSyntax);
     let _entered = span.enter();
     let rows = tsi_syntax_rows(parsed, line_starts);
-    for name in rows.interned { strings.intern(&name); }
-    sink.aux.tsi = rows.facts.into_iter().map(|row| FactOut {
-        fact: row.fact,
-        relation: row.relation,
-        args: row.args.into_iter().map(|arg| match arg {
-            TsiSyntaxArg::Id(id) => Arg::Id(id),
-            TsiSyntaxArg::Span(digest, start, end) => Arg::Span(digest, start, end),
-            TsiSyntaxArg::Text(text) => Arg::Text(text),
-            TsiSyntaxArg::Int(number) => Arg::Int(number),
-            TsiSyntaxArg::Atom(atom) => Arg::Atom(atom),
-        }).collect(),
-    }).collect();
+    for name in rows.interned {
+        strings.intern(&name);
+    }
+    sink.aux.tsi = rows
+        .facts
+        .into_iter()
+        .map(|row| FactOut {
+            fact: row.fact,
+            relation: row.relation,
+            args: row
+                .args
+                .into_iter()
+                .map(|arg| match arg {
+                    TsiSyntaxArg::Id(id) => Arg::Id(id),
+                    TsiSyntaxArg::Span(digest, start, end) => Arg::Span(digest, start, end),
+                    TsiSyntaxArg::Text(text) => Arg::Text(text),
+                    TsiSyntaxArg::Int(number) => Arg::Int(number),
+                    TsiSyntaxArg::Atom(atom) => Arg::Atom(atom),
+                })
+                .collect(),
+        })
+        .collect();
     crate::read::trace::record_phase(&span, 0, sink.aux.tsi.len() as u64, 1);
 }
 

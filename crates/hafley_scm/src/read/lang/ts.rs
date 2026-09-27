@@ -14,8 +14,8 @@
 //! name-resolved type EDGES (field / impl / uses / ...) are bound by
 //! `Resolve<TypeF>`; phase 1 stays pure-content.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::OnceLock;
 
 use oxc_allocator::Allocator;
@@ -42,7 +42,7 @@ use crate::read::seams::{
     ParseError, Parser, Project, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::read::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::tsi::Arg;
 use crate::read::types::span_arg;
@@ -2703,7 +2703,11 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
             }
         }
         self.parameter_scopes.push(
-            func.params.items.iter().filter_map(|param| binding_name(&param.pattern)).collect(),
+            func.params
+                .items
+                .iter()
+                .filter_map(|param| binding_name(&param.pattern))
+                .collect(),
         );
         self.depth += 1;
         oxc_ast_visit::walk::walk_function(self, func, flags);
@@ -2715,7 +2719,12 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
         // Arrows have no own declaration name, but they raise the depth so their
         // nested named decls land as Free defs.
         self.parameter_scopes.push(
-            arrow.params.items.iter().filter_map(|param| binding_name(&param.pattern)).collect(),
+            arrow
+                .params
+                .items
+                .iter()
+                .filter_map(|param| binding_name(&param.pattern))
+                .collect(),
         );
         self.depth += 1;
         oxc_ast_visit::walk::walk_arrow_function_expression(self, arrow);
@@ -2731,7 +2740,11 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 path: callee_path(&call.callee, self.content),
             });
         }
-        collect_value_refs(&mut self.value_refs, &call.arguments, &self.parameter_scopes);
+        collect_value_refs(
+            &mut self.value_refs,
+            &call.arguments,
+            &self.parameter_scopes,
+        );
         oxc_ast_visit::walk::walk_call_expression(self, call);
     }
 
@@ -2745,7 +2758,11 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 path: callee_path(&new_expr.callee, self.content),
             });
         }
-        collect_value_refs(&mut self.value_refs, &new_expr.arguments, &self.parameter_scopes);
+        collect_value_refs(
+            &mut self.value_refs,
+            &new_expr.arguments,
+            &self.parameter_scopes,
+        );
         oxc_ast_visit::walk::walk_new_expression(self, new_expr);
     }
 
@@ -2793,7 +2810,11 @@ fn collect_value_refs(
 ) {
     for argument in arguments {
         if let ts::Argument::Identifier(id) = argument {
-            if parameter_scopes.iter().rev().any(|params| params.iter().any(|param| param == id.name.as_str())) {
+            if parameter_scopes
+                .iter()
+                .rev()
+                .any(|params| params.iter().any(|param| param == id.name.as_str()))
+            {
                 continue;
             }
             out.push((id.span, id.name.to_string()));
@@ -4443,10 +4464,12 @@ pub fn set_resolve_path(path: Option<&str>) {
 }
 
 fn own_path(output: &RyiOutput, cx: &ProjectCx) -> Option<String> {
-    TS_RESOLVE_PATH.with(|slot| slot.borrow().clone()).or_else(|| {
-        let blob = own_blob(cx, output)?;
-        cx.indexes.paths.get()?.get(&blob).map(str::to_owned)
-    })
+    TS_RESOLVE_PATH
+        .with(|slot| slot.borrow().clone())
+        .or_else(|| {
+            let blob = own_blob(cx, output)?;
+            cx.indexes.paths.get()?.get(&blob).map(str::to_owned)
+        })
 }
 
 /// The sites ResolveExport judged AMBIGUOUS (two `export *` arms disagree).
@@ -4488,15 +4511,14 @@ pub fn call_drops(
                     .map(|(_, _, outcome)| outcome)
             });
             if let Some(outcome) = receiver {
-                let reason = match outcome {
-                    ts_receivers::TypeBinding::Decl(_) | ts_receivers::TypeBinding::Field(_, _) => {
-                        return None
-                    }
-                    ts_receivers::TypeBinding::Inferred | ts_receivers::TypeBinding::Shadowed => {
-                        UnresolvedReason::Inferred
-                    }
-                    ts_receivers::TypeBinding::Ambiguous => UnresolvedReason::Ambiguous,
-                };
+                let reason =
+                    match outcome {
+                        ts_receivers::TypeBinding::Decl(_)
+                        | ts_receivers::TypeBinding::Field(_, _) => return None,
+                        ts_receivers::TypeBinding::Inferred
+                        | ts_receivers::TypeBinding::Shadowed => UnresolvedReason::Inferred,
+                        ts_receivers::TypeBinding::Ambiguous => UnresolvedReason::Ambiguous,
+                    };
                 return Some(crate::read::project::ResolveDrop {
                     span: site.span,
                     reason,
@@ -4631,9 +4653,10 @@ impl TsSource {
         if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
             if let Some(node) = def_named(call, &output.strings, callee) {
                 let span = call.node(node).span;
-                if sites.iter().any(|site| {
-                    site.blob == *own_blob && site.span == span
-                }) {
+                if sites
+                    .iter()
+                    .any(|site| site.blob == *own_blob && site.span == span)
+                {
                     return Some(((*own_blob).clone(), span));
                 }
             }
@@ -4644,11 +4667,12 @@ impl TsSource {
         let [blob] = blobs.as_slice() else {
             return None;
         };
-        let site = sites.iter().find(|site| site.family == FamilyTag::Call)
+        let site = sites
+            .iter()
+            .find(|site| site.family == FamilyTag::Call)
             .unwrap_or(&sites[0]);
         Some(((**blob).clone(), site.span))
     }
-
 }
 
 /// The scip-resolved corpus target of one call site: the site's occurrence
@@ -5051,21 +5075,16 @@ impl Resolve<CallF> for TsSource {
                 if imported {
                     return None;
                 }
-                Self::call_name_match(
-                    output,
-                    def_index,
-                    callee,
-                    own.as_ref(),
-                )
-                .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
-                .map(|(blob, span)| {
-                    let origin = if own.as_ref() == Some(&blob) {
-                        ResolutionOrigin::SameFile
-                    } else {
-                        ResolutionOrigin::CorpusUnique
-                    };
-                    (blob, span, origin)
-                })
+                Self::call_name_match(output, def_index, callee, own.as_ref())
+                    .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
+                    .map(|(blob, span)| {
+                        let origin = if own.as_ref() == Some(&blob) {
+                            ResolutionOrigin::SameFile
+                        } else {
+                            ResolutionOrigin::CorpusUnique
+                        };
+                        (blob, span, origin)
+                    })
             };
             let own_t = match (&import_t, &seat_t) {
                 (Some(found), _) => Some((
@@ -5226,13 +5245,7 @@ impl Resolve<CallF> for TsSource {
                 if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
                     return None;
                 }
-                Self::call_name_match(
-                    output,
-                    def_index,
-                    named,
-                    own.as_ref(),
-                )
-                .map(|(blob, span)| {
+                Self::call_name_match(output, def_index, named, own.as_ref()).map(|(blob, span)| {
                     let origin = if own.as_ref() == Some(&blob) {
                         ResolutionOrigin::SameFile
                     } else {

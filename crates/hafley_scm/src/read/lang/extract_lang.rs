@@ -4,8 +4,8 @@
 //! `Source` roster, the rest are plain lookups.
 //! @comment-ok: module header, the shape every lang/*.rs opens with
 
-use std::borrow::Cow;
 use serde::{de, Deserialize, Deserializer, Serialize, Serializer};
+use std::borrow::Cow;
 
 /// `MarkdownInline` is never routed from a path (a `.md` routes to the block
 /// grammar); a caller names it directly to reach the inline plane.

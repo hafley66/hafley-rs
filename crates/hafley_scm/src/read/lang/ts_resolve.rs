@@ -356,8 +356,11 @@ struct RuntimeModuleRequests {
 impl RuntimeModuleRequests {
     fn enter_type_scope(&mut self, parameters: Option<&ts::TSTypeParameterDeclaration<'_>>) {
         self.type_parameter_scopes.push(
-            parameters.into_iter().flat_map(|parameters| parameters.params.iter())
-                .map(|parameter| parameter.name.name.to_string()).collect(),
+            parameters
+                .into_iter()
+                .flat_map(|parameters| parameters.params.iter())
+                .map(|parameter| parameter.name.name.to_string())
+                .collect(),
         );
     }
 
@@ -367,7 +370,8 @@ impl RuntimeModuleRequests {
         span: oxc_span::Span,
         parameters: Option<&ts::TSTypeParameterDeclaration<'_>>,
     ) {
-        self.type_owners.push((name.to_string(), to_local_span(span)));
+        self.type_owners
+            .push((name.to_string(), to_local_span(span)));
         self.enter_type_scope(parameters);
     }
 
@@ -425,11 +429,18 @@ impl RuntimeModuleRequests {
 impl<'a> Visit<'a> for RuntimeModuleRequests {
     fn visit_ts_type_reference(&mut self, reference: &ts::TSTypeReference<'a>) {
         if let ts::TSTypeName::IdentifierReference(name) = &reference.type_name {
-            if self.type_parameter_scopes.iter().rev().any(|scope| scope.contains(name.name.as_str())) {
+            if self
+                .type_parameter_scopes
+                .iter()
+                .rev()
+                .any(|scope| scope.contains(name.name.as_str()))
+            {
                 if let Some((owner, owner_span)) = self.type_owners.last() {
                     self.type_parameter_uses.push(SignatureTypeUse {
-                        owner: owner.clone(), owner_span: *owner_span,
-                        name: name.name.to_string(), kind: "generic",
+                        owner: owner.clone(),
+                        owner_span: *owner_span,
+                        name: name.name.to_string(),
+                        kind: "generic",
                     });
                 }
             }
@@ -444,7 +455,11 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
     }
 
     fn visit_ts_interface_declaration(&mut self, interface: &ts::TSInterfaceDeclaration<'a>) {
-        self.enter_type_owner(&interface.id.name, interface.span, interface.type_parameters.as_deref());
+        self.enter_type_owner(
+            &interface.id.name,
+            interface.span,
+            interface.type_parameters.as_deref(),
+        );
         oxc_ast_visit::walk::walk_ts_interface_declaration(self, interface);
         self.leave_type_owner();
     }
@@ -464,8 +479,12 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
     fn visit_variable_declarator(&mut self, declarator: &ts::VariableDeclarator<'a>) {
         if let ts::BindingPattern::BindingIdentifier(id) = &declarator.id {
             let parameters = match &declarator.init {
-                Some(ts::Expression::ArrowFunctionExpression(arrow)) => Some(arrow.type_parameters.as_deref()),
-                Some(ts::Expression::FunctionExpression(func)) => Some(func.type_parameters.as_deref()),
+                Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
+                    Some(arrow.type_parameters.as_deref())
+                }
+                Some(ts::Expression::FunctionExpression(func)) => {
+                    Some(func.type_parameters.as_deref())
+                }
                 _ => None,
             };
             if let Some(parameters) = parameters {
@@ -998,9 +1017,9 @@ impl TsModuleIndex {
 
     /// Whether this module exports a declaration under its local spelling.
     pub fn exports_local(&self, path: &str, local: &str) -> bool {
-        self.facts.get(path).is_some_and(|facts| {
-            facts.local_exports.values().any(|(name, _)| name == local)
-        })
+        self.facts
+            .get(path)
+            .is_some_and(|facts| facts.local_exports.values().any(|(name, _)| name == local))
     }
 
     /// Parameter count of a named function declaration at its CallF span.

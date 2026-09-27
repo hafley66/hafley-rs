@@ -33,7 +33,13 @@ pub(super) fn project_df(
             DfSyntaxKind::Match => MATCH,
             DfSyntaxKind::Block => BLOCK,
         };
-        let mut node = Node::new(Span { start: row.span.start, len: row.span.len }, kind);
+        let mut node = Node::new(
+            Span {
+                start: row.span.start,
+                len: row.span.len,
+            },
+            kind,
+        );
         if let Some(name) = row.name {
             node = node.with_name(strings.intern(&name));
         }
@@ -46,37 +52,78 @@ pub(super) fn project_df(
             DfEdgeKind::Direct,
         ));
     }
-    sink.aux.params = rows.aux.params.into_iter().map(|row| DfParam {
-        node: NodeRef(row.node.0),
-        pos: row.pos,
-    }).collect();
-    sink.aux.args = rows.aux.args.into_iter().map(|row| DfArg {
-        call: NodeRef(row.call.0),
-        pos: row.pos,
-        arg: NodeRef(row.arg.0),
-    }).collect();
-    sink.aux.fields = rows.aux.fields.into_iter().map(|row| DfField {
-        owner: NodeRef(row.owner.0),
-        name: row.name,
-        value: NodeRef(row.value.0),
-    }).collect();
-    sink.aux.lits = rows.aux.lits.into_iter().map(|row| DfLit {
-        node: NodeRef(row.node.0),
-        kind: row.kind,
-        text: row.text,
-    }).collect();
-    sink.aux.loops = rows.aux.loops.into_iter().map(|row| crate::read::types::DfLoop {
-        span: Span { start: row.span.start, len: row.span.len },
-        var: row.var,
-        collection: row.collection,
-    }).collect();
-    sink.aux.allocates = rows.aux.allocates.into_iter().map(|row| crate::read::types::DfAllocates {
-        owner: Span { start: row.owner.start, len: row.owner.len },
-    }).collect();
-    sink.aux.allocator_hits = rows.aux.allocator_hits.into_iter().map(|span| Span {
-        start: span.start,
-        len: span.len,
-    }).collect();
+    sink.aux.params = rows
+        .aux
+        .params
+        .into_iter()
+        .map(|row| DfParam {
+            node: NodeRef(row.node.0),
+            pos: row.pos,
+        })
+        .collect();
+    sink.aux.args = rows
+        .aux
+        .args
+        .into_iter()
+        .map(|row| DfArg {
+            call: NodeRef(row.call.0),
+            pos: row.pos,
+            arg: NodeRef(row.arg.0),
+        })
+        .collect();
+    sink.aux.fields = rows
+        .aux
+        .fields
+        .into_iter()
+        .map(|row| DfField {
+            owner: NodeRef(row.owner.0),
+            name: row.name,
+            value: NodeRef(row.value.0),
+        })
+        .collect();
+    sink.aux.lits = rows
+        .aux
+        .lits
+        .into_iter()
+        .map(|row| DfLit {
+            node: NodeRef(row.node.0),
+            kind: row.kind,
+            text: row.text,
+        })
+        .collect();
+    sink.aux.loops = rows
+        .aux
+        .loops
+        .into_iter()
+        .map(|row| crate::read::types::DfLoop {
+            span: Span {
+                start: row.span.start,
+                len: row.span.len,
+            },
+            var: row.var,
+            collection: row.collection,
+        })
+        .collect();
+    sink.aux.allocates = rows
+        .aux
+        .allocates
+        .into_iter()
+        .map(|row| crate::read::types::DfAllocates {
+            owner: Span {
+                start: row.owner.start,
+                len: row.owner.len,
+            },
+        })
+        .collect();
+    sink.aux.allocator_hits = rows
+        .aux
+        .allocator_hits
+        .into_iter()
+        .map(|span| Span {
+            start: span.start,
+            len: span.len,
+        })
+        .collect();
     sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
     for (index, start, end) in rows.aux.loop_collection_spans {
         sink.aux.loops[index].collection =

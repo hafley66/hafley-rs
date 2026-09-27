@@ -8,13 +8,13 @@
 //! (cst likewise + type/call/df via oxc); anything else with a linked grammar
 //! falls to `FallbackSource` (cst-only).
 
-pub mod fallback;
 #[path = "0_call_kinds.rs"]
 pub mod call_kinds;
 pub mod commonlisp;
 pub mod data;
 pub mod extract_lang;
 pub mod fact;
+pub mod fallback;
 pub mod gdscript;
 pub mod go;
 pub mod go_checker;
@@ -29,7 +29,8 @@ pub mod markdown;
 pub mod owned_region;
 pub mod prolog;
 pub mod python;
-#[path = "rust/lib.rs"] pub mod rust;
+#[path = "rust/lib.rs"]
+pub mod rust;
 pub mod rust_checker;
 #[cfg(feature = "rust-checker")]
 mod rust_checker_ra;
@@ -54,14 +55,13 @@ pub mod ts_paths;
 pub mod ts_receivers;
 pub mod ts_resolve;
 
-pub use fallback::{call_bundle, call_drops, cst_bundle, FallbackSource};
 pub use commonlisp::CommonlispSource;
 pub use data::DataSource;
 pub use extract_lang::RyiLang;
 pub use fact::{
-    dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactSet,
-    DL6_DB_RELATIVE_PATH,
+    dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactSet, DL6_DB_RELATIVE_PATH,
 };
+pub use fallback::{call_bundle, call_drops, cst_bundle, FallbackSource};
 pub use gdscript::GdscriptSource;
 pub use go::GoSource;
 pub use kotlin::KotlinSource;

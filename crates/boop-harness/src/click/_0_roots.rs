@@ -12,7 +12,11 @@ pub fn click_roots(pane: &PaneHit, touched: &SessionTouched) -> Vec<Root> {
     let dirs: Vec<PathBuf> = touched
         .paths
         .iter()
-        .filter_map(|path| Path::new(path).parent().map(|dir| dir.to_string_lossy().into_owned()))
+        .filter_map(|path| {
+            Path::new(path)
+                .parent()
+                .map(|dir| dir.to_string_lossy().into_owned())
+        })
         .map(|parent| PathBuf::from(repo_root_for(&parent).unwrap_or(parent)))
         .collect();
     boop_mux::click_roots(&pane.pane_current_path, &cwds, &dirs)
@@ -40,7 +44,16 @@ mod tests {
     fn rel(roots: &[Root], base: &Path) -> Vec<(String, RootVia)> {
         roots
             .iter()
-            .map(|root| (root.dir.strip_prefix(base).unwrap_or(&root.dir).display().to_string(), root.via.clone()))
+            .map(|root| {
+                (
+                    root.dir
+                        .strip_prefix(base)
+                        .unwrap_or(&root.dir)
+                        .display()
+                        .to_string(),
+                    root.via.clone(),
+                )
+            })
             .collect()
     }
 
@@ -54,7 +67,17 @@ mod tests {
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-qm", "a"]);
-        git(&repo, &["worktree", "add", "-q", "-b", "feat", base.join("repo-feat").to_str().unwrap()]);
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "feat",
+                base.join("repo-feat").to_str().unwrap(),
+            ],
+        );
         std::fs::create_dir_all(base.join("other/.git")).unwrap();
         std::fs::create_dir_all(base.join("other/lib")).unwrap();
 
@@ -70,7 +93,10 @@ mod tests {
                 repo.join("src/a.rs").display().to_string(),
             ],
             // `repo/src/` is the pane cwd again, spelled with a trailing slash.
-            cwds: vec![format!("{}/", repo.join("src").display()), repo.display().to_string()],
+            cwds: vec![
+                format!("{}/", repo.join("src").display()),
+                repo.display().to_string(),
+            ],
         };
         let roots = click_roots(&pane, &touched);
         assert_eq!(
@@ -83,8 +109,20 @@ mod tests {
             ]
         );
 
-        git(&repo, &["worktree", "add", "-q", "--detach", base.join("repo-detached").to_str().unwrap()]);
-        let names: Vec<RootVia> = worktrees_of(&repo).into_iter().map(|(_, name)| RootVia::Worktree(name)).collect();
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                base.join("repo-detached").to_str().unwrap(),
+            ],
+        );
+        let names: Vec<RootVia> = worktrees_of(&repo)
+            .into_iter()
+            .map(|(_, name)| RootVia::Worktree(name))
+            .collect();
         assert_eq!(
             names,
             vec![
@@ -94,7 +132,17 @@ mod tests {
             ],
             "a new worktree changes worktrees/ mtime, so the cache refreshes"
         );
-        let from_linked: Vec<PathBuf> = worktrees_of(&base.join("repo-feat")).into_iter().map(|(dir, _)| dir).collect();
-        assert_eq!(from_linked, vec![repo.clone(), base.join("repo-detached"), base.join("repo-feat")]);
+        let from_linked: Vec<PathBuf> = worktrees_of(&base.join("repo-feat"))
+            .into_iter()
+            .map(|(dir, _)| dir)
+            .collect();
+        assert_eq!(
+            from_linked,
+            vec![
+                repo.clone(),
+                base.join("repo-detached"),
+                base.join("repo-feat")
+            ]
+        );
     }
 }

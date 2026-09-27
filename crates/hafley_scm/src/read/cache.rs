@@ -9,7 +9,7 @@ use quick_cache::sync::Cache;
 use quick_cache::Weighter;
 
 use crate::read::source::FamilyMask;
-use crate::read::{CallF, CstF, DfF, Edge, RyiOutput, Node, TypeF};
+use crate::read::{CallF, CstF, DfF, Edge, Node, RyiOutput, TypeF};
 
 /// Default weight capacity in MiB, when `SPREFA_EXTRACT_BLOB_CACHE_MB` is
 /// unset, unparseable, or zero.
@@ -33,7 +33,12 @@ pub struct CacheKey {
 }
 
 impl CacheKey {
-    pub fn new(blob: crate::read::ContentId, path: &str, lang: &'static str, mask: FamilyMask) -> Self {
+    pub fn new(
+        blob: crate::read::ContentId,
+        path: &str,
+        lang: &'static str,
+        mask: FamilyMask,
+    ) -> Self {
         let mask_bits = (mask.cst as u8)
             | ((mask.types as u8) << 1)
             | ((mask.call as u8) << 2)
@@ -113,10 +118,7 @@ fn cache() -> &'static BlobCache {
 
 /// Look up `key`, extracting on a miss and counting the extraction. Concurrent
 /// misses on one key coalesce into one compute inside `quick_cache`.
-pub fn get_or_extract(
-    key: CacheKey,
-    compute: impl FnOnce() -> Arc<RyiOutput>,
-) -> Arc<RyiOutput> {
+pub fn get_or_extract(key: CacheKey, compute: impl FnOnce() -> Arc<RyiOutput>) -> Arc<RyiOutput> {
     // The miss flag rides the closure, never a delta on the global counter: the
     // rayon workers share that counter and a concurrent miss would read as this
     // call's own.
