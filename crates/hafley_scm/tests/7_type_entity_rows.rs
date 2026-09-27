@@ -87,6 +87,8 @@ fn entity_walk_captures_doc_sections_and_impl_parent() {
 #[test]
 fn tree_entity_walk_projects_the_shared_tree_and_signature_types() {
     let src = "struct Item<T> { value: Vec<T> }\ntrait Read { type Out; fn read(&self) -> Self::Out; fn ready(&self) {} }\nimpl Item<u8> { fn get(&self, index: usize) -> Option<u8> { None } }\nimpl Plain {}\nfn make(input: Item<u8>) -> Vec<u8> { todo!() }\n";
+    let parsed = syn::parse_file(src).expect("Rust parses");
+    let syn_rows = type_entity_rows(&parsed, &build_line_starts(src));
     let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language).expect("Rust grammar loads");
@@ -133,6 +135,10 @@ fn tree_entity_walk_projects_the_shared_tree_and_signature_types() {
             .iter()
             .map(|row| row.name.as_str())
             .collect::<Vec<_>>(),
-        ["Plain"]
+        ["Item", "Plain"]
+    );
+    assert_eq!(
+        rows.impl_self_heads, syn_rows.impl_self_heads,
+        "tree impl self heads must preserve Syn's output"
     );
 }

@@ -29,6 +29,8 @@ mod syntax;
 mod tree_call_rows;
 #[path = "17_tree_entity_rows.rs"]
 mod tree_entity_rows;
+#[path = "20_tree_module_specifier_rows.rs"]
+mod tree_module_specifier_rows;
 #[path = "18_tree_type_candidate_rows.rs"]
 mod tree_type_candidate_rows;
 #[path = "13_tsi_syntax_rows.rs"]
@@ -71,6 +73,7 @@ pub use syn_macro_expansion_defs::{expand_file, Expanded};
 pub use syntax::{parse_rust_syntax, RustSyntax};
 pub use tree_call_rows::{call_metadata_rows_from_tree, call_site_rows_from_tree};
 pub use tree_entity_rows::type_entity_rows_from_tree;
+pub use tree_module_specifier_rows::module_specifier_rows_from_tree;
 pub use tree_type_candidate_rows::type_candidate_rows_from_tree;
 pub use tsi_syntax_rows::{tsi_syntax_rows, Arg as TsiSyntaxArg, TsiSyntaxRows};
 pub use type_candidate_rows::{

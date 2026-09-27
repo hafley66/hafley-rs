@@ -1157,19 +1157,19 @@ pub(super) fn project_call(
         });
     }
 
-    module_specifiers(parsed, line_starts, strings, sink);
+    module_specifiers(tree, source, strings, sink);
     super::super::rust_receivers::collect_receivers(parsed, line_starts, strings, sink);
 }
 
 /// Intern SCM's module rows into the CallF specifier vocabulary.
 fn module_specifiers(
-    parsed: &syn::File,
-    line_starts: &[u32],
+    tree: &tree_sitter::Tree,
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
     sink.aux.specifiers.extend(
-        hafley_scm::lang::rust::module_specifier_rows(parsed, line_starts)
+        hafley_scm::lang::rust::module_specifier_rows_from_tree(tree, source)
             .into_iter()
             .map(|row| Specifier {
                 span: Span {
