@@ -311,18 +311,6 @@ impl ReceiverWalker {
         }
     }
 
-    fn enter_callable(
-        &mut self,
-        params: &ts::FormalParameters,
-        ret: Option<&ts::TSTypeAnnotation>,
-        fn_start: u32,
-    ) {
-        self.scope.push(HashMap::new());
-        self.seed_params(params);
-        if let Some(name) = ret.and_then(|ann| named_ref_of(&ann.type_annotation)) {
-            self.facts.ret_of.insert(fn_start, name);
-        }
-    }
 }
 
 impl Default for ReceiverWalker {
