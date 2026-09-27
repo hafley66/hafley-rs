@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: chore
-status: open
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -19,3 +19,7 @@ Twelve rows, all judged mid by the user 2026-09-18. Weak tests: tests/130 trait_
 
 ## Acceptance Criteria
 - [ ] each row fixed or closed with a one-line reason
+
+## Comments
+
+2026-09-26 repro: `ryii --help` exits 0; this review is blocked by the obsolete `extract-parity-move-rename` epic and names the retired `extract` executable.
