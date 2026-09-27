@@ -2,8 +2,6 @@
 //! boundary spells the package name; the importer's manifest gains the dependency.
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
 
 use super::{first_object, json_literal, node_string, quote_of, specifier_refs};
 use crate::edit_seams::ImportRef;
@@ -22,7 +20,7 @@ pub const PKG_DEP: ImportRefKind = ImportRefKind::Ext(LangKind {
 
 const DEP_FIELDS: [&str; 3] = ["dependencies", "devDependencies", "peerDependencies"];
 
-struct TsPackage {
+pub(crate) struct TsPackage {
     dir: String,
     manifest: String,
     name: String,
@@ -34,29 +32,18 @@ struct TsPackage {
     deps: BTreeSet<String>,
 }
 
-fn packages(cx: &MoveCx) -> &'static Vec<TsPackage> {
-    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, &'static Vec<TsPackage>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut held = match cache.lock() {
-        Ok(held) => held,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    if let Some(existing) = held.get(cx.root()) {
-        return existing;
-    }
-    let found: Vec<TsPackage> = cx
-        .files()
-        .iter()
-        .filter(|rel| rel.as_str() == "package.json" || rel.ends_with("/package.json"))
-        .filter(|rel| {
-            !rel.split('/')
-                .any(|part| part == "node_modules" || part == "dist")
-        })
-        .filter_map(|manifest| read_package(cx, manifest))
-        .collect();
-    let leaked: &'static Vec<TsPackage> = Box::leak(Box::new(found));
-    held.insert(cx.root().to_path_buf(), leaked);
-    leaked
+fn packages(cx: &MoveCx) -> &Vec<TsPackage> {
+    cx.ts_packages.get_or_init(|| {
+        cx.files()
+            .iter()
+            .filter(|rel| rel.as_str() == "package.json" || rel.ends_with("/package.json"))
+            .filter(|rel| {
+                !rel.split('/')
+                    .any(|part| part == "node_modules" || part == "dist")
+            })
+            .filter_map(|manifest| read_package(cx, manifest))
+            .collect()
+    })
 }
 
 fn read_package(cx: &MoveCx, manifest: &str) -> Option<TsPackage> {
@@ -200,33 +187,23 @@ pub(super) fn respell(
 // ── the dependency plan ─────────────────────────────────────────────────────
 
 #[derive(Default)]
-pub(super) struct DepPlan {
+pub(crate) struct DepPlan {
     /// (manifest, offset) -> (inserted text, receipt).
     pub(super) edits: BTreeMap<(String, u32), (String, String)>,
     pub(super) errors: Vec<String>,
 }
 
-pub(super) fn dep_plan(cx: &MoveCx) -> &'static DepPlan {
-    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, &'static DepPlan>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut held = match cache.lock() {
-        Ok(held) => held,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    if let Some(existing) = held.get(cx.root()) {
-        return existing;
-    }
-    let moves_ts = cx
-        .moved()
-        .keys()
-        .any(|old| crate::move_cx::owned_by(old, &super::TsSource));
-    let plan = match moves_ts {
-        true => build_dep_plan(cx, &specifier_refs(cx)),
-        false => DepPlan::default(),
-    };
-    let leaked: &'static DepPlan = Box::leak(Box::new(plan));
-    held.insert(cx.root().to_path_buf(), leaked);
-    leaked
+pub(super) fn dep_plan(cx: &MoveCx) -> &DepPlan {
+    cx.ts_dep_plan.get_or_init(|| {
+        let moves_ts = cx
+            .moved()
+            .keys()
+            .any(|old| crate::move_cx::owned_by(old, &super::TsSource));
+        match moves_ts {
+            true => build_dep_plan(cx, &specifier_refs(cx)),
+            false => DepPlan::default(),
+        }
+    })
 }
 
 fn build_dep_plan(cx: &MoveCx, specifier_refs: &[ImportRef]) -> DepPlan {

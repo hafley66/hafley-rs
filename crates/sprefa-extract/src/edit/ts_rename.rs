@@ -8,8 +8,6 @@
 //! which already resolves every specifier through `oxc_resolver`.
 
 use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
-use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
 
 use oxc_ast::ast as ts;
 use oxc_ast::ast::Program;
@@ -244,7 +242,7 @@ fn settle(mut refs: Vec<SymbolRef>) -> Vec<SymbolRef> {
 
 /// Target module -> importer -> the source-literal offsets reaching it. Keying
 /// on the offset re-uses `oxc_resolver`'s answer instead of resolving twice.
-type ImportGraph = BTreeMap<String, BTreeMap<String, BTreeSet<u32>>>;
+pub(crate) type ImportGraph = BTreeMap<String, BTreeMap<String, BTreeSet<u32>>>;
 
 /// What one importer answers about a module it imports the symbol from.
 struct ImporterSeats {
@@ -388,20 +386,8 @@ fn relay_seat(rel: &str, specifier: &ts::ExportSpecifier<'_>, name: &str, out: &
 
 /// The corpus import graph, off `TsRehome::import_refs`. ONE per root per
 /// process, the law `ts_rehome.rs:435` sets for the resolver behind it.
-fn import_graph(cx: &RenameCx) -> &'static ImportGraph {
-    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, &'static ImportGraph>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    static EMPTY: OnceLock<ImportGraph> = OnceLock::new();
-    let empty = || EMPTY.get_or_init(ImportGraph::new);
-    let Ok(mut held) = cache.lock() else {
-        return empty();
-    };
-    if let Some(existing) = held.get(cx.root()) {
-        return existing;
-    }
-    let leaked: &'static ImportGraph = Box::leak(Box::new(build_import_graph(cx)));
-    held.insert(cx.root().to_path_buf(), leaked);
-    leaked
+fn import_graph(cx: &RenameCx) -> &ImportGraph {
+    cx.ts_import_graph.get_or_init(|| build_import_graph(cx))
 }
 
 /// `import_refs` reports the specifiers a MOVE would re-aim, so the batch maps

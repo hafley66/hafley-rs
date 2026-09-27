@@ -5,9 +5,8 @@
 //! tree-sitter-json parse this crate already links.
 //! @comment-ok: module header, the seam list every lang file opens with
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::path::{Path, PathBuf};
-use std::sync::{Mutex, OnceLock};
+use std::collections::BTreeSet;
+use std::path::Path;
 
 use rayon::prelude::*;
 
@@ -69,7 +68,7 @@ impl RehomePlanCheck for TsSource {
 
 /// Every specifier and path-constant ref the corpus writes toward the batch.
 fn specifier_refs(cx: &MoveCx) -> Vec<ImportRef> {
-    let Ok(resolver) = resolver(cx.root()) else {
+    let Ok(resolver) = resolver(cx) else {
         return Vec::new();
     };
     let names = TsSource.moved_names(cx);
@@ -345,7 +344,7 @@ fn alias_respell(
         .rsplit_once('.')
         .map(|(head, _)| head)
         .unwrap_or(&witness_rel);
-    let resolver = resolver(cx.root()).ok()?;
+    let resolver = resolver(cx).ok()?;
     let from = cx.abs(&reference.importer);
     let probe = resolver.resolve(&from, &format!("{prefix}/{stripped}"))?;
     if cx.rel(&probe).as_deref() != Some(witness.as_str()) {
@@ -474,18 +473,12 @@ fn quote_of(literal: &str) -> char {
     }
 }
 
-/// ONE resolver per root per process: `oxc_resolver` holds its own filesystem
-/// cache, so rebuilding it per specifier would re-pay every stat the run made.
-fn resolver(root: &Path) -> Result<&'static TsResolver, String> {
-    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, &'static TsResolver>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut held = cache.lock().map_err(|error| error.to_string())?;
-    if let Some(existing) = held.get(root) {
-        return Ok(existing);
+/// One resolver per move context; `oxc_resolver` keeps its filesystem cache for the run.
+fn resolver(cx: &MoveCx) -> Result<&TsResolver, String> {
+    match cx.ts_resolver.get_or_init(|| TsResolver::new(cx.root())) {
+        Ok(resolver) => Ok(resolver),
+        Err(error) => Err(error.clone()),
     }
-    let leaked: &'static TsResolver = Box::leak(Box::new(TsResolver::new(root)?));
-    held.insert(root.to_path_buf(), leaked);
-    Ok(leaked)
 }
 
 // ── package.json targets ────────────────────────────────────────────────────

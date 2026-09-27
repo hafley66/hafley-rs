@@ -15,9 +15,9 @@ use sprefa_extract::move_stage::{
     state_root, Mirror, VerifyJournal,
 };
 use sprefa_extract::{
-    cleave_for, directory_path, directory_source, dispatch, flatten_each, normalize,
-    replace_action, resolve_project, scm_facts, Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms,
-    ResolveRequest, Respell, ScipMode, ScipRecords, Span,
+    cleave_for, directory_path, directory_source, dispatch, flatten_each, replace_action,
+    resolve_project, scm_facts, Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms, ResolveRequest,
+    Respell, ScipMode, ScipRecords, Span,
 };
 
 const PRODUCER: &str = "extract-cleave";
@@ -449,32 +449,62 @@ fn glob_reexports(
 /// Serde attributes name functions and modules inside strings
 /// (`#[serde(with = "arc_str")]`); each path's head is a free name there.
 fn serde_paths(text: &str) -> Vec<(String, Span)> {
-    let mut out = Vec::new();
-    for key in [
-        "with = \"",
-        "serialize_with = \"",
-        "deserialize_with = \"",
-        "default = \"",
-    ] {
-        for (at, _) in text.match_indices(key) {
-            let line_start = text[..at].rfind('\n').map_or(0, |newline| newline + 1);
-            if !text[line_start..at].contains("serde(") {
-                continue;
-            }
-            let start = at + key.len();
-            let head: String = text[start..]
-                .chars()
-                .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
-                .collect();
-            if !head.is_empty() {
-                out.push((
-                    head.clone(),
-                    span_of(start as u32, (start + head.len()) as u32),
-                ));
-            }
+    let Ok(file) = syn::parse_file(text) else {
+        return Vec::new();
+    };
+    let mut scan = SerdePathScan {
+        text,
+        paths: std::array::from_fn(|_| Vec::new()),
+    };
+    syn::visit::Visit::visit_file(&mut scan, &file);
+    scan.paths.into_iter().flatten().collect()
+}
+
+struct SerdePathScan<'a> {
+    // The order matches the former key-by-key scan.
+    paths: [Vec<(String, Span)>; 4],
+    text: &'a str,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for SerdePathScan<'_> {
+    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
+        if attribute.path().is_ident("serde") {
+            let _ = attribute.parse_nested_meta(|meta| {
+                let index = ["with", "serialize_with", "deserialize_with", "default"]
+                    .iter()
+                    .position(|key| meta.path.is_ident(key));
+                if let Some(index) = index {
+                    let literal: syn::LitStr = meta.value()?.parse()?;
+                    let head: String = literal
+                        .value()
+                        .chars()
+                        .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
+                        .collect();
+                    if !head.is_empty() {
+                        let range = literal.span().byte_range();
+                        let token = self.text.get(range.clone()).unwrap_or_default();
+                        if let Some(quote) = token.find('"').filter(|quote| *quote == 0) {
+                            let start = range.start + quote + 1;
+                            if self.text.get(start..start + head.len()) == Some(head.as_str()) {
+                                self.paths[index].push((
+                                    head.clone(),
+                                    span_of(start as u32, (start + head.len()) as u32),
+                                ));
+                            }
+                        }
+                    }
+                } else if meta.input.peek(syn::Token![=]) {
+                    let _: syn::Expr = meta.value()?.parse()?;
+                } else if meta.input.peek(syn::token::Paren) {
+                    let content;
+                    syn::parenthesized!(content in meta.input);
+                    let _: proc_macro2::TokenStream = content.parse()?;
+                }
+                Ok(())
+            });
         }
+        syn::visit::visit_attribute(self, attribute);
     }
-    out
 }
 
 /// A top-level `mod name { .. }` block, whole lines: scope rows carry no
@@ -701,8 +731,11 @@ impl Plan {
     ) -> Result<Self, String> {
         let root = cx.root().to_path_buf();
         let (src, item) = split_target(target)?;
-        let src = within_root(&root, &anchor_file_in(&cx, &src)?)?;
-        let dest = within_root(&root, &canonical_unborn(&absolute(dest)?))?;
+        let src = super::source_move::within_root(&root, &anchor_file_in(&cx, &src)?)?;
+        let dest = super::source_move::within_root(
+            &root,
+            &super::source_move::canonical_unborn(&super::source_move::absolute(dest)?),
+        )?;
         if !cx.contains(&src) {
             return Err(format!("cleave source is outside the corpus: {src}"));
         }
@@ -2009,16 +2042,17 @@ impl FileFacts {
         };
         let mut free = free;
         let mut decls = decls;
-        for (name, _) in serde_paths(&text) {
-            if decls.iter().any(|decl| decl.name == name) {
+        let serde_paths = serde_paths(&text);
+        for (name, _) in &serde_paths {
+            if decls.iter().any(|decl| decl.name == *name) {
                 continue;
             }
-            if let Some(decl) = inline_mod(&text, &name) {
+            if let Some(decl) = inline_mod(&text, name) {
                 decls.push(decl);
             }
         }
         decls.sort_by_key(|decl| decl.span.start);
-        free.extend(serde_paths(&text));
+        free.extend(serde_paths);
         Ok(Self {
             text,
             specifiers,
@@ -2558,7 +2592,7 @@ fn split_target(target: &str) -> Result<(PathBuf, String), String> {
 fn plan_root(requested: Option<&PathBuf>, src: &Path) -> Result<PathBuf, String> {
     let root = match requested {
         Some(root) => {
-            let root = absolute(root)?;
+            let root = super::source_move::absolute(root)?;
             if !root.is_dir() {
                 return Err(format!("--root is not a directory: {}", root.display()));
             }
@@ -2578,7 +2612,7 @@ fn plan_root(requested: Option<&PathBuf>, src: &Path) -> Result<PathBuf, String>
 
 /// SRC as `anchor_file` finds it, or a file an earlier batch row created.
 fn anchor_file_in(cx: &MoveCx, path: &Path) -> Result<PathBuf, String> {
-    let unborn = canonical_unborn(&absolute(path)?);
+    let unborn = super::source_move::canonical_unborn(&super::source_move::absolute(path)?);
     match cx
         .rel(&unborn)
         .is_some_and(|rel| cx.overlaid().contains_key(&rel))
@@ -2589,48 +2623,12 @@ fn anchor_file_in(cx: &MoveCx, path: &Path) -> Result<PathBuf, String> {
 }
 
 fn anchor_file(path: &Path) -> Result<PathBuf, String> {
-    let path = absolute(path)?;
+    let path = super::source_move::absolute(path)?;
     if !path.is_file() {
         return Err(format!("cleave source is not a file: {}", path.display()));
     }
     path.canonicalize()
         .map_err(|error| format!("canonicalize {}: {error}", path.display()))
-}
-
-fn absolute(path: &Path) -> Result<PathBuf, String> {
-    if path.is_absolute() {
-        return Ok(normalize(path));
-    }
-    let cwd = crate::ops::request_root();
-    Ok(normalize(&cwd.join(path)))
-}
-
-/// DEST need not exist yet, so only its deepest existing ancestor canonicalizes;
-/// the tail is re-appended so root-relative stripping still holds.
-fn canonical_unborn(path: &Path) -> PathBuf {
-    let path = normalize(path);
-    let mut tail = Vec::new();
-    let mut probe = path.as_path();
-    loop {
-        if let Ok(real) = probe.canonicalize() {
-            let mut out = real;
-            for part in tail.iter().rev() {
-                out.push(part);
-            }
-            return out;
-        }
-        let (Some(parent), Some(name)) = (probe.parent(), probe.file_name()) else {
-            return path;
-        };
-        tail.push(name.to_os_string());
-        probe = parent;
-    }
-}
-
-fn within_root(root: &Path, path: &Path) -> Result<String, String> {
-    path.strip_prefix(root)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .map_err(|_| format!("{} is outside root {}", path.display(), root.display()))
 }
 
 /// One package as a cleave judges it: directory, name, the ident a path spells

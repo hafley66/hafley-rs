@@ -22,42 +22,42 @@ use crate::read::trace;
 #[derive(Default)]
 pub struct PrologSource;
 
-fn parse(content: &str) -> Option<tree_sitter::Tree> {
+pub fn parse(content: &str) -> Option<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     let language = tree_sitter::Language::new(tree_sitter_prolog::LANGUAGE);
     parser.set_language(&language).ok()?;
     parser.parse(content, None)
 }
 
-fn text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
+pub fn text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
     node.utf8_text(src).unwrap_or("")
 }
 
-fn span(node: tree_sitter::Node) -> Span {
+pub fn span(node: tree_sitter::Node) -> Span {
     Span {
         start: node.start_byte() as u32,
         len: (node.end_byte() - node.start_byte()) as u32,
     }
 }
 
-fn field<'a>(node: tree_sitter::Node<'a>, name: &str) -> Option<tree_sitter::Node<'a>> {
+pub fn field<'a>(node: tree_sitter::Node<'a>, name: &str) -> Option<tree_sitter::Node<'a>> {
     node.child_by_field_name(name)
 }
 
-fn operator<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
+pub fn operator<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
     field(node, "operator").map(|n| text(n, src)).unwrap_or("")
 }
 
-fn named_children(node: tree_sitter::Node) -> Vec<tree_sitter::Node> {
+pub fn named_children(node: tree_sitter::Node) -> Vec<tree_sitter::Node> {
     let mut cursor = node.walk();
     node.named_children(&mut cursor).collect()
 }
 
-fn clause_term(clause: tree_sitter::Node) -> Option<tree_sitter::Node> {
+pub fn clause_term(clause: tree_sitter::Node) -> Option<tree_sitter::Node> {
     field(clause, "term").or_else(|| clause.named_child(0))
 }
 
-fn strip_annotation<'a>(mut node: tree_sitter::Node<'a>, src: &[u8]) -> tree_sitter::Node<'a> {
+pub fn strip_annotation<'a>(mut node: tree_sitter::Node<'a>, src: &[u8]) -> tree_sitter::Node<'a> {
     while node.kind() == "binary_operation" && operator(node, src) == "::" {
         node = field(node, "right").unwrap_or(node);
     }
@@ -81,7 +81,7 @@ fn callable_name_arity(node: tree_sitter::Node, src: &[u8]) -> Option<(String, u
     }
 }
 
-fn atom_text(node: tree_sitter::Node, src: &[u8]) -> String {
+pub fn atom_text(node: tree_sitter::Node, src: &[u8]) -> String {
     let raw = text(node, src);
     if raw.len() >= 2 && raw.starts_with('\'') && raw.ends_with('\'') {
         raw[1..raw.len() - 1].replace("''", "'")
@@ -278,7 +278,7 @@ fn collect_meta_directives(root: tree_sitter::Node, src: &[u8], table: &mut Meta
     }
 }
 
-fn head_body<'a>(
+pub fn head_body<'a>(
     clause: tree_sitter::Node<'a>,
     src: &[u8],
 ) -> Option<(tree_sitter::Node<'a>, Option<tree_sitter::Node<'a>>, bool)> {

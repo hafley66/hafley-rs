@@ -607,7 +607,7 @@ fn validated_moves(
 
 /// The destination does not exist yet, so only its deepest existing ancestor can
 /// be canonicalized; the tail is re-appended so root-relative stripping still holds.
-fn canonical_unborn(path: &Path) -> PathBuf {
+pub(crate) fn canonical_unborn(path: &Path) -> PathBuf {
     let path = normalize(path);
     let mut tail = Vec::new();
     let mut probe = path.as_path();
@@ -630,7 +630,7 @@ fn canonical_unborn(path: &Path) -> PathBuf {
     }
 }
 
-fn absolute(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn absolute(path: &Path) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(normalize(path));
     }
@@ -638,7 +638,7 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     Ok(normalize(&cwd.join(path)))
 }
 
-fn within_root(root: &Path, path: &Path) -> Result<String, String> {
+pub(crate) fn within_root(root: &Path, path: &Path) -> Result<String, String> {
     path.strip_prefix(root)
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
         .map_err(|_| format!("{} is outside root {}", path.display(), root.display()))

@@ -36,7 +36,10 @@ use crate::edit_seams::RenameStop;
 use crate::edit_seams::Respell;
 use crate::edit_seams::SymbolRef;
 use crate::edit_seams::SymbolSeat;
-use crate::lang::prolog::PrologSource;
+use crate::lang::prolog::{
+    atom_text, clause_term, field, head_body, named_children, operator, parse, span,
+    strip_annotation, text, PrologSource,
+};
 use crate::lang::rust::build_line_starts;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
@@ -492,84 +495,10 @@ impl FileScan {
 
 // ── the tree-sitter scan ────────────────────────────────────────────────────
 
-fn parse(content: &str) -> Option<tree_sitter::Tree> {
-    let mut parser = tree_sitter::Parser::new();
-    let language = tree_sitter::Language::new(tree_sitter_prolog::LANGUAGE);
-    parser.set_language(&language).ok()?;
-    parser.parse(content, None)
-}
-
-fn span(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
-}
-
-fn text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
-
-fn field<'a>(node: tree_sitter::Node<'a>, name: &str) -> Option<tree_sitter::Node<'a>> {
-    node.child_by_field_name(name)
-}
-
-fn operator<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    field(node, "operator")
-        .map(|op| text(op, src))
-        .unwrap_or("")
-}
-
-fn named_children(node: tree_sitter::Node) -> Vec<tree_sitter::Node> {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).collect()
-}
-
 fn arguments(node: tree_sitter::Node) -> Vec<tree_sitter::Node> {
     let mut cursor = node.walk();
     node.children_by_field_name("argument", &mut cursor)
         .collect()
-}
-
-/// The atom as Prolog reads it: a quoted atom's quotes are syntax, and `''` is
-/// one quote (`_0_source.rs:83`).
-fn atom_text(node: tree_sitter::Node, src: &[u8]) -> String {
-    let raw = text(node, src);
-    match raw.len() >= 2 && raw.starts_with('\'') && raw.ends_with('\'') {
-        true => raw[1..raw.len() - 1].replace("''", "'"),
-        false => raw.to_string(),
-    }
-}
-
-fn clause_term(clause: tree_sitter::Node) -> Option<tree_sitter::Node> {
-    field(clause, "term").or_else(|| clause.named_child(0))
-}
-
-fn strip_annotation<'a>(mut node: tree_sitter::Node<'a>, src: &[u8]) -> tree_sitter::Node<'a> {
-    while node.kind() == "binary_operation" && operator(node, src) == "::" {
-        node = field(node, "right").unwrap_or(node);
-    }
-    node
-}
-
-/// The head, the body, and whether the clause is a DCG rule (`_0_source.rs:100`).
-/// `None` is a directive, which carries no head.
-fn head_body<'a>(
-    clause: tree_sitter::Node<'a>,
-    src: &[u8],
-) -> Option<(tree_sitter::Node<'a>, Option<tree_sitter::Node<'a>>, bool)> {
-    let term = clause_term(clause)?;
-    if term.kind() == "unary_operation" {
-        return None;
-    }
-    if term.kind() == "binary_operation" {
-        match operator(term, src) {
-            ":-" => return Some((field(term, "left")?, field(term, "right"), false)),
-            "-->" => return Some((field(term, "left")?, field(term, "right"), true)),
-            _ => {}
-        }
-    }
-    Some((strip_annotation(term, src), None, false))
 }
 
 const ATOM_KINDS: [&str; 4] = ["atom", "unquoted_atom", "quoted_atom", "operator_atom"];
