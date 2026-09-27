@@ -8,6 +8,22 @@ use std::time::{Duration, Instant};
 
 use crate::daemon_guard::DaemonGuard;
 
+fn copy_fixture(source: &Path, target: &Path) {
+    std::fs::create_dir_all(target).expect("fixture directory");
+    for entry in std::fs::read_dir(source).expect("fixture entries") {
+        let entry = entry.expect("fixture entry");
+        if entry.file_name() == ".dl" {
+            continue;
+        }
+        let dest = target.join(entry.file_name());
+        if entry.file_type().expect("fixture type").is_dir() {
+            copy_fixture(&entry.path(), &dest);
+        } else {
+            std::fs::copy(entry.path(), dest).expect("copy fixture file");
+        }
+    }
+}
+
 fn run(
     client: &Path,
     cache: &Path,
@@ -28,7 +44,13 @@ fn run(
     command.output().expect("client process")
 }
 
-fn run_stdin(binary: &Path, cache: Option<&Path>, args: &[&str], input: &[u8]) -> Output {
+fn run_stdin(
+    binary: &Path,
+    cache: Option<&Path>,
+    cwd: Option<&Path>,
+    args: &[&str],
+    input: &[u8],
+) -> Output {
     let mut command = Command::new(binary);
     command
         .args(args)
@@ -41,6 +63,9 @@ fn run_stdin(binary: &Path, cache: Option<&Path>, args: &[&str], input: &[u8]) -
         command
             .env("XDG_CACHE_HOME", cache)
             .env("RYI_IDLE_SECS", "5");
+    }
+    if let Some(cwd) = cwd {
+        command.current_dir(cwd);
     }
     let mut child = command.spawn().expect("stdin process");
     child
@@ -118,6 +143,128 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
     );
     assert!(!resident.socket().exists(), "direct ryii skips the socket");
 
+    let relative_cwd = workspace.join("crates/soopy");
+    let relative_cache = scratch.path().join("relative-cache");
+    let mut relative_daemon = DaemonGuard::new(&relative_cache);
+    let direct_dot = Command::new(&server)
+        .args(["fast", "."])
+        .current_dir(&relative_cwd)
+        .env("DL_TRAIL", "0")
+        .env("RUST_LOG", "off")
+        .output()
+        .expect("direct relative cwd command");
+    assert!(
+        direct_dot.status.success(),
+        "direct fast .: {}",
+        String::from_utf8_lossy(&direct_dot.stderr)
+    );
+    assert!(
+        !relative_daemon.socket().exists(),
+        "direct fast . does not start a daemon"
+    );
+    let daemon_dot = Command::new(&client)
+        .args(["fast", "."])
+        .current_dir(&relative_cwd)
+        .env("XDG_CACHE_HOME", &relative_cache)
+        .env("RYI_IDLE_SECS", "5")
+        .env("DL_TRAIL", "0")
+        .env("RUST_LOG", "off")
+        .output()
+        .expect("daemon relative cwd command");
+    assert_eq!(
+        daemon_dot.status.code(),
+        direct_dot.status.code(),
+        "fast . exit code"
+    );
+    let first_difference = daemon_dot
+        .stdout
+        .iter()
+        .zip(&direct_dot.stdout)
+        .position(|(daemon, direct)| daemon != direct);
+    let counts = |bytes: &[u8]| {
+        let mut counts = std::collections::BTreeMap::<String, usize>::new();
+        for line in bytes
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+        {
+            let row: serde_json::Value = serde_json::from_slice(line).expect("fast JSONL row");
+            *counts
+                .entry(row["record"].as_str().unwrap_or("?").to_string())
+                .or_default() += 1;
+        }
+        counts
+    };
+    assert!(daemon_dot.stdout == direct_dot.stdout,
+        "fast . stdout from the same cwd: daemon {} bytes, direct {} bytes, first difference {first_difference:?}, daemon counts {:?}, direct counts {:?}",
+        daemon_dot.stdout.len(), direct_dot.stdout.len(), counts(&daemon_dot.stdout), counts(&direct_dot.stdout));
+    let relative_path_list = b"src/lib.rs\n";
+    let direct_stdin = run_stdin(
+        &server,
+        None,
+        Some(&relative_cwd),
+        &["fast", "-"],
+        relative_path_list,
+    );
+    let daemon_stdin = run_stdin(
+        &client,
+        Some(&relative_cache),
+        Some(&relative_cwd),
+        &["fast", "-"],
+        relative_path_list,
+    );
+    assert_eq!(
+        daemon_stdin.status.code(),
+        direct_stdin.status.code(),
+        "fast - relative path-list exit"
+    );
+    assert_eq!(
+        daemon_stdin.stdout, direct_stdin.stdout,
+        "fast - relative path-list stdout"
+    );
+
+    let fixture_cwd = scratch.path().join("type_ladder");
+    copy_fixture(
+        &Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/type_ladder"),
+        &fixture_cwd,
+    );
+    for (cwd, args) in [
+        (relative_cwd.as_path(), vec!["fast", "does/not/exist.rs"]),
+        (fixture_cwd.as_path(), vec!["slow", "."]),
+        (
+            fixture_cwd.as_path(),
+            vec![
+                "query",
+                "--query",
+                "(struct_item name: (type_identifier) @n)",
+                "src",
+            ],
+        ),
+    ] {
+        let direct = Command::new(&server)
+            .args(&args)
+            .current_dir(cwd)
+            .env("DL_TRAIL", "0")
+            .env("RUST_LOG", "off")
+            .output()
+            .expect("direct relative command");
+        let daemon = Command::new(&client)
+            .args(&args)
+            .current_dir(cwd)
+            .env("XDG_CACHE_HOME", &relative_cache)
+            .env("RYI_IDLE_SECS", "5")
+            .env("DL_TRAIL", "0")
+            .env("RUST_LOG", "off")
+            .output()
+            .expect("daemon relative command");
+        assert_eq!(
+            daemon.status.code(),
+            direct.status.code(),
+            "{args:?} exit code"
+        );
+        assert_eq!(daemon.stdout, direct.stdout, "{args:?} stdout");
+    }
+    assert!(relative_daemon.stop(), "relative daemon exited");
+
     let trace = scratch.path().join("daemon-observe.json");
     let first = run(&client, &cache, &["fast", file], None, Some(&trace));
     assert!(
@@ -134,8 +281,14 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
     );
 
     let path_list = format!("{file}\n");
-    let direct_paths = run_stdin(&server, None, &["fast", "-"], path_list.as_bytes());
-    let daemon_paths = run_stdin(&client, Some(&cache), &["fast", "-"], path_list.as_bytes());
+    let direct_paths = run_stdin(&server, None, None, &["fast", "-"], path_list.as_bytes());
+    let daemon_paths = run_stdin(
+        &client,
+        Some(&cache),
+        None,
+        &["fast", "-"],
+        path_list.as_bytes(),
+    );
     assert_eq!(
         daemon_paths.status.code(),
         direct_paths.status.code(),
@@ -151,8 +304,8 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
     let region = region.to_str().expect("UTF-8 region path");
     let generated = b"raw generated text\nwith another line\n";
     let region_args = ["region", region, "demo", "--generated", "-"];
-    let direct_region = run_stdin(&server, None, &region_args, generated);
-    let daemon_region = run_stdin(&client, Some(&cache), &region_args, generated);
+    let direct_region = run_stdin(&server, None, None, &region_args, generated);
+    let daemon_region = run_stdin(&client, Some(&cache), None, &region_args, generated);
     assert_eq!(
         daemon_region.status.code(),
         direct_region.status.code(),
@@ -167,10 +320,17 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
         Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/tsi/foreign_probe.jsonl"),
     )
     .expect("TSI fixture bytes");
-    let direct_ingest = run_stdin(&server, None, &["ingest", "/dev/stdin"], &ingest_bytes);
+    let direct_ingest = run_stdin(
+        &server,
+        None,
+        None,
+        &["ingest", "/dev/stdin"],
+        &ingest_bytes,
+    );
     let daemon_ingest = run_stdin(
         &client,
         Some(&cache),
+        None,
         &["ingest", "/dev/stdin"],
         &ingest_bytes,
     );
