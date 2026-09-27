@@ -1525,6 +1525,18 @@ enum LaneCmd {
 
 #[derive(Subcommand)]
 enum AgentCmd {
+    /// One row set of lane lifespans, events, live spans and parent edges.
+    #[cfg(feature = "agent-read")]
+    Waterfall {
+        /// Inclusive epoch milliseconds, or a duration such as `24h`.
+        #[arg(long, value_name = "MS|DURATION")]
+        since: String,
+        /// Restrict rows to a working directory.
+        #[arg(long)]
+        cwd: Option<PathBuf>,
+        #[arg(long, value_enum, default_value_t = AgentWaterfallFormat::Json)]
+        format: AgentWaterfallFormat,
+    },
     /// Register or update a native/coordinator route. Omitted fields are preserved.
     Register {
         /// The route name. Every boop call this agent makes then carries
@@ -1598,6 +1610,15 @@ enum AgentCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+}
+
+#[cfg(feature = "agent-read")]
+#[derive(Clone, Copy, ValueEnum, Default)]
+enum AgentWaterfallFormat {
+    #[default]
+    Json,
+    Ndjson,
+    Table,
 }
 
 #[cfg(feature = "agent-read")]
@@ -2419,6 +2440,35 @@ mod tests {
                 cmd: AgentSummaryCmd::Summary { .. }
             })
         ));
+    }
+
+    #[cfg(feature = "agent-read")]
+    #[test]
+    fn beep_agent_waterfall_accepts_each_output_format() {
+        for format in ["json", "ndjson", "table"] {
+            let cli = Cli::try_parse_from([
+                "boop",
+                "beep",
+                "agent",
+                "waterfall",
+                "--since",
+                "24h",
+                "--cwd",
+                "/repo",
+                "--format",
+                format,
+            ])
+            .expect("agent waterfall arguments parse");
+            assert!(matches!(
+                cli.command,
+                Some(SubCmd::Beep {
+                    cmd: Some(BeepCmd::Agent {
+                        cmd: AgentCmd::Waterfall { .. }
+                    }),
+                    ..
+                })
+            ));
+        }
     }
 
     #[test]

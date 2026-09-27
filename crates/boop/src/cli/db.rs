@@ -14,8 +14,8 @@ use crate::cli::mail::deliver_hail;
 use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
 #[cfg(feature = "agent-read")]
 use crate::{
-    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, CursorCmd, FactCmd, FavoriteCmd,
-    PriceCmd, SessionCmd, UsageArgs, UsageCmd,
+    AgentSessionGraphFormat, AgentSummaryCmd, AgentSummaryFormat, AgentWaterfallFormat, CursorCmd,
+    FactCmd, FavoriteCmd, PriceCmd, SessionCmd, UsageArgs, UsageCmd,
 };
 use crate::{ChatCmd, DbCmd, EdgeCmd, QueryArgs, QueryFormat, SyncCmd, TurnCmd};
 
@@ -1483,6 +1483,97 @@ pub(crate) fn run_agent_summary(
         AgentSummaryFormat::Text => line(&agent_summary_text(&summary)),
     }
     Ok(())
+}
+
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_agent_waterfall(
+    since: &str,
+    cwd: Option<&Path>,
+    format: AgentWaterfallFormat,
+) -> Result<()> {
+    use rusqlite::types::Value;
+
+    const COLUMNS: [&str; 9] = [
+        "kind",
+        "row_id",
+        "lane",
+        "peer",
+        "t0",
+        "t1",
+        "label",
+        "detail",
+        "schema_version",
+    ];
+
+    let since = i64::try_from(parse_waterfall_since(since)?)
+        .context("--since epoch milliseconds exceed SQLite's integer range")?;
+    let cwd = cwd.map(|path| path.to_string_lossy().into_owned());
+    let rows = open_ro_store()?.rows(
+        boop::AGENT_WATERFALL_SQL,
+        vec![
+            Value::Integer(since),
+            cwd.map(Value::Text).unwrap_or(Value::Null),
+            Value::Integer(boop::AGENT_SESSION_GRAPH_SCHEMA_VERSION as i64),
+        ],
+    )?;
+    match format {
+        AgentWaterfallFormat::Json => line(&serde_json::to_string(&rows)?),
+        AgentWaterfallFormat::Ndjson => {
+            for row in &rows {
+                line(&serde_json::to_string(row)?);
+            }
+        }
+        AgentWaterfallFormat::Table => {
+            line(&COLUMNS.join("\t"));
+            for row in &rows {
+                let Some(object) = row.as_object() else {
+                    continue;
+                };
+                let cells = COLUMNS
+                    .iter()
+                    .map(|name| match object.get(*name) {
+                        Some(serde_json::Value::String(value)) => value.clone(),
+                        Some(serde_json::Value::Null) | None => "-".to_owned(),
+                        Some(value) => value.to_string(),
+                    })
+                    .collect::<Vec<_>>();
+                line(&cells.join("\t"));
+            }
+        }
+    }
+    Ok(())
+}
+
+#[cfg(feature = "agent-read")]
+fn parse_waterfall_since(value: &str) -> Result<u64> {
+    if let Ok(timestamp) = value.parse::<u64>() {
+        i64::try_from(timestamp)
+            .context("--since epoch milliseconds exceed SQLite's integer range")?;
+        return Ok(timestamp);
+    }
+    let (amount, multiplier) = [
+        ("ms", 1_u64),
+        ("s", 1_000),
+        ("m", 60_000),
+        ("h", 3_600_000),
+        ("d", 86_400_000),
+    ]
+    .into_iter()
+    .find_map(|(suffix, multiplier)| {
+        value
+            .strip_suffix(suffix)
+            .and_then(|amount| amount.parse::<u64>().ok())
+            .map(|amount| (amount, multiplier))
+    })
+    .ok_or_else(|| {
+        anyhow::anyhow!(
+            "invalid --since `{value}`; use epoch milliseconds or a duration such as 24h"
+        )
+    })?;
+    let duration = amount
+        .checked_mul(multiplier)
+        .ok_or_else(|| anyhow::anyhow!("--since duration overflows milliseconds"))?;
+    Ok((now_ms() as u64).saturating_sub(duration))
 }
 
 #[cfg(feature = "agent-read")]

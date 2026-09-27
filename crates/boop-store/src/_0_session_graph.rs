@@ -22,6 +22,86 @@ pub const AGENT_SESSION_GRAPH_SCHEMA_VERSION: u32 = 1;
 /// Maximum number of trace events exposed by one graph document.
 const AGENT_SESSION_GRAPH_TRACE_EVENT_LIMIT: u64 = 1_000;
 
+/// One row set for the agent waterfall viewer. Values are supplied as
+/// named parameters `:since`, `:cwd`, and `:schema_version` are supplied by
+/// the caller; no filter value is interpolated into this statement.
+pub const AGENT_WATERFALL_SQL: &str = r#"
+WITH lane_span AS (
+    SELECT l.lane_id,
+           MIN(l.spawned_ts) AS start_ts,
+           MAX(COALESCE(
+               (SELECT MAX(COALESCE(e.finished_ts, e.created_ts))
+                  FROM agent_trace_event e INDEXED BY idx_trace_event_lane_time
+                 WHERE e.lane_id = l.lane_id),
+               (SELECT MAX(COALESCE(v.to_ts, v.from_ts))
+                  FROM agent_live_span v
+                 WHERE v.session_id = l.lane_id),
+               l.spawned_ts
+           )) AS end_ts,
+           MAX(l.parent_lane_id) AS parent_lane_id,
+           MAX(l.goal) AS goal,
+           MAX(l.harness_id) AS harness_id
+      FROM agent_lane l INDEXED BY idx_lane_lane
+      LEFT JOIN dict_cwd cwd ON cwd.id = l.cwd_id
+     WHERE l.lane_id > 0
+       AND l.spawned_ts >= :since
+       AND (:cwd IS NULL OR cwd.value = :cwd)
+     GROUP BY l.lane_id
+), rows AS (
+    SELECT 'lane' AS kind, s.value AS row_id, s.value AS lane, p.value AS peer,
+           sp.start_ts AS t0, sp.end_ts AS t1, h.value AS label,
+           sp.goal AS detail, :schema_version AS schema_version
+      FROM lane_span sp
+      JOIN dict_session s ON s.id = sp.lane_id
+      LEFT JOIN dict_session p ON p.id = sp.parent_lane_id
+      LEFT JOIN dict_harness h ON h.id = sp.harness_id
+    UNION ALL
+    SELECT 'event', e.event_key, s.value, COALESCE(f.value, t.value),
+           COALESCE(e.started_ts, e.created_ts), e.finished_ts, k.value,
+           e.detail, :schema_version
+      FROM agent_trace_event e INDEXED BY idx_trace_event_lane_time
+      JOIN dict_session s ON s.id = e.lane_id
+      JOIN dict_trace_kind k ON k.id = e.kind_id
+      LEFT JOIN dict_session f ON f.id = e.from_lane_id
+      LEFT JOIN dict_session t ON t.id = e.to_lane_id
+      LEFT JOIN agent_lane l ON l.lane_id = e.lane_id
+      LEFT JOIN dict_cwd cwd ON cwd.id = l.cwd_id
+     WHERE e.lane_id > 0
+       AND e.created_ts >= :since
+       AND (:cwd IS NULL OR cwd.value = :cwd)
+    UNION ALL
+    SELECT 'live', CAST(v.session_id AS TEXT) || '@' || CAST(v.from_ts AS TEXT),
+           s.value, NULL, v.from_ts, v.to_ts, st.value, '', :schema_version
+      FROM agent_live_span v
+      JOIN dict_session s ON s.id = v.session_id
+      LEFT JOIN dict_status st ON st.id = v.status_id
+      LEFT JOIN agent_session a ON a.session_id = v.session_id
+      LEFT JOIN dict_cwd cwd ON cwd.id = a.cwd_id
+      LEFT JOIN agent_lane lane_row ON lane_row.lane_id = v.session_id
+      LEFT JOIN dict_cwd lane_cwd ON lane_cwd.id = lane_row.cwd_id
+     WHERE v.from_ts >= :since
+       AND (:cwd IS NULL OR COALESCE(lane_cwd.value, cwd.value) = :cwd)
+    UNION ALL
+    SELECT 'edge', pa.value || '>' || ch.value || '/' || ek.value,
+           pa.value, ch.value, g.first_ts, g.last_ts, ek.value,
+           CAST(g.n AS TEXT), :schema_version
+      FROM agent_edge g
+      JOIN dict_session pa ON pa.id = g.parent_session_id
+      JOIN dict_session ch ON ch.id = g.child_session_id
+      JOIN dict_edekind ek ON ek.id = g.edge_kind_id
+     WHERE COALESCE(g.last_ts, g.first_ts) >= :since
+       AND (:cwd IS NULL OR EXISTS (
+           SELECT 1 FROM agent_lane l
+           JOIN dict_cwd cwd ON cwd.id = l.cwd_id
+           WHERE l.lane_id IN (g.parent_session_id, g.child_session_id)
+             AND cwd.value = :cwd
+       ))
+)
+SELECT kind, row_id, lane, peer, t0, t1, label, detail, schema_version
+  FROM rows
+ ORDER BY t0, kind, row_id
+"#;
+
 /// Filters for one session-graph read.
 #[derive(Clone, Debug)]
 pub struct AgentSessionGraphQuery {
@@ -905,6 +985,108 @@ mod tests {
         assert_eq!(graph.sessions.len(), 2);
         assert_eq!(graph.edges[0].kind, "spawned");
         assert_eq!(graph.shells[0].lane, "shell");
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn waterfall_query_returns_one_versioned_row_set_for_all_four_kinds() {
+        let path =
+            std::env::temp_dir().join(format!("boop-agent-waterfall-{}.db", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        store
+            .record_lane_spawn(&crate::ident::LaneSpawn {
+                lane: "waterfall-child".into(),
+                parent: Some("waterfall-parent".into()),
+                cwd: Some("/waterfall/repo".into()),
+                ts: 10,
+                ..crate::ident::LaneSpawn::default()
+            })
+            .unwrap();
+        let lane = store
+            .intern_public("dict_session", "waterfall-child")
+            .unwrap();
+        store
+            .intern_public("dict_session", "waterfall-parent")
+            .unwrap();
+        let kind = store
+            .intern_public("dict_trace_kind", "turn-start")
+            .unwrap();
+        let status = store.intern_public("dict_status", "live").unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_trace_event(event_key, lane_id, kind_id, created_ts, detail)
+                 VALUES ('waterfall-event', ?1, ?2, 20, 'turn started')",
+                rusqlite::params![lane, kind],
+            )
+            .unwrap();
+        store
+            .connection()
+            .execute(
+                "INSERT INTO agent_live_span(session_id, from_ts, to_ts, status_id)
+                 VALUES (?1, 21, 22, ?2)",
+                rusqlite::params![lane, status],
+            )
+            .unwrap();
+        store
+            .add_edge_at("waterfall-parent", "waterfall-child", "spawned", 23)
+            .unwrap();
+
+        let rows = store
+            .rows(
+                AGENT_WATERFALL_SQL,
+                vec![
+                    rusqlite::types::Value::Integer(1),
+                    rusqlite::types::Value::Text("/waterfall/repo".into()),
+                    rusqlite::types::Value::Integer(AGENT_SESSION_GRAPH_SCHEMA_VERSION as i64),
+                ],
+            )
+            .unwrap();
+        let kinds = rows
+            .iter()
+            .filter_map(|row| row["kind"].as_str())
+            .collect::<BTreeSet<_>>();
+        assert_eq!(kinds, BTreeSet::from(["edge", "event", "lane", "live"]));
+        assert!(rows.iter().all(|row| {
+            row["schema_version"].as_u64() == Some(AGENT_SESSION_GRAPH_SCHEMA_VERSION as u64)
+        }));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn waterfall_plan_seeks_the_lane_and_trace_event_indexes() {
+        let path = std::env::temp_dir().join(format!(
+            "boop-agent-waterfall-plan-{}.db",
+            std::process::id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        let store = Store::open(path.clone()).unwrap();
+        let sql = format!("EXPLAIN QUERY PLAN {AGENT_WATERFALL_SQL}");
+        let mut statement = store.connection().prepare(&sql).unwrap();
+        let plan = statement
+            .query_map(
+                rusqlite::params![
+                    1_i64,
+                    Option::<String>::None,
+                    AGENT_SESSION_GRAPH_SCHEMA_VERSION as i64
+                ],
+                |row| row.get::<_, String>(3),
+            )
+            .unwrap()
+            .collect::<rusqlite::Result<Vec<_>>>()
+            .unwrap()
+            .join("\n");
+        assert!(
+            plan.contains("SEARCH l USING INDEX idx_lane_lane"),
+            "{plan}"
+        );
+        assert!(
+            plan.contains("SEARCH e USING INDEX idx_trace_event_lane_time"),
+            "{plan}"
+        );
+        assert!(!plan.contains("SCAN agent_trace_event"), "{plan}");
+        assert!(!plan.contains("SCAN agent_lane"), "{plan}");
         let _ = std::fs::remove_file(path);
     }
 

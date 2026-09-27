@@ -15,6 +15,8 @@ use boop::registry::Registry;
 use boop::{bus, config, identity, lane, mailwait, proc, tmux};
 use tracing::{error, info, warn};
 
+#[cfg(feature = "agent-read")]
+use crate::cli::db::run_agent_waterfall;
 use crate::cli::db::run_harnesses;
 use crate::cli::debug::default_preset_for_harness;
 use crate::cli::mail::{all_messages, run_list};
@@ -1793,6 +1795,10 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
 
 pub(crate) fn run_agent(cmd: AgentCmd) -> Result<()> {
     match cmd {
+        #[cfg(feature = "agent-read")]
+        AgentCmd::Waterfall { since, cwd, format } => {
+            run_agent_waterfall(&since, cwd.as_deref(), format)
+        }
         AgentCmd::Register {
             name,
             kind,
