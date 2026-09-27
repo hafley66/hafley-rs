@@ -52,6 +52,9 @@ mod ops;
 #[path = "ryi/capabilities.rs"]
 mod capabilities;
 
+#[path = "ryi/1c_no_inputs.rs"]
+mod no_inputs;
+
 #[macro_export]
 macro_rules! outln {
     ($($arg:tt)*) => { $crate::ops::print_line(format_args!($($arg)*)) };
@@ -617,11 +620,7 @@ fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
     drop(expanding);
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
-        return Err(RyiExit::new(
-            2,
-            "ryi: no inputs; pass files, directories, globs, - or --entry",
-        )
-        .into());
+        return Err(RyiExit::new(2, no_inputs::suggestions()).into());
     }
     if cli.scip_index.is_some() && cli.inputs.root.is_none() {
         return Err("--scip-index needs --root".into());
@@ -757,11 +756,7 @@ fn run_file_verb(
         inputs::expand(&cli.inputs).map_err(|error| RyiExit::new(2, format!("ryi: {error}")))?;
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
-        return Err(RyiExit::new(
-            2,
-            "ryi: no inputs; pass files, directories, globs, - or --entry",
-        )
-        .into());
+        return Err(RyiExit::new(2, no_inputs::suggestions()).into());
     }
     if cli.scip_index.is_some() && cli.inputs.root.is_none() {
         return Err("--scip-index needs --root".into());
