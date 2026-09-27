@@ -5,7 +5,7 @@ use crate::read::types::{CallF, FamilyBundle, ReceiverBinding, ReceiverOutcome};
 use hafley_scm::lang::rust::{receiver_rows, RustReceiverOutcome};
 
 /// One impl block's contribution to the corpus (type, method) table.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImplEntry {
     pub self_type: String,
     pub trait_name: Option<String>,

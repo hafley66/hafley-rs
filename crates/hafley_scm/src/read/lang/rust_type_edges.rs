@@ -7,8 +7,8 @@ use crate::read::rows::FamilyBundle;
 use crate::read::shape::{Span, Strings};
 use crate::read::tsi::{Arg, FactOut};
 use hafley_scm::lang::rust::{
-    tsi_syntax_rows, type_candidate_rows, type_candidate_rows_from_tree, TsiSyntaxArg,
-    TypeCandidateGroup, TypeCandidateKind, TypeCandidateOwner,
+    tsi_syntax_rows, tsi_syntax_rows_from_tree, type_candidate_rows, type_candidate_rows_from_tree,
+    TsiSyntaxArg, TypeCandidateGroup, TypeCandidateKind, TypeCandidateOwner,
 };
 
 // ── type-edge candidates (the Resolve<TypeF> input) ───────────────
@@ -29,15 +29,13 @@ pub fn edge_candidates(
 }
 
 pub fn edge_candidates_from_tree(
-    parsed: &syn::File,
-    line_starts: &[u32],
     tree: &tree_sitter::Tree,
     source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
     emit_edge_candidates(type_candidate_rows_from_tree(tree, source), strings, sink);
-    emit_tsi_syntax(parsed, line_starts, strings, sink);
+    emit_tsi_syntax_rows(tsi_syntax_rows_from_tree(tree, source), strings, sink);
 }
 
 fn emit_edge_candidates(
@@ -106,9 +104,16 @@ fn emit_tsi_syntax(
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
+    emit_tsi_syntax_rows(tsi_syntax_rows(parsed, line_starts), strings, sink);
+}
+
+fn emit_tsi_syntax_rows(
+    rows: hafley_scm::lang::rust::TsiSyntaxRows,
+    strings: &mut Strings,
+    sink: &mut FamilyBundle<TypeF>,
+) {
     let span = crate::read::trace::phase_span("rust", crate::read::trace::Phase::TsiSyntax);
     let _entered = span.enter();
-    let rows = tsi_syntax_rows(parsed, line_starts);
     for name in rows.interned {
         strings.intern(&name);
     }
