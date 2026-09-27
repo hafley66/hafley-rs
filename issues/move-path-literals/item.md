@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-27
 type: bug
-status: open
+status: obsolete
 priority: normal
 labels: [extract]
 ---
@@ -21,3 +21,7 @@ labels: [extract]
 ## Acceptance Criteria
 - [ ] move rewrites string literals in code that spell a moved crate-relative path exactly (Rust `"src/..."` joined onto a manifest dir, TS path strings)
 - [ ] comments naming the old path are reported by default in the plan
+
+## Resolution
+
+Receipt: current `ryii move` against `crates/sprefa-extract/src/lang/ts_rename.rs` returns `move source is not a file`; current test path is `src/edit/ts_rename.rs`.
