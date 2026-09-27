@@ -1,16 +1,15 @@
 use super::*;
-use hafley_scm::lang::rust::{df_syntax_rows, DfSyntaxKind};
+use hafley_scm::lang::rust::{df_syntax_rows_from_tree, DfSyntaxKind};
 
 /// Materialize Rust syntax-flow rows into ryi's shared DfF graph.
 pub(super) fn project_df(
-    parsed: &syn::File,
+    tree: &tree_sitter::Tree,
     file: &str,
-    src: &str,
-    line_starts: &[u32],
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<DfF>,
 ) {
-    let rows = df_syntax_rows(parsed, file, line_starts);
+    let rows = df_syntax_rows_from_tree(tree, file, source);
     for row in rows.nodes {
         let kind = match row.kind {
             DfSyntaxKind::Param => DfNodeKind::Param,
@@ -126,7 +125,9 @@ pub(super) fn project_df(
         .collect();
     sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
     for (index, start, end) in rows.aux.loop_collection_spans {
-        sink.aux.loops[index].collection =
-            src.get(start as usize..end as usize).map(str::to_string);
+        sink.aux.loops[index].collection = std::str::from_utf8(source)
+            .ok()
+            .and_then(|source| source.get(start as usize..end as usize))
+            .map(str::to_string);
     }
 }
