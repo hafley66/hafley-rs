@@ -45,10 +45,10 @@ use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, Z
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::tsi::Arg;
-use crate::read::types::span_arg;
 use crate::read::types::LangKind;
 use crate::read::types::TsiNames;
 use crate::read::types::{content_id_of, RefPosition, Reference, Unresolved, UnresolvedReason};
+use crate::read::types::{span_arg, unique_blob};
 use crate::read::types::{KindIndex, ScipIndex};
 
 use super::ts_checker::TsCheckerAnswer;
@@ -4670,12 +4670,6 @@ impl TsSource {
         own: Option<&ContentId>,
     ) -> Option<(ContentId, Span)> {
         let sites = corpus_defs(index, callee);
-        let mut blobs: Vec<&ContentId> = Vec::new();
-        for site in sites {
-            if !blobs.contains(&&site.blob) {
-                blobs.push(&site.blob);
-            }
-        }
         // A same-file declaration names this call before the unique-blob leg.
         if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
             if let Some(node) = def_named(call, &output.strings, callee) {
@@ -4688,17 +4682,7 @@ impl TsSource {
                 }
             }
         }
-        if blobs.len() > 1 {
-            return None;
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|site| site.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some(((**blob).clone(), site.span))
+        unique_blob(sites.iter(), FamilyTag::Call)
     }
 }
 

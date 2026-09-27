@@ -42,8 +42,11 @@ use crate::read::seams::{
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
-use crate::read::types::ResolveDrop;
+use crate::read::types::{unique_blob, ResolveDrop};
 use crate::read::types::{PathIndex, ScipIndex, UnresolvedReason};
+use crate::span::def_span;
+pub use crate::span::node_span as go_node_span;
+use quick_cache::sync::Cache;
 
 // ── the tree-sitter-go parse (one parse feeds type/call/df) ──────────────────
 
@@ -92,9 +95,7 @@ pub fn go_parse_shared_keyed(
 }
 
 /// UTF-8 text of a tree-sitter node. Port of v5 `go_text`.
-pub fn go_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
+pub use crate::span::node_text as go_text;
 
 // ════════════════════════════════════════════════════════════════════════════
 // TypeF: entity nodes + arrow-type sigs + type-edge candidates.
@@ -213,14 +214,6 @@ fn push_entity(
 ) {
     sink.nodes
         .push(Node::new(span, kind).with_name(strings.intern(name)));
-}
-
-/// The byte span of a tree-sitter node `[start_byte, end_byte)`.
-pub fn go_node_span(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
 }
 
 // ── doc facet (port of v5 `walk_go_docs`) ────────────────────────────────────
@@ -699,7 +692,7 @@ fn project_call(
     // The import table is what a selector call's receiver is checked against,
     // so the specifiers land before the sites that read them.
     go_module_specifiers(root, src, strings, sink);
-    let imports = go_import_bindings(sink, strings);
+    let imports = go_import_bindings(&sink.aux.specifiers, strings);
     go_walk_call_sites(root, src, strings, sink, &imports);
     let field_types = go_field_types(root, src);
     go_collect_receivers(root, src, blob, strings, sink, &imports, &field_types);
@@ -708,11 +701,11 @@ fn project_call(
 /// Qualifier -> import path, per the `go_module_specifiers` table above: a
 /// plain spec binds its path's last segment, `_` and `.` bind no qualifier.
 fn go_import_bindings(
-    sink: &FamilyBundle<CallF>,
+    specifiers: &[Specifier],
     strings: &Strings,
 ) -> std::collections::HashMap<String, String> {
     let mut bindings = std::collections::HashMap::new();
-    for specifier in &sink.aux.specifiers {
+    for specifier in specifiers {
         if !matches!(specifier.kind, SpecifierKind::Named) {
             continue;
         }
@@ -828,20 +821,6 @@ fn path_of_import_spec(node: tree_sitter::Node, src: &[u8]) -> String {
         }
     }
     String::new()
-}
-
-/// The def span covers the whole callable body `[child.start, body.end)` for
-/// span-containment resolution. Port of v5 `end_of(child)` (the body end line).
-fn def_span(child: tree_sitter::Node) -> Span {
-    let start = child.start_byte();
-    let end = child
-        .child_by_field_name("body")
-        .unwrap_or(child)
-        .end_byte();
-    Span {
-        start: start as u32,
-        len: (end - start) as u32,
-    }
 }
 
 /// Walk every callable declaration, minting one def node per Free function /
@@ -3034,45 +3013,11 @@ impl GoSource {
                 return Some((site.blob.clone(), site.span));
             }
         }
-        let sites = corpus_defs(index, callee);
-        let mut blobs: Vec<ContentId> = Vec::new();
-        for site in sites {
-            if !blobs.contains(&site.blob) {
-                blobs.push(site.blob.clone());
-            }
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|s| s.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some((blob.clone(), site.span))
+        unique_blob(corpus_defs(index, callee).iter(), FamilyTag::Call)
     }
 
     // The `pkg.F` leg resolves through `go_modules::GoModuleIndex::resolve_in_dir`
     // now, the plane's own directory-scoped, exported-only lookup.
-}
-
-/// The one blob `sites` name, with the CallF facet's span preferred; two blobs
-/// are an ambiguity this tier does not settle. `pub`: `go_modules.rs`'s
-/// package-qualified leg reuses this join rather than re-deriving it.
-pub fn unique_blob(sites: &[&DefSite]) -> Option<(ContentId, Span)> {
-    let mut blobs: Vec<&ContentId> = Vec::new();
-    for site in sites {
-        if !blobs.contains(&&site.blob) {
-            blobs.push(&site.blob);
-        }
-    }
-    let [blob] = blobs.as_slice() else {
-        return None;
-    };
-    let site = sites
-        .iter()
-        .find(|s| s.family == FamilyTag::Call)
-        .unwrap_or(&sites[0]);
-    Some(((*blob).clone(), site.span))
 }
 
 /// The go module owning a file: the nearest ancestor directory holding a
@@ -3089,12 +3034,10 @@ pub fn go_module_of(path: &str) -> Option<GoModule> {
     let mut dir = Path::new(path).parent()?;
     loop {
         if let Ok(text) = std::fs::read_to_string(crate::read::io_path(&dir.join("go.mod"))) {
-            let module = text
-                .lines()
-                .find_map(|line| line.trim().strip_prefix("module "))?;
+            let module = text.parse::<gomod_parser::GoMod>().ok()?.module;
             return Some(GoModule {
                 root: dir.to_path_buf(),
-                module: module.trim().to_string(),
+                module,
             });
         }
         dir = dir.parent()?;
@@ -3116,13 +3059,7 @@ pub fn go_package_dir(module: &GoModule, import_path: &str) -> Option<PathBuf> {
 /// Directory equality over supplied paths: `./a/x.go` and `a/x.go` name one
 /// directory, and no arm may resolve on the spelling difference.
 pub fn same_dir(left: &Path, right: &Path) -> bool {
-    let strip = |path: &Path| -> Vec<std::ffi::OsString> {
-        path.components()
-            .filter(|part| !matches!(part, Component::CurDir))
-            .map(|part| part.as_os_str().to_os_string())
-            .collect()
-    };
-    strip(left) == strip(right)
+    normalize_dir(left) == normalize_dir(right)
 }
 
 /// The scip-resolved corpus target of one call site: the site's occurrence
@@ -3301,7 +3238,10 @@ pub fn go_file_facts_of_source(tree: &tree_sitter::Tree, src: &str) -> GoFileFac
     let mut facts = GoFileFacts::default();
     let src = src.as_bytes();
     go_collect_file_facts(tree.root_node(), src, &mut facts);
-    go_collect_file_imports(tree.root_node(), src, &mut facts.imports);
+    let mut strings = Strings::new();
+    let mut specifiers = Vec::new();
+    go_walk_import_specs(tree.root_node(), src, &mut strings, &mut specifiers);
+    facts.imports = go_import_bindings(&specifiers, &strings);
     facts.fields = go_field_types(tree.root_node(), src);
     facts
 }
@@ -3552,29 +3492,6 @@ fn go_collect_embed_facts(spec: tree_sitter::Node, src: &[u8], facts: &mut GoFil
     }
 }
 
-/// The `go_import_bindings` table off a dedicated parse: a plain spec binds
-/// its path's last segment, `_` and `.` bind no qualifier.
-fn go_collect_file_imports(node: tree_sitter::Node, src: &[u8], out: &mut HashMap<String, String>) {
-    if node.kind() == "import_spec" {
-        let path = path_of_import_spec(node, src);
-        match leading_name(node) {
-            Some(name_node) if name_node.kind() == "package_identifier" => {
-                out.insert(go_text(name_node, src).to_string(), path);
-            }
-            Some(_) => {}
-            None => {
-                let tail = path.rsplit('/').next().unwrap_or(&path).to_string();
-                out.insert(tail, path);
-            }
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        go_collect_file_imports(child, src, out);
-    }
-}
-
 /// A bound result type from another package is stored qualified by the
 /// caller's own import of that package (`Sub` -> `sub.Sub`), so the receiver
 /// leg's directory lookup can find it. Same-package results stay bare.
@@ -3754,31 +3671,26 @@ fn go_method_on_type(
 /// One directory's `type A = B` table, alias name -> the aliased type's id. A
 /// `pkg.T` target resolves through the DECLARING file's imports, like an embed.
 fn go_aliases_of_dir(dir: &Path, paths: &PathIndex) -> Arc<AliasesOfDir> {
-    static CACHE: OnceLock<Mutex<AliasesCache>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    static CACHE: OnceLock<Cache<(usize, PathBuf), Arc<AliasesOfDir>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Cache::new(256));
     let key = (std::ptr::from_ref(paths) as usize, normalize_dir(dir));
-    let mut guard = cache.lock().unwrap_or_else(|poison| poison.into_inner());
-    if let Some(hit) = guard.get(&key) {
-        return hit.clone();
-    }
-    let mut out: AliasesOfDir = HashMap::new();
-    for path in go_dir_index(paths).get(&key.1).into_iter().flatten() {
-        for (alias, target) in &go_facts_of_path(path).aliases {
-            if let Some(id) = go_type_id_in_file(path, target) {
-                out.insert(alias.clone(), id);
+    cache
+        .get_or_insert_with(&key, || {
+            let mut out: AliasesOfDir = HashMap::new();
+            for path in go_dir_index(paths).get(&key.1).into_iter().flatten() {
+                for (alias, target) in &go_facts_of_path(path).aliases {
+                    if let Some(id) = go_type_id_in_file(path, target) {
+                        out.insert(alias.clone(), id);
+                    }
+                }
             }
-        }
-    }
-    let out = Arc::new(out);
-    guard.insert(key, out.clone());
-    out
+            Ok::<_, std::convert::Infallible>(Arc::new(out))
+        })
+        .expect("alias cache computation is infallible")
 }
 
 /// Alias name -> the aliased type's id, one directory.
 type AliasesOfDir = HashMap<String, GoTypeId>;
-
-/// (resolve-run identity, normalized dir) -> that dir's alias table.
-type AliasesCache = HashMap<(usize, PathBuf), Arc<AliasesOfDir>>;
 
 /// `callee` among the methods declared on `(dir, type_name)`.
 fn go_method_in_dir(
@@ -3869,58 +3781,54 @@ fn normalize_dir(dir: &Path) -> PathBuf {
 /// The resolve universe's paths grouped by directory, ONE pass per run. A
 /// per-(dir, name) scan of the whole path list is what kink 1 was.
 fn go_dir_index(paths: &PathIndex) -> Arc<DirIndex> {
-    static CACHE: OnceLock<Mutex<HashMap<usize, Arc<DirIndex>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    static CACHE: OnceLock<Cache<usize, Arc<DirIndex>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Cache::new(64));
     let key = std::ptr::from_ref(paths) as usize;
-    let mut guard = cache.lock().unwrap_or_else(|poison| poison.into_inner());
-    if let Some(hit) = guard.get(&key) {
-        return hit.clone();
-    }
-    let mut index: DirIndex = HashMap::new();
-    for path in paths.map.values() {
-        if let Some(parent) = Path::new(path).parent() {
-            index
-                .entry(normalize_dir(parent))
-                .or_default()
-                .push(path.clone());
-        }
-    }
-    let index = Arc::new(index);
-    guard.insert(key, index.clone());
-    index
+    cache
+        .get_or_insert_with(&key, || {
+            let mut index: DirIndex = HashMap::new();
+            for path in paths.map.values() {
+                if let Some(parent) = Path::new(path).parent() {
+                    index
+                        .entry(normalize_dir(parent))
+                        .or_default()
+                        .push(path.clone());
+                }
+            }
+            Ok::<_, std::convert::Infallible>(Arc::new(index))
+        })
+        .expect("directory cache computation is infallible")
 }
 
 /// One directory's structs -> their embedded types as (declaring dir, bare
 /// name). A `pkg.T` embed resolves through the DECLARING file's imports.
 fn go_embeds_of_dir(dir: &Path, paths: &PathIndex) -> Arc<EmbedsOfDir> {
-    static CACHE: OnceLock<Mutex<EmbedsCache>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    static CACHE: OnceLock<Cache<(usize, PathBuf), Arc<EmbedsOfDir>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Cache::new(256));
     let key = (std::ptr::from_ref(paths) as usize, normalize_dir(dir));
-    let mut guard = cache.lock().unwrap_or_else(|poison| poison.into_inner());
-    if let Some(hit) = guard.get(&key) {
-        return hit.clone();
-    }
-    let mut out: EmbedsOfDir = HashMap::new();
-    for path in go_dir_index(paths).get(&key.1).into_iter().flatten() {
-        let facts = go_facts_of_path(path);
-        for (struct_name, embeds) in &facts.embeds {
-            let resolved: Vec<(PathBuf, String)> = embeds
-                .iter()
-                .filter_map(|embed| match embed.split_once('.') {
-                    Some((qualifier, bare)) => {
-                        let import = facts.imports.get(qualifier)?;
-                        let module = go_module_of(path)?;
-                        Some((go_package_dir(&module, import)?, bare.to_string()))
-                    }
-                    None => Some((dir.to_path_buf(), embed.clone())),
-                })
-                .collect();
-            out.entry(struct_name.clone()).or_default().extend(resolved);
-        }
-    }
-    let out = Arc::new(out);
-    guard.insert(key, out.clone());
-    out
+    cache
+        .get_or_insert_with(&key, || {
+            let mut out: EmbedsOfDir = HashMap::new();
+            for path in go_dir_index(paths).get(&key.1).into_iter().flatten() {
+                let facts = go_facts_of_path(path);
+                for (struct_name, embeds) in &facts.embeds {
+                    let resolved: Vec<(PathBuf, String)> = embeds
+                        .iter()
+                        .filter_map(|embed| match embed.split_once('.') {
+                            Some((qualifier, bare)) => {
+                                let import = facts.imports.get(qualifier)?;
+                                let module = go_module_of(path)?;
+                                Some((go_package_dir(&module, import)?, bare.to_string()))
+                            }
+                            None => Some((dir.to_path_buf(), embed.clone())),
+                        })
+                        .collect();
+                    out.entry(struct_name.clone()).or_default().extend(resolved);
+                }
+            }
+            Ok::<_, std::convert::Infallible>(Arc::new(out))
+        })
+        .expect("embed cache computation is infallible")
 }
 
 /// Normalized directory -> the resolve universe's `.go` paths under it.
@@ -3928,9 +3836,6 @@ type DirIndex = HashMap<PathBuf, Vec<String>>;
 
 /// Struct name -> its embedded types as (declaring dir, bare name).
 type EmbedsOfDir = HashMap<String, Vec<(PathBuf, String)>>;
-
-/// (resolve-run identity, normalized dir) -> that dir's embed table.
-type EmbedsCache = HashMap<(usize, PathBuf), Arc<EmbedsOfDir>>;
 
 /// A written type's (element, is_collection): a slice/map/channel written
 /// shape (`[]ast.SourceFile`) names its ELEMENT for an `Elem` hop; anything
@@ -4087,36 +3992,31 @@ fn go_field_type_of(ty: &GoTypeId, field: &str, paths: &PathIndex) -> Option<(Go
 
 /// One directory's (struct, field) -> the field type's id, ONE pass per run.
 fn go_fields_of_dir(dir: &Path, paths: &PathIndex) -> Arc<FieldsOfDir> {
-    static CACHE: OnceLock<Mutex<FieldsCache>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(HashMap::new()));
+    static CACHE: OnceLock<Cache<(usize, PathBuf), Arc<FieldsOfDir>>> = OnceLock::new();
+    let cache = CACHE.get_or_init(|| Cache::new(256));
     let key = (std::ptr::from_ref(paths) as usize, normalize_dir(dir));
-    let mut guard = cache.lock().unwrap_or_else(|poison| poison.into_inner());
-    if let Some(hit) = guard.get(&key) {
-        return hit.clone();
-    }
-    let mut out: FieldsOfDir = HashMap::new();
-    for path in go_dir_index(paths).get(&key.1).into_iter().flatten() {
-        for (owner_field, decl) in &go_facts_of_path(path).fields {
-            let (written, collection) = match decl {
-                DeclType::Named(name) => (name, false),
-                DeclType::Indexable(name) => (name, true),
-                DeclType::Streamed(name) => (name, true),
-            };
-            if let Some(id) = go_type_id_in_file(path, written) {
-                out.insert(owner_field.clone(), (id, collection));
+    cache
+        .get_or_insert_with(&key, || {
+            let mut out: FieldsOfDir = HashMap::new();
+            for path in go_dir_index(paths).get(&key.1).into_iter().flatten() {
+                for (owner_field, decl) in &go_facts_of_path(path).fields {
+                    let (written, collection) = match decl {
+                        DeclType::Named(name) => (name, false),
+                        DeclType::Indexable(name) => (name, true),
+                        DeclType::Streamed(name) => (name, true),
+                    };
+                    if let Some(id) = go_type_id_in_file(path, written) {
+                        out.insert(owner_field.clone(), (id, collection));
+                    }
+                }
             }
-        }
-    }
-    let out = Arc::new(out);
-    guard.insert(key, out.clone());
-    out
+            Ok::<_, std::convert::Infallible>(Arc::new(out))
+        })
+        .expect("field cache computation is infallible")
 }
 
 /// (struct, field) -> (the field type's id, is it a collection), one directory.
 type FieldsOfDir = HashMap<(String, String), (GoTypeId, bool)>;
-
-/// (resolve-run identity, normalized dir) -> that dir's field table.
-type FieldsCache = HashMap<(usize, PathBuf), Arc<FieldsOfDir>>;
 
 /// `call_name_match` with go's package block ahead of the corpus-wide count:
 /// one own-package def binds wherever it sits, two are a redeclaration.
@@ -4134,7 +4034,7 @@ fn go_call_name_match(
             if sites.is_empty() {
                 GoSource::call_name_match(output, def_index, callee)
             } else {
-                unique_blob(&sites)
+                unique_blob(sites.iter().copied(), FamilyTag::Call)
             }
         }
         _ => GoSource::call_name_match(output, def_index, callee),
@@ -4178,7 +4078,7 @@ impl Resolve<CallF> for GoSource {
                     .position(|j| j.as_ref().map_or(false, |(b, _)| *b == blob))?;
                 Some((index, joined, doc_ix))
             });
-        let imports = go_import_bindings(call, &output.strings);
+        let imports = go_import_bindings(&call.aux.specifiers, &output.strings);
         // The one-hop return-type inference: phase 1 recorded every `x := f()`
         // bind site and every receiver site whose operand it bound. Resolution
         // runs in SOURCE ORDER (a chain `b := a.M()` needs `a` bound first), so
@@ -4664,9 +4564,9 @@ const GO_FANOUT_CAP: usize = 64;
 /// implementer set is built once per corpus, never per call site (the same
 /// discipline as `plan_cache`; the corpus is identified by its `DefIndex`,
 /// whose address is stable for the resolve run that owns it).
-fn iface_fanout_cache() -> &'static Mutex<HashMap<(usize, String), Arc<IfaceFanout>>> {
-    static CACHE: OnceLock<Mutex<HashMap<(usize, String), Arc<IfaceFanout>>>> = OnceLock::new();
-    CACHE.get_or_init(|| Mutex::new(HashMap::new()))
+fn iface_fanout_cache() -> &'static Cache<(usize, String), Arc<IfaceFanout>> {
+    static CACHE: OnceLock<Cache<(usize, String), Arc<IfaceFanout>>> = OnceLock::new();
+    CACHE.get_or_init(|| Cache::new(256))
 }
 
 fn go_iface_fanout(
@@ -4675,40 +4575,36 @@ fn go_iface_fanout(
     iface: &str,
 ) -> Arc<IfaceFanout> {
     let key = (corpus_key(def_index), iface.to_string());
-    let cache = iface_fanout_cache();
-    let mut guard = cache.lock().unwrap_or_else(|poison| poison.into_inner());
-    if let Some(hit) = guard.get(&key) {
-        return hit.clone();
-    }
-    // The interface's required method set comes from every corpus TypeF site
-    // of this name that facts say IS an interface (a struct with methods can
-    // share the name; its method set is not a spec).
-    let mut is_iface = false;
-    let mut methods: BTreeSet<String> = BTreeSet::new();
-    if let Some(paths) = paths {
-        for site in corpus_defs(def_index, iface) {
-            if site.family != FamilyTag::Type {
-                continue;
+    iface_fanout_cache()
+        .get_or_insert_with(&key, || {
+            // The interface's required method set comes from every corpus
+            // TypeF site of this name that facts say IS an interface.
+            let mut is_iface = false;
+            let mut methods: BTreeSet<String> = BTreeSet::new();
+            if let Some(paths) = paths {
+                for site in corpus_defs(def_index, iface) {
+                    if site.family != FamilyTag::Type {
+                        continue;
+                    }
+                    let Some(path) = paths.get(&site.blob) else {
+                        continue;
+                    };
+                    let facts = go_file_facts(&site.blob, path);
+                    if !facts.ifaces.contains(iface) {
+                        continue;
+                    }
+                    is_iface = true;
+                    if let Some(names) = facts.methods_of.get(iface) {
+                        methods.extend(names.iter().cloned());
+                    }
+                }
             }
-            let Some(path) = paths.get(&site.blob) else {
-                continue;
-            };
-            let facts = go_file_facts(&site.blob, path);
-            if !facts.ifaces.contains(iface) {
-                continue;
-            }
-            is_iface = true;
-            if let Some(names) = facts.methods_of.get(iface) {
-                methods.extend(names.iter().cloned());
-            }
-        }
-    }
-    let fanout = Arc::new(IfaceFanout {
-        is_iface,
-        impls: go_iface_candidate_maps(def_index, paths, iface, &methods),
-    });
-    guard.insert(key, fanout.clone());
-    fanout
+            Ok::<_, std::convert::Infallible>(Arc::new(IfaceFanout {
+                is_iface,
+                impls: go_iface_candidate_maps(def_index, paths, iface, &methods),
+            }))
+        })
+        .expect("interface fanout cache computation is infallible")
 }
 
 /// Every named type whose method set covers ALL of `methods`, as one map per

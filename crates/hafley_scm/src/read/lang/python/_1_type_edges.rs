@@ -87,7 +87,7 @@ fn predeclare(
                 }
             }
             "expression_statement" => {
-                for assignment in named_children(target) {
+                for assignment in target.named_children(&mut target.walk()) {
                     if assignment.kind() != "assignment" {
                         continue;
                     }
@@ -133,7 +133,7 @@ fn tsi_statement(
         }
         "type_alias_statement" => tsi_type_alias(node, outer, src, strings, names, state),
         "expression_statement" => {
-            for assignment in named_children(node) {
+            for assignment in node.named_children(&mut node.walk()) {
                 if assignment.kind() == "assignment" {
                     tsi_module_assignment(assignment, outer, src, strings, names, state);
                 }
@@ -250,7 +250,7 @@ fn tsi_class(
     );
     let mut position = 0i64;
     if let Some(bases) = class.child_by_field_name("superclasses") {
-        for base in named_children(bases) {
+        for base in bases.named_children(&mut bases.walk()) {
             if base.kind() == "keyword_argument" {
                 continue;
             }
@@ -281,11 +281,11 @@ fn tsi_class(
     let Some(body) = class.child_by_field_name("body") else {
         return;
     };
-    for statement in named_children(body) {
+    for statement in body.named_children(&mut body.walk()) {
         let statement = unwrap_decorated(statement);
         match statement.kind() {
             "expression_statement" => {
-                for assignment in named_children(statement) {
+                for assignment in statement.named_children(&mut statement.walk()) {
                     if assignment.kind() != "assignment" {
                         continue;
                     }
@@ -345,7 +345,7 @@ fn tsi_generics(
     let Some(list) = list else {
         return;
     };
-    for declared in named_children(list) {
+    for declared in list.named_children(&mut list.walk()) {
         declare_parameter(declared, owner, scope, position, src, strings, names, state);
     }
 }
@@ -366,7 +366,7 @@ fn declare_parameter(
     let (name_node, bound) = match declared.kind() {
         "identifier" => (declared, None),
         "constrained_type" => {
-            let terms = named_children(declared);
+            let terms: Vec<Node> = declared.named_children(&mut declared.walk()).collect();
             let Some(first) = terms.first().map(|node| unwrap_type(*node)) else {
                 return;
             };
@@ -420,7 +420,7 @@ fn tsi_type_alias(
     let (name_node, parameters) = match left.kind() {
         "identifier" => (left, None),
         "generic_type" => {
-            let parts = named_children(left);
+            let parts: Vec<Node> = left.named_children(&mut left.walk()).collect();
             match parts.first() {
                 Some(name) if name.kind() == "identifier" => (*name, parts.get(1).copied()),
                 _ => return,
@@ -478,7 +478,7 @@ fn tsi_callable(
     let return_type = def.child_by_field_name("return_type");
     let mut referenced = Vec::new();
     if let Some(parameters) = parameters {
-        for parameter in named_children(parameters) {
+        for parameter in parameters.named_children(&mut parameters.walk()) {
             if let Some(ty) = parameter.child_by_field_name("type") {
                 typevar_references(ty, src, state, &scope, &mut referenced);
             }
@@ -501,7 +501,7 @@ fn tsi_callable(
     }
     if let Some(parameters) = parameters {
         let mut slot = 0i64;
-        for parameter in named_children(parameters) {
+        for parameter in parameters.named_children(&mut parameters.walk()) {
             if matches!(
                 parameter.kind(),
                 "positional_separator" | "keyword_separator"
@@ -563,7 +563,7 @@ fn typevar_references<'tree>(
     if node.kind() == "attribute" {
         return;
     }
-    for child in named_children(node) {
+    for child in node.named_children(&mut node.walk()) {
         typevar_references(child, src, state, scope, found);
     }
 }
@@ -573,7 +573,7 @@ fn parameter_name(parameter: Node) -> Option<Node> {
     if let Some(name) = parameter.child_by_field_name("name") {
         return Some(name);
     }
-    for child in named_children(parameter) {
+    for child in parameter.named_children(&mut parameter.walk()) {
         match child.kind() {
             "identifier" => return Some(child),
             "list_splat_pattern" | "dictionary_splat_pattern" => {
@@ -601,7 +601,8 @@ fn tsi_type_id(
     match node.kind() {
         "none" => tsi_primitive_id("None", names, state),
         "string" => {
-            let content = named_children(node)
+            let content = node
+                .named_children(&mut node.walk())
                 .into_iter()
                 .find(|child| child.kind() == "string_content")
                 .unwrap_or(node);
@@ -609,7 +610,7 @@ fn tsi_type_id(
         }
         "union_type" => tsi_sum_id(
             node,
-            named_children(node),
+            node.named_children(&mut node.walk()).collect(),
             scope,
             src,
             strings,
@@ -779,11 +780,11 @@ fn application_parts(node: Node) -> Option<(Node, Vec<Node>)> {
             Some((head, arguments))
         }
         "generic_type" => {
-            let parts = named_children(node);
+            let parts: Vec<Node> = node.named_children(&mut node.walk()).collect();
             let head = *parts.first()?;
             let arguments = parts
                 .get(1)
-                .map(|list| named_children(*list))
+                .map(|list| list.named_children(&mut list.walk()).collect())
                 .unwrap_or_default();
             Some((head, arguments))
         }
@@ -851,11 +852,4 @@ fn last_segment_text(node: Node, src: &[u8]) -> String {
             .unwrap_or_else(|| py_text(node, src).to_string()),
         _ => py_text(node, src).to_string(),
     }
-}
-
-/// Every named child in source order.
-fn named_children(node: Node) -> Vec<Node> {
-    let mut cursor = node.walk();
-    let found: Vec<Node> = node.named_children(&mut cursor).collect();
-    found
 }

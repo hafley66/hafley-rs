@@ -64,7 +64,7 @@ pub(super) fn tsi_rows(
     let outer = TsiScope::new();
     let mut state = TsiState::default();
     predeclare(root, src, strings, &mut names, &mut state);
-    for child in named_children(root) {
+    for child in root.named_children(&mut root.walk()) {
         tsi_declaration(child, &outer, src, strings, &mut names, &mut state);
     }
     sink.aux.tsi = names.into_facts();
@@ -80,7 +80,7 @@ fn predeclare(
     names: &mut TsiNames,
     state: &mut TsiState,
 ) {
-    for child in named_children(node) {
+    for child in node.named_children(&mut node.walk()) {
         match child.kind() {
             "class_declaration" | "object_declaration" => {
                 let Some(name_node) = first_child(child, "type_identifier") else {
@@ -90,7 +90,8 @@ fn predeclare(
                 if !PRIMITIVE_CLASSES.contains(&text) {
                     names.named(strings, text, node_span(name_node));
                 }
-                let supertypes = named_children(child)
+                let supertypes = child
+                    .named_children(&mut child.walk())
                     .into_iter()
                     .filter(|part| part.kind() == "delegation_specifier")
                     .filter_map(|part| supertype_node(part))
@@ -154,7 +155,7 @@ fn tsi_class(
     };
     let owner_text = kt_text(name_node, src);
     let owner = names.named(strings, owner_text, node_span(name_node));
-    let parts = named_children(class);
+    let parts: Vec<Node> = class.named_children(&mut class.walk()).collect();
     let sealed = has_class_modifier(class, "sealed", src);
     let enum_class = first_child(class, "enum").is_some();
     if sealed || enum_class {
@@ -199,7 +200,7 @@ fn tsi_class(
         }
     }
     if let Some(constructor) = first_child(class, "primary_constructor") {
-        for parameter in named_children(constructor) {
+        for parameter in constructor.named_children(&mut constructor.walk()) {
             if parameter.kind() != "class_parameter"
                 || first_child(parameter, "binding_pattern_kind").is_none()
             {
@@ -223,7 +224,7 @@ fn tsi_class(
     let Some(body) = class_body(class) else {
         return;
     };
-    for member in named_children(body) {
+    for member in body.named_children(&mut body.walk()) {
         match member.kind() {
             "enum_entry" => {
                 let Some(declared) = first_child(member, "simple_identifier") else {
@@ -276,7 +277,7 @@ fn tsi_generics(
     };
     let mut position = 0i64;
     let mut ranks: BTreeMap<String, (u32, i64)> = BTreeMap::new();
-    for declared in named_children(list) {
+    for declared in list.named_children(&mut list.walk()) {
         if declared.kind() != "type_parameter" {
             continue;
         }
@@ -308,7 +309,7 @@ fn tsi_generics(
     let Some(constraints) = constraints else {
         return scope;
     };
-    for constraint in named_children(constraints) {
+    for constraint in constraints.named_children(&mut constraints.walk()) {
         if constraint.kind() != "type_constraint" {
             continue;
         }
@@ -392,7 +393,7 @@ fn tsi_function(
     });
     if let Some(parameters) = first_child(function, "function_value_parameters") {
         let mut slot = 0i64;
-        for parameter in named_children(parameters) {
+        for parameter in parameters.named_children(&mut parameters.walk()) {
             if parameter.kind() != "parameter" {
                 continue;
             }
@@ -457,7 +458,7 @@ fn receiver_owner(
 /// The written type after the parameter list: `fun f(): T`.
 fn return_type(function: Node) -> Option<Node> {
     let mut past_parameters = false;
-    for child in named_children(function) {
+    for child in function.named_children(&mut function.walk()) {
         if child.kind() == "function_value_parameters" {
             past_parameters = true;
             continue;
@@ -530,7 +531,7 @@ fn tsi_application(
         vec![Arg::Id(result), Arg::Id(callee), Arg::Id(list)],
     );
     let mut position = 0i64;
-    for projection in named_children(arguments) {
+    for projection in arguments.named_children(&mut arguments.walk()) {
         let Some(argument) = type_child(projection) else {
             continue;
         };
@@ -605,7 +606,7 @@ fn tsi_function_type_id(
         }
     }
     if let Some(parameters) = first_child(node, "function_type_parameters") {
-        for parameter in named_children(parameters) {
+        for parameter in parameters.named_children(&mut parameters.walk()) {
             let ty = if parameter.kind() == "parameter" {
                 type_child(parameter)
             } else if TYPE_KINDS.contains(&parameter.kind()) {
@@ -625,7 +626,7 @@ fn tsi_function_type_id(
         }
     }
     let mut past_parameters = false;
-    for child in named_children(node) {
+    for child in node.named_children(&mut node.walk()) {
         if child.kind() == "function_type_parameters" {
             past_parameters = true;
             continue;
@@ -662,11 +663,11 @@ fn tsi_primitive_id(class: &'static str, names: &mut TsiNames, state: &mut TsiSt
 /// A user type's spelling with its last `<Args>` dropped, and the span of its
 /// last segment: `kotlin.collections.List<String>` heads at `List`.
 fn user_type_head(node: Node, src: &[u8]) -> (String, Span) {
-    let segments: Vec<Node> = named_children(node)
-        .into_iter()
+    let last = node
+        .named_children(&mut node.walk())
         .filter(|part| part.kind() == "type_identifier")
-        .collect();
-    let last = segments.last().copied().unwrap_or(node);
+        .last()
+        .unwrap_or(node);
     let text = match last_child(node, "type_arguments") {
         Some(arguments) => {
             let before = &src[node.start_byte()..arguments.start_byte()];
@@ -684,7 +685,7 @@ fn user_type_head(node: Node, src: &[u8]) -> (String, Span) {
 
 /// The type a supertype clause writes: bare, constructed, or delegated.
 fn supertype_node(specifier: Node) -> Option<Node> {
-    for child in named_children(specifier) {
+    for child in specifier.named_children(&mut specifier.walk()) {
         if TYPE_KINDS.contains(&child.kind()) {
             return Some(child);
         }
@@ -710,7 +711,8 @@ fn property_parts(property: Node) -> Option<(Node, Node)> {
 fn has_class_modifier(class: Node, modifier: &str, src: &[u8]) -> bool {
     first_child(class, "modifiers")
         .map(|modifiers| {
-            named_children(modifiers)
+            modifiers
+                .named_children(&mut modifiers.walk())
                 .into_iter()
                 .any(|part| part.kind() == "class_modifier" && kt_text(part, src) == modifier)
         })
@@ -738,7 +740,8 @@ fn unwrap_type(node: Node) -> Node {
 fn last_segment_text(node: Node, src: &[u8]) -> String {
     let node = unwrap_type(node);
     match node.kind() {
-        "user_type" => named_children(node)
+        "user_type" => node
+            .named_children(&mut node.walk())
             .into_iter()
             .filter(|part| part.kind() == "type_identifier")
             .last()
@@ -753,7 +756,7 @@ fn last_segment_text(node: Node, src: &[u8]) -> String {
 
 /// The first direct child that is a written type.
 fn type_child(node: Node) -> Option<Node> {
-    named_children(node)
+    node.named_children(&mut node.walk())
         .into_iter()
         .find(|child| TYPE_KINDS.contains(&child.kind()))
 }
@@ -773,12 +776,5 @@ fn last_child<'tree>(node: Node<'tree>, kind: &str) -> Option<Node<'tree>> {
         .children(&mut cursor)
         .filter(|child| child.kind() == kind)
         .last();
-    found
-}
-
-/// Every named child in source order.
-fn named_children(node: Node) -> Vec<Node> {
-    let mut cursor = node.walk();
-    let found: Vec<Node> = node.named_children(&mut cursor).collect();
     found
 }

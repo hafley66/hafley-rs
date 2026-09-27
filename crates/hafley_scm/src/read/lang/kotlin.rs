@@ -47,7 +47,7 @@ use crate::read::seams::{
 use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
-use crate::read::types::{PathIndex, UnresolvedReason};
+use crate::read::types::{unique_blob, PathIndex, UnresolvedReason};
 
 use super::kotlin_modules::KtModuleIndex;
 
@@ -71,17 +71,10 @@ pub fn kt_parse(content: &str) -> Option<tree_sitter::Tree> {
 }
 
 /// UTF-8 text of a tree-sitter node. Port of v5's inline `utf8_text` calls.
-pub fn kt_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
+pub use crate::span::node_text as kt_text;
 
 /// The byte span of a tree-sitter node `[start_byte, end_byte)`.
-pub(super) fn node_span(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
-}
+pub(super) use crate::span::node_span;
 
 /// The first direct child of `node` with `kind`. Port of v5 `kt_first_child`.
 pub fn kt_first_child<'a>(
@@ -1549,21 +1542,7 @@ impl KotlinSource {
                 return Some((site.blob.clone(), site.span));
             }
         }
-        let sites = corpus_defs(index, callee);
-        let mut blobs: Vec<ContentId> = Vec::new();
-        for site in sites {
-            if !blobs.contains(&site.blob) {
-                blobs.push(site.blob.clone());
-            }
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|site| site.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some((blob.clone(), site.span))
+        unique_blob(corpus_defs(index, callee).iter(), FamilyTag::Call)
     }
 }
 
@@ -1802,20 +1781,7 @@ fn def_in_file(
         .iter()
         .filter(|s| paths.get(&s.blob) == Some(file))
         .collect();
-    let mut blobs: Vec<&ContentId> = Vec::new();
-    for s in &sites {
-        if !blobs.contains(&&s.blob) {
-            blobs.push(&s.blob);
-        }
-    }
-    let [blob] = blobs.as_slice() else {
-        return None;
-    };
-    let site = sites
-        .iter()
-        .find(|s| s.family == prefer)
-        .unwrap_or(&sites[0]);
-    Some(((*blob).clone(), site.span))
+    unique_blob(sites.iter().copied(), prefer)
 }
 
 /// The dst leg of one candidate: same-file TypeF entity first (its span joined

@@ -35,7 +35,7 @@ use crate::lang::kotlin::{kt_child_kind, kt_first_child, kt_parse, kt_text};
 use crate::lang::rust::build_line_starts;
 use crate::lang::KotlinSource;
 use crate::rename_cx::{RenameCx, RenameRequest};
-use hafley_scm::span::Span;
+use hafley_scm::span::{node_span as span_of, Span};
 
 impl Rename for KotlinSource {
     fn symbol_refs(
@@ -306,13 +306,6 @@ fn scan_file(text: &str, old: &str) -> Option<FileScan> {
         decls: top_level_decls(root, src, old),
         idents,
     })
-}
-
-fn span_of(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
 }
 
 fn children<'a>(node: tree_sitter::Node<'a>) -> Vec<tree_sitter::Node<'a>> {

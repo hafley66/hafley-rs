@@ -374,6 +374,38 @@ fn import_rows(rows: &[Value]) -> Vec<(String, String, String, String)> {
     out
 }
 
+#[test]
+fn a_tab_separated_module_directive_uses_the_go_mod_parser() {
+    let dir = std::env::temp_dir().join("sprefa-extract-62-tab-module");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(dir.join("pkg")).expect("package dir");
+    std::fs::write(dir.join("go.mod"), "module\texample.com/tab\n\ngo 1.22\n").expect("go.mod");
+    std::fs::write(
+        dir.join("pkg/pkg.go"),
+        "package pkg\n\nfunc Answer() int { return 1 }\n",
+    )
+    .expect("package file");
+    std::fs::write(
+        dir.join("caller.go"),
+        "package caller\n\nimport p \"example.com/tab/pkg\"\n\nfunc Use() int { return p.Answer() }\n",
+    )
+    .expect("caller file");
+
+    let paths = [dir.join("caller.go"), dir.join("pkg/pkg.go")]
+        .map(|path| path.to_string_lossy().into_owned());
+    let rows = import_rows(&run_paths(&paths));
+    assert_eq!(
+        rows,
+        vec![(
+            "caller.go".to_string(),
+            "p".to_string(),
+            "pkg".to_string(),
+            "pkg".to_string(),
+        )]
+    );
+    std::fs::remove_dir_all(dir).expect("remove fixture");
+}
+
 /// A caller run ALONE (its imported package's files absent from this
 /// invocation) still writes the `resolved_import` row: the directory an
 /// in-module import names is computable from the module alone, and the row

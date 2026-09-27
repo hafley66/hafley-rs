@@ -34,6 +34,7 @@ use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONT
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{DfLoop, LangKind, ScipIndex};
+use crate::span::def_span;
 
 /// Kinds only Python constructs: the core enums do not carry them
 /// (tests/6_kind_vocab.rs). `cond` is `a if c else b`.
@@ -60,15 +61,136 @@ pub(super) fn py_parse(content: &str) -> Option<tree_sitter::Tree> {
 }
 
 /// UTF-8 text of a tree-sitter node. Port of v5 `py_text`.
-pub(super) fn py_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
+pub(super) use crate::span::node_text as py_text;
 
 /// The byte span of a tree-sitter node `[start_byte, end_byte)`.
-pub(super) fn node_span(node: tree_sitter::Node) -> crate::read::shape::Span {
-    hafley_scm::span::Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
+pub(super) use hafley_scm::span::node_span;
+
+/// One Python import clause, with relative module dots retained.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(super) enum PyImport {
+    Module {
+        span: Span,
+        module: String,
+        local: String,
+        aliased: bool,
+    },
+    Named {
+        span: Span,
+        module: String,
+        name: String,
+        local: String,
+    },
+    Star {
+        span: Span,
+        module: String,
+    },
+}
+
+impl PyImport {
+    pub(super) fn module(&self) -> &str {
+        match self {
+            Self::Module { module, .. }
+            | Self::Named { module, .. }
+            | Self::Star { module, .. } => module,
+        }
+    }
+}
+
+/// Import clauses in source order. `include_future` controls the specifier
+/// plane's `__future__` rows; module resolution keeps them out of imports.
+pub(super) fn py_walk_imports(
+    node: tree_sitter::Node,
+    src: &[u8],
+    include_future: bool,
+    out: &mut Vec<PyImport>,
+) {
+    match node.kind() {
+        "import_statement" => {
+            let mut cursor = node.walk();
+            for item in node.named_children(&mut cursor) {
+                match item.kind() {
+                    "dotted_name" => {
+                        let module = py_text(item, src).to_string();
+                        out.push(PyImport::Module {
+                            span: node_span(item),
+                            local: module.clone(),
+                            module,
+                            aliased: false,
+                        });
+                    }
+                    "aliased_import" => {
+                        let Some(module) = item.child_by_field_name("name") else {
+                            continue;
+                        };
+                        let module = py_text(module, src).to_string();
+                        let alias = item.child_by_field_name("alias");
+                        let local = alias
+                            .map(|alias| py_text(alias, src).to_string())
+                            .unwrap_or_else(|| module.clone());
+                        out.push(PyImport::Module {
+                            span: node_span(item),
+                            module,
+                            local,
+                            aliased: alias.is_some(),
+                        });
+                    }
+                    _ => {}
+                }
+            }
+        }
+        "import_from_statement" | "future_import_statement" => {
+            let future = node.kind() == "future_import_statement";
+            if include_future || !future {
+                let module = if future {
+                    "__future__".to_string()
+                } else {
+                    node.child_by_field_name("module_name")
+                        .map(|module| py_text(module, src).to_string())
+                        .unwrap_or_default()
+                };
+                let mut cursor = node.walk();
+                let mut saw_name = false;
+                for item in node.children_by_field_name("name", &mut cursor) {
+                    saw_name = true;
+                    let (name, local) = match item.kind() {
+                        "dotted_name" => {
+                            let name = py_text(item, src).to_string();
+                            (name.clone(), name)
+                        }
+                        "aliased_import" => {
+                            let Some(name) = item.child_by_field_name("name") else {
+                                continue;
+                            };
+                            let name = py_text(name, src).to_string();
+                            let local = item.child_by_field_name("alias").map_or_else(
+                                || name.clone(),
+                                |alias| py_text(alias, src).to_string(),
+                            );
+                            (name, local)
+                        }
+                        _ => continue,
+                    };
+                    out.push(PyImport::Named {
+                        span: node_span(item),
+                        module: module.clone(),
+                        name,
+                        local,
+                    });
+                }
+                if !saw_name {
+                    out.push(PyImport::Star {
+                        span: node_span(node),
+                        module,
+                    });
+                }
+            }
+        }
+        _ => {}
+    }
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        py_walk_imports(child, src, include_future, out);
     }
 }
 
@@ -421,20 +543,6 @@ fn project_call(
     py_walk_call_sites(root, src, strings, sink, &lambdas);
     py_walk_shapes(root, src, strings, sink, &lambdas);
     py_module_specifiers(root, src, strings, sink);
-}
-
-/// The def span covers `[decl start, body end)` for span-containment caller
-/// resolution; a lambda (no `body` field) covers its own extent.
-fn def_span(child: tree_sitter::Node) -> Span {
-    let start = child.start_byte();
-    let end = child
-        .child_by_field_name("body")
-        .unwrap_or(child)
-        .end_byte();
-    Span {
-        start: start as u32,
-        len: (end - start) as u32,
-    }
 }
 
 /// One CallF def node per Free function / Method / Lambda. `parent` is the
@@ -1538,100 +1646,42 @@ fn py_module_specifiers(
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    let mut rows = Vec::new();
-    py_walk_imports(root, src, strings, &mut rows);
+    let mut imports = Vec::new();
+    py_walk_imports(root, src, true, &mut imports);
+    let rows = imports.into_iter().map(|import| match import {
+        PyImport::Module {
+            span,
+            module,
+            local,
+            aliased,
+        } => Specifier {
+            span,
+            name: strings.intern(&local),
+            kind: SpecifierKind::Named,
+            module: aliased.then(|| strings.intern(&module)),
+            imported: None,
+        },
+        PyImport::Named {
+            span,
+            module,
+            name,
+            local,
+        } => Specifier {
+            span,
+            name: strings.intern(&local),
+            kind: SpecifierKind::Named,
+            module: Some(strings.intern(&module)),
+            imported: (name != local).then(|| strings.intern(&name)),
+        },
+        PyImport::Star { span, module } => Specifier {
+            span,
+            name: strings.intern(&module),
+            kind: SpecifierKind::Namespace,
+            module: None,
+            imported: None,
+        },
+    });
     sink.aux.specifiers.extend(rows);
-}
-
-fn py_walk_imports(
-    node: tree_sitter::Node,
-    src: &[u8],
-    strings: &mut Strings,
-    rows: &mut Vec<Specifier>,
-) {
-    match node.kind() {
-        "import_statement" => {
-            let mut cursor = node.walk();
-            for item in node.named_children(&mut cursor) {
-                let (name, module) = match item.kind() {
-                    "dotted_name" => (py_text(item, src).to_string(), None),
-                    "aliased_import" => {
-                        let path = item
-                            .child_by_field_name("name")
-                            .map(|n| py_text(n, src).to_string())
-                            .unwrap_or_default();
-                        let alias = item
-                            .child_by_field_name("alias")
-                            .map(|n| py_text(n, src).to_string())
-                            .unwrap_or_else(|| path.clone());
-                        (alias, Some(path))
-                    }
-                    _ => continue,
-                };
-                rows.push(Specifier {
-                    span: node_span(item),
-                    name: strings.intern(&name),
-                    kind: SpecifierKind::Named,
-                    module: module.map(|text| strings.intern(&text)),
-                    imported: None,
-                });
-            }
-        }
-        // `from __future__ import x` is its OWN node kind, and the module name
-        // is a keyword the grammar leaves off the field table.
-        "import_from_statement" | "future_import_statement" => {
-            let module = if node.kind() == "future_import_statement" {
-                "__future__".to_string()
-            } else {
-                node.child_by_field_name("module_name")
-                    .map(|n| py_text(n, src).to_string())
-                    .unwrap_or_default()
-            };
-            let mut cursor = node.walk();
-            let mut saw_name = false;
-            for item in node.children_by_field_name("name", &mut cursor) {
-                saw_name = true;
-                let (name, imported) = match item.kind() {
-                    "dotted_name" => (py_text(item, src).to_string(), None),
-                    "aliased_import" => {
-                        let source = item
-                            .child_by_field_name("name")
-                            .map(|n| py_text(n, src).to_string())
-                            .unwrap_or_default();
-                        let alias = item
-                            .child_by_field_name("alias")
-                            .map(|n| py_text(n, src).to_string())
-                            .unwrap_or_else(|| source.clone());
-                        let imported = (alias != source).then_some(source);
-                        (alias, imported)
-                    }
-                    _ => continue,
-                };
-                rows.push(Specifier {
-                    span: node_span(item),
-                    name: strings.intern(&name),
-                    kind: SpecifierKind::Named,
-                    module: Some(strings.intern(&module)),
-                    imported: imported.map(|text| strings.intern(&text)),
-                });
-            }
-            if !saw_name {
-                // `from x import *`: the wildcard is the only nameless form.
-                rows.push(Specifier {
-                    span: node_span(node),
-                    name: strings.intern(&module),
-                    kind: SpecifierKind::Namespace,
-                    module: None,
-                    imported: None,
-                });
-            }
-        }
-        _ => {}
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        py_walk_imports(child, src, strings, rows);
-    }
 }
 
 // ── DfF: intra-procedural value flow (port of v5 `py_dataflow_from`) ────────
