@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-27
 type: bug
-status: open
+status: obsolete
 priority: normal
 labels: [extract]
 ---
@@ -40,4 +40,7 @@ Batch A (rosters out of lang/mod.rs) found four more, all fixed: (1) qualified c
 
 Lane W (ryi/write-side a2698c8a): AC 1-3 were fixed by 39a24eac; AC 4 fixed (package-ident and nested direct importers are callers; relayed importers untouched). Also fixed: whole-file item not a declaration, trait import dropped when only a method call used it, pub use SRC::* glob gains pub use DEST::ITEM, indented use in mod tests respelled, serde(with) inline mod travels, use super::* inside an inline mod is not a file glob, DEST never imports itself. Pinned by tests/175_cleave_ladder.rs; a 10-item --list batch over a crates/soopy copy compiles (0 errors, 3 unused-import warnings). Open: item 5, multi-line lists still collapse when a name leaves them.
 
+### 2026-09-27 · @codex
+
+Receipt: current `ryii` invocation of the recorded `src/types.rs#ImportRef` repro exits with `cleave source is not a file`; the source path was removed by the main split.
 
