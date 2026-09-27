@@ -1023,19 +1023,35 @@ impl Plan {
                 .push(respell);
         }
         let mut out = BTreeMap::new();
-        for (rel, edits) in by_file {
-            let mut text = self.cx.text(&rel).ok_or_else(|| format!("read {rel}"))?;
+        for (rel, mut edits) in by_file {
+            let text = self.cx.text(&rel).ok_or_else(|| format!("read {rel}"))?;
+            edits.sort_by_key(|edit| (edit.span.start, edit.span.len));
+            // Import pruning can produce alternate rewrites of one shared use line;
+            // the final batch sweep recomputes the kept imports from the full text.
+            edits.dedup_by(|later, earlier| {
+                if later.span == earlier.span {
+                    earlier.text = later.text.clone();
+                    true
+                } else {
+                    false
+                }
+            });
             let shifts: Vec<(Span, u32)> = edits
                 .iter()
                 .map(|edit| (edit.span, edit.text.len() as u32))
                 .collect();
-            for edit in edits.iter().rev() {
-                text.replace_range(
-                    edit.span.start as usize..edit.span.end() as usize,
-                    &edit.text,
-                );
+            let mut rewritten = String::with_capacity(text.len());
+            let mut cursor = 0;
+            // All spans address the original text, including inserts at range boundaries.
+            for edit in &edits {
+                let start = edit.span.start as usize;
+                let end = edit.span.end() as usize;
+                rewritten.push_str(&text[cursor..start]);
+                rewritten.push_str(&edit.text);
+                cursor = end;
             }
-            out.insert(rel, (text, shifts));
+            rewritten.push_str(&text[cursor..]);
+            out.insert(rel, (rewritten, shifts));
         }
         if self.dest_facts.is_none() {
             let (_, block) = self.import_block("");

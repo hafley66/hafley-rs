@@ -290,6 +290,27 @@ fn batch_drops_an_import_made_unused_by_a_later_row() {
 }
 
 #[test]
+fn batch_keeps_every_row_source_parseable_while_composing() {
+    let fixture = fixture("basic", "batch-invalid-rust");
+    std::fs::remove_dir_all(&fixture.root).unwrap();
+    let soopy = Path::new(env!("CARGO_MANIFEST_DIR")).join("../soopy");
+    copy_tree(&soopy, &fixture.root);
+    git(&fixture.root, &["init", "-q", "."]);
+    let list = fixture.state.join("batch.tsv");
+    std::fs::write(
+        &list,
+        "src/_1_pattern.rs#Pattern\tsrc/_1b_extract.rs\nsrc/_0a_durable_write.rs#DeviceSyncCounts\tsrc/_0b_counts.rs\n",
+    )
+    .unwrap();
+
+    let stdout = cleave(&fixture, &["--list", list.to_str().unwrap()]);
+    assert!(
+        !stdout.contains("cleave batch leaves invalid Rust"),
+        "{stdout}"
+    );
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(
