@@ -206,9 +206,21 @@ impl Source for RustSource {
                 };
                 if let Ok(parsed) = parsed {
                     let line_starts = &parsed.line_starts;
-                    rust_module = Some(super::rust_modules::rust_module_facts_from_parsed(
-                        &parsed.file,
-                        line_starts,
+                    rust_module = Some(tree.as_ref().map_or_else(
+                        || {
+                            super::rust_modules::rust_module_facts_from_parsed(
+                                &parsed.file,
+                                line_starts,
+                            )
+                        },
+                        |tree| {
+                            super::rust_modules::rust_module_facts_from_tree(
+                                &parsed.file,
+                                line_starts,
+                                tree,
+                                content,
+                            )
+                        },
                     ));
                     if mask.types {
                         let span = trace::family_span("rust", "type");

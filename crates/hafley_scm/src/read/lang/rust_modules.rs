@@ -104,6 +104,24 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
 /// The module facts off the extract pass's own syn parse, so no second parse.
 pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
+    rust_module_facts_from_rows(parsed, line_starts, rows)
+}
+
+pub fn rust_module_facts_from_tree(
+    parsed: &syn::File,
+    line_starts: &[u32],
+    tree: &tree_sitter::Tree,
+    source: &[u8],
+) -> RustModuleFacts {
+    let rows = hafley_scm::lang::rust::module_resolution_rows_from_tree(tree, source);
+    rust_module_facts_from_rows(parsed, line_starts, rows)
+}
+
+fn rust_module_facts_from_rows(
+    parsed: &syn::File,
+    line_starts: &[u32],
+    rows: hafley_scm::lang::rust::ModuleResolutionRows,
+) -> RustModuleFacts {
     let mut return_walk = ReturnReceiverWalk {
         line_starts,
         method_returns: Vec::new(),
