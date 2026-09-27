@@ -376,6 +376,7 @@ name = "boop"
 version = "0.0.10"
 dependencies = [
  "anyhow",
+ "blake3",
  "boop-acp",
  "boop-harness",
  "boop-proc",

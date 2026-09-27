@@ -231,6 +231,15 @@ REMINDERS: recurring sends to an existing explicit route, no agent spawn:
   Native doors and existing supervised lanes are supported. ACPX mode is held
   with an explanation because the configured queue can accept without a turn.
 
+MARKDOWN MAIL: opt in to watching a directory; each ready `.md` file is
+  imported once, delivered, then moved under its receipt-state directory:
+    boop mail watch <dir> [--once] [--mail-dir <dir>]
+  YAML-style frontmatter accepts `to`, `from`, `harness`, `cwd`, `worktree`,
+  optional `branch`, and optional `preset`. `to` falls back to the filename
+  stem. Unknown recipients need `harness`, `cwd`, and `worktree`; refusal is
+  recorded in the mail row. Files with only an appended receipt after a watcher
+  restart move to `uncertain/` for inspection without automatic redelivery.
+
 SEND: one verb, `boop mail send`. It sends and then blocks for the answer:
     boop mail send --to <route> <body> [--timeout <s>] [--kind <k>] [--as <name>]
     boop mail send --to <route> <body> --no-wait   send and return

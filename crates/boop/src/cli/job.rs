@@ -30,6 +30,75 @@ use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, 
 
 pub(crate) type DispatchArgs = boop::harness::SpawnSpec;
 
+pub(crate) fn create_from_markdown_mail(
+    registry: &Registry,
+    lane_id: &str,
+    harness: &str,
+    cwd: &Path,
+    worktree: &Path,
+    branch: Option<&str>,
+    preset: Option<&str>,
+    mail_dir: &Path,
+) -> Result<()> {
+    let harness_id = harness.parse::<HarnessId>()?;
+    registry
+        .by_name(harness_id.as_str())
+        .with_context(|| format!("unknown harness `{harness}` in Markdown mail metadata"))?;
+    anyhow::ensure!(
+        cwd.is_absolute(),
+        "Markdown session metadata `cwd` must be absolute"
+    );
+    anyhow::ensure!(
+        worktree.is_absolute(),
+        "Markdown session metadata `worktree` must be absolute"
+    );
+    let repo = lane::repo_root(cwd)?;
+    let branch = match branch {
+        Some(branch) => branch.to_owned(),
+        None => {
+            let relative = worktree
+                .strip_prefix(repo.join(".boop-worktrees"))
+                .with_context(|| {
+                    format!("worktree must be below {}/.boop-worktrees", repo.display())
+                })?;
+            relative
+                .components()
+                .map(|component| component.as_os_str().to_string_lossy())
+                .collect::<Vec<_>>()
+                .join("/")
+        }
+    };
+    let expected_worktree = lane::worktree_dir(&repo, &branch);
+    anyhow::ensure!(
+        worktree == expected_worktree,
+        "worktree metadata {} does not match branch `{branch}` (expected {})",
+        worktree.display(),
+        expected_worktree.display()
+    );
+    let brief_dir = mail_dir.join("markdown-watch").join("briefs");
+    std::fs::create_dir_all(&brief_dir)?;
+    let brief = brief_dir.join(format!("{lane_id}.md"));
+    if !brief.exists() {
+        std::fs::write(
+            &brief,
+            format!("# Managed lane {lane_id}\n\nRead and act on mail addressed to this lane.\n"),
+        )?;
+    }
+    run_lane(
+        registry,
+        boop::harness::SpawnSpec {
+            lane: Some(lane_id.to_owned()),
+            branch: Some(branch),
+            harness: Some(harness_id),
+            preset: preset.map(str::to_owned),
+            cwd_arg: Some(repo.display().to_string()),
+            brief: Some(brief),
+            mail_dir_override: Some(mail_dir.to_path_buf()),
+            ..boop::harness::SpawnSpec::default()
+        },
+    )
+}
+
 pub(crate) fn run_dispatch(registry: &Registry, mut args: DispatchArgs) -> Result<()> {
     let lane_id = args.lane.clone().context("dispatch requires a lane")?;
     let adapter = registry.resolve(args.harness.map(|id| id.as_str()))?;

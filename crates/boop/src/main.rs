@@ -602,6 +602,11 @@ fn run_cli(cli: Cli) -> Result<()> {
                     timeout,
                     mail_dir.as_deref(),
                 ),
+                MailCmd::Watch {
+                    directory,
+                    once,
+                    mail_dir,
+                } => cli::mail::run_watch(&registry, &directory, mail_dir.as_deref(), once),
             },
             SubCmd::Db { sql, format, cmd } => match cmd {
                 Some(cmd) => run_db(&registry, cmd),
@@ -1733,6 +1738,16 @@ enum MailCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Import ready Markdown messages from a directory until stopped.
+    Watch {
+        /// Directory containing ready `.md` files.
+        directory: PathBuf,
+        /// Process one scan and exit; useful for supervised one-shot runs.
+        #[arg(long)]
+        once: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -2623,6 +2638,22 @@ mod tests {
                 cmd: MeCmd::Whoami { json: true, .. },
                 ..
             })
+        ));
+    }
+
+    #[test]
+    fn mail_watch_is_explicit_and_parses_the_directory() {
+        let cli = Cli::try_parse_from(["boop", "mail", "watch", "/tmp/inbox", "--once"])
+            .expect("explicit Markdown mail watcher parses");
+        assert!(matches!(
+            cli.command,
+            Some(SubCmd::Mail {
+                cmd: MailCmd::Watch {
+                    directory,
+                    once: true,
+                    ..
+                }
+            }) if directory == PathBuf::from("/tmp/inbox")
         ));
     }
 

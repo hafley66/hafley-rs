@@ -52,6 +52,7 @@ tracing-subscriber.workspace = true
 hafley-observe = { path = "../hafley-observe", features = ["fmt"] }
 signal-hook = "0.4"
 nix = { version = "0.31", features = ["signal", "process"] }
+blake3 = "1"
 
 [dev-dependencies]
 tungstenite = { version = "0.26", default-features = false, features = ["handshake"] }
