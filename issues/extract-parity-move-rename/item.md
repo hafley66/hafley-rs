@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: epic
-status: needs-decision
+status: obsolete
 priority: normal
 labels: [extract]
 ---
@@ -21,3 +21,7 @@ Plan: crates/sprefa-extract/plans/2026-09-17-fast-slow-parity-and-move-rename.md
 ## Decisions
 
 Should Lane E Go/Python move and rename work resume under this epic, or be split into a separately prioritized item?
+
+## Comments
+
+2026-09-26 repro: current `ryii` exposes `fast` (`ryii fast --help`); `t_170_ratchet_sites_rust::fast_matches_slow_on_soopy_at_the_pinned_rate` passes, while this epic's `extract` executable name is retired.
