@@ -2344,8 +2344,27 @@ impl Store {
     /// Query events for one lane, joining all dictionary identities back to
     /// strings. A caller cannot request more than the bounded query window.
     pub fn query_trace_events(&self, lane: Option<&str>, limit: u64) -> Result<Vec<TraceEventRow>> {
+        self.query_trace_events_ordered(lane, limit, false)
+    }
+
+    /// Query the newest events for one lane, returned oldest first for display.
+    pub fn query_recent_trace_events(
+        &self,
+        lane: Option<&str>,
+        limit: u64,
+    ) -> Result<Vec<TraceEventRow>> {
+        self.query_trace_events_ordered(lane, limit, true)
+    }
+
+    fn query_trace_events_ordered(
+        &self,
+        lane: Option<&str>,
+        limit: u64,
+        newest: bool,
+    ) -> Result<Vec<TraceEventRow>> {
         let limit = limit.min(TRACE_EVENT_QUERY_LIMIT);
-        let mut statement = self.connection.prepare(
+        let direction = if newest { "DESC" } else { "ASC" };
+        let sql = format!(
             "SELECT e.event_key, lane.value, trace.value, session.value,
                     kind.value, from_lane.value, to_lane.value, e.started_ts,
                     e.finished_ts, delivery.value, classification.value, e.detail,
@@ -2358,12 +2377,13 @@ impl Store {
                LEFT JOIN dict_session to_lane ON to_lane.id = e.to_lane_id
                JOIN dict_trace_kind kind ON kind.id = e.kind_id
                LEFT JOIN dict_trace_delivery delivery ON delivery.id = e.delivery_state_id
-               LEFT JOIN dict_trace_classification classification
+              LEFT JOIN dict_trace_classification classification
                  ON classification.id = e.classification_id
               WHERE (?1 IS NULL OR lane.value = ?1)
-              ORDER BY e.created_ts, e.event_id
-              LIMIT ?2",
-        )?;
+              ORDER BY e.created_ts {direction}, e.event_id {direction}
+              LIMIT ?2"
+        );
+        let mut statement = self.connection.prepare(&sql)?;
         let mut rows = statement.query(params![lane, limit as i64])?;
         let mut events = Vec::new();
         while let Some(row) = rows.next()? {
@@ -2382,6 +2402,9 @@ impl Store {
                 detail: row.get(11)?,
                 created_ts: row.get::<_, i64>(12)? as u64,
             });
+        }
+        if newest {
+            events.reverse();
         }
         Ok(events)
     }
@@ -3649,6 +3672,25 @@ impl Store {
             rows.push(row?);
         }
         Ok(rows)
+    }
+
+    /// The newest transcript turn role for one normalized session.
+    pub fn latest_turn_role(&self, session: &str) -> Result<Option<(u64, String)>> {
+        let row = self
+            .connection
+            .query_row(
+                "SELECT turn.turn, role.value
+                   FROM agent_turn turn
+                   JOIN dict_session session ON session.id = turn.session_id
+                   JOIN dict_role role ON role.id = turn.role_id
+                  WHERE session.value = ?1
+                  ORDER BY turn.turn DESC
+                  LIMIT 1",
+                params![session],
+                |row| Ok((row.get::<_, i64>(0)? as u64, row.get(1)?)),
+            )
+            .optional()?;
+        Ok(row)
     }
 }
 
@@ -5532,6 +5574,26 @@ mod tests {
         assert_eq!(rows[0].finished_ts, None);
         assert_eq!(rows[0].delivery_state.as_deref(), Some("nextturn"));
         assert_eq!(rows[0].classification.as_deref(), Some("completed"));
+        drop(store);
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn recent_trace_events_are_bounded_and_returned_oldest_first() {
+        let (path, store) = fresh_store("trace-recent");
+        for (key, timestamp) in [("event-1", 10), ("event-2", 20), ("event-3", 30)] {
+            store
+                .record_trace_event(&trace_event(
+                    &format!("trace-a/lane-a/run-1/{key}"),
+                    timestamp,
+                ))
+                .unwrap();
+        }
+        let recent = store.query_recent_trace_events(Some("lane-a"), 2).unwrap();
+        assert_eq!(
+            recent.iter().map(|row| row.created_ts).collect::<Vec<_>>(),
+            vec![20, 30]
+        );
         drop(store);
         let _ = std::fs::remove_file(&path);
     }

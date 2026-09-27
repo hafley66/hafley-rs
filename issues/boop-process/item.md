@@ -1,9 +1,9 @@
 ---
 created: 2026-08-19
-updated: 2026-08-20
+updated: 2026-09-27
 type: epic
 owner: hafley66
-status: open
+status: needs-decision
 priority: high
 ---
 
@@ -43,3 +43,16 @@ Flipped in 1fbc69e on branch feature/acp-all-harnesses:
 Measured 2026-08-20, live end_turn on every adapter, plus a real claude lane turn through `boop beep lane run` (rc=0, result row hailed). All four advertise `loadSession`, so `--resume` rides `session/load`; live resume receipts for claude and kimi.
 
 One open decision: boop spells a codex preset `gpt-5.6-luna@medium`, and codex-acp takes `gpt-5.6-luna` on the `model` config option with the effort on a separate `reasoning_effort` option. Nothing is translated, so such a lane fails at open with the offered ids in the message. Receipts in TASKS/acp-all-harnesses.REPORT.md section 4.
+
+## Reproduction on installed boop 0.0.10 (248dfdd3)
+
+`boop job --help` returns `unrecognized subcommand 'job'`; the target namespace
+and the remaining job-control changes are not exposed by the current CLI. The
+crate split listed in this epic is already complete; the remaining namespace,
+wait-all, kill/rm, signal, attach, and global-flag changes span several cards.
+
+## Decision needed
+
+Should implementation proceed from `boop-job-namespace` under the documented
+`job/mail/me` surface, or should this epic close around the current `beep` and
+`wait` surface?

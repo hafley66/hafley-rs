@@ -2,7 +2,7 @@
 created: 2026-08-20
 updated: 2026-09-14
 type: improvement
-status: open
+status: needs-decision
 priority: high
 labels: [domain-boop, intent-design, needs-chris]
 size: L
@@ -90,3 +90,7 @@ is a separate decision and is NOT part of this card.
 ### 2026-09-14T13:59:48Z · @codex
 
 Cleanup 2026-09-14: resident ACP-host experiment retained at archive/boop-cleanup-20260914/feature/boop-acp-host (6821d85d79e9d442f9682c297fc3f67bf2df6a25). host.rs, agents.rs, ACP agent registry and CLI hosting are absent in main. Preserve for architecture review against current door-based delivery; no automatic merge or new test claim. Its idle worktree was removed.
+
+### 2026-09-27 · @codex
+
+Reproduced on installed `boop 0.0.10 (248dfdd3-dirty)`: one `boop beep` verb still reaches both ACP `session/prompt` (`crates/boop-proc/src/deliver.rs`) and tmux pane injection; `write_inbox_hooks` also remains in `crates/boop/src/cli/mail.rs`. Decision: should adopted coordinators become boop-owned ACP children so every send uses ACP, or should adopted-pane hooks/paste remain and this card narrow to boop-owned lanes?

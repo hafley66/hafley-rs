@@ -2,6 +2,8 @@
 //! and cost as a join against a rate table (cost is computed, never stored).
 
 use anyhow::Result;
+use rusqlite::params_from_iter;
+use serde::Serialize;
 
 use crate::ident::{Row, Store};
 use crate::rows::UsageRow;
@@ -62,6 +64,28 @@ pub struct Block {
     pub is_gap: bool,
 }
 
+/// Token totals for a session or one transcript turn.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize)]
+pub struct TokenTotals {
+    pub calls: i64,
+    pub input_tokens: i64,
+    pub output_tokens: i64,
+    pub cache_create_5m_tokens: i64,
+    pub cache_create_1h_tokens: i64,
+    pub cache_read_tokens: i64,
+}
+
+/// Token snapshots attached to one harness session. `latest_turn_delta` sums
+/// the latest transcript turn's persisted usage snapshots; an in-progress
+/// provider update changes that value in place instead of adding a second call.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct SessionTokenUsage {
+    pub session: String,
+    pub latest_turn: Option<i64>,
+    pub total: TokenTotals,
+    pub latest_turn_delta: TokenTotals,
+}
+
 /// Cost per million tokens, per bucket. A model with no row costs `null`,
 /// never zero: a missing rate is not a free call.
 pub struct ModelPrice<'a> {
@@ -118,6 +142,77 @@ const CONTEXT_TOKENS_SQL: &str = "SELECT input_tokens + cache_read_tokens AS ctx
          WHERE s.value = ?1 ORDER BY ts DESC LIMIT 1";
 
 impl Store {
+    /// Read totals and the current latest-turn token delta for the selected
+    /// transcript sessions in one bounded query.
+    pub fn token_usage_for_sessions(&self, sessions: &[String]) -> Result<Vec<SessionTokenUsage>> {
+        if sessions.is_empty() {
+            return Ok(Vec::new());
+        }
+        let placeholders = (1..=sessions.len())
+            .map(|index| format!("?{index}"))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let sql = format!(
+            "WITH selected AS MATERIALIZED (
+                 SELECT id, value FROM dict_session WHERE value IN ({placeholders})
+             ), by_turn AS (
+                 SELECT usage.session_id, usage.turn, COUNT(*) AS calls,
+                        SUM(usage.input_tokens) AS input_tokens,
+                        SUM(usage.output_tokens) AS output_tokens,
+                        SUM(usage.cache_create_5m_tokens) AS cache_create_5m_tokens,
+                        SUM(usage.cache_create_1h_tokens) AS cache_create_1h_tokens,
+                        SUM(usage.cache_read_tokens) AS cache_read_tokens
+                   FROM agent_usage usage
+                   JOIN selected ON selected.id = usage.session_id
+                  GROUP BY usage.session_id, usage.turn
+             ), latest AS (
+                 SELECT session_id, MAX(turn) AS turn FROM by_turn GROUP BY session_id
+             )
+             SELECT selected.value, latest.turn,
+                    COALESCE(SUM(by_turn.calls), 0),
+                    COALESCE(SUM(by_turn.input_tokens), 0),
+                    COALESCE(SUM(by_turn.output_tokens), 0),
+                    COALESCE(SUM(by_turn.cache_create_5m_tokens), 0),
+                    COALESCE(SUM(by_turn.cache_create_1h_tokens), 0),
+                    COALESCE(SUM(by_turn.cache_read_tokens), 0),
+                    COALESCE(SUM(by_turn.calls) FILTER (WHERE by_turn.turn = latest.turn), 0),
+                    COALESCE(SUM(by_turn.input_tokens) FILTER (WHERE by_turn.turn = latest.turn), 0),
+                    COALESCE(SUM(by_turn.output_tokens) FILTER (WHERE by_turn.turn = latest.turn), 0),
+                    COALESCE(SUM(by_turn.cache_create_5m_tokens) FILTER (WHERE by_turn.turn = latest.turn), 0),
+                    COALESCE(SUM(by_turn.cache_create_1h_tokens) FILTER (WHERE by_turn.turn = latest.turn), 0),
+                    COALESCE(SUM(by_turn.cache_read_tokens) FILTER (WHERE by_turn.turn = latest.turn), 0)
+               FROM selected
+               LEFT JOIN latest ON latest.session_id = selected.id
+               LEFT JOIN by_turn ON by_turn.session_id = selected.id
+              GROUP BY selected.id, selected.value, latest.turn
+              ORDER BY selected.value"
+        );
+        let mut statement = self.connection().prepare(&sql)?;
+        let rows = statement.query_map(params_from_iter(sessions), |row| {
+            Ok(SessionTokenUsage {
+                session: row.get(0)?,
+                latest_turn: row.get(1)?,
+                total: TokenTotals {
+                    calls: row.get(2)?,
+                    input_tokens: row.get(3)?,
+                    output_tokens: row.get(4)?,
+                    cache_create_5m_tokens: row.get(5)?,
+                    cache_create_1h_tokens: row.get(6)?,
+                    cache_read_tokens: row.get(7)?,
+                },
+                latest_turn_delta: TokenTotals {
+                    calls: row.get(8)?,
+                    input_tokens: row.get(9)?,
+                    output_tokens: row.get(10)?,
+                    cache_create_5m_tokens: row.get(11)?,
+                    cache_create_1h_tokens: row.get(12)?,
+                    cache_read_tokens: row.get(13)?,
+                },
+            })
+        })?;
+        Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+    }
+
     /// The `db usage` totals report, column names and rows in SELECT order.
     pub fn usage_totals(&self) -> Result<(Vec<String>, Vec<Row>)> {
         self.passthrough(USAGE_TOTALS_SQL)
@@ -525,6 +620,13 @@ mod tests {
         assert!(totals[0].bucket.is_none());
         assert_eq!(totals[0].calls, 1);
         assert_eq!(totals[0].output_tokens, 5);
+
+        let lane_usage = store.token_usage_for_sessions(&["s".to_owned()]).unwrap();
+        assert_eq!(lane_usage.len(), 1);
+        assert_eq!(lane_usage[0].latest_turn, Some(1));
+        assert_eq!(lane_usage[0].total.calls, 1);
+        assert_eq!(lane_usage[0].total.input_tokens, 10);
+        assert_eq!(lane_usage[0].latest_turn_delta.output_tokens, 5);
 
         let by_harness = store
             .usage_report_rows(Some(GroupBy::Harness), &UsageQuery::default())

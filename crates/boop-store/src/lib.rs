@@ -68,7 +68,7 @@ pub use summary::{
 pub use tags::{normalize_tag, tags_in, Tag};
 pub use touched::SessionTouched;
 #[cfg(feature = "agent-read")]
-pub use usage::{GroupBy, UsageQuery};
+pub use usage::{GroupBy, SessionTokenUsage, TokenTotals, UsageQuery};
 
 /// Open the default store at `~/.agent/boop.db`.
 pub fn open_default() -> anyhow::Result<Store> {

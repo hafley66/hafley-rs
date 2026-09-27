@@ -2,7 +2,7 @@
 created: 2026-09-05
 updated: 2026-09-05
 type: bug
-status: open
+status: fixed
 priority: normal
 epic: boop-process
 ---
@@ -36,23 +36,25 @@ both look like a send that landed and an answer that never came.
 
 ## Expected
 
-One of, decided when the fix is written:
-
-- The send refuses at once, naming the lane and saying the route is gone, so the
-  coordinator respawns instead of waiting.
-- Or a row to a retired lane revives it the way `revive_if_retired` already does
-  for a retired route, and the lane resumes its conversation.
-- Or the lane's route survives its exit in a `retired` state that a later hail
-  can revive, and `lane list` shows it.
-
-Whichever, the sender learns within one command that its hail cannot be
-delivered, and the message names the next action.
+The one-turn exit drops the live route and records retired residency plus a
+spawn receipt. `boop beep <lane>` re-registers and revives that lane on its
+pinned conversation before delivering the body, then returns on the lane's
+result row. `lane list` shows the retired lane and its revive spelling.
 
 ## Acceptance Criteria
 
-- [ ] A `boop beep <lane>` to a lane whose route is gone exits nonzero, or
-      revives the lane; it does not print a landing and then sit.
-- [ ] The printed line names the lane and the command that respawns or revives it.
-- [ ] A test covers hail-after-exit for a one-turn lane whose `--expect-*` was
+- [x] A `boop beep <lane>` to a lane whose route is gone revives it; it does not
+      print a landing and then sit.
+- [x] The printed line names the lane and says it is reviving the lane.
+- [x] A test covers hail-after-exit for a one-turn lane whose `--expect-*` was
       met.
-- [ ] The two receipt rows above are explained by the root cause the fix names.
+- [x] The two receipt rows above share the retired-route cause and revive from
+      the stored spawn receipt.
+
+## Reproduction on installed boop 0.0.10 (248dfdd3)
+
+`boop beep lane get feature-turn-cwd` and `feature-fork-render` show both
+receipts as `retired` with no session id. The fixture test
+`a_finished_lane_retires_and_a_beep_revives_it_on_the_same_conversation` passed:
+the one-turn lane drops its route, the next beep revives it on the pinned ACP
+conversation, delivers the body, and returns the result row.

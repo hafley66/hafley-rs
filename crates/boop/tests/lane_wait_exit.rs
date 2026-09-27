@@ -15,6 +15,65 @@ fn mail_dir(name: &str) -> PathBuf {
     dir
 }
 
+fn tmux_at(tmpdir: &Path, socket: Option<&str>, args: &[&str]) -> std::process::Output {
+    let mut command = Command::new("tmux");
+    command
+        .env_remove("TMUX")
+        .env_remove("TMUX_PANE")
+        .env("TMUX_TMPDIR", tmpdir)
+        .args(["-f", "/dev/null"]);
+    if let Some(socket) = socket {
+        command.args(["-L", socket]);
+    }
+    command.args(args).output().expect("tmux is installed")
+}
+
+#[test]
+fn kill_stops_the_session_and_retains_the_route_for_inspection() {
+    let dir = mail_dir("kill-retains-route");
+    let tmux_tmpdir = PathBuf::from("/tmp").join(format!("bkill-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmux_tmpdir);
+    std::fs::create_dir_all(&tmux_tmpdir).unwrap();
+    let socket = None;
+    let started = tmux_at(
+        &tmux_tmpdir,
+        socket,
+        &["new-session", "-d", "-s", "job-kill", "sleep 30"],
+    );
+    assert!(
+        started.status.success(),
+        "{}",
+        String::from_utf8_lossy(&started.stderr)
+    );
+    let route = boop_store::bus::route_from_value(&serde_json::json!({
+        "kind": "lane",
+        "tmux": "job-kill",
+    }));
+    boop_store::bus::write_route(&dir, "job-kill", &route).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args(["beep", "lane", "kill", "job-kill", "--mail-dir"])
+        .arg(&dir)
+        .env("TMUX_TMPDIR", &tmux_tmpdir)
+        .boop_test_root(dir.join("home"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(boop_store::bus::read_routes(&dir)
+        .unwrap()
+        .contains_key("job-kill"));
+    assert!(
+        !tmux_at(&tmux_tmpdir, socket, &["has-session", "-t", "job-kill"])
+            .status
+            .success()
+    );
+    let _ = tmux_at(&tmux_tmpdir, socket, &["kill-server"]);
+}
+
 /// `boop wait <lane>` dispatches to the lane-result wait only when the
 /// registry already names `lane` as a `kind: "lane"` route.
 fn seed_lane_route(dir: &std::path::Path, lane: &str) {
@@ -44,7 +103,7 @@ fn seed_result(dir: &std::path::Path, lane: &str, rc: i32) {
 
 fn seed_current_result(dir: &std::path::Path, lane: &str, rc: i32) {
     let row = serde_json::json!({
-        "id": "m-create-result",
+        "id": format!("m-create-result-{lane}"),
         "from": lane,
         "to": "sprefa-coordinator",
         "from_timestamp": boop::bus::now_iso(),
@@ -55,6 +114,34 @@ fn seed_current_result(dir: &std::path::Path, lane: &str, rc: i32) {
         "ref": null,
     });
     boop_store::testing::append_mail(&dir.join("boop.db"), &row);
+}
+
+#[test]
+fn bare_wait_joins_all_child_lanes_and_propagates_a_failure() {
+    let dir = mail_dir("wait-all");
+    for (lane, rc) in [("child-a", 0), ("child-b", 7)] {
+        boop_store::bus::write_route(
+            &dir,
+            lane,
+            &boop_store::bus::route_from_value(&serde_json::json!({
+                "kind": "lane",
+                "parent": "parent",
+            })),
+        )
+        .unwrap();
+        seed_current_result(&dir, lane, rc);
+    }
+
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args(["wait", "--as", "parent", "--mail-dir"])
+        .arg(&dir)
+        .boop_test_root(dir.join("home"))
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(7));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("child-a rc=0"), "{stdout}");
+    assert!(stdout.contains("child-b rc=7"), "{stdout}");
 }
 
 fn executable(name: &str) -> PathBuf {
