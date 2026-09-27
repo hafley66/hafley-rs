@@ -1,12 +1,13 @@
 ---
 created: 2026-08-30
-updated: 2026-08-30
+updated: 2026-09-27
 type: task
-status: open
+status: obsolete
 priority: high
 epic: terminal-multiplexer-substrate
 related: ['@tmux-pane-projection', '@harness-interface', '@mux-paste-path', '@terminal-runtime-models']
 labels: [domain-boop, domain-instant, component-terminal-host, intent-decoupling]
+closed: 2026-09-27
 ---
 
 # Terminal snapshot boundary for host-neutral turn projection
@@ -94,3 +95,9 @@ pub trait TerminalSnapshotSource: Send + Sync { fn snapshot(&self, target: &Term
 ## Tests Run
 
 Planning only.
+
+## Resolution
+
+### 2026-09-27T05:04:20Z · @issuectl
+
+Repro receipt: current source contains boop-mux TerminalSnapshot and Multiplexer::pane_snapshot; remaining criteria are a cross-repo Instant host integration, with no Boop runtime failure reproduced.
