@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-18
+updated: 2026-09-26
 type: improvement
-status: open
+status: obsolete
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: S
+closed: 2026-09-26
 ---
 
 # model@effort parsed in four places with two copies of the allowlist
@@ -65,3 +66,9 @@ failed / 1 ignored, zero build warnings:
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Resolution
+
+### 2026-09-27T03:11:38Z · @issuectl
+
+Repro receipt (boop 0.0.10 49124370-dirty): `boop beep lane create --help` exposes preset/variant selection and no `--model` input; the `model@effort` four-site CLI contract audited here is gone.

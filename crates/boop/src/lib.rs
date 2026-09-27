@@ -16,6 +16,19 @@ pub const BUILD: &str = concat!(env!("CARGO_PKG_VERSION"), " (", env!("BOOP_BUIL
 /// Just the commit stamp half of `BUILD`.
 pub const BUILD_SHA: &str = env!("BOOP_BUILD_SHA");
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct BuildInfo {
+    pub version: &'static str,
+    pub sha: &'static str,
+    pub timestamp: &'static str,
+}
+
+pub const BUILD_INFO: BuildInfo = BuildInfo {
+    version: env!("CARGO_PKG_VERSION"),
+    sha: env!("BOOP_BUILD_SHA_FULL"),
+    timestamp: env!("BOOP_BUILD_TS"),
+};
+
 // The store's modules keep their old paths so a library caller (and this
 // crate's own `crate::ident::...` spellings) is unchanged by the crate split.
 #[cfg(feature = "agent-read")]

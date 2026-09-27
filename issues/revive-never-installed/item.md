@@ -1,9 +1,10 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: bug
-status: open
+status: obsolete
 priority: high
+closed: 2026-09-26
 ---
 
 # revive shipped green and was never installed; two e2e legs red under load
@@ -171,4 +172,8 @@ Revive's own leg is 3 for 3 across three passes, all three harnesses. The featur
 - [ ] `resolve_executable` should reject a claude that cannot run under the scratch HOME, or `mock_tui_launch` should probe it once and fail fast. A blank pane for 90 seconds teaches nothing.
 - [ ] `wait_for_screen` should say the pane is dead or empty rather than printing an empty screen dump after the wanted string.
 
+## Resolution
 
+### 2026-09-27T02:56:18Z · @issuectl
+
+Repro receipt (boop 0.0.10 49124370-dirty): `boop beep lane revive --list` succeeds and reports no dead coordinator route to revive; the installed binary includes the revive verb.
