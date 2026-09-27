@@ -183,6 +183,55 @@ fn sqlite_arm_writes_line_start_and_the_view_joins_it() {
 }
 
 #[test]
+fn resolve_lines_sqlite_on_directory_writes_line_start_and_decorates_spans() {
+    let dir = scratch("ryi-lines-resolve-directory");
+    let a_ts = "import { helper } from \"./b\";\nimport { gone } from \"./nowhere\";\nexport function use() {\n  return gone + helper;\n}\n";
+    let b_ts = "export function helper() {\n  return Math.pow(2, 3);\n}\n";
+    write_fixture(&dir, "a.ts", a_ts);
+    write_fixture(&dir, "b.ts", b_ts);
+    let database = dir.join("facts.db");
+    let output = ryi(&[
+        "--resolve",
+        "--lines",
+        "--sqlite",
+        &database.to_string_lossy(),
+        &dir.to_string_lossy(),
+    ]);
+    assert!(
+        output.status.success(),
+        "stderr: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let connection = rusqlite::Connection::open(&database).expect("open export");
+    let rows: i64 = connection
+        .query_row("SELECT count(*) FROM line_start", [], |row| row.get(0))
+        .expect("count line starts");
+    assert!(rows > 0, "--resolve --lines records line_start rows");
+    let later_line: i64 = connection
+        .query_row("SELECT max(line) FROM span_lines", [], |row| row.get(0))
+        .expect("read decorated spans");
+    assert!(later_line > 1, "span_lines includes a span after line one");
+
+    let stdout = ryi(&["--resolve", "--lines", &dir.to_string_lossy()]);
+    let mut decorated_after_first_line = false;
+    for line in stdout_lines(&stdout) {
+        let value: Value = serde_json::from_str(&line).expect("one row per line");
+        if value
+            .get("span")
+            .and_then(|span| span.get("line"))
+            .and_then(Value::as_u64)
+            .is_some_and(|line| line > 1)
+        {
+            decorated_after_first_line = true;
+        }
+    }
+    assert!(
+        decorated_after_first_line,
+        "directory input decorates resolve rows on stdout"
+    );
+}
+
+#[test]
 fn sqlite_arm_without_the_flag_leaves_line_start_empty() {
     // The committed gate: line_start rows ride --lines only, and the
     // span_lines summary says so ("needs --lines for non-empty line_start").

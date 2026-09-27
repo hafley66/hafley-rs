@@ -954,7 +954,17 @@ fn stream_resolve(
         let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
             output
                 .source_fact(raw.path, raw.content_id, &raw.fact)
-                .map_err(|error| std::io::Error::other(error.to_string()))
+                .map_err(|error| std::io::Error::other(error.to_string()))?;
+            if cli.lines && matches!(&raw.fact, sprefa_extract::FlatFact::FileRow { .. }) {
+                output
+                    .source_fact(
+                        raw.path,
+                        raw.content_id,
+                        &line_start_fact_with_content_id(raw.path, raw.content, raw.content_id),
+                    )
+                    .map_err(|error| std::io::Error::other(error.to_string()))?;
+            }
+            Ok::<(), std::io::Error>(())
         };
         let resolved = resolve_project_with_raw(&request, &mut push_raw)?;
         output.clear_source()?;

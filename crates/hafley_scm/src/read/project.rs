@@ -229,6 +229,7 @@ impl LegTrail {
 pub struct ProjectInput {
     pub path: String,
     pub blob: ContentId,
+    raw_content: Option<Vec<u8>>,
     pub file: Option<FlatFact>,
     size_skip: Option<FlatFact>,
     pub output: Arc<RyiOutput>,
@@ -266,6 +267,7 @@ pub fn resolve_project_with_tsi_tiers(
 pub struct RawProjectFact<'a> {
     pub path: &'a str,
     pub content_id: &'a ContentId,
+    pub content: &'a [u8],
     pub fact: FlatFact,
 }
 
@@ -296,8 +298,8 @@ pub fn resolve_project_with_raw<E>(
     request: &ResolveRequest,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
-    let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input| {
-        push_input_raw(input, push_raw)
+    let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input, content| {
+        push_input_raw(input, content, push_raw)
     })?;
     resolve_pushed(request, inputs, None)
 }
@@ -305,11 +307,13 @@ pub fn resolve_project_with_raw<E>(
 /// One input's file row and phase-1 rows into `push_raw`.
 fn push_input_raw<E>(
     input: &mut ProjectInput,
+    content: &[u8],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
     push_raw(RawProjectFact {
         path: &input.path,
         content_id: &input.blob,
+        content,
         fact: input
             .file
             .take()
@@ -320,6 +324,7 @@ fn push_input_raw<E>(
         push_raw(RawProjectFact {
             path: &input.path,
             content_id: &input.blob,
+            content,
             fact,
         })
         .map_err(ResolveWithRawError::RawSink)?;
@@ -336,6 +341,7 @@ fn push_input_raw<E>(
             push_raw(RawProjectFact {
                 path: &input.path,
                 content_id: &input.blob,
+                content,
                 fact,
             })
         })
@@ -1514,8 +1520,8 @@ pub fn diet_scip_streamed<E>(
     if paths.len() > FAST_RETAIN_FILES {
         return diet_scip_bounded(paths, push);
     }
-    let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input| {
-        push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))?;
+    let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input, content| {
+        push_input_raw(input, content, &mut |raw| push(DietRow::Raw(raw)))?;
         if let Some(output) = Arc::get_mut(&mut input.output) {
             output.cst = None;
             output.df = None;
@@ -1622,7 +1628,8 @@ fn visit_fast_inputs<E>(
     let io_root = crate::read::request_io_root();
     for chunk in paths.chunks(8) {
         for result in read_chunk(chunk, false, Planes::Fast, io_root.as_deref()) {
-            if let Some(input) = result.map_err(ResolveWithRawError::Project)? {
+            if let Some(mut input) = result.map_err(ResolveWithRawError::Project)? {
+                input.raw_content.take();
                 on_input(input)?;
             }
         }
@@ -1636,8 +1643,8 @@ fn diet_scip_bounded<E>(
     paths: &[PathBuf],
     push: &mut impl FnMut(DietRow<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
-    let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input| {
-        push_input_raw(input, &mut |raw| push(DietRow::Raw(raw)))?;
+    let mut inputs = read_inputs_streamed(paths, true, Planes::Fast, &mut |input, content| {
+        push_input_raw(input, content, &mut |raw| push(DietRow::Raw(raw)))?;
         let output = Arc::get_mut(&mut input.output).expect("one owner of a streamed output");
         *output = definition_output(output);
         Ok(())
@@ -1902,7 +1909,8 @@ fn flatten_inputs(
 ) -> Result<Vec<ProjectInput>, ProjectError> {
     let mut inputs = Vec::with_capacity(results.len());
     for result in results {
-        if let Some(input) = result? {
+        if let Some(mut input) = result? {
+            input.raw_content.take();
             inputs.push(input);
         }
     }
@@ -1934,7 +1942,7 @@ pub fn read_inputs_streamed<E>(
     paths: &[PathBuf],
     modules: bool,
     planes: Planes,
-    on_input: &mut impl FnMut(&mut ProjectInput) -> Result<(), ResolveWithRawError<E>>,
+    on_input: &mut impl FnMut(&mut ProjectInput, &[u8]) -> Result<(), ResolveWithRawError<E>>,
 ) -> Result<Vec<ProjectInput>, ResolveWithRawError<E>> {
     let io_root = crate::read::request_io_root();
     let mut inputs = Vec::with_capacity(paths.len());
@@ -1966,7 +1974,11 @@ pub fn read_inputs_streamed<E>(
                 let Some(mut input) = result.map_err(ResolveWithRawError::Project)? else {
                     continue;
                 };
-                on_input(&mut input)?;
+                // The source bytes are borrowed only for this callback. The
+                // retained ProjectInput owns parsed output, not another copy
+                // of every file in the project.
+                let content = input.raw_content.take().expect("fresh input bytes");
+                on_input(&mut input, &content)?;
                 if let Some(output) = Arc::get_mut(&mut input.output) {
                     output.cst = None;
                 }
@@ -2053,6 +2065,7 @@ fn read_chunk(
                                         &path, &content, &blob,
                                     )),
                                     blob,
+                                    raw_content: Some(content),
                                     path,
                                     size_skip,
                                     output,
