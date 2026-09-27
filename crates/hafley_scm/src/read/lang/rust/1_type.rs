@@ -21,10 +21,12 @@ use crate::read::lang::rust_type_refs::type_probe_key;
 pub(super) fn project_types(
     parsed: &syn::File,
     line_starts: &[u32],
+    tree: &tree_sitter::Tree,
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    let rows = hafley_scm::lang::rust::type_entity_rows(parsed, line_starts);
+    let rows = hafley_scm::lang::rust::type_entity_rows_from_tree(tree, source);
     for row in rows.entities {
         let span = Span {
             start: row.range.start,
@@ -51,7 +53,7 @@ pub(super) fn project_types(
                 ty: strings.intern(&sig.name),
             }));
     }
-    const_values(parsed, line_starts, strings, sink);
+    const_values(tree, source, strings, sink);
     for row in rows.docs {
         sink.aux.docs.push(DocFact {
             owner: Span {
@@ -134,12 +136,12 @@ fn push_entity_raw(
 
 /// Intern item-level string const rows from the same syn parse as the type arm.
 fn const_values(
-    parsed: &syn::File,
-    line_starts: &[u32],
+    tree: &tree_sitter::Tree,
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
-    for row in hafley_scm::lang::rust::const_string_rows(parsed, line_starts) {
+    for row in hafley_scm::lang::rust::const_string_rows_from_tree(tree, source) {
         let span = Span {
             start: row.range.start,
             len: row.range.end - row.range.start,

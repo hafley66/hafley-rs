@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-26
+updated: 2026-09-27
 type: improvement
-status: needs-decision
+status: open
 priority: normal
 related: ['@rust-fast-macro-incremental']
 labels: [extract]
@@ -36,4 +36,4 @@ Removing syn from the fast path means porting the hafley_scm Rust producers from
 
 2026-09-26: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports Rust parse `calls=2`.
 
-Decision: port Rust projections to the existing tree-sitter parse, or keep the current syn projections and defer the one-parse target?
+Approved: port the syn-based Rust projections to the existing tree-sitter parse, with one parse per Rust file. Current repro: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports `rust parse calls=2`.

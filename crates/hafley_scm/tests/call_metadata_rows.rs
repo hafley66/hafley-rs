@@ -5,7 +5,8 @@ use std::collections::BTreeSet;
 
 use hafley_scm::build;
 use hafley_scm::lang::rust::{
-    build_line_starts, call_definition_rows, call_metadata_rows, RUST_CALL_QUERY,
+    build_line_starts, call_definition_rows, call_metadata_rows, call_metadata_rows_from_tree,
+    RUST_CALL_QUERY,
 };
 use tree_sitter::{Language, Parser};
 use tree_sitter_rust::LANGUAGE;
@@ -46,6 +47,34 @@ fn snap(src: &str, extra: &[(u32, u32)]) -> (Vec<Cfg>, Vec<Owner>) {
             )
         })
         .collect();
+    let language = Language::new(LANGUAGE);
+    let mut parser = Parser::new();
+    parser.set_language(&language).expect("rust grammar");
+    let tree = parser.parse(src.as_bytes(), None).expect("rust tree");
+    let (tree_cfgs, tree_owners) = call_metadata_rows_from_tree(
+        &tree,
+        src.as_bytes(),
+        &defs.iter().copied().collect::<Vec<_>>(),
+    );
+    assert_eq!(
+        cfg,
+        tree_cfgs
+            .iter()
+            .map(|row| (row.start, row.end, row.predicate.clone()))
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        owners,
+        tree_owners
+            .iter()
+            .map(|row| (
+                row.start,
+                row.end,
+                row.self_type.clone(),
+                row.trait_name.clone(),
+            ))
+            .collect::<Vec<_>>()
+    );
     (cfg, owners)
 }
 

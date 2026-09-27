@@ -1066,8 +1066,8 @@ pub(super) fn scm_call_defs(
 
 /// The crate's metadata rows, interned and appended onto the CallF aux.
 fn syn_call_metadata(
-    parsed: &syn::File,
-    line_starts: &[u32],
+    tree: &tree_sitter::Tree,
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
@@ -1076,7 +1076,8 @@ fn syn_call_metadata(
         .iter()
         .map(|node| (node.span.start, node.span.end()))
         .collect();
-    let (cfg, owners) = call_metadata_rows(parsed, line_starts, &defs);
+    let defs = defs.into_iter().collect::<Vec<_>>();
+    let (cfg, owners) = call_metadata_rows_from_tree(tree, source, &defs);
     for row in cfg {
         sink.aux.cfg_scopes.push(CfgScope {
             span: Span {
@@ -1103,6 +1104,8 @@ fn syn_call_metadata(
 pub(super) fn project_call(
     parsed: &syn::File,
     line_starts: &[u32],
+    tree: &tree_sitter::Tree,
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
@@ -1113,7 +1116,7 @@ pub(super) fn project_call(
         .iter()
         .map(|node| node.span.start..node.span.end())
         .collect();
-    let rows = call_site_rows(parsed, line_starts, &defs);
+    let rows = call_site_rows_from_tree(tree, source, &defs);
     sink.aux
         .expected_types
         .extend(rows.expected_types.iter().map(|(range, ty)| {
@@ -1135,7 +1138,7 @@ pub(super) fn project_call(
         sink.nodes
             .push(Node::new(span, CONST_INIT).with_name(strings.intern(&row.name)));
     }
-    syn_call_metadata(parsed, line_starts, strings, sink);
+    syn_call_metadata(tree, source, strings, sink);
 
     for (callee, predicate) in rows.test_only_calls {
         sink.aux.test_only_calls.push(TestOnlyCall {

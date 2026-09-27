@@ -1,7 +1,8 @@
 #![cfg(feature = "rust_syn")]
 
 use hafley_scm::lang::rust::{
-    build_line_starts, type_candidate_rows, TypeCandidateKind as Kind, TypeCandidateOwner,
+    build_line_starts, type_candidate_rows, type_candidate_rows_from_tree,
+    TypeCandidateKind as Kind, TypeCandidateOwner,
 };
 
 #[test]
@@ -14,6 +15,41 @@ fn type_candidates_drop_generic_parameters_and_keep_owner_reference_order() {
     assert!(
         matches!(&groups[1].owner, TypeCandidateOwner::Impl { primary_name, bare_head: Some(_) } if primary_name == "S")
     );
+    assert!(matches!(groups[2].owner, TypeCandidateOwner::Declared(_)));
+    let receipt: Vec<_> = groups
+        .iter()
+        .map(|group| {
+            group
+                .candidates
+                .iter()
+                .map(|row| (row.to.as_str(), row.kind))
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    assert_eq!(
+        receipt,
+        [
+            vec![("Clone", Kind::Generic), ("Option", Kind::Field)],
+            vec![("Send", Kind::Generic), ("Trait", Kind::Impl)],
+            vec![("S", Kind::Uses), ("Vec", Kind::Uses)],
+        ]
+    );
+}
+
+#[test]
+fn tree_type_candidates_match_the_shared_rust_fixture_projection() {
+    let src = "struct S<T: Clone> { x: Option<T> }\nimpl<T: Send> Trait<u8> for S<T> {}\ntype Alias = Vec<S<i32>>;\n";
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    let mut parser = tree_sitter::Parser::new();
+    parser.set_language(&language).expect("Rust grammar loads");
+    let tree = parser.parse(src, None).expect("Rust tree parses");
+    let groups = type_candidate_rows_from_tree(&tree, src.as_bytes());
+    assert_eq!(groups.len(), 3);
+    assert!(matches!(groups[0].owner, TypeCandidateOwner::Declared(_)));
+    assert!(matches!(
+        &groups[1].owner,
+        TypeCandidateOwner::Impl { primary_name, bare_head: Some(_) } if primary_name == "S"
+    ));
     assert!(matches!(groups[2].owner, TypeCandidateOwner::Declared(_)));
     let receipt: Vec<_> = groups
         .iter()

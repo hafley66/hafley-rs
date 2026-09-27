@@ -25,6 +25,12 @@ mod receiver_rows;
 mod syn_macro_expansion_defs;
 #[path = "15_syntax.rs"]
 mod syntax;
+#[path = "19_tree_call_rows.rs"]
+mod tree_call_rows;
+#[path = "17_tree_entity_rows.rs"]
+mod tree_entity_rows;
+#[path = "18_tree_type_candidate_rows.rs"]
+mod tree_type_candidate_rows;
 #[path = "13_tsi_syntax_rows.rs"]
 mod tsi_syntax_rows;
 #[path = "9_type_candidate_rows.rs"]
@@ -47,7 +53,7 @@ pub fn rust_combined_query() -> String {
     format!("{RUST_CALL_QUERY}\n{RUST_FAST_QUERY}")
 }
 pub use call_site_rows::{call_site_rows, CallSiteRow, CallSiteRows, ConstInitRow};
-pub use const_string_rows::{const_string_rows, ConstStringRow};
+pub use const_string_rows::{const_string_rows, const_string_rows_from_tree, ConstStringRow};
 pub use df_syntax_rows::{df_syntax_rows, DfNodeKind as DfSyntaxKind, DfSyntaxRows};
 pub use expanded_call_rows::{expanded_call_rows, ExpandedCallKind, ExpandedCallRows};
 pub use macro_invocation_rows::{
@@ -63,6 +69,9 @@ pub use module_specifier_rows::{
 pub use receiver_rows::{receiver_rows, ReceiverOutcome as RustReceiverOutcome};
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
 pub use syntax::{parse_rust_syntax, RustSyntax};
+pub use tree_call_rows::{call_metadata_rows_from_tree, call_site_rows_from_tree};
+pub use tree_entity_rows::type_entity_rows_from_tree;
+pub use tree_type_candidate_rows::type_candidate_rows_from_tree;
 pub use tsi_syntax_rows::{tsi_syntax_rows, Arg as TsiSyntaxArg, TsiSyntaxRows};
 pub use type_candidate_rows::{
     bare_self_head, type_candidate_rows, TypeCandidateGroup, TypeCandidateKind, TypeCandidateOwner,
