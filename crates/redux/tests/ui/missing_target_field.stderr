@@ -1,5 +1,5 @@
 error[E0533]: expected value, found struct variant `__MachineState::Open`
-  --> /kache/home/projects/hafley-rs/.boop-worktrees/chore/the-gang-edits/crates/redux/tests/ui/missing_target_field.rs:25:1
+  --> tests/ui/missing_target_field.rs:25:1
    |
 25 | / machine! {
 26 | |     MissingField for State {
