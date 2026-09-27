@@ -82,6 +82,50 @@ fn resolve_on_a_directory_still_exits_2() {
     assert_eq!(output.status.code(), Some(2));
 }
 
+#[test]
+fn kinds_accept_directory_and_multiple_paths_without_resolve() {
+    let root = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/graph_rust");
+    let files = [
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/graph_rust/0_widget.rs"
+        ),
+        concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/fixtures/graph_rust/1_reader.rs"
+        ),
+    ];
+    let run = |paths: &[&str]| {
+        Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["--kinds", "cst"])
+            .args(paths)
+            .env("RUST_LOG", "off")
+            .output()
+            .expect("extract binary runs")
+    };
+    for paths in [&[root][..], &files[..]] {
+        let output = run(paths);
+        assert_eq!(
+            output.status.code(),
+            Some(0),
+            "stderr: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let rows: Vec<serde_json::Value> = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        assert!(
+            !rows.is_empty(),
+            "--kinds cst {} emits rows",
+            paths.join(" ")
+        );
+        assert!(rows.iter().all(|row| row["family"] == "cst"));
+        assert!(!String::from_utf8_lossy(&output.stderr).contains("--resolve"));
+    }
+}
+
 /// Defect 2: `extract <file> | head -1` panicked on the closed pipe
 /// ("failed printing to stdout", rc 101). Early close is a clean exit 0 with
 /// nothing on stderr, from the BufWriter path AND the println! rows.
