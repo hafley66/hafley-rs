@@ -44,7 +44,7 @@ pub fn slow_project_with_raw<E>(
         files,
         false,
         crate::read::project::Planes::All,
-        &mut |input| push_phase_one(input, push_raw),
+        &mut |input, content| push_phase_one(input, content, push_raw),
     )?;
     let mut facts = Vec::new();
     let index = match index {
@@ -79,12 +79,14 @@ pub fn slow_project_with_raw<E>(
 
 fn push_phase_one<E>(
     input: &mut ProjectInput,
+    content: &[u8],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
     if let Some(file) = input.file.take() {
         push_raw(RawProjectFact {
             path: &input.path,
             content_id: &input.blob,
+            content,
             fact: file,
         })
         .map_err(ResolveWithRawError::RawSink)?;
@@ -96,6 +98,7 @@ fn push_phase_one<E>(
         push_raw(RawProjectFact {
             path: &input.path,
             content_id: &input.blob,
+            content,
             fact,
         })
     })
