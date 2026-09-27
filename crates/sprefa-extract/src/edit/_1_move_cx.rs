@@ -46,6 +46,8 @@ impl MoveCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
+        let io_root = hafley_scm::read::io_path(root);
+        let root = io_root.as_path();
         let files = walk_files(root)?;
         let present = files.iter().cloned().collect();
         Ok(Self {
@@ -174,6 +176,8 @@ impl MoveCx {
 /// The path inventory shared by every edit verb. A context calls this once
 /// when its invocation opens and keeps the resulting path order throughout.
 pub fn walk_files(root: &Path) -> Result<Vec<String>, String> {
+    let io_root = hafley_scm::read::io_path(root);
+    let root = io_root.as_path();
     let mut files = Vec::new();
     let walk = WalkBuilder::new(root)
         .hidden(false)

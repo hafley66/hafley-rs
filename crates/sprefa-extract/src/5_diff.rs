@@ -946,14 +946,15 @@ fn write_sqlite(
     if path.as_os_str().is_empty() || path == Path::new(":memory:") {
         return Err("--sqlite requires a filesystem path for a new database".into());
     }
-    if std::fs::symlink_metadata(path).is_ok() {
+    let destination = sprefa_extract::io_path(path);
+    if std::fs::symlink_metadata(&destination).is_ok() {
         return Err(format!(
             "--sqlite: {} already exists; supply a new database path",
             path.display()
         )
         .into());
     }
-    let parent = path
+    let parent = destination
         .parent()
         .filter(|parent| !parent.as_os_str().is_empty())
         .unwrap_or(Path::new("."));
@@ -978,7 +979,7 @@ fn write_sqlite(
     connection.execute_batch("COMMIT;")?;
     connection.close().map_err(|(_, error)| error)?;
     temporary.as_file().sync_all()?;
-    temporary.persist_noclobber(path)?;
+    temporary.persist_noclobber(&destination)?;
     let quoted = format!("'{}'", path.to_string_lossy().replace('\'', "'\"'\"'"));
     writeln!(out, "Wrote {} ({} rows)", path.display(), rows.len())?;
     writeln!(out, "Tables: sqlite3 {quoted} '.tables'")?;

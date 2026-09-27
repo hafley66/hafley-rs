@@ -19,6 +19,7 @@ pub fn state_root(requested: Option<&Path>) -> Result<PathBuf, String> {
             PathBuf::from(home).join(".agent").join("soopy-state")
         }
     };
+    let root = hafley_scm::read::io_path(&root);
     std::fs::create_dir_all(&root)
         .map_err(|error| format!("create state root {}: {error}", root.display()))?;
     root.canonicalize()
@@ -45,6 +46,8 @@ pub fn stage_and_commit(
     actions: &[soopy::SourceAction],
     durability: soopy::Durability,
 ) -> Result<(String, Vec<soopy::FilePreview>), String> {
+    let io_root = hafley_scm::read::io_path(root);
+    let root = io_root.as_path();
     let mut source_root = soopy::SourceRoot::open_directory(root)
         .map_err(|error| format!("open root {}: {error}", root.display()))?;
     let identity = source_root.directory().identity.clone();
@@ -85,10 +88,11 @@ pub const VERIFY_TIMEOUT_SECS: u64 = 300;
 
 /// Run `<cmd>` through `sh -c` in `root`, output inherited. `None` on timeout.
 pub fn run_verify_command(root: &Path, command: &str) -> Result<Option<i32>, String> {
+    let io_root = hafley_scm::read::io_path(root);
     let mut child = std::process::Command::new("sh")
         .arg("-c")
         .arg(command)
-        .current_dir(root)
+        .current_dir(&io_root)
         .spawn()
         .map_err(|error| format!("spawn verify command: {error}"))?;
     let deadline = Instant::now() + Duration::from_secs(VERIFY_TIMEOUT_SECS);
@@ -128,6 +132,8 @@ impl VerifyJournal {
         shims: &[String],
         edited: &[String],
     ) -> Result<Self, String> {
+        let io_root = hafley_scm::read::io_path(root);
+        let root = io_root.as_path();
         let mut existing = BTreeMap::new();
         for rel in moves
             .iter()
@@ -153,6 +159,8 @@ impl VerifyJournal {
     /// bytes restored over whole files. Swept directories re-created first, so
     /// a move-back has somewhere to land. Returns the count of restored paths.
     pub fn restore(&self, root: &Path, state: &Path, swept: &[String]) -> Result<usize, String> {
+        let io_root = hafley_scm::read::io_path(root);
+        let root = io_root.as_path();
         for directory in swept {
             std::fs::create_dir_all(root.join(directory))
                 .map_err(|error| format!("re-create {directory}: {error}"))?;
@@ -229,7 +237,7 @@ impl VerifyJournal {
 
 /// The identity of the file at `root/rel`, as soopy hashes it.
 pub fn content_id(root: &Path, rel: &str) -> Result<soopy::ContentId, String> {
-    let path = root.join(rel);
+    let path = hafley_scm::read::io_path(&root.join(rel));
     let bytes = std::fs::read(&path).map_err(|error| format!("read {rel}: {error}"))?;
     Ok(soopy::ContentId::blake3(&bytes))
 }
@@ -275,6 +283,8 @@ pub struct Mirror {
 
 impl Mirror {
     pub fn build(source_root: &Path, stages: &[Vec<soopy::SourceAction>]) -> Result<Self, String> {
+        let io_root = hafley_scm::read::io_path(source_root);
+        let source_root = io_root.as_path();
         let root = std::env::temp_dir().join(format!(
             "extract-move-{}-{}",
             std::process::id(),

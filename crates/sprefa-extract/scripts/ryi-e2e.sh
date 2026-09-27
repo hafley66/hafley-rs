@@ -34,20 +34,21 @@ row() { printf '%-6s %-44s %s\n' "$1" "$2" "$3"; [ "$1" = ok ] || fail=1; }
 # same <label> <cwd> <stdin-file|-> <args...>: ryi and ryii byte-equal.
 same() {
   local label=$1 cwd=$2 input=$3; shift 3
-  local a=$out/a b=$out/b ra rb
+  local a=$out/a b=$out/b ae=$out/a.err be=$out/b.err ra rb
   if [ "$input" = - ]; then
-    (cd "$cwd" && "$ryii" "$@" >"$a" 2>/dev/null </dev/null); ra=$?
-    (cd "$cwd" && "$ryi" "$@" >"$b" 2>/dev/null </dev/null); rb=$?
+    (cd "$cwd" && "$ryii" "$@" >"$a" 2>"$ae" </dev/null); ra=$?
+    (cd "$cwd" && "$ryi" "$@" >"$b" 2>"$be" </dev/null); rb=$?
   else
-    (cd "$cwd" && "$ryii" "$@" >"$a" 2>/dev/null <"$input"); ra=$?
-    (cd "$cwd" && "$ryi" "$@" >"$b" 2>/dev/null <"$input"); rb=$?
+    (cd "$cwd" && "$ryii" "$@" >"$a" 2>"$ae" <"$input"); ra=$?
+    (cd "$cwd" && "$ryi" "$@" >"$b" 2>"$be" <"$input"); rb=$?
   fi
   local na nb
   na=$(wc -l <"$a" | tr -d ' '); nb=$(wc -l <"$b" | tr -d ' ')
-  if [ "$ra" = "$rb" ] && cmp -s "$a" "$b"; then
+  if [ "$ra" = "$rb" ] && cmp -s "$a" "$b" && cmp -s "$ae" "$be"; then
     row ok "$label" "rc=$ra rows=$na"
   else
-    row FAIL "$label" "ryii rc=$ra rows=$na | ryi rc=$rb rows=$nb"
+    row FAIL "$label" "ryii rc=$ra rows=$na | ryi rc=$rb rows=$nb; stdout or stderr differs"
+    diff -u "$ae" "$be" | head -30 || true
   fi
 }
 

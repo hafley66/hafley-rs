@@ -653,8 +653,9 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
         if compiled(lang) {
             return Some(root);
         }
-        // @eprintln-ok: CLI-UX note, off the fact stream.
-        eprintln!("ryi slow: no {lang} checker in this build (cargo feature {lang}-checker)");
+        crate::read::diagnostic_line(format_args!(
+            "ryi slow: no {lang} checker in this build (cargo feature {lang}-checker)"
+        ));
         None
     };
     let request = crate::read::project::ResolveRequest {

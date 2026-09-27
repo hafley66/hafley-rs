@@ -713,6 +713,8 @@ const BUILD_CONFIGS: [&str; 2] = ["tsconfig.build.json", "tsconfig.json"];
 /// Read `rootDir`/`outDir` off the package's tsconfig chain, defaulting to
 /// `src`/`dist` per field when no config states it.
 pub fn build_paths(package_dir_abs: &Path) -> BuildPaths {
+    let io_dir = hafley_scm::read::io_path(package_dir_abs);
+    let package_dir_abs = io_dir.as_path();
     let mut root_dir = None;
     let mut out_dir = None;
     for name in BUILD_CONFIGS {

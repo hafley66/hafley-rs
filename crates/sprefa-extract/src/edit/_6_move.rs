@@ -498,7 +498,7 @@ fn requested_moves(cli: &MoveArgs) -> Result<Vec<(PathBuf, PathBuf)>, String> {
 /// `old<TAB>new` per line. A row with no tab is an error, never a silent skip:
 /// a dropped row is a move that never happens.
 fn read_move_list(path: &Path) -> Result<Vec<(PathBuf, PathBuf)>, String> {
-    let text = std::fs::read_to_string(path)
+    let text = std::fs::read_to_string(sprefa_extract::io_path(path))
         .map_err(|error| format!("read move list {}: {error}", path.display()))?;
     let mut rows = Vec::new();
     for (index, line) in text.lines().enumerate() {

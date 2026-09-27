@@ -37,6 +37,8 @@ struct ReceiptStore {
 
 impl ReceiptStore {
     fn open(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
+        let io_path = sprefa_extract::io_path(path);
+        let path = io_path.as_path();
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
         }
@@ -185,10 +187,10 @@ pub fn run_to(
     let mut input = match watcher {
         Ok(watcher) => ChangeInput::Events(watcher),
         Err(error) => {
-            eprintln!(
+            crate::ops::print_diagnostic(format_args!(
                 "ryi watch: file watcher unavailable ({error:#}); polling every {}ms",
                 options.poll_ms
-            );
+            ));
             ChangeInput::Poll(snapshot)
         }
     };
@@ -491,7 +493,9 @@ impl Options {
                 .collect()
         };
         Ok(Options {
-            root: args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
+            root: sprefa_extract::io_path(
+                &args.root.map_or_else(crate::inputs::git_root_of_cwd, Ok)?,
+            ),
             patterns,
             mask: parse_mask(&args.kinds)?,
             state: args.receipts,
