@@ -3,7 +3,7 @@ created: 2026-09-23
 updated: 2026-09-23
 type: epic
 owner: hafley66
-status: open
+status: needs-decision
 priority: high
 labels: [extract]
 ---
@@ -27,3 +27,7 @@ Execution order: Rust, TS/JS, Kotlin; then resume @scip-ingestion-conformance. S
 ## Tests Run
 
 ## Implementation Notes
+
+Current checkout already has the TS/JS and Kotlin `Source` implementations in `hafley_scm`; a Kotlin combined-family duplicate parse was removed in `606b8771`. The ordered Rust → TS/JS → Kotlin cutover is gated on the user's pending Rust one-parse decision.
+
+Question: What one-parse policy should the Rust front-end establish before the remaining language cutovers proceed?
