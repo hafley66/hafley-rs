@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 labels: [extract]
 closed: 2026-09-25
@@ -24,3 +24,7 @@ closed: 2026-09-25
 
 ## Implementation Notes
 Found by fork inputs-cli (branch ryi/inputs-cli). Out of that fork's scope: soopy is shared.
+
+## Repro receipt
+
+2026-09-26: current `ryii fast crates/soopy/src` exits 0 over 29 files; `soopy::enumerate` now walks from `walk_bases` literal prefixes.
