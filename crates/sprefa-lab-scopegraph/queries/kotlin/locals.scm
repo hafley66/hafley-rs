@@ -57,3 +57,17 @@
   (identifier) @local.reference)
 (import_alias
   (type_identifier) @local.definition.namespace)
+
+; Receiver and type captures retain the grouping needed by the corpus graph.
+(navigation_expression
+  (_) @local.receiver
+  (navigation_suffix
+    (simple_identifier) @local.member.reference)) @local.member.access
+(parameter
+  (user_type) @local.parameter.type)
+(class_parameter
+  (simple_identifier) @local.definition.member.property
+  (user_type) @local.member.type)
+(type_parameter
+  (type_identifier) @local.type.parameter
+  (user_type) @local.type.bound)

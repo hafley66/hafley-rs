@@ -99,6 +99,15 @@ fn kotlin_corpus_resolves_explicit_and_wildcard_imports_and_same_package_names()
     assert!(resolved.iter().any(|(reference, external)| {
         reference.name == "make" && external.name == "build" && external.path == "model/Widget.kt"
     }));
+    let widget_import = &app.imports[0];
+    let stack_edges = app
+        .symbol_edges
+        .iter()
+        .filter(|edge| edge.path == widget_import.path)
+        .collect::<Vec<_>>();
+    assert_eq!(stack_edges.len(), widget_import.stack.len());
+    assert!(stack_edges[0].from.is_empty());
+    assert!(stack_edges.last().unwrap().to.is_empty());
     assert!(resolved.iter().any(|(reference, external)| {
         reference.name == "lone" && external.path == "model/Widget.kt"
     }));
@@ -108,6 +117,55 @@ fn kotlin_corpus_resolves_explicit_and_wildcard_imports_and_same_package_names()
             .external
             .as_ref()
             .is_some_and(|target| target.name == "helper" && target.resolution == "same_package")
+    }));
+}
+
+#[test]
+fn kotlin_typed_receiver_resolves_a_member_to_its_declaring_file() {
+    let mut corpus = sprefa_lab_scopegraph::corpus::Corpus::build_kotlin([
+        (
+            "lib/Widget.kt".into(),
+            "package acme\nclass Widget { fun run() = 1 }\nclass Holder(val w: Widget)\ninterface Proj { fun project() = 1 }".into(),
+        ),
+        (
+            "app/Use.kt".into(),
+            "package acme\nfun use(w: Widget) = w.run()\nfun field(h: Holder) = h.w.run()\nfun <P : Proj> bound(p: P) = p.project()".into(),
+        ),
+    ])
+    .unwrap();
+    corpus.resolve();
+    let unit = &corpus.units["app/Use.kt"];
+    let resolved = unit
+        .member_accesses
+        .iter()
+        .filter_map(|access| {
+            access.target.as_ref().map(|target| {
+                (
+                    access.access.text.as_str(),
+                    access.receiver_type.as_deref(),
+                    target,
+                )
+            })
+        })
+        .collect::<Vec<_>>();
+    assert!(resolved.iter().any(|(access, receiver, target)| {
+        *access == "w.run"
+            && *receiver == Some("Widget")
+            && target.path == "lib/Widget.kt"
+            && target.name == "run"
+            && target.resolution == "typed_receiver"
+    }));
+    assert!(resolved.iter().any(|(access, receiver, target)| {
+        *access == "h.w"
+            && *receiver == Some("Holder")
+            && target.name == "w"
+            && target.role == "member.property"
+    }));
+    assert!(resolved.iter().any(|(access, receiver, target)| {
+        *access == "h.w.run" && *receiver == Some("Widget") && target.name == "run"
+    }));
+    assert!(resolved.iter().any(|(access, receiver, target)| {
+        *access == "p.project" && *receiver == Some("Proj") && target.name == "project"
     }));
 }
 

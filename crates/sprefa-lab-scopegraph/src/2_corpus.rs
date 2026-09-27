@@ -13,6 +13,14 @@ pub enum SymbolOp {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SymbolStackEdge {
+    pub path: Vec<String>,
+    pub from: Vec<String>,
+    pub operation: SymbolOp,
+    pub to: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImportBinding {
     pub path: Vec<String>,
     pub local_name: String,
@@ -27,6 +35,18 @@ pub struct Export {
     pub name: String,
     pub start: usize,
     pub role: String,
+    pub owner: Option<String>,
+    pub value_type: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MemberAccess {
+    pub receiver: Capture,
+    pub member: Capture,
+    pub access: Capture,
+    pub receiver_type: Option<String>,
+    pub result_type: Option<String>,
+    pub target: Option<ExternalDefinition>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -35,6 +55,9 @@ pub struct KotlinUnit {
     pub package: String,
     pub imports: Vec<ImportBinding>,
     pub exports: Vec<Export>,
+    pub symbol_edges: Vec<SymbolStackEdge>,
+    pub member_accesses: Vec<MemberAccess>,
+    pub captures: Vec<Capture>,
     pub graph: ScopeGraph,
 }
 
@@ -51,9 +74,29 @@ impl Corpus {
         let mut units = BTreeMap::new();
         for (path, source) in sources {
             let matches = run_query(language.clone(), &source, KOTLIN_LOCALS, Path::new(&path))?;
+            let member_accesses = matches
+                .iter()
+                .filter_map(|matched| {
+                    let capture = |label: &str| {
+                        matched
+                            .captures
+                            .iter()
+                            .find(|capture| capture.label == label)
+                            .cloned()
+                    };
+                    Some(MemberAccess {
+                        receiver: capture("local.receiver")?,
+                        member: capture("local.member.reference")?,
+                        access: capture("local.member.access")?,
+                        receiver_type: None,
+                        result_type: None,
+                        target: None,
+                    })
+                })
+                .collect::<Vec<_>>();
             let captures = matches
-                .into_iter()
-                .flat_map(|matched| matched.captures)
+                .iter()
+                .flat_map(|matched| matched.captures.iter().cloned())
                 .collect::<Vec<_>>();
             let package = captures
                 .iter()
@@ -72,18 +115,33 @@ impl Corpus {
                 .iter()
                 .filter(|capture| capture.label == "local.import")
                 .map(|capture| parse_import(&capture.text))
+                .collect::<Vec<_>>();
+            let symbol_edges = imports
+                .iter()
+                .flat_map(|import| stack_edges(&import.path, &import.stack))
                 .collect();
             let graph = crate::scope::resolve(captures.clone(), source.len());
+            let type_definitions = graph
+                .definitions
+                .iter()
+                .filter(|definition| definition.role == "type")
+                .collect::<Vec<_>>();
             let exports = graph
                 .definitions
                 .iter()
-                .filter(|definition| is_top_level_export(&definition.capture))
-                .map(|definition| Export {
-                    path: path.clone(),
-                    package: package.clone(),
-                    name: definition.name.clone(),
-                    start: definition.capture.start,
-                    role: definition.role.clone(),
+                .filter_map(|definition| {
+                    let owner = (definition.role != "type")
+                        .then(|| enclosing_type(&definition.capture, &type_definitions))
+                        .flatten();
+                    (owner.is_some() || is_top_level_export(&definition.capture)).then(|| Export {
+                        path: path.clone(),
+                        package: package.clone(),
+                        name: definition.name.clone(),
+                        start: definition.capture.start,
+                        role: definition.role.clone(),
+                        owner,
+                        value_type: capture_value_type(&definition.capture, &captures),
+                    })
                 })
                 .collect();
             units.insert(
@@ -93,6 +151,9 @@ impl Corpus {
                     package,
                     imports,
                     exports,
+                    symbol_edges,
+                    member_accesses,
+                    captures,
                     graph,
                 },
             );
@@ -102,8 +163,15 @@ impl Corpus {
 
     pub fn resolve(&mut self) {
         let mut exports: BTreeMap<(String, String), Vec<Export>> = BTreeMap::new();
+        let member_exports = self
+            .units
+            .values()
+            .flat_map(|unit| unit.exports.iter())
+            .filter(|export| export.owner.is_some())
+            .cloned()
+            .collect::<Vec<_>>();
         for unit in self.units.values() {
-            for export in &unit.exports {
+            for export in unit.exports.iter().filter(|export| export.owner.is_none()) {
                 exports
                     .entry((export.package.clone(), export.name.clone()))
                     .or_default()
@@ -111,6 +179,36 @@ impl Corpus {
             }
         }
         for unit in self.units.values_mut() {
+            unit.member_accesses
+                .sort_by_key(|access| (access.access.start, access.access.end));
+            let mut resolved_accesses = Vec::with_capacity(unit.member_accesses.len());
+            for mut access in std::mem::take(&mut unit.member_accesses) {
+                access.receiver_type =
+                    infer_receiver_type(unit, &access.receiver, &exports, &resolved_accesses);
+                let candidates = member_exports
+                    .iter()
+                    .filter(|export| {
+                        export.owner.as_deref() == access.receiver_type.as_deref()
+                            && export.name == access.member.text
+                    })
+                    .cloned()
+                    .collect::<Vec<_>>();
+                match unique_exports(candidates).as_slice() {
+                    [target] => {
+                        access.result_type = target.value_type.clone();
+                        access.target = Some(ExternalDefinition {
+                            path: target.path.clone(),
+                            name: target.name.clone(),
+                            start: target.start,
+                            role: target.role.clone(),
+                            resolution: "typed_receiver".into(),
+                        });
+                    }
+                    _ => {}
+                }
+                resolved_accesses.push(access);
+            }
+            unit.member_accesses = resolved_accesses;
             for reference in &mut unit.graph.references {
                 if reference.definition.is_some() {
                     continue;
@@ -174,6 +272,115 @@ pub fn symbol_stack(qualified_name: &str) -> Vec<SymbolOp> {
         .map(|part| SymbolOp::Push((*part).into()))
         .chain(parts.iter().map(|part| SymbolOp::Pop((*part).into())))
         .collect()
+}
+
+fn stack_edges(path: &[String], stack: &[SymbolOp]) -> Vec<SymbolStackEdge> {
+    let mut state = Vec::new();
+    let mut edges = Vec::new();
+    for operation in stack {
+        let from = state.clone();
+        match operation {
+            SymbolOp::Push(name) => state.insert(0, name.clone()),
+            SymbolOp::Pop(name) if state.first() == Some(name) => {
+                state.remove(0);
+            }
+            SymbolOp::Pop(_) => continue,
+        }
+        edges.push(SymbolStackEdge {
+            path: path.to_vec(),
+            from,
+            operation: operation.clone(),
+            to: state.clone(),
+        });
+    }
+    edges
+}
+
+fn enclosing_type(
+    capture: &Capture,
+    type_definitions: &[&crate::scope::Definition],
+) -> Option<String> {
+    let declaration = capture
+        .ancestor_kinds
+        .iter()
+        .zip(&capture.ancestors)
+        .find(|(kind, _)| *kind == "class_declaration" || *kind == "object_declaration")
+        .map(|(_, span)| span)?;
+    type_definitions.iter().find_map(|definition| {
+        definition
+            .capture
+            .ancestor_kinds
+            .iter()
+            .zip(&definition.capture.ancestors)
+            .any(|(kind, span)| {
+                (kind == "class_declaration" || kind == "object_declaration") && span == declaration
+            })
+            .then(|| definition.name.clone())
+    })
+}
+
+fn capture_value_type(capture: &Capture, captures: &[Capture]) -> Option<String> {
+    let scope_kinds = ["parameter", "class_parameter", "variable_declaration"];
+    let scopes = capture
+        .ancestor_kinds
+        .iter()
+        .zip(&capture.ancestors)
+        .filter(|(kind, _)| scope_kinds.contains(&kind.as_str()))
+        .map(|(_, span)| *span)
+        .collect::<Vec<_>>();
+    captures
+        .iter()
+        .filter(|candidate| {
+            matches!(
+                candidate.label.as_str(),
+                "local.parameter.type" | "local.member.type" | "local.binding.type"
+            )
+        })
+        .find(|candidate| candidate.ancestors.iter().any(|span| scopes.contains(span)))
+        .map(|candidate| candidate.text.clone())
+}
+
+fn infer_receiver_type(
+    unit: &KotlinUnit,
+    receiver: &Capture,
+    exports: &BTreeMap<(String, String), Vec<Export>>,
+    resolved_accesses: &[MemberAccess],
+) -> Option<String> {
+    if let Some(access) = resolved_accesses
+        .iter()
+        .find(|access| access.access.text == receiver.text)
+    {
+        return access.result_type.clone();
+    }
+    if exports
+        .values()
+        .flatten()
+        .any(|export| export.role == "type" && export.name == receiver.text)
+    {
+        return Some(receiver.text.clone());
+    }
+    let definition = unit
+        .graph
+        .definitions
+        .iter()
+        .filter(|definition| definition.name == receiver.text)
+        .filter(|definition| definition.capture.start <= receiver.start)
+        .max_by_key(|definition| definition.capture.start)?;
+    let value_type = capture_value_type(&definition.capture, &unit.captures);
+    value_type.map(|value_type| {
+        unit.captures
+            .iter()
+            .find(|capture| capture.label == "local.type.parameter" && capture.text == value_type)
+            .and_then(|parameter| {
+                unit.captures
+                    .iter()
+                    .find(|capture| {
+                        capture.label == "local.type.bound" && capture.parent == parameter.parent
+                    })
+                    .map(|capture| capture.text.clone())
+            })
+            .unwrap_or(value_type)
+    })
 }
 
 fn parse_import(text: &str) -> ImportBinding {

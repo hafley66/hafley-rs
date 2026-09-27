@@ -7,14 +7,16 @@
 | L1 relation predicates | Tests cover `#inside?`, `#has?`, `#precedes?`, and `#follows?` through `Query::general_predicates()` on Rust syntax. |
 | Match-limit rail | Every `run_query` drains `matches()` and checks `did_exceed_match_limit()`; overflow returns `MatchLimit { path }`. |
 | Grouped captures | The query runner uses `matches()` only; a two-capture fixture asserts both captures remain grouped in one result. |
-| L2 Kotlin query | Helix Kotlin `locals.scm` is vendored with MPL-2.0/source header and 11 lab query lines; it compiles against `tree-sitter-kotlin-sg`, with call/import/alias captures exercised. |
+| L2 Kotlin query | Helix Kotlin `locals.scm` is vendored with MPL-2.0/source header and 25 lab query lines; it compiles against `tree-sitter-kotlin-sg`, with call/import/alias/receiver/type captures exercised. |
 | L3 local resolver | Scope nesting, innermost definition attachment, outward name lookup, and explicit unresolved reasons are implemented in 192 lines. |
 | Kotlin corpus resolution | Explicit imports and aliases, wildcard imports, and same-package names resolve against exported top-level declarations. Import and package header tokens are excluded from local-name resolution. |
+| Qualified-name edges | Each import path carries `Push`/`Pop` transitions between explicit stack states, with the source path retained on each edge. |
+| Typed Kotlin receivers | Parameter types, constructor property types, and generic upper bounds resolve member accesses, including chained class properties, to the declaring file and definition span. |
 | L5 TypeScript query | Helix `_typescript`, `ecma`, and `typescript` locals query files are vendored; the existing Kotlin-tested engine resolves a TypeScript parameter with no language-specific engine change. |
 
-The query evaluator and local scope resolver total 456 lines. Kotlin `locals.scm` totals 59 lines, including source/license attribution and lab query additions.
+The query evaluator and local scope resolver total 456 lines. Kotlin `locals.scm` totals 73 lines, including source/license attribution and lab query additions.
 
-Qualified-name symbol-stack graph edges, typed receiver-member edges, Kotlin fixture comparison, and the final verdict remain open gates. The comparison runs below depend on the receiver and module-resolution implementation.
+Kotlin fixture comparison and the final verdict remain open gates. The comparison runs below exercise the receiver and module-resolution implementation.
 
 ## Remaining measurement gates
 
