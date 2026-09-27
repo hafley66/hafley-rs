@@ -38,3 +38,17 @@ Capture release baselines for the three named corpora, then move fast-path rows 
 ## Decisions
 
 Should the first migration slice cover SCM capture rows only, or convert every fast-path fact family in one pass?
+
+## Reproduction receipt
+
+Current release `ryii fast` reproduced the row and serialization path. On the first 3,000 lexically sorted `*.rs` files under `~/.cargo/registry/src`, it emitted 1,593,102 JSONL rows (421,958,775 bytes) in 51.53 s, with 1,689,255,936 bytes maximum resident memory. The current implementation collects `Vec<FlatFact>` in `read/project.rs` and `sorted_lines` serializes each row into a `Vec<String>` then globally sorts it (`read/project.rs:522-530, 1758-1767`); SCM capture rows own `text: String` (`read/lang/7_scm_rows.rs:48-50`).
+
+Release baseline (`RUST_LOG=error ryii fast <corpus> > /dev/null`):
+
+| corpus | rows | output bytes | wall | max RSS |
+| --- | ---: | ---: | ---: | ---: |
+| `crates/sprefa-extract/src` | 56,912 | 10,195,719 | 0.39 s | 174,571,520 B |
+| `~/projects/typespec/packages` | 354,417 | 94,619,922 | 2.14 s | 871,464,960 B |
+| first 3,000 sorted `*.rs` paths from `~/.cargo/registry/src` via `ryii fast -` | 1,593,102 | 421,958,775 | 51.53 s | 1,689,255,936 B |
+
+The registry input list for the before/after runs was written to `/tmp/fast-rows-registry-3000.list` with `find ~/.cargo/registry/src -type f -name '*.rs' -print | sort | head -3000`. Release outputs were captured at `/tmp/fast-rows-before-{sprefa,typespec,registry}.jsonl`; elapsed time and RSS were captured with `/usr/bin/time -lp`.
