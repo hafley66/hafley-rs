@@ -8,14 +8,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use super::{answer_of, CALL_FACETS, TYPE_FACETS};
 pub use super::{
     CheckerAnswer as TsCheckerAnswer, CheckerAnswers as TsCheckerAnswers,
     CheckerRef as TsCheckerRef,
 };
-use super::{CALL_FACETS, TYPE_FACETS};
-use crate::read::shape::FamilyTag;
 use crate::read::tsi::stamp_digests;
-use crate::read::types::{ContentId, DefIndex, DefSite};
+use crate::read::types::{ContentId, DefIndex};
 use hafley_scm::span::Span;
 
 type Bound = super::CheckerBound;
@@ -179,34 +178,6 @@ impl crate::read::tsi::SemanticRows for TsCheckerIndex {
 
 /// The declaration identifier's offset picks between several defs of one name
 /// in one file; a lone def of the name binds without it.
-fn answer_of(
-    reference: &TsCheckerRef,
-    facets: &[FamilyTag],
-    blob_of: &HashMap<&str, &ContentId>,
-    defs: &DefIndex,
-) -> Option<TsCheckerAnswer> {
-    if reference.dst_path.is_empty() {
-        return Some(TsCheckerAnswer::External);
-    }
-    let blob = *blob_of.get(reference.dst_path.as_str())?;
-    let sites = defs.map.get(reference.dst_name.as_str())?;
-    facets.iter().find_map(|facet| {
-        let in_file: Vec<&DefSite> = sites
-            .iter()
-            .filter(|site| &site.blob == blob && site.family == *facet)
-            .collect();
-        let covering = in_file.iter().find(|site| {
-            site.span.start <= reference.dst_offset && reference.dst_offset < site.span.end()
-        });
-        let chosen = match covering {
-            Some(site) => *site,
-            None if in_file.len() == 1 => in_file[0],
-            None => return None,
-        };
-        Some(TsCheckerAnswer::Corpus(chosen.blob.clone(), chosen.span))
-    })
-}
-
 /// Run the checker over `root` and answer every reference in `files`
 /// (supplied path, absolute path).
 #[cfg(not(feature = "ts-checker"))]

@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use crate::read::shape::FamilyTag;
 use crate::read::tsi::FactOut;
-use crate::read::types::ContentId;
+use crate::read::types::{ContentId, DefIndex, DefSite};
 use crate::span::Span;
 
 const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
@@ -35,6 +35,34 @@ pub struct CheckerRef {
 pub enum CheckerAnswer {
     Corpus(ContentId, Span),
     External,
+}
+
+fn answer_of(
+    reference: &CheckerRef,
+    facets: &[FamilyTag],
+    blob_of: &HashMap<&str, &ContentId>,
+    defs: &DefIndex,
+) -> Option<CheckerAnswer> {
+    if reference.dst_path.is_empty() {
+        return Some(CheckerAnswer::External);
+    }
+    let blob = *blob_of.get(reference.dst_path.as_str())?;
+    let sites = defs.map.get(reference.dst_name.as_str())?;
+    facets.iter().find_map(|facet| {
+        let in_file: Vec<&DefSite> = sites
+            .iter()
+            .filter(|site| &site.blob == blob && site.family == *facet)
+            .collect();
+        let covering = in_file.iter().find(|site| {
+            site.span.start <= reference.dst_offset && reference.dst_offset < site.span.end()
+        });
+        let chosen = match covering {
+            Some(site) => *site,
+            None if in_file.len() == 1 => in_file[0],
+            None => return None,
+        };
+        Some(CheckerAnswer::Corpus(chosen.blob.clone(), chosen.span))
+    })
 }
 
 struct CheckerBound {

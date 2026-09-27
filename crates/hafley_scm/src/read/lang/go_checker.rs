@@ -9,16 +9,15 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use super::{answer_of, CALL_FACETS, TYPE_FACETS};
 pub use super::{
     CheckerAnswer as GoCheckerAnswer, CheckerAnswers as GoCheckerAnswers,
     CheckerRef as GoCheckerRef,
 };
-use super::{CALL_FACETS, TYPE_FACETS};
-use crate::read::shape::{FamilyTag, NodeRef};
+use crate::read::shape::NodeRef;
 use crate::read::tsi::stamp_digests;
 use crate::read::types::{
-    CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ProjectEdge, ResolutionOrigin, RyiOutput,
-    TypeF,
+    CallEdgeKind, CallF, ContentId, DefIndex, ProjectEdge, ResolutionOrigin, RyiOutput, TypeF,
 };
 use hafley_scm::span::Span;
 
@@ -353,34 +352,6 @@ fn site_callee<'a>(
 
 /// The declaration identifier's offset picks between several defs of one name
 /// in one file; a lone def of the name binds without it.
-fn answer_of(
-    reference: &GoCheckerRef,
-    facets: &[FamilyTag],
-    blob_of: &HashMap<&str, &ContentId>,
-    defs: &DefIndex,
-) -> Option<GoCheckerAnswer> {
-    if reference.dst_path.is_empty() {
-        return Some(GoCheckerAnswer::External);
-    }
-    let blob = *blob_of.get(reference.dst_path.as_str())?;
-    let sites = defs.map.get(reference.dst_name.as_str())?;
-    facets.iter().find_map(|facet| {
-        let in_file: Vec<&DefSite> = sites
-            .iter()
-            .filter(|site| &site.blob == blob && site.family == *facet)
-            .collect();
-        let covering = in_file.iter().find(|site| {
-            site.span.start <= reference.dst_offset && reference.dst_offset < site.span.end()
-        });
-        let chosen = match covering {
-            Some(site) => *site,
-            None if in_file.len() == 1 => in_file[0],
-            None => return None,
-        };
-        Some(GoCheckerAnswer::Corpus(chosen.blob.clone(), chosen.span))
-    })
-}
-
 /// Run the checker over `root` and answer every reference in `files`
 /// (supplied path, absolute path).
 #[cfg(not(feature = "go-checker"))]
