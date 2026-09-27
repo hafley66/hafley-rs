@@ -11,6 +11,8 @@ use tracing_subscriber::Layer;
 
 use crate::flush::{Flush, Row, Sink, Writer};
 
+const SQLITE_STMT_CHAIN_END: *mut ffi::sqlite3_stmt = std::ptr::null_mut();
+
 pub const SQLITE_TARGET: &str = "sqlite";
 
 /// The file the log sink writes when a host did not name one.
@@ -174,7 +176,8 @@ pub fn instrument(connection: &Connection) {
         let handle = connection.handle();
         // Existing cached statements may have completed before tracing began.
         let mut statement = ffi::sqlite3_next_stmt(handle, std::ptr::null_mut());
-        while !statement.is_null() {
+        // budget: SQLITE_STMT_CHAIN_END terminates SQLite's finite statement chain
+        while statement != SQLITE_STMT_CHAIN_END {
             StatementCounters::take(statement);
             statement = ffi::sqlite3_next_stmt(handle, statement);
         }

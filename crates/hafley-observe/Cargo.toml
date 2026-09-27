@@ -11,10 +11,9 @@ description = "Shared executable-owned tracing configuration for hafley-rs binar
 # Compatibility names used by local consumers of the sibling checkout.
 otlp = ["otlp-trace"]
 sqlite = ["sqlite-sink"]
-# The four shipped layers stay default so an existing host (boop, soopy,
-# sprefa-extract) builds the subscriber it has today. Every layer this lab
-# prices is one feature, enabled alone by the bench.
-default = ["fmt", "chrome", "otlp-trace", "sqlite-sink"]
+# Every optional subscriber layer has an explicit feature; consumers that
+# require the current set select it in their dependency declaration.
+default = []
 fmt = []
 chrome = ["dep:tracing-chrome"]
 otlp-trace = [
@@ -42,6 +41,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-capture = "0.1.0"
 tracing-tunnel = "0.1.0"
+hafley-observe-macros = { path = "../hafley-observe-macros" }
 # The process sampler reads rusage through this; it is compiled on every build
 # so the harness can measure with the layers off.
 libc = "0.2"
@@ -71,3 +71,18 @@ serde_json = "1"
 [[bin]]
 name = "watch-the-watchman"
 path = "bench/watch_the_watchman.rs"
+
+[[test]]
+name = "event_sums_by_ancestor"
+path = "tests/event_sums_by_ancestor.rs"
+required-features = ["sqlite-sink"]
+
+[[test]]
+name = "sqlite_statement_counters"
+path = "tests/sqlite_statement_counters.rs"
+required-features = ["sqlite-sink"]
+
+[[test]]
+name = "empty_sinks_init"
+path = "tests/empty_sinks_init.rs"
+required-features = ["fmt"]

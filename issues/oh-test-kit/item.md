@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-26
 type: feature
-status: needs-decision
+status: open
 priority: normal
 labels: [observability]
 ---
@@ -79,17 +79,16 @@ HTTP client into every consumer.
 
 ## Acceptance Criteria
 
-- [ ] `oh` attribute crate exists with `test`, `budget`, `instrument_all`, `skip`
-- [ ] `use oh::test;` plus bare `#[test]` works end to end
-- [ ] `instrument_all` emits a named error for the two nightly-gated forms
-- [ ] time, log, and memory budgets each fail a test that exceeds them
+- [x] `oh` attribute crate exists with `test`, `budget`, `instrument_all`, `skip`
+- [x] `use oh::test;` plus bare `#[test]` works end to end
+- [x] `instrument_all` emits a named error for file modules (macro unit test)
+- [ ] `instrument_all` emits a named error for inner macro attributes (stable Rust rejects the syntax before proc-macro expansion)
+- [x] time, log, and memory budgets each fail a test that exceeds them
 - [ ] ring drain emits `drained_at` and `last_event_at` on SIGTERM
 - [ ] replay re-exec carries the seed and switches the subscriber
-- [ ] lab minting is a CLI subcommand with a build output
-- [ ] `default = []`
+- [ ] lab minting is a CLI subcommand with a build output (`find .. -iname '*new-lab*'` found no source script in this checkout)
+- [x] `default = []`
 
-## Reproduction receipt
+## Progress receipt
 
-2026-09-26: `crates/hafley-observe` currently has no proc-macro dependency, no `oh::test` attributes, and its manifest sets `default = ["fmt", "chrome", "otlp-trace", "sqlite-sink"]`. None of the eight acceptance criteria are implemented end to end. The request spans a new attribute crate, resource budgets, SIGTERM drain/replay, and lab generation.
-
-Question: Should this full OH attribute, budget, drain/replay, and lab-minting scope be pursued as an epic in hafley-rs?
+2026-09-26: added `hafley-observe-macros`, the `oh::test`/`budget`/`instrument_all`/`skip` attributes, synchronous per-callsite log and elapsed-time checks, optional peak allocation checks, and `default = []`. Default package run: 19 passed. `--features fmt,sqlite-sink`: 29 passed. `instrument_all` file-module diagnostic test passed; inner-attribute diagnostic, SIGTERM drain/replay, and lab minting remain open.

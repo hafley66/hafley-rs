@@ -16,7 +16,7 @@ loadable = ["rusqlite/loadable_extension", "rusqlite/functions"]
 rusqlite = { version = "=0.40.2", features = ["vtab"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
-hafley-observe = { path = "../hafley-observe" }
+hafley-observe = { path = "../hafley-observe", features = ["fmt", "chrome", "otlp-trace", "sqlite-sink"] }
 
 [dev-dependencies]
 rusqlite = { version = "=0.40.2", features = ["bundled", "vtab", "load_extension"] }
