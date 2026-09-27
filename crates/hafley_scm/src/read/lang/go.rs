@@ -44,6 +44,7 @@ use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::ResolveDrop;
 use crate::read::types::{PathIndex, ScipIndex, UnresolvedReason};
+use crate::span::def_span;
 
 // ── the tree-sitter-go parse (one parse feeds type/call/df) ──────────────────
 
@@ -826,20 +827,6 @@ fn path_of_import_spec(node: tree_sitter::Node, src: &[u8]) -> String {
         }
     }
     String::new()
-}
-
-/// The def span covers the whole callable body `[child.start, body.end)` for
-/// span-containment resolution. Port of v5 `end_of(child)` (the body end line).
-fn def_span(child: tree_sitter::Node) -> Span {
-    let start = child.start_byte();
-    let end = child
-        .child_by_field_name("body")
-        .unwrap_or(child)
-        .end_byte();
-    Span {
-        start: start as u32,
-        len: (end - start) as u32,
-    }
 }
 
 /// Walk every callable declaration, minting one def node per Free function /

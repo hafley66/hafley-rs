@@ -34,6 +34,7 @@ use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONT
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{DfLoop, LangKind, ScipIndex};
+use crate::span::def_span;
 
 /// Kinds only Python constructs: the core enums do not carry them
 /// (tests/6_kind_vocab.rs). `cond` is `a if c else b`.
@@ -419,20 +420,6 @@ fn project_call(
     py_walk_call_sites(root, src, strings, sink, &lambdas);
     py_walk_shapes(root, src, strings, sink, &lambdas);
     py_module_specifiers(root, src, strings, sink);
-}
-
-/// The def span covers `[decl start, body end)` for span-containment caller
-/// resolution; a lambda (no `body` field) covers its own extent.
-fn def_span(child: tree_sitter::Node) -> Span {
-    let start = child.start_byte();
-    let end = child
-        .child_by_field_name("body")
-        .unwrap_or(child)
-        .end_byte();
-    Span {
-        start: start as u32,
-        len: (end - start) as u32,
-    }
 }
 
 /// One CallF def node per Free function / Method / Lambda. `parent` is the

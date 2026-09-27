@@ -22,6 +22,16 @@ impl Span {
     }
 }
 
+/// Span from a declaration start through its body, or through the node when it has no body.
+pub fn def_span(node: tree_sitter::Node) -> Span {
+    let start = node.start_byte();
+    let end = node.child_by_field_name("body").unwrap_or(node).end_byte();
+    Span {
+        start: start as u32,
+        len: (end - start) as u32,
+    }
+}
+
 /// UTF-8 text of a tree-sitter node, empty when its source slice is invalid.
 pub fn node_text<'tree, 'src, N>(node: N, src: &'src [u8]) -> &'src str
 where
