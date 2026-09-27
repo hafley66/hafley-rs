@@ -243,9 +243,25 @@ fn call_target(
         let field = current.child_by_field_name("field")?;
         return Some((span(field), text(field, source).to_owned(), None));
     }
-    let path = path_text(current, source);
+    let path = call_path_text(current, source);
     let callee = path.rsplit("::").next()?.trim().to_owned();
     Some((span(current), callee, path.contains("::").then_some(path)))
+}
+
+fn call_path_text(node: tree_sitter::Node<'_>, source: &[u8]) -> String {
+    let path = path_text(node, source);
+    let Some(qualified) = path.strip_prefix('<') else {
+        return path;
+    };
+    let Some((self_or_trait, suffix)) = qualified.split_once(">::") else {
+        return path;
+    };
+    let suffix = suffix.trim();
+    if let Some((_, trait_name)) = self_or_trait.split_once(" as ") {
+        format!("{}::{suffix}", trait_name.trim())
+    } else {
+        suffix.to_owned()
+    }
 }
 
 fn struct_target(

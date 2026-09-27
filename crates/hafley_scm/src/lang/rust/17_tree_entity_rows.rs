@@ -91,10 +91,17 @@ fn collect_impl_items(node: tree_sitter::Node<'_>, source: &[u8], rows: &mut Typ
         return;
     };
     if let Some(ty) = node.child_by_field_name("type") {
-        if ty.kind() == "type_identifier" {
+        let head = match ty.kind() {
+            "type_identifier" => Some(ty),
+            "generic_type" => ty
+                .child_by_field_name("type")
+                .filter(|head| head.kind() == "type_identifier"),
+            _ => None,
+        };
+        if let Some(head) = head {
             rows.impl_self_heads.push(ImplSelfHeadRow {
-                range: span(ty),
-                name: node_text(ty, source).to_owned(),
+                range: span(head),
+                name: node_text(head, source).to_owned(),
             });
         }
     }
@@ -183,9 +190,7 @@ fn doc_line(node: tree_sitter::Node<'_>, source: &[u8]) -> Option<String> {
         return None;
     }
     let text = node_text(node, source).trim();
-    let line = text
-        .strip_prefix("///")
-        .or_else(|| text.strip_prefix("//!"))?;
+    let line = text.strip_prefix("///")?;
     Some(line.strip_prefix(' ').unwrap_or(line).to_owned())
 }
 
@@ -260,7 +265,13 @@ fn append_type_refs(
     for child in named_children(node) {
         append_type_refs(child, source, slot, pos, out);
     }
-    out.sort_by(|a, b| a.name.cmp(&b.name));
+    out.sort_by(|a, b| {
+        let slot = |slot| match slot {
+            SignatureSlot::Param => 0,
+            SignatureSlot::Ret => 1,
+        };
+        (slot(a.slot), a.pos, &a.name).cmp(&(slot(b.slot), b.pos, &b.name))
+    });
     out.dedup_by(|a, b| a.slot == b.slot && a.pos == b.pos && a.name == b.name);
 }
 
