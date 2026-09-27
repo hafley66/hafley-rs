@@ -3089,12 +3089,10 @@ pub fn go_module_of(path: &str) -> Option<GoModule> {
     let mut dir = Path::new(path).parent()?;
     loop {
         if let Ok(text) = std::fs::read_to_string(crate::read::io_path(&dir.join("go.mod"))) {
-            let module = text
-                .lines()
-                .find_map(|line| line.trim().strip_prefix("module "))?;
+            let module = text.parse::<gomod_parser::GoMod>().ok()?.module;
             return Some(GoModule {
                 root: dir.to_path_buf(),
-                module: module.trim().to_string(),
+                module,
             });
         }
         dir = dir.parent()?;
