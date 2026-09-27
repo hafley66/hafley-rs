@@ -1281,8 +1281,7 @@ enum LaneCmd {
         /// worktree, and nothing above it. Pair with `--dry-run` first.
         #[arg(long)]
         state: Option<String>,
-        /// Bulk delete only: print every route and every worktree path the
-        /// delete would remove, and remove nothing.
+        /// Print what a single-lane or bulk delete would remove, and remove nothing.
         #[arg(long)]
         dry_run: bool,
         /// Check merge against this branch instead of the lane's base branch

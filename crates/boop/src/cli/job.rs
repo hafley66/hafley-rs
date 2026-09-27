@@ -223,7 +223,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         {
             // A dead-on-arrival pane can run its route-only epilogue before
             // registration. Drop only the route this dispatch registered.
-            if let Err(error) = run_lane_delete(Some(&dir), &args.to, true, None) {
+            if let Err(error) = run_lane_delete(Some(&dir), &args.to, true, false, None) {
                 warn!(lane = args.to, %error, "dead lane route cleanup failed");
             }
         }
@@ -2479,6 +2479,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                 mail_dir.as_deref(),
                 &lane,
                 route_only,
+                dry_run,
                 merged_into.as_deref(),
             ),
             (None, Some(_)) => run_lane_bulk_delete(mail_dir.as_deref(), dry_run),
@@ -3161,10 +3162,35 @@ pub(crate) fn run_lane_delete(
     mail_dir_arg: Option<&Path>,
     lane: &str,
     route_only: bool,
+    dry_run: bool,
     merged_into: Option<&str>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
     let routes = bus::read_routes(&dir)?;
+    if dry_run {
+        if let Some(route) = routes.get(lane) {
+            println!(
+                "lane {lane}: route ({}) would be removed",
+                route.kind.as_str()
+            );
+            if !route_only {
+                if let Some(session) = route.tmux.as_deref() {
+                    println!("lane {lane}: tmux session {session} would be killed");
+                }
+                if let Some(worktree) = route.worktree_dir.as_deref() {
+                    println!(
+                        "lane {lane}: worktree {worktree} would be checked for merged-branch cleanup"
+                    );
+                }
+                if let Some(target) = boop::supervise::reclaim_lane_target(lane) {
+                    println!("lane {lane}: target {} would be removed", target.display());
+                }
+            }
+        } else {
+            println!("lane {lane}: no registry route; carcass cleanup skipped (dry run)");
+        }
+        return Ok(());
+    }
     let Some(route) = routes.get(lane) else {
         if route_only {
             anyhow::bail!("no registry route for lane `{lane}`")
@@ -4678,7 +4704,7 @@ mod tests {
             },
         )
         .unwrap();
-        run_lane_delete(Some(&dir), "l", true, None).unwrap();
+        run_lane_delete(Some(&dir), "l", true, false, None).unwrap();
         let routes = read_routes(&dir).unwrap();
         assert!(
             !routes.contains_key("l"),
@@ -5525,7 +5551,7 @@ mod tests {
             Some("sprefa-coordinator"),
             "an old row is still a usable parent default"
         );
-        run_lane_delete(Some(&dir), "boop-sql", true, None).unwrap();
+        run_lane_delete(Some(&dir), "boop-sql", true, false, None).unwrap();
         let after = read_routes(&dir).unwrap();
         assert!(!after.contains_key("boop-sql"));
         assert!(
