@@ -29,11 +29,18 @@ Removing syn from the fast path means porting the hafley_scm Rust producers from
 
 ## Acceptance Criteria
 - [ ] fast's Rust extraction parses each file once
-- [ ] ratchet 170 and the fast/slow diff unchanged
+- [x] ratchet 170 and the fast/slow diff unchanged
 - [ ] release numbers before/after on the 3000-file registry corpus
+
+## Projection progress
+
+- [x] TSI syntax rows project from the shared tree and match Syn on pinned Rust fixtures.
+- [x] Dataflow rows project from the shared tree and match Syn on pinned Rust fixtures.
+- [ ] Module facts, receivers, and type candidates still use the remaining Syn projections.
+- [ ] Parse count is still 2 per file; remaining projections must reach 1.
 
 ## Repro receipt
 
-2026-09-26: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports Rust parse `calls=2`.
+2026-09-27 after TSI and dataflow tree projections: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports `rust parse calls=2`; ratchet 170, extraction suite, e2e, and workspace suite pass.
 
 Approved: port the syn-based Rust projections to the existing tree-sitter parse, with one parse per Rust file. Current repro: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports `rust parse calls=2`.
