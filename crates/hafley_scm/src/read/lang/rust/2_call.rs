@@ -319,8 +319,19 @@ pub fn crate_root_of(
     path: &str,
     crate_roots: &std::collections::HashMap<String, String>,
 ) -> Option<String> {
-    crate_roots.get(path).map(|root| {
-        if root == "." {
+    let mut normalized = std::path::PathBuf::new();
+    for component in std::path::Path::new(path).components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other),
+        }
+    }
+    let key = normalized.to_string_lossy();
+    crate_roots.get(key.as_ref()).map(|root| {
+        if root == "." || root.is_empty() {
             String::new()
         } else {
             root.clone()

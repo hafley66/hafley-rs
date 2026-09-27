@@ -673,9 +673,8 @@ pub struct RustModuleIndex {
     impl_types: std::collections::HashSet<String>,
     /// `.rs` path -> the directory of its nearest `Cargo.toml`.
     crate_dirs: HashMap<String, String>,
-    /// `.rs` path -> nearest manifest directory, including files outside a
-    /// Cargo target that still need `crate::` module anchoring.
-    crate_roots: HashMap<String, String>,
+    /// Normalized `.rs` path -> Cargo package root for `crate::` anchoring.
+    crate_module_roots: HashMap<String, String>,
     /// A file can be included by more than one Cargo target through `mod`.
     target_scopes: HashMap<String, HashSet<TargetScope>>,
     known_crate_idents: HashSet<String>,
@@ -1003,7 +1002,7 @@ type ExportTable = HashMap<String, Resolution>;
 
 impl RustModuleIndex {
     pub fn crate_root_of(&self, path: &str) -> Option<String> {
-        crate_root_of(path, &self.crate_roots)
+        crate_root_of(path, &self.crate_module_roots)
     }
 
     /// `files` is every `.rs` input's facts; `corpus` is EVERY input's (path,
@@ -1015,6 +1014,15 @@ impl RustModuleIndex {
     ) -> RustModuleIndex {
         let crate_roots = nearest_crate_dirs(corpus);
         let crate_dirs = crate_dirs_of(&files, &crate_roots);
+        let crate_module_roots = crate_dirs
+            .iter()
+            .map(|(path, root)| {
+                (
+                    lexical(std::path::Path::new(path)),
+                    lexical(std::path::Path::new(root)),
+                )
+            })
+            .collect();
         let crate_libs = crate_libs(&crate_roots, corpus);
         let target_scopes = target_scopes_of(&files, &crate_dirs, &crate_libs);
         let known_crate_idents = crate_dirs
@@ -1026,7 +1034,7 @@ impl RustModuleIndex {
             crate_libs,
             crate_deps: crate_deps_of(&crate_dirs),
             crate_dirs,
-            crate_roots,
+            crate_module_roots,
             target_scopes,
             known_crate_idents,
             ..RustModuleIndex::default()
