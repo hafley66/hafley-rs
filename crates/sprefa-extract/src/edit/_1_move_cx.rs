@@ -46,6 +46,8 @@ impl MoveCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
+        let io_root = hafley_scm::read::io_path(root);
+        let root = io_root.as_path();
         let files = walk_files(root)?;
         Self::from_files(root, files)
     }
@@ -53,6 +55,8 @@ impl MoveCx {
     /// Open a corpus, optionally including untracked files when the caller
     /// explicitly supplied its root.
     pub fn open_with_untracked(root: &Path, include_untracked: bool) -> Result<Self, String> {
+        let io_root = hafley_scm::read::io_path(root);
+        let root = io_root.as_path();
         let files = walk_files_with_untracked(root, include_untracked)?;
         Self::from_files(root, files)
     }
@@ -192,6 +196,8 @@ pub fn walk_files_with_untracked(
     root: &Path,
     include_untracked: bool,
 ) -> Result<Vec<String>, String> {
+    let io_root = hafley_scm::read::io_path(root);
+    let root = io_root.as_path();
     if !include_untracked {
         let output = std::process::Command::new("git")
             .args(["-C", &root.to_string_lossy(), "ls-files", "-z"])

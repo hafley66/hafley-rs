@@ -225,16 +225,16 @@ pub fn package_edges(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectE
     let Some(root) = request.project_root else {
         return Err(ProjectError::ManifestsNeedRoot);
     };
-    let root_absolute =
-        std::fs::canonicalize(root).map_err(|err| ProjectError::Read(root.to_path_buf(), err))?;
+    let root_absolute = std::fs::canonicalize(crate::read::io_path(root))
+        .map_err(|err| ProjectError::Read(root.to_path_buf(), err))?;
     let mut manifests = Vec::new();
     for path in request.paths {
         let relative = project_relative(&path.to_string_lossy(), &root_absolute)?;
         let Some(kind) = ManifestKind::of_path(&relative) else {
             continue;
         };
-        let text =
-            std::fs::read_to_string(path).map_err(|err| ProjectError::Read(path.clone(), err))?;
+        let text = std::fs::read_to_string(crate::read::io_path(path))
+            .map_err(|err| ProjectError::Read(path.clone(), err))?;
         manifests.push(Manifest {
             path: relative,
             kind,

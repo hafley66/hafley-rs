@@ -83,7 +83,7 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
     for document in &index.documents {
         let path = document.relative_path.as_str();
         let callables = fn_defs.get(path);
-        let content = std::fs::read(root.join(path)).ok();
+        let content = std::fs::read(crate::read::io_path(&root.join(path))).ok();
         let lines = content.as_deref().map(LineTable::build);
         for occurrence in &document.occurrences {
             let symbol = index.symbol(occurrence.symbol);
@@ -364,7 +364,7 @@ fn repo_of(root: &Path, relative: &str, slug: &str) -> String {
         if dir == root {
             break;
         }
-        if dir.join(".git").exists() {
+        if crate::read::io_path(&dir.join(".git")).exists() {
             if let Some(name) = dir.file_name().and_then(|n| n.to_str()) {
                 return name.to_string();
             }

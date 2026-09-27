@@ -41,8 +41,9 @@ pub fn reach_files(
     };
     fill_indexes(&cx, &inputs, &pairs, &corpus);
 
-    let canonical =
-        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let canonical = |path: &Path| {
+        std::fs::canonicalize(crate::read::io_path(path)).unwrap_or_else(|_| path.to_path_buf())
+    };
     let by_canonical: HashMap<PathBuf, usize> = universe
         .iter()
         .enumerate()
@@ -62,7 +63,7 @@ pub fn reach_files(
             let target = Path::new(&target_path);
             if let Some(to) = index_of(&target_path) {
                 next.entry(from).or_default().push(to);
-            } else if target.is_dir() {
+            } else if crate::read::io_path(target).is_dir() {
                 let dir = canonical(target);
                 next.entry(from).or_default().extend(
                     universe

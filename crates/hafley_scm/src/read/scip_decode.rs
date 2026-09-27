@@ -30,7 +30,7 @@ mod proto;
 /// simultaneously and that pair, not the resolved graph, is the run's memory
 /// peak.
 pub fn load_index(index_path: &Path) -> Result<ScipIndex, ScipError> {
-    let bytes = std::fs::read(index_path)
+    let bytes = std::fs::read(crate::read::io_path(index_path))
         .map_err(|e| ScipError::Parse(format!("read {}: {e}", index_path.display())))?;
     let mut documents = Vec::new();
     let mut external_symbols: Vec<ScipSymbolInfo> = Vec::new();
@@ -131,7 +131,7 @@ pub fn merge_indexes(inputs: &[std::path::PathBuf], out: &Path) -> Result<usize,
     let mut merged: Option<proto::Index> = None;
     let mut documents = 0usize;
     for path in inputs {
-        let bytes = std::fs::read(path)
+        let bytes = std::fs::read(crate::read::io_path(path))
             .map_err(|e| ScipError::Parse(format!("read {}: {e}", path.display())))?;
         let index = proto::Index::decode(bytes.as_slice())
             .map_err(|e| ScipError::Parse(format!("protobuf decode {}: {e}", path.display())))?;
@@ -145,7 +145,7 @@ pub fn merge_indexes(inputs: &[std::path::PathBuf], out: &Path) -> Result<usize,
         }
     }
     let merged = merged.unwrap_or_default();
-    std::fs::write(out, merged.encode_to_vec())
+    std::fs::write(crate::read::io_path(out), merged.encode_to_vec())
         .map_err(|e| ScipError::Parse(format!("write {}: {e}", out.display())))?;
     Ok(documents)
 }
@@ -153,7 +153,7 @@ pub fn merge_indexes(inputs: &[std::path::PathBuf], out: &Path) -> Result<usize,
 /// Keep the documents under `prefix`; drop external symbols and documentation
 /// text. Returns the documents kept.
 pub fn prune_index(input: &Path, out: &Path, prefix: &str) -> Result<usize, ScipError> {
-    let bytes = std::fs::read(input)
+    let bytes = std::fs::read(crate::read::io_path(input))
         .map_err(|e| ScipError::Parse(format!("read {}: {e}", input.display())))?;
     let mut index = proto::Index::decode(bytes.as_slice())
         .map_err(|e| ScipError::Parse(format!("protobuf decode {}: {e}", input.display())))?;
@@ -171,7 +171,7 @@ pub fn prune_index(input: &Path, out: &Path, prefix: &str) -> Result<usize, Scip
             occurrence.override_documentation.clear();
         }
     }
-    std::fs::write(out, index.encode_to_vec())
+    std::fs::write(crate::read::io_path(out), index.encode_to_vec())
         .map_err(|e| ScipError::Parse(format!("write {}: {e}", out.display())))?;
     Ok(index.documents.len())
 }

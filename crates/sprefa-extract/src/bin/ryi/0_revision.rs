@@ -19,7 +19,7 @@ pub struct RevisionSnapshot {
 
 impl RevisionReader {
     pub fn open(root: &Path) -> Result<Self, Box<dyn std::error::Error>> {
-        let root = std::fs::canonicalize(root)?;
+        let root = std::fs::canonicalize(sprefa_extract::io_path(root))?;
         let repository = soopy::open(&root)?;
         Ok(Self {
             tree: soopy::SourceTree::open(repository.clone()),

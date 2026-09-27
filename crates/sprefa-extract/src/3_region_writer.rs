@@ -13,10 +13,12 @@ pub struct RegionError {
 }
 
 pub fn run(cli: RegionArgs) -> Result<i32, RegionError> {
-    let target = cli.target.canonicalize().map_err(|error| RegionError {
-        message: format!("open target {}: {error}", cli.target.display()),
-        exit: 2,
-    })?;
+    let target = sprefa_extract::io_path(&cli.target)
+        .canonicalize()
+        .map_err(|error| RegionError {
+            message: format!("open target {}: {error}", cli.target.display()),
+            exit: 2,
+        })?;
     let before = std::fs::read(&target).map_err(|error| RegionError {
         message: format!("read target {}: {error}", target.display()),
         exit: 2,
@@ -102,7 +104,7 @@ fn read_generated(path: &Path) -> Result<String, RegionError> {
             exit: 2,
         })
     } else {
-        std::fs::read_to_string(path).map_err(|error| RegionError {
+        std::fs::read_to_string(sprefa_extract::io_path(path)).map_err(|error| RegionError {
             message: format!("read generated {}: {error}", path.display()),
             exit: 2,
         })

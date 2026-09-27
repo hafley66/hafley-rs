@@ -8,7 +8,9 @@ pub const RYI_VERSION: &str = "0.1.0";
 
 #[path = "0_request_root.rs"]
 mod request_root;
-pub use request_root::{io_path, request_io_root, with_io_root};
+pub use request_root::{
+    diagnostic_line, io_path, request_io_root, with_diagnostic_sink, with_io_root,
+};
 
 pub mod cache;
 pub mod cfg;

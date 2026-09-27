@@ -277,6 +277,20 @@ async fn socket_response(
     args: &serde_json::Value,
     root: &Path,
 ) -> (axum::http::StatusCode, axum::body::Bytes) {
+    let (status, _, body) = socket_response_with_headers(socket, op, args, root).await;
+    (status, body)
+}
+
+async fn socket_response_with_headers(
+    socket: &Path,
+    op: &str,
+    args: &serde_json::Value,
+    root: &Path,
+) -> (
+    axum::http::StatusCode,
+    axum::http::HeaderMap,
+    axum::body::Bytes,
+) {
     let stream = tokio::net::UnixStream::connect(socket)
         .await
         .expect("connect unix socket");
@@ -305,13 +319,14 @@ async fn socket_response(
     let request = request.body(body).expect("socket request");
     let response = client.send_request(request).await.expect("socket response");
     let status = response.status();
+    let headers = response.headers().clone();
     let body = response
         .into_body()
         .collect()
         .await
         .expect("socket body")
         .to_bytes();
-    (status, body)
+    (status, headers, body)
 }
 
 async fn socket_request(
@@ -468,7 +483,7 @@ async fn operation_error_has_http_status_and_server_accepts_next_request() {
         &scratch.path().join("cache"),
     );
 
-    let (status, body) = socket_response(
+    let (status, headers, body) = socket_response_with_headers(
         &socket,
         "scip",
         &json!({"indexer": "not-a-language"}),
@@ -476,17 +491,12 @@ async fn operation_error_has_http_status_and_server_accepts_next_request() {
     )
     .await;
     assert_eq!(status, axum::http::StatusCode::BAD_REQUEST);
-    let rows: Vec<serde_json::Value> = body
-        .split(|byte| *byte == b'\n')
-        .filter(|line| !line.is_empty())
-        .map(|line| serde_json::from_slice(line).expect("JSON error row"))
-        .collect();
-    assert_eq!(rows.len(), 1);
-    assert_eq!(rows[0]["code"], 2);
-    assert!(rows[0]["error"]
-        .as_str()
-        .unwrap()
-        .contains("unknown language"));
+    assert!(body.is_empty(), "early failure body: {body:?}");
+    assert_eq!(headers["x-ryi-exit-code"], "2");
+    let stderr = base64::engine::general_purpose::STANDARD
+        .decode(headers["x-ryi-stderr"].as_bytes())
+        .expect("base64 stderr header");
+    assert!(String::from_utf8_lossy(&stderr).contains("unknown language"));
 
     let first = scratch.path().join("first.rs");
     let unsupported = scratch.path().join("second.txt");
