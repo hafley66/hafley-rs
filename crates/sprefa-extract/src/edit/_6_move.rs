@@ -630,7 +630,7 @@ fn canonical_unborn(path: &Path) -> PathBuf {
     }
 }
 
-fn absolute(path: &Path) -> Result<PathBuf, String> {
+pub(crate) fn absolute(path: &Path) -> Result<PathBuf, String> {
     if path.is_absolute() {
         return Ok(normalize(path));
     }
@@ -638,7 +638,7 @@ fn absolute(path: &Path) -> Result<PathBuf, String> {
     Ok(normalize(&cwd.join(path)))
 }
 
-fn within_root(root: &Path, path: &Path) -> Result<String, String> {
+pub(crate) fn within_root(root: &Path, path: &Path) -> Result<String, String> {
     path.strip_prefix(root)
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))
         .map_err(|_| format!("{} is outside root {}", path.display(), root.display()))

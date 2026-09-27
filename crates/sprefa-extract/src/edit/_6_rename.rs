@@ -14,8 +14,8 @@ use sprefa_extract::move_stage::{
     content_id, print_previews_with as print_previews, stage_and_commit, state_root, Mirror,
 };
 use sprefa_extract::{
-    directory_source, normalize, rename_for, renames, replace_action, RenameCx, RenameRequest,
-    RenameStop, Respell, SymbolRef,
+    directory_source, rename_for, renames, replace_action, RenameCx, RenameRequest, RenameStop,
+    Respell, SymbolRef,
 };
 
 #[path = "_6_rename_verify.rs"]
@@ -567,7 +567,7 @@ fn read_rename_list(path: &Path) -> Result<Vec<(PathBuf, String, String)>, Renam
 /// The corpus root: as asked, else the git root holding the first anchor.
 fn plan_root(requested: Option<&PathBuf>, first: &Path) -> Result<PathBuf, RenameError> {
     let root = match requested {
-        Some(root) => absolute(root)?,
+        Some(root) => super::source_move::absolute(root).map_err(plan_error)?,
         None => {
             let anchor = anchor_file(first)?;
             let parent = anchor.parent().unwrap_or(&anchor).to_path_buf();
@@ -597,7 +597,7 @@ fn validated_batch(
             true => anchor_file(&anchor)?,
             false => anchor_file(&root.join(&anchor))?,
         };
-        let anchor = within_root(root, &anchor)?;
+        let anchor = super::source_move::within_root(root, &anchor).map_err(plan_error)?;
         if old == new {
             return Err(plan_error(format!("{anchor}: {old} renames to itself")));
         }
@@ -615,7 +615,7 @@ fn validated_batch(
 }
 
 fn anchor_file(path: &Path) -> Result<PathBuf, RenameError> {
-    let path = absolute(path)?;
+    let path = super::source_move::absolute(path).map_err(plan_error)?;
     if !path.is_file() {
         return Err(plan_error(format!(
             "rename anchor is not a file: {}",
@@ -624,24 +624,4 @@ fn anchor_file(path: &Path) -> Result<PathBuf, RenameError> {
     }
     path.canonicalize()
         .map_err(|error| plan_error(format!("canonicalize {}: {error}", path.display())))
-}
-
-fn absolute(path: &Path) -> Result<PathBuf, RenameError> {
-    if path.is_absolute() {
-        return Ok(normalize(path));
-    }
-    let cwd = crate::ops::request_root();
-    Ok(normalize(&cwd.join(path)))
-}
-
-fn within_root(root: &Path, path: &Path) -> Result<String, RenameError> {
-    path.strip_prefix(root)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .map_err(|_| {
-            plan_error(format!(
-                "{} is outside root {}",
-                path.display(),
-                root.display()
-            ))
-        })
 }
