@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use soopy::{
     ContentId, DirectoryDelta, DirectoryRoot, FileQuery, FileReadRequest, FileWatchQuery, Pattern,
@@ -35,15 +35,21 @@ fn wait_for(
     watcher: &mut soopy::DirectoryWatcher,
     expected: DirectoryDelta,
 ) -> Vec<DirectoryDelta> {
-    for _ in 0..5 {
-        let Some(deltas) = watcher.recv_timeout(Duration::from_secs(1)).unwrap() else {
-            continue;
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut observed = Vec::new();
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            panic!("directory watcher did not emit {expected:?}; observed {observed:?}");
+        }
+        let Some(deltas) = watcher.recv_timeout(remaining).unwrap() else {
+            panic!("directory watcher did not emit {expected:?}; observed {observed:?}");
         };
         if contains_delta(&deltas, &expected) {
             return deltas;
         }
+        observed.extend(deltas);
     }
-    panic!("directory watcher did not emit {expected:?}");
 }
 
 #[test]
@@ -116,7 +122,9 @@ fn plain_directory_watcher_reports_add_change_and_remove() {
         &mut watcher,
         DirectoryDelta::Added(PathBuf::from("watched.txt")),
     );
-    std::fs::write(&file, b"two\n").unwrap();
+    // Change the size as well as the bytes so the debouncer observes the
+    // rewrite even when both writes land within the same timestamp quantum.
+    std::fs::write(&file, b"two changed\n").unwrap();
     wait_for(
         &mut watcher,
         DirectoryDelta::Changed(PathBuf::from("watched.txt")),
