@@ -18,13 +18,13 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use hafley_scm::lang::rust::{
-    call_metadata_rows, call_site_rows, line_col_to_byte, parse_rust_syntax, rust_combined_query,
-    CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
+    call_metadata_rows_from_tree, call_site_rows_from_tree, line_col_to_byte, parse_rust_syntax,
+    rust_combined_query, CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
 
 use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
-use super::rust_type_edges::edge_candidates;
+use super::rust_type_edges::edge_candidates_from_tree;
 use crate::read::family::{
     CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, DocFact, DocTag, MethodOwner, ProjectEdge,
@@ -214,7 +214,16 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "type");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<TypeF>::default();
-                        project_types(&parsed.file, line_starts, &mut strings, &mut bundle);
+                        if let Some(tree) = tree.as_ref() {
+                            project_types(
+                                &parsed.file,
+                                line_starts,
+                                tree,
+                                content,
+                                &mut strings,
+                                &mut bundle,
+                            );
+                        }
                         trace::record_bundle(&span, &bundle, 0);
                         types = Some(bundle);
                     }
@@ -231,7 +240,16 @@ impl Source for RustSource {
                                 &mut bundle,
                             );
                         }
-                        project_call(&parsed.file, line_starts, &mut strings, &mut bundle);
+                        if let Some(tree) = tree.as_ref() {
+                            project_call(
+                                &parsed.file,
+                                line_starts,
+                                tree,
+                                content,
+                                &mut strings,
+                                &mut bundle,
+                            );
+                        }
                         splice_macro_expansions(src, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
