@@ -585,12 +585,12 @@ mod sink {
         let want_summary = !matches!(std::env::var("DL_TRAIL").as_deref(), Ok("0"))
             || matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
             || std::env::args().any(|arg| arg == "--bench");
-        // `info` is one line per file with its phase timings (user-set
-        // 2026-09-18). `RUST_LOG` still overrides.
+        // Per-file phase spans remain available through RUST_LOG; routine CLI
+        // runs default to warnings so stderr stays useful for diagnostics.
         let observability = hafley_observe::Config::from_env(
             "sprefa-extract",
             crate::read::RYI_VERSION,
-            "sprefa_extract=info,hafley_scm=info",
+            "warn",
             std::io::IsTerminal::is_terminal(&std::io::stderr()),
         )
         .expect("observability configuration");

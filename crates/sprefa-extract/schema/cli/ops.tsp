@@ -13,7 +13,7 @@ using Daemon;
 @rootArgs(FileArgs)
 @argsConflictsWithSubcommands
 @doc("Source files -> flat graph facts (JSONL on stdout, or --sqlite)")
-@afterHelp("Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nBuild: git hash: $SPREFA_BUILD_GIT_HASH, datetime: $SPREFA_BUILD_DATETIME")
+@afterHelp("Logging: RUST_LOG (default warn; set sprefa_extract=info,hafley_scm=info for span timings), HAFLEY_LOG_FORMAT=json|text\nBuild: git hash: $SPREFA_BUILD_GIT_HASH, datetime: $SPREFA_BUILD_DATETIME")
 namespace Ryi;
 
 /** Unmodified stdin bytes, including newlines and non-JSON content. */
