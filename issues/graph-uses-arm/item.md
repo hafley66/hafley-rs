@@ -2,7 +2,7 @@
 created: 2026-09-20
 updated: 2026-09-20
 type: feature
-status: open
+status: fixed
 priority: normal
 epic: ryi-new-verbs
 labels: [extract, artifact-cli]
@@ -53,6 +53,10 @@ Command: `ryi graph --uses Widget tests/fixtures/ts_checker/src`
 - [ ] `cargo test --features cli --no-fail-fast` green from `crates/sprefa-extract`
 
 ## Tests Run
+
+`cargo nextest run --features cli -j 2 --test all -E 'test(/^t_164_graph_uses_ts::/)'`: 4 passed.
+
+Receipt: debug `ryii graph --uses Widget tests/fixtures/ts_checker/src` returned 1 `param` edge.
 
 ## Implementation Notes
 

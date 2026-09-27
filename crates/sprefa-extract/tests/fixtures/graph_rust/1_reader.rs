@@ -4,6 +4,10 @@ pub fn read(value: Widget) -> Widget {
     value
 }
 
+pub fn make() -> Widget {
+    Widget { value: 0 }
+}
+
 pub struct Reader;
 
 impl Reader {
