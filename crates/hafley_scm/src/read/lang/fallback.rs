@@ -21,8 +21,8 @@ use crate::read::seams::{corpus_defs, covering_def, DefIndex, Resolve};
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
-use crate::read::types::ResolveDrop;
 use crate::read::types::UnresolvedReason;
+use crate::read::types::{unique_blob, ResolveDrop};
 use crate::span::node_text;
 use std::collections::BTreeSet;
 
@@ -437,21 +437,7 @@ impl Resolve<CallF> for FallbackSource {
 /// The one corpus CALL def of `name`, or nothing: kotlin's corpus-unique leg
 /// without the same-file seat (the guessed bundle projects no defs).
 fn unique_corpus_def(index: &DefIndex, callee: &str) -> Option<(ContentId, Span)> {
-    let sites = corpus_defs(index, callee);
-    let mut blobs: Vec<ContentId> = Vec::new();
-    for site in sites {
-        if !blobs.contains(&site.blob) {
-            blobs.push(site.blob.clone());
-        }
-    }
-    let [blob] = blobs.as_slice() else {
-        return None;
-    };
-    let site = sites
-        .iter()
-        .find(|site| site.family == FamilyTag::Call)
-        .unwrap_or(&sites[0]);
-    Some((blob.clone(), site.span))
+    unique_blob(corpus_defs(index, callee).iter(), FamilyTag::Call)
 }
 
 /// The guessed call arm's non-edge channel: one `unresolved` row per site no

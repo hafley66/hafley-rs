@@ -23,12 +23,12 @@ use std::path::Path;
 
 use crate::read::family::SpecifierKind;
 use crate::read::seams::{corpus_defs, DefIndex, DefSite};
-use crate::read::shape::{ContentId, Span, Strings};
-use crate::read::types::PathIndex;
+use crate::read::shape::{ContentId, FamilyTag, Span, Strings};
+use crate::read::types::{unique_blob, PathIndex};
 
 use super::go::{
     go_file_facts_of_source, go_is_method_def, go_module_of, go_node_span, go_package_dir,
-    go_parse_shared, go_text, go_walk_import_specs, same_dir, unique_blob, GoFileFacts,
+    go_parse_shared, go_text, go_walk_import_specs, same_dir, GoFileFacts,
 };
 
 // ── phase-2 facts: one dedicated parse per file ─────────────────────────────
@@ -328,7 +328,12 @@ impl GoModuleIndex {
         if !is_exported(name) {
             return None;
         }
-        unique_blob(&self.free_sites_in_dir(dir, def_index, paths, name))
+        unique_blob(
+            self.free_sites_in_dir(dir, def_index, paths, name)
+                .iter()
+                .copied(),
+            FamilyTag::Call,
+        )
     }
 
     /// The bare-name leg through the referring file's OWN package directory,
@@ -340,7 +345,12 @@ impl GoModuleIndex {
         paths: &PathIndex,
         name: &str,
     ) -> Option<(ContentId, Span)> {
-        unique_blob(&self.free_sites_in_dir(dir, def_index, paths, name))
+        unique_blob(
+            self.free_sites_in_dir(dir, def_index, paths, name)
+                .iter()
+                .copied(),
+            FamilyTag::Call,
+        )
     }
 
     /// The corpus-unique tier scoped to `file`'s own package: the directory's
@@ -430,7 +440,7 @@ impl GoModuleIndex {
                     .is_some_and(|path| self.is_type_decl(path, site.span))
             })
             .collect();
-        unique_blob(&sites)
+        unique_blob(sites.iter().copied(), FamilyTag::Call)
     }
 
     fn sites_in_dir<'a>(

@@ -42,7 +42,7 @@ use crate::read::seams::{
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
-use crate::read::types::ResolveDrop;
+use crate::read::types::{unique_blob, ResolveDrop};
 use crate::read::types::{PathIndex, ScipIndex, UnresolvedReason};
 use crate::span::def_span;
 pub use crate::span::node_span as go_node_span;
@@ -3012,45 +3012,11 @@ impl GoSource {
                 return Some((site.blob.clone(), site.span));
             }
         }
-        let sites = corpus_defs(index, callee);
-        let mut blobs: Vec<ContentId> = Vec::new();
-        for site in sites {
-            if !blobs.contains(&site.blob) {
-                blobs.push(site.blob.clone());
-            }
-        }
-        let [blob] = blobs.as_slice() else {
-            return None;
-        };
-        let site = sites
-            .iter()
-            .find(|s| s.family == FamilyTag::Call)
-            .unwrap_or(&sites[0]);
-        Some((blob.clone(), site.span))
+        unique_blob(corpus_defs(index, callee).iter(), FamilyTag::Call)
     }
 
     // The `pkg.F` leg resolves through `go_modules::GoModuleIndex::resolve_in_dir`
     // now, the plane's own directory-scoped, exported-only lookup.
-}
-
-/// The one blob `sites` name, with the CallF facet's span preferred; two blobs
-/// are an ambiguity this tier does not settle. `pub`: `go_modules.rs`'s
-/// package-qualified leg reuses this join rather than re-deriving it.
-pub fn unique_blob(sites: &[&DefSite]) -> Option<(ContentId, Span)> {
-    let mut blobs: Vec<&ContentId> = Vec::new();
-    for site in sites {
-        if !blobs.contains(&&site.blob) {
-            blobs.push(&site.blob);
-        }
-    }
-    let [blob] = blobs.as_slice() else {
-        return None;
-    };
-    let site = sites
-        .iter()
-        .find(|s| s.family == FamilyTag::Call)
-        .unwrap_or(&sites[0]);
-    Some(((*blob).clone(), site.span))
 }
 
 /// The go module owning a file: the nearest ancestor directory holding a
@@ -4084,7 +4050,7 @@ fn go_call_name_match(
             if sites.is_empty() {
                 GoSource::call_name_match(output, def_index, callee)
             } else {
-                unique_blob(&sites)
+                unique_blob(sites.iter().copied(), FamilyTag::Call)
             }
         }
         _ => GoSource::call_name_match(output, def_index, callee),

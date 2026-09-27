@@ -1974,6 +1974,28 @@ pub struct DefSite {
     pub family: FamilyTag,
 }
 
+/// Resolve a name to its sole corpus blob and the preferred family span.
+pub(crate) fn unique_blob<'a>(
+    sites: impl IntoIterator<Item = &'a DefSite>,
+    prefer: FamilyTag,
+) -> Option<(ContentId, Span)> {
+    let sites: Vec<&DefSite> = sites.into_iter().collect();
+    let mut blobs: Vec<&ContentId> = Vec::new();
+    for site in &sites {
+        if !blobs.contains(&&site.blob) {
+            blobs.push(&site.blob);
+        }
+    }
+    let [blob] = blobs.as_slice() else {
+        return None;
+    };
+    let site = sites
+        .iter()
+        .find(|site| site.family == prefer)
+        .unwrap_or(&sites[0]);
+    Some(((*blob).clone(), site.span))
+}
+
 /// THE corpus name index: def name -> every def site with that name, across
 /// ALL files and BOTH def-bearing families (CallF defs + TypeF entities).
 /// Lang-agnostic by construction: it is built from phase-1 OUTPUT (the
