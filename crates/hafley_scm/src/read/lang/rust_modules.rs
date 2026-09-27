@@ -104,7 +104,8 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
 /// The module facts off the extract pass's own syn parse, so no second parse.
 pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
-    rust_module_facts_from_rows(parsed, line_starts, rows)
+    let macros = hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts);
+    rust_module_facts_from_rows(parsed, line_starts, rows, macros)
 }
 
 pub fn rust_module_facts_from_tree(
@@ -114,13 +115,15 @@ pub fn rust_module_facts_from_tree(
     source: &[u8],
 ) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows_from_tree(tree, source);
-    rust_module_facts_from_rows(parsed, line_starts, rows)
+    let macros = hafley_scm::lang::rust::macro_invocation_rows_from_tree(tree, source);
+    rust_module_facts_from_rows(parsed, line_starts, rows, macros)
 }
 
 fn rust_module_facts_from_rows(
     parsed: &syn::File,
     line_starts: &[u32],
     rows: hafley_scm::lang::rust::ModuleResolutionRows,
+    macros: Vec<hafley_scm::lang::rust::MacroInvocationRow>,
 ) -> RustModuleFacts {
     let mut return_walk = ReturnReceiverWalk {
         line_starts,
@@ -278,21 +281,18 @@ fn rust_module_facts_from_rows(
             .filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
             .map(|(ident, _)| ident.to_string())
             .collect(),
-        macro_invocations: hafley_scm::lang::rust::macro_invocation_rows_from_parsed(
-            parsed,
-            line_starts,
-        )
-        .into_iter()
-        .map(|row| {
-            (
-                Span {
-                    start: row.range.start,
-                    len: row.range.end - row.range.start,
-                },
-                row.name,
-            )
-        })
-        .collect(),
+        macro_invocations: macros
+            .into_iter()
+            .map(|row| {
+                (
+                    Span {
+                        start: row.range.start,
+                        len: row.range.end - row.range.start,
+                    },
+                    row.name,
+                )
+            })
+            .collect(),
     }
 }
 

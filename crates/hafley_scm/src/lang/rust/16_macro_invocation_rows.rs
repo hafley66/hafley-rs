@@ -67,6 +67,70 @@ pub fn macro_invocation_rows_from_parsed(
     collector.rows
 }
 
+pub fn macro_invocation_rows_from_tree(
+    tree: &tree_sitter::Tree,
+    source: &[u8],
+) -> Vec<MacroInvocationRow> {
+    let mut rows = Vec::new();
+    let mut stack = vec![tree.root_node()];
+    while let Some(node) = stack.pop() {
+        match node.kind() {
+            "macro_invocation" => {
+                if let Some(path) = node.child_by_field_name("macro") {
+                    let name = std::str::from_utf8(&source[path.byte_range()])
+                        .expect("Rust macro paths are UTF-8")
+                        .rsplit("::")
+                        .next()
+                        .unwrap_or_default()
+                        .to_owned();
+                    let end = if node.end_byte() > node.start_byte()
+                        && source.get(node.end_byte() - 1) == Some(&b';')
+                    {
+                        node.end_byte() - 1
+                    } else {
+                        node.end_byte()
+                    };
+                    rows.push(MacroInvocationRow {
+                        range: syn_compatible_byte(source, node.start_byte())
+                            ..syn_compatible_byte(source, end),
+                        name,
+                    });
+                }
+            }
+            "macro_definition" => {
+                if let Some(name) = node.child_by_field_name("name") {
+                    rows.push(MacroInvocationRow {
+                        range: syn_compatible_byte(source, node.start_byte())
+                            ..syn_compatible_byte(source, node.end_byte()),
+                        name: std::str::from_utf8(&source[name.byte_range()])
+                            .expect("Rust macro names are UTF-8")
+                            .to_owned(),
+                    });
+                }
+            }
+            _ => {}
+        }
+        let mut cursor = node.walk();
+        let mut children = node.named_children(&mut cursor).collect::<Vec<_>>();
+        children.reverse();
+        stack.extend(children);
+    }
+    rows.sort_by_key(|row| row.range.end - row.range.start);
+    rows
+}
+
+fn syn_compatible_byte(source: &[u8], offset: usize) -> u32 {
+    let line_start = source[..offset]
+        .iter()
+        .rposition(|byte| *byte == b'\n')
+        .map_or(0, |newline| newline + 1);
+    let column = std::str::from_utf8(&source[line_start..offset])
+        .expect("Rust source is UTF-8")
+        .chars()
+        .count();
+    (line_start + column) as u32
+}
+
 pub fn macro_invocation_rows(content: &[u8]) -> Vec<MacroInvocationRow> {
     let Ok(text) = std::str::from_utf8(content) else {
         return Vec::new();

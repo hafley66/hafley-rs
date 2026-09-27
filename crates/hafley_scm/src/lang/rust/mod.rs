@@ -61,7 +61,8 @@ pub use const_string_rows::{const_string_rows, const_string_rows_from_tree, Cons
 pub use df_syntax_rows::{df_syntax_rows, DfNodeKind as DfSyntaxKind, DfSyntaxRows};
 pub use expanded_call_rows::{expanded_call_rows, ExpandedCallKind, ExpandedCallRows};
 pub use macro_invocation_rows::{
-    macro_invocation_rows, macro_invocation_rows_from_parsed, MacroInvocationRow,
+    macro_invocation_rows, macro_invocation_rows_from_parsed, macro_invocation_rows_from_tree,
+    MacroInvocationRow,
 };
 pub use module_resolution_rows::{
     module_resolution_rows, principal_ty, EnumVariantsRow, ImplMethodsRow, ModuleResolutionRows,
