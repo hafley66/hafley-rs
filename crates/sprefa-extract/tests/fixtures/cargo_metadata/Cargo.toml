@@ -1,0 +1,7 @@
+[workspace]
+members = ["crates/app", "crates/real-dep"]
+exclude = ["crates/excluded"]
+resolver = "2"
+
+[workspace.dependencies]
+renamed = { package = "real-dep", path = "crates/real-dep" }

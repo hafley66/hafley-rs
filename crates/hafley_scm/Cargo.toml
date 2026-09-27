@@ -39,6 +39,7 @@ tree-sitter-html = { version = "0.23", optional = true }
 tree-sitter-gdscript = { version = "6", optional = true }
 tree-sitter-commonlisp = { version = "0.4", optional = true }
 tree-sitter-rust = { version = "0.24", optional = true }
+cargo_metadata = { version = "=0.23.1", optional = true }
 tree-sitter-typescript = { version = "0.23", optional = true }
 tree-sitter-javascript = { version = "0.23", optional = true }
 serde_json = { version = "1", optional = true }
@@ -83,7 +84,8 @@ shared = [
     "dep:serde_json", "dep:regex", "dep:soopy", "dep:basic-toml",
     "dep:prost", "dep:rusqlite", "dep:rayon", "dep:quick_cache", "dep:tracing",
 ]
-rust = ["shared", "rust_syn", "dep:tree-sitter-rust"]
+rust = ["shared", "rust_syn", "dep:tree-sitter-rust", "cargo-metadata"]
+cargo-metadata = ["dep:cargo_metadata"]
 typescript = [
     "shared",
     "dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_ast", "dep:oxc_ast_visit", "dep:oxc_span",

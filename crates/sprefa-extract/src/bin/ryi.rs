@@ -820,14 +820,18 @@ fn extract_to(
     }
 
     if cli.deps {
-        for line in diet_file_edges_jsonl(&scip_request(cli)?)? {
+        let lines = diet_file_edges_jsonl(&scip_request(cli)?)
+            .map_err(|error| RyiExit::new(2, format!("ryi: {error}")))?;
+        for line in lines {
             output.line(&line)?;
         }
         return Ok(());
     }
 
     if cli.package_deps {
-        for line in package_edges_jsonl(&scip_request(cli)?)? {
+        let lines = package_edges_jsonl(&scip_request(cli)?)
+            .map_err(|error| RyiExit::new(2, format!("ryi: {error}")))?;
+        for line in lines {
             output.line(&line)?;
         }
         return Ok(());

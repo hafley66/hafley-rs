@@ -299,7 +299,7 @@ shared = [
     "dep:regex", "dep:soopy", "dep:prost", "dep:rusqlite", "dep:rustc-hash",
     "dep:hashbrown", "dep:rayon", "dep:quick_cache", "dep:tracing",
 ]
-rust = ["shared", "hafley_scm/rust", "dep:syn", "dep:proc-macro2", "dep:ra_ap_syntax", "dep:salsa", "dep:tree-sitter-rust"]
+rust = ["shared", "hafley_scm/rust", "hafley_scm/cargo-metadata", "dep:syn", "dep:proc-macro2", "dep:ra_ap_syntax", "dep:salsa", "dep:tree-sitter-rust"]
 typescript = [
     "shared", "hafley_scm/typescript", "dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_ast",
     "dep:oxc_ast_visit", "dep:oxc_span", "dep:oxc_syntax", "dep:oxc_semantic",

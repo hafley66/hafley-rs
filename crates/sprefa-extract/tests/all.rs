@@ -201,6 +201,8 @@ mod t_184_language_feature_matrix;
 mod t_185_rust_mod_file_edges;
 #[path = "187_python_module_resolution.rs"]
 mod t_187_python_module_resolution;
+#[path = "188_rust_cargo_metadata.rs"]
+mod t_188_rust_cargo_metadata;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]

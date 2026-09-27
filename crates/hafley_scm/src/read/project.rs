@@ -153,6 +153,8 @@ pub enum ProjectError {
     DepsPathOutsideRoot(PathBuf),
     /// Manifest edges were requested without `project_root`.
     ManifestsNeedRoot,
+    /// Cargo could not provide package and target ownership for Rust inputs.
+    CargoMetadataFailed(PathBuf, String),
     /// A bundled `.scm` query refused one of fast's files.
     Scm(String),
 }
@@ -178,6 +180,11 @@ impl std::fmt::Display for ProjectError {
             Self::ManifestsNeedRoot => write!(
                 f,
                 "package edges need --root: a package graph's node names are project-relative manifest paths"
+            ),
+            Self::CargoMetadataFailed(root, reason) => write!(
+                f,
+                "cargo metadata failed for {}: {reason}; Rust crate roots need cargo",
+                root.display()
             ),
             Self::Scm(detail) => write!(f, "scm: {detail}"),
         }
