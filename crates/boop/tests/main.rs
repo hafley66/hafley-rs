@@ -31,6 +31,8 @@ mod lane_completion_row;
 mod lane_create_env;
 #[path = "lane_debug.rs"]
 mod lane_debug;
+#[path = "lane_delete_dry_run.rs"]
+mod lane_delete_dry_run;
 #[path = "lane_lifecycle_e2e.rs"]
 mod lane_lifecycle_e2e;
 mod lane_retire_revive;

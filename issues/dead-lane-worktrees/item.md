@@ -1,12 +1,13 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: chore
-status: open
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
 lane: repo-hygiene
+closed: 2026-09-26
 ---
 
 # Remove dead extract-lane worktrees and fast-forward primary main
@@ -19,3 +20,9 @@ Eight worktrees under .boop-worktrees/feature/extract-lane-{b-meter,b-meter-2,c-
 ## Acceptance Criteria
 - [ ] worktrees removed, branches kept or deleted per user
 - [ ] primary main fast-forwarded
+
+## Resolution
+
+### 2026-09-27T02:56:40Z · @issuectl
+
+Repro receipt (boop 0.0.10 49124370-dirty): all nine named extract-lane worktree paths are absent; `boop beep lane delete --state dead --dry-run` lists three other lanes and one different worktree.

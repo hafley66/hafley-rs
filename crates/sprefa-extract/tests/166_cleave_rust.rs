@@ -202,6 +202,231 @@ fn rust_parent_glob_supplies_the_moved_items_type() {
 }
 
 #[test]
+fn untouched_imports_are_not_reported_as_orphans() {
+    let fixture = fixture("basic", "orphan-noise");
+    std::fs::write(
+        fixture.root.join("src/util.rs"),
+        "use crate::config::Config;\nuse crate::log::Log;\n\npub fn target() -> Config { Config::new() }\npub fn untouched() -> Log { Log::new() }\n",
+    )
+    .unwrap();
+    let plan = plan_of(&cleave(
+        &fixture,
+        &["src/util.rs#target", "src/app.rs", "--json"],
+    ));
+    assert!(!names(&plan, "orphans").contains(&"Log".to_string()));
+}
+
+#[test]
+fn default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files() {
+    let fixture = fixture("basic", "corpus-walk");
+    std::fs::write(fixture.root.join("tracked.rs"), "pub fn tracked() {}\n").unwrap();
+    std::fs::write(fixture.root.join("scratch.rs"), "pub fn scratch() {}\n").unwrap();
+    std::fs::write(fixture.root.join(".gitignore"), ".probe/\n").unwrap();
+    std::fs::create_dir_all(fixture.root.join(".probe")).unwrap();
+    std::fs::write(fixture.root.join(".probe/noise.rs"), "pub fn noise() {}\n").unwrap();
+    git(&fixture.root, &["add", "tracked.rs"]);
+
+    let default = sprefa_extract::move_cx::walk_files_with_untracked(&fixture.root, false).unwrap();
+    let explicit = sprefa_extract::move_cx::walk_files_with_untracked(&fixture.root, true).unwrap();
+    assert!(default.contains(&"tracked.rs".to_string()), "{default:?}");
+    assert!(!default.contains(&"scratch.rs".to_string()), "{default:?}");
+    assert!(explicit.contains(&"scratch.rs".to_string()), "{explicit:?}");
+    assert!(
+        explicit.contains(&".probe/noise.rs".to_string()),
+        "{explicit:?}"
+    );
+}
+
+#[test]
+fn batch_keeps_every_row_source_parseable_while_composing() {
+    let fixture = fixture("basic", "batch-invalid-rust");
+    std::fs::remove_dir_all(&fixture.root).unwrap();
+    let soopy = Path::new(env!("CARGO_MANIFEST_DIR")).join("../soopy");
+    copy_tree(&soopy, &fixture.root);
+    git(&fixture.root, &["init", "-q", "."]);
+    let list = fixture.state.join("batch.tsv");
+    std::fs::write(
+        &list,
+        "src/_1_pattern.rs#Pattern\tsrc/_1b_extract.rs\nsrc/_0a_durable_write.rs#DeviceSyncCounts\tsrc/_0b_counts.rs\n",
+    )
+    .unwrap();
+
+    let stdout = cleave(&fixture, &["--list", list.to_str().unwrap()]);
+    assert!(
+        !stdout.contains("cleave batch leaves invalid Rust"),
+        "{stdout}"
+    );
+}
+
+#[test]
+fn thread_local_static_is_named_unsupported_and_fails_the_plan() {
+    let fixture = fixture("basic", "thread-local-drag");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod opts;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/opts.rs"),
+        "use std::cell::RefCell;\nthread_local! { pub(crate) static LIVE_PARAMS: RefCell<u32> = RefCell::new(0); }\npub(crate) fn param_f32() -> u32 { LIVE_PARAMS.with(|value| *value.borrow()) }\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+
+    for target in ["LIVE_PARAMS", "param_f32"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["cleave", &format!("src/opts.rs#{target}"), "src/moved.rs"])
+            .args(if target == "param_f32" {
+                vec!["--drag"]
+            } else {
+                vec![]
+            })
+            .arg("--root")
+            .arg(&fixture.root)
+            .arg("--state")
+            .arg(&fixture.state)
+            .current_dir(&fixture.root)
+            .env("HAFLEY_TRACE", &fixture.trace)
+            .output()
+            .expect("cleave binary runs");
+        assert_eq!(output.status.code(), Some(2));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if target == "param_f32" {
+            assert!(
+                stdout.contains("ungraded LIVE_PARAMS"),
+                "{stdout}\n{stderr}"
+            );
+            assert!(
+                stderr.contains("cleave --drag left ungraded names"),
+                "{stderr}"
+            );
+        } else {
+            assert!(
+                stderr.contains("unsupported thread_local! macro"),
+                "{stderr}"
+            );
+        }
+    }
+}
+
+#[test]
+fn unsupported_macro_items_are_ungraded_and_fail_the_plan() {
+    let fixture = fixture("basic", "unsupported-macro-item");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod opts;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/opts.rs"),
+        "lazy_static! { static ref UNSUPPORTED: std::cell::RefCell<u32> = std::cell::RefCell::new(0); }\npub(crate) fn param_f32() -> u32 { *UNSUPPORTED.borrow() }\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/opts.rs#UNSUPPORTED", "src/moved.rs"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unsupported lazy_static! macro"));
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/opts.rs#param_f32", "src/moved.rs", "--drag"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("ungraded UNSUPPORTED"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cleave --drag left ungraded names"));
+}
+
+#[test]
+fn macro_rules_items_are_named_unsupported() {
+    let fixture = fixture("basic", "macro-rules-item");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod opts;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/opts.rs"),
+        "macro_rules! param { ($value:expr) => { $value }; }\npub(crate) fn read() -> u32 { param!(1) }\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/opts.rs#param", "src/moved.rs"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("unsupported macro_rules! macro"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn undeclared_destinations_stop_before_rewriting_callers() {
+    let fixture = fixture("basic", "undeclared-dest");
+    let stop = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args([
+            "cleave",
+            "src/util.rs#load_config",
+            "crates/new/src/x.rs",
+            "--drag",
+        ])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(stop.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&stop.stderr).contains("is not declared by a Rust module"));
+
+    let create = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args([
+            "cleave",
+            "src/util.rs#load_config",
+            "src/not_declared.rs",
+            "--drag",
+        ])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(create.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&create.stdout).contains("mod not_declared;"));
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(
@@ -292,15 +517,16 @@ fn a_commit_moves_the_item_its_uses_and_the_caller_and_still_compiles() {
 #[test]
 fn a_missing_destination_is_created_with_every_use_line() {
     let fixture = fixture("basic", "create");
-    cleave(
-        &fixture,
-        &["src/util.rs#load_config", "src/loader.rs", "--commit"],
-    );
     std::fs::write(
         fixture.root.join("src/lib.rs"),
         "pub mod app;\npub mod config;\npub mod loader;\npub mod log;\npub mod util;\n",
     )
     .unwrap();
+    cleave(
+        &fixture,
+        &["src/util.rs#load_config", "src/loader.rs", "--commit"],
+    );
+    assert!(read(&fixture, "src/lib.rs").contains("pub mod loader;"));
     assert_eq!(use_lines(&fixture, "src/loader.rs"), 3);
     assert!(read(&fixture, "src/app.rs").contains("use crate::loader::load_config;"));
     cargo_check(&fixture);

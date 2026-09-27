@@ -322,8 +322,17 @@ impl CommitEngine {
                     reason: "receipt does not match the sealed stage".into(),
                 });
             }
-            validate_receipt(&self.target_root, &receipt, stage.id, &stage.root)?;
-            return Ok(receipt);
+            match validate_receipt(&self.target_root, &receipt, stage.id, &stage.root) {
+                Ok(()) => return Ok(receipt),
+                Err(refusal @ CommitRefusal::ReceiptDiverged { .. }) => {
+                    // A completed stage can be rolled back by a later verified
+                    // operation. Reapply it only when its full pre-state holds.
+                    if self.preflight(stage).is_err() {
+                        return Err(refusal);
+                    }
+                }
+                Err(refusal) => return Err(refusal),
+            }
         }
         let journal_path = self.journal_path(stage.id);
         if journal_path.exists() {

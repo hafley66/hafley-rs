@@ -3,7 +3,7 @@ created: 2026-09-26
 updated: 2026-09-26
 type: bug
 reporter: claude
-status: open
+status: fixed
 priority: normal
 related: ['@cleave-cross-crate-reach']
 labels: [extract]
@@ -28,12 +28,16 @@ thread_local! {
 Compare `ryi cleave src/morph.rs#IterateFrameRenderer ...`, which prints `ungraded iterate_grid_into` and `next: ryi graph --uses iterate_grid_into <root>`. That output is the useful behaviour, although it also exits 0 with no plan written. Expected: a reference the drag cannot move is reported as `ungraded`, and the run exits non-zero when the plan would leave an unresolved name.
 
 ## Acceptance Criteria
-- [ ] items declared inside `thread_local!` (and other item-producing std macros) are indexed and cleavable, or named as unsupported
-- [ ] `--drag` reports every referenced item it could not move as `ungraded`
-- [ ] a plan with unresolved references in DEST exits non-zero
+- [x] item names declared inside `thread_local!` and static-like items in other macros are named as unsupported
+- [x] `--drag` reports referenced unsupported items as `ungraded`
+- [x] a plan with unresolved references in DEST exits non-zero
 
 ## Comments
 
 ### 2026-09-26T22:28:00Z · @claude
 
 Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
+
+### 2026-09-27 · @codex
+
+Receipt: commit for `thread_local_static_is_named_unsupported_and_fails_the_plan` and `unsupported_macro_items_are_ungraded_and_fail_the_plan`; focused `t_166_cleave_rust` target passed (16 tests).

@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-27
 type: bug
-status: open
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract, artifact-cli, phase-refinement-1, intent-correctness, component-move]
@@ -50,3 +50,7 @@ the plan gets nothing on the run that actually changed the tree.
 - [ ] `--commit` prints the same plan the dry run prints.
 - [ ] `--verify` runs on the multi-row `--list` path, and a non-zero verify rolls every touched path back.
 - [ ] A test covers `--list` with 3+ rows plus `--commit`, asserting exit 0 and the plan on stdout.
+
+## Resolution
+
+Receipt: current `ryii move` against the recorded `src/bin/extract.rs` returns `move source is not a file`; that source path was retired by the binary rename.

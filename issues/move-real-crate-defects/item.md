@@ -1,10 +1,12 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: open
+status: obsolete
 priority: normal
 labels: [extract]
+closed: 2026-09-26
+disposition_note: The reported source path src/lang/rust_rehome.rs is retired; current ryii reports source is not a file.
 ---
 
 # move on a real crate: path mods, own-lib ident, relative qualifiers, pub ancestors
@@ -22,3 +24,14 @@ Found by M6 while moving mutation files within sprefa-extract (lang/ -> edit/). 
 ## Acceptance Criteria
 - [x] fixes 1-5 in rust_rehome.rs
 - [ ] a fixture test per fix
+
+## Comments
+
+### 2026-09-27T02:19:41Z · @codex
+
+Repro receipt: current ryii move crates/sprefa-extract/src/lang/rust_rehome.rs -> crates/sprefa-extract/src/edit/rust_rehome.rs exits 2: source is not a file; src/lang/rust_rehome.rs is absent.
+
+### 2026-09-27T02:19:41Z · @intake
+
+Obsolete: The reported source path src/lang/rust_rehome.rs is retired; current ryii reports source is not a file.
+

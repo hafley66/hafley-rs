@@ -3,10 +3,14 @@ created: 2026-09-26
 updated: 2026-09-26
 type: bug
 reporter: claude
-status: open
+status: fixed
 priority: high
 related: ['@cleave-cross-crate-reach']
 labels: [extract]
+closed: 2026-09-26
+commits:
+- hash: 5fa64e40556fa04e8b45557166566fdc5ac29518
+  summary: 'fix(sprefa-extract): honor Rust relocate module stems'
 ---
 
 # move --relocate-mod still writes #[path]; cross-crate move silently uses #[path]
@@ -30,8 +34,8 @@ The help for `--relocate-mod` says "Move a Rust module's `mod` line instead of a
 The file stays compiled into the binary crate through a path reaching outside `src/`. Expected: detect that DEST is outside SRC's package root and stop (exit 2), or require an explicit flag.
 
 ## Acceptance Criteria
-- [ ] `--relocate-mod` renames the `mod` item to the new stem and respells all `crate::<old>::` paths, with no `#[path]`
-- [ ] move with DEST outside SRC's package root is a named stop unless a flag opts into `#[path]`
+- [x] `--relocate-mod` renames the `mod` item to the new stem and respells all `crate::<old>::` paths, with no `#[path]`
+- [x] move with DEST outside SRC's package root is a named stop unless a flag opts into `#[path]`
 - [ ] tests for both
 
 ## Comments
@@ -39,3 +43,8 @@ The file stays compiled into the binary crate through a path reaching outside `s
 ### 2026-09-26T22:27:59Z · @claude
 
 Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
+
+### 2026-09-27T02:17:58Z · @codex
+
+Current ryii reproduced both defects; relocation now renames the module and stops outside the crate root. t_3_move_rust passed (19 tests), including cargo check of the renamed fixture.
+

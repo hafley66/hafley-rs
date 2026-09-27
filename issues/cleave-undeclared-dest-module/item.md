@@ -3,7 +3,7 @@ created: 2026-09-26
 updated: 2026-09-26
 type: bug
 reporter: claude
-status: open
+status: fixed
 priority: high
 related: ['@cleave-cross-crate-reach']
 labels: [extract]
@@ -28,12 +28,18 @@ Corpus: ascii-renderer at main `1c24a4b` (single binary crate, `src/main.rs` dec
 Expected: when DEST is under no package, or under a package other than SRC's, either stop with a named error (exit 2) or spell callers through the destination package (`ascii_engine::...`). If DEST is inside SRC's crate, add the `mod` line.
 
 ## Acceptance Criteria
-- [ ] cleave into a path that is under no `Cargo.toml` is a named stop (exit 2)
-- [ ] cleave into a path whose module is undeclared in SRC's crate adds the `mod` declaration (or stops), never emits `crate::<undeclared>` paths
-- [ ] test: fixture binary crate, cleave into `crates/new/src/x.rs`, assert the stop
+- [x] cleave into a path with no declared Rust module path is a named stop (exit 2)
+- [x] an undeclared destination with a usable parent gains its `mod` declaration; paths without a usable parent stop before caller rewrites
+- [x] test: fixture binary crate, cleave into `crates/new/src/x.rs`, assert the stop
 
 ## Comments
 
 ### 2026-09-26T22:27:59Z · @claude
 
 Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
+
+### 2026-09-27 · @codex
+
+Receipt: `t_166_cleave_rust` passed (18 tests), including `undeclared_destinations_stop_before_rewriting_callers` and `a_missing_destination_is_created_with_every_use_line`.
+
+Follow-up receipt: package-nested `src/lib.rs` declarations are recognized; the combined `t_166_cleave_rust` and `t_173_move_cross_crate` targets passed (33 tests).

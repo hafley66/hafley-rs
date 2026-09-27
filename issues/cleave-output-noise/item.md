@@ -3,7 +3,7 @@ created: 2026-09-26
 updated: 2026-09-26
 type: improvement
 reporter: claude
-status: open
+status: fixed
 priority: low
 related: ['@cleave-cross-crate-reach']
 labels: [extract]
@@ -22,7 +22,7 @@ Output noise from `ryi cleave` on a 140-module binary crate:
 3. **Untracked scratch dirs are in the corpus.** The planning agent reports that an untracked `.probe/` dir was scanned. Expected: honour `.gitignore`, and skip untracked files unless `--root` names them.
 
 ## Acceptance Criteria
-- [ ] default log level hides per-file INFO
+- [wont-fix] default log level hides per-file INFO; default remains INFO by user ruling
 - [ ] `orphan` lists only imports orphaned by this plan
 - [ ] corpus walk skips gitignored/untracked paths by default
 
@@ -31,3 +31,7 @@ Output noise from `ryi cleave` on a 140-module binary crate:
 ### 2026-09-26T22:28:00Z · @claude
 
 Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
+
+### 2026-09-27 · @codex
+
+Receipt: tracked-only default corpus and move-only orphan rows retained; focused `t_166_cleave_rust` tests passed. Default INFO logging stays per user ruling.

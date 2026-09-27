@@ -1,12 +1,13 @@
 ---
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-09-26
 type: feature
-status: open
+status: obsolete
 priority: high
 epic: boop-process
 size: M
 blocked_by: ['@boop-crate-split']
+closed: 2026-09-26
 ---
 
 # boop job / boop mail / boop me: the job-control verb surface
@@ -20,3 +21,9 @@ The verb surface of `docs/design/boop-process.md` section 2: `boop job create|li
 - [ ] each old spelling is a hidden alias that prints one deprecation line to stderr and works.
 - [ ] tests: wait-all with two children (one fails, rc propagates), kill keeps the row / rm forgets, signal --children reaches two live children and skips a dead one, attach on a pane-less job is a named error, --timeout kills at N+poll.
 - [ ] `docs/design/boop-process.md` section 2 updated to match; `crates/boop/docs/*.md` verbs renamed.
+
+## Resolution
+
+### 2026-09-27T03:11:14Z · @issuectl
+
+Repro receipt (boop 0.0.10 49124370-dirty): `boop --help` exposes `beep` and `db`; `job`, `mail`, and `host` are absent, with current doctrine naming beep for drive/mail and db for reads.

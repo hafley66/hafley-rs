@@ -378,6 +378,64 @@ fn dynamic_stop_lists_every_seat() {
     assert_untouched(&fixture, case);
 }
 
+/// Class property declarations and accesses on typed receivers rename across
+/// the class body and a file importing its type.
+#[test]
+fn typed_class_property_renames_across_files() {
+    let fixture = fixture("property", "commit");
+    let index = scip_index(&fixture.root);
+    let stdout = rename_verb(
+        &fixture,
+        "src/box.ts#old",
+        "fresh",
+        &["--verify-scip", &index_arg(&index), "--commit"],
+    );
+    assert!(stdout.contains("scip-verify disagreements=0"), "{stdout}");
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/box.ts")).unwrap(),
+        "export class Box {\n  fresh = 1;\n\n  current() {\n    return this.fresh;\n  }\n}\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/use.ts")).unwrap(),
+        "import { Box } from \"./box\";\n\nexport function read(box: Box): number {\n  const { fresh: old } = box;\n  return box.fresh + old;\n}\n"
+    );
+}
+
+#[test]
+fn untyped_property_receiver_keeps_the_dynamic_stop() {
+    let fixture = fixture("property", "untyped");
+    let path = fixture.root.join("src/use.ts");
+    let mut text = std::fs::read_to_string(&path).unwrap();
+    text.push_str("\nexport function unknown(probe: unknown) { return probe.old; }\n");
+    std::fs::write(&path, text).unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .arg("rename")
+        .arg("src/box.ts#old")
+        .arg("fresh")
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .output()
+        .expect("extract binary runs");
+    assert_eq!(output.status.code(), Some(6));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("untyped property access"),
+        "dynamic seat is named: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
+fn object_literal_property_key_renames_with_typed_access() {
+    let fixture = fixture("object_property", "commit");
+    rename_verb(&fixture, "src/app.ts#old", "fresh", &["--commit"]);
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/app.ts")).unwrap(),
+        "export const box = { fresh: 1 };\n\nexport function read(): number {\n  return box.fresh;\n}\n"
+    );
+}
+
 // ── arc 3: the importer walk ────────────────────────────────────────────────
 
 /// An exported symbol's rename reaches every file the importer graph joins to
