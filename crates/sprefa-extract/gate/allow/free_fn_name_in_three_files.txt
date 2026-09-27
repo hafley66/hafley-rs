@@ -51,21 +51,18 @@ crates/hafley_scm/src/lang/rust/7_type_entity_rows.rs	fn::collect	1
 crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs	fn::collect	1
 crates/hafley_scm/src/lib.rs	fn::run	1
 crates/hafley_scm/src/read/2_slow.rs	fn::span_of	1
+crates/hafley_scm/src/read/cargo_metadata.rs	fn::packages	1
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	fn::ingest	1
 crates/hafley_scm/src/read/lang/commonlisp/_0_source.rs	fn::parse	1
 crates/hafley_scm/src/read/lang/commonlisp/_0_source.rs	fn::project_cst	1
-crates/hafley_scm/src/read/lang/commonlisp/_0_source.rs	fn::span	1
 crates/hafley_scm/src/read/lang/data/_0_source.rs	fn::parse	1
 crates/hafley_scm/src/read/lang/data/_0_source.rs	fn::span_of	1
 crates/hafley_scm/src/read/lang/data/_0_source.rs	fn::walk	1
 crates/hafley_scm/src/read/lang/fallback.rs	fn::call_drops	1
-crates/hafley_scm/src/read/lang/fallback.rs	fn::node_text	1
 crates/hafley_scm/src/read/lang/gdscript/_0_source.rs	fn::parse	1
 crates/hafley_scm/src/read/lang/gdscript/_0_source.rs	fn::project_cst	1
-crates/hafley_scm/src/read/lang/gdscript/_0_source.rs	fn::span	1
 crates/hafley_scm/src/read/lang/go.rs	fn::call_drops	1
 crates/hafley_scm/src/read/lang/go.rs	fn::clean_block_comment	1
-crates/hafley_scm/src/read/lang/go.rs	fn::def_span	1
 crates/hafley_scm/src/read/lang/go.rs	fn::df_edge	1
 crates/hafley_scm/src/read/lang/go.rs	fn::df_push	1
 crates/hafley_scm/src/read/lang/go.rs	fn::fn_sigs	1
@@ -100,7 +97,6 @@ crates/hafley_scm/src/read/lang/kotlin.rs	fn::push_sig	1
 crates/hafley_scm/src/read/lang/kotlin.rs	fn::resolve_type_dst	1
 crates/hafley_scm/src/read/lang/kotlin_receivers.rs	fn::is_type_node	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::last_segment_text	1
-crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::named_children	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_application	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_class	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_declaration	1
@@ -118,7 +114,6 @@ crates/hafley_scm/src/read/lang/prolog/_0_source.rs	fn::project_df	1
 crates/hafley_scm/src/read/lang/prolog/_0_source.rs	fn::project_types	1
 crates/hafley_scm/src/read/lang/prolog/_0_source.rs	fn::span	1
 crates/hafley_scm/src/read/lang/prolog/_0_source.rs	fn::text	1
-crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::def_span	1
 crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::df_edge	1
 crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::df_push	1
 crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::fn_sigs	1
@@ -131,7 +126,6 @@ crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::push_sig	1
 crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::resolve_type_dst	1
 crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::scip_call_target	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::last_segment_text	1
-crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::named_children	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_application	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_callable	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_class	1
@@ -172,6 +166,8 @@ crates/hafley_scm/src/read/lang/ts_checker.rs	fn::answer	2
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::collect	1
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::to_span	1
 crates/hafley_scm/src/read/tsi/ingest.rs	fn::ingest	1
+crates/hafley_scm/src/span.rs	fn::def_span	1
+crates/hafley_scm/src/span.rs	fn::node_text	1
 crates/ryi/src/gen/client_auto.rs	fn::main	1
 crates/ryi/src/gen/client_auto.rs	fn::run	1
 crates/ryi/src/main.rs	fn::main	1
@@ -210,7 +206,6 @@ crates/sprefa-extract/src/edit/kotlin_rename.rs	fn::scan_file	1
 crates/sprefa-extract/src/edit/kotlin_rename.rs	fn::seat	1
 crates/sprefa-extract/src/edit/kotlin_rename.rs	fn::select_by_at	1
 crates/sprefa-extract/src/edit/kotlin_rename.rs	fn::settle	1
-crates/sprefa-extract/src/edit/kotlin_rename.rs	fn::span_of	1
 crates/sprefa-extract/src/edit/prolog_rename.rs	fn::not_found	1
 crates/sprefa-extract/src/edit/prolog_rename.rs	fn::scan_file	1
 crates/sprefa-extract/src/edit/prolog_rename.rs	fn::seat	1
@@ -224,6 +219,7 @@ crates/sprefa-extract/src/edit/rust_rehome.rs	fn::node_text	1
 crates/sprefa-extract/src/edit/rust_rehome.rs	fn::scan_file	1
 crates/sprefa-extract/src/edit/rust_rehome.rs	fn::slice	1
 crates/sprefa-extract/src/edit/rust_rehome.rs	fn::under	1
+crates/sprefa-extract/src/edit/rust_rehome/cross.rs	fn::packages	1
 crates/sprefa-extract/src/edit/rust_rename.rs	fn::ambiguous	1
 crates/sprefa-extract/src/edit/rust_rename.rs	fn::not_found	1
 crates/sprefa-extract/src/edit/rust_rename.rs	fn::principal_ty	1
@@ -234,6 +230,7 @@ crates/sprefa-extract/src/edit/rust_rename.rs	fn::under	1
 crates/sprefa-extract/src/edit/ts_mutate.rs	fn::inside	1
 crates/sprefa-extract/src/edit/ts_mutate.rs	fn::line_span	1
 crates/sprefa-extract/src/edit/ts_mutate.rs	fn::slice	1
+crates/sprefa-extract/src/edit/ts_rehome/cross.rs	fn::packages	1
 crates/sprefa-extract/src/edit/ts_rename.rs	fn::ambiguous	1
 crates/sprefa-extract/src/edit/ts_rename.rs	fn::not_found	1
 crates/sprefa-extract/src/edit/ts_rename.rs	fn::select_by_at	1

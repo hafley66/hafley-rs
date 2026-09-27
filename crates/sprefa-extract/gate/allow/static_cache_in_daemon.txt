@@ -1,6 +1,7 @@
 crates/hafley_scm/src/lang/rust/23_frontend.rs	fn::call_query	1
 crates/hafley_scm/src/lang/rust/23_frontend.rs	fn::fast_file_query	1
 crates/hafley_scm/src/read/cache.rs	fn::cache	1
+crates/hafley_scm/src/read/cargo_metadata.rs	item::<file-scope>	2
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	item::<file-scope>	1
 crates/hafley_scm/src/read/lang/go.rs	fn::fanout_cap_registry	1
 crates/hafley_scm/src/read/lang/go.rs	fn::go_aliases_of_dir	1
