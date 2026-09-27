@@ -942,7 +942,8 @@ impl Store {
                 )?;
                 if note_is_required {
                     self.connection.execute_batch(
-                        "CREATE TABLE agent_favorite_v19 (
+                        "DROP VIEW IF EXISTS v_favorite;
+                         CREATE TABLE agent_favorite_v19 (
                            favorite_id INTEGER PRIMARY KEY,
                            markdown_id INTEGER NOT NULL,
                            note TEXT,
@@ -6887,7 +6888,11 @@ mod tests {
         store
             .connection
             .execute_batch(
-                "ALTER TABLE agent_turn DROP COLUMN source_class; PRAGMA user_version = 34;",
+                "DROP VIEW IF EXISTS v_favorite;
+                 DROP VIEW IF EXISTS v_message;
+                 DROP VIEW IF EXISTS v_conversational_turn;
+                 ALTER TABLE agent_turn DROP COLUMN source_class;
+                 PRAGMA user_version = 34;",
             )
             .unwrap();
         drop(store);
