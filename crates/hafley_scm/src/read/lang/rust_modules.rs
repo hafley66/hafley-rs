@@ -391,14 +391,11 @@ impl CargoManifest {
 
 /// Crate identifier -> corpus library root, from the Cargo.toml (read off
 /// disk) of each crate directory the corpus's `.rs` files sit in.
-fn crate_libs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
-    let roots: BTreeSet<String> = corpus
-        .iter()
-        .filter(|(path, _)| path.ends_with(".rs"))
-        .filter_map(|(path, _)| {
-            crate_root_of(path).or_else(|| path.starts_with("src/").then(String::new))
-        })
-        .collect();
+fn crate_libs(
+    crate_roots: &HashMap<String, String>,
+    corpus: &[(String, ContentId)],
+) -> HashMap<String, String> {
+    let roots: BTreeSet<String> = crate_roots.values().cloned().collect();
     let in_corpus: std::collections::HashSet<&str> =
         corpus.iter().map(|(path, _)| path.as_str()).collect();
     let mut out = HashMap::new();
@@ -676,6 +673,9 @@ pub struct RustModuleIndex {
     impl_types: std::collections::HashSet<String>,
     /// `.rs` path -> the directory of its nearest `Cargo.toml`.
     crate_dirs: HashMap<String, String>,
+    /// `.rs` path -> nearest manifest directory, including files outside a
+    /// Cargo target that still need `crate::` module anchoring.
+    crate_roots: HashMap<String, String>,
     /// A file can be included by more than one Cargo target through `mod`.
     target_scopes: HashMap<String, HashSet<TargetScope>>,
     known_crate_idents: HashSet<String>,
@@ -733,17 +733,16 @@ fn lexical(path: &std::path::Path) -> String {
 /// member counts: under `src/`, a Cargo target root, or reached from one by
 /// `mod`. Nested packages use their own nearest manifest.
 fn crate_dirs_of(
-    corpus: &[(String, ContentId)],
     files: &[(String, RustModuleFacts)],
+    nearest: &HashMap<String, String>,
 ) -> HashMap<String, String> {
-    let nearest = nearest_crate_dirs(corpus);
     let facts: HashMap<&str, &RustModuleFacts> = files
         .iter()
         .map(|(path, facts)| (path.as_str(), facts))
         .collect();
     let mut members: HashMap<String, String> = HashMap::new();
     let mut queue: Vec<String> = Vec::new();
-    for (path, dir) in &nearest {
+    for (path, dir) in nearest {
         let relative = std::path::Path::new(path)
             .strip_prefix(dir)
             .map(|rel| rel.to_string_lossy().into_owned())
@@ -1003,6 +1002,10 @@ pub struct ImplMethodTarget {
 type ExportTable = HashMap<String, Resolution>;
 
 impl RustModuleIndex {
+    pub fn crate_root_of(&self, path: &str) -> Option<String> {
+        crate_root_of(path, &self.crate_roots)
+    }
+
     /// `files` is every `.rs` input's facts; `corpus` is EVERY input's (path,
     /// blob), any language, so target lookups stay lang-agnostic.
     pub fn build(
@@ -1010,8 +1013,9 @@ impl RustModuleIndex {
         corpus: &[(String, ContentId)],
         def_index: &DefIndex,
     ) -> RustModuleIndex {
-        let crate_dirs = crate_dirs_of(corpus, &files);
-        let crate_libs = crate_libs(corpus);
+        let crate_roots = nearest_crate_dirs(corpus);
+        let crate_dirs = crate_dirs_of(&files, &crate_roots);
+        let crate_libs = crate_libs(&crate_roots, corpus);
         let target_scopes = target_scopes_of(&files, &crate_dirs, &crate_libs);
         let known_crate_idents = crate_dirs
             .values()
@@ -1022,6 +1026,7 @@ impl RustModuleIndex {
             crate_libs,
             crate_deps: crate_deps_of(&crate_dirs),
             crate_dirs,
+            crate_roots,
             target_scopes,
             known_crate_idents,
             ..RustModuleIndex::default()
@@ -2012,7 +2017,7 @@ impl RustModuleIndex {
                 crate_root: None,
             }
         } else {
-            let Some(target) = module_target(from, &refs) else {
+            let Some(target) = module_target(from, &refs, self.crate_root_of(from)) else {
                 return HomeFile::None;
             };
             target

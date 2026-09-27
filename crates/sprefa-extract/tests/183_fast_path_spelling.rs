@@ -13,10 +13,29 @@ fn rust_project() -> PathBuf {
     .unwrap();
     std::fs::write(
         root.join("src/lib.rs"),
-        "pub mod api;\npub use crate::api::Thing;\n",
+        "pub mod api;\npub use crate::api::Thing;\n#[path = \"../tests/helper.rs\"] pub mod helper;\n",
     )
     .unwrap();
     std::fs::write(root.join("src/api.rs"), "pub struct Thing;\n").unwrap();
+    std::fs::create_dir_all(root.join("tests")).unwrap();
+    std::fs::write(
+        root.join("tests/helper.rs"),
+        "use crate::api::Thing;\npub fn make() -> Thing { Thing }\n",
+    )
+    .unwrap();
+    let nested_crate = root.join("src/nested_crate");
+    std::fs::create_dir_all(nested_crate.join("src")).unwrap();
+    std::fs::write(
+        nested_crate.join("Cargo.toml"),
+        "[package]\nname = \"nested_crate\"\nversion = \"0.1.0\"\nedition = \"2021\"\n",
+    )
+    .unwrap();
+    std::fs::write(
+        nested_crate.join("src/lib.rs"),
+        "pub mod api;\npub use crate::api::NestedThing;\n",
+    )
+    .unwrap();
+    std::fs::write(nested_crate.join("src/api.rs"), "pub struct NestedThing;\n").unwrap();
     let git = |args: &[&str]| {
         let output = Command::new("git")
             .arg("-C")
@@ -89,18 +108,25 @@ fn equivalent_directory_spellings_resolve_the_same_imports_and_keep_output_paths
         normalized(relative.clone(), &root),
         normalized(absolute.clone(), &root)
     );
-    assert!(relative
-        .iter()
-        .all(|row| row["src_path"].as_str().unwrap().starts_with("src/")));
+    assert!(relative.iter().all(|row| {
+        let path = row["src_path"].as_str().unwrap();
+        path.starts_with("src/") || path.starts_with("tests/")
+    }));
     assert!(absolute.iter().all(|row| {
-        row["src_path"]
-            .as_str()
-            .unwrap()
-            .starts_with(&format!("{}/src/", root.display()))
+        let path = row["src_path"].as_str().unwrap();
+        path.starts_with(&format!("{}/src/", root.display()))
+            || path.starts_with(&format!("{}/tests/", root.display()))
     }));
     assert!(
         !relative.is_empty(),
         "fixture must exercise resolved imports"
     );
+    assert!(relative
+        .iter()
+        .any(|row| { row["src_path"] == "tests/helper.rs" && row["target_path"] == "src/api.rs" }));
+    assert!(relative.iter().any(|row| {
+        row["src_path"] == "src/nested_crate/src/lib.rs"
+            && row["target_path"] == "src/nested_crate/src/api.rs"
+    }));
     std::fs::remove_dir_all(root).unwrap();
 }
