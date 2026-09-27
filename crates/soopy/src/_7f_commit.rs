@@ -299,6 +299,13 @@ impl CommitEngine {
                 actual,
             });
         }
+        let journal_path = self.journal_path(stage.id);
+        if journal_path.exists() {
+            return Err(CommitRefusal::RecoveryRequired {
+                stage_id: stage.id,
+                journal: journal_path,
+            });
+        }
         if let Some(receipt) = self.read_receipt(stage.id)? {
             let expected_operations = stage_operation_receipts(&stage.files);
             let expected_watch = watch_projection(stage.id, &expected_operations);
@@ -322,15 +329,17 @@ impl CommitEngine {
                     reason: "receipt does not match the sealed stage".into(),
                 });
             }
-            validate_receipt(&self.target_root, &receipt, stage.id, &stage.root)?;
-            return Ok(receipt);
-        }
-        let journal_path = self.journal_path(stage.id);
-        if journal_path.exists() {
-            return Err(CommitRefusal::RecoveryRequired {
-                stage_id: stage.id,
-                journal: journal_path,
-            });
+            match validate_receipt(&self.target_root, &receipt, stage.id, &stage.root) {
+                Ok(()) => return Ok(receipt),
+                Err(refusal @ CommitRefusal::ReceiptDiverged { .. }) => {
+                    // A completed stage can be rolled back by a later verified
+                    // operation. Reapply it only when its full pre-state holds.
+                    if self.preflight(stage).is_err() {
+                        return Err(refusal);
+                    }
+                }
+                Err(refusal) => return Err(refusal),
+            }
         }
         let preflight_started = Instant::now();
         let preflight_span = tracing::debug_span!(
