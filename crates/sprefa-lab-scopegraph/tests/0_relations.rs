@@ -351,8 +351,7 @@ fn unknown_general_predicate_is_a_named_error() {
 
 #[test]
 fn kotlin_top_level_functions_resolve_before_declaration_but_values_do_not() {
-    let source =
-        "fun caller() = later()\nfun later() = 1\nfun values() { consume(item); val item = 1 }";
+    let source = "fun caller() = later()\nfun later() = 1\nfun topUser() = x\nval x = 1\nclass C { fun f() = x; val x = 1 }\nfun values() { consume(item); val item = 1 }";
     let graph = analyze(
         Language::new(tree_sitter_kotlin_sg::LANGUAGE),
         source,
@@ -368,6 +367,32 @@ fn kotlin_top_level_functions_resolve_before_declaration_but_values_do_not() {
     assert!(
         later.definition.is_some(),
         "later function should resolve: {later:?}"
+    );
+    let x_references = graph
+        .references
+        .iter()
+        .filter(|reference| reference.name == "x")
+        .collect::<Vec<_>>();
+    assert_eq!(
+        x_references.len(),
+        2,
+        "top-level and member uses: {x_references:?}"
+    );
+    let top_level_property = source.find("val x = 1").unwrap() + 4;
+    let member_property = source.rfind("val x = 1").unwrap() + 4;
+    assert_eq!(
+        graph.definitions[x_references[0].definition.unwrap()]
+            .capture
+            .start,
+        top_level_property,
+        "top-level property should resolve independent of source order"
+    );
+    assert_eq!(
+        graph.definitions[x_references[1].definition.unwrap()]
+            .capture
+            .start,
+        member_property,
+        "class member property should resolve independent of source order"
     );
     let item = graph
         .references

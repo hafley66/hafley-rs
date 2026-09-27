@@ -189,7 +189,7 @@ CodeQL and Glean, and is out of scope here.
 - [x] `did_exceed_match_limit()` is checked after each query run and overflow returns a path-named error.
 - [x] The engine uses `matches()` exclusively; tests pin grouped captures.
 - [x] Kotlin corpus resolution handles explicit imports, aliases, wildcard imports, and same-package names.
-- [x] Kotlin local resolution hoists function and type declarations into their enclosing scope while preserving source order for value bindings.
+- [x] Kotlin local resolution hoists function and type declarations plus top-level and class-member properties while preserving source order for function-body value bindings.
 - [x] Qualified-name symbol-stack graph edges and typed receiver-member resolution.
 - [ ] L1-L4 on Kotlin: compare receiver 7 and module-plane 11 fixtures with `ryi fast`, with zero unexplained disagreements.
 - [x] L5 TypeScript query runs through the same engine with zero language-specific engine edits.
@@ -216,3 +216,7 @@ The initial current-checkout reproduction on `w: Widget` / `w.run()` had no memb
 ### 2026-09-27 · forward declaration reproduction
 
 Red: `kotlin_top_level_functions_resolve_before_declaration_but_values_do_not` observed `later()` with `definition=None, unresolved=NoDefinition` for `fun caller() = later(); fun later() = 1`. Green: namespace/type definitions attach to the containing scope and resolve independent of source order; the same test passes while a later `val item` remains `DefinitionAfterReference`. The corpus test now asserts a sibling function call resolves locally; its cross-file same-package case remains pinned in `Main.kt`. The lab suite passes 14/14. The `sprefa-extract` query entry now uses the crate's public re-exports with only shared, Kotlin, and TypeScript features enabled. L4 fixture comparisons and L6 SCIP/ratchet measurements remain unchecked with their commands in `REPORT.md`.
+
+### 2026-09-27 · Kotlin property order follow-up
+
+Red: `kotlin_top_level_functions_resolve_before_declaration_but_values_do_not` failed on `fun topUser() = x; val x = 1` with `definition=None`. Green: top-level and class-member `val` properties now resolve independent of source order; the function-body `val item` remains `DefinitionAfterReference`. Targeted test passes. L4/L6 measurement gates remain open with their existing commands.

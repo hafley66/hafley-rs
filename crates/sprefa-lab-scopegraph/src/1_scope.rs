@@ -155,7 +155,7 @@ pub fn resolve(captures: impl IntoIterator<Item = Capture>, source_len: usize) -
                 .copied()
                 .filter(|index| {
                     definitions[*index].capture.start <= capture.start
-                        || matches!(definitions[*index].role.as_str(), "namespace" | "type")
+                        || is_order_independent_definition(&definitions[*index])
                 })
                 .max_by_key(|index| definitions[*index].capture.start)
             {
@@ -183,6 +183,17 @@ pub fn resolve(captures: impl IntoIterator<Item = Capture>, source_len: usize) -
         definitions,
         references,
     }
+}
+
+fn is_order_independent_definition(definition: &Definition) -> bool {
+    matches!(definition.role.as_str(), "namespace" | "type")
+        || (definition.role == "variable"
+            && !definition.capture.ancestor_kinds.iter().any(|kind| {
+                matches!(
+                    kind.as_str(),
+                    "function_declaration" | "lambda_literal" | "anonymous_function"
+                )
+            }))
 }
 
 fn definition_scope(scopes: &[Scope], capture: &Capture, role: &str) -> usize {

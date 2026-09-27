@@ -4,7 +4,7 @@
 
 | Gate | Receipt |
 |---|---|
-| Kotlin declaration scope | Forward `later()` was red as `NoDefinition`; namespace/type names now bind from the enclosing declaration scope regardless of source order, while a later `val` remains `DefinitionAfterReference`. Local suite passes 14/14. |
+| Kotlin declaration scope | Forward `later()` was red as `NoDefinition`; top-level and class-member properties now bind regardless of source order, while a later function-body `val item` remains `DefinitionAfterReference`. Local suite passes 14/14. |
 | L1 relation predicates | Tests cover `#inside?`, `#has?`, `#precedes?`, and `#follows?` through `Query::general_predicates()` on Rust syntax. |
 | Match-limit rail | Every `run_query` drains `matches()` and checks `did_exceed_match_limit()`; overflow returns `MatchLimit { path }`. |
 | Grouped captures | The query runner uses `matches()` only; a two-capture fixture asserts both captures remain grouped in one result. |
@@ -38,3 +38,5 @@ HAFLEY_TRACE=1 cargo nextest run --features cli -j 2 --test all -E 'test(/^t_159
 ```
 
 The final replacement verdict and line-count comparison to the 61% per-language baseline remain pending those receipts.
+
+Property order follow-up: the top-level and class-member property references were red with no definition for `fun f() = x; val x = 1`; both resolve after the change. The function-body local still reports `DefinitionAfterReference`.
