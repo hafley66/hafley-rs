@@ -1,8 +1,8 @@
 ---
 created: 2026-09-15
-updated: 2026-09-15
+updated: 2026-09-26
 type: feature
-status: open
+status: needs-decision
 priority: normal
 ---
 
@@ -47,3 +47,9 @@ Daemon automatic startup versus explicit enablement; new ordinary session versus
 - [ ] Interrupted imports and restarts recover without accidental duplicate sends.
 - [ ] Stored, queued, accepted and uncertain delivery remain distinguishable.
 - [ ] Large Markdown body and attribution survive delivery unchanged.
+
+## Reproduction receipt
+
+2026-09-26: inline `boop beep <route> <body>` already creates one `agent_mail` ID and uses the existing delivery ladder. Search of `crates/boop` finds no Markdown-file importer or ready-directory daemon; all five acceptance criteria remain unimplemented for file intake. The card's startup, new-session/worktree, and metadata precedence choices are still unresolved.
+
+Question: Should Markdown intake be opt-in, and must unknown recipients carry explicit session-creation metadata?
