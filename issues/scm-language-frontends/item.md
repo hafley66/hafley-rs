@@ -1,9 +1,9 @@
 ---
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-27
 type: epic
 owner: hafley66
-status: needs-decision
+status: fixed
 priority: high
 labels: [extract]
 ---
@@ -18,18 +18,22 @@ Module syntax is a language capability in SCM++: extract module references and p
 Execution order: Rust, TS/JS, Kotlin; then resume @scip-ingestion-conformance. Scope graph and compiler-backed SCIP ingestion are separate work.
 
 ## Acceptance Criteria
-- [ ] Rust fast extraction consumes SCM++ per-file rows without a second ryi parse
-- [ ] TS/JS OXC per-file parsing is owned by SCM++
-- [ ] Kotlin per-file parsing and module syntax are owned by SCM++
-- [ ] Rust, TS/JS, and Kotlin family goldens and move dry-runs retain their behavior
-- [ ] @scip-ingestion-conformance is unblocked after the three language cutovers
+- [x] Rust fast extraction consumes SCM++ per-file rows without a second ryi parse
+- [x] TS/JS OXC per-file parsing is owned by SCM++
+- [x] Kotlin per-file parsing and module syntax are owned by SCM++
+- [x] Rust, TS/JS, and Kotlin family goldens and move dry-runs retain their behavior
+- [x] @scip-ingestion-conformance is unblocked after the three language cutovers
 
 ## Tests Run
 
+- Rust `DL_TRACE_SUMMARY=1 ryii fast tests/fixtures/rust/sample.rs`: parse calls=1, query calls=1.
+- TS `DL_TRACE_SUMMARY=1 ryii fast tests/fixtures/ts/sample.ts`: parse calls=2 (tree-sitter plus OXC); the OXC parse and projections are in `hafley_scm::read::lang::ts`.
+- Kotlin `DL_TRACE_SUMMARY=1 ryii fast tests/fixtures/df_loops/sample.kt`: parse calls=1.
+- `cargo nextest run --features cli -j 2 --offline --locked --test all`: 1118/1118 passed, 18 skipped; includes language goldens and Rust/TS/Kotlin move tests.
+- `bash scripts/ryi-e2e.sh /Users/chrishafley/.cache/boop/cargo-target/debug`: 14/14 passed.
+- `cargo nextest run --workspace -j 2 --offline --locked -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'`: 1366 passed, 203 skipped, 2 slow, 1 leaky, 0 failed.
+
 ## Implementation Notes
 
-Current checkout already has the TS/JS and Kotlin `Source` implementations in `hafley_scm`; a Kotlin combined-family duplicate parse was removed in `606b8771`. The ordered Rust → TS/JS → Kotlin cutover is gated on the user's pending Rust one-parse decision.
-
-Question: What one-parse policy should the Rust front-end establish before the remaining language cutovers proceed?
-
-Plan: After the Rust one-parse policy is resolved, make `hafley_scm` return one owned Rust file result for the requested families and module references, then verify TS/JS OXC rows and Kotlin module spellings flow through the same per-file contract without adding parse calls to move resolution; run the existing Rust, TS/JS, and Kotlin family and move fixture targets, record combined-family parse/query counts, and unblock SCIP ingestion only when all three language cutovers have receipts.
+- `RustFastFile::extract` owns the Rust parse and combined query. Rust, TS/JS, and Kotlin `Source` implementations and module syntax remain in `hafley_scm`; ryi consumes the resulting per-file output and owns cross-file resolution and move planning.
+- Combined-family receipts: Rust parse/query 1/1, TS tree-sitter/OXC parse calls 2, Kotlin parse 1. Existing family goldens and module respelling/move tests pass; SCIP ingestion is unblocked.
