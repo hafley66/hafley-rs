@@ -11,9 +11,10 @@
 use crate::read::family::{CstEdgeKind, CstF};
 use crate::read::lang::extract_lang::RyiLang;
 use crate::read::rows::{Edge, FamilyBundle, Node};
-use crate::read::shape::{NodeRef, Span, Strings};
+use crate::read::shape::{NodeRef, Strings};
 use crate::read::source::{FamilyMask, RyiOutput, Source};
 use crate::read::trace;
+use crate::span::node_span as span;
 
 #[derive(Default)]
 pub struct GdscriptSource;
@@ -23,13 +24,6 @@ fn parse(content: &[u8]) -> Option<tree_sitter::Tree> {
     let language = tree_sitter::Language::new(tree_sitter_gdscript::LANGUAGE);
     parser.set_language(&language).ok()?;
     parser.parse(content, None)
-}
-
-fn span(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
 }
 
 /// Pre-order, named nodes only: unnamed punctuation passes its nearest named

@@ -22,6 +22,14 @@ impl Span {
     }
 }
 
+/// The byte span of a tree-sitter node `[start_byte, end_byte)`.
+pub fn node_span(node: tree_sitter::Node) -> Span {
+    Span {
+        start: node.start_byte() as u32,
+        len: (node.end_byte() - node.start_byte()) as u32,
+    }
+}
+
 /// Span from a declaration start through its body, or through the node when it has no body.
 pub fn def_span(node: tree_sitter::Node) -> Span {
     let start = node.start_byte();

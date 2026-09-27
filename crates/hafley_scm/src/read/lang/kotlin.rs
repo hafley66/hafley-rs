@@ -74,12 +74,7 @@ pub fn kt_parse(content: &str) -> Option<tree_sitter::Tree> {
 pub use crate::span::node_text as kt_text;
 
 /// The byte span of a tree-sitter node `[start_byte, end_byte)`.
-pub(super) fn node_span(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
-}
+pub(super) use crate::span::node_span;
 
 /// The first direct child of `node` with `kind`. Port of v5 `kt_first_child`.
 pub fn kt_first_child<'a>(

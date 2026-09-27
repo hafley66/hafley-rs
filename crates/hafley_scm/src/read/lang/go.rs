@@ -45,6 +45,7 @@ use crate::read::trace;
 use crate::read::types::ResolveDrop;
 use crate::read::types::{PathIndex, ScipIndex, UnresolvedReason};
 use crate::span::def_span;
+pub use crate::span::node_span as go_node_span;
 
 // ── the tree-sitter-go parse (one parse feeds type/call/df) ──────────────────
 
@@ -212,14 +213,6 @@ fn push_entity(
 ) {
     sink.nodes
         .push(Node::new(span, kind).with_name(strings.intern(name)));
-}
-
-/// The byte span of a tree-sitter node `[start_byte, end_byte)`.
-pub fn go_node_span(node: tree_sitter::Node) -> Span {
-    Span {
-        start: node.start_byte() as u32,
-        len: (node.end_byte() - node.start_byte()) as u32,
-    }
 }
 
 // ── doc facet (port of v5 `walk_go_docs`) ────────────────────────────────────
