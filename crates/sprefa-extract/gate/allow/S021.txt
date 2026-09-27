@@ -1,27 +1,19 @@
-crates/hafley_scm/src/lang/rust/23_frontend.rs:53
-crates/hafley_scm/src/lang/rust/23_frontend.rs:61
-crates/hafley_scm/src/read/cache.rs:112
-crates/hafley_scm/src/read/lang/7_scm_rows.rs:15
-crates/hafley_scm/src/read/lang/go.rs:1159
-crates/hafley_scm/src/read/lang/go.rs:3195
-crates/hafley_scm/src/read/lang/go.rs:3757
-crates/hafley_scm/src/read/lang/go.rs:3872
-crates/hafley_scm/src/read/lang/go.rs:3896
-crates/hafley_scm/src/read/lang/go.rs:4090
-crates/hafley_scm/src/read/lang/go.rs:4642
-crates/hafley_scm/src/read/lang/go.rs:4668
-crates/hafley_scm/src/read/lang/kotlin.rs:57
-crates/hafley_scm/src/read/lang/kotlin_receivers.rs:68
-crates/hafley_scm/src/read/lang/prolog/_0_source.rs:133
-crates/hafley_scm/src/read/lang/ts.rs:66
-crates/hafley_scm/src/read/lang/ts.rs:67
-crates/hafley_scm/src/read/lang/ts_receivers.rs:616
-crates/hafley_scm/src/read/project.rs:1888
-crates/sprefa-extract/src/bin/ryi.rs:339
-crates/sprefa-extract/src/edit/rust_rehome.rs:1754
-crates/sprefa-extract/src/edit/rust_rehome.rs:889
-crates/sprefa-extract/src/edit/ts_rehome.rs:480
-crates/sprefa-extract/src/edit/ts_rehome/cross.rs:210
-crates/sprefa-extract/src/edit/ts_rehome/cross.rs:38
-crates/sprefa-extract/src/edit/ts_rename.rs:392
-crates/sprefa-extract/src/edit/ts_rename.rs:394
+crates/hafley_scm/src/lang/rust/23_frontend.rs	fn::call_query	S021	1
+crates/hafley_scm/src/lang/rust/23_frontend.rs	fn::fast_file_query	S021	1
+crates/hafley_scm/src/read/cache.rs	fn::cache	S021	1
+crates/hafley_scm/src/read/lang/7_scm_rows.rs	item::<file-scope>	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::fanout_cap_registry	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::go_aliases_of_dir	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::go_dir_index	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::go_embeds_of_dir	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::go_fields_of_dir	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::iface_fanout_cache	S021	1
+crates/hafley_scm/src/read/lang/go.rs	fn::plan_cache	S021	1
+crates/hafley_scm/src/read/lang/go.rs	item::<file-scope>	S021	1
+crates/hafley_scm/src/read/lang/kotlin.rs	item::<file-scope>	S021	1
+crates/hafley_scm/src/read/lang/kotlin_receivers.rs	item::<file-scope>	S021	1
+crates/hafley_scm/src/read/lang/prolog/_0_source.rs	fn::builtin_meta	S021	1
+crates/hafley_scm/src/read/lang/ts.rs	item::<file-scope>	S021	2
+crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::facts_cache	S021	1
+crates/hafley_scm/src/read/project.rs	item::<file-scope>	S021	1
+crates/sprefa-extract/src/bin/ryi.rs	item::<file-scope>	S021	1

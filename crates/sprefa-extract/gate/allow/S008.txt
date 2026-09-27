@@ -1,37 +1,35 @@
-fs::read:126
-fs::read:129
-fs::read:746
-std::fs::read:118
-std::fs::read:122
-std::fs::read:134
-std::fs::read:148
-std::fs::read:156
-std::fs::read:1563
-std::fs::read:16
-std::fs::read:174
-std::fs::read:2030
-std::fs::read:210
-std::fs::read:2375
-std::fs::read:241
-std::fs::read:2681
-std::fs::read:290
-std::fs::read:304
-std::fs::read:3286
-std::fs::read:33
-std::fs::read:3403
-std::fs::read:342
-std::fs::read:349
-std::fs::read:378
-std::fs::read:392
-std::fs::read:422
-std::fs::read:502
-std::fs::read:600
-std::fs::read:601
-std::fs::read:615
-std::fs::read:644
-std::fs::read:75
-std::fs::read:80
-std::fs::read:81
-std::fs::read:849
-std::fs::read:915
-std::fs::read:94
+crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::tree_df_rows_match_syn_across_pinned_rust_fixtures	S008	1
+crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tree_tsi_rows_match_syn_on_pinned_rust_fixtures	S008	1
+crates/hafley_scm/src/read/2_slow.rs	fn::project_index	S008	1
+crates/hafley_scm/src/read/lang/7_scm_rows.rs	fn::file_captures	S008	1
+crates/hafley_scm/src/read/lang/go.rs	fn::go_parse_file_facts	S008	1
+crates/hafley_scm/src/read/lang/rust_modules.rs	fn::tree_module_facts_match_syn_across_pinned_rust_fixtures	S008	1
+crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::facts_of	S008	1
+crates/hafley_scm/src/read/lang/ts_resolve.rs	fn::build	S008	1
+crates/hafley_scm/src/read/project.rs	fn::blob	S008	1
+crates/hafley_scm/src/read/project.rs	fn::read_chunk	S008	1
+crates/hafley_scm/src/read/scip_decode.rs	fn::load_index	S008	1
+crates/hafley_scm/src/read/scip_decode.rs	fn::merge_indexes	S008	1
+crates/hafley_scm/src/read/scip_decode.rs	fn::prune_index	S008	1
+crates/hafley_scm/src/read/scip_ensure.rs	fn::record_index_set	S008	1
+crates/hafley_scm/src/read/scip_ensure.rs	fn::recorded_digest	S008	1
+crates/hafley_scm/src/read/scip_ensure.rs	fn::source_set_for_root_excluding	S008	1
+crates/hafley_scm/src/read/scip_v5_rels.rs	fn::v5_rel_rows	S008	1
+crates/sprefa-extract/src/0_graph.rs	fn::line	S008	2
+crates/sprefa-extract/src/0_graph.rs	fn::slice_at	S008	1
+crates/sprefa-extract/src/0_query.rs	fn::source_bytes	S008	1
+crates/sprefa-extract/src/0_stratify.rs	fn::line_count	S008	2
+crates/sprefa-extract/src/0_stratify.rs	fn::symbol_cut_lines	S008	2
+crates/sprefa-extract/src/3_region_writer.rs	fn::run	S008	1
+crates/sprefa-extract/src/bin/ryi.rs	fn::extract_file	S008	1
+crates/sprefa-extract/src/bin/ryi.rs	fn::register_line_tables	S008	1
+crates/sprefa-extract/src/bin/ryi.rs	fn::run_slow	S008	1
+crates/sprefa-extract/src/bin/ryi/0_sqlite.rs	fn::line_table_for	S008	1
+crates/sprefa-extract/src/edit/_1_move_cx.rs	fn::read	S008	1
+crates/sprefa-extract/src/edit/_1_rename_cx.rs	fn::read	S008	1
+crates/sprefa-extract/src/edit/_2_drain.rs	fn::bind_action	S008	1
+crates/sprefa-extract/src/edit/_3_stage.rs	fn::capture	S008	1
+crates/sprefa-extract/src/edit/_3_stage.rs	fn::content_id	S008	1
+crates/sprefa-extract/src/edit/_3_stage.rs	fn::restore	S008	1
+crates/sprefa-extract/src/edit/_6_rename.rs	fn::build_sequential	S008	1
+crates/sprefa-extract/src/edit/_7_cleave.rs	fn::batch_stages	S008	1

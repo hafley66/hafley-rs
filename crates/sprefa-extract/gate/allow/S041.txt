@@ -1,4 +1,2 @@
-crates/sprefa-extract/src/edit/_3_stage.rs:246
-crates/sprefa-extract/src/edit/kotlin_rehome.rs:137
-crates/sprefa-extract/src/edit/kotlin_rehome.rs:143
-crates/sprefa-extract/src/edit/kotlin_rehome.rs:53
+crates/sprefa-extract/src/edit/_3_stage.rs	fn::print_previews	S041	1
+crates/sprefa-extract/src/edit/kotlin_rehome.rs	fn::import_refs	S041	3

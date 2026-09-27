@@ -1,4 +1,5 @@
 ; S029: std::env::var/var_os calls in ryi command and edit functions.
-((function_item body: (block) @body) @hit
- (#match? @body "std::env::var(_os)?\\s*\\(")
-)
+(call_expression
+  function: (scoped_identifier) @callee
+  (#match? @callee "std::env::var(_os)?$")
+) @hit

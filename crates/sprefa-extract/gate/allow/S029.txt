@@ -1,7 +1,5 @@
-crates/sprefa-extract/src/bin/ryi.rs:30
-crates/sprefa-extract/src/bin/ryi.rs:378
-crates/sprefa-extract/src/bin/ryi.rs:425
-crates/sprefa-extract/src/bin/ryi/0_sqlite.rs:203
-crates/sprefa-extract/src/bin/ryi/0_sqlite.rs:524
-crates/sprefa-extract/src/bin/ryi/0a_bind.rs:293
-crates/sprefa-extract/src/edit/_3_stage.rs:13
+crates/sprefa-extract/src/bin/ryi.rs	fn::cap_memory	S029	1
+crates/sprefa-extract/src/bin/ryi/0_sqlite.rs	fn::furnish	S029	1
+crates/sprefa-extract/src/bin/ryi/0_sqlite.rs	fn::write_stdout	S029	2
+crates/sprefa-extract/src/bin/ryi/0a_bind.rs	fn::drain_inner	S029	1
+crates/sprefa-extract/src/edit/_3_stage.rs	fn::state_root	S029	1
