@@ -11,9 +11,11 @@ description = "Shared executable-owned tracing configuration for hafley-rs binar
 # Compatibility names used by local consumers of the sibling checkout.
 otlp = ["otlp-trace"]
 sqlite = ["sqlite-sink"]
-# Every optional subscriber layer has an explicit feature; consumers that
-# require the current set select it in their dependency declaration.
-default = []
+# The four shipped layers stay default so existing hosts build the subscriber
+# they have today. Every layer this lab prices is one feature, enabled alone
+# by the bench.
+default = ["fmt", "chrome", "otlp-trace", "sqlite-sink"]
+oh = ["dep:hafley-observe-macros"]
 fmt = []
 chrome = ["dep:tracing-chrome"]
 otlp-trace = [
@@ -41,7 +43,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 tracing-capture = "0.1.0"
 tracing-tunnel = "0.1.0"
-hafley-observe-macros = { path = "../hafley-observe-macros" }
+hafley-observe-macros = { path = "../hafley-observe-macros", optional = true }
 # The process sampler reads rusage through this; it is compiled on every build
 # so the harness can measure with the layers off.
 libc = "0.2"
@@ -66,6 +68,7 @@ tokio = { version = "1", default-features = false, features = ["rt", "time"], op
 sysinfo = { version = "0.35", default-features = false, optional = true }
 
 [dev-dependencies]
+hafley-observe = { path = ".", features = ["oh"] }
 serde_json = "1"
 syn = { version = "2", features = ["full", "visit"] }
 

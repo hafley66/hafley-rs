@@ -527,6 +527,11 @@ pub trait Harness: Send + Sync {
         None
     }
 
+    /// Optional evidence rule for matching source turns to rendered rows.
+    fn turn_match_policy(&self) -> Option<boop_turnvis::TurnMatchPolicy> {
+        None
+    }
+
     /// This harness's own live-session registry: the file, database or server
     /// it writes when a TUI is running.
     fn live(&self) -> &dyn crate::live::LiveSessions {

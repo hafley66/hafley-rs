@@ -27,7 +27,7 @@ serde_json = "1"
 sysinfo = "0.39"
 tempfile = "3"
 tracing.workspace = true
-hafley-observe = { path = "../hafley-observe", features = ["fmt", "chrome", "otlp-trace", "sqlite-sink"] }
+hafley-observe = { path = "../hafley-observe" }
 
 [dev-dependencies]
 

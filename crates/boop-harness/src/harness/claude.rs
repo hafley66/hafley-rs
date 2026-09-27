@@ -268,6 +268,10 @@ impl Harness for Claude {
         Some(crate::harness::claude_summary::anchor)
     }
 
+    fn turn_match_policy(&self) -> Option<boop_turnvis::TurnMatchPolicy> {
+        Some(crate::harness::claude_summary::accept_turn_match)
+    }
+
     fn live(&self) -> &dyn crate::live::LiveSessions {
         &DOOR
     }

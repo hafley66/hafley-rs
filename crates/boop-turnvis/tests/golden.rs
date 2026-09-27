@@ -1,5 +1,6 @@
 use boop_turnvis::{
-    locate_visible_turns, normalize_turn_line, BoopTurn, Confidence, LogicalLine, VisibleTurn,
+    locate_visible_turns, locate_visible_turns_with_policy, normalize_turn_line, BoopTurn,
+    Confidence, LogicalLine, MatchEvidence, VisibleTurn,
 };
 use serde::Deserialize;
 
@@ -205,6 +206,13 @@ const FIXTURES: &[&str] = &[
     "omp-chaotic",
 ];
 
+fn fixture_match_policy(turn: &BoopTurn, evidence: MatchEvidence) -> bool {
+    turn.harness != "claude"
+        || turn.role != "user"
+        || evidence.matched_rows >= 2
+        || evidence.has_prompt_marker
+}
+
 fn load<T: for<'de> Deserialize<'de>>(path: &str) -> T {
     let text = std::fs::read_to_string(path).unwrap_or_else(|e| panic!("read {path}: {e}"));
     serde_json::from_str(&text).unwrap_or_else(|e| panic!("parse {path}: {e}"))
@@ -222,7 +230,8 @@ fn golden_fixtures() {
             .unwrap_or(name);
         let turns: Vec<BoopTurn> = load(&format!("{dir}/{turns_name}.turns.json"));
         let golden: Golden = load(&format!("{dir}/{name}.golden.json"));
-        let got = locate_visible_turns(&capture.lines, &turns);
+        let got =
+            locate_visible_turns_with_policy(&capture.lines, &turns, None, fixture_match_policy);
         all_failures.extend(compare_lines(name, &capture.lines, &got, &golden));
         all_failures.extend(compare(name, &got, &golden));
     }
@@ -404,7 +413,10 @@ fn claude_375_does_not_claim_prior_code_or_terminal_chrome() {
         line("Opus 5.5 (1M context) ctx 51% of 1000k", 6),
         line("ryi fast and slow 0:ryi fast and slow*", 7),
     ];
-    let found = locate_visible_turns(&screen, &[old_user, current_user, answer]);
+    let turns = [old_user, current_user, answer];
+    let generic = locate_visible_turns(&screen, &turns);
+    assert!(generic.iter().any(|turn| turn.turn == 890));
+    let found = locate_visible_turns_with_policy(&screen, &turns, None, fixture_match_policy);
 
     assert_eq!(
         found.iter().map(|turn| turn.turn).collect::<Vec<_>>(),

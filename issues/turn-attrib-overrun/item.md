@@ -1,6 +1,6 @@
 ---
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 type: bug
 status: open
 priority: normal
@@ -35,6 +35,9 @@ Live `%375` was `hafley-rs-4`, 179x51. The read-only `~/.agent/boop.db` lookup f
 - [ ] Full fixture from this screen (capture of `%375` plus turns 890-914 from the boop store) reproduces both wrong labels in a boop-turnvis test. Current regression is a minimal cut with turns 890, 912 and 914.
 - [x] An extended span stops before composer, Claude status lines and tmux status rows.
 - [x] A turn label is never placed on a row whose text belongs to an earlier turn's code block.
+- [x] Generic `boop-turnvis` matching has no Claude-name branch; the adapter supplies its source-match policy.
 - [ ] The tooltip shows route, pane, harness session id and rung.
+
+2026-09-27: `t1_harness_boundaries::behavioral_harness_dispatch_stays_in_adapters` reproduced the generic `harness != "claude"` branch in `boop-turnvis/src/lib.rs:499`. Turn matching now takes an evidence policy; the Claude adapter supplies the two-row-or-prompt-marker rule. `cargo nextest run -p boop-turnvis -j 2` passed 10 tests, and the boundary test passed in `cargo nextest run -p boop -p boop-turnvis -j 2`. That full run encountered a separate Codex live-test update prompt at `0.156.1 → 0.157.1`.
 
 Remaining gates: expand the minimal regression to the complete `%375` capture and turns 890-914; implement the tooltip identity in the Instant source tree, which is absent from this checkout.

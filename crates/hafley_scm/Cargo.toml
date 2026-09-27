@@ -52,7 +52,7 @@ rayon = { version = "1", optional = true }
 quick_cache = { version = "0.7", optional = true }
 tracing = { version = "0.1", optional = true }
 # `cli`: the subscriber half of read/trace.rs.
-hafley-observe = { path = "../hafley-observe", optional = true, features = ["fmt", "chrome", "otlp-trace", "sqlite-sink"] }
+hafley-observe = { path = "../hafley-observe", optional = true }
 libc = { version = "0.2", optional = true }
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"], optional = true }
 # `rust-checker`: rust-analyzer's name resolution and inference.

@@ -64,13 +64,6 @@ fn every_loop_names_the_constant_that_bounds_it() {
     let mut loops = 0usize;
 
     for path in &files {
-        // This module is excluded from the default build, so its source-level
-        // loops are outside the default-feature scanner's proof.
-        if !cfg!(feature = "sqlite-sink")
-            && path.file_name().is_some_and(|name| name == "5_sqlite.rs")
-        {
-            continue;
-        }
         let text = fs::read_to_string(path).expect("source file");
         let lines: Vec<&str> = text.lines().collect();
         let relative = path

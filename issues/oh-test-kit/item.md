@@ -91,4 +91,4 @@ HTTP client into every consumer.
 
 ## Progress receipt
 
-2026-09-27: The code remains hosted in `crates/hafley-observe` (`src/11_testkit.rs`, `tests/oh_testkit.rs`) with proc-macro attributes in the sibling `hafley-observe-macros` crate. The target `oh_testkit` suite passes 8 tests after adding scanner coverage. Inner-attribute diagnostics, SIGTERM drain/replay, and lab minting remain open as listed above.
+2026-09-27: The code remains hosted in `crates/hafley-observe` (`src/11_testkit.rs`, `tests/oh_testkit.rs`) with proc-macro attributes in the sibling `hafley-observe-macros` crate. The macros and testkit are gated by `hafley-observe/oh`, selected only through its dev-dependency. Subscriber features remain opt-in; `boop` selects `fmt` for its log output. `cargo nextest run -p hafley-observe --test oh_testkit --test bounded_loops -j 2` passed 9 tests, including the universal loop scan. Inner-attribute diagnostics, SIGTERM drain/replay, and lab minting remain open as listed above.

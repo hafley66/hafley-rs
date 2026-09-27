@@ -227,7 +227,7 @@ quick_cache = "0.7"
 # and versions the engine crate carries (sprefa-engine-rs/Cargo.toml:36-37), so
 # one process linking both installs one subscriber that sees both crates.
 tracing = "0.1"
-hafley-observe = { path = "../hafley-observe", optional = true, features = ["fmt", "chrome", "otlp-trace", "sqlite-sink"] }
+hafley-observe = { path = "../hafley-observe", optional = true }
 # getloadavg beside every timing, so a wall number reports the machine it was
 # taken on. Already unified in this lock through soopy -> rustix -> errno.
 libc = { version = "0.2", optional = true }
