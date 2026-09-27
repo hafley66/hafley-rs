@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-27
 type: bug
-status: open
+status: fixed
 priority: normal
 related: ['@ryi-cli-cleanup']
 labels: [extract]
@@ -28,10 +28,15 @@ Stage ids are content-addressed, so the identical plan reproduces the committed 
 
 ## Acceptance Criteria
 - [x] a failed verify leaves the tree byte-identical to before the run
-- [ ] the identical re-run after a rollback commits with the same `--state`
+- [x] the identical re-run after a rollback commits with the same `--state`
 
 ## Tests Run
 - crates/sprefa-extract/tests/173_move_cross_crate.rs (verify-fail rollback leaves a clean tree)
+- `a_rolled_back_move_can_recommit_with_the_same_state` in `t_173_move_cross_crate`
 
 ## Implementation Notes
 Seen by milestone M5. Part 2 lives in soopy's durable stage store.
+
+## Resolution
+
+Receipt: `t_173_move_cross_crate` passed (15 tests), including `a_rolled_back_move_can_recommit_with_the_same_state`.

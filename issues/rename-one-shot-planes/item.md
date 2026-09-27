@@ -1,12 +1,14 @@
 ---
 created: 2026-09-18
-updated: 2026-09-20
+updated: 2026-09-26
 type: task
-status: open
+status: obsolete
 priority: normal
 epic: ryi-new-verbs
 related: ['@move-commit-exits-two', '@rename-path-double-reach', '@extract-lines-flag']
 labels: [extract, artifact-cli, intent-architecture, component-rename, phase-refinement-1, needs-chris]
+closed: 2026-09-26
+disposition_note: Current ryii repro on crates/sprefa-extract/src/types.rs#ExtractOutput exits 2 because that retired anchor file is absent; Cargo declares the bin as ryii.
 ---
 
 # ryi rename in one shot: the three planes move and rename cannot reach
@@ -105,3 +107,9 @@ because `#[path]` gives two compilation routes to the symbol, see
 - [ ] `cargo test --features cli --no-fail-fast`
 
 ## Implementation Notes
+
+## Comments
+
+### 2026-09-27T02:44:48Z · @intake
+
+Obsolete: Current ryii repro on crates/sprefa-extract/src/types.rs#ExtractOutput exits 2 because that retired anchor file is absent; Cargo declares the bin as ryii.

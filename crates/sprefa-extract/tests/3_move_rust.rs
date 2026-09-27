@@ -142,6 +142,57 @@ const TO_MOD_RS: [(&str, &str); 1] = [("src/a.rs", "src/a/mod.rs")];
 const DEEPER: [(&str, &str); 1] = [("src/b.rs", "src/deep/b.rs")];
 
 #[test]
+fn relocate_mod_renames_a_module_when_its_file_stem_changes() {
+    let fixture = fixture("relocate_rename");
+    let table = move_files(
+        &fixture,
+        &[("src/a.rs", "src/_0_a.rs")],
+        &["--commit", "--relocate-mod"],
+    );
+    let lib = read(&fixture.root, "src/lib.rs");
+
+    assert!(
+        lib.contains("mod _0_a;"),
+        "the decl follows the new stem:\n{lib}\n{table}"
+    );
+    assert!(lib.contains("use crate::_0_a::f;"), "use path:\n{lib}");
+    assert!(!lib.contains("#[path"), "no path attribute:\n{lib}");
+    assert!(
+        table.contains("relocate mod a -> _0_a"),
+        "receipt:\n{table}"
+    );
+
+    let check = Command::new("cargo")
+        .args(["check", "--offline"])
+        .current_dir(&fixture.root)
+        .output()
+        .expect("cargo runs");
+    assert!(
+        check.status.success(),
+        "cargo check after module rename: {}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+}
+
+#[test]
+fn moving_a_rust_file_outside_its_crate_root_is_a_named_stop() {
+    let fixture = fixture("relocate_package_boundary");
+    let output = try_move(
+        &fixture,
+        &[("src/a.rs", "crates/ascii-engine/src/_0_a.rs")],
+        &[],
+    );
+
+    assert_eq!(output.status.code(), Some(2));
+    let said = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        said.contains("outside the source Rust crate root"),
+        "the stop names the source crate boundary:\n{said}"
+    );
+    assert_eq!(git(&fixture.root, &["status", "--porcelain"]), "");
+}
+
+#[test]
 fn a_mod_decl_gains_a_path_attr_when_its_file_leaves_its_dir() {
     let fixture = fixture("path_attr_grows");
     move_files(&fixture, &OUT_OF_DIR, &["--commit"]);

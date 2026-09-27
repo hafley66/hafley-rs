@@ -3,7 +3,7 @@ created: 2026-09-26
 updated: 2026-09-26
 type: bug
 reporter: claude
-status: open
+status: fixed
 priority: normal
 related: ['@cleave-cross-crate-reach']
 labels: [extract]
@@ -24,10 +24,14 @@ src/registry.rs declares no param
 Expected: `macro_rules!` items can be cleaved, keeping their `#[macro_export]`/`#[macro_use]` attributes. Callers depend on textual order and `#[macro_use] mod`, so the plan must also move or keep the `#[macro_use]` on the destination `mod` line. If this is out of scope, the error should say "macro_rules! items are not supported". "declares no param" reads as a typo in the selector.
 
 ## Acceptance Criteria
-- [ ] cleave of a `macro_rules!` item moves it with its attributes and fixes `#[macro_use]` ordering, or stops with a message naming the unsupported item kind
+- [x] stops with a message naming the unsupported `macro_rules!` item kind
 
 ## Comments
 
 ### 2026-09-26T22:27:59Z · @claude
 
 Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
+
+### 2026-09-27 · @codex
+
+Receipt: `macro_rules_items_are_named_unsupported` passes; direct selection now reports `unsupported macro_rules! macro`.

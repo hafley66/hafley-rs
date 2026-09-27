@@ -403,6 +403,38 @@ fn a_failed_verify_restores_the_moved_file_bytes() {
 }
 
 #[test]
+fn a_rolled_back_move_can_recommit_with_the_same_state() {
+    let fixture = fixture("rust_cross", "rust_rollback_retry");
+    commit(&fixture, &[]);
+    let before = read(&fixture, "alpha/src/shapes.rs");
+    let failed = ryi(
+        &fixture,
+        &move_args(
+            &fixture,
+            "alpha/src/shapes.rs",
+            "beta/src/shapes.rs",
+            &["--commit", "--verify", "false"],
+        ),
+    );
+    assert_eq!(failed.status.code(), Some(3));
+    assert_eq!(read(&fixture, "alpha/src/shapes.rs"), before);
+    assert!(!fixture.root.join("beta/src/shapes.rs").exists());
+
+    let retry = ryi(
+        &fixture,
+        &move_args(
+            &fixture,
+            "alpha/src/shapes.rs",
+            "beta/src/shapes.rs",
+            &["--commit"],
+        ),
+    );
+    stdout(&retry);
+    assert!(!fixture.root.join("alpha/src/shapes.rs").exists());
+    assert!(fixture.root.join("beta/src/shapes.rs").exists());
+}
+
+#[test]
 fn a_cleave_into_a_new_numbered_file_declares_it() {
     let fixture = fixture("rust_cross", "rust_cleave_new");
     commit(&fixture, &[]);

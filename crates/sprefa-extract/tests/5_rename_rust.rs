@@ -204,6 +204,72 @@ fn renamed_fixture_crate_passes_cargo_check() {
     );
 }
 
+#[test]
+fn library_reexports_and_consumers_rename_with_the_library_root() {
+    let fixture = fixture("reexport", "root-tie");
+    let plan = rename_verb(
+        &fixture,
+        "src/types.rs#Pattern",
+        "ItemPattern",
+        &["--commit"],
+    );
+    let glob_plan = rename_verb(
+        &fixture,
+        "src/types.rs#RepositoryId",
+        "RepoIdentity",
+        &["--commit"],
+    );
+    let lib = std::fs::read_to_string(fixture.root.join("src/lib.rs")).unwrap();
+    let users = std::fs::read_to_string(fixture.root.join("src/users.rs")).unwrap();
+    let main = std::fs::read_to_string(fixture.root.join("src/main.rs")).unwrap();
+
+    assert!(
+        lib.contains("pub use types::ItemPattern;"),
+        "lib.rs:\n{lib}"
+    );
+    assert!(lib.contains("pub use types::*;"), "glob re-export:\n{lib}");
+    assert!(
+        users.contains("use crate::{ItemPattern, RepoIdentity};"),
+        "users.rs:\n{users}"
+    );
+    assert!(
+        users.contains("crate::ItemPattern"),
+        "qualified use through the re-export:\n{users}"
+    );
+    assert!(
+        main.contains("rust_rename_reexport::ItemPattern"),
+        "binary crate's library use:\n{main}"
+    );
+    assert!(
+        users.contains("crate::RepoIdentity"),
+        "qualified glob re-export use:\n{users}"
+    );
+    assert!(
+        main.contains("rust_rename_reexport::RepoIdentity"),
+        "binary crate's glob re-export use:\n{main}"
+    );
+    assert!(
+        plan.contains("src/lib.rs"),
+        "the plan reaches the library root:\n{plan}"
+    );
+    assert!(
+        glob_plan.contains("src/users.rs"),
+        "glob binding reaches its consumer:\n{glob_plan}"
+    );
+
+    let check = Command::new("cargo")
+        .args(["check", "--offline", "--all-targets"])
+        .env("CARGO_TARGET_DIR", fixture.root.join("target"))
+        .current_dir(&fixture.root)
+        .output()
+        .expect("cargo runs");
+    assert!(
+        check.status.success(),
+        "cargo check after re-export rename: {}",
+        String::from_utf8_lossy(&check.stderr)
+    );
+}
+
 /// A module path inside an ordinary macro (`check!(ground::decide())`, the
 /// boop 2026-09-11 report-8 shape) is a bound reference and renames; the
 /// same-spelled field, local, loop binding and string in the same macro stay.
@@ -473,6 +539,46 @@ fn untyped_field_access_is_a_dynamic_stop() {
     assert!(
         entries.is_empty(),
         "the stopped run edited the tree:\n{}",
+        entries.join("\n")
+    );
+}
+
+/// A typed field access supplies a partial plan; an untyped receiver beside it
+/// is reported with its expression and does not turn the run into a stop.
+#[test]
+fn untyped_field_access_abstains_beside_typed_access() {
+    let fixture = fixture("field_abstain", "abstain");
+    let output = run_rename(
+        &fixture.root,
+        &fixture.state,
+        "src/util.rs#size",
+        "width",
+        &["--json"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(7),
+        "plan plus abstain exits 7: {stderr}"
+    );
+    assert!(
+        stdout.contains("plan src/util.rs size -> width"),
+        "plan is emitted: {stdout}"
+    );
+    assert!(
+        stdout.contains("src/lib.rs  1 uses"),
+        "typed access is planned: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"symbol\":\"size\",\"reason\":\"inferred\",\"receiver\":\"v\""),
+        "untyped receiver is reported: {stdout}"
+    );
+    assert!(stderr.is_empty(), "abstain is not a run error: {stderr}");
+    let entries = diff_rq(&fixture.root, &tree("field_abstain", "before"));
+    assert!(
+        entries.is_empty(),
+        "dry run edits nothing:\n{}",
         entries.join("\n")
     );
 }

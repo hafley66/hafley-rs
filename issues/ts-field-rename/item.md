@@ -1,13 +1,14 @@
 ---
 created: 2026-09-18
-updated: 2026-09-20
+updated: 2026-09-26
 type: feature
-status: open
+status: done
 priority: normal
 epic: ryi-fast-tier
 labels: [extract]
 lane: extract-rename
 blocked_by: ['@flash-review-cleanups', '@scip-ingestion-conformance']
+closed: 2026-09-26
 ---
 
 # ts field rename: property seats typed by the receiver plane
@@ -21,3 +22,9 @@ ts_rename.rs renames scope-plane bindings only; a member access spelling `old` i
 - [ ] tests/4_rename_ts.rs gains field cases: same-file, cross-file importer, untyped receiver stop, destructuring
 - [ ] tsc clean on the committed fixture tree (existing tsc_is_clean_on_the_committed_tree pattern)
 - [ ] scip_verify agrees on the field fixture
+
+## Resolution
+
+### 2026-09-27T02:57:56Z · @issuectl
+
+Current ryii reproduced exit 4 for a class property anchor. t_4_rename_ts passed (21 tests); typed property fixture reports zero SCIP disagreements and passes tsc --noEmit.

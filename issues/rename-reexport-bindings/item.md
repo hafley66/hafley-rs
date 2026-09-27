@@ -3,8 +3,9 @@ created: 2026-09-26
 updated: 2026-09-26
 type: bug
 reporter: codex
-status: open
+status: fixed
 priority: normal
+closed: 2026-09-26
 ---
 
 # ryi rename batch leaves soopy re-export bindings stale
@@ -27,3 +28,9 @@ error[E0432]: unresolved import `_1_pattern::Pattern` at src/lib.rs:38
 ```
 
 The declarations and many direct uses were renamed. The root re-export `pub use _1_pattern::Pattern;` and two imports through that re-export kept their old spelling. The plan needs to follow root re-export bindings and their consumers across rows.
+
+## Comments
+
+### 2026-09-27T02:37:30Z · @codex
+
+Current ryii reproduced the batch failure on copied soopy: exit 0 then three E0432 imports. Library-root selection and public-glob forwarding now rename the bindings and consumers; the same batch exits 0 and cargo check --all-targets --offline passes. t_5_rename_rust passed (19 tests).

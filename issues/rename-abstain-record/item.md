@@ -1,12 +1,14 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-26
 type: improvement
-status: open
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 related: ['@local-binding-inference']
 labels: [extract, artifact-cli, phase-refinement-1, component-rename]
+closed: 2026-09-26
+disposition_note: 'Current ryii repro: TS rename exits 7 with a plan and JSON abstain row for probe.old().'
 ---
 
 # rename records why it declined a site
@@ -54,3 +56,9 @@ exit code says whether abstains exist.
 ## Tests Run
 
 ## Implementation Notes
+
+## Comments
+
+### 2026-09-27T02:39:21Z · @intake
+
+Obsolete: Current ryii repro: TS rename exits 7 with a plan and JSON abstain row for probe.old().
