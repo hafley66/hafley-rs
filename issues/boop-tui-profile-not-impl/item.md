@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-26
 type: improvement
-status: open
+status: obsolete
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: M
+closed: 2026-09-26
 ---
 
 # channel/opencode.rs and channel/kimi.rs are impls that only carry data
@@ -41,3 +42,9 @@ Sites:
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Resolution
+
+### 2026-09-27T03:33:11Z · @issuectl
+
+The referenced channel/opencode.rs, channel/kimi.rs and TuiProfile implementations do not exist in the current crate tree; ACP is the active channel path.
