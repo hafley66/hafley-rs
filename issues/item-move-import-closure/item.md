@@ -1,12 +1,14 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-26
 type: feature
-status: open
+status: obsolete
 priority: high
 epic: extract-parity-move-rename
 related: ['@capability-as-data', '@rename-path-double-reach']
 labels: [extract, artifact-cli]
+closed: 2026-09-26
+disposition_note: The requested item move and import-closure behavior is implemented by current ryii cleave; the direct CLI repro moved the item and repaired the imports.
 ---
 
 # move one item between modules with its import closure
@@ -156,3 +158,14 @@ this verb. Do not do both in one lane.
 - [ ] a fixture proves: move one item, source loses exactly the orphaned specifiers, destination gains exactly the needed ones, crate still compiles
 - [ ] a refusal is never the answer; an unresolvable free name prints what it can plus the commands that would answer it
 - [ ] `cargo test --features cli --no-fail-fast`, zero failures
+
+## Comments
+
+### 2026-09-27T02:23:05Z · @codex
+
+Repro receipt: current ryii cleave src/util.rs#target src/config.rs --commit moved the item, added crate::log::log_line at the destination, removed its orphaned source import, and exited 0.
+
+### 2026-09-27T02:23:05Z · @intake
+
+Obsolete: The requested item move and import-closure behavior is implemented by current ryii cleave; the direct CLI repro moved the item and repaired the imports.
+
