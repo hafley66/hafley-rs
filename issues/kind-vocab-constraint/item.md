@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-27
 type: feature
-status: needs-decision
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 related: ['@default-families-no-conditional', '@lab-scopegraph-queries']
@@ -74,6 +74,8 @@ into a `NodeKind` enum per language, hand-rolled, no external crate.
 - [ ] no mention of v5 anywhere in this card
 
 ## Tests Run
+
+Repro receipt: `crates/sprefa-extract/src/lang/astgrep.rs` is absent and `rg -n 'kind\.contains\(' crates` returns no matches on current HEAD.
 
 ## Implementation Notes
 
