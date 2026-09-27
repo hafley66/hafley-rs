@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-26
 type: feature
-status: open
+status: done
 priority: high
 epic: boop-lane-observability
 related: ['@lane-status-command', '@boop-pane-liveness']
 labels: [domain-boop, component-cli, intent-implementation]
+closed: 2026-09-26
 ---
 
 # boop debug: one-shot tail of recent WARN/ERROR plus --help banner
@@ -62,3 +63,9 @@ so a coordinator sees "something is wrong" without opening a log.
 Sources: `crates/boop/src/trail.rs` (SUPERVISE_LOG, lanes_root),
 `agent_trace_event` schema in `~/.agent/boop.db`, `dict_trace_kind.value='error'`.
 Related: `@lane-status-command` (absorbed lane-log-tail), `@boop-pane-liveness`.
+
+## Resolution
+
+### 2026-09-27T03:23:38Z · @issuectl
+
+Receipt (boop 0.0.10 49124370-dirty): `boop debug --help` exposes `--since` and `--lane`; root help calls `help_banner`, and debug tests cover clean and non-empty banner output.
