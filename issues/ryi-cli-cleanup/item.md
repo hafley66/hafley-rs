@@ -1,12 +1,14 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: improvement
-status: open
+status: obsolete
 priority: normal
 epic: ryi-new-verbs
 related: ['@cli-teach-errors', '@extract-lines-flag', '@extract-graph-verb']
 labels: [extract, artifact-cli]
+closed: 2026-09-26
+disposition_note: Current ryi help and fast/slow ratchet pass against the claimed interface; old --project-root/--family/--state assumptions are retired, and the card requests warn contrary to the user INFO ruling.
 ---
 
 # ryi CLI cleanup: turnkey fast and slow over one input model
@@ -35,3 +37,13 @@ Input handling is also split four ways (files only, one dir, files+dirs without 
 ## Tests Run
 
 ## Implementation Notes
+
+## Comments
+
+### 2026-09-27T02:00:05Z · @codex
+
+Repro receipt: current ryi help lists fast/slow with --root and --kinds plus the INFO default; t_170 fast/slow ratchet passed.
+
+### 2026-09-27T02:00:10Z · @intake
+
+Obsolete: Current ryi help and fast/slow ratchet pass against the claimed interface; old --project-root/--family/--state assumptions are retired, and the card requests warn contrary to the user INFO ruling.
