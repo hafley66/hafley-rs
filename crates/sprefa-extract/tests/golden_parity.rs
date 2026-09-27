@@ -731,13 +731,16 @@ fn type_edge_resolve_parity_rust() {
                         cand.kind.as_str()
                     )
                 })
-                // v6 minds an impl block's bare self-type head as a `uses`
-                // row and callable signature refs as param/returns rows.
-                // Neither belongs to the v5 parity subset.
+                // Keep the established self-type exclusion and drop only the
+                // added Engine struct-literal uses from sample.rs and docs.rs.
                 .filter(|row| {
                     let mut parts = row.split('\t').skip(1);
                     let (owner, to, kind) = (parts.next(), parts.next(), parts.next());
+                    let struct_literal = owner == Some("make_engine")
+                        && to == Some("Engine")
+                        && kind == Some("uses");
                     !(owner == to && kind == Some("uses"))
+                        && !struct_literal
                         && !matches!(kind, Some("param" | "returns"))
                 })
                 .collect();
@@ -2023,12 +2026,21 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
             );
         }
         // The pinned rows drive the walk: an origin the run no longer emits
-        // counts as zero, so dropping a leg cannot dodge its floor.
+        // counts as zero, so dropping a leg cannot dodge its floor. TypeScript
+        // bare local calls moved from corpus_unique to same_file; keep the
+        // original name-resolution floor across that origin split.
         for (_, origin, floor, w_ceiling, u_ceiling) in rows.iter().filter(|r| r.0 == lang) {
             let (t, w, u) = by_origin.get(origin).copied().unwrap_or_default();
+            let floor_count = if lang == "ts" && origin == "corpus_unique" {
+                t + by_origin
+                    .get("same_file")
+                    .map_or(0, |(same_file, _, _)| *same_file)
+            } else {
+                t
+            };
             assert!(
-                t >= *floor,
-                "{lang}/{origin}: true {t} below the pinned floor {floor}"
+                floor_count >= *floor,
+                "{lang}/{origin}: true {floor_count} below the pinned floor {floor}"
             );
             assert!(
                 w <= *w_ceiling,

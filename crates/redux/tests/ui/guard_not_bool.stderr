@@ -1,5 +1,5 @@
 error[E0308]: mismatched types
-  --> /kache/home/projects/hafley-rs/.boop-worktrees/chore/the-gang-edits/crates/redux/tests/ui/guard_not_bool.rs:28:1
+  --> tests/ui/guard_not_bool.rs:28:1
    |
 28 | / machine! {
 29 | |     NotBool for State {
