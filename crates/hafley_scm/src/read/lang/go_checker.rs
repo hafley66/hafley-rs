@@ -15,6 +15,7 @@ pub use super::{
 };
 use super::{CALL_FACETS, TYPE_FACETS};
 use crate::read::shape::{FamilyTag, NodeRef};
+use crate::read::tsi::stamp_digests;
 use crate::read::types::{
     CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ProjectEdge, ResolutionOrigin, RyiOutput,
     TypeF,
@@ -348,30 +349,6 @@ fn site_callee<'a>(
         .iter()
         .find(|candidate| candidate.span == site)
         .map(|candidate| output.strings.lookup(candidate.callee))
-}
-
-/// The driver wrote each span's SUPPLIED path; a corpus path becomes the file's
-/// content digest and any other path stays as it is, naming a file off-corpus.
-fn stamp_digests(
-    rows: Vec<crate::read::tsi::FactOut>,
-    corpus: &[(String, ContentId)],
-) -> Vec<crate::read::tsi::FactOut> {
-    let digest_of: HashMap<&str, String> = corpus
-        .iter()
-        .map(|(path, blob)| (path.as_str(), blob.to_string()))
-        .collect();
-    rows.into_iter()
-        .map(|mut row| {
-            for arg in &mut row.args {
-                if let crate::read::tsi::Arg::Span(key, _, _) = arg {
-                    if let Some(digest) = digest_of.get(key.as_str()) {
-                        *key = digest.clone();
-                    }
-                }
-            }
-            row
-        })
-        .collect()
 }
 
 /// The declaration identifier's offset picks between several defs of one name
