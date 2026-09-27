@@ -1,9 +1,9 @@
 ---
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-26
 type: feature
 reporter: chrishafley
-status: untriaged
+status: needs-decision
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -25,3 +25,9 @@ Installed soopy --help exposes show-stage and discard-stage, plus source read/wa
 - [ ] End-to-end CLI fixtures cover stale input, conflicts, create/replace/move/delete, interrupted apply and replay.
 ## Tests Run
 Help and source inspected; no new tests executed. Related: @soopy-staged-mutations.
+
+## Repro receipt
+
+2026-09-26: `ryii stage --help` falls back to top-level help; current `ryii` exposes move/rename but no generic stage, commit, or recover command.
+
+Decision: add a generic StageRequest/StageId CLI, or keep staging and recovery as library APIs behind the focused move/rename commands?
