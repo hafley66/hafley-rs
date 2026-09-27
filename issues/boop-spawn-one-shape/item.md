@@ -1,8 +1,8 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-27
 type: improvement
-status: open
+status: needs-info
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
@@ -41,3 +41,9 @@ Sites:
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Decisions
+
+### 2026-09-27T04:09:22Z · @codex
+
+Current repro: DispatchArgs, LaneArgs, SpawnSpec, and Route remain separate. The decision boundary is whether Route JSON adopts the canonical spawn type with a compatibility migration, or stays persisted with an explicit conversion from a shared request type. No registry migration contract is in this card.
