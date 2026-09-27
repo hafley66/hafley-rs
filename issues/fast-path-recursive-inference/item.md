@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-26
 type: feature
-status: needs-decision
+status: open
 priority: normal
 epic: ryi-fast-tier
 related: ['@local-binding-inference', '@extract-graph-verb', '@kind-vocab-constraint']
@@ -99,6 +99,4 @@ relation belongs to before writing either.
 
 ## Repro receipt
 
-2026-09-26: current `ryii fast` leaves both `String.contains` and `Vec.contains` unresolved with reason `inferred` in a two-parameter fixture.
-
-Decision: add the initializer relation in this producer queue, or implement the recursive rules in dl8 as the card specifies?
+2026-09-27: `ryii fast /tmp/recursive-inference-repro.rs --sqlite /tmp/recursive-inference-20260927.db` exports two `contains` rows in `unresolved` with reason `inferred`; DL8 has no current program consuming the extraction SQLite relations, and the card remains blocked by `scip-ingestion-conformance`.
