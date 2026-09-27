@@ -363,3 +363,57 @@ fn interleaved_anchor_intervals_do_not_overlap() {
     assert_eq!(found[0].id, "edge:1");
     assert_eq!((found[0].buffer_start, found[0].buffer_end), (1, 3));
 }
+
+#[test]
+fn claude_375_does_not_claim_prior_code_or_terminal_chrome() {
+    let mut old_user = turn(
+        890,
+        "user",
+        "Box<dyn Iterator<Item = OpResult<Value>> + Send>\n\ndo we need dyn when we are code-gen'ing?",
+    );
+    old_user.session = "99f3ac04-07ff-46cf-97ee-da5965fdae41".into();
+    old_user.harness = "claude".into();
+    let mut answer = turn(
+        914,
+        "assistant",
+        "All 18 branches of the night renamed as `type/the-gang-…`, grouped by status.\n\n## Merged into main\n\nfix/the-gang-stops-binding-across-crates\nfeature/the-gang-batches-the-edits\nfeature/the-gang-teaches-typespec-clap\nchore/the-gang-caps-the-heap\nfeature/the-gang-learns-generics\nfeature/the-gang-parses-typescript-once",
+    );
+    answer.session = old_user.session.clone();
+    answer.harness = "claude".into();
+    let mut current_user = turn(
+        912,
+        "user",
+        "no more random K3/A3 designation; all work leased as type/the-gang-…",
+    );
+    current_user.session = old_user.session.clone();
+    current_user.harness = "claude".into();
+
+    let screen = [
+        line("Box<dyn Iterator<Item = OpResult<Value>> + Send>", 0),
+        line(
+            "❯ no more random K3/A3 designation; all work leased as type/the-gang-…",
+            1,
+        ),
+        line(
+            "All 18 branches of the night renamed as type/the-gang-…, grouped by status.",
+            2,
+        ),
+        line("## Merged into main", 3),
+        line("feature/the-gang-parses-typescript-once", 4),
+        line("❯", 5),
+        line("Opus 5.5 (1M context) ctx 51% of 1000k", 6),
+        line("ryi fast and slow 0:ryi fast and slow*", 7),
+    ];
+    let found = locate_visible_turns(&screen, &[old_user, current_user, answer]);
+
+    assert_eq!(
+        found.iter().map(|turn| turn.turn).collect::<Vec<_>>(),
+        vec![912, 914],
+        "turn 890 matched its code excerpt above the actual prompt",
+    );
+    assert_eq!(
+        (found[1].buffer_start, found[1].buffer_end),
+        (2, 4),
+        "turn 914 must stop before the composer, Claude status and tmux status rows",
+    );
+}
