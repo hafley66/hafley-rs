@@ -146,34 +146,13 @@ fn py_string_literal(node: tree_sitter::Node, src: &[u8]) -> Option<String> {
     if node.kind() != "string" {
         return None;
     }
-    let token = py_text(node, src);
-    let quote_start = token.find(|ch| ch == '\'' || ch == '"')?;
-    let prefix = &token[..quote_start];
-    if prefix.chars().any(|ch| matches!(ch, 'b' | 'B' | 'f' | 'F')) {
-        return None;
-    }
-    let quote_text = if token.get(quote_start..quote_start + 3)? == "'''"
-        || token.get(quote_start..quote_start + 3)? == "\"\"\""
-    {
-        token.get(quote_start..quote_start + 3)?
-    } else {
-        token.get(quote_start..quote_start + 1)?
-    };
-    let content_start = quote_start + quote_text.len();
-    let content_end = token.len().checked_sub(quote_text.len())?;
-    if content_end < content_start || !token.ends_with(quote_text) {
-        return None;
-    }
-    let content = &token[content_start..content_end];
-    if prefix.chars().any(|ch| matches!(ch, 'r' | 'R')) {
-        return Some(content.to_string());
-    }
-    Some(
-        content
-            .replace("\\'", "'")
-            .replace("\\\"", "\"")
-            .replace("\\\\", "\\"),
-    )
+    let mut cursor = node.walk();
+    let content: String = node
+        .named_children(&mut cursor)
+        .filter(|child| child.kind() == "string_content")
+        .map(|child| py_text(child, src))
+        .collect();
+    Some(content)
 }
 
 // ── the module plane proper ──────────────────────────────────────────────────
