@@ -413,7 +413,7 @@ fn batch_pattern_source_stays_valid_after_import_cleanup() {
     )
     .unwrap();
     let (ok, output) = run(
-        env!("CARGO_BIN_EXE_ryi"),
+        env!("CARGO_BIN_EXE_ryii"),
         &[
             "cleave",
             "--list",

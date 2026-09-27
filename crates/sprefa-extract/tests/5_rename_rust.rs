@@ -139,14 +139,14 @@ fn rust_rename_matches_the_hand_written_after() {
 /// source directory. Both root bindings and their consumer follow the names.
 #[test]
 fn batch_renames_library_reexports_with_a_main_target() {
-    let fixture = fixture("reexport", "batch");
+    let fixture = fixture("reexport_batch", "batch");
     let list = fixture.state.join("batch.tsv");
     std::fs::write(
         &list,
         "src/_1_pattern.rs\tPattern\tGlobPattern\nsrc/_0_types.rs\tRepositoryId\tRepoIdentity\n",
     )
     .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryi"))
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("rename")
         .arg("--list")
         .arg(&list)
@@ -163,7 +163,7 @@ fn batch_renames_library_reexports_with_a_main_target() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert_eq!(
-        diff_rq(&fixture.root, &tree("reexport", "after")),
+        diff_rq(&fixture.root, &tree("reexport_batch", "after")),
         Vec::<String>::new()
     );
 }
