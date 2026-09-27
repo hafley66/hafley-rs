@@ -76,7 +76,7 @@ pub(super) fn project_types(
     // The candidates walk runs AFTER every entity is in the bundle so an
     // impl-owned candidate finds its in-file self-type entity regardless of
     // item order (v5's text-keyed pass has no order sensitivity; spans do).
-    edge_candidates(parsed, line_starts, strings, sink);
+    edge_candidates_from_tree(parsed, line_starts, tree, source, strings, sink);
     impl_self_type_candidates(rows.impl_self_heads, strings, sink);
 }
 

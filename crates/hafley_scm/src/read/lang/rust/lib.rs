@@ -24,7 +24,7 @@ use hafley_scm::lang::rust::{
 
 use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
-use super::rust_type_edges::edge_candidates;
+use super::rust_type_edges::edge_candidates_from_tree;
 use crate::read::family::{
     CallEdgeKind, CallF, CallKind, CallSite, ConstKind, ConstValue, DfArg, DfEdgeKind, DfF,
     DfField, DfLit, DfNodeKind, DfParam, DocFact, DocTag, MethodOwner, ProjectEdge,

@@ -70,3 +70,61 @@ fn tree_type_candidates_match_the_shared_rust_fixture_projection() {
         ]
     );
 }
+
+#[test]
+fn tree_type_candidates_match_syn_across_the_pinned_soopy_fixture() {
+    let fixture_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let roots = [
+        fixture_root.join("../sprefa-extract/tests/fixtures/ratchet_soopy/src"),
+        fixture_root.join("../sprefa-extract/tests/fixtures/rust_visibility/app/src"),
+        fixture_root.join("../sprefa-extract/tests/fixtures/type_ladder_scope/src"),
+    ];
+    let mut pending = roots.to_vec();
+    while let Some(path) = pending.pop() {
+        for entry in std::fs::read_dir(&path).expect("fixture directory reads") {
+            let entry = entry.expect("fixture entry reads");
+            let path = entry.path();
+            if path.is_dir() {
+                pending.push(path);
+                continue;
+            }
+            if path.extension().and_then(std::ffi::OsStr::to_str) != Some("rs") {
+                continue;
+            }
+            let source = std::fs::read_to_string(&path).expect("Rust fixture reads as UTF-8");
+            let syn_file = syn::parse_file(&source).expect("Syn parses the Rust fixture");
+            let syn_groups = type_candidate_rows(&syn_file, &build_line_starts(&source));
+            let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+            let mut parser = tree_sitter::Parser::new();
+            parser.set_language(&language).expect("Rust grammar loads");
+            let tree = parser
+                .parse(&source, None)
+                .expect("tree-sitter parses fixture");
+            let tree_groups = type_candidate_rows_from_tree(&tree, source.as_bytes());
+            if tree_groups != syn_groups {
+                let examples = tree_groups
+                    .iter()
+                    .zip(&syn_groups)
+                    .enumerate()
+                    .filter(|(_, (tree, syn))| tree != syn)
+                    .take(8)
+                    .map(|(index, (tree, syn))| {
+                        (
+                            index,
+                            &tree.owner,
+                            &tree.candidates,
+                            &syn.owner,
+                            &syn.candidates,
+                        )
+                    })
+                    .collect::<Vec<_>>();
+                panic!(
+                    "candidate rows diverge for {}: tree groups={}, syn groups={}, examples={examples:#?}",
+                    path.display(),
+                    tree_groups.len(),
+                    syn_groups.len(),
+                );
+            }
+        }
+    }
+}
