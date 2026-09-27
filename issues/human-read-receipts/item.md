@@ -1,9 +1,10 @@
 ---
 created: 2026-09-15
-updated: 2026-09-15
+updated: 2026-09-27
 type: feature
-status: open
+status: obsolete
 priority: normal
+closed: 2026-09-27
 ---
 
 # Human message visibility receipts and five-second coverage
@@ -59,3 +60,9 @@ Whether every visible pane or only focused pane counts; partial-range UI present
 - [ ] Unknown adapter capability creates no confirmed receipt.
 - [ ] Replayed events and restarts create no duplicate or fabricated exposure.
 - [ ] Agent context states observed exposure and timestamp without claiming comprehension.
+
+## Resolution
+
+### 2026-09-27T05:03:34Z · @issuectl
+
+Repro receipt: ~/.cargo/bin/boop --help documents `boop beep message ack` as read-at-best; it exposes no human-visibility receipt, and the card is a new cross-repo feature proposal with no current runtime defect.
