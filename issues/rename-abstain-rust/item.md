@@ -1,12 +1,13 @@
 ---
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-26
 type: improvement
-status: open
+status: done
 priority: normal
 epic: extract-parity-move-rename
 related: ['@rename-abstain-record']
 labels: [extract, artifact-cli, component-rename]
+closed: 2026-09-26
 ---
 
 # rename: Rust arm emits abstain rows for untyped field accesses
@@ -34,3 +35,9 @@ Contract already in place: `Rename::occurrences -> Result<(Vec<SymbolRef>, Vec<R
 ## Comments
 
 ## Decisions
+
+## Resolution
+
+### 2026-09-27T02:44:12Z · @issuectl
+
+Current ryii reproduced exit 6 on mixed typed/untyped field accesses; t_5_rename_rust passed (20 tests) after emitting the typed plan plus one inferred abstain.

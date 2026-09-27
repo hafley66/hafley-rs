@@ -29,6 +29,7 @@ use syn::spanned::Spanned;
 
 use crate::edit_seams::RefRole;
 use crate::edit_seams::Rename;
+use crate::edit_seams::RenameAbstain;
 use crate::edit_seams::RenameStop;
 use crate::edit_seams::Respell;
 use crate::edit_seams::SymbolRef;
@@ -37,6 +38,7 @@ use crate::lang::rust::{build_line_starts, syn_span, RustSource};
 use crate::lang::rust_modules::CargoManifest;
 use crate::move_cx::{dirname, join_rel, stem};
 use crate::rename_cx::{RenameCx, RenameRequest};
+use crate::types::UnresolvedReason;
 use hafley_scm::atoms::{NameId, Strings};
 use hafley_scm::span::Span;
 
@@ -46,6 +48,15 @@ impl Rename for RustSource {
         cx: &RenameCx,
         request: &RenameRequest,
     ) -> Result<Vec<SymbolRef>, RenameStop> {
+        self.symbol_refs_and_abstains(cx, request)
+            .map(|(refs, _)| refs)
+    }
+
+    fn symbol_refs_and_abstains(
+        &self,
+        cx: &RenameCx,
+        request: &RenameRequest,
+    ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
         let corpus = Corpus::open(cx, &request.old);
         let anchor = corpus
             .scans
@@ -95,6 +106,8 @@ impl Rename for RustSource {
             text: request.old.clone(),
         }];
         let mut seats: Vec<SymbolSeat> = Vec::new();
+        let mut untyped_fields = Vec::new();
+        let mut typed_field_access = false;
         for (rel, scan) in &corpus.scans {
             let anchored = (rel == &request.anchor).then_some(declaration);
             let line_starts = cx
@@ -115,8 +128,41 @@ impl Rename for RustSource {
                     request,
                     &mut refs,
                     &mut seats,
+                    &mut untyped_fields,
+                    &mut typed_field_access,
                 );
             }
+        }
+        let mut abstains = Vec::new();
+        if typed_field_access {
+            for (file, span, receiver, _) in untyped_fields {
+                let receiver = cx
+                    .text(&file)
+                    .and_then(|text| {
+                        text.get(receiver.start as usize..receiver.end() as usize)
+                            .map(str::to_owned)
+                    })
+                    .unwrap_or_default();
+                abstains.push(RenameAbstain {
+                    file,
+                    span,
+                    symbol: request.old.clone(),
+                    reason: UnresolvedReason::Inferred.as_str(),
+                    receiver,
+                });
+            }
+        } else {
+            seats.extend(
+                untyped_fields
+                    .into_iter()
+                    .map(|(file, span, _, line)| SymbolSeat {
+                        file,
+                        span,
+                        line,
+                        reaches: String::new(),
+                        form: "untyped field",
+                    }),
+            );
         }
         if let Some(stop) = corpus.inexact(&refs) {
             return Err(stop);
@@ -130,7 +176,7 @@ impl Rename for RustSource {
             seats.dedup_by(|left, right| left.file == right.file && left.span == right.span);
             return Err(RenameStop::Dynamic(seats));
         }
-        Ok(settle(refs))
+        Ok((settle(refs), abstains))
     }
 
     fn respell_symbol(
@@ -456,6 +502,8 @@ impl Corpus {
         request: &RenameRequest,
         refs: &mut Vec<SymbolRef>,
         seats: &mut Vec<SymbolSeat>,
+        untyped_fields: &mut Vec<(String, Span, Span, u32)>,
+        typed_field_access: &mut bool,
     ) {
         let mut ours: BTreeSet<&[String]> = BTreeSet::new();
         let mut shadowed: BTreeSet<&[String]> = BTreeSet::new();
@@ -625,20 +673,26 @@ impl Corpus {
                         span,
                         ty: Some(ty),
                         write,
+                        ..
                     } if ty == owner => {
+                        *typed_field_access = true;
                         let role = match write {
                             true => RefRole::Write,
                             false => RefRole::Read,
                         };
                         refs.push(seat(rel, *span, role, &request.old));
                     }
-                    FieldSite::Access { span, ty: None, .. } => seats.push(SymbolSeat {
-                        file: rel.to_string(),
-                        span: *span,
-                        line: line_starts.partition_point(|start| *start <= span.start) as u32,
-                        reaches: String::new(),
-                        form: "untyped field",
-                    }),
+                    FieldSite::Access {
+                        span,
+                        receiver,
+                        ty: None,
+                        ..
+                    } => untyped_fields.push((
+                        rel.to_string(),
+                        *span,
+                        *receiver,
+                        line_starts.partition_point(|start| *start <= span.start) as u32,
+                    )),
                     FieldSite::Owner {
                         span,
                         chain,
@@ -1121,6 +1175,7 @@ enum FieldSite {
     /// `x.old`: the same-file type of `x`, or unknown.
     Access {
         span: Span,
+        receiver: Span,
         ty: Option<String>,
         /// The access is the assigned-to side of an assignment.
         write: bool,
@@ -1582,6 +1637,7 @@ impl<'ast> syn::visit::Visit<'ast> for FieldWalk<'_> {
             if ident == self.old {
                 self.out.push(FieldSite::Access {
                     span: syn_span(self.line_starts, ident.span()),
+                    receiver: syn_span(self.line_starts, node.base.span()),
                     ty: self.value_ty(&node.base),
                     write: self.write,
                 });

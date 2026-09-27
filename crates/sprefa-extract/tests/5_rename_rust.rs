@@ -543,6 +543,46 @@ fn untyped_field_access_is_a_dynamic_stop() {
     );
 }
 
+/// A typed field access supplies a partial plan; an untyped receiver beside it
+/// is reported with its expression and does not turn the run into a stop.
+#[test]
+fn untyped_field_access_abstains_beside_typed_access() {
+    let fixture = fixture("field_abstain", "abstain");
+    let output = run_rename(
+        &fixture.root,
+        &fixture.state,
+        "src/util.rs#size",
+        "width",
+        &["--json"],
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(
+        output.status.code(),
+        Some(7),
+        "plan plus abstain exits 7: {stderr}"
+    );
+    assert!(
+        stdout.contains("plan src/util.rs size -> width"),
+        "plan is emitted: {stdout}"
+    );
+    assert!(
+        stdout.contains("src/lib.rs  1 uses"),
+        "typed access is planned: {stdout}"
+    );
+    assert!(
+        stdout.contains("\"symbol\":\"size\",\"reason\":\"inferred\",\"receiver\":\"v\""),
+        "untyped receiver is reported: {stdout}"
+    );
+    assert!(stderr.is_empty(), "abstain is not a run error: {stderr}");
+    let entries = diff_rq(&fixture.root, &tree("field_abstain", "before"));
+    assert!(
+        entries.is_empty(),
+        "dry run edits nothing:\n{}",
+        entries.join("\n")
+    );
+}
+
 /// A variant anchor renames every path whose segments end `[Kind, Old]` once
 /// `Kind` resolves to the anchor's module: the bare path in `make()`, the match
 /// arm, the `use Kind::Old;` clause, and the bare `Old` it binds inside
