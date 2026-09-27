@@ -100,6 +100,9 @@ mod diff;
 #[path = "../0_graph.rs"]
 mod graph;
 
+#[path = "../0_stratify.rs"]
+mod stratify;
+
 #[path = "../edit/_6_rename.rs"]
 mod source_rename;
 
@@ -566,6 +569,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(Cmd::Watch(args)) => return watch::run(args),
         Some(Cmd::Diff(args)) => return or_exit_2(diff::run(args)),
         Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
+        Some(Cmd::Stratify(args)) => return or_exit_2(stratify::run(args)),
         Some(Cmd::Query(args)) => return or_exit_2(query::run(args)),
         Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args)),
         Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args)),
@@ -660,6 +664,7 @@ fn run_formatted(ryi: Ryi, out: &mut dyn Write) -> Result<(), Box<dyn std::error
         Some(Cmd::Slow(args)) => write_formatted_rows(out, ops::slow(&args)),
         Some(Cmd::Scip(args)) => write_formatted_rows(out, ops::scip(&args)),
         Some(Cmd::Graph(args)) => write_formatted_rows(out, ops::graph(&args)),
+        Some(Cmd::Stratify(args)) => write_formatted_rows(out, ops::stratify(&args)),
         Some(Cmd::Query(args)) => write_formatted_rows(out, ops::query(&args)),
         Some(Cmd::Watch(args)) => write_formatted_rows(out, ops::watch(&args)),
         Some(Cmd::Diff(args)) => write_formatted_rows(out, ops::diff(&args)),
@@ -690,6 +695,7 @@ fn run_verb(
         Some(Cmd::Watch(args)) => watch::run_to(args, writer, cancelled),
         Some(Cmd::Diff(args)) => or_exit_2(diff::run_to(args, &mut writer)),
         Some(Cmd::Graph(args)) => or_exit_2(graph::run_to(args, &mut writer)),
+        Some(Cmd::Stratify(args)) => or_exit_2(stratify::run_to(args, &mut writer)),
         Some(Cmd::Query(args)) => or_exit_2(query::run_to(args, writer)),
         Some(Cmd::Move(args)) => or_exit_2(source_move::run(args)),
         Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args)),

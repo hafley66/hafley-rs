@@ -400,6 +400,24 @@ pub struct TrailArgs {
   pub runs: usize,
 }
 
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
+pub struct StratifyArgs {
+  #[command(flatten)]
+  #[serde(flatten)]
+  pub inputs: Inputs,
+  #[doc = "Entry point PATH[:NAME][=RANK]; repeatable"]
+  #[arg(long, value_name = "PATH[:NAME][=RANK]")]
+  #[serde(default)]
+  pub from: Vec<String>,
+  #[doc = "Base line target; default is the corpus median"]
+  #[arg(long, value_name = "N")]
+  pub base_lines: Option<u32>,
+  #[doc = "Edge plane used to build the graph (call, type, or both)"]
+  #[arg(long, default_value = "both", value_name = "KIND")]
+  #[serde(default = "__serde_default_stratify_kind")]
+  pub kind: String,
+}
+
 fn __serde_default_graph_timeout() -> u64 { serde_json::from_value(serde_json::json!(30)).expect("TypeSpec default matches Rust field") }
 
 fn __serde_default_region_generated() -> PathBuf { serde_json::from_value(serde_json::json!("-")).expect("TypeSpec default matches Rust field") }
@@ -407,3 +425,5 @@ fn __serde_default_region_generated() -> PathBuf { serde_json::from_value(serde_
 fn __serde_default_watch_poll_ms() -> u64 { serde_json::from_value(serde_json::json!(500)).expect("TypeSpec default matches Rust field") }
 
 fn __serde_default_trail_runs() -> usize { serde_json::from_value(serde_json::json!(5)).expect("TypeSpec default matches Rust field") }
+
+fn __serde_default_stratify_kind() -> String { serde_json::from_value(serde_json::json!("both")).expect("TypeSpec default matches Rust field") }

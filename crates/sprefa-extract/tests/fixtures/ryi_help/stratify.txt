@@ -1,0 +1,16 @@
+Rank files from entrypoints and propose dependency-first numeric prefixes
+
+Usage: ryii stratify [OPTIONS] [PATH]...
+
+Arguments:
+  [PATH]...  Files, directories, or globs; - reads a path list from stdin
+
+Options:
+      --pattern <GLOB>             Keep files matching GLOB under each directory input; repeatable
+      --entry <FILE>               Run on the files FILE reaches over imports (universe: the PATH inputs, else FILE's project)
+      --depth <N>                  Import hops from --entry
+      --root <DIR>                 Corpus root
+      --from <PATH[:NAME][=RANK]>  Entry point PATH[:NAME][=RANK]; repeatable
+      --base-lines <N>             Base line target; default is the corpus median
+      --kind <KIND>                Edge plane used to build the graph (call, type, or both) [default: both]
+  -h, --help                       Print help

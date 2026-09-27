@@ -63,6 +63,7 @@ pub fn request_uses_stdin(verb: &str, args: &serde_json::Value) -> bool {
         "ingest" => &["paths"],
         "schema" => &[],
         "trail" => &[],
+        "stratify" => &[],
         _ => &[],
     };
     fn has_stdin(value: &serde_json::Value, names: &[&str]) -> bool {

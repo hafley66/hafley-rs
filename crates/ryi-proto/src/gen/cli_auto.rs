@@ -10,6 +10,7 @@ use crate::ops_auto::RegionArgs;
 use crate::ops_auto::RenameArgs;
 use crate::ops_auto::ScipArgs;
 use crate::ops_auto::SlowArgs;
+use crate::ops_auto::StratifyArgs;
 use crate::ops_auto::TrailArgs;
 use crate::ops_auto::WatchArgs;
 
@@ -52,4 +53,6 @@ pub enum Cmd {
   Schema,
   #[doc = "Print the last N runs from the trail"]
   Trail(TrailArgs),
+  #[doc = "Rank files from entrypoints and propose dependency-first numeric prefixes"]
+  Stratify(StratifyArgs),
 }
