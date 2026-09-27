@@ -168,7 +168,7 @@ fn collect(
                 let bare_head = bare_self_head(&item.self_ty, line_starts);
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
-                if let Some((_, path, _)) = &item.trait_ {
+                if let Some((path, _)) = &item.trait_ {
                     if let Some(to) = path_name(path) {
                         candidates.push(TypeCandidateRow {
                             to,
@@ -201,9 +201,9 @@ fn collect(
                                     &mut candidates,
                                 );
                             } else if let syn::FnArg::Receiver(receiver) = arg {
-                                if receiver.colon_token.is_some() {
+                                if let syn::ReceiverKind::Typed(_, ty) = &receiver.kind {
                                     self_type_candidate(
-                                        &receiver.ty,
+                                        ty,
                                         &primary_name,
                                         TypeCandidateKind::Param,
                                         &mut candidates,
@@ -430,8 +430,10 @@ fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
     for arg in &sig.inputs {
         let ty = match arg {
             syn::FnArg::Typed(arg) => Some(&*arg.ty),
-            syn::FnArg::Receiver(receiver) if receiver.colon_token.is_some() => Some(&*receiver.ty),
-            _ => None,
+            syn::FnArg::Receiver(receiver) => match &receiver.kind {
+                syn::ReceiverKind::Typed(_, ty) => Some(ty.as_ref()),
+                _ => None,
+            },
         };
         if let Some(ty) = ty {
             candidates.extend(type_refs(ty).into_iter().map(|to| TypeCandidateRow {
@@ -511,7 +513,7 @@ fn field_candidates(fields: &Fields, candidates: &mut Vec<TypeCandidateRow>) {
 fn generic_candidates(generics: &syn::Generics, candidates: &mut Vec<TypeCandidateRow>) {
     for param in &generics.params {
         if let GenericParam::Type(param) = param {
-            if let Some(default) = &param.default {
+            if let Some((_, default)) = &param.default {
                 candidates.extend(type_refs(default).into_iter().map(|to| TypeCandidateRow {
                     to,
                     kind: TypeCandidateKind::Generic,

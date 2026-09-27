@@ -152,7 +152,7 @@ fn visit(
             }
             syn::Item::Impl(item) => {
                 let self_type = primary_type(&item.self_ty);
-                let trait_name = item.trait_.as_ref().map(|(_, path, _)| path_string(path));
+                let trait_name = item.trait_.as_ref().map(|(path, _)| path_string(path));
                 for child in &item.items {
                     if let syn::ImplItem::Fn(method) = child {
                         let range = def(method.sig.ident.span(), method.block.span());

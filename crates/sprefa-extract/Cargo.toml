@@ -77,7 +77,7 @@ oxc_resolver = "11.24.3"
 # (syn 2 dropped its `span-locations` feature), gated by proc-macro2's
 # `span-locations`; v6 Span is byte offsets, bridged by the line_starts table
 # in lang/rust.rs.
-syn = { version = "2", features = ["full", "visit", "parsing", "extra-traits"] }
+syn = { version = "3", features = ["full", "visit", "parsing", "extra-traits"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 # ra_ap_syntax and salsa remain for the optional rust checker tier.
 ra_ap_syntax = "0.0.352"

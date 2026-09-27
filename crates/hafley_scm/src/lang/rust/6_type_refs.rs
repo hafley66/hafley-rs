@@ -19,7 +19,7 @@ pub fn type_refs(ty: &Type) -> Vec<String> {
 fn collect_type_refs(ty: &Type, out: &mut Vec<String>) {
     match ty {
         Type::Array(t) => collect_type_refs(&t.elem, out),
-        Type::BareFn(t) => {
+        Type::FnPtr(t) => {
             for input in &t.inputs {
                 collect_type_refs(&input.ty, out);
             }
@@ -88,7 +88,7 @@ pub fn collect_path_args(path: &Path, out: &mut Vec<String>) {
             }
             PathArguments::Parenthesized(p) => {
                 for input in &p.inputs {
-                    collect_type_refs(input, out);
+                    collect_type_refs(&input.ty, out);
                 }
                 if let ReturnType::Type(_, ty) = &p.output {
                     collect_type_refs(ty, out);
