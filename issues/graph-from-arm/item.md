@@ -1,8 +1,8 @@
 ---
 created: 2026-09-20
-updated: 2026-09-20
+updated: 2026-09-26
 type: feature
-status: needs-decision
+status: obsolete
 priority: normal
 epic: ryi-new-verbs
 labels: [extract, artifact-cli]
@@ -114,3 +114,7 @@ SELECT depth, count(*) FROM reach GROUP BY depth ORDER BY depth;
 ## Decisions
 
 Should bare `--from NAME` remain a multi-definition seed while adding exact `--from PATH:NAME`, or should the arm require an exact path-qualified root?
+
+## Comments
+
+2026-09-26 repro: `ryii graph --from make tests/fixtures/graph_rust/0_widget.rs tests/fixtures/graph_rust/1_reader.rs` exits 0 and emits `graph_node` (`Widget`, depth 1).
