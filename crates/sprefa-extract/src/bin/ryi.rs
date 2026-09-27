@@ -595,9 +595,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(Cmd::Region(args)) => match region_writer::run(args) {
             Ok(0) => return Ok(()),
             Ok(code) => return Err(RyiExit::new(code, "").into()),
-            Err(error) => {
-                return Err(RyiExit::new(error.exit, error.message).into());
-            }
+            Err(error) => return Err(error.into()),
         },
     };
 
@@ -736,13 +734,10 @@ fn run_verb(
                 if code == 0 {
                     Ok(())
                 } else {
-                    Err(region_writer::RegionError {
-                        message: format!("region exited {code}"),
-                        exit: code,
-                    })
+                    Err(RyiExit::new(code, format!("region exited {code}")))
                 }
             })
-            .map_err(|error| RyiExit::new(error.exit, error.message).into()),
+            .map_err(|error| Box::new(error) as Box<dyn std::error::Error>),
     };
     result.map_err(RyiExit::boxed)
 }
