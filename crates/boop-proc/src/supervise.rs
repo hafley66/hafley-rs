@@ -1659,17 +1659,11 @@ fn supervise(
                     );
                     continue;
                 }
-                let delivery = match channel.steer(&hail_text(&hail, &mood)) {
-                    Ok(delivery) => delivery,
-                    Err(error) => {
-                        record_hail_transition(
-                            events,
-                            &hail,
-                            "rejected-by-harness",
-                            &error.to_string(),
-                        );
-                        return Err(error);
-                    }
+                let Some(delivery) =
+                    record_steer_outcome(events, &hail, channel.steer(&hail_text(&hail, &mood)))
+                else {
+                    held.push(hail);
+                    continue;
                 };
                 match delivery {
                     Delivery::MidTurn => {
@@ -3159,6 +3153,26 @@ fn record_hail_transition(events: &TraceRecorder, hail: &Hail, state: &str, deta
     }
 }
 
+/// Record the Codex ACP steering rung. Errors stay owned by the supervisor so
+/// it can retry the hail in the next turn.
+fn record_steer_outcome(
+    events: &TraceRecorder,
+    hail: &Hail,
+    result: Result<Delivery>,
+) -> Option<Delivery> {
+    match result {
+        Ok(Delivery::MidTurn) => {
+            record_hail_transition(events, hail, "steered", "mid-turn steer accepted");
+            Some(Delivery::MidTurn)
+        }
+        Ok(Delivery::NextTurn) => Some(Delivery::NextTurn),
+        Err(error) => {
+            record_hail_transition(events, hail, "steering-failed", &error.to_string());
+            None
+        }
+    }
+}
+
 /// Ack plus an accepted receipt and store edge naming the tier, so `boop db`
 /// answers whether the lane received the hail and how it landed.
 fn record_delivery(events: &TraceRecorder, dir: &Path, hail: &Hail, tier: Delivery) {
@@ -3181,6 +3195,59 @@ fn record_delivery(events: &TraceRecorder, dir: &Path, hail: &Hail, tier: Delive
 mod tests {
     use super::*;
     use boop_acp::channel::TurnReceipt;
+
+    #[test]
+    fn codex_steer_receipts_keep_acceptance_and_error_detail() {
+        let dir = tempdir();
+        let events = TraceRecorder::new("mine", &dir);
+        let accepted = Hail {
+            id: "steer-ok".into(),
+            from: "coordinator".into(),
+            kind: "request".into(),
+            body: "accepted body".into(),
+        };
+        let failed = Hail {
+            id: "steer-error".into(),
+            from: "coordinator".into(),
+            kind: "request".into(),
+            body: "failed body".into(),
+        };
+
+        assert_eq!(
+            record_steer_outcome(&events, &accepted, Ok(Delivery::MidTurn)),
+            Some(Delivery::MidTurn)
+        );
+        assert_eq!(
+            record_steer_outcome(
+                &events,
+                &failed,
+                Err(anyhow::anyhow!(
+                    "Codex ACP _session/steering returned outcome failed"
+                )),
+            ),
+            None
+        );
+
+        let accepted_row = events
+            .store
+            .as_ref()
+            .unwrap()
+            .delivery_rows("steer-ok")
+            .unwrap();
+        assert_eq!(accepted_row[0].outcome, "steered");
+        assert_eq!(accepted_row[0].detail, "mid-turn steer accepted");
+        let failed_row = events
+            .store
+            .as_ref()
+            .unwrap()
+            .delivery_rows("steer-error")
+            .unwrap();
+        assert_eq!(failed_row[0].outcome, "steering-failed");
+        assert_eq!(
+            failed_row[0].detail,
+            "Codex ACP _session/steering returned outcome failed"
+        );
+    }
 
     fn write_box(dir: &Path, rows: &[bus::Message]) {
         use std::io::Write;

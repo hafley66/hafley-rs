@@ -305,6 +305,10 @@ pub enum DeliveryState {
     ClaimedBySupervisor,
     /// The text was handed to a harness and the answer is not in yet.
     SubmittedToHarness,
+    /// Codex ACP admitted the text to its active-turn steering queue.
+    Steered,
+    /// Codex ACP rejected or failed to apply the active-turn steering request.
+    SteeringFailed,
     /// The harness took the text into the running turn.
     AcceptedByHarness,
     /// The harness refused the text. The row stays in the mailbox.
@@ -370,6 +374,8 @@ impl DeliveryState {
             DeliveryState::Appended => "appended",
             DeliveryState::ClaimedBySupervisor => "claimed-by-supervisor",
             DeliveryState::SubmittedToHarness => "submitted-to-harness",
+            DeliveryState::Steered => "steered",
+            DeliveryState::SteeringFailed => "steering-failed",
             DeliveryState::AcceptedByHarness => "accepted-by-harness",
             DeliveryState::RejectedByHarness => "rejected-by-harness",
             DeliveryState::HeldForTurnBoundary => "held-for-turn-boundary",
@@ -393,6 +399,7 @@ impl DeliveryState {
         matches!(
             self,
             DeliveryState::AcceptedByHarness
+                | DeliveryState::Steered
                 | DeliveryState::HeldForTurnBoundary
                 | DeliveryState::QueuedInHookInbox
                 | DeliveryState::PastedIntoPane
@@ -405,10 +412,12 @@ impl DeliveryState {
     /// Read one stored `outcome` word back. Unknown text is `None` rather than
     /// a guess, so a store written by a newer boop reads as unknown.
     pub fn parse(word: &str) -> Option<DeliveryState> {
-        const ALL: [DeliveryState; 16] = [
+        const ALL: [DeliveryState; 18] = [
             DeliveryState::Appended,
             DeliveryState::ClaimedBySupervisor,
             DeliveryState::SubmittedToHarness,
+            DeliveryState::Steered,
+            DeliveryState::SteeringFailed,
             DeliveryState::AcceptedByHarness,
             DeliveryState::RejectedByHarness,
             DeliveryState::HeldForTurnBoundary,
@@ -424,6 +433,25 @@ impl DeliveryState {
             DeliveryState::CooledOff,
         ];
         ALL.into_iter().find(|state| state.as_str() == word)
+    }
+}
+
+#[cfg(test)]
+mod delivery_state_tests {
+    use super::DeliveryState;
+
+    #[test]
+    fn codex_steering_receipts_are_distinct_and_parseable() {
+        assert_eq!(
+            DeliveryState::parse("steered"),
+            Some(DeliveryState::Steered)
+        );
+        assert!(DeliveryState::Steered.landed());
+        assert_eq!(
+            DeliveryState::parse("steering-failed"),
+            Some(DeliveryState::SteeringFailed)
+        );
+        assert!(!DeliveryState::SteeringFailed.landed());
     }
 }
 

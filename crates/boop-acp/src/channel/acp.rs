@@ -628,12 +628,19 @@ async fn codex_steer(
 ) -> Result<Delivery, agent_client_protocol::Error> {
     let request = UntypedMessage::new(
         "_session/steering",
-        serde_json::json!({"sessionId": session.0, "prompt": [text]}),
+        serde_json::json!({
+            "sessionId": session.0,
+            "prompt": [{"type": "text", "text": text}],
+        }),
     )?;
     let response = connection.send_request(request).block_task().await?;
     match response["outcome"].as_str() {
         Some("injected" | "startedNewTurn") => Ok(Delivery::MidTurn),
-        Some("failed") => Ok(Delivery::NextTurn),
+        Some("failed") => {
+            let mut error = agent_client_protocol::Error::internal_error();
+            error.message = "Codex ACP _session/steering returned outcome failed".into();
+            Err(error)
+        }
         outcome => {
             let mut error = agent_client_protocol::Error::internal_error();
             error.message = format!("Codex ACP steering returned unexpected outcome {outcome:?}");
@@ -1793,8 +1800,10 @@ while True:
     elif method == "_session/steering":
         with open(sys.argv[1], "w") as report:
             json.dump(frame["params"], report)
-        send({"jsonrpc":"2.0", "id":frame["id"], "result":{"outcome":"injected"}})
-        send({"jsonrpc":"2.0", "id":prompt_id, "result":{"stopReason":"end_turn"}})
+        outcome = "failed" if frame["params"]["prompt"][0]["text"] == "reject me" else "injected"
+        send({"jsonrpc":"2.0", "id":frame["id"], "result":{"outcome":outcome}})
+        if outcome == "injected":
+            send({"jsonrpc":"2.0", "id":prompt_id, "result":{"stopReason":"end_turn"}})
     elif "id" in frame:
         send({"jsonrpc":"2.0", "id":frame["id"], "result":{}})
 "#;
@@ -1835,6 +1844,40 @@ while True:
         let params: serde_json::Value =
             serde_json::from_slice(&std::fs::read(&report).unwrap()).unwrap();
         assert_eq!(params["sessionId"], "ses_steer");
-        assert_eq!(params["prompt"], serde_json::json!(["worker completed"]));
+        assert_eq!(
+            params["prompt"],
+            serde_json::json!([{"type": "text", "text": "worker completed"}])
+        );
+    }
+
+    #[test]
+    fn failed_codex_steering_returns_an_error_for_the_delivery_receipt() {
+        let root =
+            std::env::temp_dir().join(format!("boop-acp-steer-failed-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&root);
+        std::fs::create_dir_all(&root).unwrap();
+        let script = root.join("fake_codex_acp.py");
+        let report = root.join("steer.json");
+        std::fs::write(&script, FAKE_CODEX_ACP).unwrap();
+        let spec = ChannelSpec {
+            model: None,
+            effort: None,
+            cwd: root.clone(),
+            resume: None,
+            lane: None,
+            executable: None,
+        };
+        let command = vec![
+            "python3".to_owned(),
+            script.display().to_string(),
+            report.display().to_string(),
+        ];
+        let mut channel = AcpChannel::open_with_steering(&spec, &command, true).unwrap();
+        channel.start_turn("hold this turn open").unwrap();
+        let error = channel.steer("reject me").unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("_session/steering returned outcome failed"));
+        channel.close().unwrap();
     }
 }
