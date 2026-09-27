@@ -1,12 +1,16 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-26
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, needs-chris]
 size: M
+closed: 2026-09-26
+commits:
+- hash: b540cc0a
+  summary: 'perf(boop): query pending mail by recipient'
 ---
 
 # Mail dir is re-read and re-parsed in full every 700 ms
@@ -46,3 +50,9 @@ Store choice is Chris's call: move the mailbox into `~/.agent/boop.db` versus in
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Resolution
+
+### 2026-09-27T03:20:45Z · @issuectl
+
+Receipt: b540cc0a; `recipient_reads_use_the_covering_mail_index`, `pending_takes_only_this_lane_s_unacked_actionable_rows`, and `a_seen_id_is_not_offered_twice` passed. The 700 ms pending path now selects through idx_mail_to; bus.ndjson is import-only, so rotation is no longer part of this live path.

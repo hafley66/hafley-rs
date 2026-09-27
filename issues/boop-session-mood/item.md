@@ -1,10 +1,11 @@
 ---
 created: 2026-08-18
-updated: 2026-08-18
+updated: 2026-09-26
 type: feature
-status: open
+status: done
 priority: normal
 related: ['@boop-hosted-in-dl6']
+closed: 2026-09-26
 ---
 
 # boop: per-session mood attribute, cascading message format for agent-to-agent mail
@@ -37,3 +38,9 @@ A mood is one attribute row on a session node in the session graph. It names the
 - [ ] `boop beep lane create --mood` sets the child; a child with no mood resolves to the parent's.
 - [ ] hail / inbox drain / lane completion mail render through the receiver's effective mood; one test per delivery path with a fixture mood.
 - [ ] COUNT test: resolving the effective mood is one query (recursive CTE), not one per ancestor.
+
+## Resolution
+
+### 2026-09-27T03:24:14Z · @issuectl
+
+Receipt (boop 0.0.10 49124370-dirty): `boop me mood --help` exposes named read/set/clear semantics; `session_mood::me_mood_sets_reads_and_clears_the_named_session` and receiver-rendering tests are present.

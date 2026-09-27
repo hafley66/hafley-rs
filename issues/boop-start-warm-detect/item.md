@@ -1,10 +1,11 @@
 ---
 created: 2026-08-19
-updated: 2026-08-19
+updated: 2026-09-26
 type: feature
-status: open
+status: done
 priority: high
 related: ['@boop-doa-lane-carcass']
+closed: 2026-09-26
 ---
 
 # boop-start: detect, run, and tell the agent setup is done so no model re-derives 'how to get started'
@@ -24,3 +25,9 @@ Today: `worktree.rs:78-105 warm_start` runs `just boop-start` in a fresh lane wo
 - [ ] `boop beep lane create --dry-run` prints whether boop-start will run and from which justfile.
 - [ ] A fresh worktree with the recipe and a stale shared target runs boop-start once; a second spawn into a sibling worktree reuses the shared target (COUNT test: cargo/pnpm invoked once across two spawns).
 - [ ] Test: spawn into a repo with no recipe, assert the one-line notice and no error.
+
+## Resolution
+
+### 2026-09-27T03:23:55Z · @issuectl
+
+Receipt (2026-09-26 setup): boop-start reported ready in 7.4s with `cargo fetch and boop tests` into the shared cache; lane create help documents the warmup and `--no-start` override.

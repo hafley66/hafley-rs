@@ -1,10 +1,11 @@
 ---
 created: 2026-09-02
-updated: 2026-09-02
+updated: 2026-09-26
 type: bug
 reporter: hafley66@gmail.com
-status: open
+status: obsolete
 priority: normal
+closed: 2026-09-26
 ---
 
 # boop: transport readiness probe collides with running one-shot opencode lanes
@@ -31,3 +32,9 @@ Suggestions to evaluate (not decisions):
 - Mark the probe reply as out-of-band so a one-shot run continues to the brief's end.
 
 Note: lane briefs currently must carry CARGO_TARGET_DIR per lane because `boop lane create` has no env flag. Separate small feature request, filed as a second issue if the tracker supports it cheaply: `boop lane create: --env KEY=VAL flag`.
+
+## Resolution
+
+### 2026-09-27T03:29:27Z · @issuectl
+
+Current supervisor has a separate start_ack_pending gate and regression test the_start_ack_trims_the_word_and_ignores_its_case; that focused test passed against current source, while nextest exited 1 due missing cached linker object files.
