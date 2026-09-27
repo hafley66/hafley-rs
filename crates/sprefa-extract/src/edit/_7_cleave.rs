@@ -255,7 +255,13 @@ fn drop_batch_unused_imports(
                 continue;
             }
             if let Some(edit) = arm.edit_import(&text, &kept, &module) {
-                text = apply(&text, &edit);
+                let candidate = apply(&text, &edit);
+                // Import facts were read before this file's preceding batch
+                // edits. Keep a valid overlay when a stale grouping proposes
+                // a rewrite that no longer forms a Rust use item.
+                if !rel.ends_with(".rs") || syn::parse_file(&candidate).is_ok() {
+                    text = candidate;
+                }
             }
         }
         if text != facts.text {
@@ -1053,19 +1059,9 @@ impl Plan {
                 .push(respell);
         }
         let mut out = BTreeMap::new();
-        for (rel, mut edits) in by_file {
+        for (rel, edits) in by_file {
             let text = self.cx.text(&rel).ok_or_else(|| format!("read {rel}"))?;
-            edits.sort_by_key(|edit| (edit.span.start, edit.span.len));
-            // Import pruning can produce alternate rewrites of one shared use line;
-            // the final batch sweep recomputes the kept imports from the full text.
-            edits.dedup_by(|later, earlier| {
-                if later.span == earlier.span {
-                    earlier.text = later.text.clone();
-                    true
-                } else {
-                    false
-                }
-            });
+            let edits = Self::normalize_row_edits(&rel, edits)?;
             let shifts: Vec<(Span, u32)> = edits
                 .iter()
                 .map(|edit| (edit.span, edit.text.len() as u32))
@@ -1092,6 +1088,28 @@ impl Plan {
             out.insert(self.rows.dest.clone(), (text, Vec::new()));
         }
         Ok(out)
+    }
+
+    /// Match the stage planner's equivalent-edit normalization before a row
+    /// becomes the next row's in-memory source text.
+    fn normalize_row_edits(rel: &str, mut edits: Vec<Respell>) -> Result<Vec<Respell>, String> {
+        edits.sort_by_key(|edit| (edit.span.start, edit.span.len));
+        // Import pruning can propose different text for a shared use line;
+        // retain the last projection before checking independent overlaps.
+        edits.dedup_by(|later, earlier| {
+            if later.span == earlier.span {
+                earlier.text = later.text.clone();
+                true
+            } else {
+                false
+            }
+        });
+        if edits.windows(2).any(|pair| {
+            pair[0].span.end() > pair[1].span.start || pair[0].span.start == pair[1].span.start
+        }) {
+            return Err(format!("{rel}: cleave row has overlapping edits"));
+        }
+        Ok(edits)
     }
 
     /// Every byte this cleave rewrites, as one `Respell` per span, in (file,
@@ -2795,4 +2813,29 @@ fn cross_package_stop(
         ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod batch_row_tests {
+    use super::*;
+
+    #[test]
+    fn equivalent_pub_insertions_form_one_valid_item() {
+        let edit = || Respell {
+            file: "src/_1_pattern.rs".to_string(),
+            span: Span::anchor(0),
+            text: "pub ".to_string(),
+            receipt: None,
+        };
+        let edits = Plan::normalize_row_edits("src/_1_pattern.rs", vec![edit(), edit()]).unwrap();
+        let mut text = "struct Pattern;".to_string();
+        for edit in edits.iter().rev() {
+            text.replace_range(
+                edit.span.start as usize..edit.span.end() as usize,
+                &edit.text,
+            );
+        }
+        assert_eq!(text, "pub struct Pattern;");
+        syn::parse_file(&text).unwrap();
+    }
 }

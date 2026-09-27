@@ -380,3 +380,75 @@ fn cleave_ladder() {
     +pub use crate::_2_dest::Documented;"#
     );
 }
+
+/// Reduced Pattern then unrelated counts batch: the first source's overlay
+/// retains a Pattern importer while its moved impl drops fmt imports.
+#[test]
+fn batch_pattern_source_stays_valid_after_import_cleanup() {
+    let scratch = tempfile::tempdir().unwrap();
+    let root = scratch.path().join("repo");
+    let state = scratch.path().join("state");
+    let target = scratch.path().join("target");
+    let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cleave_ladder");
+    copy_tree(&fixture, &root);
+    for args in [
+        &["init", "-q", "."][..],
+        &["add", "-A"],
+        &[
+            "-c",
+            "user.email=l@l",
+            "-c",
+            "user.name=l",
+            "commit",
+            "-qm",
+            "l",
+        ],
+    ] {
+        assert!(run("git", args, &root, &target).0);
+    }
+    let list = scratch.path().join("batch.tsv");
+    std::fs::write(
+        &list,
+        "src/_6_pattern.rs#Pattern\tsrc/_8_extract.rs\nsrc/_7_counts.rs#Counts\tsrc/_9_counts.rs\n",
+    )
+    .unwrap();
+    let (ok, output) = run(
+        env!("CARGO_BIN_EXE_ryii"),
+        &[
+            "cleave",
+            "--list",
+            list.to_str().unwrap(),
+            "--root",
+            root.to_str().unwrap(),
+            "--state",
+            state.to_str().unwrap(),
+            "--commit",
+        ],
+        &root,
+        &target,
+    );
+    assert!(ok, "batch Pattern then Counts: {output}");
+    let source = std::fs::read_to_string(root.join("src/_6_pattern.rs")).unwrap();
+    assert_eq!(
+        source
+            .lines()
+            .filter(|line| !line.is_empty())
+            .collect::<Vec<_>>(),
+        vec![
+            "use crate::_8_extract::Pattern;",
+            "pub fn compile(pattern: &Pattern) -> String {",
+            "    pattern.to_string()",
+            "}",
+        ]
+    );
+    assert!(std::fs::read_to_string(root.join("src/_8_extract.rs"))
+        .unwrap()
+        .contains("impl Display for Pattern"));
+    let (checked, check) = run(
+        "cargo",
+        &["check", "--offline", "--all-targets", "-q"],
+        &root,
+        &target,
+    );
+    assert!(checked, "batch output must compile: {check}");
+}
