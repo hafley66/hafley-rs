@@ -19,7 +19,6 @@ use hafley_scm::lang::rust::{
 };
 use std::collections::BTreeSet;
 
-use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
 use super::rust_type_edges::edge_candidates_from_tree;
 use crate::read::family::{
@@ -28,7 +27,7 @@ use crate::read::family::{
     ResolutionOrigin, SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind,
     TypeEntityKind, TypeF, TypeSig,
 };
-use crate::read::project::ResolveDrop;
+use crate::read::lang::cst_bundle::cst_bundle_from_tree;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
@@ -36,6 +35,7 @@ use crate::read::seams::{
 };
 use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
+use crate::read::types::ResolveDrop;
 
 use crate::read::trace;
 use crate::read::types::LangKind;
@@ -229,6 +229,7 @@ impl Source for RustSource {
             df,
             data: None,
             scm_captures,
+            #[cfg(feature = "kotlin")]
             kotlin_module: None,
             rust_module,
         }

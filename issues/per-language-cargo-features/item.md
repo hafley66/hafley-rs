@@ -2,7 +2,7 @@
 created: 2026-09-27
 updated: 2026-09-27
 type: feature
-status: open
+status: fixed
 priority: medium
 epic: capability-as-data
 related: ['@capability-as-data']
@@ -46,15 +46,20 @@ sprefa-extract/go-checker -> hafley_scm/go-checker -> read
 
 Receipts: `crates/sprefa-extract/Cargo.toml` has `hafley_scm` with `features = ["read"]` as a non-optional dependency, and the `cli`, checker, and mimalloc features. `crates/hafley_scm/Cargo.toml` defines the aggregate `read` feature with every grammar and front-end dependency, plus `cli`, checker features, and `rust_syn`.
 
+Baseline repro (2026-09-27): current `ryii capabilities` emits every Source row;
+`cargo tree --manifest-path crates/sprefa-extract/Cargo.toml --no-default-features -e features -i tree-sitter-rust` still includes `tree-sitter-rust` through unconditional Rust grammar deps.
+
 ## Acceptance criteria
 
-- [ ] Add paired language features to `sprefa-extract` and `hafley_scm` for every `Source` row: `rust`, `typescript` (including JavaScript/JSX), `go`, `kotlin`, `python`, `prolog`, `markdown`, `data`, `fallback`, `gdscript`, and `commonlisp`.
-- [ ] Make grammar and language-specific parser dependencies optional under their owning language feature; leave shared parse/runtime dependencies in a named shared feature.
-- [ ] Preserve `read` as an aggregate feature enabling all language features, so existing consumers retain current behavior.
-- [ ] Keep `cli` and checker features forwarding through the same graph without enabling languages outside the selected aggregate.
-- [ ] Gate source modules, grammar registration, roster rows, and `Source::planes` declarations with those features; unsupported source rows are absent from the selected build's capability matrix.
-- [ ] Add a feature-matrix test that compares `ryii capabilities` output to `cargo tree -e features` for each grammar dependency and verifies the default/aggregate build contains every current source.
-- [ ] Verify `cargo check -p hafley_scm --no-default-features --features read` and representative single-language builds, including Rust and TypeScript.
+- [x] Add paired language features to `sprefa-extract` and `hafley_scm` for every `Source` row: `rust`, `typescript` (including JavaScript/JSX), `go`, `kotlin`, `python`, `prolog`, `markdown`, `data`, `fallback`, `gdscript`, and `commonlisp`.
+- [x] Make grammar and language-specific parser dependencies optional under their owning language feature; leave shared parse/runtime dependencies in a named shared feature.
+- [x] Preserve `read` as an aggregate feature enabling all language features, so existing consumers retain current behavior.
+- [x] Keep `cli` and checker features forwarding through the same graph without enabling languages outside the selected aggregate.
+- [x] Gate source modules, grammar registration, roster rows, and `Source::planes` declarations with those features; unsupported source rows are absent from the selected build's capability matrix.
+- [x] Add a feature-matrix test that compares `ryii capabilities` output to `cargo tree -e features` for each grammar dependency and verifies the default/aggregate build contains every current source.
+- [x] Verify `cargo check -p hafley_scm --no-default-features --features read` and representative single-language builds, including Rust and TypeScript.
+
+Implementation receipt: `t_184_language_feature_matrix::capabilities_roster_and_single_language_grammar_features_match`; no-default, Rust-only, and TypeScript-only checks pass; full sprefa-extract 1,120 passed / 18 skipped; workspace 1,378 passed / 203 skipped.
 
 ## Scope note
 

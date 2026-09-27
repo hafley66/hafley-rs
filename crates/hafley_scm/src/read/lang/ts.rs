@@ -24,8 +24,8 @@ use oxc_ast::ast::Program;
 use oxc_ast_visit::Visit as OxcVisit;
 use oxc_span::{GetSpan, SourceType};
 
+use super::cst_bundle::{cst_bundle, cst_bundle_from_tree};
 use super::extract_lang::RyiLang;
-use super::fallback::{cst_bundle, cst_bundle_from_tree};
 use super::scm_rows::ScmCaptures;
 use super::ts_resolve::{
     ts_module_facts_from_parsed, ts_stash_module_facts, ImportedName, ResolvedImport, TsModuleIndex,
@@ -4282,7 +4282,9 @@ impl Source for TsSource {
             df,
             data: None,
             scm_captures,
+            #[cfg(feature = "kotlin")]
             kotlin_module: None,
+            #[cfg(feature = "rust")]
             rust_module: None,
         }
     }
@@ -4503,7 +4505,7 @@ pub fn call_drops(
     output: &RyiOutput,
     cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
-) -> Vec<crate::read::project::ResolveDrop> {
+) -> Vec<crate::read::types::ResolveDrop> {
     let Some(call) = &output.call else {
         return Vec::new();
     };
@@ -4544,7 +4546,7 @@ pub fn call_drops(
                         | ts_receivers::TypeBinding::Shadowed => UnresolvedReason::Inferred,
                         ts_receivers::TypeBinding::Ambiguous => UnresolvedReason::Ambiguous,
                     };
-                return Some(crate::read::project::ResolveDrop {
+                return Some(crate::read::types::ResolveDrop {
                     span: site.span,
                     reason,
                     detail: callee.to_string(),
@@ -4558,7 +4560,7 @@ pub fn call_drops(
                     .and_then(|(receiver, _)| modules.import(path, receiver))
                     .is_some();
             if member_untyped {
-                return Some(crate::read::project::ResolveDrop {
+                return Some(crate::read::types::ResolveDrop {
                     span: site.span,
                     reason: UnresolvedReason::Inferred,
                     detail: written.unwrap_or(callee).to_string(),
@@ -4566,7 +4568,7 @@ pub fn call_drops(
             }
             module_target(modules, path, callee, written)
                 .err()
-                .map(|()| crate::read::project::ResolveDrop {
+                .map(|()| crate::read::types::ResolveDrop {
                     span: site.span,
                     reason: UnresolvedReason::Ambiguous,
                     detail: written.unwrap_or(callee).to_string(),

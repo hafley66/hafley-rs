@@ -1191,9 +1191,7 @@ fn bind_pat_rec(
     acc: &mut Vec<(String, NodeRef)>,
 ) {
     match pattern {
-        syn::Pat::Guard(guard) => {
-            bind_pat_rec(&guard.pat, line_starts, strings, scope, sink, acc)
-        }
+        syn::Pat::Guard(guard) => bind_pat_rec(&guard.pat, line_starts, strings, scope, sink, acc),
         syn::Pat::Ident(ident) => {
             let binding = df_push(
                 sink,

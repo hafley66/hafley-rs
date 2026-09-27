@@ -1,6 +1,7 @@
 #[path = "build/0_metadata.rs"]
 mod metadata;
 
+#[cfg(feature = "kotlin")]
 fn ident(name: &str) -> String {
     let mut out = String::new();
     for ch in name.chars() {
@@ -9,6 +10,7 @@ fn ident(name: &str) -> String {
     out
 }
 
+#[cfg(feature = "kotlin")]
 fn type_name(name: &str) -> String {
     name.split(|ch: char| !ch.is_ascii_alphanumeric())
         .filter(|part| !part.is_empty())
@@ -23,6 +25,7 @@ fn type_name(name: &str) -> String {
         .collect()
 }
 
+#[cfg(feature = "kotlin")]
 fn generate_kotlin_scm() {
     let path = "queries/kotlin/scip.scm";
     println!("cargo:rerun-if-changed={path}");
@@ -75,5 +78,6 @@ fn generate_kotlin_scm() {
 
 fn main() {
     metadata::run();
+    #[cfg(feature = "kotlin")]
     generate_kotlin_scm();
 }

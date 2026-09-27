@@ -47,8 +47,8 @@ use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::trace::stage_span;
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
-    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
-    UnresolvedReason,
+    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ResolveDrop, ScipError, ScipIndex,
+    ScipSource, TypeF,
 };
 use crate::read::wire::{flatten_flow, FlatFact};
 
@@ -2210,14 +2210,6 @@ pub struct ResolveArm {
     /// Which types plane the `types` arm reads. Also the phase-1 mask
     /// `read_inputs` dispatches this language under.
     pub type_plane: TypePlane,
-}
-
-/// One call site a `Resolve<CallF>` arm dropped: where, why, and the callee as
-/// written. `Vec<ProjectEdge>` has no seat for a non-edge, so the arm says here.
-pub struct ResolveDrop {
-    pub span: Span,
-    pub reason: UnresolvedReason,
-    pub detail: String,
 }
 
 /// One row per `Source` in `lang::sources()`; an impl with no row here is

@@ -10,34 +10,58 @@
 
 #[path = "0_call_kinds.rs"]
 pub mod call_kinds;
+#[cfg(feature = "commonlisp")]
 pub mod commonlisp;
+#[path = "1_cst_bundle.rs"]
+pub mod cst_bundle;
+#[cfg(feature = "data")]
 pub mod data;
 pub mod extract_lang;
 pub mod fact;
+#[cfg(feature = "fallback")]
 pub mod fallback;
+#[cfg(feature = "gdscript")]
 pub mod gdscript;
+#[cfg(feature = "go")]
 pub mod go;
+#[cfg(feature = "go")]
 pub mod go_checker;
+#[cfg(feature = "go")]
 pub mod go_modules;
+#[cfg(feature = "go")]
 pub mod go_type_edges;
+#[cfg(feature = "kotlin")]
 pub mod kotlin;
+#[cfg(feature = "kotlin")]
 pub mod kotlin_modules;
+#[cfg(feature = "kotlin")]
 pub mod kotlin_receivers;
+#[cfg(feature = "kotlin")]
 pub mod kotlin_type_edges;
+#[cfg(feature = "markdown")]
 pub mod markdown;
 #[path = "4_owned_region.rs"]
 pub mod owned_region;
+#[cfg(feature = "prolog")]
 pub mod prolog;
+#[cfg(feature = "python")]
 pub mod python;
+#[cfg(feature = "rust")]
 #[path = "rust/lib.rs"]
 pub mod rust;
+#[cfg(feature = "rust")]
 pub mod rust_checker;
 #[cfg(feature = "rust-checker")]
 mod rust_checker_ra;
+#[cfg(feature = "rust")]
 pub mod rust_modules;
+#[cfg(feature = "rust")]
 pub mod rust_receivers;
+#[cfg(feature = "rust")]
 pub mod rust_scip_macros;
+#[cfg(feature = "rust")]
 pub mod rust_type_edges;
+#[cfg(feature = "rust")]
 pub mod rust_type_refs;
 #[path = "6_scm_family.rs"]
 mod scm_family;
@@ -49,29 +73,44 @@ pub mod scm_store;
 pub mod source_facts;
 #[path = "2_source_query.rs"]
 pub mod source_query;
+#[cfg(feature = "typescript")]
 pub mod ts;
+#[cfg(feature = "typescript")]
 pub mod ts_checker;
+#[cfg(feature = "typescript")]
 pub mod ts_paths;
+#[cfg(feature = "typescript")]
 pub mod ts_receivers;
+#[cfg(feature = "typescript")]
 pub mod ts_resolve;
 
+#[cfg(feature = "commonlisp")]
 pub use commonlisp::CommonlispSource;
+#[cfg(feature = "data")]
 pub use data::DataSource;
 pub use extract_lang::RyiLang;
 pub use fact::{
     dl6_db_path, open_dl6_readonly, open_readonly, FactError, FactSet, DL6_DB_RELATIVE_PATH,
 };
+#[cfg(feature = "fallback")]
 pub use fallback::{call_bundle, call_drops, cst_bundle, FallbackSource};
+#[cfg(feature = "gdscript")]
 pub use gdscript::GdscriptSource;
+#[cfg(feature = "go")]
 pub use go::GoSource;
+#[cfg(feature = "kotlin")]
 pub use kotlin::KotlinSource;
+#[cfg(feature = "markdown")]
 pub use markdown::MarkdownSource;
 pub use owned_region::{
     find_owned_region, owned_region_markers, propose_owned_region, OwnedRegion, OwnedRegionError,
     OwnedRegionProposal,
 };
+#[cfg(feature = "prolog")]
 pub use prolog::PrologSource;
+#[cfg(feature = "python")]
 pub use python::PythonSource;
+#[cfg(feature = "rust")]
 pub use rust::RustSource;
 pub use scm_rows::{scm_edges, scm_facts, ScmEdge, ScmError};
 pub use source_facts::{
@@ -84,9 +123,11 @@ pub use source_query::{
     SourceQueryOutput, TreeSitterQuery, TreeSitterQueryMatch, TreeSitterSpannedCapture,
     TreeSitterSpannedMatch,
 };
+#[cfg(feature = "typescript")]
 pub use ts::{
     ts_specifiers, CallProjector, DfProjector, OxcParser, TsSource, TsSpecifier, TypeProjector,
 };
+#[cfg(feature = "typescript")]
 pub use ts_resolve::{respell, TsResolver};
 
 use crate::read::source::Source;
@@ -105,16 +146,27 @@ use crate::read::source::Source;
 /// (`.gd`, `.lisp`, `.lsp`, `.cl`, `.asd` are unclaimed above).
 pub fn sources() -> &'static [&'static dyn Source] {
     &[
+        #[cfg(feature = "rust")]
         &RustSource,
+        #[cfg(feature = "go")]
         &GoSource,
+        #[cfg(feature = "kotlin")]
         &KotlinSource,
+        #[cfg(feature = "markdown")]
         &MarkdownSource,
+        #[cfg(feature = "prolog")]
         &PrologSource,
+        #[cfg(feature = "python")]
         &PythonSource,
+        #[cfg(feature = "data")]
         &DataSource,
+        #[cfg(feature = "typescript")]
         &TsSource,
+        #[cfg(feature = "gdscript")]
         &GdscriptSource,
+        #[cfg(feature = "commonlisp")]
         &CommonlispSource,
+        #[cfg(feature = "fallback")]
         &FallbackSource,
     ]
 }

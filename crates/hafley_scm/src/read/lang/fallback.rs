@@ -16,12 +16,12 @@ use crate::read::lang::call_kinds::{
     ARG_KINDS, CALLEE_FIRST_KINDS, CALLEE_NAME_KINDS, CALL_KINDS, MODULE_CALLER, NAME_LEAF_KINDS,
 };
 use crate::read::lang::extract_lang::RyiLang;
-use crate::read::project::ResolveDrop;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::seams::{corpus_defs, covering_def, DefIndex, Resolve};
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
+use crate::read::types::ResolveDrop;
 use crate::read::types::UnresolvedReason;
 use std::collections::BTreeSet;
 
@@ -393,7 +393,9 @@ impl Source for FallbackSource {
             df: None,
             data: None,
             scm_captures: None,
+            #[cfg(feature = "kotlin")]
             kotlin_module: None,
+            #[cfg(feature = "rust")]
             rust_module: None,
         }
     }
