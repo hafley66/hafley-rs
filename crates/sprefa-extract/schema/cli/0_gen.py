@@ -18,6 +18,13 @@ STAGED_DECORATOR = '"../../../../decorator-def/lib/main.tsp"'
 
 
 def main() -> None:
+    # The daemon validator runs from decorator-def's dist, not its TypeScript source.
+    # Build the emitter and its workspace dependencies in dependency order.
+    subprocess.run(
+        ["pnpm", "--filter", "@hafley66/alloy-rs...", "build"],
+        cwd=TSP,
+        check=True,
+    )
     if not EMITTER.is_file():
         raise SystemExit(f"missing {EMITTER}; build @hafley/alloy-rs in HAFLEY_TSP")
     if len(sys.argv) > 1 and sys.argv[1]:
