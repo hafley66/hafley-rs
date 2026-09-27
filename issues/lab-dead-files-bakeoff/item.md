@@ -50,6 +50,8 @@ Open-gate commands are recorded in `crates/lab-20260921-dead-files-bakeoff/REPOR
 
 2026-09-27 measurement receipt: Knip was run with `npx -y knip` against a lane-scratch copy of `ts5_findings` with a minimal package manifest. Comparison: agreement 32, ryi-only 0, Knip-only 29; all Knip-only paths and the no-entrypoint cause are in `REPORT.md`. On the 3-source Rust fixture, `ryi --deps` emitted `file_unresolved` for `mod live;` (`node_modules_boundary`); module reachability found only `src/orphan.rs`, while rustc `dead_code` named an unused item in reachable `src/live.rs`. The lab CLI reported the file-path sets; its JSON-array handling and source-only unresolved-row decoding are covered by two new tests. `cargo nextest run --manifest-path crates/lab-20260921-dead-files-bakeoff/Cargo.toml -j 2 --locked --offline --test 0_dead_files` passed 5/5. The workspace gate passed 1378/1378 with 203 excluded and 1 leaky test. The user-selected real-repository gate is the only remaining measurement.
 
+2026-09-27 Rust module resolver correction: the fixture now lives in `crates/sprefa-extract/tests/fixtures/rust_module_reachability`. `ryii --deps` emits `file_edge(src_path="src/lib.rs", dst_path="src/live.rs", kind="module", symbols=1)`. The lab comparison flipped from agreement 1 / Ryi-only 1 / tool-only 0 to agreement 1 / Ryi-only 0 / tool-only 0 against `mod` reachability. Against rustc `dead_code`, the file-path comparison is agreement 0 / Ryi-only 1 / tool-only 1 (`src/orphan.rs` vs `src/live.rs`).
+
 2026-09-26: fixture comparison on `crates/sprefa-extract/tests/fixtures/ts5_findings`:
 
 - `timeout 10 madge --json --extensions ts crates/sprefa-extract/tests/fixtures/ts5_findings`: 61 files, 32 edges.

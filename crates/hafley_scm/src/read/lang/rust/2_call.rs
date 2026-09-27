@@ -1176,6 +1176,10 @@ fn module_specifiers(
                 },
                 name: strings.intern(&row.name),
                 kind: match row.kind {
+                    hafley_scm::lang::rust::ModuleSpecifierKind::Module => SpecifierKind::Module,
+                    hafley_scm::lang::rust::ModuleSpecifierKind::ModulePath => {
+                        SpecifierKind::ModulePath
+                    }
                     hafley_scm::lang::rust::ModuleSpecifierKind::Named => SpecifierKind::Named,
                     hafley_scm::lang::rust::ModuleSpecifierKind::Namespace => {
                         SpecifierKind::Namespace

@@ -6,6 +6,8 @@ use super::call_metadata_rows::span_range;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ModuleSpecifierKind {
+    Module,
+    ModulePath,
     Named,
     Namespace,
     Reexport,
@@ -36,11 +38,16 @@ fn collect(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<ModuleSpecifi
                 Some((_, inner)) => collect(inner, line_starts, out),
                 None => {
                     let name = item.ident.to_string();
+                    let path = mod_path_attr(&item.attrs);
                     out.push(ModuleSpecifierRow {
                         range: span_range(line_starts, item.span()),
-                        module: mod_path_attr(&item.attrs).unwrap_or_else(|| name.clone()),
+                        module: path.clone().unwrap_or_else(|| name.clone()),
                         name,
-                        kind: ModuleSpecifierKind::Named,
+                        kind: if path.is_some() {
+                            ModuleSpecifierKind::ModulePath
+                        } else {
+                            ModuleSpecifierKind::Module
+                        },
                     });
                 }
             },

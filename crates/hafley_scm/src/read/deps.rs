@@ -407,8 +407,7 @@ pub fn fold_edges(
 ) -> Vec<FlatFact> {
     let mut crossings: BTreeMap<(&str, String, &'static str), BTreeSet<&str>> = BTreeMap::new();
     for row in rows {
-        let (Some(target), _) = resolve_specifier(row.from_path, row.module, universe, tsconfig)
-        else {
+        let (Some(target), _) = resolve_row(row, universe, tsconfig) else {
             continue;
         };
         if target == row.from_path {
@@ -444,7 +443,7 @@ pub fn fold_unresolved(
 ) -> Vec<FlatFact> {
     let mut stops: BTreeSet<(&str, &str, &'static str)> = BTreeSet::new();
     for row in rows {
-        let (target, policy) = resolve_specifier(row.from_path, row.module, universe, tsconfig);
+        let (target, policy) = resolve_row(row, universe, tsconfig);
         if target.is_some() {
             continue;
         }
@@ -466,6 +465,263 @@ pub fn fold_unresolved(
             reason: reason.to_string(),
         })
         .collect()
+}
+
+fn resolve_row(
+    row: &SpecifierRow<'_>,
+    universe: &BTreeSet<String>,
+    tsconfig: &TsconfigPaths,
+) -> (Option<String>, Policy) {
+    match row.kind {
+        SpecifierKind::Module => resolve_rust_module(row.from_path, row.module, false, universe),
+        SpecifierKind::ModulePath => resolve_rust_module(row.from_path, row.module, true, universe),
+        _ => resolve_specifier(row.from_path, row.module, universe, tsconfig),
+    }
+}
+
+/// Resolve an out-of-line Rust module declaration within the corpus. Cargo
+/// roots are identified relative to the nearest manifest in the file universe;
+/// a `mod.rs` and a crate root use their containing directory, while another
+/// module file gets a same-named child directory as its module base.
+fn resolve_rust_module(
+    from_path: &str,
+    module: &str,
+    path_attribute: bool,
+    universe: &BTreeSet<String>,
+) -> (Option<String>, Policy) {
+    let parent = from_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
+    let file = from_path.rsplit('/').next().unwrap_or(from_path);
+    let stem = file.strip_suffix(".rs").unwrap_or(file);
+    let crate_root = nearest_manifest_dir(from_path, universe)
+        .is_some_and(|manifest_dir| is_cargo_root(from_path, &manifest_dir));
+    let module_dir = if crate_root || stem == "mod" {
+        parent.to_owned()
+    } else if parent.is_empty() {
+        stem.to_owned()
+    } else {
+        format!("{parent}/{stem}")
+    };
+
+    let candidate = if path_attribute {
+        join_relative(parent, module)
+    } else {
+        join_relative(&module_dir, &format!("{module}.rs"))
+    };
+    if universe.contains(&candidate) {
+        return (Some(candidate), Policy::RelativeExact);
+    }
+
+    if !path_attribute {
+        let nested = join_relative(&module_dir, &format!("{module}/mod.rs"));
+        if universe.contains(&nested) {
+            return (Some(nested), Policy::RelativeIndexFile);
+        }
+    }
+    (None, Policy::RelativeUnresolved)
+}
+
+fn nearest_manifest_dir(from_path: &str, universe: &BTreeSet<String>) -> Option<String> {
+    let mut directory = from_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
+    loop {
+        let manifest = if directory.is_empty() {
+            "Cargo.toml".to_owned()
+        } else {
+            format!("{directory}/Cargo.toml")
+        };
+        if universe.contains(&manifest) {
+            return Some(directory.to_owned());
+        }
+        let Some((parent, _)) = directory.rsplit_once('/') else {
+            if directory.is_empty() {
+                return None;
+            }
+            directory = "";
+            continue;
+        };
+        directory = parent;
+    }
+}
+
+fn is_cargo_root(from_path: &str, manifest_dir: &str) -> bool {
+    let relative = if manifest_dir.is_empty() {
+        from_path
+    } else {
+        let Some(relative) = from_path
+            .strip_prefix(manifest_dir)
+            .and_then(|path| path.strip_prefix('/'))
+        else {
+            return false;
+        };
+        relative
+    };
+    if matches!(relative, "build.rs" | "src/lib.rs" | "src/main.rs") {
+        return true;
+    }
+
+    let parts: Vec<&str> = relative.split('/').collect();
+    match parts.as_slice() {
+        [directory, file] if matches!(*directory, "tests" | "examples" | "benches") => {
+            file.ends_with(".rs")
+        }
+        ["src", "bin", file] => file.ends_with(".rs"),
+        ["src", "bin", _target, "main.rs"] => true,
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod rust_module_resolution_tests {
+    use super::{resolve_rust_module, Policy};
+    use crate::read::types::SpecifierKind;
+
+    #[test]
+    fn rust_module_resolution_table_covers_roots_nesting_and_path_attributes() {
+        let cases: &[(&str, &str, &str, SpecifierKind, &[&str], &str, Policy)] = &[
+            (
+                "lib root",
+                "crates/foo/src/lib.rs",
+                "live",
+                SpecifierKind::Module,
+                &["crates/foo/src/live.rs"],
+                "crates/foo/src/live.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "bin root",
+                "crates/foo/src/bin/ryi.rs",
+                "ops",
+                SpecifierKind::Module,
+                &["crates/foo/src/bin/ops.rs"],
+                "crates/foo/src/bin/ops.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "tests root",
+                "crates/foo/tests/all.rs",
+                "x",
+                SpecifierKind::Module,
+                &["crates/foo/tests/x.rs"],
+                "crates/foo/tests/x.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "example root",
+                "crates/foo/examples/demo.rs",
+                "part",
+                SpecifierKind::Module,
+                &["crates/foo/examples/part.rs"],
+                "crates/foo/examples/part.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "bench root",
+                "crates/foo/benches/measure.rs",
+                "part",
+                SpecifierKind::Module,
+                &["crates/foo/benches/part.rs"],
+                "crates/foo/benches/part.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "build script root",
+                "crates/foo/build.rs",
+                "part",
+                SpecifierKind::Module,
+                &["crates/foo/part.rs"],
+                "crates/foo/part.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "src main root",
+                "crates/foo/src/main.rs",
+                "part",
+                SpecifierKind::Module,
+                &["crates/foo/src/part.rs"],
+                "crates/foo/src/part.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "nested bin main root",
+                "crates/foo/src/bin/ryi/main.rs",
+                "part",
+                SpecifierKind::Module,
+                &["crates/foo/src/bin/ryi/part.rs"],
+                "crates/foo/src/bin/ryi/part.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "nested non-root",
+                "crates/foo/src/foo.rs",
+                "bar",
+                SpecifierKind::Module,
+                &["crates/foo/src/foo/bar.rs"],
+                "crates/foo/src/foo/bar.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "mod.rs",
+                "crates/foo/src/foo/mod.rs",
+                "bar",
+                SpecifierKind::Module,
+                &["crates/foo/src/foo/bar.rs"],
+                "crates/foo/src/foo/bar.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "directory mod.rs fallback",
+                "crates/foo/src/foo.rs",
+                "bar",
+                SpecifierKind::Module,
+                &["crates/foo/src/foo/bar/mod.rs"],
+                "crates/foo/src/foo/bar/mod.rs",
+                Policy::RelativeIndexFile,
+            ),
+            (
+                "path attribute from a root",
+                "crates/foo/src/bin/ryi.rs",
+                "ryi/ops.rs",
+                SpecifierKind::ModulePath,
+                &["crates/foo/src/bin/ryi/ops.rs"],
+                "crates/foo/src/bin/ryi/ops.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "path attribute from a non-root",
+                "crates/foo/src/foo.rs",
+                "bar.rs",
+                SpecifierKind::ModulePath,
+                &["crates/foo/src/bar.rs"],
+                "crates/foo/src/bar.rs",
+                Policy::RelativeExact,
+            ),
+            (
+                "deep main is a non-root",
+                "crates/foo/src/a/main.rs",
+                "bar",
+                SpecifierKind::Module,
+                &["crates/foo/src/a/main/bar.rs"],
+                "crates/foo/src/a/main/bar.rs",
+                Policy::RelativeExact,
+            ),
+        ];
+
+        let mut failures = Vec::new();
+        for (name, from, module, kind, files, expected, policy) in cases {
+            let universe = std::iter::once("crates/foo/Cargo.toml".to_owned())
+                .chain(files.iter().map(|file| (*file).to_owned()))
+                .collect();
+            let observed =
+                resolve_rust_module(from, module, *kind == SpecifierKind::ModulePath, &universe);
+            let expected = (Some((*expected).to_owned()), *policy);
+            if observed != expected {
+                failures.push(format!("{name}: expected {expected:?}, got {observed:?}"));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "Rust module resolution cases: {failures:?}"
+        );
+    }
 }
 
 /// Resolve the supplied files' module specifiers syntactically and fold them to

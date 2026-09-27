@@ -39,17 +39,21 @@ fn collect_items(
                     collect_items(body, source, &mut Vec::new(), rows);
                 } else if let Some(name_node) = child.child_by_field_name("name") {
                     let name = text(name_node, source).to_owned();
-                    let module = pending_attrs
+                    let path = pending_attrs
                         .iter()
-                        .find_map(|(attr, _)| path_attribute(attr))
-                        .unwrap_or_else(|| name.clone());
+                        .find_map(|(attr, _)| path_attribute(attr));
+                    let module = path.clone().unwrap_or_else(|| name.clone());
                     let start = pending_attrs
                         .first()
                         .map_or(child.start_byte() as u32, |(_, start)| *start);
                     rows.push(ModuleSpecifierRow {
                         range: start..child.end_byte() as u32,
                         name,
-                        kind: ModuleSpecifierKind::Named,
+                        kind: if path.is_some() {
+                            ModuleSpecifierKind::ModulePath
+                        } else {
+                            ModuleSpecifierKind::Module
+                        },
                         module,
                     });
                     pending_attrs.clear();

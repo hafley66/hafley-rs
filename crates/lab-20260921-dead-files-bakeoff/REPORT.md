@@ -6,12 +6,12 @@
 |---|---|---|---:|---:|---:|
 | madge | TypeScript | `tests/fixtures/ts5_findings` | 32 | 0 | 0 |
 | Knip | TypeScript | `tests/fixtures/ts5_findings` | 32 | 0 | 29 |
-| `mod` reachability | Rust | `fixtures/rust_module_reachability` | 1 | 1 | 0 |
-| rustc `dead_code` | Rust | `fixtures/rust_module_reachability` | 1 | 1 | 0 |
+| `mod` reachability | Rust | `crates/sprefa-extract/tests/fixtures/rust_module_reachability` | 1 | 0 | 0 |
+| rustc `dead_code` | Rust | `crates/sprefa-extract/tests/fixtures/rust_module_reachability` | 0 | 1 | 1 |
 
 TypeScript fixture verdict: madge and Ryi produce the same 32 orphan paths. Knip reports all 61 fixture files as unused with the minimal synthetic package manifest; its 29 extra paths have no declared package entrypoint to root them.
 
-Rust fixture verdict: Ryi reports `src/live.rs` as orphaned because `mod live;` becomes `file_unresolved` with reason `node_modules_boundary`; module reachability identifies only `src/orphan.rs` as unreachable. rustc reports the unused `unused_item` in `src/live.rs`, while `src/orphan.rs` is outside the compiled module tree.
+Rust fixture verdict: Ryi resolves `mod live;` to `src/live.rs` as a `file_edge`; its orphan set matches module reachability at `src/orphan.rs`. rustc reports the unused `unused_item` in reachable `src/live.rs` and does not compile `src/orphan.rs`.
 
 Knip-only paths, each caused by the fixture package having no declared entrypoint:
 
@@ -47,7 +47,7 @@ private_shadows_export/nodeTests.ts
 top_level_callee.ts
 ```
 
-The apparent rustc agreement is by containing source path: it identifies an unused item in reachable `src/live.rs`, not a dead file. The mod-reachability comparison is the file-level result.
+The rustc comparison projects diagnostic source paths to files: it identifies an unused item in reachable `src/live.rs`, while Ryi's file-level result is `src/orphan.rs`.
 
 ## Reproduction commands
 
@@ -82,12 +82,12 @@ Rust fixture:
 
 ```sh
 scratch=$HOME/.cache/lanes/the-gang-graph/dead-files
-fixture=crates/lab-20260921-dead-files-bakeoff/fixtures/rust_module_reachability
+fixture=crates/sprefa-extract/tests/fixtures/rust_module_reachability
 timeout 10 cargo check --manifest-path "$fixture/Cargo.toml" -j 2 --offline --message-format json > "$scratch/rust-cargo.jsonl"
-HAFLEY_TRACE="$scratch/rust-ryi-trace.json" timeout 10 "$HOME/.cache/boop/cargo-target/debug/ryii" --deps --root "$fixture" "$fixture" > "$scratch/rust-ryi.jsonl"
+HAFLEY_TRACE="$scratch/rust-ryi-trace-final.json" timeout 10 "$HOME/.cache/boop/cargo-target/debug/ryii" --deps --root "$fixture" "$fixture" > "$scratch/rust-ryi-final.jsonl"
 timeout 10 printf '%s\n' 'src/orphan.rs' > "$scratch/mod-orphans.txt"
-timeout 10 "$HOME/.cache/boop/cargo-target/debug/lab-dead-files" "$fixture" "$scratch/rust-ryi.jsonl" "$scratch/mod-orphans.txt"
-timeout 10 "$HOME/.cache/boop/cargo-target/debug/lab-dead-files" --rustc "$fixture" "$scratch/rust-ryi.jsonl" "$scratch/rust-cargo.jsonl"
+timeout 10 "$HOME/.cache/boop/cargo-target/debug/lab-dead-files" "$fixture" "$scratch/rust-ryi-final.jsonl" "$scratch/mod-orphans.txt"
+timeout 10 "$HOME/.cache/boop/cargo-target/debug/lab-dead-files" --rustc "$fixture" "$scratch/rust-ryi-final.jsonl" "$scratch/rust-cargo-fixed.jsonl"
 ```
 
 ## Remaining gate: user-selected TypeScript repository

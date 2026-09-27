@@ -697,6 +697,10 @@ impl UnresolvedReason {
 /// (`_0_shape.rs`:127-129; v5 `module_binding.kind`), renamed for the row.
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum SpecifierKind {
+    /// An out-of-line Rust `mod name;` declaration.
+    Module,
+    /// An out-of-line Rust `#[path = "..."] mod name;` declaration.
+    ModulePath,
     Named,
     Default,
     Namespace,
@@ -715,6 +719,8 @@ pub enum SpecifierKind {
 impl SpecifierKind {
     pub const fn as_str(self) -> &'static str {
         match self {
+            SpecifierKind::Module => "module",
+            SpecifierKind::ModulePath => "module",
             SpecifierKind::Named => "named",
             SpecifierKind::Default => "default",
             SpecifierKind::Namespace => "namespace",
