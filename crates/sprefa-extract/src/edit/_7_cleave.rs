@@ -449,32 +449,62 @@ fn glob_reexports(
 /// Serde attributes name functions and modules inside strings
 /// (`#[serde(with = "arc_str")]`); each path's head is a free name there.
 fn serde_paths(text: &str) -> Vec<(String, Span)> {
-    let mut out = Vec::new();
-    for key in [
-        "with = \"",
-        "serialize_with = \"",
-        "deserialize_with = \"",
-        "default = \"",
-    ] {
-        for (at, _) in text.match_indices(key) {
-            let line_start = text[..at].rfind('\n').map_or(0, |newline| newline + 1);
-            if !text[line_start..at].contains("serde(") {
-                continue;
-            }
-            let start = at + key.len();
-            let head: String = text[start..]
-                .chars()
-                .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
-                .collect();
-            if !head.is_empty() {
-                out.push((
-                    head.clone(),
-                    span_of(start as u32, (start + head.len()) as u32),
-                ));
-            }
+    let Ok(file) = syn::parse_file(text) else {
+        return Vec::new();
+    };
+    let mut scan = SerdePathScan {
+        text,
+        paths: std::array::from_fn(|_| Vec::new()),
+    };
+    syn::visit::Visit::visit_file(&mut scan, &file);
+    scan.paths.into_iter().flatten().collect()
+}
+
+struct SerdePathScan<'a> {
+    // The order matches the former key-by-key scan.
+    paths: [Vec<(String, Span)>; 4],
+    text: &'a str,
+}
+
+impl<'ast> syn::visit::Visit<'ast> for SerdePathScan<'_> {
+    fn visit_attribute(&mut self, attribute: &'ast syn::Attribute) {
+        if attribute.path().is_ident("serde") {
+            let _ = attribute.parse_nested_meta(|meta| {
+                let index = ["with", "serialize_with", "deserialize_with", "default"]
+                    .iter()
+                    .position(|key| meta.path.is_ident(key));
+                if let Some(index) = index {
+                    let literal: syn::LitStr = meta.value()?.parse()?;
+                    let head: String = literal
+                        .value()
+                        .chars()
+                        .take_while(|ch| ch.is_alphanumeric() || *ch == '_')
+                        .collect();
+                    if !head.is_empty() {
+                        let range = literal.span().byte_range();
+                        let token = self.text.get(range.clone()).unwrap_or_default();
+                        if let Some(quote) = token.find('"').filter(|quote| *quote == 0) {
+                            let start = range.start + quote + 1;
+                            if self.text.get(start..start + head.len()) == Some(head.as_str()) {
+                                self.paths[index].push((
+                                    head.clone(),
+                                    span_of(start as u32, (start + head.len()) as u32),
+                                ));
+                            }
+                        }
+                    }
+                } else if meta.input.peek(syn::Token![=]) {
+                    let _: syn::Expr = meta.value()?.parse()?;
+                } else if meta.input.peek(syn::token::Paren) {
+                    let content;
+                    syn::parenthesized!(content in meta.input);
+                    let _: proc_macro2::TokenStream = content.parse()?;
+                }
+                Ok(())
+            });
         }
+        syn::visit::visit_attribute(self, attribute);
     }
-    out
 }
 
 /// A top-level `mod name { .. }` block, whole lines: scope rows carry no
@@ -2012,16 +2042,17 @@ impl FileFacts {
         };
         let mut free = free;
         let mut decls = decls;
-        for (name, _) in serde_paths(&text) {
-            if decls.iter().any(|decl| decl.name == name) {
+        let serde_paths = serde_paths(&text);
+        for (name, _) in &serde_paths {
+            if decls.iter().any(|decl| decl.name == *name) {
                 continue;
             }
-            if let Some(decl) = inline_mod(&text, &name) {
+            if let Some(decl) = inline_mod(&text, name) {
                 decls.push(decl);
             }
         }
         decls.sort_by_key(|decl| decl.span.start);
-        free.extend(serde_paths(&text));
+        free.extend(serde_paths);
         Ok(Self {
             text,
             specifiers,
