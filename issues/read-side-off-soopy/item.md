@@ -2,7 +2,7 @@
 created: 2026-09-25
 updated: 2026-09-26
 type: improvement
-status: open
+status: fixed
 priority: normal
 epic: ryi-new-verbs
 related: ['@ryi-cli-cleanup']
@@ -37,4 +37,4 @@ Blocked by M6 (read side into hafley_scm).
 
 ## Repro receipt
 
-2026-09-26: before/after stdout for `ryii fast ../../crates/soopy/src` compares byte-equal at 3,867,401 bytes; `scripts/ryi-e2e.sh /tmp/ryi-read-side-bin` reports 14/14. `Inputs` worktree enumeration now uses `WalkParallel` and `globset`; commit enumeration and other worktree read paths remain unchecked above.
+2026-09-27: commit `1161f80d`; before/after stdout for `ryii fast ../../crates/soopy/src` compares byte-equal at 3,867,401 bytes; `scripts/ryi-e2e.sh /tmp/ryi-read-side-bin` reports 14/14. `Inputs` worktree enumeration now uses `WalkParallel` and `globset`; remaining repository read-path work stays unchecked above.
