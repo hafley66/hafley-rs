@@ -407,6 +407,8 @@ fn persistent_stage(bin: &str, root: &Path) -> Result<PathBuf, ScipError> {
 /// batched reads. A plain directory retains the original root-only staging
 /// behavior because it has no repository topology to preserve.
 fn copy_repository_snapshot(root: &Path, stage: &Path) -> Result<PathBuf, ScipError> {
+    let io_root = crate::read::io_path(root);
+    let root = io_root.as_path();
     let repository = match soopy::discover(root) {
         Ok(repository) => repository,
         Err(_) => {
@@ -652,6 +654,8 @@ pub fn copy_sources(
     exts: &[&str],
     extra_names: &[&str],
 ) -> Result<(), ScipError> {
+    let io_root = crate::read::io_path(src_root);
+    let src_root = io_root.as_path();
     let mut staged: Vec<PathBuf> = Vec::new();
     let mut stack = vec![src_root.to_path_buf()];
     while let Some(dir) = stack.pop() {

@@ -165,7 +165,7 @@ fn run_slow(
     }
     if slow.lines {
         for path in &files {
-            if let Ok(content) = std::fs::read(path) {
+            if let Ok(content) = std::fs::read(sprefa_extract::io_path(path)) {
                 output.register_line_table(&path.to_string_lossy(), newline_offsets(&content));
             }
         }
@@ -295,7 +295,7 @@ fn run_scip_raw(
 /// against its own file. Unreadable inputs simply leave their rows raw.
 fn register_line_tables(cli: &FileArgs, output: &mut sqlite::Output) {
     for path in &cli.paths {
-        let Ok(content) = std::fs::read(path) else {
+        let Ok(content) = std::fs::read(sprefa_extract::io_path(path)) else {
             continue;
         };
         output.register_line_table(&path.to_string_lossy(), newline_offsets(&content));
@@ -308,7 +308,7 @@ fn check_ingest_paths(paths: &[PathBuf]) -> RyiResult<()> {
     for path in paths {
         if path == std::path::Path::new("/dev/stdin")
             || path == std::path::Path::new("-")
-            || path.exists()
+            || sprefa_extract::io_path(path).exists()
         {
             continue;
         }
@@ -427,6 +427,7 @@ fn write_trail(state: &sprefa_extract::trace::SummaryState) {
 fn git_sha() -> Option<String> {
     let out = std::process::Command::new("git")
         .args(["rev-parse", "--short", "HEAD"])
+        .current_dir(ops::request_root())
         .output()
         .ok()?;
     out.status
@@ -814,7 +815,7 @@ fn extract_file(
     path: &std::path::Path,
     output: &mut sqlite::Output,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let content = std::fs::read(path)?;
+    let content = std::fs::read(sprefa_extract::io_path(path))?;
     let path_str = path.to_string_lossy();
     if let Some(db) = &mut output.database {
         db.source(&path_str, content_id_of(&content).to_string())?;
@@ -1128,7 +1129,7 @@ fn stream_ingest(
                     None => std::fs::read_to_string(path)?,
                 }
             } else {
-                std::fs::read_to_string(path)?
+                std::fs::read_to_string(sprefa_extract::io_path(path))?
             };
         lines.extend(text.lines().map(str::to_string));
     }

@@ -361,7 +361,7 @@ fn file_captures(
     } else {
         root.map_or_else(|| path.to_path_buf(), |root| root.join(path))
     };
-    let source = std::fs::read(io_path).map_err(|error| ScmError::Io {
+    let source = std::fs::read(crate::read::io_path(&io_path)).map_err(|error| ScmError::Io {
         path: name.clone(),
         detail: error.to_string(),
     })?;

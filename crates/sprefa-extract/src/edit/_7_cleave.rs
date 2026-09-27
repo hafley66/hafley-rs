@@ -304,7 +304,7 @@ fn batch_stages(
 }
 
 fn read_cleave_list(path: &Path) -> Result<Vec<(String, PathBuf)>, String> {
-    let text = std::fs::read_to_string(path)
+    let text = std::fs::read_to_string(sprefa_extract::io_path(path))
         .map_err(|error| format!("read cleave list {}: {error}", path.display()))?;
     let mut rows = Vec::new();
     for (index, line) in text.lines().enumerate() {

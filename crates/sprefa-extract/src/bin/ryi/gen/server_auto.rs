@@ -48,8 +48,24 @@ fn diagnostic_header(diagnostics: &crate::ops::Diagnostics) -> Option<HeaderValu
     HeaderValue::from_str(&base64::engine::general_purpose::STANDARD.encode(bytes)).ok()
 }
 
+fn operation_error_response(error: OpError, diagnostics: &crate::ops::Diagnostics) -> Response {
+    let mut bytes = std::mem::take(&mut *diagnostics.lock().unwrap());
+    if !error.0.is_empty() {
+        bytes.extend_from_slice(error.0.as_bytes());
+        bytes.push(b'\n');
+    }
+    let mut response = (error_status(error.1), [(CONTENT_TYPE, "application/x-ndjson")], Bytes::new()).into_response();
+    response.headers_mut().insert(HeaderName::from_static("x-ryi-exit-code"), HeaderValue::from_str(&error.1.to_string()).expect("exit code header"));
+    if !bytes.is_empty() {
+        if let Ok(value) = HeaderValue::from_str(&base64::engine::general_purpose::STANDARD.encode(bytes)) {
+            response.headers_mut().insert(HeaderName::from_static("x-ryi-stderr"), value);
+        }
+    }
+    response
+}
+
 async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send>, diagnostics: crate::ops::Diagnostics) -> Response {
-    let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<i32>, Bytes)>(64);
+    let (tx, mut rx) = tokio::sync::mpsc::channel::<(Option<OpError>, Bytes)>(64);
     tokio::task::spawn_blocking(move || {
         let mut batch = Vec::with_capacity(64 * 1024);
         for item in items {
@@ -62,9 +78,9 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
                 }
                 Err(error) => {
                     if !batch.is_empty() && tx.blocking_send((None, Bytes::from(std::mem::take(&mut batch)))).is_err() { return; }
-                    let mut line = serde_json::to_vec(&serde_json::json!({"error": error.0, "code": error.1})).expect("error row serializes");
+                    let mut line = serde_json::to_vec(&serde_json::json!({"error": &error.0, "code": error.1})).expect("error row serializes");
                     line.push(b'\n');
-                    let _ = tx.blocking_send((Some(error.1), Bytes::from(line)));
+                    let _ = tx.blocking_send((Some(error), Bytes::from(line)));
                     return;
                 }
             }
@@ -72,15 +88,16 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
         if !batch.is_empty() { let _ = tx.blocking_send((None, Bytes::from(batch))); }
     });
     let first = rx.recv().await;
-    let status = first.as_ref().and_then(|item| item.0).map_or(StatusCode::OK, error_status);
-    let first_code = first.as_ref().and_then(|item| item.0);
+    if let Some((Some(error), _)) = first.as_ref() {
+        return operation_error_response(OpError(error.0.clone(), error.1), &diagnostics);
+    }
     let stream = futures_util::stream::unfold((first, rx, diagnostics, None, false), |(first, mut rx, diagnostics, exit, finished)| async move {
         if finished { return None; }
         if let Some((code, bytes)) = first {
-            return Some((Ok::<Frame<Bytes>, std::io::Error>(Frame::data(bytes)), (None, rx, diagnostics, code.or(exit), false)));
+            return Some((Ok::<Frame<Bytes>, std::io::Error>(Frame::data(bytes)), (None, rx, diagnostics, code.map(|error| error.1).or(exit), false)));
         }
         if let Some((code, bytes)) = rx.recv().await {
-            return Some((Ok(Frame::data(bytes)), (None, rx, diagnostics, code.or(exit), false)));
+            return Some((Ok(Frame::data(bytes)), (None, rx, diagnostics, code.map(|error| error.1).or(exit), false)));
         }
         let mut headers = HeaderMap::new();
         if let Some(value) = diagnostic_header(&diagnostics) {
@@ -92,17 +109,13 @@ async fn jsonl_response(items: Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send
         if headers.is_empty() { return None; }
         Some((Ok(Frame::trailers(headers)), (None, rx, diagnostics, exit, true)))
     });
-    let mut response = (status, [(CONTENT_TYPE, "application/x-ndjson"), (axum::http::header::TRAILER, "x-ryi-stderr, x-ryi-exit-code")], Body::new(StreamBody::new(stream))).into_response();
-    if let Some(code) = first_code {
-        response.headers_mut().insert(HeaderName::from_static("x-ryi-exit-code"), HeaderValue::from_str(&code.to_string()).expect("exit code header"));
-    }
-    response
+    (StatusCode::OK, [(CONTENT_TYPE, "application/x-ndjson"), (axum::http::header::TRAILER, "x-ryi-stderr, x-ryi-exit-code")], Body::new(StreamBody::new(stream))).into_response()
 }
 
 async fn raw_response(out: OpResult<Vec<u8>>, diagnostics: &crate::ops::Diagnostics) -> Response {
     let mut response = match out {
         Ok(bytes) => ([(CONTENT_TYPE, "application/x-ndjson")], bytes).into_response(),
-        Err(error) => error_response(error),
+        Err(error) => operation_error_response(error, diagnostics),
     };
     if let Some(value) = diagnostic_header(diagnostics) {
         response.headers_mut().insert(HeaderName::from_static("x-ryi-stderr"), value);
