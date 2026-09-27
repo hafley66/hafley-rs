@@ -1,5 +1,5 @@
 error[E0425]: cannot find value `attempts` in this scope
-  --> /kache/home/projects/hafley-rs/.boop-worktrees/chore/the-gang-edits/crates/redux/tests/ui/source_binding_does_not_escape.rs:34:57
+  --> tests/ui/source_binding_does_not_escape.rs:34:57
    |
 34 |         ([Awaiting { attempts }] [Go] -> [Open { token: attempts }], id: GO),
    |                                                         ^^^^^^^^ not found in this scope
