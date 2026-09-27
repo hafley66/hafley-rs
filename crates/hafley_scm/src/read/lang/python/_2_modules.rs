@@ -23,40 +23,9 @@ use std::path::{Path, PathBuf};
 use crate::read::lang::ts_resolve::{ImportRow, ResolvedImportKind};
 use crate::read::shape::Span;
 
-use super::_0_source::{node_span, py_parse, py_text};
+use super::_0_source::{py_parse, py_text, py_walk_imports, PyImport};
 
 // ── phase-2 facts: one dedicated parse per file ─────────────────────────────
-
-/// One import statement's clause, the module spelled as written (relative
-/// dots kept).
-#[derive(Clone, Debug, PartialEq, Eq)]
-enum PyImport {
-    /// `import a.b [as c]`: `local` is `c`, else `a.b` itself.
-    Module {
-        span: Span,
-        module: String,
-        local: String,
-    },
-    /// `from m import n [as c]`: `local` is `c`, else `n`.
-    Named {
-        span: Span,
-        module: String,
-        name: String,
-        local: String,
-    },
-    /// `from m import *`.
-    Star { span: Span, module: String },
-}
-
-impl PyImport {
-    fn module(&self) -> &str {
-        match self {
-            PyImport::Module { module, .. }
-            | PyImport::Named { module, .. }
-            | PyImport::Star { module, .. } => module,
-        }
-    }
-}
 
 /// One file's import clauses plus the names its module scope declares.
 #[derive(Clone, Debug, Default)]
@@ -77,92 +46,9 @@ pub fn py_module_facts(path: &str, content: &[u8]) -> Option<PyModuleFacts> {
     let root = tree.root_node();
     let src = text.as_bytes();
     let mut facts = PyModuleFacts::default();
-    walk_imports(root, src, &mut facts.imports);
+    py_walk_imports(root, src, false, &mut facts.imports);
     collect_top_level(root, src, &mut facts.top_level);
     Some(facts)
-}
-
-/// Every import clause at any depth (a function-local import binds the same
-/// file edge), in source order.
-fn walk_imports(node: tree_sitter::Node, src: &[u8], out: &mut Vec<PyImport>) {
-    match node.kind() {
-        "import_statement" => {
-            let mut cursor = node.walk();
-            for item in node.named_children(&mut cursor) {
-                match item.kind() {
-                    "dotted_name" => {
-                        let module = py_text(item, src).to_string();
-                        out.push(PyImport::Module {
-                            span: node_span(item),
-                            local: module.clone(),
-                            module,
-                        });
-                    }
-                    "aliased_import" => {
-                        let Some(module) = item.child_by_field_name("name") else {
-                            continue;
-                        };
-                        let module = py_text(module, src).to_string();
-                        let local = item.child_by_field_name("alias").map_or_else(
-                            || module.clone(),
-                            |alias| py_text(alias, src).to_string(),
-                        );
-                        out.push(PyImport::Module {
-                            span: node_span(item),
-                            module,
-                            local,
-                        });
-                    }
-                    _ => {}
-                }
-            }
-        }
-        "import_from_statement" => {
-            let module = node
-                .child_by_field_name("module_name")
-                .map(|module| py_text(module, src).to_string())
-                .unwrap_or_default();
-            let mut cursor = node.walk();
-            let mut saw_name = false;
-            for item in node.children_by_field_name("name", &mut cursor) {
-                saw_name = true;
-                let (name, local) = match item.kind() {
-                    "dotted_name" => {
-                        let name = py_text(item, src).to_string();
-                        (name.clone(), name)
-                    }
-                    "aliased_import" => {
-                        let Some(name) = item.child_by_field_name("name") else {
-                            continue;
-                        };
-                        let name = py_text(name, src).to_string();
-                        let local = item
-                            .child_by_field_name("alias")
-                            .map_or_else(|| name.clone(), |alias| py_text(alias, src).to_string());
-                        (name, local)
-                    }
-                    _ => continue,
-                };
-                out.push(PyImport::Named {
-                    span: node_span(item),
-                    module: module.clone(),
-                    name,
-                    local,
-                });
-            }
-            if !saw_name {
-                out.push(PyImport::Star {
-                    span: node_span(node),
-                    module,
-                });
-            }
-        }
-        _ => {}
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        walk_imports(child, src, out);
-    }
 }
 
 /// The names bound at module depth: `def`/`class` (decorated or not) and the
