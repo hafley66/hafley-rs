@@ -4,7 +4,7 @@ Branches: `feature/the-gang-splits-the-daemon` in both worktrees. Bases: hafley-
 
 ## State
 
-`ryi` is always the generated daemon client. It connects to the per-user socket or spawns `ryii --daemon`; there is no exec fallback or `--daemon-client` flag. `ryii <verb>` runs the flat in-process CLI, and `ryii --daemon` serves requests. The two binaries share generated types and one clap model from `ryi-proto`; the server sets its displayed clap name to `ryii`. The requested design is **not complete**: connect-or-spawn still uses a direct `Command::spawn` retry loop, stdin sentinels outside `ingest` are not streamed, and some engine diagnostics remain outside the request-scoped stderr transport. These are detailed below.
+`ryi` is always the generated daemon client. It connects to the per-user socket or spawns `ryii --daemon`; there is no exec fallback or `--daemon-client` flag. `ryii <verb>` runs the flat in-process CLI, and `ryii --daemon` serves requests. The two binaries share generated types and one clap model from `ryi-proto`; the server sets its displayed clap name to `ryii`. Stdin selected by `-` or `/dev/stdin` travels as an unmodified `application/octet-stream` request body. The requested design is **not complete**: connect-or-spawn still uses a direct `Command::spawn` retry loop, and some engine diagnostics remain outside the request-scoped stderr transport. These are detailed below.
 
 ## Files
 
@@ -24,7 +24,7 @@ Counts in `crates/sprefa-extract/schema/cli/ops.tsp`, comparing the base with th
 | `@post` | 14 | 0 |
 | `@query` | 91 | 2 |
 | `@path` | 3 | 0 |
-| `@bodyRoot` | 6 | 1 |
+| `@bodyRoot` | 6 | 8 |
 | `@valueName` | 37 | 34 |
 | `@requires` | 8 | 8 |
 | `@requiresAll` | 1 | 1 |
@@ -33,7 +33,7 @@ Counts in `crates/sprefa-extract/schema/cli/ops.tsp`, comparing the base with th
 | `@requiredOneOf` | 1 | 1 |
 | `...Inputs` | 0 | 5 |
 
-The two remaining `@query` annotations are `ingest.paths` and `ingest.sqlite`. TypeSpec reports `duplicate-body` when those join its `@bodyRoot input: JsonlStream<jsonValue>` in the body. The decorator-def import precedes `@typespec/http` so its `$onValidate` routes exist before HTTP duplicate-route validation. `setRoute({ program }, op, { path: "/" + op.name, shared: false })` is called only for undecorated operations in the daemon namespace.
+The two remaining `@query` annotations are `ingest.paths` and `ingest.sqlite`. `RawByteStream` is `HttpStream<bytes, "application/octet-stream", bytes>`; it is the `@bodyRoot` request input on extract, fast, slow, scip, graph, query, region and ingest. The daemon validator marks those operations' other implicit-body arguments with HTTP `@bodyIgnore`, since the generated transport carries their serialized arguments in `x-ryi-request`. This prevents HTTP `duplicate-body` diagnostics without adding query annotations to every flag. The decorator-def import precedes `@typespec/http` so its `$onValidate` routes exist before HTTP duplicate-route validation. `setRoute({ program }, op, { path: "/" + op.name, shared: false })` is called only for undecorated operations in the daemon namespace.
 
 The optional `serverBin` field stays inside the existing `@daemon` decorator. `Ryi` sets it to `ryii`; the emitter's generic default remains `${bin}-server`. `daemon_auto::SERVER_BIN` supplies the client's sibling/PATH lookup and the server's clap display name.
 
@@ -50,6 +50,8 @@ These files began as hand-written expected output during the code-only phase. Th
 
 `ryi-proto/src/lib.rs` includes these files inside its own crate. Client and server depend on `ryi-proto`; neither uses a cross-crate `#[path]`.
 
+The raw-stdin revision regenerated `ryi-proto/src/gen/daemon_auto.rs`, `ryi/src/gen/client_auto.rs`, and `sprefa-extract/src/bin/ryi/gen/server_auto.rs` from the TypeSpec emitter. It added no hand-written generated file.
+
 ## Daemon mechanism and API calls
 
 | Role | Crate | Exact call |
@@ -62,6 +64,8 @@ These files began as hand-written expected output during the code-only phase. Th
 | Diagnostic transport | `http-body-util` 0.1 | `StreamBody::new` and `BodyExt::into_stream` preserve HTTP trailer frames; Hyper `Frame::trailers` carries request-scoped stderr |
 | Connect-or-spawn | no selected crate | Current code calls `Command::new(ryii).arg("--daemon").spawn()` and retries `UnixStream::connect`. This does **not** satisfy the library requirement. |
 
+For raw stdin, generated client code detects `-` or `/dev/stdin` only in path fields that are positional or default to `-`. It sends the request envelope in the base64 `x-ryi-request` header and pipes stdin through `ReaderStream` into an octet-stream HTTP body. The server copies body chunks through `StreamReader` into a `NamedTempFile`, then passes an `Arc` for that file through request-scoped context to the engine worker. The file persists through streamed response production. `Inputs.paths`, region's generated body and ingest read that scoped file; direct `ryii` keeps its own stdin reader. Ingest no longer parses and reserializes each request line in the daemon adapter. The body remains raw bytes over HTTP and on disk; each operation starts after its complete stdin body arrives. Runtime parity for these paths is unverified under the no-tests rule.
+
 [`muzan::ensure_daemon_with_args`](https://docs.rs/muzan/0.1.1/muzan/daemon/fn.ensure_daemon_with_args.html) connects to its own line-oriented JSON IPC under `$XDG_STATE_HOME/{app}/daemon.sock` and [spawns the current executable](https://docs.rs/muzan/0.1.1/src/muzan/daemon.rs.html). [`daemonizable::Daemonizer::spawn_daemon`](https://docs.rs/daemonizable/0.0.1/daemonizable/struct.Daemonizer.html) re-executes the current executable and returns a typed pipe RPC client. The lane requires the separate `ryii` binary and one Hyper socket under `$XDG_CACHE_HOME/ryi`. Neither library's connect-or-spawn API directly takes that executable and socket. A choice to extend the candidate list or permit a second IPC socket remains open; the current `Command::spawn` loop does not satisfy the named-library requirement.
 
 The lock and PID file live under `XDG_CACHE_HOME/ryi`, or `HOME/.cache/ryi`. The socket normally lives there too. When that path exceeds 100 bytes, a SHA-256-derived short socket directory under the system temporary directory is used with mode 0700. The server stores its own executable size and nanosecond mtime at startup; the client computes the same identity from the resolved `ryii` path on connect. A mismatch returns 409, cancels the old server and triggers respawn. Tests own each daemon with a guard that sends `POST /__shutdown`, then waits on its recorded PID and escalates through SIGTERM and SIGKILL. `@daemon` supplies idle 600 seconds and handshake enabled; the generated service-name prefix yields `RYI_IDLE_SECS` and `RYI_HANDSHAKE` overrides. A response-body guard keeps a streamed request active until EOF or drop.
@@ -71,6 +75,8 @@ The daemon installs `sprefa_extract::trace::install()` once after detaching. The
 `with_request_context` places an absolute root and a diagnostic sink in thread-local slots for a handler invocation. The row producer captures and reapplies them on its worker thread. A drop guard restores prior values even on unwind. The client resolves typed relative path arguments in `Request::new` before transport. `Request::decode` uses the same generated path function for relative HTTP callers; absolute client paths are unchanged there. Revision reads use explicit scratch paths; diff facts are rebased from scratch before comparison. The request path never changes process cwd. SCIP timeout is another scoped thread-local override. Extraction cache keys include the source path because TypeScript closure names embed that path even when file bytes match. This does not move the process-wide mimalloc cap into request scope.
 
 ## Changed goldens
+
+The raw-stdin revision changed no hafley-rs golden. It changed the hafley-tsp daemon fixture from JSONL input to `RawByteStream` and updated its inline snapshot for the generated stdin path fields. That snapshot and the new round-trip assertions are unverified at runtime.
 
 The help captures for `cleave`, `diff`, `fast`, `graph`, `ingest`, `move`, `query`, `region`, `rename`, `schema`, `scip`, `slow`, `trail`, and `watch` changed `Usage: ryi-server ... -> Usage: ryii ...`; `root.txt` changed both usage lines the same way. Every capture lost the `--daemon-client` line because the client is now always a daemon client and the direct server has no transport flag. `schema` changed `Usage: ryi-server schema [OPTIONS] -> Usage: ryii schema`, and `trail` changed `Usage: ryi-server trail [OPTIONS] [N] -> Usage: ryii trail [N]`; after removing that flag, only help remains in their option sections, so their help-line padding returned to the pre-flag spacing. The expected captures were written by comparison with the pre-flag base and have not been run under the no-tests rule. The root capture still omits the deleted `serve` command. Its build-stamp line stays at the prior captured value because the test normalizes it. The transient `extract.txt` capture remains removed because `@rootArgs(FileArgs)` owns the implicit root operation.
 
@@ -101,7 +107,7 @@ On `tests/fixtures/type_ladder/src`, the corrected fast path emits 317 rows with
 
 ## Verification
 
-For the `ryi`/`ryii` revision, no test binary was executed, per the current user rule. The following compile-only checks passed: `pnpm exec tsc -p tsconfig.json` in decorator-def, `pnpm exec tsc -p tsconfig.build.json` and direct Rollup in packages/rust, and `HAFLEY_TSP=... python3 crates/sprefa-extract/schema/cli/0_gen.py`. Cargo used the persistent `CARGO_TARGET_DIR=$HOME/.cache/lanes/shared/target`: `cargo test --no-run -j 4 -p ryi -p ryi-proto` and `cargo test --no-run -j 4 --features cli --test all` in sprefa-extract both compiled. The generated help captures, daemon process tests, and output comparisons in this revision remain unverified at runtime.
+For the `ryi`/`ryii` revision, no test binary was executed, per the current user rule. The following compile-only checks passed: `pnpm exec tsc -p tsconfig.json` in decorator-def, `pnpm exec tsc -p tsconfig.build.json` and direct Rollup in packages/rust, and `HAFLEY_TSP=... python3 crates/sprefa-extract/schema/cli/0_gen.py`. Cargo used the persistent `CARGO_TARGET_DIR=$HOME/.cache/lanes/shared/target`: `cargo test --no-run -j 4 -p ryi -p ryi-proto` and `cargo test --no-run -j 4 --features cli --test all` in sprefa-extract both compiled. For the raw-stdin revision, TypeScript, Rollup, the real TypeSpec contract and the daemon fixture compile; `cargo check -j 4 -p ryi -p ryi-proto`, `cargo check -j 4 --features cli --bin ryii`, and `cargo check -j 4 --features cli --tests` passed. An initial `cargo test --no-run -j 4 --features cli --test all` found a stale formatted-ingest call; the direct formatted path now uses the same raw ingestion adapter, and the later check passed. No test binary, daemon round trip, or performance script ran for the raw-stdin revision. Its generated snapshot and expected stdout, stderr and exit-code comparisons remain unverified.
 
 The table and run notes below record earlier revisions. They do not verify the current binary names or always-daemon client behavior. Those earlier commands used the two lane worktrees and, before the persistent-target rule, `CARGO_TARGET_DIR=/tmp/ryi-daemon-audit1-root-target` or `/tmp/ryi-daemon-audit1-server-target`.
 
@@ -160,7 +166,7 @@ The coordinator's earlier release warm-client baseline for a relative `hafley_sc
 
 A serial full-suite run had 224/225 targets pass and 1,080 tests pass, with `golden_parity::ported_facets_match_v5` failing on five TypeScript closure names. An isolated serial run reproduced it. The extraction cache keyed only by content, language and mask, and an earlier test warmed it with the same bytes under a basename path. The extracted closure names contain the source path. Adding the path to `CacheKey` corrected the production output and made the serial parity target pass 11/11. The final full suite then passed 225/225 targets. The cache test now asserts two parses and distinct closure output for byte-identical TypeScript files at two paths; this changes its prior cross-path sharing expectation because that sharing returned the wrong path in output.
 
-A manual round trip at the earlier default-daemon revision copied sibling binaries into one temporary directory. `ryi fast` and `ryi --fresh fast` then produced identical stdout for an absolute fixture path. Touching the copied server binary forced a 409 handshake replacement and preserved stdout. With `RYI_IDLE_SECS=1`, the socket disappeared after three seconds. The revised, unexecuted `182_client_daemon.rs` checks direct `ryii` execution without a socket for a relative directory, daemon `ryi` equality on an absolute file, executable replacement, idle exit, zero-fact stderr equality, a synchronized two-client first start, two request trace spans, and PID-backed shutdown including a long XDG cache path.
+A manual round trip at the earlier default-daemon revision copied sibling binaries into one temporary directory. `ryi fast` and `ryi --fresh fast` then produced identical stdout for an absolute fixture path. Touching the copied server binary forced a 409 handshake replacement and preserved stdout. With `RYI_IDLE_SECS=1`, the socket disappeared after three seconds. The revised, unexecuted `182_client_daemon.rs` checks direct `ryii` execution without a socket for a relative directory, daemon `ryi` equality on an absolute file, executable replacement, idle exit, zero-fact stderr equality, a synchronized two-client first start, three request trace spans including the path-list input, and PID-backed shutdown including a long XDG cache path.
 
 An invalid rename returned code 2 in both modes, with zero stdout bytes; the daemon client wrote its JSON error row to stderr. The fresh process wrote its original plain diagnostic to stderr.
 
@@ -174,8 +180,7 @@ The later review prohibited all test execution. The `6af0e0ad` main merge and su
 
 - Full stderr/tracing parity, lock behavior beyond the tested two-client startup, all verb-specific relative path cases, and memory behavior under concurrent requests remain unverified.
 - The server captures its file disclosure and SCIP location messages in a request-local buffer. Stream responses send them in `x-ryi-stderr` HTTP trailers, and raw responses send them in the same header. The client writes those bytes to stderr; the daemon round-trip test checks the zero-fact disclosure against fresh mode. Diagnostics emitted directly from other engine modules, including the optional `RYI_SQLITE_PHASES` timing line, still go to the detached process stderr.
-- `fast -` and `region --generated -` still read the daemon's stdin. Only `ingest` has a TypeSpec `@bodyRoot JsonlStream<jsonValue>` request stream. Ingest avoids reading an interactive TTY. Modeling these other stdin uses as streams conflicts with body-default parameters unless their metadata placement changes.
-- Their stdin content can be arbitrary source bytes; `JsonlStream<T>` declares JSON lines. The stdin contract remains an open user question. This binary rename leaves the current stdin behavior in place.
+- The raw-stdin process assertions in `182_client_daemon.rs` compare `ryii` and `ryi` for a `fast -` path list, a `region --generated -` text body, and `ingest /dev/stdin` bytes from the TSI fixture. They compiled but have not run. The fixture's `RawByteStream` and generated snapshot likewise compiled without executing the Vitest assertion.
 - The HTTP `{request_root,args}` envelope and `x-ryi-request` stream metadata header are generated transport conventions and are not explicit TypeSpec models.
 - `ryii fast tests/fixtures/type_ladder/src` is the direct in-process call and starts no daemon. `ryi fast tests/fixtures/type_ladder/src` always uses the daemon and resolves typed relative path arguments to absolute before sending; its response path spellings and some row counts can differ from direct mode. Relative-path byte parity remains open. The revised process test uses an absolute fixture path for daemon stdout parity; it has not run under the no-tests rule.
 - The process-wide mimalloc limit remains shared by all daemon requests.
@@ -210,7 +215,7 @@ The roster lists 20 hafley-tsp lane paths and 230 hafley-rs lane paths. The hafl
 
 </details>
 
-<details><summary>hafley-rs: 229 paths</summary>
+<details><summary>hafley-rs: 230 paths</summary>
 
 - `Cargo.lock`
 - `crates/hafley-observe/src/3_chrome.rs`
@@ -243,6 +248,7 @@ The roster lists 20 hafley-tsp lane paths and 230 hafley-rs lane paths. The hafl
 - `crates/sprefa-extract/schema/cli/domain.tsp`
 - `crates/sprefa-extract/schema/cli/ops.tsp`
 - `crates/sprefa-extract/src/0_query.rs`
+- `crates/sprefa-extract/src/3_region_writer.rs`
 - `crates/sprefa-extract/src/5_diff.rs`
 - `crates/sprefa-extract/src/bin/ryi.rs`
 - `crates/sprefa-extract/src/bin/ryi/0_revision.rs`
