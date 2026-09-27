@@ -70,11 +70,13 @@ struct Cli {
 enum SubCmd {
     /// Print shell functions that route interactive harnesses through Boop.
     /// Folded (one-pane-register-path): `boop tui <harness>` is the spelling.
+    #[command(hide = true)]
     ShellInit {
         #[arg(value_enum)]
         shell: ShellKind,
     },
     /// Launch an ordinary interactive harness TUI and register this pane.
+    #[command(hide = true)]
     Tui {
         /// Registered harness adapter: claude, codex, kimi, or opencode.
         harness: String,
@@ -104,7 +106,11 @@ enum SubCmd {
     /// `boop beep <route> <body>` is the one send. `<route>` is a lane, a
     /// coordinator, a native, `parent` (the caller's own parent edge) or
     /// `children` (every live child of the caller).
-    #[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
+    #[command(
+        args_conflicts_with_subcommands = true,
+        subcommand_negates_reqs = true,
+        hide = true
+    )]
     Beep {
         /// A registry name, or the `parent` / `children` alias.
         ///
@@ -136,6 +142,16 @@ enum SubCmd {
         mail_dir: Option<PathBuf>,
         #[command(subcommand)]
         cmd: Option<BeepCmd>,
+    },
+    /// Create and control registered agent jobs.
+    Job {
+        #[command(subcommand)]
+        cmd: LaneCmd,
+    },
+    /// Send, receive, and wait for addressed mail.
+    Mail {
+        #[command(subcommand)]
+        cmd: MailCmd,
     },
     /// Run raw SQL read-only against the store (the default `db` form), or
     /// read/count what agents did through a `db` subcommand.
@@ -171,11 +187,13 @@ enum SubCmd {
     },
     /// Freshly synchronize and summarize Boop agent/runtime/activity facts.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     Agent {
         #[command(subcommand)]
         cmd: AgentSummaryCmd,
     },
     /// Report the caller's own identity and which of the two rungs named it.
+    #[command(hide = true)]
     Whoami {
         #[arg(long)]
         json: bool,
@@ -187,6 +205,7 @@ enum SubCmd {
     },
     /// Block until mail lands: the reply to <id>, a lane's result row, or
     /// the next unread row addressed to you with --me.
+    #[command(hide = true)]
     Wait {
         /// A message id or lane name. Omit to wait for all child lanes; use --me for the inbox.
         #[arg(value_name = "ID-OR-LANE")]
@@ -207,6 +226,7 @@ enum SubCmd {
     /// Folded (door-only-claude-delivery): the hook inbox is a rung the
     /// delivery ladder walks on its own, not a verb a caller reaches for. The
     /// installed hook still calls `boop inbox drain`, so the group runs.
+    #[command(hide = true)]
     Inbox {
         #[command(subcommand)]
         cmd: InboxCmd,
@@ -221,12 +241,14 @@ enum SubCmd {
     },
     /// Print the newest user messages from the caller's tracked conversation.
     #[cfg(feature = "agent-read")]
+    #[command(hide = true)]
     Remind {
         /// Number of user messages to print, newest window first in chronology.
         count: u64,
     },
     /// The shared tag table: apply tags to any surface, read the recent five
     /// back. Search reads `agent_tag` only, never a message body.
+    #[command(hide = true)]
     Tag {
         #[command(subcommand)]
         cmd: TagCmd,
@@ -516,13 +538,40 @@ fn run_cli(cli: Cli) -> Result<()> {
                 no_wait,
                 mail_dir,
                 cmd,
-            } => match cmd {
-                Some(cmd) => run_beep(&registry, cmd),
-                None => run_send(
+            } => {
+                eprintln!("deprecated: use `boop job`, `boop mail`, or `boop me`");
+                match cmd {
+                    Some(cmd) => run_beep(&registry, cmd),
+                    None => run_send(
+                        &registry,
+                        Outbound {
+                            route: &beep_route(route.as_deref()),
+                            body: beep_body(body.as_deref().or(body_flag.as_deref()), &kind),
+                            kind: &kind,
+                            as_name: as_name.as_deref(),
+                            box_name: None,
+                            timeout_secs: timeout,
+                            wait: !no_wait,
+                            mail_dir: mail_dir.as_deref(),
+                        },
+                    ),
+                }
+            }
+            SubCmd::Job { cmd } => cli::job::run_beep_lane(&registry, cmd),
+            SubCmd::Mail { cmd } => match cmd {
+                MailCmd::Send {
+                    to,
+                    body,
+                    as_name,
+                    kind,
+                    timeout,
+                    no_wait,
+                    mail_dir,
+                } => run_send(
                     &registry,
                     Outbound {
-                        route: &beep_route(route.as_deref()),
-                        body: beep_body(body.as_deref().or(body_flag.as_deref()), &kind),
+                        route: &beep_route(Some(&to)),
+                        body: Some(&body),
                         kind: &kind,
                         as_name: as_name.as_deref(),
                         box_name: None,
@@ -530,6 +579,28 @@ fn run_cli(cli: Cli) -> Result<()> {
                         wait: !no_wait,
                         mail_dir: mail_dir.as_deref(),
                     },
+                ),
+                MailCmd::Recv {
+                    as_name,
+                    hook,
+                    mail_dir,
+                } => run_inbox(InboxCmd::Drain {
+                    as_name,
+                    hook,
+                    mail_dir,
+                }),
+                MailCmd::Wait {
+                    id,
+                    me,
+                    as_name,
+                    timeout,
+                    mail_dir,
+                } => run_wait(
+                    id.as_deref(),
+                    me,
+                    as_name.as_deref(),
+                    timeout,
+                    mail_dir.as_deref(),
                 ),
             },
             SubCmd::Db { sql, format, cmd } => match cmd {
@@ -547,35 +618,67 @@ fn run_cli(cli: Cli) -> Result<()> {
                 as_name,
                 wait_timeout,
                 mail_dir,
-            } => match id.as_deref() {
-                Some(id) if wait_target_is_a_lane(mail_dir.as_deref(), id) => {
-                    run_lane_wait(mail_dir.as_deref(), id, wait_timeout)
+            } => {
+                eprintln!("deprecated: use `boop mail wait` or `boop job wait`");
+                match id.as_deref() {
+                    Some(id) if wait_target_is_a_lane(mail_dir.as_deref(), id) => {
+                        run_lane_wait(mail_dir.as_deref(), id, wait_timeout)
+                    }
+                    Some(id) => run_wait(
+                        Some(id),
+                        false,
+                        as_name.as_deref(),
+                        wait_timeout,
+                        mail_dir.as_deref(),
+                    ),
+                    None if me => run_wait(
+                        None,
+                        true,
+                        as_name.as_deref(),
+                        wait_timeout,
+                        mail_dir.as_deref(),
+                    ),
+                    None => {
+                        run_wait_all_children(as_name.as_deref(), wait_timeout, mail_dir.as_deref())
+                    }
                 }
-                Some(id) => run_wait(
-                    Some(id),
-                    false,
-                    as_name.as_deref(),
-                    wait_timeout,
-                    mail_dir.as_deref(),
-                ),
-                None if me => run_wait(
-                    None,
-                    true,
-                    as_name.as_deref(),
-                    wait_timeout,
-                    mail_dir.as_deref(),
-                ),
-                None => {
-                    run_wait_all_children(as_name.as_deref(), wait_timeout, mail_dir.as_deref())
-                }
-            },
+            }
             SubCmd::Whoami {
                 json,
                 as_name,
                 mail_dir,
-            } => run_whoami(json, as_name.as_deref(), mail_dir.as_deref()),
-            SubCmd::Inbox { cmd } => run_inbox(cmd),
+            } => {
+                eprintln!("deprecated: use `boop me whoami`");
+                run_whoami(json, as_name.as_deref(), mail_dir.as_deref())
+            }
+            SubCmd::Inbox { cmd } => {
+                eprintln!("deprecated: use `boop mail recv`");
+                run_inbox(cmd)
+            }
             SubCmd::Me { mail_dir, cmd } => match cmd {
+                MeCmd::Whoami { json, as_name } => {
+                    run_whoami(json, as_name.as_deref(), mail_dir.as_deref())
+                }
+                MeCmd::Register {
+                    name,
+                    harness,
+                    parent,
+                } => cli::me::register_route(
+                    &name,
+                    Some("native"),
+                    None,
+                    harness.as_deref(),
+                    None,
+                    None,
+                    None,
+                    None,
+                    parent.as_deref(),
+                    None,
+                    mail_dir.as_deref(),
+                    None,
+                    &registry,
+                    boop::tmux::mux(),
+                ),
                 MeCmd::Mood {
                     name: mood,
                     clear,
@@ -842,6 +945,9 @@ fn tui_trail(harness: &str) -> Option<String> {
 /// belongs in one lane's trail.
 fn supervised_lane(command: &SubCmd) -> Option<&str> {
     match command {
+        SubCmd::Job {
+            cmd: LaneCmd::Run { lane, .. },
+        } => Some(lane),
         SubCmd::Beep {
             cmd: Some(BeepCmd::Lane {
                 cmd: LaneCmd::Run { lane, .. },
@@ -1181,6 +1287,9 @@ enum LaneCmd {
         /// Seconds `--wait` blocks before exiting 124; 0 waits forever.
         #[arg(long, default_value_t = 3600)]
         wait_timeout: u64,
+        /// Stop the job after this many seconds. The supervisor checks each poll.
+        #[arg(long)]
+        timeout: Option<u64>,
         /// Overrides the lane id derived from `--branch`.
         #[arg(long)]
         lane: Option<String>,
@@ -1303,7 +1412,6 @@ enum LaneCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Stop a lane and forget it, or bulk-delete by state.
-    #[command(alias = "rm")]
     Delete {
         /// One lane: kill its pane and drop its route. Omit for a bulk delete
         /// by `--state`.
@@ -1327,9 +1435,39 @@ enum LaneCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Forget a stopped job's route and keep its worktree and history.
+    Rm {
+        lane: String,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// Stop a lane process and retain its route and result history.
     Kill {
         lane: String,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Wait for a job's result row.
+    Wait {
+        lane: String,
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Attach to a job's tmux session.
+    Attach {
+        lane: String,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Send a POSIX signal to this job or its direct children.
+    Signal {
+        signal: String,
+        #[arg(long)]
+        children: bool,
+        #[arg(long = "as")]
+        as_name: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1551,6 +1689,49 @@ enum InboxCmd {
         cwd: Option<PathBuf>,
         #[arg(long)]
         uninstall: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum MailCmd {
+    /// Deliver a message to a registered route.
+    Send {
+        #[arg(long = "to", value_name = "JOB")]
+        to: String,
+        #[arg(value_name = "BODY")]
+        body: String,
+        #[arg(long = "as")]
+        as_name: Option<String>,
+        #[arg(long, default_value = "request")]
+        kind: String,
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
+        #[arg(long)]
+        no_wait: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Drain mail addressed to the caller and mark each row handed over.
+    Recv {
+        #[arg(long = "as")]
+        as_name: Option<String>,
+        #[arg(long, value_enum, default_value_t = HookArg::Plain)]
+        hook: HookArg,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Wait for a reply, job result, or the next row addressed to --me.
+    Wait {
+        #[arg(value_name = "ID-OR-JOB")]
+        id: Option<String>,
+        #[arg(long, conflicts_with = "id")]
+        me: bool,
+        #[arg(long = "as")]
+        as_name: Option<String>,
+        #[arg(long, default_value_t = mailwait::DEFAULT_TIMEOUT_SECS)]
+        timeout: u64,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
     },
 }
 
@@ -1919,6 +2100,21 @@ enum SyncCmd {
 
 #[derive(Subcommand)]
 enum MeCmd {
+    /// Report which identity rung names the caller.
+    Whoami {
+        #[arg(long)]
+        json: bool,
+        #[arg(long = "as")]
+        as_name: Option<String>,
+    },
+    /// Register a pane-less route for a native coordinator or subagent.
+    Register {
+        name: String,
+        #[arg(long)]
+        harness: Option<String>,
+        #[arg(long)]
+        parent: Option<String>,
+    },
     /// Read or set the format agents mail this session in. No name prints the
     /// effective mood and the session that set it.
     Mood {
@@ -2369,6 +2565,65 @@ mod tests {
             }
             other => panic!("lane run parsed as {:?}", other.is_some()),
         }
+    }
+
+    #[test]
+    fn job_commands_are_available_without_the_legacy_beep_lane_prefix() {
+        let cli = Cli::try_parse_from([
+            "boop",
+            "job",
+            "create",
+            "--branch",
+            "feature/cli-surface",
+            "--preset",
+            "zfable",
+            "--timeout",
+            "5",
+            "--dry-run",
+        ])
+        .expect("boop job create parses");
+        assert!(matches!(
+            cli.command,
+            Some(SubCmd::Job {
+                cmd: LaneCmd::Create {
+                    dry_run: true,
+                    timeout: Some(5),
+                    ..
+                }
+            })
+        ));
+        assert!(Cli::command()
+            .find_subcommand("job")
+            .is_some_and(|command| command.find_subcommand("list").is_some()));
+    }
+
+    #[test]
+    fn mail_and_me_commands_have_direct_root_namespaces() {
+        assert!(matches!(
+            Cli::try_parse_from([
+                "boop",
+                "mail",
+                "send",
+                "--to",
+                "worker",
+                "hello",
+                "--no-wait"
+            ])
+            .expect("mail send parses")
+            .command,
+            Some(SubCmd::Mail {
+                cmd: MailCmd::Send { no_wait: true, .. }
+            })
+        ));
+        assert!(matches!(
+            Cli::try_parse_from(["boop", "me", "whoami", "--json"])
+                .expect("me whoami parses")
+                .command,
+            Some(SubCmd::Me {
+                cmd: MeCmd::Whoami { json: true, .. },
+                ..
+            })
+        ));
     }
 
     /// RECEIPT. `beep agent subscribe` defaults to the door, takes a mailbox

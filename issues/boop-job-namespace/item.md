@@ -20,9 +20,9 @@ The verb surface of `docs/design/boop-process.md` section 2: `boop job create|li
 - [ ] each old spelling is a hidden alias that prints one deprecation line to stderr and works.
 - [x] wait-all with two children (one fails, rc propagates).
 - [x] `lane kill` keeps the route and result history; `lane rm` aliases route deletion.
-- [ ] signal --children reaches two live children and skips a dead one.
-- [ ] attach on a pane-less job is a named error.
-- [ ] --timeout kills at N+poll.
+- [x] signal --children reaches two live children and skips a dead one.
+- [x] attach on a pane-less job is a named error.
+- [x] --timeout kills at N+poll.
 - [ ] `docs/design/boop-process.md` section 2 updated to match; `crates/boop/docs/*.md` verbs renamed.
 
 ## Reproduction on installed boop 0.0.10 (248dfdd3)
@@ -36,6 +36,23 @@ one timeout budget, and exits with the first nonzero child rc. `boop wait
 --me` retains inbox behavior. `boop beep lane kill <lane>` stops its tmux
 session and retains its route; `boop beep lane rm <lane>` removes the route.
 The remaining namespace operations stay open.
+
+## Current implementation receipt
+
+`boop job` dispatches lane create/list/get/wait/kill/rm/attach/pane directly;
+`boop mail` exposes send/recv/wait, and `boop me` exposes whoami/register
+alongside mood/favorite. `job signal --children` signals live child panes and
+prints skip reasons for dead routes. `job create --timeout N` carries a timeout
+to the supervisor, which writes rc 124 and closes the channel within one poll
+after N. `job rm` forgets a route without stopping its pane.
+
+Tests: `job_commands_are_available_without_the_legacy_beep_lane_prefix`,
+`mail_and_me_commands_have_direct_root_namespaces`,
+`signal_children_reaches_live_children_and_skips_a_dead_route`,
+`attach_on_a_pane_less_job_reports_the_job_name`,
+`runtime_timeout_writes_rc_124_within_one_poll_of_the_deadline`,
+`rm_forgets_the_route_and_leaves_a_live_pane_running`, and
+`env_pairs_ride_the_dry_run_cmd_line`.
 
 Test: `cargo nextest run -p boop -j 2 -E
 'test(bare_wait_joins_all_child_lanes_and_propagates_a_failure)'` passes.

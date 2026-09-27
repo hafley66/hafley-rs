@@ -640,6 +640,8 @@ pub struct LaneRun {
     pub pr_base: String,
     /// Validation command run in the lane worktree before each result row.
     pub verify: Option<String>,
+    /// Total runtime limit from lane creation; checked once per channel poll.
+    pub timeout_secs: Option<u64>,
 }
 
 /// One inbox message the supervisor has taken responsibility for.
@@ -1248,6 +1250,10 @@ fn supervise(
     let mut quiet_watch = QuietWatch::seeded(&lane.mail_dir, &lane.lane);
     let last_activity = std::cell::Cell::new(std::time::Instant::now());
     let mut last_stale: Option<std::time::Instant> = None;
+    let deadline = lane
+        .timeout_secs
+        .filter(|seconds| *seconds > 0)
+        .map(|seconds| Instant::now() + Duration::from_secs(seconds));
 
     events.record(
         "channel-open",
@@ -1311,6 +1317,26 @@ fn supervise(
         // `turn_tools` for the rest of the turn once it lands.
         let mut pr_checked = false;
         let end = loop {
+            if deadline.is_some_and(|deadline| Instant::now() >= deadline) {
+                let detail = format!(
+                    "job timed out after {}s",
+                    lane.timeout_secs.unwrap_or_default()
+                );
+                if let Err(error) = channel.close() {
+                    warn!(lane = lane.lane, error = %error, "close timed out lane failed");
+                }
+                record_result(lane, 124, Some(&detail));
+                info!(
+                    lane = lane.lane,
+                    timeout_secs = lane.timeout_secs,
+                    "lane runtime timeout"
+                );
+                return Ok(Ended {
+                    exit_code: 124,
+                    detail: Some(detail),
+                    retired: false,
+                });
+            }
             match channel.next_event(POLL) {
                 Err(error) => {
                     events.record(
@@ -3302,6 +3328,7 @@ mod tests {
             post_pr: false,
             pr_base: "main".to_owned(),
             verify: None,
+            timeout_secs: None,
         };
         let mut watch = ParentWatch {
             policy: ParentDeathPolicy::Orphan,
@@ -3770,7 +3797,53 @@ mod tests {
             post_pr: false,
             pr_base: "main".to_owned(),
             verify: None,
+            timeout_secs: None,
         }
+    }
+
+    #[test]
+    fn runtime_timeout_writes_rc_124_within_one_poll_of_the_deadline() {
+        struct NeverFinishes {
+            closed: bool,
+        }
+        impl LaneChannel for NeverFinishes {
+            fn conversation_id(&self) -> Option<String> {
+                Some("timeout-fixture".to_owned())
+            }
+            fn start_turn(&mut self, _: &str) -> Result<()> {
+                Ok(())
+            }
+            fn steer(&mut self, _: &str) -> Result<Delivery> {
+                Ok(Delivery::NextTurn)
+            }
+            fn next_event(&mut self, timeout: Duration) -> Result<Option<TurnEvent>> {
+                std::thread::sleep(timeout);
+                Ok(None)
+            }
+            fn close(&mut self) -> Result<()> {
+                self.closed = true;
+                Ok(())
+            }
+        }
+
+        let dir = tempdir();
+        let mut lane = parented_lane(&dir, "timeout-job", "coordinator");
+        lane.timeout_secs = Some(1);
+        let mut channel = NeverFinishes { closed: false };
+        let mut events = TraceRecorder::new(&lane.lane, &lane.mail_dir);
+        let started = Instant::now();
+        let ended = supervise(&lane, &mut channel, &mut events).unwrap();
+        let elapsed = started.elapsed();
+
+        assert_eq!(ended.exit_code, 124);
+        assert!(channel.closed, "timeout closes the harness channel");
+        assert!(elapsed >= Duration::from_secs(1), "elapsed: {elapsed:?}");
+        assert!(
+            elapsed <= Duration::from_secs(1) + POLL + Duration::from_millis(50),
+            "elapsed: {elapsed:?}"
+        );
+        assert_eq!(result_rows(&dir).len(), 1);
+        assert_eq!(result_rows(&dir)[0].rc, Some(124));
     }
 
     #[test]
@@ -4857,6 +4930,7 @@ mod tests {
             post_pr: false,
             pr_base: "main".to_owned(),
             verify: None,
+            timeout_secs: None,
         };
         yield_to_parent(&lane, "completed", &[]);
         assert!(rows_of_kind(&dir, "yield").is_empty());
@@ -5274,6 +5348,7 @@ mod tests {
             post_pr: false,
             pr_base: "main".to_owned(),
             verify: None,
+            timeout_secs: None,
         };
         record_result(&lane, 0, None);
         let rows = result_rows(&dir);

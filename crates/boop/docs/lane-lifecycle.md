@@ -6,7 +6,7 @@ longer ends the pane: the supervisor parks on the mailbox instead.
 
 ## States
 
-| state | `lane list` | what it means | how it's read |
+| state | `job list` | what it means | how it's read |
 | --- | --- | --- | --- |
 | live | `live` | a turn is running | tmux target alive, no residency file or residency `live` |
 | idle | `idle` | parked between turns, channel open, process alive | tmux target alive, residency file says `idle` |
@@ -18,7 +18,7 @@ stateDiagram-v2
     live --> idle: turn ends, no pending hail
     idle --> live: a hail wakes the mailbox poll (<= 700ms)
     live --> dead: harness process dies / hard failure / retry budget exhausted
-    idle --> dead: lane delete / parent dies (Kill policy)
+    idle --> dead: job kill / parent dies (Kill policy)
     dead --> [*]
 ```
 
@@ -28,7 +28,7 @@ Only these end the supervisor process (`Ended` returned, pane exits):
 
 | exit | trigger | where |
 | --- | --- | --- |
-| explicit delete | `boop beep lane delete <lane>` kills the tmux session; the supervisor's `SIGTERM`/`SIGHUP`/`SIGINT` handler writes the result row and exits | `arm_signal_trail`, `signal_exit` |
+| explicit kill | `boop job kill <lane>` stops the tmux session and retains the route; `boop job rm <lane>` forgets the route | `run_lane_kill`, `run_lane_delete` |
 | harness gone | a hard `Failed` turn, or a `Flaked` turn past `FLAKE_RESUME_CAP` retries | the `held.is_empty() && !end.is_done()` branch in `supervise` |
 | parent died (Kill policy) | `ParentWatch::probe` sees the lane's parent route go dead under `ParentDeathPolicy::Kill` | `ParentWatch::probe`, checked every poll whether running or parked |
 

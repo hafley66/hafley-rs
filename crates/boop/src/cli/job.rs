@@ -418,6 +418,9 @@ pub(crate) fn run_lane_supervisor(
         post_pr,
         pr_base,
         verify: verify.map(str::to_owned),
+        timeout_secs: std::env::var("BOOP_LANE_TIMEOUT_SECS")
+            .ok()
+            .and_then(|value| value.parse().ok()),
     };
     // A handshake that fails here happens before the supervisor exists, so
     // nothing else would tell the parent this lane never opened. A rejected
@@ -1944,6 +1947,7 @@ pub(crate) fn run_fork(
             bin: None,
             wait: false,
             wait_timeout: 3600,
+            timeout: None,
             lane: (!has_repo).then(|| lane.clone()),
             tmux: None,
             socket: None,
@@ -2325,6 +2329,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             dry_run,
             wait,
             wait_timeout,
+            timeout,
             mood,
             // Folded: a dead name resets itself now, so the flag is a no-op alias.
             reclaim: _,
@@ -2349,7 +2354,10 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                     on_parent_death,
                 )?;
             }
-            let env = parse_env_pairs(env)?;
+            let mut env = parse_env_pairs(env)?;
+            if let Some(timeout) = timeout {
+                env.push(("BOOP_LANE_TIMEOUT_SECS".to_owned(), timeout.to_string()));
+            }
             run_lane(
                 registry,
                 LaneArgs {
@@ -2467,7 +2475,22 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                 anyhow::bail!("name a lane to delete, or pass --state dead for a bulk delete")
             }
         },
+        LaneCmd::Rm { lane, mail_dir } => {
+            run_lane_delete(mail_dir.as_deref(), &lane, true, false, None)
+        }
         LaneCmd::Kill { lane, mail_dir } => run_lane_kill(mail_dir.as_deref(), &lane),
+        LaneCmd::Wait {
+            lane,
+            timeout,
+            mail_dir,
+        } => run_lane_wait(mail_dir.as_deref(), &lane, timeout),
+        LaneCmd::Attach { lane, mail_dir } => run_lane_attach(mail_dir.as_deref(), &lane),
+        LaneCmd::Signal {
+            signal,
+            children,
+            as_name,
+            mail_dir,
+        } => run_lane_signal(mail_dir.as_deref(), &signal, children, as_name.as_deref()),
         LaneCmd::Prune { dry_run, mail_dir } => run_lane_prune(mail_dir.as_deref(), dry_run),
         LaneCmd::Route { lane, mail_dir } => run_resolve(&lane, mail_dir.as_deref()),
         LaneCmd::Pane {
@@ -3736,6 +3759,105 @@ pub(crate) fn run_lane_pane(
         anyhow::bail!("lane `{lane}` has no tmux session to capture")
     };
     print!("{}", tmux::mux().capture_pane(socket, target, lines)?);
+    Ok(())
+}
+
+pub(crate) fn run_lane_attach(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let Some(route) = routes.get(lane) else {
+        anyhow::bail!("no registry route for job `{lane}`")
+    };
+    let pane = route
+        .tmux
+        .as_deref()
+        .with_context(|| format!("job `{lane}` has no pane to attach"))?;
+    let target = tmux::mux()
+        .session_of_pane(route.socket.as_deref(), pane)
+        .unwrap_or_else(|| pane.to_owned());
+    let mut command = std::process::Command::new("tmux");
+    if let Some(socket) = route.socket.as_deref() {
+        command.args(["-L", socket]);
+    }
+    let status = command
+        .args(["attach-session", "-t", &target])
+        .status()
+        .context("run tmux attach-session")?;
+    anyhow::ensure!(status.success(), "tmux could not attach to job `{lane}`");
+    Ok(())
+}
+
+fn parse_job_signal(name: &str) -> Result<nix::sys::signal::Signal> {
+    use nix::sys::signal::Signal;
+    let name = name.trim().to_ascii_uppercase();
+    let name = name.strip_prefix("SIG").unwrap_or(&name);
+    let signal = match name {
+        "HUP" => Signal::SIGHUP,
+        "INT" => Signal::SIGINT,
+        "QUIT" => Signal::SIGQUIT,
+        "KILL" => Signal::SIGKILL,
+        "TERM" => Signal::SIGTERM,
+        "STOP" => Signal::SIGSTOP,
+        "CONT" => Signal::SIGCONT,
+        "USR1" => Signal::SIGUSR1,
+        "USR2" => Signal::SIGUSR2,
+        _ => anyhow::bail!("unknown job signal `{name}`"),
+    };
+    Ok(signal)
+}
+
+pub(crate) fn run_lane_signal(
+    mail_dir_arg: Option<&Path>,
+    signal_name: &str,
+    children: bool,
+    as_name: Option<&str>,
+) -> Result<()> {
+    use nix::sys::signal::kill;
+    use nix::unistd::Pid;
+
+    let signal = parse_job_signal(signal_name)?;
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let caller = waiting_as(&dir, as_name)?;
+    let targets = if children {
+        routes
+            .iter()
+            .filter(|(_, route)| route.kind.as_str() == "lane")
+            .filter(|(_, route)| route.parent.as_deref() == Some(caller.as_str()))
+            .map(|(name, route)| (name.as_str(), route))
+            .collect::<Vec<_>>()
+    } else {
+        vec![(
+            caller.as_str(),
+            routes
+                .get(&caller)
+                .context("caller has no registered job route")?,
+        )]
+    };
+    let snapshot = proc::SysinfoSnapshot::capture()?;
+    let mut signalled = Vec::new();
+    let mut skipped = Vec::new();
+    for (name, route) in targets {
+        let Some(target) = route.tmux.as_deref() else {
+            skipped.push(format!("{name}: no pane"));
+            continue;
+        };
+        let Some(pid) = tmux::mux().pane_pid(route.socket.as_deref(), target) else {
+            skipped.push(format!("{name}: pane is not live"));
+            continue;
+        };
+        if !snapshot.is_alive(pid) {
+            skipped.push(format!("{name}: process {pid} is not live"));
+            continue;
+        }
+        kill(Pid::from_raw(pid as i32), signal)
+            .with_context(|| format!("send {signal:?} to job `{name}` process {pid}"))?;
+        signalled.push(name.to_owned());
+    }
+    println!("signalled {} with {signal:?}", signalled.join(", "));
+    for row in skipped {
+        println!("skipped {row}");
+    }
     Ok(())
 }
 

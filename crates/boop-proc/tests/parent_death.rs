@@ -130,6 +130,7 @@ fn lane_run(dir: &Path) -> LaneRun {
         post_pr: false,
         pr_base: "main".to_owned(),
         verify: None,
+        timeout_secs: None,
     }
 }
 

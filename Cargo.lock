@@ -384,6 +384,7 @@ dependencies = [
  "clap",
  "dirs 5.0.1",
  "hafley-observe",
+ "nix 0.31.3",
  "peak_alloc",
  "proc-macro2",
  "rusqlite",

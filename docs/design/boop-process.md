@@ -35,9 +35,9 @@ Three namespaces. Everything else is deleted or folded. Additive migration: old 
 
 | namespace | verbs | today's spelling |
 |---|---|---|
-| `boop job` | `create`, `list`, `get`, `wait [<job>...]` (none = all my children), `kill <job> [--signal]`, `signal <sig> [--children]`, `rm <job>` (forget, carcass-safe), `attach <job>`, `pane <job>`, `run` (hidden, pane-only) | `beep lane *`, `beep agent register` (a job with no pane) |
-| `boop mail` | `send --to <job> \| --parent \| --children --body`, `recv [--me]` (the inbox drain), `wait <id> \| --me` | `beep hail`, `tell-parent`, `tell-children`, `inbox`, `wait` |
-| `boop me` | `whoami`, `mood`, `favorite`, `register` (pane adoption) | `whoami`, `me *`, `adopt` |
+| `boop job` | `create`, `list`, `get`, `wait [<job>...]` (none = all my children), `kill <job>`, `signal <sig> [--children]`, `rm <job>` (forget, carcass-safe), `attach <job>`, `pane <job>`, `run` (hidden, pane-only) | `beep lane *`, `beep agent register` (a job with no pane) |
+| `boop mail` | `send --to <job> <body>`, `recv`, `wait <id> \| --me`, `watch <dir>` (opt-in file intake) | `beep hail`, `tell-parent`, `tell-children`, `inbox`, `wait` |
+| `boop me` | `whoami`, `mood`, `favorite`, `register` (pane-less route registration) | `whoami`, `me *`, `adopt` |
 | stays | `db`, `debug`, `config`, `host chat` | unchanged |
 | goes | `agent`, `concatmap` (coroutine is dl6's, hafley-rs `boop-concatmap-state-in-store`), `beep` as a word, 16 hidden pre-split verbs, 34 `--mail-dir` declarations (one global flag) | |
 

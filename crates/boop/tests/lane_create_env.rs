@@ -99,12 +99,12 @@ fn cmd_line(output: &std::process::Output) -> String {
         .to_owned()
 }
 
-/// RECEIPT. Repeatable `--env` pairs land on the dry-run `cmd:` line as
-/// shell-quoted `KEY='VAL'` stamps the supervisor child inherits.
+/// RECEIPT. Repeatable `--env` pairs and `--timeout` land on the dry-run
+/// command as shell-quoted stamps the supervisor child inherits.
 #[test]
 fn env_pairs_ride_the_dry_run_cmd_line() {
     let fixture = Fixture::new("pairs");
-    let output = fixture.run(&["--env", "A=1", "--env", "B=two words"]);
+    let output = fixture.run(&["--timeout", "5", "--env", "A=1", "--env", "B=two words"]);
     assert!(
         output.status.success(),
         "{}",
@@ -113,6 +113,7 @@ fn env_pairs_ride_the_dry_run_cmd_line() {
     let cmd = cmd_line(&output);
     assert!(cmd.contains("A='1'"), "cmd: {cmd}");
     assert!(cmd.contains("B='two words'"), "cmd: {cmd}");
+    assert!(cmd.contains("BOOP_LANE_TIMEOUT_SECS='5'"), "cmd: {cmd}");
 }
 
 /// RECEIPT. A `--env` with no `=` fails the clap value_parser, naming the

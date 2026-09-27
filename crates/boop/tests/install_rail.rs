@@ -244,8 +244,15 @@ fn a_lane_spawn_names_the_binary_that_ran_it() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let stderr = String::from_utf8_lossy(&out.stderr);
     assert!(out.status.success(), "stdout: {stdout}\nstderr: {stderr}");
+    assert_eq!(
+        stderr.lines().next(),
+        Some("deprecated: use `boop job`, `boop mail`, or `boop me`")
+    );
     // The first log line of the spawn, before anything is opened.
-    let first = stderr.lines().next().unwrap_or_default();
+    let first = stderr
+        .lines()
+        .find(|line| line.contains("lane create resolved"))
+        .unwrap_or_default();
     // The pane formatter wraps every field name in colour codes, so the name
     // and its value are asserted separately.
     assert!(first.contains("lane create resolved"), "stderr: {stderr}");

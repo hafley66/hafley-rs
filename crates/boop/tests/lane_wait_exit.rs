@@ -74,6 +74,146 @@ fn kill_stops_the_session_and_retains_the_route_for_inspection() {
     let _ = tmux_at(&tmux_tmpdir, socket, &["kill-server"]);
 }
 
+#[test]
+fn attach_on_a_pane_less_job_reports_the_job_name() {
+    let dir = mail_dir("attach-pane-less");
+    let route = boop_store::bus::route_from_value(&serde_json::json!({
+        "kind": "lane",
+        "harness": "codex",
+    }));
+    boop_store::bus::write_route(&dir, "job-no-pane", &route).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args(["job", "attach", "job-no-pane", "--mail-dir"])
+        .arg(&dir)
+        .boop_test_root(dir.join("home"))
+        .output()
+        .unwrap();
+
+    assert!(!output.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&output.stderr).trim(),
+        "Error: job `job-no-pane` has no pane to attach"
+    );
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn rm_forgets_the_route_and_leaves_a_live_pane_running() {
+    let dir = mail_dir("rm-route-only");
+    let tmux_tmpdir = PathBuf::from("/tmp").join(format!("brm-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmux_tmpdir);
+    std::fs::create_dir_all(&tmux_tmpdir).unwrap();
+    let started = tmux_at(
+        &tmux_tmpdir,
+        None,
+        &["new-session", "-d", "-s", "job-rm-live", "sleep 30"],
+    );
+    assert!(
+        started.status.success(),
+        "{}",
+        String::from_utf8_lossy(&started.stderr)
+    );
+    let route = boop_store::bus::route_from_value(&serde_json::json!({
+        "kind": "lane",
+        "tmux": "job-rm-live",
+    }));
+    boop_store::bus::write_route(&dir, "job-rm-live", &route).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args(["job", "rm", "job-rm-live", "--mail-dir"])
+        .arg(&dir)
+        .env("TMUX_TMPDIR", &tmux_tmpdir)
+        .boop_test_root(dir.join("home"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!boop_store::bus::read_routes(&dir)
+        .unwrap()
+        .contains_key("job-rm-live"));
+    assert!(
+        tmux_at(&tmux_tmpdir, None, &["has-session", "-t", "job-rm-live"])
+            .status
+            .success()
+    );
+    let _ = tmux_at(&tmux_tmpdir, None, &["kill-server"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+#[test]
+fn signal_children_reaches_live_children_and_skips_a_dead_route() {
+    let dir = mail_dir("signal-children");
+    let tmux_tmpdir = PathBuf::from("/tmp").join(format!("bsignal-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&tmux_tmpdir);
+    std::fs::create_dir_all(&tmux_tmpdir).unwrap();
+    for lane in ["job-signal-a", "job-signal-b"] {
+        let started = tmux_at(
+            &tmux_tmpdir,
+            None,
+            &["new-session", "-d", "-s", lane, "sleep 30"],
+        );
+        assert!(
+            started.status.success(),
+            "{}",
+            String::from_utf8_lossy(&started.stderr)
+        );
+        let route = boop_store::bus::route_from_value(&serde_json::json!({
+            "kind": "lane",
+            "tmux": lane,
+            "parent": "coordinator",
+        }));
+        boop_store::bus::write_route(&dir, lane, &route).unwrap();
+    }
+    let dead = boop_store::bus::route_from_value(&serde_json::json!({
+        "kind": "lane",
+        "tmux": "job-signal-dead",
+        "parent": "coordinator",
+    }));
+    boop_store::bus::write_route(&dir, "job-signal-dead", &dead).unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_boop"))
+        .args([
+            "job",
+            "signal",
+            "TERM",
+            "--children",
+            "--as",
+            "coordinator",
+            "--mail-dir",
+        ])
+        .arg(&dir)
+        .env("TMUX_TMPDIR", &tmux_tmpdir)
+        .boop_test_root(dir.join("home"))
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("job-signal-a"), "{stdout}");
+    assert!(stdout.contains("job-signal-b"), "{stdout}");
+    assert!(
+        stdout.contains("skipped job-signal-dead: pane is not live"),
+        "{stdout}"
+    );
+    for lane in ["job-signal-a", "job-signal-b"] {
+        assert!(
+            !tmux_at(&tmux_tmpdir, None, &["has-session", "-t", lane])
+                .status
+                .success(),
+            "signal did not end {lane}"
+        );
+    }
+    let _ = tmux_at(&tmux_tmpdir, None, &["kill-server"]);
+    let _ = std::fs::remove_dir_all(dir);
+}
+
 /// `boop wait <lane>` dispatches to the lane-result wait only when the
 /// registry already names `lane` as a `kind: "lane"` route.
 fn seed_lane_route(dir: &std::path::Path, lane: &str) {
