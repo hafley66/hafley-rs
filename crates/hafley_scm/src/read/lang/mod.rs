@@ -8,6 +8,27 @@
 //! (cst likewise + type/call/df via oxc); anything else with a linked grammar
 //! falls to `FallbackSource` (cst-only).
 
+use crate::read::types::ContentId;
+use crate::span::Span;
+
+/// One resolved reference shared by checker tiers with the same wire shape.
+#[derive(Clone, Debug)]
+pub struct CheckerRef {
+    pub start: u32,
+    pub end: u32,
+    pub name: String,
+    pub dst_path: String,
+    pub dst_name: String,
+    pub dst_offset: u32,
+}
+
+/// The checker's resolution for a reference into or outside the corpus.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckerAnswer {
+    Corpus(ContentId, Span),
+    External,
+}
+
 #[path = "0_call_kinds.rs"]
 pub mod call_kinds;
 #[cfg(feature = "commonlisp")]

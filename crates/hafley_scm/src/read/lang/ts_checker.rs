@@ -8,32 +8,10 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+pub use super::{CheckerAnswer as TsCheckerAnswer, CheckerRef as TsCheckerRef};
 use crate::read::shape::FamilyTag;
 use crate::read::types::{ContentId, DefIndex, DefSite};
 use hafley_scm::span::Span;
-
-/// One resolved reference. Offsets are the UTF-8 byte offset `to_span` writes;
-/// the driver converts out of TypeScript's UTF-16 positions before emitting.
-#[derive(Clone, Debug)]
-pub struct TsCheckerRef {
-    pub start: u32,
-    pub end: u32,
-    pub name: String,
-    /// Empty when the checker resolved the reference OUTSIDE the resolve
-    /// universe: `lib.d.ts`, a dependency, a file this run was not handed.
-    pub dst_path: String,
-    pub dst_name: String,
-    /// The declaration identifier's offset: several defs in one file share a name.
-    pub dst_offset: u32,
-}
-
-/// What the checker knows about one reference. `External` is knowledge, not
-/// absence: no corpus edge exists, so no name-match leg may invent one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TsCheckerAnswer {
-    Corpus(ContentId, Span),
-    External,
-}
 
 /// The driver's return: resolved references per referring file, plus the two
 /// costs the tier is judged on separately.

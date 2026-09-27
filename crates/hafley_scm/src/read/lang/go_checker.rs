@@ -2,44 +2,20 @@
 //! answers the DESTINATION of a reference this crate's parse found; caller,
 //! site spans and drops stay ours.
 //!
-//! A per-lang copy of `ts_checker`, the way the resolve arms are. The join runs
-//! as a project post-pass rather than inside the go arm, so one tier reaches
-//! both go families without the arm carrying a second resolution order.
+//! The join runs as a project post-pass rather than inside the go arm, so one
+//! tier reaches both go families without the arm carrying a second resolution order.
 
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+pub use super::{CheckerAnswer as GoCheckerAnswer, CheckerRef as GoCheckerRef};
 use crate::read::shape::{FamilyTag, NodeRef};
 use crate::read::types::{
     CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ProjectEdge, ResolutionOrigin, RyiOutput,
     TypeF,
 };
 use hafley_scm::span::Span;
-
-/// One resolved reference. Offsets are the UTF-8 byte offset `to_span` writes,
-/// which is also what `go/token.Position.Offset` counts.
-#[derive(Clone, Debug)]
-pub struct GoCheckerRef {
-    pub start: u32,
-    pub end: u32,
-    pub name: String,
-    /// Empty when the checker resolved the reference OUTSIDE the resolve
-    /// universe: the standard library, a dependency, a file this run was not
-    /// handed.
-    pub dst_path: String,
-    pub dst_name: String,
-    /// The declaration identifier's offset: several defs in one file share a name.
-    pub dst_offset: u32,
-}
-
-/// What the checker knows about one reference. `External` is knowledge, not
-/// absence: no corpus edge exists, so no name-match leg may invent one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum GoCheckerAnswer {
-    Corpus(ContentId, Span),
-    External,
-}
 
 /// The driver's return: resolved references per referring file, plus the two
 /// costs the tier is judged on separately.
