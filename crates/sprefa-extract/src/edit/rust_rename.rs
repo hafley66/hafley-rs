@@ -263,9 +263,11 @@ impl Corpus {
             let Some(text) = cx.text(rel) else {
                 continue;
             };
-            // A file that never spells the name seats it nowhere, and a re-export
-            // chain writes the name at every hop, so the filter drops no seat.
-            if !text.contains(old) {
+            // A file that never spells the name can still forward it through a
+            // public glob, whose item syntax has no token for the forwarded name.
+            let carries_name = text.contains(old);
+            let may_forward_glob = !carries_name && text.contains("use") && text.contains('*');
+            if !carries_name && !may_forward_glob {
                 continue;
             }
             let line_starts = build_line_starts(&text);
@@ -286,6 +288,14 @@ impl Corpus {
             }) else {
                 continue;
             };
+            if !carries_name
+                && !scanned
+                    .uses
+                    .iter()
+                    .any(|leaf| leaf.exported && matches!(leaf.kind, LeafKind::Glob))
+            {
+                continue;
+            }
             homes.insert(
                 rel.to_string(),
                 path_mods
@@ -352,7 +362,10 @@ impl Corpus {
                 for home in self.homes_of(rel) {
                     for leaf in &scan.uses {
                         if !leaf.exported
-                            || !matches!(leaf.kind, LeafKind::Name | LeafKind::SelfName)
+                            || !matches!(
+                                leaf.kind,
+                                LeafKind::Name | LeafKind::SelfName | LeafKind::Glob
+                            )
                         {
                             continue;
                         }
@@ -2144,7 +2157,13 @@ fn owning_root(rel: &str, roots: &BTreeSet<String>) -> Option<String> {
     roots
         .iter()
         .filter(|root| rel == root.as_str() || under(rel, dirname(root)))
-        .max_by_key(|root| (rel == root.as_str(), dirname(root).len()))
+        .max_by_key(|root| {
+            (
+                rel == root.as_str(),
+                dirname(root).len(),
+                root.rsplit('/').next() == Some("lib.rs"),
+            )
+        })
         .cloned()
 }
 
