@@ -44,13 +44,13 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
     let mut files = Vec::new();
     for token in &tokens {
         let path = token;
-        if path.is_dir() {
+        if sprefa_extract::io_path(path).is_dir() {
             files.extend(walk(path, &inputs.patterns)?);
-        } else if path.exists() {
+        } else if sprefa_extract::io_path(path).exists() {
             files.push(path.clone());
         } else if is_glob(&token.to_string_lossy()) {
             let (base, rest) = split_glob(&token.to_string_lossy());
-            if !base.is_dir() {
+            if !sprefa_extract::io_path(&base).is_dir() {
                 return Err(format!("{} matched nothing", token.display()));
             }
             let found = walk(&base, &[rest])?;
@@ -76,7 +76,12 @@ pub fn expand(inputs: &Inputs) -> Result<Vec<PathBuf>, String> {
             .map_err(|error| error.to_string())?;
     }
     let mut seen = HashSet::new();
-    files.retain(|path| seen.insert(std::fs::canonicalize(path).unwrap_or_else(|_| path.clone())));
+    files.retain(|path| {
+        seen.insert(
+            std::fs::canonicalize(sprefa_extract::io_path(path))
+                .unwrap_or_else(|_| sprefa_extract::io_path(path)),
+        )
+    });
     Ok(files)
 }
 
@@ -87,7 +92,7 @@ pub fn root(inputs: &Inputs) -> PathBuf {
         return root.clone();
     }
     if let [only] = inputs.paths.as_slice() {
-        if only.is_dir() {
+        if sprefa_extract::io_path(only).is_dir() {
             return only.clone();
         }
     }
@@ -106,11 +111,12 @@ pub fn git_root_of_cwd() -> Result<PathBuf, Box<dyn std::error::Error>> {
 /// Every roster-claimed file under `dir` that matches `patterns` (relative to
 /// `dir`; empty means all), spelled `dir` joined with its path below `dir`.
 fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
+    let io_dir = sprefa_extract::io_path(dir);
     let discovered =
-        sprefa_extract::trace::stage_span("discover").in_scope(|| soopy::discover(dir));
+        sprefa_extract::trace::stage_span("discover").in_scope(|| soopy::discover(&io_dir));
     let mut found: Vec<PathBuf> = match discovered {
         Ok(repository) => {
-            let absolute = std::fs::canonicalize(dir)
+            let absolute = std::fs::canonicalize(&io_dir)
                 .map_err(|error| format!("{}: {error}", dir.display()))?;
             let below = absolute
                 .strip_prefix(&repository.root)
@@ -157,7 +163,7 @@ fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
                 .collect()
         }
         Err(_) => {
-            let mut root = soopy::DirectoryRoot::open(dir)
+            let mut root = soopy::DirectoryRoot::open(&io_dir)
                 .map_err(|error| format!("{}: {error:#}", dir.display()))?;
             let query = soopy::FileQuery {
                 patterns: patterns
@@ -233,13 +239,13 @@ fn project_dir(entry: &Path) -> PathBuf {
         };
         if ["Cargo.toml", "package.json", "go.mod"]
             .iter()
-            .any(|marker| at_or_dot.join(marker).is_file())
+            .any(|marker| sprefa_extract::io_path(&at_or_dot.join(marker)).is_file())
         {
             return at_or_dot.to_path_buf();
         }
         dir = at.parent();
     }
-    soopy::discover(start)
+    soopy::discover(sprefa_extract::io_path(start))
         .map(|repository| repository.root)
         .unwrap_or_else(|_| start.to_path_buf())
 }

@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: bug
-status: open
+status: fixed
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -27,3 +27,5 @@ Lane D law for kotlin: a navigation call whose receiver K1 could not type gets n
 ### 2026-09-18T14:43:12Z · @claude
 
 K1 (merged a2158735) already landed the law: kotlin.rs resolve arm returns None for Inferred/Ambiguous/Shadowed receivers with no module_plane or corpus_unique fallback; shadowed() deleted, replaced by receiver-plane Shadowed rows (7dc7b1a7); call_drops reasons inferred/no_corpus_def/ambiguous; CTF histograms in plans/reviews/2026-09-18-lane-k1-kotlin-receivers-REPORT.md. Remaining scope: tests/138_untyped_receiver_kotlin.rs mirroring 135/136 (test-only).
+
+Receipt: `t_138_untyped_receiver_kotlin::untyped_receiver_member_call_declines` passes.

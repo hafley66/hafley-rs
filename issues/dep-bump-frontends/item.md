@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-19
 type: chore
-status: open
+status: needs-decision
 priority: normal
 epic: extract-parity-move-rename
 related: ['@kind-vocab-constraint', '@default-families-no-conditional']
@@ -70,3 +70,11 @@ a regression, and the two look identical in a regeneration.
 - [ ] every moved golden has its diff read and the reason recorded, no blanket regeneration
 - [ ] `cargo test --features cli --no-fail-fast`, zero failures
 - [ ] the three receipt counts from @default-families-no-conditional re-measured and recorded, since a grammar bump moves them
+
+## Plan
+
+First bump ast-grep and OXC with the resolver pins, regenerate the call-kind table from the resulting grammars, and review every changed golden row against its fixture source; keep the `syn` 2-to-3 migration separable if it forces wider AST changes, then remeasure the three default-family receipts on the same corpus.
+
+## Decisions
+
+Should the major `syn` 3 migration remain in this dependency lane, or split from the ast-grep/OXC/ra_ap bumps?

@@ -1,5 +1,4 @@
 // Generated for ryii from the Ryi HTTP operations and @daemon options.
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
@@ -116,7 +115,7 @@ macro_rules! stream_handler {
         async fn $handler(Json(request): Json<Request>) -> Response {
             let root = request.request_root.clone();
             tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-            let args: $args = match request.decode($verb) { Ok(args) => args, Err(error) => return bad_request(error) };
+            let args: $args = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
             let diagnostics = Arc::new(Mutex::new(Vec::new()));
             let items = crate::ops::with_request_context(root, Some(diagnostics.clone()), || crate::ops::$op(&args));
             jsonl_response(items, diagnostics).await
@@ -128,7 +127,7 @@ macro_rules! raw_handler {
         async fn $handler(Json(request): Json<Request>) -> Response {
             let root = request.request_root.clone();
             tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-            let args: $args = match request.decode($verb) { Ok(args) => args, Err(error) => return bad_request(error) };
+            let args: $args = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
             let diagnostics = Arc::new(Mutex::new(Vec::new()));
             let captured = diagnostics.clone();
             let out = tokio::task::spawn_blocking(move || crate::ops::with_request_context(root, Some(captured), || crate::ops::$op(&args))).await;
@@ -186,7 +185,7 @@ async fn extract(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: ExtractArgs = match request.decode("extract") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: ExtractArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -221,7 +220,7 @@ async fn fast(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: FastArgs = match request.decode("fast") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: FastArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -256,7 +255,7 @@ async fn slow(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: SlowArgs = match request.decode("slow") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: SlowArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -291,7 +290,7 @@ async fn scip(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: ScipArgs = match request.decode("scip") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: ScipArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -326,7 +325,7 @@ async fn graph(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: GraphArgs = match request.decode("graph") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: GraphArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -361,7 +360,7 @@ async fn query(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: QueryArgs = match request.decode("query") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: QueryArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -396,7 +395,7 @@ async fn region(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: RegionArgs = match request.decode("region") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: RegionArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();
@@ -431,7 +430,7 @@ async fn ingest(headers: HeaderMap, body: Body) -> Response {
     };
     let root = request.request_root.clone();
     tracing::Span::current().record("request_root", &tracing::field::display(root.display()));
-    let args: IngestArgs = match request.decode("ingest") { Ok(args) => args, Err(error) => return bad_request(error) };
+    let args: IngestArgs = match request.decode() { Ok(args) => args, Err(error) => return bad_request(error) };
 
     let diagnostics = Arc::new(Mutex::new(Vec::new()));
     let captured = diagnostics.clone();

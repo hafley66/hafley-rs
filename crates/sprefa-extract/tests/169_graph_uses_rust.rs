@@ -36,6 +36,8 @@ fn rust_function_and_method_signatures_are_type_uses() {
         [
             ("default", "param"),
             ("default", "returns"),
+            ("make", "returns"),
+            ("make", "uses"),
             ("method", "param"),
             ("method", "returns"),
             ("read", "param"),

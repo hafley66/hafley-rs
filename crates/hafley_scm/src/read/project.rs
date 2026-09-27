@@ -1428,6 +1428,7 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
 /// The `symbol`/`occurrence`/`local` rows fast reads straight out of
 /// `queries/<lang>/scip.scm`. A language with no query yet contributes none.
 fn scm_rows(paths: &[PathBuf], inputs: &[ProjectInput]) -> Result<Vec<FlatFact>, ProjectError> {
+    let io_root = crate::read::request_io_root();
     let captured: std::collections::HashMap<&str, &crate::read::lang::scm_rows::ScmCaptures> =
         inputs
             .iter()
@@ -1442,8 +1443,11 @@ fn scm_rows(paths: &[PathBuf], inputs: &[ProjectInput]) -> Result<Vec<FlatFact>,
                 let name = path.to_string_lossy();
                 match captured.get(name.as_ref()) {
                     Some(captures) => Ok(captures.facts(&name)),
-                    None => crate::read::scm_facts(std::slice::from_ref(path))
-                        .map_err(|error| ProjectError::Scm(error.to_string())),
+                    None => crate::read::lang::scm_rows::scm_facts_at(
+                        std::slice::from_ref(path),
+                        io_root.as_deref(),
+                    )
+                    .map_err(|error| ProjectError::Scm(error.to_string())),
                 }
             })
             .collect()
@@ -1518,6 +1522,7 @@ pub fn diet_scip_streamed<E>(
     for fact in resolved {
         push(DietRow::Resolved(fact)).map_err(ResolveWithRawError::RawSink)?;
     }
+    let io_root = crate::read::request_io_root();
     for chunk in paths.chunks(READ_CHUNK_FILES) {
         let owned: Vec<(&PathBuf, Option<crate::read::lang::scm_rows::ScmCaptures>)> = chunk
             .iter()
@@ -1528,8 +1533,11 @@ pub fn diet_scip_streamed<E>(
                 .par_iter()
                 .map(|(path, captured)| match captured {
                     Some(captures) => Ok(captures.facts(&path.to_string_lossy())),
-                    None => crate::read::scm_facts(std::slice::from_ref(*path))
-                        .map_err(|error| ProjectError::Scm(error.to_string())),
+                    None => crate::read::lang::scm_rows::scm_facts_at(
+                        std::slice::from_ref(*path),
+                        io_root.as_deref(),
+                    )
+                    .map_err(|error| ProjectError::Scm(error.to_string())),
                 })
                 .collect()
         });
@@ -1589,8 +1597,9 @@ fn visit_fast_inputs<E>(
     paths: &[PathBuf],
     on_input: &mut impl FnMut(ProjectInput) -> Result<(), ResolveWithRawError<E>>,
 ) -> Result<(), ResolveWithRawError<E>> {
+    let io_root = crate::read::request_io_root();
     for chunk in paths.chunks(8) {
-        for result in read_chunk(chunk, false, Planes::Fast) {
+        for result in read_chunk(chunk, false, Planes::Fast, io_root.as_deref()) {
             if let Some(input) = result.map_err(ResolveWithRawError::Project)? {
                 on_input(input)?;
             }
@@ -1677,13 +1686,17 @@ fn diet_scip_bounded<E>(
         }
         Ok(())
     })?;
+    let io_root = crate::read::request_io_root();
     for chunk in paths.chunks(8) {
         let rows: Vec<Result<Vec<FlatFact>, ProjectError>> = EXTRACT_POOL.install(|| {
             chunk
                 .par_iter()
                 .map(|path| {
-                    crate::read::scm_facts(std::slice::from_ref(path))
-                        .map_err(|error| ProjectError::Scm(error.to_string()))
+                    crate::read::lang::scm_rows::scm_facts_at(
+                        std::slice::from_ref(path),
+                        io_root.as_deref(),
+                    )
+                    .map_err(|error| ProjectError::Scm(error.to_string()))
                 })
                 .collect()
         });
@@ -1879,7 +1892,12 @@ fn read_inputs_plain(
     modules: bool,
     planes: Planes,
 ) -> Result<Vec<ProjectInput>, ProjectError> {
-    flatten_inputs(read_chunk(paths, modules, planes))
+    flatten_inputs(read_chunk(
+        paths,
+        modules,
+        planes,
+        crate::read::request_io_root().as_deref(),
+    ))
 }
 
 /// Files per streamed chunk for mixed-language reads: the bound on how many
@@ -1896,6 +1914,7 @@ pub fn read_inputs_streamed<E>(
     planes: Planes,
     on_input: &mut impl FnMut(&mut ProjectInput) -> Result<(), ResolveWithRawError<E>>,
 ) -> Result<Vec<ProjectInput>, ResolveWithRawError<E>> {
+    let io_root = crate::read::request_io_root();
     let mut inputs = Vec::with_capacity(paths.len());
     let chunk_files = if matches!(planes, Planes::Fast) {
         8
@@ -1912,7 +1931,10 @@ pub fn read_inputs_streamed<E>(
         let (chunks, landed) = std::sync::mpsc::sync_channel(1);
         scope.spawn(move || {
             for chunk in paths.chunks(chunk_files) {
-                if chunks.send(read_chunk(chunk, modules, planes)).is_err() {
+                if chunks
+                    .send(read_chunk(chunk, modules, planes, io_root.as_deref()))
+                    .is_err()
+                {
                     break;
                 }
             }
@@ -1939,13 +1961,21 @@ fn read_chunk(
     paths: &[PathBuf],
     modules: bool,
     planes: Planes,
+    io_root: Option<&Path>,
 ) -> Vec<Result<Option<ProjectInput>, ProjectError>> {
     // Largest file first, so the longest parse never starts last and leaves the
     // other workers idle; results go back to path order below.
     let mut order: Vec<(u64, usize)> = paths
         .iter()
         .enumerate()
-        .map(|(index, path)| (std::fs::metadata(path).map_or(0, |meta| meta.len()), index))
+        .map(|(index, path)| {
+            let file = if path.is_absolute() {
+                path.to_path_buf()
+            } else {
+                io_root.map_or_else(|| path.clone(), |root| root.join(path))
+            };
+            (std::fs::metadata(file).map_or(0, |meta| meta.len()), index)
+        })
         .collect();
     order.sort_unstable_by(|left, right| right.cmp(left));
     let mut indexed: Vec<(usize, Result<Option<ProjectInput>, ProjectError>)> = EXTRACT_POOL
@@ -1958,7 +1988,12 @@ fn read_chunk(
                     (
                         index,
                         (|| {
-                            let content = std::fs::read(path)
+                            let file = if path.is_absolute() {
+                                path.clone()
+                            } else {
+                                io_root.map_or_else(|| path.clone(), |root| root.join(path))
+                            };
+                            let content = std::fs::read(file)
                                 .map_err(|err| ProjectError::Read(path.clone(), err))?;
                             let path = path.to_string_lossy().to_string();
                             let size_skip = if matches!(planes, Planes::Fast)

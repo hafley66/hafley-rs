@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-20
 type: feature
-status: open
+status: needs-decision
 priority: normal
 epic: extract-parity-move-rename
 related: ['@default-families-no-conditional', '@lab-scopegraph-queries']
@@ -81,7 +81,8 @@ into a `NodeKind` enum per language, hand-rolled, no external crate.
 
 ## Decisions
 
+Should this crate upgrade its pinned tree-sitter runtime from 0.25 to 0.26 for type-sitter, or should the task use a generator that supports the current runtime?
+
 ### 2026-09-20T18:00:37Z · @chris
 
 buy the library that auto-generates node-kind enums per language; no bespoke build; every reference to sprefa v5 is deleted, v5 is dead
-

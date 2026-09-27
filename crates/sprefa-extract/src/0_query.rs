@@ -77,13 +77,13 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
 fn source_bytes(path: &Path, digest: Option<&str>) -> Result<Vec<u8>, String> {
     match digest {
         Some(oid) => cat_blob(path, oid),
-        None => std::fs::read(path)
+        None => std::fs::read(sprefa_extract::io_path(path))
             .map_err(|error| format!("query input '{}': {error}", path.display())),
     }
 }
 
 fn cat_blob(path: &Path, oid: &str) -> Result<Vec<u8>, String> {
-    let repository = soopy::discover(path.parent().unwrap_or(path))
+    let repository = soopy::discover(sprefa_extract::io_path(path.parent().unwrap_or(path)))
         .map_err(|error| one_line_text(format!("git cat-file blob {oid}: {error}")))?;
     let mut batch = soopy::GitBatch::open(&repository.root)
         .map_err(|error| one_line_text(format!("git cat-file blob {oid}: {error}")))?;

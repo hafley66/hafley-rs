@@ -6,6 +6,10 @@
 /// Pinned to sprefa-extract/Cargo.toml by tests/111_cli_identity.rs.
 pub const RYI_VERSION: &str = "0.1.0";
 
+#[path = "0_request_root.rs"]
+mod request_root;
+pub use request_root::{io_path, request_io_root, with_io_root};
+
 pub mod cache;
 pub mod cfg;
 pub mod cpg_decode;

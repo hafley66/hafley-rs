@@ -716,7 +716,8 @@ fn run_file_verb(
     writer: Box<dyn Write + Send>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let _budget = IndexBudget::scoped_override(cli.scip_timeout.filter(|secs| *secs > 0));
-    cli.paths = inputs::expand(&cli.inputs)?;
+    cli.paths =
+        inputs::expand(&cli.inputs).map_err(|error| RyiExit::new(2, format!("ryi: {error}")))?;
     let root_only = cli.scip_deps || cli.deps || cli.package_deps;
     if cli.paths.is_empty() && !root_only {
         return Err(RyiExit::new(

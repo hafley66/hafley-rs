@@ -400,10 +400,11 @@ fn crate_libs(
         corpus.iter().map(|(path, _)| path.as_str()).collect();
     let mut out = HashMap::new();
     for root in roots {
-        let Some(parsed) = std::fs::read_to_string(std::path::Path::new(&root).join("Cargo.toml"))
-            .ok()
-            .and_then(|text| CargoManifest::parse(&text))
-        else {
+        let Some(parsed) = std::fs::read_to_string(crate::read::io_path(
+            &std::path::Path::new(&root).join("Cargo.toml"),
+        ))
+        .ok()
+        .and_then(|text| CargoManifest::parse(&text)) else {
             continue;
         };
         let lib = lexical(&std::path::Path::new(&root).join(parsed.lib_path()));
@@ -912,7 +913,9 @@ fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String>
                 known
                     .entry(dir.to_path_buf())
                     .or_insert_with(|| {
-                        let text = std::fs::read_to_string(dir.join("Cargo.toml")).ok()?;
+                        let text =
+                            std::fs::read_to_string(crate::read::io_path(&dir.join("Cargo.toml")))
+                                .ok()?;
                         let manifest: serde_json::Value = basic_toml::from_str(&text).ok()?;
                         manifest.get("package").map(|_| lexical(dir))
                     })
@@ -929,7 +932,10 @@ fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String>
 /// `workspace = true` entries read through the nearest `[workspace]` above.
 fn crate_deps_of(crate_dirs: &HashMap<String, String>) -> HashMap<String, CrateDeps> {
     let read = |dir: &std::path::Path| -> Option<serde_json::Value> {
-        basic_toml::from_str(&std::fs::read_to_string(dir.join("Cargo.toml")).ok()?).ok()
+        basic_toml::from_str(
+            &std::fs::read_to_string(crate::read::io_path(&dir.join("Cargo.toml"))).ok()?,
+        )
+        .ok()
     };
     let mut out = HashMap::new();
     for dir in crate_dirs.values().collect::<BTreeSet<_>>() {
