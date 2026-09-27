@@ -4,6 +4,8 @@
 
 #[path = "0_remind_cli.rs"]
 mod t0_remind_cli;
+#[path = "1_reminder.rs"]
+mod t1_reminder;
 
 #[path = "boop_start_warm.rs"]
 mod boop_start_warm;

@@ -1606,6 +1606,7 @@ fn lane_expect(args: &LaneArgs) -> boop::trail::Expect {
 
 pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
     match cmd {
+        BeepCmd::Remind { cmd } => crate::cli::reminder::run(registry, cmd),
         BeepCmd::Harness { cmd } => match cmd {
             HarnessCmd::List => run_harnesses(registry),
             HarnessCmd::Get { harness } => run_harness_get(registry, &harness),

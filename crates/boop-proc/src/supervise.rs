@@ -666,6 +666,21 @@ pub fn pending(dir: &Path, lane: &str, seen: &BTreeSet<String>) -> Result<Vec<Ha
         .collect())
 }
 
+/// A reminder held behind an active turn can expire before its resume turn.
+/// Recheck the mailbox projection at that boundary.
+fn retain_active_reminders(dir: &Path, held: &mut Vec<Hail>) -> Result<()> {
+    if held.iter().any(|hail| hail.from.starts_with("reminder:")) {
+        let messages = bus::read_messages(dir)?;
+        held.retain(|hail| {
+            !hail.from.starts_with("reminder:")
+                || messages
+                    .iter()
+                    .any(|message| message.id == hail.id && message.to_timestamp.is_none())
+        });
+    }
+    Ok(())
+}
+
 /// A lane acts on requests and hails. Its own dispatch row and result rows are
 /// bookkeeping and would loop straight back into the agent's context.
 fn deliverable(kind: &str) -> bool {
@@ -875,9 +890,8 @@ struct TraceRecorder {
 }
 
 impl TraceRecorder {
-    fn new(lane: &str) -> Self {
-        let store = boop_store::Store::default_path()
-            .and_then(boop_store::Store::open)
+    fn new(lane: &str, dir: &Path) -> Self {
+        let store = bus::open_store(dir)
             .map_err(|error| {
                 warn!(lane, error = %error, "open trace event store failed");
             })
@@ -950,7 +964,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         resume = lane.resume.as_deref().unwrap_or_default(),
     )
     .entered();
-    let mut events = TraceRecorder::new(&lane.lane);
+    let mut events = TraceRecorder::new(&lane.lane, &lane.mail_dir);
     events.record(
         "supervisor-start",
         TraceRecorder::session(channel),
@@ -1221,6 +1235,7 @@ fn supervise(
         "lane channel opened",
     );
     loop {
+        let mut inflight_reminders = Vec::new();
         info!(turn_bytes = turn.len(), "lane turn starting");
         turn_tools.clear();
         record_residency(&lane.mail_dir, &lane.lane, RESIDENCY_LIVE);
@@ -1261,6 +1276,9 @@ fn supervise(
         }
         for hail in opening_hails.drain(..) {
             record_delivery(events, &lane.mail_dir, &hail, Delivery::NextTurn);
+            if hail.from.starts_with("reminder:") {
+                inflight_reminders.push(hail);
+            }
         }
         remember_conversation(lane, channel);
         // One `gh pr view` per turn, not one per poll: the tool fact stays in
@@ -1487,6 +1505,9 @@ fn supervise(
                             "lane hail delivered"
                         );
                         record_delivery(events, &lane.mail_dir, &hail, Delivery::MidTurn);
+                        if hail.from.starts_with("reminder:") {
+                            inflight_reminders.push(hail.clone());
+                        }
                         events.record(
                             "delivery",
                             TraceRecorder::session(channel),
@@ -1512,6 +1533,9 @@ fn supervise(
                 }
             }
         };
+        for hail in &inflight_reminders {
+            record_hail_transition(events, hail, "turn-ended", end.detail());
+        }
         last_activity.set(std::time::Instant::now());
         // A fast turn can finish before the 700 ms poll drains the channel's
         // tool calls; read the rest so the PR producer still sees them.
@@ -1563,6 +1587,7 @@ fn supervise(
             }
             start_ack_pending = false;
             println!("[boop] startup acknowledged; submitting brief");
+            retain_active_reminders(&lane.mail_dir, &mut held)?;
             let arrived = std::mem::take(&mut held);
             opening_hails = arrived.clone();
             turn = std::iter::once(brief.clone())
@@ -1623,6 +1648,7 @@ fn supervise(
             record_hail_transition(events, &hail, "claimed-by-supervisor", "turn boundary");
             held.push(hail);
         }
+        retain_active_reminders(&lane.mail_dir, &mut held)?;
         // The marker: a waiter learns the brief is done as soon as it is, not
         // when the lane eventually exits. Written at most once per lane.
         if held.is_empty() && end.is_done() && !result_written {
@@ -3283,6 +3309,106 @@ mod tests {
     }
 
     #[test]
+    fn reminder_turn_end_receipt_lives_in_the_lane_mail_store() {
+        struct Channel {
+            dir: PathBuf,
+            count: usize,
+            texts: Vec<String>,
+        }
+        impl LaneChannel for Channel {
+            fn conversation_id(&self) -> Option<String> {
+                Some("reminder-fixture".into())
+            }
+            fn start_turn(&mut self, text: &str) -> Result<()> {
+                self.count += 1;
+                self.texts.push(text.into());
+                Ok(())
+            }
+            fn steer(&mut self, _: &str) -> Result<Delivery> {
+                Ok(Delivery::NextTurn)
+            }
+            fn close(&mut self) -> Result<()> {
+                Ok(())
+            }
+            fn next_event(&mut self, _: Duration) -> Result<Option<TurnEvent>> {
+                if self.count == 2 {
+                    let store = bus::open_store(&self.dir)?;
+                    let now = boop_acp::channel::now_ms() as i64;
+                    store.reminder_add(
+                        "receipt",
+                        "mine",
+                        "bounded reminder",
+                        1,
+                        now + 60_000,
+                        now,
+                    )?;
+                    store.reminder_claim("receipt", now + 1)?;
+                }
+                Ok(Some(if self.count == 3 {
+                    TurnEvent::failed("bounded fixture exit")
+                } else {
+                    TurnEvent::ok_with_receipt(
+                        "completed",
+                        TurnReceipt {
+                            text: "boop".into(),
+                            tool_calls: 0,
+                        },
+                    )
+                }))
+            }
+        }
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "coordinator");
+        let mut channel = Channel {
+            dir: dir.clone(),
+            count: 0,
+            texts: vec![],
+        };
+        assert_eq!(run(lane, &mut channel).unwrap(), 1);
+        assert_eq!(channel.count, 3);
+        assert!(channel.texts[2].contains("bounded reminder"));
+        let store = bus::open_store(&dir).unwrap();
+        let id = store.reminders().unwrap()[0].last_message.clone().unwrap();
+        assert_eq!(
+            store
+                .delivery_rows(&id)
+                .unwrap()
+                .iter()
+                .map(|row| row.outcome.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "appended",
+                "claimed-by-supervisor",
+                "submitted-to-harness",
+                "accepted-by-harness",
+                "turn-ended"
+            ]
+        );
+    }
+
+    #[test]
+    fn reminder_buffer_is_rechecked_at_turn_boundary() {
+        let dir = tempdir();
+        let _lane = parented_lane(&dir, "mine", "coordinator");
+        let store = bus::open_store(&dir).unwrap();
+        let now = boop_acp::channel::now_ms() as i64;
+        store
+            .reminder_add("held", "mine", "bounded reminder", 1, now + 60_000, now)
+            .unwrap();
+        let message = store.reminder_claim("held", now + 1).unwrap().unwrap();
+        let mut held = pending(&dir, "mine", &BTreeSet::new()).unwrap();
+        assert_eq!(held.len(), 1);
+        store.reminder_cancel("held").unwrap();
+        retain_active_reminders(&dir, &mut held).unwrap();
+        assert!(held.is_empty());
+        assert!(store
+            .delivery_rows(&message.id)
+            .unwrap()
+            .iter()
+            .all(|row| row.outcome != "accepted-by-harness"));
+    }
+
+    #[test]
     fn ack_stamps_the_row_so_the_next_read_skips_it() {
         let dir = tempdir();
         write_box(&dir, &[message("m1", "mine", "request")]);
@@ -4901,7 +5027,6 @@ mod tests {
     #[test]
     fn a_seeded_watch_does_not_repeat_a_warning_that_already_landed() {
         let dir = tempdir();
-        let lane = parented_lane(&dir, "mine", "coordinator");
         let mut warn = message("w1", "coordinator", HARNESS_QUIET);
         warn.from = "mine".into();
         warn.from_timestamp = "2026-09-14T00:00:01.000Z".into();

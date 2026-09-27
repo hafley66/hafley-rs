@@ -17,6 +17,8 @@ pub mod ident;
 pub mod proc;
 #[cfg(feature = "agent-read")]
 pub mod query;
+#[path = "1_reminder.rs"]
+pub mod reminder;
 pub mod rows;
 pub mod runtime;
 pub mod session;

@@ -850,6 +850,11 @@ fn supervised_lane(command: &SubCmd) -> Option<&str> {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum BeepCmd {
+    /// Expiring recurring reminders to existing routes.
+    Remind {
+        #[command(subcommand)]
+        cmd: cli::reminder::ReminderCmd,
+    },
     /// Harness adapters and what each can do.
     Harness {
         #[command(subcommand)]

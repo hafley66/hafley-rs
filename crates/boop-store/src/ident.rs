@@ -62,7 +62,8 @@ pub struct Store {
 /// message:%'`) stored as `user` are reclassified to `meta`.
 /// 35 = agent_turn.source_class distinguishes human input from harness injection.
 /// 36 = favorite-context and project-membership SQL views.
-pub const SCHEMA_VERSION: i64 = 36;
+/// 37 = durable expiring reminders over the mailbox.
+pub const SCHEMA_VERSION: i64 = 37;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -763,6 +764,9 @@ impl Store {
             self.connection
                 .execute_batch(COST_VIEW_SCHEMA)
                 .with_context(|| format!("initialise cost views at {}", path.display()))?;
+            self.connection
+                .execute_batch(crate::reminder::SCHEMA)
+                .with_context(|| format!("initialise reminder schedules at {}", path.display()))?;
             self.seed_moods()?;
             if self.schema_version()? == 0 {
                 self.connection.execute_batch(
@@ -1087,6 +1091,9 @@ impl Store {
                 self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
                 self.connection.execute_batch("PRAGMA user_version = 36;")?;
             }
+            if self.schema_version()? < 37 {
+                self.connection.execute_batch("PRAGMA user_version = 37;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1104,6 +1111,10 @@ impl Store {
     /// re-syncs from byte 0. Every table in `USER_AUTHORED` crosses the drop
     /// by value, ids and timestamps included.
     pub fn rebuild(&self) -> Result<()> {
+        anyhow::ensure!(
+            self.reminders()?.is_empty(),
+            "store has durable reminders; stop schedules before rebuilding the projection"
+        );
         let carried = self.carry_user_authored()?;
         let mut names = Vec::new();
         {
@@ -1123,6 +1134,7 @@ impl Store {
         self.connection.execute_batch(MAILBOX_SCHEMA)?;
         self.connection.execute_batch(COST_VIEW_SCHEMA)?;
         self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
+        self.connection.execute_batch(crate::reminder::SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
         self.restore_user_authored(&carried)?;

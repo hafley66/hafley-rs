@@ -474,6 +474,11 @@ pub fn deliver_hail_budgeted(
     paster: &dyn PanePaster,
     budget: &DoorBudget,
 ) -> Result<Landing> {
+    if !store.reminder_message_active(message, boop_harness::live::now_ms() as i64)? {
+        let landing = Landing::new(Rung::MailboxOnly, "reminder cancelled or expired");
+        landing.record(store, &message.id, &message.to, None)?;
+        return Ok(landing);
+    }
     let route = routes.get(message.to.as_str());
     let harness = route.and_then(|route| route.harness);
     // Admission spans the external call and its receipt, without keeping a
@@ -1130,7 +1135,12 @@ pub fn drain_route_held_mail_budgeted(
         let commit_retry = message.kind.commit_row()
             && message.detail.as_deref() != Some("done")
             && commit_push_mode(store, &routes, &message.to, &message.from) == CommitPush::Door;
-        if message.kind.lane_progress_row() && !commit_retry {
+        if message.kind.lane_progress_row() && !commit_retry
+            || message
+                .r#ref
+                .as_deref()
+                .is_some_and(|reference| reference.starts_with("reminder:"))
+        {
             continue;
         }
         let Ok(landing) =
@@ -1489,6 +1499,39 @@ mod tests {
             worktree_dir: None,
             app_server_socket: None,
         }
+    }
+
+    #[test]
+    fn cancelled_reminder_is_not_sent_or_retried_through_the_ladder() {
+        let dir = std::env::temp_dir().join(format!("boop-reminder-cancel-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let mut route = unbound_route(&dir);
+        route.harness = None;
+        bus::write_route(&dir, "recipient", &route).unwrap();
+        let store = bus::open_store(&dir).unwrap();
+        let now = boop_harness::live::now_ms() as i64;
+        store
+            .reminder_add("tick", "recipient", "bounded body", 1000, now + 60_000, now)
+            .unwrap();
+        let message = store.reminder_claim("tick", now + 1000).unwrap().unwrap();
+        store.reminder_cancel("tick").unwrap();
+        let registry = Registry::with(vec![]);
+        let routes = bus::routes_in(&store).unwrap();
+        let landing = deliver_hail_with(&registry, &store, &routes, &message, &NoPane).unwrap();
+        assert_eq!(landing.detail, "reminder cancelled or expired");
+        assert_eq!(
+            store
+                .delivery_rows(&message.id)
+                .unwrap()
+                .iter()
+                .map(|row| row.outcome.as_str())
+                .collect::<Vec<_>>(),
+            vec!["appended", "held-in-mailbox"]
+        );
+        assert!(bus::held_messages(&store, "recipient").unwrap().is_empty());
+        drop(store);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     /// RECEIPT. Same-cwd candidates cannot bind a route. An exact pane can.
