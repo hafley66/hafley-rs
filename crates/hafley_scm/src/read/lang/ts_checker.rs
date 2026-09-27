@@ -8,28 +8,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub use super::{CheckerAnswer as TsCheckerAnswer, CheckerRef as TsCheckerRef};
+pub use super::{
+    CheckerAnswer as TsCheckerAnswer, CheckerAnswers as TsCheckerAnswers,
+    CheckerRef as TsCheckerRef,
+};
 use crate::read::shape::FamilyTag;
 use crate::read::types::{ContentId, DefIndex, DefSite};
 use hafley_scm::span::Span;
-
-/// The driver's return: resolved references per referring file, plus the two
-/// costs the tier is judged on separately.
-#[derive(Default)]
-pub struct TsCheckerAnswers {
-    pub calls: HashMap<String, Vec<TsCheckerRef>>,
-    pub types: HashMap<String, Vec<TsCheckerRef>>,
-    /// The checker walk's own rows, ids run-local across the whole program. Empty
-    /// unless the caller asked for them: the walk is not free.
-    pub tsi: Vec<crate::read::tsi::FactOut>,
-    /// (relation, complete, diagnostic). A claim about the whole run, never a file.
-    pub coverage: Vec<(String, bool, Option<String>)>,
-    /// `ts.createProgram` over the supplied roots: parse, bind, module resolution.
-    pub load: Duration,
-    /// The per-file resolve walk over the loaded program.
-    pub walk: Duration,
-    pub files_answered: usize,
-}
 
 /// Why the tier could not run. Every one falls back to the syntax leg.
 #[derive(Debug)]

@@ -8,6 +8,10 @@
 //! (cst likewise + type/call/df via oxc); anything else with a linked grammar
 //! falls to `FallbackSource` (cst-only).
 
+use std::collections::HashMap;
+use std::time::Duration;
+
+use crate::read::tsi::FactOut;
 use crate::read::types::ContentId;
 use crate::span::Span;
 
@@ -27,6 +31,18 @@ pub struct CheckerRef {
 pub enum CheckerAnswer {
     Corpus(ContentId, Span),
     External,
+}
+
+/// The driver output shared by checker tiers with the same answer shape.
+#[derive(Default)]
+pub struct CheckerAnswers {
+    pub calls: HashMap<String, Vec<CheckerRef>>,
+    pub types: HashMap<String, Vec<CheckerRef>>,
+    pub tsi: Vec<FactOut>,
+    pub coverage: Vec<(String, bool, Option<String>)>,
+    pub load: Duration,
+    pub walk: Duration,
+    pub files_answered: usize,
 }
 
 #[path = "0_call_kinds.rs"]

@@ -9,31 +9,16 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-pub use super::{CheckerAnswer as GoCheckerAnswer, CheckerRef as GoCheckerRef};
+pub use super::{
+    CheckerAnswer as GoCheckerAnswer, CheckerAnswers as GoCheckerAnswers,
+    CheckerRef as GoCheckerRef,
+};
 use crate::read::shape::{FamilyTag, NodeRef};
 use crate::read::types::{
     CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ProjectEdge, ResolutionOrigin, RyiOutput,
     TypeF,
 };
 use hafley_scm::span::Span;
-
-/// The driver's return: resolved references per referring file, plus the two
-/// costs the tier is judged on separately.
-#[derive(Default)]
-pub struct GoCheckerAnswers {
-    pub calls: HashMap<String, Vec<GoCheckerRef>>,
-    pub types: HashMap<String, Vec<GoCheckerRef>>,
-    /// The checker walk's own rows, ids run-local across the whole program.
-    /// Empty unless the caller asked for them: the walk is not free.
-    pub tsi: Vec<crate::read::tsi::FactOut>,
-    /// (relation, complete, diagnostic). A claim about the whole run, never a file.
-    pub coverage: Vec<(String, bool, Option<String>)>,
-    /// `packages.Load` over the root: parse, type-check, module resolution.
-    pub load: Duration,
-    /// The per-file resolve walk over the loaded packages.
-    pub walk: Duration,
-    pub files_answered: usize,
-}
 
 /// Why the tier could not run. Every one falls back to the syntax leg.
 #[derive(Debug)]
