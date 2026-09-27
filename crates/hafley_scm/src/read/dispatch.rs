@@ -50,6 +50,7 @@ pub fn extracting_blob(content: &[u8]) -> Option<ContentId> {
 pub fn dispatch_uncached(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiOutput>> {
     let src = source_for(path)?;
     let span = tracing::info_span!(
+        target: "sprefa_extract",
         "extract_file",
         path,
         lang = src.name(),
@@ -71,6 +72,7 @@ pub fn dispatch(path: &str, content: &[u8], mask: FamilyMask) -> Option<Arc<RyiO
         return None;
     };
     let span = tracing::info_span!(
+        target: "sprefa_extract",
         "extract_file",
         path,
         lang = src.name(),

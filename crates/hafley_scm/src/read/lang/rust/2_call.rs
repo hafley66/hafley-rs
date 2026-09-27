@@ -142,7 +142,11 @@ impl RustSource {
         qualifier: &[&str],
         callee: &str,
     ) -> Option<(ContentId, Span)> {
-        let want = module_target(from, qualifier)?;
+        let want = module_target(
+            from,
+            qualifier,
+            modules.and_then(|index| index.crate_root_of(from)),
+        )?;
         let sites: Vec<&DefSite> = corpus_defs(index, callee)
             .iter()
             .filter(|site| {
@@ -268,7 +272,11 @@ impl ModuleTarget {
 
 /// `qualifier` read from `from`'s position: `crate` restarts at the crate root,
 /// `self` extends the caller's module, `super` pops one, else absolute suffix.
-pub fn module_target(from: &str, qualifier: &[&str]) -> Option<ModuleTarget> {
+pub fn module_target(
+    from: &str,
+    qualifier: &[&str],
+    crate_root: Option<String>,
+) -> Option<ModuleTarget> {
     let own = module_segments(from);
     let normalize = |rest: &[&str]| -> Vec<String> {
         rest.iter()
@@ -278,7 +286,7 @@ pub fn module_target(from: &str, qualifier: &[&str]) -> Option<ModuleTarget> {
     match qualifier[0] {
         "crate" => Some(ModuleTarget {
             suffix: normalize(&qualifier[1..]),
-            crate_root: crate_root_of(from),
+            crate_root,
         }),
         "self" | "super" => {
             let mut base = own;
@@ -306,11 +314,29 @@ pub fn module_target(from: &str, qualifier: &[&str]) -> Option<ModuleTarget> {
     }
 }
 
-/// The crate directory holding `path`: the prefix ending at the segment before
-/// the first `src`. None where the file sits outside a Cargo layout.
-pub fn crate_root_of(path: &str) -> Option<String> {
-    let (root, _) = path.split_once("/src/")?;
-    Some(root.to_string())
+/// The Cargo manifest directory assigned to `path` by the corpus manifest walk.
+pub fn crate_root_of(
+    path: &str,
+    crate_roots: &std::collections::HashMap<String, String>,
+) -> Option<String> {
+    let mut normalized = std::path::PathBuf::new();
+    for component in std::path::Path::new(path).components() {
+        match component {
+            std::path::Component::CurDir => {}
+            std::path::Component::ParentDir => {
+                normalized.pop();
+            }
+            other => normalized.push(other),
+        }
+    }
+    let key = normalized.to_string_lossy();
+    crate_roots.get(key.as_ref()).map(|root| {
+        if root == "." || root.is_empty() {
+            String::new()
+        } else {
+            root.clone()
+        }
+    })
 }
 
 /// One corpus `DefSite` examined while learning a file's own blob. The term

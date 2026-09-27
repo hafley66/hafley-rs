@@ -36,7 +36,7 @@ fn help_names_the_build_and_mode_aliases() {
     assert!(help.contains(&format!("datetime: {}", ryi_proto::BUILD_DATETIME)));
     assert!(help.contains("  fast "));
     assert!(help.contains("  slow "));
-    assert!(help.contains("sprefa_extract=info"));
+    assert!(help.contains("sprefa_extract=info,hafley_scm=info"));
     assert!(help.contains("HAFLEY_LOG_FORMAT"));
 }
 
