@@ -1,2 +1,7 @@
-std::env::var_os:534
-std::env::var_os:544
+crates/sprefa-extract/src/bin/ryi.rs:30
+crates/sprefa-extract/src/bin/ryi.rs:378
+crates/sprefa-extract/src/bin/ryi.rs:425
+crates/sprefa-extract/src/bin/ryi/0_sqlite.rs:203
+crates/sprefa-extract/src/bin/ryi/0_sqlite.rs:524
+crates/sprefa-extract/src/bin/ryi/0a_bind.rs:293
+crates/sprefa-extract/src/edit/_3_stage.rs:13

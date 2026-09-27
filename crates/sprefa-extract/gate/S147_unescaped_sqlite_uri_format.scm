@@ -1,3 +1,6 @@
-; S147: format! builds the SQLite file URI with an unescaped path.
-((macro_invocation) @hit
- (#match? @hit "format!.*file:\\{\\}\\?mode=ro"))
+; S147: format! literals combine a file: URI with a ?mode= option.
+((macro_invocation
+  macro: (identifier) @macro
+) @hit
+ (#eq? @macro "format")
+ (#match? @hit "file:.*\\?mode="))

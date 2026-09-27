@@ -1,7 +1,4 @@
-; S029: per-row environment lookup of the streaming flush override.
-((call_expression
-  function: (scoped_identifier) @path
-  arguments: (arguments (string_literal) @name)
-) @hit
- (#match? @path "std::env::var_os$")
- (#match? @name "RYI_STREAM_FLUSH"))
+; S029: std::env::var/var_os calls in ryi command and edit functions.
+((function_item body: (block) @body) @hit
+ (#match? @body "std::env::var(_os)?\\s*\\(")
+)

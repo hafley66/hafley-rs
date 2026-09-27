@@ -1,3 +1,6 @@
-; S171: include_str! reaches source files through a sibling crate path.
-((macro_invocation) @hit
- (#match? @hit "include_str!.*\\.\\./\\.\\./sprefa-extract"))
+; S171: include_str!/include_bytes! paths traverse up at least two directories.
+((macro_invocation
+  macro: (identifier) @macro
+) @hit
+ (#match? @macro "^include_(str|bytes)$")
+ (#match? @hit "\\.\\./\\.\\."))

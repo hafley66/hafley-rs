@@ -14,6 +14,10 @@ if [[ "$ryii" != /* ]]; then
   ryii=$(cd -- "$(dirname -- "$ryii")" && pwd)/$(basename -- "$ryii")
 fi
 roots=(crates/hafley_scm/src crates/sprefa-extract/src crates/ryi/src crates/ryi-proto/src)
+test_roots=()
+while IFS= read -r test_root; do
+  test_roots+=("${test_root#"$repo_root"/}")
+done < <(find "$repo_root/crates" -mindepth 2 -maxdepth 2 -type d -name tests -print | sort)
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 failed=0
@@ -24,8 +28,13 @@ while IFS= read -r query_file; do
   hits="$tmp/$id.hits"
   fresh="$tmp/$id.fresh"
   query=$(cat -- "$query_file")
+  case "$id" in
+    S029) rule_roots=(crates/sprefa-extract/src/bin crates/sprefa-extract/src/edit) ;;
+    S182|S183) rule_roots=("${test_roots[@]}") ;;
+    *) rule_roots=("${roots[@]}") ;;
+  esac
 
-  (cd "$repo_root" && "$ryii" query --pattern '*.rs' --query "$query" "${roots[@]}") >"$raw"
+  (cd "$repo_root" && "$ryii" query --pattern '*.rs' --query "$query" "${rule_roots[@]}") >"$raw"
   python3 - "$raw" >"$hits" <<'PY'
 import json
 import sys

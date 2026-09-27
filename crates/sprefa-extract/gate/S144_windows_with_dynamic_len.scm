@@ -1,4 +1,4 @@
-; S144: windows(literal.len()) can panic when the literal is empty.
+; S144: windows(x.len()) can panic when x has an empty spelling.
 ((call_expression
   function: (field_expression field: (field_identifier) @method)
   arguments: (arguments
@@ -11,5 +11,4 @@
   )
 ) @hit
  (#eq? @method "windows")
- (#eq? @receiver "literal")
  (#eq? @inner_method "len"))
