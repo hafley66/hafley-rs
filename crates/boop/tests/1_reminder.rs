@@ -1,3 +1,4 @@
+use boop_store::testing::BoopCommandExt;
 use boop_store::{bus, Store};
 use std::{
     path::PathBuf,
@@ -22,9 +23,9 @@ impl Fixture {
     fn command(&self, args: &[&str]) -> Command {
         let mut cmd = Command::new(BOOP);
         cmd.args(args)
+            .boop_test_root(&self.dir)
             .args(["--mail-dir"])
             .arg(&self.dir)
-            .env("HOME", &self.dir)
             .env("BOOP_DB", self.dir.join("boop.db"))
             .env("BOOP_CODEX_STATE_DB", self.dir.join("absent-codex.db"))
             .env("BOOP_SESSION", "fixture")

@@ -357,10 +357,13 @@ impl DeadReason {
 
 /// The parent named by a `parent-died` result detail.
 fn parent_died_edge(detail: Option<&str>) -> Option<String> {
-    detail?
-        .strip_prefix(PARENT_DIED)?
-        .strip_prefix(": ")
-        .map(str::to_owned)
+    let parent = detail?.strip_prefix(PARENT_DIED)?.strip_prefix(": ")?;
+    Some(
+        parent
+            .split_once("; verified: ")
+            .map_or(parent, |(parent, _)| parent)
+            .to_owned(),
+    )
 }
 
 /// The typed reason for a dead lane: its newest result row, then a parent
@@ -660,10 +663,10 @@ mod tests {
             "killed",
             "coordinator",
             "result",
-            "lane killed done rc=1 (parent-died: coordinator)",
+            "lane killed done rc=1 (parent-died: coordinator; verified: none)",
         );
         killed.rc = Some(1);
-        killed.detail = Some("parent-died: coordinator".into());
+        killed.detail = Some("parent-died: coordinator; verified: none".into());
         write_rows(
             &mail,
             &[

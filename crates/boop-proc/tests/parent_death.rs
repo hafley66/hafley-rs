@@ -193,7 +193,10 @@ fn a_kill_policy_ends_the_lane_when_the_parent_pane_dies() {
     );
     let results = of_kind(&dir, "result");
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].detail.as_deref(), Some("parent-died: boss"));
+    assert_eq!(
+        results[0].detail.as_deref(),
+        Some("parent-died: boss; verified: none")
+    );
     assert_eq!(
         boop_store::trail::dead_reason(&dir, &dir.join("lanes"), "mine").token(),
         "parent-died=boss"
