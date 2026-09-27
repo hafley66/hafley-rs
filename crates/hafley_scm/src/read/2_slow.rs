@@ -487,9 +487,7 @@ fn type_rows(index: &ScipIndex, doc: &Doc<'_>, defs: &Defs) -> Vec<FlatFact> {
                 let name = text(&owner).unwrap_or_default();
                 refs.iter().find(|(span, _)| {
                     text(span) == Some(bare.as_bytes())
-                        && line_of(doc.content, *span)
-                            .windows(name.len())
-                            .any(|w| w == name)
+                        && memchr::memmem::find(line_of(doc.content, *span), name).is_some()
                 })
             }
             _ => refs.iter().find(|(span, symbol)| {
