@@ -213,28 +213,14 @@ impl Source for RustSource {
                                 line_starts,
                             )
                         },
-                        |tree| {
-                            super::rust_modules::rust_module_facts_from_tree(
-                                &parsed.file,
-                                line_starts,
-                                tree,
-                                content,
-                            )
-                        },
+                        |tree| super::rust_modules::rust_module_facts_from_tree(tree, content),
                     ));
                     if mask.types {
                         let span = trace::family_span("rust", "type");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<TypeF>::default();
                         if let Some(tree) = tree.as_ref() {
-                            project_types(
-                                &parsed.file,
-                                line_starts,
-                                tree,
-                                content,
-                                &mut strings,
-                                &mut bundle,
-                            );
+                            project_types(tree, content, &mut strings, &mut bundle);
                         }
                         trace::record_bundle(&span, &bundle, 0);
                         types = Some(bundle);

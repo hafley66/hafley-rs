@@ -98,13 +98,11 @@ pub fn macro_invocation_rows_from_tree(
                 }
             }
             "macro_definition" => {
-                if let Some(name) = node.child_by_field_name("name") {
+                if node.child_by_field_name("name").is_some() {
                     rows.push(MacroInvocationRow {
                         range: syn_compatible_byte(source, node.start_byte())
                             ..syn_compatible_byte(source, node.end_byte()),
-                        name: std::str::from_utf8(&source[name.byte_range()])
-                            .expect("Rust macro names are UTF-8")
-                            .to_owned(),
+                        name: "macro_rules".to_owned(),
                     });
                 }
             }
