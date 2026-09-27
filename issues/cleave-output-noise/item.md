@@ -22,7 +22,7 @@ Output noise from `ryi cleave` on a 140-module binary crate:
 3. **Untracked scratch dirs are in the corpus.** The planning agent reports that an untracked `.probe/` dir was scanned. Expected: honour `.gitignore`, and skip untracked files unless `--root` names them.
 
 ## Acceptance Criteria
-- [ ] default log level hides per-file INFO
+- [wont-fix] default log level hides per-file INFO; default remains INFO by user ruling
 - [ ] `orphan` lists only imports orphaned by this plan
 - [ ] corpus walk skips gitignored/untracked paths by default
 
@@ -34,4 +34,4 @@ Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dr
 
 ### 2026-09-27 · @codex
 
-Receipt: this queue commit; `t_166_cleave_rust` passed (14 tests).
+Receipt: tracked-only default corpus and move-only orphan rows retained; focused `t_166_cleave_rust` tests passed. Default INFO logging stays per user ruling.

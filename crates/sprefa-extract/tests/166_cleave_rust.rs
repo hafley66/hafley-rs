@@ -217,31 +217,7 @@ fn untouched_imports_are_not_reported_as_orphans() {
 }
 
 #[test]
-fn default_cleave_logging_hides_per_file_info() {
-    let fixture = fixture("basic", "quiet-default");
-    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args([
-            "cleave",
-            "src/util.rs#load_config",
-            "src/config.rs",
-            "--root",
-        ])
-        .arg(&fixture.root)
-        .arg("--state")
-        .arg(&fixture.state)
-        .current_dir(&fixture.root)
-        .env_remove("RUST_LOG")
-        .env_remove("HAFLEY_LOG")
-        .env("HAFLEY_TRACE", &fixture.trace)
-        .output()
-        .expect("cleave binary runs");
-    assert_eq!(output.status.code(), Some(0));
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(!stderr.contains("INFO extract_file"), "{stderr}");
-}
-
-#[test]
-fn default_corpus_walk_skips_untracked_and_honors_gitignore() {
+fn default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files() {
     let fixture = fixture("basic", "corpus-walk");
     std::fs::write(fixture.root.join("tracked.rs"), "pub fn tracked() {}\n").unwrap();
     std::fs::write(fixture.root.join("scratch.rs"), "pub fn scratch() {}\n").unwrap();

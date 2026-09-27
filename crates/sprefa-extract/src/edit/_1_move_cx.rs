@@ -214,10 +214,10 @@ pub fn walk_files_with_untracked(
     let mut files = Vec::new();
     let walk = WalkBuilder::new(root)
         .hidden(false)
-        .ignore(true)
-        .git_ignore(true)
-        .git_global(true)
-        .git_exclude(true)
+        .ignore(false)
+        .git_ignore(false)
+        .git_global(false)
+        .git_exclude(false)
         .filter_entry(|entry| !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref()))
         .build();
     for entry in walk {
