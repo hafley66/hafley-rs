@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -20,3 +20,7 @@ tests/golden_parity.rs:2012 iterates the run's by_origin; an origin whose rows a
 ## Acceptance Criteria
 - [x] a run with an origin missing fails the floor
 - [x] unresolved is a ceiling
+
+## Repro receipt
+
+2026-09-26: `t_golden_parity::ratchet_pin_charges_an_origin_the_run_dropped` passes; the dropped-origin floor now fails inside the assertion probe.
