@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 type: feature
-status: open
+status: needs-info
 priority: normal
 labels: [boop, lane, intent-correctness]
 ---
@@ -85,3 +85,9 @@ Related: the lane brief form that worked this session is
 `TASKS/lane-cst-out-of-default.BRIEF.md`. Both declare the exact command in a
 "Validation, exact commands" section, which is the string this feature would
 lift into `lane create`.
+
+## Comments
+
+### 2026-09-27T04:41:02Z · @codex
+
+Repro on current installed Boop: `boop beep lane --help` lists no verify subcommand; current result rows carry process exit status only. The card names two valid contracts, both affecting who can skip verification, so implementation awaits that choice.
