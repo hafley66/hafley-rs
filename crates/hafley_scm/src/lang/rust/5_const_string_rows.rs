@@ -63,7 +63,7 @@ fn collect_tree_consts(node: tree_sitter::Node<'_>, source: &[u8], rows: &mut Ve
     }
 }
 
-fn decode_string_literal(literal: &str) -> Option<String> {
+pub(super) fn decode_string_literal(literal: &str) -> Option<String> {
     let raw_start = literal.find('"')?;
     if literal.starts_with('r') {
         let hashes = literal[..raw_start]

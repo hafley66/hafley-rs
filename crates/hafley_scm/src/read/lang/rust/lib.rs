@@ -249,14 +249,9 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "df");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<DfF>::default();
-                        project_df(
-                            &parsed.file,
-                            path,
-                            src,
-                            line_starts,
-                            &mut strings,
-                            &mut bundle,
-                        );
+                        if let Some(tree) = tree.as_ref() {
+                            project_df(tree, path, content, &mut strings, &mut bundle);
+                        }
                         trace::record_bundle(&span, &bundle, 0);
                         df = Some(bundle);
                     }
