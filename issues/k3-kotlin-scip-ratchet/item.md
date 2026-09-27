@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: chore
-status: open
+status: needs-decision
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -21,3 +21,11 @@ scip_ensure.rs:92-97 declares scip-java (markers build.gradle.kts / build.gradle
 - [ ] `extract slow` over the kotlin fixture produces scip facts (5_scip_facts_cli covers it)
 - [ ] RATCHET.tsv has kotlin rows; wrong_target 0
 - [ ] join_hits > 0 on the kotlin ratchet
+
+## Plan
+
+Prepare a small Gradle Kotlin fixture and confirm the existing scip-java marker path can index it, then share the current origin-keyed join logic with the Kotlin ratchet, run `extract slow`, and pin only Kotlin rows whose fixture join coverage is nonzero and wrong-target count is zero; keep the ratchet command and output reproducible from the fixture.
+
+## Decision
+
+Should the fixture use a preinstalled JDK, coursier, and scip-java lane, or check in a generated SCIP index so indexing does not require those tools?
