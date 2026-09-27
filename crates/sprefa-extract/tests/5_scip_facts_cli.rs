@@ -16,6 +16,7 @@ use std::process::Command;
 const SCIP_REL_ROOT: &str = "tests/fixtures/scip_rel";
 const SCIP_REL_SOURCE: &str = "tests/fixtures/scip_rel/animal.ts";
 const SCIP_REL_GOLDEN: &str = include_str!("fixtures/scip_rel/expected.jsonl");
+const SCIP_KOTLIN_ROOT: &str = "tests/fixtures/kotlin/scip";
 
 fn run(args: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
@@ -29,6 +30,34 @@ fn run(args: &[&str]) -> String {
         String::from_utf8_lossy(&output.stderr)
     );
     String::from_utf8(output.stdout).expect("stdout is UTF-8")
+}
+
+#[test]
+fn slow_kotlin_fixture_emits_scip_resolved_calls() {
+    let output = run(&["slow", "--no-checker", SCIP_KOTLIN_ROOT]);
+    let rows = output
+        .lines()
+        .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("slow JSON row"))
+        .collect::<Vec<_>>();
+    let resolved = rows
+        .iter()
+        .filter(|row| row["record"] == "resolved_edge")
+        .collect::<Vec<_>>();
+    let scip_names = resolved
+        .iter()
+        .filter(|row| row["resolution_origin"] == "scip")
+        .map(|row| row["callee_name"].as_str().expect("callee name"))
+        .collect::<std::collections::BTreeSet<_>>();
+
+    assert_eq!(
+        resolved.len(),
+        2,
+        "both fixture calls should resolve: {rows:#?}"
+    );
+    assert_eq!(
+        scip_names,
+        std::collections::BTreeSet::from(["helper", "local"])
+    );
 }
 
 /// The whole `ryi scip --raw` stream over the scip.proto worked example, minus

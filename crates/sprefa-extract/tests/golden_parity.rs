@@ -33,9 +33,10 @@ use std::sync::{Arc, Mutex};
 use sprefa_extract::{
     build_def_index, byte_range_cached, containing_def_site, content_id_of, covering_def,
     definition_of, dispatch, flatten, join_documents, site_occurrence, CallEdgeKind, CallF,
-    ContentId, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, ManifestMap, NodeRef,
-    ProjectCx, ProjectDigest, ProjectEdge, PythonSource, Resolve, RustSource, RyiOutput, ScipGo,
-    ScipRust, ScipSource, ScipTypescript, Span, TsSource, TypeF, ZERO_CONTENT_ID,
+    ContentId, FamilyMask, FamilyTag, FileSet, FlatFact, GoSource, IndexBag, KotlinSource,
+    ManifestMap, NodeRef, ProjectCx, ProjectDigest, ProjectEdge, PythonSource, Resolve, RustSource,
+    RyiOutput, ScipGo, ScipJava, ScipRust, ScipSource, ScipTypescript, Span, TsSource, TypeF,
+    ZERO_CONTENT_ID,
 };
 
 struct Case {
@@ -1606,8 +1607,7 @@ fn call_resolve_scip_ratchet_go() {
 #[test]
 fn call_resolve_scip_ratchet_rust() {
     let fixture_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rust");
-    // Every .rs under the fixture root, recursively (lib.rs + the scip/ trio
-    // included — every one is crate-reachable, so every one gets a document).
+    // Every .kt under the Gradle fixture root, recursively.
     let mut rels: Vec<String> = Vec::new();
     let mut stack = vec![fixture_root.clone()];
     while let Some(dir) = stack.pop() {
@@ -1685,7 +1685,7 @@ fn call_resolve_scip_ratchet_rust() {
             .documents
             .iter()
             .position(|d| &d.relative_path == rel)
-            .expect("one scip document per fixture file (every .rs is crate-reachable)");
+            .expect("one scip document per Kotlin fixture file");
         let doc = &scip_index.documents[doc_ix];
         let content = reader(rel).unwrap();
         let Some(call) = &out.call else { continue };
@@ -1872,6 +1872,305 @@ fn call_resolve_scip_ratchet_rust() {
         "rust: zero join coverage: not one site joined to a scip occurrence"
     );
     pin_ratchet_tsv("rust", &counts.by_origin);
+    for line in &lines {
+        eprintln!("  {line}");
+    }
+    assert_eq!(
+        counts.missing_occurrence,
+        0,
+        "occurrence parity: every v6 site has a scip occurrence\n{}",
+        lines.join("\n")
+    );
+    assert_eq!(
+        counts.disagreements,
+        0,
+        "every NameResolve agrees with scip's corpus target\n{}",
+        lines.join("\n")
+    );
+    assert_eq!(
+        counts.misses,
+        0,
+        "no silent misses: every scip-corpus-resolved site has a v6 edge\n{}",
+        lines.join("\n")
+    );
+    assert_eq!(
+        counts.overbound,
+        0,
+        "no overbinding: every NameResolve is scip-corpus-resolved\n{}",
+        lines.join("\n")
+    );
+}
+
+#[test]
+fn call_resolve_scip_ratchet_kotlin() {
+    let fixture_root =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/kotlin/scip");
+    // Every .rs under the fixture root, recursively (lib.rs + the scip/ trio
+    // included — every one is crate-reachable, so every one gets a document).
+    let mut rels: Vec<String> = Vec::new();
+    let mut stack = vec![fixture_root.clone()];
+    while let Some(dir) = stack.pop() {
+        for entry in std::fs::read_dir(&dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                if path.file_name().unwrap() != "target" {
+                    stack.push(path);
+                }
+                continue;
+            }
+            if path.extension().and_then(|e| e.to_str()) == Some("kt") {
+                rels.push(
+                    path.strip_prefix(&fixture_root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .replace('\\', "/"),
+                );
+            }
+        }
+    }
+    rels.sort();
+    let reader = |p: &str| std::fs::read(fixture_root.join(p)).ok();
+    let index_path = ScipJava
+        .build(&fixture_root)
+        .expect("scip-java build failed (the ratchet never fakes green)");
+    let scip_index = ScipJava.load(&index_path).expect("scip load");
+    let joined = join_documents(&scip_index, &reader);
+    assert!(
+        joined.iter().all(Option::is_some),
+        "every scip document is reader-readable: the corpus and the index cover the same universe"
+    );
+    // The corpus: every fixture file dispatched + the DefIndex over all.
+    let corpus: Vec<(String, ContentId, Arc<RyiOutput>)> = rels
+        .iter()
+        .map(|rel| {
+            let bytes = reader(rel).unwrap();
+            (
+                rel.clone(),
+                content_id_of(&bytes),
+                dispatch(rel, &bytes, FamilyMask::ALL).expect("a Source matches the fixture"),
+            )
+        })
+        .collect();
+    let pairs: Vec<(ContentId, &RyiOutput)> = corpus
+        .iter()
+        .map(|(_, hash, out)| (hash.clone(), out.as_ref()))
+        .collect();
+    let file_set = FileSet;
+    let manifest_map = ManifestMap;
+    let cx = ProjectCx {
+        files: &file_set,
+        manifests: &manifest_map,
+        reader: Some(&reader),
+        digest: ProjectDigest::default(),
+        indexes: IndexBag::default(),
+        witness: false,
+    };
+    cx.indexes
+        .def_index
+        .set(build_def_index(&pairs))
+        .expect("fresh OnceLock");
+    cx.indexes
+        .scip_index
+        .set(scip_index)
+        .expect("fresh OnceLock");
+    let scip_index = cx.indexes.scip_index.get().unwrap();
+    let def_index = cx.indexes.def_index.get().unwrap();
+
+    let mut total_sites = 0usize;
+    let mut counts = RatchetCounts::default();
+    let mut lines: Vec<String> = Vec::new();
+    for (rel, _blob, out) in &corpus {
+        let doc_ix = scip_index
+            .documents
+            .iter()
+            .position(|d| &d.relative_path == rel)
+            .expect("one scip document per fixture file (every .kt is Gradle indexed)");
+        let doc = &scip_index.documents[doc_ix];
+        let content = reader(rel).unwrap();
+        let Some(call) = &out.call else { continue };
+        let edges = Resolve::<sprefa_extract::CallF>::resolve(&KotlinSource, out, &cx);
+        let edge_origin = origin_by_edge(&edges);
+        let mut actual: Vec<(u32, u32, u32, &'static str, ContentId)> = edges
+            .iter()
+            // The ratchet grades SITE outcomes against scip occurrences; a
+            // value reference is not a site and has no occurrence.
+            .filter(|edge| edge.kind != CallEdgeKind::ValueRef)
+            .map(|edge| {
+                let from = call.node(edge.src).span;
+                (
+                    from.start,
+                    edge.dst_span.start,
+                    edge.dst_span.end(),
+                    edge.kind.as_str(),
+                    edge.dst_blob.clone(),
+                )
+            })
+            .collect();
+        actual.sort_by_key(|t| (t.0, t.1, t.2, t.3));
+        let mut expected: Vec<(u32, u32, u32, &'static str, ContentId)> = Vec::new();
+        for site in &call.aux.sites {
+            total_sites += 1;
+            let callee = out.strings.lookup(site.callee);
+            let line = line_of(&content, site.span.start);
+            // scip's independent word on this site (the local guard is the
+            // kotlin adaptation: a local binding is NOT a corpus call target).
+            let occ = site_occurrence(doc, &content, site.span, callee);
+            if occ.is_some() {
+                counts.join_hits += 1;
+            } else {
+                counts.missing_occurrence += 1;
+                lines.push(format!("MISSING-OCCURRENCE {rel}:{line} {callee}"));
+            }
+            let scip_t = occ
+                .filter(|sym| !scip_index.symbol(*sym).starts_with("local "))
+                .and_then(|sym| definition_of(scip_index, doc_ix, sym))
+                .and_then(|(def_doc_ix, def_range)| {
+                    let def_doc = &scip_index.documents[def_doc_ix];
+                    let (def_blob, def_content) = joined[def_doc_ix].as_ref().unwrap();
+                    let ident = byte_range_cached(
+                        def_doc,
+                        def_content,
+                        def_range,
+                        def_doc.position_encoding,
+                    )?;
+                    containing_def_site(def_index, def_blob.clone(), ident)
+                        .map(|(name, s)| (def_blob.clone(), s.span, name))
+                });
+            let name_t = KotlinSource::call_name_match(out, def_index, callee);
+            // The twin outcome (the same legs the arm runs; the multiset
+            // comparison below is the orchestration check). Clones name_t/scip_t
+            // into the closure so both stay owned for the scip-side match below.
+            let twin = covering_def(call, site.span).and_then(|caller| {
+                let (dst, kind) = match (name_t.clone(), scip_t.clone()) {
+                    (Some(n), Some(s)) if n.0 == s.0 && callee == s.2 => {
+                        (n, CallEdgeKind::NameResolve)
+                    }
+                    (_, Some(s)) => ((s.0, s.1), CallEdgeKind::ScipOverride),
+                    (Some(n), None) => (n, CallEdgeKind::NameResolve),
+                    (None, None) => return None,
+                };
+                Some((caller, dst, kind))
+            });
+            let mut origin: Option<&'static str> = None;
+            if let Some((caller, dst, kind)) = &twin {
+                let from = call.node(*caller).span;
+                origin = origin_of(&edge_origin, *caller, dst, *kind);
+                expected.push((
+                    from.start,
+                    dst.1.start,
+                    dst.1.end(),
+                    kind.as_str(),
+                    dst.0.clone(),
+                ));
+            }
+            // The scip-side classification (assertions 2-6).
+            match (twin, scip_t) {
+                (Some((_, dst, CallEdgeKind::NameResolve)), Some(s)) => {
+                    if !(dst.0 == s.0 && callee == s.2) {
+                        counts.disagreements += 1;
+                        if let Some(o) = origin {
+                            counts.wrong_target(o);
+                        }
+                        lines.push(format!(
+                            "DISAGREE {rel}:{line} {callee}: v6 NameResolve -> ({:?}, {callee}), scip -> ({:?}, {})",
+                            short(&dst.0), short(&s.0), s.2
+                        ));
+                    } else {
+                        counts.name_resolve += 1;
+                        if let Some(o) = origin {
+                            counts.resolved(o);
+                        }
+                    }
+                }
+                (Some((_, dst, CallEdgeKind::NameResolve)), None) => {
+                    counts.overbound += 1;
+                    lines.push(format!(
+                        "OVERBOUND {rel}:{line} {callee}: v6 NameResolve -> ({:?}) but scip has no corpus target",
+                        short(&dst.0)
+                    ));
+                }
+                (Some((_, dst, CallEdgeKind::ScipOverride)), Some(s)) => {
+                    assert_eq!(
+                        (dst.0.clone(), dst.1),
+                        (s.0.clone(), s.1),
+                        "override edge carries scip's target at {rel}:{line} {callee}"
+                    );
+                    assert!(
+                        !(name_t == Some((s.0.clone(), s.1)) && callee == s.2),
+                        "override with a matching name-match is no override at {rel}:{line} {callee}"
+                    );
+                    counts.scip_override += 1;
+                    if let Some(o) = origin {
+                        counts.resolved(o);
+                    }
+                    lines.push(format!(
+                        "OVERRIDE {rel}:{line} {callee}: name-match {} displaced; scip -> ({:?}, {})",
+                        match name_t {
+                            Some((b, _)) => format!("({:?}, {callee})", short(&b)),
+                            None => "<none: ambiguous/absent>".to_string(),
+                        },
+                        short(&s.0),
+                        s.2
+                    ));
+                }
+                (Some((_, _, CallEdgeKind::ScipOverride)), None) => {
+                    panic!("override without a scip corpus target at {rel}:{line} {callee}");
+                }
+                // A value reference is not a call site: no occurrence, so the
+                // scip ratchet has nothing to classify it against.
+                (Some((_, _, CallEdgeKind::ValueRef)), _) => {}
+                // The twin re-derives the NAME-MATCH leg only, so it mints no
+                // import_resolve edge for the ratchet to classify.
+                (Some((_, _, CallEdgeKind::ImportResolve)), _) => {}
+                (Some((_, _, CallEdgeKind::Implements)), _) => {}
+                // The twin re-derives the per-site legs only; a ScipMacro
+                // edge is minted by the project post-pass, not by a site.
+                (Some((_, _, CallEdgeKind::ScipMacro)), _) => {}
+                // The checker tier is off in the goldens.
+                (Some((_, _, CallEdgeKind::CheckerResolve)), _) => {}
+                (None, Some(s)) => {
+                    counts.misses += 1;
+                    counts.unresolved();
+                    lines.push(format!(
+                        "MISS {rel}:{line} {callee}: scip resolves to corpus ({:?}, {}) but v6 emitted no edge",
+                        short(&s.0), s.2
+                    ));
+                }
+                (None, None) => {
+                    if occ.is_some() {
+                        counts.external_no_edge += 1;
+                    }
+                }
+            }
+        }
+        expected.sort_by_key(|t| (t.0, t.1, t.2, t.3));
+        assert_eq!(
+            actual, expected,
+            "[{rel}] arm edges != twin expected outcomes"
+        );
+        eprintln!(
+            "[{rel}] scip ratchet: sites {} | name_resolve {} scip_override {} external-no-edge {}",
+            call.aux.sites.len(),
+            counts.name_resolve,
+            counts.scip_override,
+            counts.external_no_edge
+        );
+    }
+    eprintln!(
+        "[kotlin-total] scip ratchet ({}) over {} sites: name_resolve {} scip_override {} external-no-edge {} | missing-occurrence {} disagreements {} misses {} overbound {}",
+        scip_index.tool(), total_sites, counts.name_resolve, counts.scip_override,
+        counts.external_no_edge, counts.missing_occurrence, counts.disagreements,
+        counts.misses, counts.overbound
+    );
+    eprintln!("lang\torigin\ttrue\twrong_target\tunresolved");
+    for (origin, (t, w, u)) in &counts.by_origin {
+        eprintln!("kotlin\t{origin}\t{t}\t{w}\t{u}");
+    }
+    assert!(
+        counts.join_hits > 0,
+        "kotlin: zero join coverage: not one site joined to a scip occurrence"
+    );
+    pin_ratchet_tsv("kotlin", &counts.by_origin);
     for line in &lines {
         eprintln!("  {line}");
     }

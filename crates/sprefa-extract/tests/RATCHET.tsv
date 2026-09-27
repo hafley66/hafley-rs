@@ -1,6 +1,7 @@
 lang	origin	true	wrong_target	unresolved
 go	corpus_unique	1	0	0
 go	scip	1	0	0
+kotlin	corpus_unique	2	0	0
 rust	same_file	2	0	0
 rust	scip	3	0	0
 ts	corpus_unique	8	0	0

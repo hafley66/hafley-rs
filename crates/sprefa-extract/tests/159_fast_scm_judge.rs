@@ -1,6 +1,6 @@
 //! Fast's judge: the scm definitions `ryi fast` emits against a real SCIP
-//! index, keyed on (path, name, span). TypeScript is judged; Kotlin is stated
-//! unjudged.
+//! index, keyed on (path, name, span). TypeScript definitions are judged;
+//! Kotlin call resolution is pinned by `golden_parity`.
 
 #![cfg(feature = "cli")]
 
@@ -109,17 +109,6 @@ fn the_typescript_definitions_agree_with_scip_typescript() {
         (both.len(), scm_only.len(), scip_only.len()),
         (BOTH, SCM_ONLY, SCIP_ONLY),
         "the pinned split moved:\n{listing}"
-    );
-}
-
-/// No Kotlin indexer exists on this machine, so the Kotlin rows of phase 2 are
-/// unjudged. Installing scip-java fails this and asks for the judge.
-#[test]
-fn the_kotlin_rows_are_unjudged_because_no_kotlin_indexer_is_reachable() {
-    let found = Command::new("scip-java").arg("version").output().is_ok();
-    assert!(
-        !found,
-        "scip-java is on PATH now: judge the kotlin rows too, the way this file judges ts"
     );
 }
 
