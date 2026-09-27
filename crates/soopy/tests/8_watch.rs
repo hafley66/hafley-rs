@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use soopy::{
     Head, Pattern, RefDelta, RefQuery, RepositoryDelta, Revision, SourceDelta, SourceQuery,
@@ -97,6 +97,28 @@ fn receive(watcher: &mut soopy::RepositoryWatcher) -> Vec<RepositoryDelta> {
         .expect("filesystem event")
 }
 
+fn receive_until(
+    watcher: &mut soopy::RepositoryWatcher,
+    expected: &str,
+    matches: impl Fn(&[RepositoryDelta]) -> bool,
+) -> Vec<RepositoryDelta> {
+    let deadline = Instant::now() + Duration::from_secs(10);
+    let mut observed = Vec::new();
+    loop {
+        let remaining = deadline.saturating_duration_since(Instant::now());
+        if remaining.is_zero() {
+            panic!("watcher did not emit {expected}; observed {observed:?}");
+        }
+        let Some(deltas) = watcher.recv_timeout(remaining).unwrap() else {
+            panic!("watcher did not emit {expected}; observed {observed:?}");
+        };
+        if matches(&deltas) {
+            return deltas;
+        }
+        observed.extend(deltas);
+    }
+}
+
 #[test]
 fn repository_watcher_rejects_invalid_source_and_coalescing() {
     let root = repository();
@@ -153,26 +175,33 @@ fn repository_watcher_emits_ref_targets_and_head_changes() {
     let mut watcher = tree.watch_repository(query(&tree, false, false)).unwrap();
 
     git(&root, &["checkout", "-q", "topic"]);
-    let head = receive(&mut watcher);
-    assert!(head.iter().any(|delta| {
-        matches!(delta, RepositoryDelta::Ref(RefDelta::HeadChanged { before: soopy::HeadObservation { state: Head::Symbolic { target: before }, target: Some(_) }, after: soopy::HeadObservation { state: Head::Symbolic { target: after }, target: Some(_) } }) if (before.as_ref() == "refs/heads/master" || before.as_ref() == "refs/heads/main") && after.as_ref() == "refs/heads/topic")
-    }));
+    receive_until(
+        &mut watcher,
+        "HEAD transition to refs/heads/topic",
+        |deltas| {
+            deltas.iter().any(|delta| {
+            matches!(delta, RepositoryDelta::Ref(RefDelta::HeadChanged { before: soopy::HeadObservation { state: Head::Symbolic { target: before }, target: Some(_) }, after: soopy::HeadObservation { state: Head::Symbolic { target: after }, target: Some(_) } }) if (before.as_ref() == "refs/heads/master" || before.as_ref() == "refs/heads/main") && after.as_ref() == "refs/heads/topic")
+        })
+        },
+    );
 
     let before = git(&root, &["rev-parse", "refs/heads/topic"]);
     std::fs::write(root.join("src/lib.rs"), "pub const VALUE: u8 = 2;\n").unwrap();
     git(&root, &["add", "src/lib.rs"]);
     git(&root, &["commit", "-qm", "advance topic"]);
-    let advanced = receive(&mut watcher);
-    assert!(advanced.iter().any(|delta| {
-        matches!(delta, RepositoryDelta::Ref(RefDelta::Changed { before: old, after }) if old.name.as_ref() == "refs/heads/topic" && old.direct.0.as_ref() == before.trim() && old.direct != after.direct)
-    }));
+    receive_until(&mut watcher, "refs/heads/topic target change", |deltas| {
+        deltas.iter().any(|delta| {
+            matches!(delta, RepositoryDelta::Ref(RefDelta::Changed { before: old, after }) if old.name.as_ref() == "refs/heads/topic" && old.direct.0.as_ref() == before.trim() && old.direct != after.direct)
+        })
+    });
 
     git(&root, &["tag", "-a", "v1", "-m", "tag one"]);
     git(&root, &["pack-refs", "--all", "--prune"]);
-    let tag = receive(&mut watcher);
-    assert!(tag.iter().any(|delta| {
-        matches!(delta, RepositoryDelta::Ref(RefDelta::Added(observation)) if observation.name.as_ref() == "refs/tags/v1" && observation.peeled.is_some())
-    }));
+    receive_until(&mut watcher, "annotated refs/tags/v1 addition", |deltas| {
+        deltas.iter().any(|delta| {
+            matches!(delta, RepositoryDelta::Ref(RefDelta::Added(observation)) if observation.name.as_ref() == "refs/tags/v1" && observation.peeled.is_some())
+        })
+    });
     std::fs::remove_dir_all(root).unwrap();
 }
 

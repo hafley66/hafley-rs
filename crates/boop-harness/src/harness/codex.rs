@@ -150,6 +150,10 @@ impl Harness for Codex {
                 r#"model_provider = "llmock""#,
                 r#"approval_policy = "never""#,
                 r#"sandbox_mode = "read-only""#,
+                // A release prompt would take over the real TUI in this
+                // isolated mock-provider recipe and prevent its prompt from
+                // reaching llmock.
+                "check_for_update_on_startup = false",
                 "disable_response_storage = true",
                 table.as_str(),
                 r#"[model_providers.llmock]"#,
