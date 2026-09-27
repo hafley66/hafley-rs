@@ -199,8 +199,8 @@ mod t_184_fast_recursive_receiver;
 mod t_184_language_feature_matrix;
 #[path = "185_rust_mod_file_edges.rs"]
 mod t_185_rust_mod_file_edges;
-#[path = "186_bare_cli_suggestions.rs"]
-mod t_186_bare_cli_suggestions;
+#[path = "188_bare_cli_suggestions.rs"]
+mod t_188_bare_cli_suggestions;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]
