@@ -236,8 +236,8 @@ mod t_187_python_module_resolution;
 mod t_188_rust_cargo_metadata;
 #[path = "189_lift_scope_rows.rs"]
 mod t_189_lift_scope_rows;
-#[path = "186_bare_cli_suggestions.rs"]
-mod t_186_bare_cli_suggestions;
+#[path = "188_bare_cli_suggestions.rs"]
+mod t_188_bare_cli_suggestions;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "190_rename_rust_slow.rs"]
