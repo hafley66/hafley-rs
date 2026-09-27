@@ -63,6 +63,7 @@ pub struct TurnRow {
     pub turn: i64,
     pub ts: i64,
     pub role: String,
+    pub source_class: String,
     pub said: String,
 }
 

@@ -28,6 +28,7 @@ fn boop_envelopes_change_presentation_only() {
             turn: index as i64 + 1,
             ts: 0,
             role: "user".into(),
+            source_class: "unknown".into(),
             said: (*text).into(),
         })
         .collect();

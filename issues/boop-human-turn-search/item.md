@@ -1,12 +1,13 @@
 ---
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-27
 type: bug
-status: open
+status: fixed
 priority: high
-epic: boop-query
-labels: [domain-boop, intent-correctness, component-transcript]
 size: M
+labels: [domain-boop, intent-correctness, component-transcript]
+closed: 2026-09-27
+closed_by: codex
 ---
 
 # Search typed user turns separately from harness-injected user records
@@ -85,30 +86,30 @@ still inspect every record.
 
 ## Acceptance Criteria
 
-- [ ] `agent_turn` stores a source-class value distinct from its transcript
+- [x] `agent_turn` stores a source-class value distinct from its transcript
       role. The vocabulary includes `human`, `harness`, and `unknown`.
-- [ ] The schema migration and `boop db sync create --rebuild` populate this
+- [x] The schema migration and `boop db sync create --rebuild` populate this
       value for existing transcript files.
-- [ ] Codex projection marks approval-review and continuation envelopes as
+- [x] Codex projection marks approval-review and continuation envelopes as
       `harness`. Detection uses the surrounding record structure, including
       `turn_context.model = codex-auto-review`, rather than only a text prefix.
-- [ ] Codex projection marks local-command events, command caveats, and
+- [x] Codex projection marks local-command events, command caveats, and
       injected instruction/skill bodies as `harness` when their source record
       identifies them.
-- [ ] Each other harness adapter classifies records where its transcript format
+- [x] Each other harness adapter classifies records where its transcript format
       provides the distinction. Records without sufficient evidence are
       `unknown`; they are excluded by `--human`.
-- [ ] `boop db search <text> --human` filters source class to `human` before
+- [x] `boop db search <text> --human` filters source class to `human` before
       applying the text predicate. Existing `boop db search <text>` behavior
       continues to search all stored text.
-- [ ] Search output includes source class when `--format text` or NDJSON is
+- [x] Search output includes source class when `--format text` or NDJSON is
       selected, so a caller can audit why a row was returned.
-- [ ] A Codex fixture contains one direct user message with `wow` and one
+- [x] A Codex fixture contains one direct user message with `wow` and one
       auto-review envelope whose copied history contains `wow`. `--human`
       returns only the direct message.
-- [ ] Fixtures cover at least one generated user-record family for Claude and
+- [x] Fixtures cover at least one generated user-record family for Claude and
       OpenCode when their source formats expose one.
-- [ ] `cargo test -p boop-store -p boop` passes.
+- [x] `cargo test -p boop-store -p boop` passes.
 
 ## Implementation Notes
 
@@ -122,3 +123,15 @@ decision so direct transcript reads and SQLite searches agree.
 ## Tests Run
 
 Read-only reproduction against the live Boop store.
+
+## Agent Runs
+
+### 2026-09-27T04:04:10Z · @codex
+
+Targeted nextest: boop-store (Claude source classification, v34 migration), boop-harness (Codex auto-review fixture), boop (CLI --human parser); 8 tests passed. OpenCode message rows expose role/content metadata but no generated-user origin family.
+
+## Resolution
+
+### 2026-09-27T04:04:14Z · @codex
+
+Added persisted source classes, harness-aware projection, and boop db search --human; targeted nextest passed 8 tests.

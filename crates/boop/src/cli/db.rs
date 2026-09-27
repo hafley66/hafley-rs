@@ -1325,13 +1325,14 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             text,
             days,
             harness,
+            human,
             limit,
             format,
         } => {
             let store = open_ro_store()?;
             let since = now_ms().saturating_sub(days * 24 * 60 * 60 * 1000);
             emit_json_rows(
-                &store.search_turns(&text, since, harness.as_deref(), limit)?,
+                &store.search_turns(&text, since, harness.as_deref(), human, limit)?,
                 format,
             );
             Ok(())

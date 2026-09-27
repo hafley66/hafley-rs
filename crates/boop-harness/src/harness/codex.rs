@@ -1363,8 +1363,24 @@ fn project_line(
             let text = message_text(payload);
             if !text.is_empty() {
                 *turn += 1;
-                let inserted =
-                    store.write_turn(&sid, *turn, ts, role, &text, turn_cwd.as_deref())?;
+                let source_class = if role == "user" {
+                    if current_model == "codex-auto-review" {
+                        "harness"
+                    } else {
+                        "human"
+                    }
+                } else {
+                    "harness"
+                };
+                let inserted = store.write_turn_classified(
+                    &sid,
+                    *turn,
+                    ts,
+                    role,
+                    &text,
+                    turn_cwd.as_deref(),
+                    source_class,
+                )?;
                 record(stat, inserted);
             }
         }
@@ -1821,6 +1837,41 @@ mod tests {
         drop(store);
         std::fs::remove_dir_all(base).unwrap();
         turns
+    }
+
+    #[test]
+    fn human_search_excludes_codex_auto_review_history() {
+        let base = temp_path("human-source-class");
+        let _ = std::fs::remove_dir_all(&base);
+        std::fs::create_dir_all(&base).unwrap();
+        let transcript = base.join("session.jsonl");
+        write_lines(
+            &transcript,
+            &[
+                r#"{"timestamp":"2026-09-01T10:00:00Z","type":"turn_context","payload":{"model":"gpt-5.6"}}"#,
+                r#"{"timestamp":"2026-09-01T10:00:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"wow"}]}}"#,
+                r#"{"timestamp":"2026-09-01T10:00:02Z","type":"turn_context","payload":{"model":"codex-auto-review"}}"#,
+                r#"{"timestamp":"2026-09-01T10:00:03Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"copied history says wow"}]}}"#,
+            ],
+        );
+        let store = Store::open(base.join("store.db")).unwrap();
+        let size = std::fs::metadata(&transcript).unwrap().len();
+        sync_session(&store, &Codex, &session_for(&transcript, size)).unwrap();
+
+        let human = store
+            .search_turns("wow", 0, Some("codex"), true, 10)
+            .unwrap();
+        assert_eq!(human.len(), 1);
+        assert_eq!(human[0]["source_class"], "human");
+        assert_eq!(human[0]["snippet"], "wow");
+
+        let all = store
+            .search_turns("wow", 0, Some("codex"), false, 10)
+            .unwrap();
+        assert_eq!(all.len(), 2);
+        assert!(all.iter().any(|row| row["source_class"] == "harness"));
+        drop(store);
+        std::fs::remove_dir_all(base).unwrap();
     }
 
     #[test]

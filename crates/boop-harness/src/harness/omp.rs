@@ -855,7 +855,8 @@ fn project_line(
             let text = message_text(message);
             if !text.is_empty() {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, "user", &text, None)?;
+                let inserted =
+                    store.write_turn_classified(&sid, *turn, ts, "user", &text, None, "human")?;
                 record(stat, inserted);
             }
         }
@@ -873,8 +874,9 @@ fn project_line(
                             let name = item.get("name").and_then(Value::as_str).unwrap_or("tool");
                             *turn += 1;
                             let body = tool_call_body(name, item.get("arguments"));
-                            let inserted =
-                                store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
+                            let inserted = store.write_turn_classified(
+                                &sid, *turn, ts, "tool", &body, None, "harness",
+                            )?;
                             record(stat, inserted);
                             store.write_tool_fact(&sid, *turn, ts, name, item.get("arguments"))?;
                         }
@@ -885,7 +887,15 @@ fn project_line(
             let text = prose.join("\n");
             if !text.is_empty() {
                 *turn += 1;
-                let inserted = store.write_turn(&sid, *turn, ts, "assistant", &text, None)?;
+                let inserted = store.write_turn_classified(
+                    &sid,
+                    *turn,
+                    ts,
+                    "assistant",
+                    &text,
+                    None,
+                    "harness",
+                )?;
                 record(stat, inserted);
             }
             if let Some(usage) = message.get("usage") {
@@ -934,7 +944,8 @@ fn project_line(
         "toolResult" => {
             *turn += 1;
             let body = tool_result_body(message.get("content"));
-            let inserted = store.write_turn(&sid, *turn, ts, "tool", &body, None)?;
+            let inserted =
+                store.write_turn_classified(&sid, *turn, ts, "tool", &body, None, "harness")?;
             record(stat, inserted);
         }
         _ => {}

@@ -376,7 +376,7 @@ impl Store {
         // for a single-session read, since the planner cannot use the
         // (session_id, turn) primary key behind an OR.
         let mut sql = String::from(
-            "SELECT s.value, h.value, t.turn, t.ts, r.value, t.said
+            "SELECT s.value, h.value, t.turn, t.ts, r.value, t.source_class, t.said
                FROM agent_turn t
                JOIN dict_session s ON s.id = t.session_id
                JOIN dict_harness h ON h.id = (SELECT harness_id FROM agent_session a WHERE a.session_id = t.session_id)
@@ -439,7 +439,8 @@ impl Store {
                 turn: row.get(2)?,
                 ts: row.get(3)?,
                 role: row.get(4)?,
-                said: row.get(5)?,
+                source_class: row.get(5)?,
+                said: row.get(6)?,
             })
         })?;
         Ok(base.collect::<Result<Vec<_>, _>>()?)
@@ -486,12 +487,14 @@ impl Store {
         needle: &str,
         since_ts: u64,
         harness: Option<&str>,
+        human_only: bool,
         limit: u64,
     ) -> Result<Vec<Row>> {
         let mut sql = String::from(
             "SELECT dict_session.value AS session_id, dict_harness.value AS harness,
                     dict_cwd.value AS cwd, agent_session.nickname AS nickname,
                     t.turn AS turn, t.ts AS ts, dict_role.value AS role,
+                    t.source_class AS source_class,
                     substr(t.said, max(1, instr(lower(t.said), lower(?1)) - 80), 240) AS snippet
              FROM agent_turn t
              JOIN agent_session ON agent_session.session_id = t.session_id
@@ -506,6 +509,9 @@ impl Store {
         if let Some(harness) = harness {
             sql.push_str(" AND dict_harness.value = ?3");
             values.push(harness.to_string().into());
+        }
+        if human_only {
+            sql.push_str(" AND t.source_class = 'human'");
         }
         sql.push_str(&format!(" ORDER BY t.ts DESC LIMIT {limit}"));
         self.rows(&sql, values)

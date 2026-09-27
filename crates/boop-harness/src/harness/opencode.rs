@@ -829,13 +829,18 @@ fn write_part(
     match part.kind.as_str() {
         "text" => {
             *turn += 1;
-            let inserted = store.write_turn(
+            let inserted = store.write_turn_classified(
                 session_id,
                 *turn,
                 message.ts,
                 &message.role,
                 &part.text,
                 None,
+                match message.role.as_str() {
+                    "user" => "human",
+                    "assistant" | "tool" => "harness",
+                    _ => "unknown",
+                },
             )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);
@@ -896,13 +901,18 @@ fn write_part(
         "file" => {
             let path = part.file_path();
             *turn += 1;
-            let inserted = store.write_turn(
+            let inserted = store.write_turn_classified(
                 session_id,
                 *turn,
                 message.ts,
                 &message.role,
                 &format!("file {path}"),
                 None,
+                if message.role == "user" {
+                    "human"
+                } else {
+                    "harness"
+                },
             )?;
             record(stat, inserted);
             first_turn.get_or_insert(*turn);

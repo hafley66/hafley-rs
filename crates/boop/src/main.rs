@@ -1663,6 +1663,9 @@ enum DbCmd {
         /// Only this harness: claude, codex, kimi, opencode.
         #[arg(long)]
         harness: Option<String>,
+        /// Return only turns classified as direct human input.
+        #[arg(long)]
+        human: bool,
         #[arg(long, default_value_t = 50)]
         limit: u64,
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
@@ -2168,6 +2171,19 @@ mod tests {
             cli.command,
             Some(SubCmd::Agent {
                 cmd: AgentSummaryCmd::Summary { .. }
+            })
+        ));
+    }
+
+    #[test]
+    fn db_search_human_flag_parses() {
+        let cli = Cli::try_parse_from(["boop", "db", "search", "wow", "--human"])
+            .expect("human-only search parses");
+        assert!(matches!(
+            cli.command,
+            Some(SubCmd::Db {
+                cmd: Some(DbCmd::Search { human: true, .. }),
+                ..
             })
         ));
     }

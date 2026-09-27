@@ -4239,6 +4239,7 @@ mod tests {
             turn: 3,
             ts: 0,
             role: "assistant".into(),
+            source_class: "unknown".into(),
             said: "the turn body".into(),
         }];
         let brief = fork_brief(&comment, &turns);

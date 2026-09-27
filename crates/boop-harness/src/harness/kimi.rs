@@ -960,7 +960,19 @@ fn project_line(
         let text = append_message_text(message.get("content"));
         if !text.is_empty() {
             *turn += 1;
-            let inserted = store.write_turn(&sid, *turn, ts, role, &text, None)?;
+            let inserted = store.write_turn_classified(
+                &sid,
+                *turn,
+                ts,
+                role,
+                &text,
+                None,
+                match role {
+                    "user" => "human",
+                    "assistant" | "tool" => "harness",
+                    _ => "unknown",
+                },
+            )?;
             record(stat, inserted);
         }
         return Ok(());

@@ -60,7 +60,8 @@ pub struct Store {
 /// MAX(ts) activity aggregate reads the index alone, not the wide turn body.
 /// 33 = historical peer messages (`said LIKE 'Another Claude session sent a
 /// message:%'`) stored as `user` are reclassified to `meta`.
-pub const SCHEMA_VERSION: i64 = 34;
+/// 35 = agent_turn.source_class distinguishes human input from harness injection.
+pub const SCHEMA_VERSION: i64 = 35;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -1069,6 +1070,17 @@ impl Store {
                      PRAGMA user_version = 34;",
                 )?;
             }
+            if self.schema_version()? < 35 {
+                let present = self.connection.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM pragma_table_info('agent_turn') WHERE name = 'source_class')",
+                    [],
+                    |row| row.get::<_, bool>(0),
+                )?;
+                if !present {
+                    self.connection.execute_batch(TURN_SOURCE_SCHEMA)?;
+                }
+                self.connection.execute_batch("PRAGMA user_version = 35;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1307,13 +1319,30 @@ impl Store {
         said: &str,
         cwd: Option<&str>,
     ) -> Result<usize> {
+        let source_class = match role {
+            "assistant" | "tool" | "system" | "meta" => "harness",
+            _ => "unknown",
+        };
+        self.add_turn_with_source(session, turn, ts, role, said, cwd, source_class)
+    }
+
+    fn add_turn_with_source(
+        &self,
+        session: &str,
+        turn: u64,
+        ts: u64,
+        role: &str,
+        said: &str,
+        cwd: Option<&str>,
+        source_class: &str,
+    ) -> Result<usize> {
         let sid = self.session_id(session)?;
         let role_id = self.intern("dict_role", role)?;
         let cwd_id = cwd.map(|c| self.intern("dict_cwd", c)).transpose()?;
         Ok(self.connection.execute(
-            "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role_id, said, cwd_id)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-            params![sid, turn as i64, ts as i64, role_id, said, cwd_id],
+            "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role_id, said, cwd_id, source_class)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![sid, turn as i64, ts as i64, role_id, said, cwd_id, source_class],
         )?)
     }
 
@@ -3505,7 +3534,8 @@ impl Store {
         let path = query.path.as_deref();
         let limit = query.limit;
         let mut sql = String::from(
-            "SELECT s.value AS session, h.value AS harness, t.turn, t.ts, r.value AS role, t.said
+            "SELECT s.value AS session, h.value AS harness, t.turn, t.ts, r.value AS role,
+                    t.source_class AS source_class, t.said
              FROM agent_turn t
              JOIN dict_session s ON s.id = t.session_id
              JOIN dict_harness h ON h.id = (SELECT harness_id FROM agent_session a WHERE a.session_id = t.session_id)
@@ -3563,7 +3593,8 @@ impl Store {
                 "turn": row.get::<_, i64>(2)?,
                 "ts": row.get::<_, i64>(3)?,
                 "role": row.get::<_, String>(4)?,
-                "said": row.get::<_, String>(5)?,
+                "source_class": row.get::<_, String>(5)?,
+                "said": row.get::<_, String>(6)?,
             }))
         })?;
         for row in iter {
@@ -3692,7 +3723,28 @@ impl Store {
         said: &str,
         cwd: Option<&str>,
     ) -> Result<usize> {
-        self.add_turn(session, turn, ts, role, said, cwd)
+        let source_class = match role {
+            "assistant" | "tool" | "system" | "meta" => "harness",
+            _ => "unknown",
+        };
+        self.write_turn_classified(session, turn, ts, role, said, cwd, source_class)
+    }
+
+    pub fn write_turn_classified(
+        &self,
+        session: &str,
+        turn: u64,
+        ts: u64,
+        role: &str,
+        said: &str,
+        cwd: Option<&str>,
+        source_class: &str,
+    ) -> Result<usize> {
+        anyhow::ensure!(
+            matches!(source_class, "human" | "harness" | "unknown"),
+            "unknown turn source class `{source_class}`"
+        );
+        self.add_turn_with_source(session, turn, ts, role, said, cwd, source_class)
     }
 
     /// The per-turn cwd for one session, in turn order, through the `v_turn_cwd`
@@ -3880,7 +3932,20 @@ fn project_line(
                     .and_then(serde_json::Value::as_str)
                     .unwrap_or("");
                 walk.turn += 1;
-                let inserted = store.add_turn(&sid, walk.turn, ts, role, said, cwd)?;
+                let source_class = match role {
+                    "user" => "human",
+                    "meta" | "assistant" | "tool" | "system" => "harness",
+                    _ => "unknown",
+                };
+                let inserted = store.write_turn_classified(
+                    &sid,
+                    walk.turn,
+                    ts,
+                    role,
+                    said,
+                    cwd,
+                    source_class,
+                )?;
                 walk.record(inserted);
                 first_turn.get_or_insert(walk.turn);
             }
@@ -4267,6 +4332,10 @@ const TURN_ACTIVITY_INDEX_SCHEMA: &str = "
 CREATE INDEX IF NOT EXISTS idx_turn_session_ts ON agent_turn(session_id, ts);
 ";
 
+const TURN_SOURCE_SCHEMA: &str = "
+ALTER TABLE agent_turn ADD COLUMN source_class TEXT NOT NULL DEFAULT 'unknown';
+";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_harness (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
@@ -4497,6 +4566,7 @@ CREATE TABLE IF NOT EXISTS agent_turn (
   role_id INTEGER NOT NULL,
   said TEXT,
   cwd_id INTEGER,
+  source_class TEXT NOT NULL DEFAULT 'unknown',
   PRIMARY KEY (session_id, turn)
 ) WITHOUT ROWID;
 -- A covering (session_id, ts) index: MAX(ts) per session answers from the
@@ -6596,6 +6666,35 @@ mod tests {
         let _ = std::fs::remove_file(&db_path);
     }
 
+    #[test]
+    fn v34_adds_unknown_source_class_to_existing_turns() {
+        let (path, store) = fresh_store("v35-turn-source-class");
+        store
+            .write_turn("ses-source-class", 1, 42, "user", "existing", None)
+            .unwrap();
+        store
+            .connection
+            .execute_batch(
+                "ALTER TABLE agent_turn DROP COLUMN source_class; PRAGMA user_version = 34;",
+            )
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(path.clone()).unwrap();
+        let source_class: String = migrated
+            .connection
+            .query_row(
+                "SELECT source_class FROM agent_turn
+                 WHERE session_id = (SELECT id FROM dict_session WHERE value = ?1)",
+                ["ses-source-class"],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(source_class, "unknown");
+        drop(migrated);
+        let _ = std::fs::remove_file(path);
+    }
+
     fn usage_record(message_id: &str, request: &str, output: i64, extra: &str) -> String {
         format!(
             r#"{{"type":"assistant","sessionId":"ses-1","timestamp":"2026-08-01T00:00:01.000Z",{request}"message":{{"id":"{message_id}","model":"claude-opus-5","usage":{{"input_tokens":10,"output_tokens":{output},"cache_read_input_tokens":700,"service_tier":"standard","cache_creation":{{"ephemeral_5m_input_tokens":33,"ephemeral_1h_input_tokens":4}}}},"content":[{extra}]}}}}"#
@@ -7948,7 +8047,7 @@ mod tests {
     /// The stored role of turn 1 for a transcript file ingested into a fresh
     /// store. `db` distinguishes the store from a peer test's siblings, since
     /// the temp paths are keyed only by process id and name.
-    fn stored_role(db: &str, path: &std::path::Path, line: &str) -> String {
+    fn stored_role_and_source(db: &str, path: &std::path::Path, line: &str) -> (String, String) {
         let db_path = temp_path(db);
         let _ = std::fs::remove_file(&db_path);
         let store = Store::open(db_path.clone()).unwrap();
@@ -7968,9 +8067,10 @@ mod tests {
         };
         let rows = store.query_turns(&filter).unwrap();
         let role = rows[0]["role"].as_str().unwrap().to_owned();
+        let source_class = rows[0]["source_class"].as_str().unwrap().to_owned();
         drop(store);
         let _ = std::fs::remove_file(&db_path);
-        role
+        (role, source_class)
     }
 
     /// A peer message injected by the CLI (origin.kind "peer", promptSource
@@ -7979,12 +8079,13 @@ mod tests {
     #[test]
     fn peer_message_ingests_as_meta() {
         let path = temp_path("peer_role_peer.jsonl");
-        let role = stored_role(
+        let (role, source_class) = stored_role_and_source(
             "db_peer_ingest",
             &path,
             r#"{"type":"user","isMeta":true,"promptSource":"system","origin":{"kind":"peer","from":"unknown"},"message":{"content":"Another Claude session sent a message:\nhello"}}"#,
         );
         assert_eq!(role, "meta");
+        assert_eq!(source_class, "harness");
         let _ = std::fs::remove_file(&path);
     }
 
@@ -7992,12 +8093,13 @@ mod tests {
     #[test]
     fn slash_command_body_ingests_as_meta() {
         let path = temp_path("peer_role_slash.jsonl");
-        let role = stored_role(
+        let (role, source_class) = stored_role_and_source(
             "db_slash",
             &path,
             r#"{"type":"user","isMeta":true,"promptSource":"queued","message":{"content":"/compact"}}"#,
         );
         assert_eq!(role, "meta");
+        assert_eq!(source_class, "harness");
         let _ = std::fs::remove_file(&path);
     }
 
@@ -8005,8 +8107,10 @@ mod tests {
     #[test]
     fn typed_line_ingests_as_user() {
         let path = temp_path("peer_role_typed.jsonl");
-        let role = stored_role("db_typed", &path, r#"{"type":"user","message":"hello"}"#);
+        let (role, source_class) =
+            stored_role_and_source("db_typed", &path, r#"{"type":"user","message":"hello"}"#);
         assert_eq!(role, "user");
+        assert_eq!(source_class, "human");
         let _ = std::fs::remove_file(&path);
     }
 
@@ -8015,12 +8119,13 @@ mod tests {
     #[test]
     fn interrupted_line_ingests_as_user() {
         let path = temp_path("peer_role_interrupt.jsonl");
-        let role = stored_role(
+        let (role, source_class) = stored_role_and_source(
             "db_interrupt",
             &path,
             r#"{"type":"user","message":{"content":[{"type":"text","text":"[Request interrupted by user]"}]}}"#,
         );
         assert_eq!(role, "user");
+        assert_eq!(source_class, "human");
         let _ = std::fs::remove_file(&path);
     }
 
@@ -8028,12 +8133,13 @@ mod tests {
     #[test]
     fn assistant_line_ingests_as_assistant() {
         let path = temp_path("peer_role_assistant.jsonl");
-        let role = stored_role(
+        let (role, source_class) = stored_role_and_source(
             "db_assistant",
             &path,
             r#"{"type":"assistant","message":{"content":[{"type":"text","text":"said"}]}}"#,
         );
         assert_eq!(role, "assistant");
+        assert_eq!(source_class, "harness");
         let _ = std::fs::remove_file(&path);
     }
 

@@ -484,6 +484,7 @@ mod tests {
             turn: index,
             ts: 1_700_000_000_000 + index,
             role: role.to_owned(),
+            source_class: "unknown".to_owned(),
             said: said.to_owned(),
         }
     }
