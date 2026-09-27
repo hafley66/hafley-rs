@@ -1376,6 +1376,16 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 pub struct KotlinSource;
 
 impl Source for KotlinSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "kotlin"
     }

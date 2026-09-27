@@ -20,6 +20,9 @@ impl std::fmt::Display for OpError {
 
 pub type OpResult<T> = Result<T, OpError>;
 
+#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize, Default)]
+pub struct CapabilitiesArgs {}
+
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct ExtractArgs {
   #[command(flatten)]

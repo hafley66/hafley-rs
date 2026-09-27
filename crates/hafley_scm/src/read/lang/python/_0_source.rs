@@ -2497,6 +2497,16 @@ fn py_flow_expr(
 pub struct PythonSource;
 
 impl Source for PythonSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "python"
     }

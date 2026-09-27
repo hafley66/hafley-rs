@@ -2632,6 +2632,8 @@ pub struct RyiOutput {
 pub trait Source: Sync + Send {
     fn name(&self) -> &'static str;
     fn matches(&self, path: &str) -> bool;
+    /// The extraction planes this source can project, declared without parsing.
+    fn planes(&self) -> FamilyMask;
     /// One parse per backing engine, masked projections. Owns the arena(s)
     /// internally; returns owned output (no borrowed parse crosses the seam).
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput;

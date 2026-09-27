@@ -4151,6 +4151,16 @@ pub const MODULE: CallKind = CallKind::Ext(LangKind {
 pub const MODULE_DEF_NAME: &str = "<module>";
 
 impl Source for TsSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "ts"
     }

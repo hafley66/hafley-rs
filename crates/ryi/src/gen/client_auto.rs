@@ -103,6 +103,7 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
 fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> {
     let pair = match &cli.cmd {
         None => ("extract", serde_json::to_value(&cli.file)?),
+        Some(Cmd::Capabilities) => ("capabilities", serde_json::json!({})),
         Some(Cmd::Fast(args)) => ("fast", serde_json::to_value(args)?),
         Some(Cmd::Slow(args)) => ("slow", serde_json::to_value(args)?),
         Some(Cmd::Scip(args)) => ("scip", serde_json::to_value(args)?),
@@ -131,10 +132,12 @@ async fn run() -> Result<i32, ClientError> {
     let json = serde_json::to_string(&request)?;
     let socket = ready_socket(&server).await?;
     let method = match verb {
+        "capabilities" => Method::GET,
         "schema" => Method::GET,
         _ => Method::POST,
     };
     let path = match verb {
+        "capabilities" => "/capabilities",
         "extract" => "/extract",
         "fast" => "/fast",
         "slow" => "/slow",

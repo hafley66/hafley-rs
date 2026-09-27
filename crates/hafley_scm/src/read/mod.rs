@@ -79,9 +79,9 @@ pub use project::{
     resolve_project, resolve_project_jsonl, resolve_project_with_raw,
     resolve_project_with_tsi_tiers, scip_facts, scip_facts_jsonl, scip_family,
     scip_family_from_index, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
-    scip_index_location, sorted_lines, DietRow, FsBlobSource, ProjectError, RawProjectFact,
-    ResolveArm, ResolveArms, ResolveRequest, ResolveWithRawError, ScipFamilyRequest, ScipMode,
-    SourceTreeBlobSource, RESOLVE_ARMS,
+    scip_index_location, sorted_lines, CheckerTier, DietRow, FsBlobSource, ProjectError,
+    RawProjectFact, ResolveArm, ResolveArms, ResolveRequest, ResolveWithRawError,
+    ScipFamilyRequest, ScipMode, SourceTreeBlobSource, CHECKER_TIERS, RESOLVE_ARMS,
 };
 pub use reach::{reach_files, REACH_DEPTH_CAP};
 pub use rows::{Edge, FamilyBundle, Node};

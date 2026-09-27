@@ -117,6 +117,16 @@ pub const CONST_INIT: CallKind = CallKind::Ext(LangKind {
 });
 
 impl Source for RustSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "rust"
     }

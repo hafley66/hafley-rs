@@ -329,6 +329,16 @@ fn callee_of(
 pub struct FallbackSource;
 
 impl Source for FallbackSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: false,
+            call: true,
+            df: false,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "fallback"
     }
