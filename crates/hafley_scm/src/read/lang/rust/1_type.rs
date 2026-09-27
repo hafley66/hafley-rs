@@ -19,8 +19,6 @@ use crate::read::lang::rust_type_refs::type_probe_key;
 /// (Const entities + ConstValue rows). Port of v5 `rust_entities_from` +
 /// `rust_const_values_from`.
 pub(super) fn project_types(
-    parsed: &syn::File,
-    line_starts: &[u32],
     tree: &tree_sitter::Tree,
     source: &[u8],
     strings: &mut Strings,
@@ -76,7 +74,7 @@ pub(super) fn project_types(
     // The candidates walk runs AFTER every entity is in the bundle so an
     // impl-owned candidate finds its in-file self-type entity regardless of
     // item order (v5's text-keyed pass has no order sensitivity; spans do).
-    edge_candidates_from_tree(parsed, line_starts, tree, source, strings, sink);
+    edge_candidates_from_tree(tree, source, strings, sink);
     impl_self_type_candidates(rows.impl_self_heads, strings, sink);
 }
 

@@ -82,7 +82,9 @@ pub use tree_module_resolution_rows::module_resolution_rows_from_tree;
 pub use tree_module_specifier_rows::module_specifier_rows_from_tree;
 pub use tree_receiver_rows::receiver_rows_from_tree;
 pub use tree_type_candidate_rows::type_candidate_rows_from_tree;
-pub use tsi_syntax_rows::{tsi_syntax_rows, Arg as TsiSyntaxArg, TsiSyntaxRows};
+pub use tsi_syntax_rows::{
+    tsi_syntax_rows, tsi_syntax_rows_from_tree, Arg as TsiSyntaxArg, TsiSyntaxRows,
+};
 pub use type_candidate_rows::{
     bare_self_head, type_candidate_rows, TypeCandidateGroup, TypeCandidateKind, TypeCandidateOwner,
     TypeCandidateRow,
