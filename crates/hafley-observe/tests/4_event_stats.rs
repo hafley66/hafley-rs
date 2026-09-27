@@ -1,4 +1,6 @@
+extern crate hafley_observe as oh;
 use hafley_observe::{CountRecorder, FieldStats};
+use oh::test;
 use tracing_subscriber::prelude::*;
 
 #[test]

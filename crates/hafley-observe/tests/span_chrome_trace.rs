@@ -1,5 +1,7 @@
 #![cfg(feature = "chrome")]
 
+extern crate hafley_observe as oh;
+use oh::test;
 use std::fs;
 use std::path::PathBuf;
 use tracing_chrome::ChromeLayerBuilder;

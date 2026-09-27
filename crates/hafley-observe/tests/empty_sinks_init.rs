@@ -24,7 +24,8 @@ impl Write for Captured {
     }
 }
 
-#[test]
+// This test exercises the process-global subscriber installed by init.
+#[::core::prelude::v1::test]
 fn empty_sink_list_still_formats_events() {
     let captured = Captured::default();
     let writer = captured.clone();

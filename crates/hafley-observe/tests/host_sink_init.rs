@@ -24,7 +24,8 @@ impl Sink for Recorder {
     }
 }
 
-#[test]
+// This test exercises the process-global subscriber installed by init.
+#[::core::prelude::v1::test]
 fn host_sink_receives_filtered_events() {
     let recorder = Arc::new(Recorder::default());
     let config = Config {

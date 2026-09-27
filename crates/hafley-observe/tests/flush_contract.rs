@@ -2,6 +2,8 @@
 //! one owes the same thing: every row lands, once, in the order it was
 //! written.
 
+extern crate hafley_observe as oh;
+use oh::test;
 use std::sync::{Arc, Mutex};
 
 use hafley_observe::{Flush, Row, Sink, Writer};

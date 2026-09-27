@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-26
 type: improvement
-status: needs-decision
+status: open
 priority: low
 related: ['@oh-test-kit']
 labels: [observability]
@@ -12,7 +12,7 @@ labels: [observability]
 
 ## Description
 
-Idea only. Do not act. Written down so it survives the session.
+Stamping support is implemented in `hafley-observe`: tests import `oh::test`, and a scanner test fails when a test file contains the builtin-looking `#[test]` spelling without that import. Existing process-global subscriber tests use the fully qualified builtin test attribute so `oh::test` does not replace their dispatcher.
 
 ## The problem
 
@@ -60,8 +60,12 @@ without doing name resolution. A grep sees the same three characters either way,
 likely has to check for the `use oh::test;` import at file scope and treat its absence
 as the failure.
 
-## Reproduction receipt
+## Acceptance
 
-2026-09-26: current hafley-rs checkout has no `crates/oh` package or `oh::test` implementation; `rg --files crates` and manifest/source search return none. The observed tests use Rust's built-in `#[test]`, so the proposed stamping behavior has no OH test target to exercise in this repository.
+- [x] Test files using `#[test]` import `oh::test`.
+- [x] Scanner test fails with the file paths when an import is missing.
+- [ ] Scanner identifies newly added test functions that have no test attribute.
 
-Question: Should the OH test kit and stamp scanner be created in hafley-rs, or do they belong in another repository?
+## Progress receipt
+
+2026-09-26: `oh_testkit::every_test_file_imports_oh_test` passes in default and `fmt,sqlite-sink` feature modes. It checks Rust files under `crates/hafley-observe/src` and `tests`.

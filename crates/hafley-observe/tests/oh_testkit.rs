@@ -96,3 +96,36 @@ fn time_budget_reports_elapsed_limit() {
     }));
     assert!(result.is_err());
 }
+
+#[test(time_ms = 1000, logs = 5)]
+fn every_test_file_imports_oh_test() {
+    fn rust_files(root: &std::path::Path, files: &mut Vec<std::path::PathBuf>) {
+        for entry in std::fs::read_dir(root).expect("test source directory") {
+            let path = entry.expect("directory entry").path();
+            if path.is_dir() {
+                rust_files(&path, files);
+            } else if path.extension().is_some_and(|extension| extension == "rs") {
+                files.push(path);
+            }
+        }
+    }
+
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+    let mut files = Vec::new();
+    rust_files(&root.join("src"), &mut files);
+    rust_files(&root.join("tests"), &mut files);
+
+    let unstamped: Vec<_> = files
+        .into_iter()
+        .filter_map(|path| {
+            let source = std::fs::read_to_string(&path).expect("Rust source");
+            (source.contains("#[test") && !source.contains("use oh::test;"))
+                .then(|| path.strip_prefix(root).unwrap().display().to_string())
+        })
+        .collect();
+    assert!(
+        unstamped.is_empty(),
+        "test attributes without `use oh::test;`:\n{}",
+        unstamped.join("\n")
+    );
+}

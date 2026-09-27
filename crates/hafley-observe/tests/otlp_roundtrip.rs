@@ -7,6 +7,8 @@
 //! Skipped when otel-desktop-viewer is not found. The receiver is never faked:
 //! the test either runs the real viewer or does nothing.
 
+extern crate hafley_observe as oh;
+use oh::test;
 use std::net::TcpStream;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};

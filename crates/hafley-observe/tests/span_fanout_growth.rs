@@ -1,4 +1,6 @@
+extern crate hafley_observe as oh;
 use hafley_observe::{assert_growth, assert_growth_sized, CountRecorder, Growth};
+use oh::test;
 use tracing_subscriber::prelude::*;
 
 fn drive_batched(rows: usize) {
