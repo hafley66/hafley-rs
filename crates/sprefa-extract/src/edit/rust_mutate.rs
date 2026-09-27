@@ -158,6 +158,13 @@ impl Cleave for RustSource {
         let text = cx.text(&parent)?;
         let parsed = syn::parse_file(&text).ok()?;
         let (name, numbered) = module_name(file);
+        if parsed
+            .items
+            .iter()
+            .any(|item| matches!(item, syn::Item::Mod(module) if module.ident == name))
+        {
+            return None;
+        }
         let aim = match numbered {
             true => format!(
                 "#[path = \"{}\"] ",

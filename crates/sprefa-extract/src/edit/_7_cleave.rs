@@ -704,6 +704,14 @@ impl Plan {
                 "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
             ));
         }
+        if arm.name() == "rust"
+            && !rust_module_declared(&cx, &dest)
+            && (cx.contains(&dest) || arm.declare_new_file(&cx, &src, &dest).is_none())
+        {
+            return Err(format!(
+                "cleave destination {dest} is not declared by a Rust module; declare it or choose a declared module path"
+            ));
+        }
 
         let source = FileFacts::open(&cx, &src, true)?;
         if let Some(row) = source
@@ -2597,6 +2605,72 @@ fn package_view(cx: &MoveCx, language: &str, rel: &str) -> Option<PackageView> {
         _ => sprefa_extract::edit::ts_rehome::cross::package_deps(cx, rel)
             .map(|(name, deps)| (name.clone(), name.clone(), name, deps)),
     }
+}
+
+fn rust_module_declared(cx: &MoveCx, dest: &str) -> bool {
+    let Some((dir, file)) = dest.rsplit_once('/') else {
+        return matches!(file_stem(dest), Some("lib" | "main"));
+    };
+    let stem = file_stem(file).unwrap_or_default();
+    if matches!(stem, "lib" | "main") {
+        return true;
+    }
+    let (parent, module_name) = if stem == "mod" {
+        let Some((parent, module_name)) = dir.rsplit_once('/') else {
+            return false;
+        };
+        (parent, module_name)
+    } else {
+        (dir, stem)
+    };
+    let mut candidates = Vec::new();
+    if parent.is_empty() {
+        candidates.extend([
+            "lib.rs".to_string(),
+            "main.rs".to_string(),
+            "mod.rs".to_string(),
+        ]);
+    } else {
+        candidates.extend([format!("{parent}.rs"), format!("{parent}/mod.rs")]);
+        if parent == "src" {
+            candidates.extend([
+                "src/lib.rs".to_string(),
+                "src/main.rs".to_string(),
+                "src/mod.rs".to_string(),
+            ]);
+        }
+    }
+    candidates.into_iter().any(|path| {
+        cx.text(&path)
+            .and_then(|text| syn::parse_file(&text).ok())
+            .is_some_and(|parsed| {
+                parsed.items.into_iter().any(|item| {
+                    matches!(item, syn::Item::Mod(module)
+                            if module.ident == module_name || module_declares_path(&module, file))
+                })
+            })
+    })
+}
+
+fn module_declares_path(module: &syn::ItemMod, file: &str) -> bool {
+    module.attrs.iter().any(|attr| {
+        matches!(
+            &attr.meta,
+            syn::Meta::NameValue(value)
+                if value.path.is_ident("path")
+                    && matches!(
+                        &value.value,
+                        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(path), .. })
+                            if path.value() == file
+                    )
+        )
+    })
+}
+
+fn file_stem(path: &str) -> Option<&str> {
+    path.rsplit_once('/')
+        .map_or(path, |(_, file)| file)
+        .strip_suffix(".rs")
 }
 
 /// The manifest key a package specifier names: `serde` of `serde::de`, `@a/b` of

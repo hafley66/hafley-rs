@@ -384,6 +384,46 @@ fn macro_rules_items_are_named_unsupported() {
 }
 
 #[test]
+fn undeclared_destinations_stop_before_rewriting_callers() {
+    let fixture = fixture("basic", "undeclared-dest");
+    let stop = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args([
+            "cleave",
+            "src/util.rs#load_config",
+            "crates/new/src/x.rs",
+            "--drag",
+        ])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(stop.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&stop.stderr).contains("is not declared by a Rust module"));
+
+    let create = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args([
+            "cleave",
+            "src/util.rs#load_config",
+            "src/not_declared.rs",
+            "--drag",
+        ])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(create.status.code(), Some(0));
+    assert!(String::from_utf8_lossy(&create.stdout).contains("mod not_declared;"));
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(
@@ -474,15 +514,16 @@ fn a_commit_moves_the_item_its_uses_and_the_caller_and_still_compiles() {
 #[test]
 fn a_missing_destination_is_created_with_every_use_line() {
     let fixture = fixture("basic", "create");
-    cleave(
-        &fixture,
-        &["src/util.rs#load_config", "src/loader.rs", "--commit"],
-    );
     std::fs::write(
         fixture.root.join("src/lib.rs"),
         "pub mod app;\npub mod config;\npub mod loader;\npub mod log;\npub mod util;\n",
     )
     .unwrap();
+    cleave(
+        &fixture,
+        &["src/util.rs#load_config", "src/loader.rs", "--commit"],
+    );
+    assert!(read(&fixture, "src/lib.rs").contains("pub mod loader;"));
     assert_eq!(use_lines(&fixture, "src/loader.rs"), 3);
     assert!(read(&fixture, "src/app.rs").contains("use crate::loader::load_config;"));
     cargo_check(&fixture);
