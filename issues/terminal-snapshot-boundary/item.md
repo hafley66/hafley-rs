@@ -2,7 +2,7 @@
 created: 2026-08-30
 updated: 2026-08-30
 type: task
-status: open
+status: obsolete
 priority: high
 epic: terminal-multiplexer-substrate
 related: ['@tmux-pane-projection', '@harness-interface', '@mux-paste-path', '@terminal-runtime-models']
@@ -91,6 +91,10 @@ pub trait TerminalSnapshotSource: Send + Sync { fn snapshot(&self, target: &Term
 - [ ] Existing Instant terminal turn-visibility tests pass unchanged or are replaced by fixtures with byte-equivalent expected projections.
 - [ ] `cargo test -p boop-harness -p boop-turnvis` and the selected Instant terminal test suite pass.
 
+## Reproduction receipt
+
+`rg -n "XtermViewportAdapter|NativeTmuxPane" . --glob '!target/**' --glob '!*.lock'` finds only the card text; `src/terminal.ts` and the Instant source tree are absent from this checkout. The terminal snapshot defect cannot be reproduced in the current `hafley-rs` target.
+
 ## Tests Run
 
-Planning only.
+No product test applies in this checkout; no Instant source files are present.
