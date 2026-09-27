@@ -8,6 +8,9 @@ size: M
 labels: [domain-boop, intent-correctness, component-transcript]
 closed: 2026-09-27
 closed_by: codex
+commits:
+- hash: f2968375
+  summary: Add human-only transcript search
 ---
 
 # Search typed user turns separately from harness-injected user records
