@@ -68,7 +68,7 @@ pub use boop_store::{
     load_agent_session_graph_with_runtime, ActivityCount, ActivityScope, AgentSessionEdge,
     AgentSessionGraph, AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity,
     AgentSessionNode, AgentShellNode, FactKind, FactQuery, GroupBy, LoadAgentSessionGraph,
-    ToolResultAvailability, UsageQuery, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+    ToolResultAvailability, UsageQuery, AGENT_SESSION_GRAPH_SCHEMA_VERSION, AGENT_WATERFALL_SQL,
 };
 pub use boop_store::{
     AgentRuntimeRow, CommandRow, CompletionRecord, DeliveryState, EdgeRow, FactCursor, FetchRow,

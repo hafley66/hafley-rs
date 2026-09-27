@@ -40,6 +40,7 @@ pub use _0_session_graph::{
     load_agent_session_graph_with_runtime, AgentSessionEdge, AgentSessionGraph,
     AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity, AgentSessionNode,
     AgentShellNode, LoadAgentSessionGraph, SessionGraphReader, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
+    AGENT_WATERFALL_SQL,
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
