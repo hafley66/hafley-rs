@@ -899,6 +899,9 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     if let Some(bin) = spec.bin.as_deref().filter(|value| !value.is_empty()) {
         command.push_str(&format!(" --bin {}", shell_quote(bin)));
     }
+    if let Some(verify) = spec.verify.as_deref() {
+        command.push_str(&format!(" --verify {}", shell_quote(verify)));
+    }
     if let Some(session) = &spec.resume_session {
         command.push_str(&format!(" --resume {}", shell_quote(session)));
     }
@@ -1084,6 +1087,18 @@ mod supervisor_command_tests {
             ..spec()
         });
         assert!(!empty.contains("--bin"), "{empty}");
+    }
+
+    #[test]
+    fn the_spawn_line_carries_the_verify_command_as_one_argument() {
+        let command = supervisor_command(&SpawnSpec {
+            verify: Some("cargo nextest run -p boop-proc".to_owned()),
+            ..spec()
+        });
+        assert!(
+            command.contains("--verify 'cargo nextest run -p boop-proc'"),
+            "{command}"
+        );
     }
 }
 

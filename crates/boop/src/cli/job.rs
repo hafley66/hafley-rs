@@ -359,6 +359,7 @@ pub(crate) fn run_lane_supervisor(
     resume: Option<&str>,
     variant: Option<&str>,
     bin: Option<&str>,
+    verify: Option<&str>,
     mail_dir_arg: Option<&Path>,
 ) -> Result<()> {
     info!(
@@ -416,6 +417,7 @@ pub(crate) fn run_lane_supervisor(
         resume: resume.map(str::to_owned),
         post_pr,
         pr_base,
+        verify: verify.map(str::to_owned),
     };
     // A handshake that fails here happens before the supervisor exists, so
     // nothing else would tell the parent this lane never opened. A rejected
@@ -1426,6 +1428,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             spawn_id,
             post_pr,
             pr_base: Some(pr_base),
+            verify: args.verify.clone(),
             ..boop::harness::SpawnSpec::default()
         },
     )?;
@@ -1866,6 +1869,7 @@ pub(crate) fn run_fork(
             expect_path: Vec::new(),
             expect_commit_subject: Vec::new(),
             expect_commits_at_least: None,
+            verify: None,
             env: Vec::new(),
             commit_push: None,
             post_pr: false,
@@ -2268,6 +2272,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             expect_path,
             expect_commit_subject,
             expect_commits_at_least,
+            verify,
             env,
             commit_push,
             post_pr,
@@ -2313,6 +2318,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                     expect_path,
                     expect_commit_subject,
                     expect_commits_at_least,
+                    verify,
                     env,
                     commit_push,
                     post_pr,
@@ -2331,6 +2337,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             resume,
             variant,
             bin,
+            verify,
             mail_dir,
         } => run_lane_supervisor(
             registry,
@@ -2342,6 +2349,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             resume.as_deref(),
             variant.as_deref(),
             bin.as_deref(),
+            verify.as_deref(),
             mail_dir.as_deref(),
         ),
         LaneCmd::Get {

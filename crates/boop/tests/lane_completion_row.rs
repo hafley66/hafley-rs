@@ -99,6 +99,7 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         resume: None,
         post_pr: false,
         pr_base: "main".to_owned(),
+        verify: None,
     };
     std::thread::spawn(move || {
         let _ = boop::supervise::run(lane, &mut DoneChannel);
@@ -109,7 +110,7 @@ fn one_lane_exit_writes_exactly_one_result_row() {
     );
     assert_eq!(
         result_rows(&dir, "mine"),
-        vec!["lane mine done rc=0".to_owned()]
+        vec!["lane mine done rc=0 (verified: none)".to_owned()]
     );
 
     let epilogue = boop::lane::pane_epilogue("mine", &dir);
@@ -124,7 +125,10 @@ fn one_lane_exit_writes_exactly_one_result_row() {
     assert!(status.success(), "the epilogue itself must succeed");
 
     let rows = result_rows(&dir, "mine");
-    assert_eq!(rows, vec!["lane mine done rc=0".to_owned()]);
+    assert_eq!(
+        rows,
+        vec!["lane mine done rc=0 (verified: none)".to_owned()]
+    );
 
     let routes = boop::bus::read_routes(&dir).unwrap();
     assert!(

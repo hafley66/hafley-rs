@@ -1115,6 +1115,9 @@ enum LaneCmd {
         /// complete.
         #[arg(long = "expect-commits-at-least")]
         expect_commits_at_least: Option<u32>,
+        /// Run this command in the lane worktree before writing its result row.
+        #[arg(long, value_name = "COMMAND")]
+        verify: Option<String>,
         /// An env var the lane's spawn inherits, `KEY=VAL`. Repeatable; each
         /// value is shell-quoted onto the supervisor's spawn command.
         #[arg(long = "env", value_name = "KEY=VAL", value_parser = parse_env_kv)]
@@ -1216,6 +1219,9 @@ enum LaneCmd {
         /// The executable the harness runs as, threaded from `lane create`.
         #[arg(long)]
         bin: Option<String>,
+        /// Validation command carried from `lane create`.
+        #[arg(long)]
+        verify: Option<String>,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -2292,18 +2298,27 @@ mod tests {
             "zfable",
             "--bin",
             "ccz",
+            "--verify",
+            "cargo nextest run -p boop-proc",
         ])
         .expect("parse lane create --bin");
         match cli.command {
             Some(SubCmd::Beep {
                 cmd:
                     Some(BeepCmd::Lane {
-                        cmd: LaneCmd::Create { bin, preset, .. },
+                        cmd:
+                            LaneCmd::Create {
+                                bin,
+                                preset,
+                                verify,
+                                ..
+                            },
                     }),
                 ..
             }) => {
                 assert_eq!(bin.as_deref(), Some("ccz"));
                 assert_eq!(preset.as_deref(), Some("zfable"));
+                assert_eq!(verify.as_deref(), Some("cargo nextest run -p boop-proc"));
             }
             other => panic!("lane create parsed as {:?}", other.is_some()),
         }
@@ -2320,16 +2335,21 @@ mod tests {
             "/tmp/brief.md",
             "--bin",
             "ccz",
+            "--verify",
+            "cargo nextest run -p boop-proc",
         ])
         .expect("parse lane run --bin");
         match cli.command {
             Some(SubCmd::Beep {
                 cmd:
                     Some(BeepCmd::Lane {
-                        cmd: LaneCmd::Run { bin, .. },
+                        cmd: LaneCmd::Run { bin, verify, .. },
                     }),
                 ..
-            }) => assert_eq!(bin.as_deref(), Some("ccz")),
+            }) => {
+                assert_eq!(bin.as_deref(), Some("ccz"));
+                assert_eq!(verify.as_deref(), Some("cargo nextest run -p boop-proc"));
+            }
             other => panic!("lane run parsed as {:?}", other.is_some()),
         }
     }

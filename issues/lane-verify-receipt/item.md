@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-27
 type: feature
-status: needs-info
+status: fixed
 priority: normal
 labels: [boop, lane, intent-correctness]
 ---
@@ -78,6 +78,10 @@ the done mail as a nonzero exit does.
 
 ## Tests Run
 
+- `cargo nextest run -p boop-proc -j 2 -E 'test(/verify_failure_sets_the_result_rc_and_carries_a_bounded_receipt|result_without_verify_says_verified_none|an_unmet_expectation_turns_exit_zero_into_rc_four/)'` (3 passed)
+- `cargo nextest run -p boop-harness -j 2 -E 'test(/the_spawn_line_carries_the_verify_command_as_one_argument/)'` (1 passed)
+- `cargo nextest run -p boop -j 2 -E 'test(/lane_create_and_lane_run_both_take_a_bin_override|one_lane_exit_writes_exactly_one_result_row/)'` (2 passed)
+
 ## Implementation Notes
 
 Related: the lane brief form that worked this session is
@@ -88,6 +92,14 @@ lift into `lane create`.
 
 ## Comments
 
-### 2026-09-27T04:41:02Z · @codex
+### 2026-09-27 · reproduction
 
 Repro on current installed Boop: `boop beep lane --help` lists no verify subcommand; current result rows carry process exit status only. The card names two valid contracts, both affecting who can skip verification, so implementation awaits that choice.
+
+### 2026-09-27 · user decision
+
+Option 1: `lane create --verify <command>` runs after the agent goes idle and before the result row, in the lane worktree with its `CARGO_TARGET_DIR`. Store exit code, duration and output tail on the row; row rc equals verify rc when set. Without a command, report `verified: none`.
+
+### 2026-09-27 · implementation receipt
+
+`--verify` is carried in the canonical spawn type and supervisor command. The supervisor runs it in the lane cwd, captures combined output with an 8 KiB tail, and stores the command, exit code, duration and tail as JSON in result-row detail. The visible result body includes `verified: pass`, `verified: fail`, or `verified: none`. A fixture command exiting 1 writes rc 1 and the captured tail.

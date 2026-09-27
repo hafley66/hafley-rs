@@ -638,6 +638,8 @@ pub struct LaneRun {
     pub post_pr: bool,
     /// The branch `gh pr create --base` targets when `post_pr` is set.
     pub pr_base: String,
+    /// Validation command run in the lane worktree before each result row.
+    pub verify: Option<String>,
 }
 
 /// One inbox message the supervisor has taken responsibility for.
@@ -2314,6 +2316,57 @@ fn head_progress_detail(lane: &LaneRun) -> String {
     )
 }
 
+#[derive(serde::Serialize)]
+struct VerifyReceipt {
+    command: String,
+    exit_code: i32,
+    duration_ms: u64,
+    output_tail: String,
+}
+
+const VERIFY_OUTPUT_TAIL_BYTES: usize = 8 * 1024;
+
+/// Run the declared check in the lane worktree. The supervisor inherits the
+/// lane's CARGO_TARGET_DIR from the spawn environment.
+fn run_verify(lane: &LaneRun, command: &str) -> VerifyReceipt {
+    let started = Instant::now();
+    let output = std::process::Command::new("sh")
+        .args(["-c", &format!("{command} 2>&1")])
+        .current_dir(&lane.cwd)
+        .output();
+    let (exit_code, output) = match output {
+        Ok(output) => (output.status.code().unwrap_or(128), output.stdout),
+        Err(error) => (127, error.to_string().into_bytes()),
+    };
+    let output = String::from_utf8_lossy(&output);
+    let tail_start = output.len().saturating_sub(VERIFY_OUTPUT_TAIL_BYTES);
+    let tail_start = output
+        .char_indices()
+        .find_map(|(index, _)| (index >= tail_start).then_some(index))
+        .unwrap_or(output.len());
+    VerifyReceipt {
+        command: command.to_owned(),
+        exit_code,
+        duration_ms: started.elapsed().as_millis().min(u64::MAX as u128) as u64,
+        output_tail: output[tail_start..].to_owned(),
+    }
+}
+
+fn result_verify_detail(receipt: Option<&VerifyReceipt>) -> String {
+    match receipt {
+        Some(receipt) => format!(
+            "verified: {} ({})",
+            if receipt.exit_code == 0 {
+                "pass"
+            } else {
+                "fail"
+            },
+            serde_json::to_string(receipt).unwrap_or_else(|_| "{}".to_owned())
+        ),
+        None => "verified: none".to_owned(),
+    }
+}
+
 /// Write the lane's result row before the pane can evaporate: a killed pane
 /// never runs its epilogue, and the waiter reads only this mailbox.
 fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
@@ -2324,7 +2377,19 @@ fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
         );
         return;
     };
-    let (exit_code, detail) = apply_expectations(lane, exit_code, detail);
+    let (expected_exit_code, detail) = apply_expectations(lane, exit_code, detail);
+    let verification = lane
+        .verify
+        .as_deref()
+        .map(|command| run_verify(lane, command));
+    let exit_code = verification
+        .as_ref()
+        .map_or(expected_exit_code, |receipt| receipt.exit_code);
+    let verify_detail = result_verify_detail(verification.as_ref());
+    let detail = match detail {
+        Some(detail) => Some(format!("{detail}; {verify_detail}")),
+        None => Some(verify_detail),
+    };
     let progress = head_progress_detail(lane);
     let detail = match (detail, progress.is_empty()) {
         (Some(detail), false) => Some(format!("{detail}{progress}")),
@@ -3169,6 +3234,7 @@ mod tests {
             resume: None,
             post_pr: false,
             pr_base: "main".to_owned(),
+            verify: None,
         };
         let mut watch = ParentWatch {
             policy: ParentDeathPolicy::Orphan,
@@ -3636,7 +3702,57 @@ mod tests {
             resume: None,
             post_pr: false,
             pr_base: "main".to_owned(),
+            verify: None,
         }
+    }
+
+    #[test]
+    fn verify_failure_sets_the_result_rc_and_carries_a_bounded_receipt() {
+        let dir = tempdir();
+        let mut lane = parented_lane(&dir, "verify-fails", "coordinator");
+        lane.verify = Some(
+            "python3 -c 'import sys; print(\"x\" * 10000); sys.stdout.write(\"verify-fixture-tail\"); sys.exit(1)'"
+                .to_owned(),
+        );
+
+        record_result(&lane, 0, None);
+
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].rc, Some(1));
+        assert!(rows[0].body.contains("verified: fail"), "{}", rows[0].body);
+        let detail = rows[0].detail.as_deref().unwrap_or_default();
+        let receipt: serde_json::Value = serde_json::from_str(
+            detail
+                .split_once("verified: fail (")
+                .unwrap()
+                .1
+                .strip_suffix(')')
+                .unwrap(),
+        )
+        .unwrap();
+        assert!(receipt["command"]
+            .as_str()
+            .unwrap()
+            .contains("verify-fixture-tail"));
+        assert_eq!(receipt["exit_code"], 1);
+        assert!(receipt["duration_ms"].as_u64().is_some());
+        let tail = receipt["output_tail"].as_str().unwrap();
+        assert!(tail.len() <= VERIFY_OUTPUT_TAIL_BYTES);
+        assert!(tail.ends_with("verify-fixture-tail"), "{tail:?}");
+    }
+
+    #[test]
+    fn result_without_verify_says_verified_none() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "verify-none", "coordinator");
+
+        record_result(&lane, 0, None);
+
+        let rows = result_rows(&dir);
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].rc, Some(0));
+        assert!(rows[0].body.contains("verified: none"), "{}", rows[0].body);
     }
 
     fn rows_of_kind(dir: &Path, kind: &str) -> Vec<bus::Message> {
@@ -3815,7 +3931,10 @@ mod tests {
             *turns.lock().unwrap(),
             [START_ACK_PROMPT, "do the work\n", "do the work\n"]
         );
-        assert_eq!(result_rows(&dir)[0].body, "lane mine done rc=0");
+        assert_eq!(
+            result_rows(&dir)[0].body,
+            "lane mine done rc=0 (verified: none)"
+        );
     }
 
     #[derive(Clone, Default)]
@@ -3857,7 +3976,7 @@ mod tests {
         assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT]);
         assert_eq!(
             result_rows(&dir)[0].body,
-            "lane mine done rc=1 (startup acknowledgment failed: provider never acknowledged)"
+            "lane mine done rc=1 (startup acknowledgment failed: provider never acknowledged; verified: none)"
         );
         assert!(rows_of_kind(&dir, "yield").is_empty());
     }
@@ -4085,7 +4204,10 @@ mod tests {
 
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
         assert_eq!(*turns.lock().unwrap(), [RESUME_NUDGE]);
-        assert_eq!(result_rows(&dir)[0].body, "lane resume-nudge done rc=0");
+        assert_eq!(
+            result_rows(&dir)[0].body,
+            "lane resume-nudge done rc=0 (verified: none)"
+        );
     }
 
     // FAIL-PRE-FIX: the trail pin outlives `lane delete`, the worktree and the
@@ -4320,7 +4442,10 @@ mod tests {
             *turns.lock().unwrap(),
             [START_ACK_PROMPT, "do the work\n", "do the work\n"]
         );
-        assert_eq!(result_rows(&dir)[0].body, "lane empty-once done rc=0");
+        assert_eq!(
+            result_rows(&dir)[0].body,
+            "lane empty-once done rc=0 (verified: none)"
+        );
     }
 
     /// The second empty brief turn is the lane's answer: the parent's row leads
@@ -4343,7 +4468,7 @@ mod tests {
         assert_eq!(
             result_rows(&dir)[0].body,
             "lane empty-twice done rc=1 \
-             (brief turn produced nothing twice; incomplete: missing path done.txt)"
+             (brief turn produced nothing twice; incomplete: missing path done.txt; verified: none)"
         );
     }
 
@@ -4365,7 +4490,10 @@ mod tests {
 
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
         assert_eq!(*turns.lock().unwrap(), [START_ACK_PROMPT, "do the work\n"]);
-        assert_eq!(result_rows(&dir)[0].body, "lane no-expect done rc=0");
+        assert_eq!(
+            result_rows(&dir)[0].body,
+            "lane no-expect done rc=0 (verified: none)"
+        );
     }
 
     /// The empty-turn rail reads the receipt, never the stop reason.
@@ -4408,7 +4536,7 @@ mod tests {
         assert_eq!(rows.len(), 1);
         assert_eq!(
             rows[0].body,
-            "lane mine done rc=101 (panic: harness stream vanished mid-frame)"
+            "lane mine done rc=101 (panic: harness stream vanished mid-frame; verified: none)"
         );
     }
 
@@ -4431,7 +4559,10 @@ mod tests {
         assert_eq!(signal_exit(&lane, caught), 143);
         let rows = result_rows(&dir);
         assert_eq!(rows.len(), 1);
-        assert_eq!(rows[0].body, "lane mine done rc=143 (killed by SIGTERM)");
+        assert_eq!(
+            rows[0].body,
+            "lane mine done rc=143 (killed by SIGTERM; verified: none)"
+        );
     }
 
     #[derive(Clone, Default)]
@@ -4658,6 +4789,7 @@ mod tests {
             resume: None,
             post_pr: false,
             pr_base: "main".to_owned(),
+            verify: None,
         };
         yield_to_parent(&lane, "completed", &[]);
         assert!(rows_of_kind(&dir, "yield").is_empty());
@@ -4829,11 +4961,13 @@ mod tests {
         assert_eq!(rows[0].rc, Some(4));
         assert_eq!(
             rows[0].body,
-            format!("lane {lane_name} done rc=4 (incomplete: missing path plans/x.md)")
+            format!(
+                "lane {lane_name} done rc=4 (incomplete: missing path plans/x.md; verified: none)"
+            )
         );
         assert_eq!(
             rows[0].detail.as_deref(),
-            Some("incomplete: missing path plans/x.md")
+            Some("incomplete: missing path plans/x.md; verified: none")
         );
     }
 
@@ -5072,6 +5206,7 @@ mod tests {
             resume: None,
             post_pr: false,
             pr_base: "main".to_owned(),
+            verify: None,
         };
         record_result(&lane, 0, None);
         let rows = result_rows(&dir);

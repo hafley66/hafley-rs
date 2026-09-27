@@ -266,6 +266,8 @@ pub struct SpawnSpec {
     pub expect_path: Vec<String>,
     pub expect_commit_subject: Vec<String>,
     pub expect_commits_at_least: Option<u32>,
+    /// Validation command Boop runs before writing the lane result row.
+    pub verify: Option<String>,
     pub env: Vec<(String, String)>,
     pub commit_push: Option<String>,
     pub no_post_pr: bool,
@@ -324,6 +326,7 @@ impl Default for SpawnSpec {
             expect_path: Vec::new(),
             expect_commit_subject: Vec::new(),
             expect_commits_at_least: None,
+            verify: None,
             env: Vec::new(),
             commit_push: None,
             no_post_pr: false,
