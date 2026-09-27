@@ -118,6 +118,62 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
     );
     assert!(!resident.socket().exists(), "direct ryii skips the socket");
 
+    let relative_cwd = workspace.join("crates/soopy");
+    let relative_cache = scratch.path().join("relative-cache");
+    let mut relative_daemon = DaemonGuard::new(&relative_cache);
+    let direct_dot = Command::new(&server)
+        .args(["fast", "."])
+        .current_dir(&relative_cwd)
+        .env("DL_TRAIL", "0")
+        .env("RUST_LOG", "off")
+        .output()
+        .expect("direct relative cwd command");
+    assert!(
+        direct_dot.status.success(),
+        "direct fast .: {}",
+        String::from_utf8_lossy(&direct_dot.stderr)
+    );
+    assert!(
+        !relative_daemon.socket().exists(),
+        "direct fast . does not start a daemon"
+    );
+    let daemon_dot = Command::new(&client)
+        .args(["fast", "."])
+        .current_dir(&relative_cwd)
+        .env("XDG_CACHE_HOME", &relative_cache)
+        .env("RYI_IDLE_SECS", "5")
+        .env("DL_TRAIL", "0")
+        .env("RUST_LOG", "off")
+        .output()
+        .expect("daemon relative cwd command");
+    assert_eq!(
+        daemon_dot.status.code(),
+        direct_dot.status.code(),
+        "fast . exit code"
+    );
+    let first_difference = daemon_dot
+        .stdout
+        .iter()
+        .zip(&direct_dot.stdout)
+        .position(|(daemon, direct)| daemon != direct);
+    let counts = |bytes: &[u8]| {
+        let mut counts = std::collections::BTreeMap::<String, usize>::new();
+        for line in bytes
+            .split(|byte| *byte == b'\n')
+            .filter(|line| !line.is_empty())
+        {
+            let row: serde_json::Value = serde_json::from_slice(line).expect("fast JSONL row");
+            *counts
+                .entry(row["record"].as_str().unwrap_or("?").to_string())
+                .or_default() += 1;
+        }
+        counts
+    };
+    assert!(daemon_dot.stdout == direct_dot.stdout,
+        "fast . stdout from the same cwd: daemon {} bytes, direct {} bytes, first difference {first_difference:?}, daemon counts {:?}, direct counts {:?}",
+        daemon_dot.stdout.len(), direct_dot.stdout.len(), counts(&daemon_dot.stdout), counts(&direct_dot.stdout));
+    assert!(relative_daemon.stop(), "relative daemon exited");
+
     let trace = scratch.path().join("daemon-observe.json");
     let first = run(&client, &cache, &["fast", file], None, Some(&trace));
     assert!(

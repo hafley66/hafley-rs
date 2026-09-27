@@ -123,7 +123,7 @@ pub fn scm_edges(paths: &[PathBuf]) -> Result<Vec<ScmEdge>, ScmError> {
     let mut references = Vec::new();
     let mut imports = Vec::new();
     for path in expand(paths)? {
-        let Some((name, end, captured)) = file_captures(&path)? else {
+        let Some((name, end, captured)) = file_captures(&path, None)? else {
             continue;
         };
         let root = store.node(NodeKind::Root, "", &name, 0, end)?;
@@ -308,9 +308,16 @@ fn span_names(spans: &[Capture], definitions: &[Capture]) -> BTreeMap<(u32, u32)
 /// Every pass-1 row for the supplied files, in emission order. One file's rows
 /// are a function of that file alone.
 pub fn scm_facts(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ScmError> {
+    scm_facts_at(paths, None)
+}
+
+pub(crate) fn scm_facts_at(
+    paths: &[PathBuf],
+    root: Option<&Path>,
+) -> Result<Vec<FlatFact>, ScmError> {
     let mut facts = Vec::new();
     for path in expand(paths)? {
-        facts.extend(file_facts(&path)?);
+        facts.extend(file_facts(&path, root)?);
     }
     Ok(facts)
 }
@@ -332,8 +339,8 @@ fn query_for(path: &str) -> Option<(RyiLang, &'static str)> {
     Some((source.extract_lang(path)?, source.scm_query(path)?))
 }
 
-fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScmError> {
-    let Some((name, end, captured)) = file_captures(path)? else {
+fn file_facts(path: &Path, root: Option<&Path>) -> Result<Vec<FlatFact>, ScmError> {
+    let Some((name, end, captured)) = file_captures(path, root)? else {
         return Ok(Vec::new());
     };
     Ok(rows(&name, end, captured))
@@ -341,12 +348,20 @@ fn file_facts(path: &Path) -> Result<Vec<FlatFact>, ScmError> {
 
 /// One file's pass: the engine runs the cached bundled query; the arena's
 /// captures are every later projection's input.
-fn file_captures(path: &Path) -> Result<Option<(String, u32, BTreeSet<Capture>)>, ScmError> {
+fn file_captures(
+    path: &Path,
+    root: Option<&Path>,
+) -> Result<Option<(String, u32, BTreeSet<Capture>)>, ScmError> {
     let name = path.to_string_lossy().to_string();
     let Some((lang, query_text)) = query_for(&name) else {
         return Ok(None);
     };
-    let source = std::fs::read(path).map_err(|error| ScmError::Io {
+    let io_path = if path.is_absolute() {
+        path.to_path_buf()
+    } else {
+        root.map_or_else(|| path.to_path_buf(), |root| root.join(path))
+    };
+    let source = std::fs::read(io_path).map_err(|error| ScmError::Io {
         path: name.clone(),
         detail: error.to_string(),
     })?;
