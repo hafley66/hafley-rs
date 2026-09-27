@@ -14,6 +14,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+use petgraph::algo::dominators::simple_fast;
+use petgraph::graph::{DiGraph, NodeIndex};
+
 use crate::read::lang::source_for;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::shape::{NodeRef, Span, Strings};
@@ -516,6 +519,112 @@ impl<'a> CfgBuild<'a> {
                 self.connect(&flow.exits, exit);
             }
             None => self.edge(entry, exit, CfgEdgeKind::Exit),
+        }
+        self.control_dependence(entry, exit);
+    }
+
+    /// Add control-dependence edges from CFG post-dominators. Every edge stays
+    /// in `CfgF`; `Control` is an additional edge kind in that family.
+    fn control_dependence(&mut self, entry: NodeRef, exit: NodeRef) {
+        let start = entry.0 as usize;
+        let end = self.bundle.nodes.len();
+        let count = end - start;
+        if !(start..end).any(|node| {
+            matches!(
+                self.bundle.nodes[node].kind,
+                CfgNodeKind::Branch | CfgNodeKind::Loop
+            )
+        }) {
+            return;
+        }
+        let mut successors = vec![Vec::<usize>::new(); count];
+        for edge in &self.bundle.edges {
+            let from = edge.src.0 as usize;
+            let to = edge.dst.0 as usize;
+            if (start..end).contains(&from)
+                && (start..end).contains(&to)
+                && edge.kind != CfgEdgeKind::Control
+            {
+                successors[from - start].push(to - start);
+            }
+        }
+
+        let exit = exit.0 as usize - start;
+        let mut reachable = vec![false; count];
+        let mut work = vec![0];
+        reachable[0] = true;
+        while let Some(node) = work.pop() {
+            for &next in &successors[node] {
+                if !reachable[next] {
+                    reachable[next] = true;
+                    work.push(next);
+                }
+            }
+        }
+        let nodes: Vec<usize> = (0..count).filter(|&node| reachable[node]).collect();
+        if !reachable[exit] {
+            return;
+        }
+
+        let mut reversed = DiGraph::<(), ()>::new();
+        for _ in 0..count {
+            reversed.add_node(());
+        }
+        for (from, next) in successors.iter().enumerate() {
+            for &to in next {
+                reversed.add_edge(NodeIndex::new(to), NodeIndex::new(from), ());
+            }
+        }
+        let post_dominators = simple_fast(&reversed, NodeIndex::new(exit));
+
+        let mut controls = Vec::new();
+        for &controller in &nodes {
+            if !matches!(
+                self.bundle.nodes[controller + start].kind,
+                CfgNodeKind::Branch | CfgNodeKind::Loop
+            ) {
+                continue;
+            }
+            let targets: Vec<usize> = successors[controller]
+                .iter()
+                .copied()
+                .filter(|&target| reachable[target])
+                .collect();
+            if targets.len() < 2 {
+                continue;
+            }
+            let controller_ix = NodeIndex::new(controller);
+            let stop = post_dominators.immediate_dominator(controller_ix);
+            for target in targets {
+                let target_ix = NodeIndex::new(target);
+                let mut ancestor = Some(controller_ix);
+                let mut target_post_dominates_controller = false;
+                while let Some(node) = ancestor {
+                    if node == target_ix {
+                        target_post_dominates_controller = true;
+                        break;
+                    }
+                    ancestor = post_dominators.immediate_dominator(node);
+                }
+                if target_post_dominates_controller {
+                    continue;
+                }
+                let mut runner = Some(target_ix);
+                while let Some(node) = runner {
+                    if Some(node) == stop {
+                        break;
+                    }
+                    controls.push((controller, node.index()));
+                    runner = post_dominators.immediate_dominator(node);
+                }
+            }
+        }
+        for (controller, dependent) in controls {
+            self.edge(
+                NodeRef((controller + start) as u32),
+                NodeRef((dependent + start) as u32),
+                CfgEdgeKind::Control,
+            );
         }
     }
 

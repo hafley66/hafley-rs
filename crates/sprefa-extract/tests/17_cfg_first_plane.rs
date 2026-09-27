@@ -156,6 +156,9 @@ fn cfg_edges(path: &str, source: &str) -> BTreeSet<String> {
             ..
         } = fact
         {
+            if kind == "control" {
+                continue;
+            }
             set.insert(format!(
                 "{} -{kind}-> {}",
                 label(source, from_kind.as_deref().unwrap_or(""), from),
@@ -164,6 +167,43 @@ fn cfg_edges(path: &str, source: &str) -> BTreeSet<String> {
         }
     }
     set
+}
+
+#[test]
+fn ts_if_emits_control_dependence_in_the_cfg_family() {
+    let source =
+        "function choose(flag: boolean) { if (flag) { left(); } else { right(); } after(); }";
+    let mut controls = BTreeSet::new();
+    for fact in cfg_facts("choose.ts", source.as_bytes()) {
+        if let FlatFact::Edge {
+            family: FamilyTag::Cfg,
+            kind,
+            from,
+            from_kind,
+            to,
+            to_kind,
+            ..
+        } = fact
+        {
+            if kind == "control" {
+                controls.insert(format!(
+                    "{} -control-> {}",
+                    label(source, from_kind.as_deref().unwrap_or(""), from),
+                    label(source, to_kind.as_deref().unwrap_or(""), to),
+                ));
+            }
+        }
+    }
+    assert_eq!(
+        controls,
+        [
+            "branch(if (flag) { left(); } else {) -control-> stmt(else { right(); })",
+            "branch(if (flag) { left(); } else {) -control-> stmt({ left(); })",
+        ]
+        .into_iter()
+        .map(str::to_string)
+        .collect()
+    );
 }
 
 fn expect(actual: BTreeSet<String>, wanted: &[&str]) {

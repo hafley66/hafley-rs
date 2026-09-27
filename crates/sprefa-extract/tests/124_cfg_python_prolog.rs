@@ -39,6 +39,9 @@ fn cfg_edges(path: &str, source: &str) -> BTreeSet<String> {
             ..
         } = fact
         {
+            if kind == "control" {
+                continue;
+            }
             set.insert(format!(
                 "{} -{kind}-> {}",
                 label(source, from_kind.as_deref().unwrap_or(""), from),

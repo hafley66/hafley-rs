@@ -110,7 +110,7 @@ pub struct ScipArgs {
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
-#[command(group(clap::ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path"])))]
+#[command(group(clap::ArgGroup::new("arm").required(true).args(["callers", "uses", "from", "call_path", "type_path", "flow_path", "slice"])))]
 pub struct GraphArgs {
   #[command(flatten)]
   #[serde(flatten)]
@@ -133,6 +133,9 @@ pub struct GraphArgs {
   #[doc = "Flow paths from BLOB@START:END"]
   #[arg(long, value_name = "BLOB@START:END")]
   pub flow_path: Option<String>,
+  #[doc = "Control-dependence slice at PATH:BYTE"]
+  #[arg(long, value_name = "PATH:BYTE")]
+  pub slice: Option<String>,
   #[doc = "Keep the fact store in a new SQLite database at PATH"]
   #[arg(long, value_name = "PATH")]
   pub sqlite: Option<PathBuf>,

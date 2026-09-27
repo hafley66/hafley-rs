@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: feature
-status: open
+status: fixed
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -46,10 +46,10 @@ exit   [2089,2419)
 ## Acceptance Criteria
 - [x] a `throw` edge kind lands in the cfg vocabulary
 - [x] try-body throws and throwing calls reach the catch entry; rust/go/ts/kotlin each covered by a fixture
-- [ ] post-dominance computed from the cfg
-- [ ] CDG edges emitted under the existing `edge family=cfg` vocabulary, no new record kind
-- [ ] `extract graph --slice PATH:BYTE` returns a closed statement set on one fixture
-- [ ] `cargo test --features cli` green
+- [x] post-dominance computed from the cfg
+- [x] CDG edges emitted under the existing `edge family=cfg` vocabulary, no new record kind
+- [x] `extract graph --slice PATH:BYTE` returns a closed statement set on one fixture
+- [x] `cargo test --features cli,read --test all -j 2` green
 
 G1 repro receipt: `ryii --kinds cfg /tmp/cdg-throw-repro.ts` showed no incoming edge to `catch_clause` and sent the try-body throw to callable exit. The G1 fixture now asserts call-site and explicit throw edges into the catch entry; a throw from the catch body still reaches callable exit.
 
@@ -59,6 +59,11 @@ G1 verification receipts:
 - `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --workspace -j 2 -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'`: 1378 passed, 203 skipped, 1 leaky.
 
 ## Tests Run
+
+- Red: before control-dependence generation, the new `ts_if_emits_control_dependence_in_the_cfg_family` assertion has no `control` edges for either arm. Green: it now pins the branch-to-arm edges, and `control_slice_returns_a_closed_statement_set` pins the backwards closure for `allow()` without including `after()`.
+- `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --features cli,read --locked -j 2 --test all -E 'test(/t_17_cfg_first_plane::|t_124_cfg_python_prolog::|control_slice_returns_a_closed_statement_set/)'`: 17 passed.
+- `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo test --features cli,read --test all -j 2`: 1,130 passed, 0 failed, 18 ignored.
+- Review follow-up: replaced the hand-written post-dominator fixpoint with `petgraph::algo::dominators::simple_fast` over the reversed per-callable CFG. `cargo check -p hafley_scm --offline -j 2` passes; the same focused CFG/slice selection passes 17/17 with `petgraph` 0.8.3 in both lockfiles.
 
 ## Implementation Notes
 
