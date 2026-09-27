@@ -23,8 +23,6 @@
 //! corpus carries, so the `--text-refs` scan has nothing stable to look for).
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::path::PathBuf;
-use std::sync::{Mutex, OnceLock};
 
 use rayon::prelude::*;
 use syn::spanned::Spanned;
@@ -874,7 +872,7 @@ struct RelocateEdit {
 }
 
 #[derive(Default)]
-struct RelocatePlan {
+pub(crate) struct RelocatePlan {
     /// Moved files whose decl this strategy owns, so the `#[path]` arm drops them.
     relocated: BTreeSet<String>,
     /// Keyed by (file, offset), which is exactly the key `0_move.rs` claims.
@@ -885,19 +883,8 @@ struct RelocatePlan {
 
 /// The plan, built once per root per process. A run carries ONE batch, so the
 /// key `crate_roots` already caches by is the key this caches by too.
-fn relocate_plan(cx: &MoveCx) -> &'static RelocatePlan {
-    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, &'static RelocatePlan>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut held = match cache.lock() {
-        Ok(held) => held,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    if let Some(existing) = held.get(cx.root()) {
-        return existing;
-    }
-    let leaked: &'static RelocatePlan = Box::leak(Box::new(build_relocate_plan(cx)));
-    held.insert(cx.root().to_path_buf(), leaked);
-    leaked
+fn relocate_plan(cx: &MoveCx) -> &RelocatePlan {
+    cx.relocate_plan.get_or_init(|| build_relocate_plan(cx))
 }
 
 fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
@@ -1750,34 +1737,25 @@ fn quote_of(literal: &str) -> char {
 
 /// Crate roots are mod-rs files and a `[[bin]] path` can put one anywhere, so
 /// the manifests are read. ONE read per root per process, `ts_rehome::resolver`'s law.
-fn crate_roots(cx: &MoveCx) -> &'static BTreeSet<String> {
-    static CACHE: OnceLock<Mutex<BTreeMap<PathBuf, &'static BTreeSet<String>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(|| Mutex::new(BTreeMap::new()));
-    let mut held = match cache.lock() {
-        Ok(held) => held,
-        Err(poisoned) => poisoned.into_inner(),
-    };
-    if let Some(existing) = held.get(cx.root()) {
-        return existing;
-    }
-    let mut roots: BTreeSet<String> = cx
-        .files()
-        .iter()
-        .filter(|rel| auto_crate_root(rel))
-        .cloned()
-        .collect();
-    for manifest in cx.files().iter().filter(|rel| is_manifest(rel)) {
-        let Some(text) = cx.text(manifest) else {
-            continue;
-        };
-        let package_dir = dirname(manifest);
-        for leaf in manifest_leaves(&text) {
-            roots.insert(join_rel(package_dir, toml_bare(&leaf.literal)));
+fn crate_roots(cx: &MoveCx) -> &BTreeSet<String> {
+    cx.crate_roots.get_or_init(|| {
+        let mut roots: BTreeSet<String> = cx
+            .files()
+            .iter()
+            .filter(|rel| auto_crate_root(rel))
+            .cloned()
+            .collect();
+        for manifest in cx.files().iter().filter(|rel| is_manifest(rel)) {
+            let Some(text) = cx.text(manifest) else {
+                continue;
+            };
+            let package_dir = dirname(manifest);
+            for leaf in manifest_leaves(&text) {
+                roots.insert(join_rel(package_dir, toml_bare(&leaf.literal)));
+            }
         }
-    }
-    let leaked: &'static BTreeSet<String> = Box::leak(Box::new(roots));
-    held.insert(cx.root().to_path_buf(), leaked);
-    leaked
+        roots
+    })
 }
 
 /// Cargo's target auto-discovery, as path shapes: the two library/binary roots,

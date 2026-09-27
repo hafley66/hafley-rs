@@ -11,6 +11,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Component, Path, PathBuf};
+use std::sync::OnceLock;
 
 use ignore::WalkBuilder;
 
@@ -30,7 +31,6 @@ pub const SKIP_DIRS: [&str; 4] = [".git", "target", "node_modules", ".boop-workt
 /// by contract and carries no worktree root, while a move resolves against
 /// on-disk truth through `oxc_resolver`.
 /// @comment-ok: the ProjectCx split is a decision the signature cannot show
-#[derive(Clone)]
 pub struct MoveCx {
     root: PathBuf,
     files: Vec<String>,
@@ -40,6 +40,30 @@ pub struct MoveCx {
     relocate_mod: bool,
     /// Texts a batch already rewrote in memory, read before the disk.
     overlay: BTreeMap<String, String>,
+    pub(crate) relocate_plan: OnceLock<crate::edit::rust_rehome::RelocatePlan>,
+    pub(crate) crate_roots: OnceLock<BTreeSet<String>>,
+    pub(crate) ts_packages: OnceLock<Vec<crate::edit::ts_rehome::cross::TsPackage>>,
+    pub(crate) ts_dep_plan: OnceLock<crate::edit::ts_rehome::cross::DepPlan>,
+    pub(crate) ts_resolver: OnceLock<Result<crate::lang::ts_resolve::TsResolver, String>>,
+}
+
+impl Clone for MoveCx {
+    fn clone(&self) -> Self {
+        Self {
+            root: self.root.clone(),
+            files: self.files.clone(),
+            present: self.present.clone(),
+            moved: self.moved.clone(),
+            shim: self.shim,
+            relocate_mod: self.relocate_mod,
+            overlay: self.overlay.clone(),
+            relocate_plan: OnceLock::new(),
+            crate_roots: OnceLock::new(),
+            ts_packages: OnceLock::new(),
+            ts_dep_plan: OnceLock::new(),
+            ts_resolver: OnceLock::new(),
+        }
+    }
 }
 
 impl MoveCx {
@@ -71,6 +95,11 @@ impl MoveCx {
             shim: false,
             relocate_mod: false,
             overlay: BTreeMap::new(),
+            relocate_plan: OnceLock::new(),
+            crate_roots: OnceLock::new(),
+            ts_packages: OnceLock::new(),
+            ts_dep_plan: OnceLock::new(),
+            ts_resolver: OnceLock::new(),
         })
     }
 
@@ -79,6 +108,7 @@ impl MoveCx {
     pub fn with_batch(mut self, moved: BTreeMap<String, String>, shim: bool) -> Self {
         self.moved = moved;
         self.shim = shim;
+        self.clear_plan_caches();
         self
     }
 
@@ -86,6 +116,7 @@ impl MoveCx {
     /// new parent and respelling `use` paths, instead of a `#[path]` attribute.
     pub fn with_relocate_mod(mut self, relocate_mod: bool) -> Self {
         self.relocate_mod = relocate_mod;
+        self.relocate_plan.take();
         self
     }
 
@@ -130,11 +161,20 @@ impl MoveCx {
             self.files.sort();
         }
         self.overlay.insert(rel.to_string(), text);
+        self.clear_plan_caches();
     }
 
     /// The batch's rewritten texts, path order.
     pub fn overlaid(&self) -> &BTreeMap<String, String> {
         &self.overlay
+    }
+
+    fn clear_plan_caches(&mut self) {
+        self.relocate_plan.take();
+        self.crate_roots.take();
+        self.ts_packages.take();
+        self.ts_dep_plan.take();
+        self.ts_resolver.take();
     }
 
     /// A path whose bytes are `rel`'s current text: the file itself, or a copy

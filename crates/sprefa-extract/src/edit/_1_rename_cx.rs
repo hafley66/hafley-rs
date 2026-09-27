@@ -8,7 +8,7 @@
 //! root-relative spelling law (`move_cx.rs:26,45,158`).
 
 use hafley_scm::atoms::Strings;
-use std::cell::RefCell;
+use std::cell::{OnceCell, RefCell};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
@@ -43,6 +43,7 @@ pub struct RenameCx {
     batch: Vec<RenameRequest>,
     overlay: BTreeMap<String, String>,
     rust_parse: RefCell<BTreeMap<String, syn::File>>,
+    pub(crate) ts_import_graph: OnceCell<crate::edit::ts_rename::ImportGraph>,
     names: Rc<RefCell<Strings>>,
 }
 
@@ -59,6 +60,7 @@ impl RenameCx {
             batch: Vec::new(),
             overlay: BTreeMap::new(),
             rust_parse: RefCell::new(BTreeMap::new()),
+            ts_import_graph: OnceCell::new(),
             names: Rc::new(RefCell::new(Strings::new())),
         })
     }
@@ -104,6 +106,7 @@ impl RenameCx {
 
     pub fn overlay(&mut self, rel: String, text: String) {
         self.rust_parse.get_mut().remove(&rel);
+        self.ts_import_graph.take();
         self.overlay.insert(rel, text);
     }
 
