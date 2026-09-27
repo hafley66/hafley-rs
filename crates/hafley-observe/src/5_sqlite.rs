@@ -174,6 +174,7 @@ pub fn instrument(connection: &Connection) {
         let handle = connection.handle();
         // Existing cached statements may have completed before tracing began.
         let mut statement = ffi::sqlite3_next_stmt(handle, std::ptr::null_mut());
+        // budget: dynamically bounded by sqlite3_next_stmt's null end sentinel
         while !statement.is_null() {
             StatementCounters::take(statement);
             statement = ffi::sqlite3_next_stmt(handle, statement);

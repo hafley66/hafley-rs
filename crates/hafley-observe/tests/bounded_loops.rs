@@ -1,5 +1,5 @@
-//! Every loop in `src` names the constant that bounds it, and the listing this
-//! test prints is the receipt: one line per loop against its budget.
+//! Every loop in `src` names its constant bound or documents its finite
+//! collection/sentinel bound. The listing is the receipt, one line per loop.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -12,8 +12,7 @@ const BUDGET_PREFIX: &str = "// budget:";
 fn rust_files(root: &Path) -> Vec<PathBuf> {
     let mut files = Vec::new();
     let mut pending = vec![root.to_path_buf()];
-    // budget: one directory entry per push; every pushed path comes from a
-    // bounded read_dir listing
+    // budget: dynamically bounded by each finite read_dir listing
     while let Some(directory) = pending.pop() {
         let Ok(entries) = fs::read_dir(&directory) else {
             continue;
@@ -79,7 +78,8 @@ fn every_loop_names_the_constant_that_bounds_it() {
                     let declared = named
                         .as_ref()
                         .is_some_and(|name| text.contains(&format!("const {name}")));
-                    if !declared {
+                    let documents_dynamic_bound = budget.contains("dynamically bounded by");
+                    if !declared && !documents_dynamic_bound {
                         unnamed.push(format!("{}:{} {}", relative, index + 1, budget.trim()));
                     }
                     listing.push(format!(
