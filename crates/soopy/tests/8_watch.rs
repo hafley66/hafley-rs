@@ -258,22 +258,23 @@ fn repository_watcher_emits_detached_head_transition() {
     let tree = SourceTree::open(soopy::open(&root).unwrap());
     let mut watcher = tree.watch_repository(query(&tree, false, false)).unwrap();
     git(&root, &["checkout", "-q", "--detach", "HEAD"]);
-    let deltas = receive(&mut watcher);
-    assert!(deltas.iter().any(|delta| {
-        matches!(
-            delta,
-            RepositoryDelta::Ref(RefDelta::HeadChanged {
-                before: soopy::HeadObservation {
-                    state: Head::Symbolic { .. },
-                    target: Some(_)
-                },
-                after: soopy::HeadObservation {
-                    state: Head::Detached(_),
-                    target: Some(_)
-                }
-            })
-        )
-    }));
+    receive_until(&mut watcher, "detached HEAD transition", |deltas| {
+        deltas.iter().any(|delta| {
+            matches!(
+                delta,
+                RepositoryDelta::Ref(RefDelta::HeadChanged {
+                    before: soopy::HeadObservation {
+                        state: Head::Symbolic { .. },
+                        target: Some(_)
+                    },
+                    after: soopy::HeadObservation {
+                        state: Head::Detached(_),
+                        target: Some(_)
+                    }
+                })
+            )
+        })
+    });
     std::fs::remove_dir_all(root).unwrap();
 }
 
