@@ -48,6 +48,7 @@ cap = { version = "0.1.2", optional = true }
 # corpus scan must not pay; `walkdir` is `ignore`'s own dependency with no
 # filter_entry-by-name convenience. The move corpus walk is the one caller.
 ignore = "0.4"
+globset = "0.4"
 # oxc arena AST front-end for TS/JS (v5 carried these; src/graph/typegraph/ts).
 # The Program<'a> borrows the Allocator + source text, so parse ties content to
 # 'a (the GAT seam). Commit 2b: TypeF entities; commit 2c: the arrow-type sigs

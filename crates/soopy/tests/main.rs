@@ -20,6 +20,8 @@ mod t14_commit_engine;
 mod t15_source_mutations;
 #[path = "16_multi_repo_refresh.rs"]
 mod t16_multi_repo_refresh;
+#[path = "18_mutation_cli.rs"]
+mod t18_mutation_cli;
 #[path = "1_correctness.rs"]
 mod t1_correctness;
 #[path = "2_identities.rs"]

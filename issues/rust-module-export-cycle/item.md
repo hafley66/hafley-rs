@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 labels: [extract]
 closed: 2026-09-25
@@ -27,3 +27,7 @@ export_table -> resolve_in_module -> resolve_qualified -> home_file -> bound_hom
 - [x] one `stack` threads through home_file / bound_home / star_contributions
 - [x] a regression test with a re-export cycle through a use-bound head terminates
 - [x] `ryi fast` over the 3000-file registry corpus completes
+
+## Repro receipt
+
+2026-09-26: current `ryii fast crates/sprefa-extract/tests/fixtures/rust_findings/module_plane/crate_a/src` exits 0 on the re-export fixture; the overflow defect does not reproduce.

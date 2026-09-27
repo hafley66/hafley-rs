@@ -4,7 +4,10 @@
 use std::collections::HashSet;
 use std::io::BufRead;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use ignore::WalkBuilder;
 use sprefa_extract::{source_for, SourcePattern};
 
 use crate::cli::Inputs;
@@ -112,74 +115,67 @@ pub fn git_root_of_cwd() -> Result<PathBuf, Box<dyn std::error::Error>> {
 /// `dir`; empty means all), spelled `dir` joined with its path below `dir`.
 fn walk(dir: &Path, patterns: &[String]) -> Result<Vec<PathBuf>, String> {
     let io_dir = sprefa_extract::io_path(dir);
-    let discovered =
-        sprefa_extract::trace::stage_span("discover").in_scope(|| soopy::discover(&io_dir));
-    let mut found: Vec<PathBuf> = match discovered {
-        Ok(repository) => {
-            let absolute = std::fs::canonicalize(&io_dir)
-                .map_err(|error| format!("{}: {error}", dir.display()))?;
-            let below = absolute
-                .strip_prefix(&repository.root)
-                .map_err(|_| format!("{} is outside {}", dir.display(), repository.root.display()))?
-                .to_string_lossy()
-                .replace('\\', "/");
-            let prefixed = |glob: &str| {
-                if below.is_empty() {
-                    glob.to_string()
-                } else {
-                    format!("{below}/{glob}")
+    let absolute =
+        std::fs::canonicalize(&io_dir).map_err(|error| format!("{}: {error}", dir.display()))?;
+    let mut matcher = GlobSetBuilder::new();
+    if patterns.is_empty() {
+        matcher.add(Glob::new("**").map_err(|error| error.to_string())?);
+    } else {
+        for pattern in patterns {
+            matcher.add(
+                Glob::new(pattern).map_err(|error| format!("invalid glob {pattern:?}: {error}"))?,
+            );
+        }
+    }
+    let matcher: Arc<GlobSet> = Arc::new(matcher.build().map_err(|error| error.to_string())?);
+    let found = Arc::new(Mutex::new(Vec::new()));
+    let failure = Arc::new(Mutex::new(None));
+    let mut walker = WalkBuilder::new(&absolute);
+    walker.hidden(false).filter_entry(|entry| {
+        if entry.file_name() == ".git" {
+            return false;
+        }
+        !(entry.depth() >= 1
+            && entry.file_type().is_some_and(|kind| kind.is_dir())
+            && entry.path().join(".git").exists())
+    });
+    walker.build_parallel().run(|| {
+        let matcher = Arc::clone(&matcher);
+        let found = Arc::clone(&found);
+        let failure = Arc::clone(&failure);
+        let absolute = absolute.clone();
+        let dir = dir.to_path_buf();
+        Box::new(move |result| match result {
+            Ok(entry) => {
+                if !entry.file_type().is_some_and(|kind| kind.is_file()) {
+                    return ignore::WalkState::Continue;
                 }
-            };
-            let globs: Vec<SourcePattern> = if patterns.is_empty() {
-                vec![SourcePattern(prefixed("**"))]
-            } else {
-                patterns
-                    .iter()
-                    .map(|glob| SourcePattern(prefixed(glob)))
-                    .collect()
-            };
-            // Expansion keeps paths only; the worktree stamp is never read, so
-            // it costs no `git rev-parse` / `git status`.
-            let revision = soopy::RevisionId::Worktree {
-                worktree: repository.worktree.clone(),
-                head: None,
-                dirty: false,
-            };
-            let mut tree = soopy::SourceTree::open(repository);
-            sprefa_extract::trace::stage_span("enumerate")
-                .in_scope(|| tree.enumerate(&revision, &globs))
-                .map_err(|error| format!("{}: {error:#}", dir.display()))?
-                .into_iter()
-                .map(|entry| {
-                    let path = entry.source.path.0.to_string();
-                    let rest = if below.is_empty() {
-                        path.as_str()
-                    } else {
-                        path.strip_prefix(&below)
-                            .map_or(path.as_str(), |rest| rest.trim_start_matches('/'))
-                    };
-                    joined(dir, rest)
-                })
-                .collect()
-        }
-        Err(_) => {
-            let mut root = soopy::DirectoryRoot::open(&io_dir)
-                .map_err(|error| format!("{}: {error:#}", dir.display()))?;
-            let query = soopy::FileQuery {
-                patterns: patterns
-                    .iter()
-                    .map(|glob| SourcePattern(glob.clone()))
-                    .collect(),
-            };
-            root.snapshot(&query)
-                .map_err(|error| format!("{}: {error:#}", dir.display()))?
-                .files
-                .into_iter()
-                .map(|entry| joined(dir, &entry.file.path.0))
-                .collect()
-        }
-    };
-    found.retain(|path| source_for(&path.to_string_lossy()).is_some());
+                let relative = match entry.path().strip_prefix(&absolute) {
+                    Ok(relative) => relative,
+                    Err(error) => {
+                        *failure.lock().unwrap() = Some(format!("{}: {error}", dir.display()));
+                        return ignore::WalkState::Quit;
+                    }
+                };
+                if matcher.is_match(relative) {
+                    if let Some(relative) = relative.to_str() {
+                        if source_for(relative).is_some() {
+                            found.lock().unwrap().push(joined(&dir, relative));
+                        }
+                    }
+                }
+                ignore::WalkState::Continue
+            }
+            Err(error) => {
+                *failure.lock().unwrap() = Some(format!("{}: {error}", dir.display()));
+                ignore::WalkState::Quit
+            }
+        })
+    });
+    if let Some(error) = failure.lock().unwrap().take() {
+        return Err(error);
+    }
+    let mut found = Arc::try_unwrap(found).unwrap().into_inner().unwrap();
     found.sort();
     Ok(found)
 }

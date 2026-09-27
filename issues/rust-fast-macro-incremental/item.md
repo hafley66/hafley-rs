@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: improvement
-status: open
+status: needs-decision
 priority: normal
 labels: [extract]
 ---
@@ -23,3 +23,9 @@ Directions: expand only the invocation subtrees a pass changed instead of repars
 ## Acceptance Criteria
 - [ ] no single registry file over 200ms in `family:"call"` (release)
 - [ ] output identical on the macro-heavy registry set (downcast-rs, crossterm stylize, bitflags 1.3.2, castaway, borsh schema, byteorder, clap_builder debug_asserts)
+
+## Repro receipt
+
+2026-09-26: current `ryii fast` on crossterm 0.29 `style/stylize.rs` (6,933 bytes) takes 1.56s in `family:"call"` and reports 42 resolve calls.
+
+Decision: prioritize incremental expansion of changed invocations, or cap per-file expansion work with the existing budget flag?

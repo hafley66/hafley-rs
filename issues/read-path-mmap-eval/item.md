@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: task
-status: open
+status: obsolete
 priority: normal
 related: ['@fast-rows-columnar']
 labels: [extract]
@@ -26,3 +26,7 @@ The whole run is ~3.0s wall; the read + hash bound is about 1%. mmap would also 
 
 ## Acceptance Criteria
 - [ ] revisit when rows borrow from the source buffer (arena/columnar issue)
+
+## Repro receipt
+
+2026-09-26: current `ryii fast` reads crossterm `stylize.rs` and exits 0; the card's measured read/hash share is about 1%, so no current read-path defect reproduces.

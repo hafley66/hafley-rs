@@ -1,11 +1,10 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: open
 priority: normal
 labels: [extract]
-closed: 2026-09-25
 ---
 
 # soopy worktree enumerate walks the repo root and hashes every match for a subdirectory input
@@ -24,3 +23,7 @@ closed: 2026-09-25
 
 ## Implementation Notes
 Found by fork inputs-cli (branch ryi/inputs-cli). Out of that fork's scope: soopy is shared.
+
+## Repro receipt
+
+2026-09-26: `ryii fast crates/soopy/src` exits 0 over 29 files; this does not measure visited directories or file hashes. The CLI no longer calls Soopy enumeration for this worktree input after `read-side-off-soopy`; the library-level hash gate and timing receipt remain unchecked.

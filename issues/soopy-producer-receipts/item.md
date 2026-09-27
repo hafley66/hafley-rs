@@ -1,9 +1,9 @@
 ---
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-26
 type: task
 reporter: chrishafley
-status: untriaged
+status: open
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -25,3 +25,7 @@ crates/soopy/src/_7c_edit_producers.rs exposes from_ast_grep_parts over scalar f
 - [ ] State durability, corpus, hardware, versions and test commands; do not infer speed rankings from unrelated workloads.
 ## Tests Run
 Source inspected; peer documentation compared; no comparative benchmark run. Related: @soopy-staged-mutations, @soopy-edit-producers, @soopy-multi-repo-refresh.
+
+## Repro receipt
+
+2026-09-26: `ryii move` exercises the built-in move adapter only; its dry-run preview does not execute a real external producer or produce comparable phase and memory receipts. Producer-integration gates remain unchecked.

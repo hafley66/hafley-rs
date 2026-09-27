@@ -1,6 +1,6 @@
 ---
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-09-26
 type: epic
 owner: chrishafley
 status: open
@@ -39,3 +39,7 @@ The detailed archaeology, type proposal, library survey, lifecycle, and implemen
 - [x] cargo clippy -p soopy --all-targets -- -D warnings
 - [x] just test-source-mutations
 - [x] just perf-source-mutations
+
+## Repro receipt
+
+2026-09-26: scale acceptance remains unchecked for large edit sets, large files, and many repositories; this epic stays open until those gates have receipts.

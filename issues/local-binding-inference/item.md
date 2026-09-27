@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-26
 type: feature
-status: deferred
+status: obsolete
 priority: normal
 epic: ryi-fast-tier
 labels: [extract, artifact-cli, phase-refinement-1, intent-correctness]
@@ -100,3 +100,7 @@ missing kill rule mints a wrong target.
 ## Tests Run
 
 ## Implementation Notes
+
+## Repro receipt
+
+2026-09-26: current `ryii fast` resolves `value.push()` to `LocalType::push` with origin `receiver` after `let value = LocalType::new()`, despite a second `OtherType::push`; the described ambiguity does not reproduce.

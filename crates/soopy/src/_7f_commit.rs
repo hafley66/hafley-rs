@@ -28,7 +28,8 @@ const JOURNAL_VERSION: u32 = 2;
 
 /// A deterministic interruption point used by integration tests and hosts
 /// that need to exercise restart recovery.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CommitFailpoint {
     AfterJournal,
     BeforeOperation(usize),
@@ -75,7 +76,8 @@ pub struct CommitOperationReceipt {
 /// Typed refusal from the commit boundary. Filesystem failures are retained
 /// as strings so the public API does not expose a platform-specific error
 /// enum.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 pub enum CommitRefusal {
     RootMismatch {
         expected: SourceRootId,

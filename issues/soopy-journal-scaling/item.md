@@ -1,6 +1,6 @@
 ---
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-09-26
 type: improvement
 assignee: luna
 status: done
@@ -38,3 +38,7 @@ Remove the measured quadratic journal rewrite path while preserving crash recove
 ### 2026-08-16T21:09:13Z · @codex
 
 Merged c89eef6 after removing the corruptible checkpoint sidecar. Recovery derives completed operations from synced target state. Aggregate and strict clippy gates passed. Smoke 100 files and 10000 edits: 2.70 seconds, 59108 journal bytes, zero checkpoint bytes.
+
+## Repro receipt
+
+2026-08-16: `just perf-source-mutations` recorded the 100-file, 10,000-edit smoke at 2.70 seconds, 59,108 journal bytes, and zero checkpoint bytes; the recorded 1,000-file/100,000-edit acceptance and failure-boundary test gates are checked above.

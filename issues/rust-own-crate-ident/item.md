@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 labels: [extract]
 closed: 2026-09-25
@@ -18,3 +18,7 @@ closed: 2026-09-25
 ## Acceptance Criteria
 - [ ] a path whose first segment names a corpus crate (Cargo.toml package/lib name, `-` -> `_`) resolves from that crate's lib root
 - [ ] `--entry soopy/src/main.rs` reaches the lib files main.rs uses
+
+## Repro receipt
+
+2026-09-26: current `ryii fast --entry crates/soopy/src/main.rs crates/soopy/src` exits 0 and reaches 29 files; own-crate import traversal works.
