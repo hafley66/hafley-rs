@@ -24,3 +24,5 @@ In `crates/soopy`, `ryii fast .` emits 576 `resolved_import` rows while `ryii fa
 `t_183_fast_path_spelling::equivalent_directory_spellings_resolve_the_same_imports_and_keep_output_paths` passed; `ryii fast .` and `ryii fast "$PWD"` both emit 653 `resolved_import` rows in `crates/soopy`.
 
 ## Implementation Notes
+
+Crate roots for Rust `crate::` matching come from each file's nearest Cargo manifest. Regression inputs include a `tests/` module and a nested package beneath an outer `src/` directory. Test passed in commit `ede37d69`.
