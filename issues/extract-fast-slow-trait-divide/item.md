@@ -1,8 +1,8 @@
 ---
 created: 2026-09-16
-updated: 2026-09-20
+updated: 2026-09-26
 type: improvement
-status: needs-decision
+status: obsolete
 priority: high
 size: L
 epic: scip-ingestion-conformance
@@ -83,6 +83,10 @@ SELECT family, COUNT(*) FROM node GROUP BY family;   -- slow db: every scip_* ta
 - `crates/sprefa-extract` is excluded from the root workspace and is its own workspace root, so a change here is proven by `cd crates/sprefa-extract && cargo test --features cli`.
 - `tests/golden_parity.rs` fails 2 cases in this checkout (`ported_facets_match_v5` ts `lambdas`, `rust_doc_parity`) because 11 captured oracles still carry a `v6/sprefa-extract/...` root prefix; unrelated to this issue, do not re-debug.
 - The consumer that hit this: a loop/blowout audit that maps every call inside every loop to its enclosing function. Fast mode supplied the loops and the call spans; the missing definition names forced a source-byte re-read at each span, and the missing spans on the symbol plane made the compiler cross-check impossible.
+
+## Comments
+
+2026-09-26 repro: `ryii fast --help` confirms the current command name; the `extract` executable named here is retired, and `t_170_ratchet_sites_rust::fast_matches_slow_on_soopy_at_the_pinned_rate` passes.
 
 ## Decisions
 
