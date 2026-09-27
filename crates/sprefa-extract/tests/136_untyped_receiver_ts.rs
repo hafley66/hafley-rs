@@ -107,7 +107,7 @@ fn untyped_receiver_member_call_drops_inferred() {
     );
     assert!(
         rows.iter()
-            .any(|(file, origin)| file == "use.ts" && origin == "corpus_unique"),
+            .any(|(file, origin)| file == "use.ts" && origin == "same_file"),
         "{rows:?}"
     );
     let drops = drops(&["defs.ts", "use.ts"]);
@@ -134,20 +134,20 @@ fn untyped_receiver_member_call_drops_inferred() {
 
 #[test]
 fn free_call_keeps_name_match() {
-    // D.1: free calls keep the corpus name match: `push(5)` and both `mk()`
-    // sites bind to use.ts's own defs.
+    // Same-file call resolution binds the local `push(5)` and both `mk()`
+    // sites to use.ts's own defs.
     let rows = edges(&["defs.ts", "use.ts"]);
     assert!(
         rows.iter().any(|(callee, file, origin)| callee == "push"
             && file == "use.ts"
-            && origin == "corpus_unique"),
+            && origin == "same_file"),
         "{rows:?}"
     );
     assert_eq!(
         rows.iter()
             .filter(|(callee, file, origin)| callee == "mk"
                 && file == "use.ts"
-                && origin == "corpus_unique")
+                && origin == "same_file")
             .count(),
         2,
         "{rows:?}"
