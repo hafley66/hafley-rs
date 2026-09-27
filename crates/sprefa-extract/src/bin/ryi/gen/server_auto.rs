@@ -159,19 +159,6 @@ raw_handler!(schema, "schema", SchemaArgs, schema);
 raw_handler!(trail, "trail", TrailArgs, trail);
 stream_handler!(stratify, "stratify", StratifyArgs, stratify);
 
-fn jsonl_input<T: serde::de::DeserializeOwned + Send + 'static>(body: Body) -> impl Iterator<Item = OpResult<T>> + Send {
-    let (tx, mut rx) = tokio::sync::mpsc::channel(64);
-    tokio::spawn(async move {
-        let chunks = body.into_data_stream().map(|chunk| chunk.map_err(std::io::Error::other));
-        let reader = tokio_util::io::StreamReader::new(chunks);
-        let mut lines = tokio_util::codec::FramedRead::new(reader, tokio_util::codec::LinesCodec::new());
-        while let Some(line) = lines.next().await {
-            let value = line.map_err(OpError::from).and_then(|line| serde_json::from_str(&line).map_err(OpError::from));
-            if tx.send(value).await.is_err() { return; }
-        }
-    });
-    std::iter::from_fn(move || rx.blocking_recv())
-}
 
 async fn extract(headers: HeaderMap, body: Body) -> Response {
     let (json, input) = if let Some(encoded) = headers.get("x-ryi-request") {

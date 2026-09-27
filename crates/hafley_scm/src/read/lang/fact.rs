@@ -9,9 +9,8 @@
 //! never a query.
 //! @comment-ok: module header, the shape every lang/*.rs opens with
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
 
 use rusqlite::{Connection, OpenFlags};
 
@@ -115,50 +114,6 @@ impl FactSet {
             column,
             values,
         })
-    }
-
-    /// ONE statement, grouped: the `column` set per distinct `key_column`. How a
-    /// per-file question is answered without a query per file.
-    pub fn load_by(
-        connection: &Connection,
-        rel: &str,
-        key_column: &str,
-        column: &str,
-    ) -> Result<BTreeMap<String, Arc<Self>>, FactError> {
-        let rel = identifier(rel)?;
-        let key_column = identifier(key_column)?;
-        let column = identifier(column)?;
-        let statement = format!(
-            "SELECT DISTINCT k.\"content\", v.\"content\" FROM \"{rel}\" t \
-             JOIN \"__str\" k ON k.\"__id\" = t.\"{key_column}\" \
-             JOIN \"__str\" v ON v.\"__id\" = t.\"{column}\""
-        );
-        let query = |error: rusqlite::Error| FactError::Query {
-            statement: statement.clone(),
-            message: error.to_string(),
-        };
-        let mut prepared = connection.prepare(&statement).map_err(query)?;
-        let pairs = prepared
-            .query_map([], |row| {
-                Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?))
-            })
-            .and_then(|rows| rows.collect::<Result<Vec<(String, String)>, _>>())
-            .map_err(query)?;
-        let mut by_key: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
-        for (key, value) in pairs {
-            by_key.entry(key).or_default().insert(value);
-        }
-        Ok(by_key
-            .into_iter()
-            .map(|(key, values)| {
-                let set = Self {
-                    rel: rel.clone(),
-                    column: column.clone(),
-                    values,
-                };
-                (key, Arc::new(set))
-            })
-            .collect())
     }
 
     /// The set a caller already holds, for a run with no store behind it.
