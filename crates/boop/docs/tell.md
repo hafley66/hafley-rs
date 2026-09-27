@@ -4,11 +4,11 @@ A child already carries its own identity and the edge that names its parent, so
 neither end of that edge is worth spelling in a prompt.
 
 ```
-boop beep parent "TEXT" [--kind completion|yield|note] [--as NAME]
-boop beep children "TEXT" [--as NAME]
+boop mail send --to parent "TEXT" [--kind completion|yield|note] [--as NAME]
+boop mail send --to children "TEXT" [--as NAME]
 ```
 
-Use the positional route and body shown above. The removed `tell-parent` and
+Use the `--to` route and body shown above. The removed `tell-parent` and
 `tell-children` commands are rejected. Hidden `--body TEXT` remains a compatibility
 alias for the positional body.
 `--no-wait` returns after delivery admission; ordinary sends wait for a response
@@ -16,7 +16,7 @@ up to `--timeout` seconds and return 124 on timeout.
 
 | step | where it comes from |
 |---|---|
-| the sender | explicit `--as`, otherwise `BOOP_SESSION` / legacy `BOOP_LANE`; `boop whoami` displays the resolved identity |
+| the sender | explicit `--as`, otherwise `BOOP_SESSION` / legacy `BOOP_LANE`; `boop me whoami` displays the resolved identity |
 | the recipient | the caller's registry route `parent`, written by `lane create --parent` and `agent register --parent` |
 | the fallback | the one registered coordinator with a pane, when the route records no parent |
 | delivery | `boop-proc::deliver::deliver_hail_budgeted`; harness door or owned queue, installed hook, lane supervisor, and explicit fallback outcomes |

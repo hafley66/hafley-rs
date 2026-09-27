@@ -335,3 +335,20 @@ op trail(
   /** Runs to print */
   @positional @valueName("N") runs: usize = 5,
 ): jsonValue;
+
+/** Rank files from entrypoints and propose dependency-first numeric prefixes */
+op stratify(
+  ...Inputs,
+
+  /** Entry point PATH[:NAME][=RANK]; repeatable */
+  @valueName("PATH[:NAME][=RANK]")
+  from: string[],
+
+  /** Base line target; default is the corpus median */
+  @valueName("N")
+  base_lines?: uint32,
+
+  /** Edge plane used to build the graph (call, type, or both) */
+  @valueName("KIND")
+  kind?: string = "both",
+): JsonlStream<jsonValue>;

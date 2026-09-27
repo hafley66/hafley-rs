@@ -125,8 +125,7 @@ fn boop(scratch: &Scratch, args: &[&str]) -> std::process::Output {
 
 /// RECEIPT. A real harness TUI, mock-provisioned by its own adapter recipe,
 /// registers as a coordinator; `boop beep scream` leaves the broadcast row
-/// in the scratch store. Completed/unknown turns skip keys. A measured busy
-/// turn takes one key and must confirm idle before its hail is pushed.
+/// in the scratch store and emits one recipient result plus one tally.
 #[test]
 fn scream_interrupts_each_real_tui() {
     let Some(llmock) = mock_tui::resolve_llmock() else {
@@ -180,42 +179,46 @@ fn scream_interrupts_each_real_tui() {
             &[
                 "beep",
                 "scream",
+                "--verbose",
                 "--mail-dir",
                 &root.join("mail").display().to_string(),
             ],
         );
         let stdout = String::from_utf8_lossy(&screamed.stdout);
         assert!(screamed.status.success(), "{}: {stdout}", case.entry);
-        if stdout.contains(&format!("interrupt-sent {route} in ")) {
-            assert_eq!(
-                stdout
-                    .lines()
-                    .filter(|line| line.starts_with("interrupt-sent "))
-                    .count(),
-                1,
-                "{stdout}"
-            );
-            assert!(
-                stdout.contains("idle confirmed") || stdout.contains("interrupt-unconfirmed"),
-                "{stdout}"
-            );
-        } else {
-            assert!(
-                stdout.contains(&format!("interrupt-skipped {route} (")),
-                "{}: no interrupt disposition\n{stdout}",
-                case.entry
-            );
-        }
+        assert_eq!(stdout.lines().count(), 2, "{}: {stdout}", case.entry);
+        assert!(
+            !String::from_utf8_lossy(&screamed.stderr).contains("WARN"),
+            "{}: {}",
+            case.entry,
+            String::from_utf8_lossy(&screamed.stderr)
+        );
+        let live_result = stdout.lines().any(|line| {
+            line.starts_with(&format!("landed {route} "))
+                || line.starts_with(&format!("failed {route} "))
+        });
+        let skipped = stdout
+            .lines()
+            .any(|line| line.starts_with(&format!("skipped {route} (")));
         let rows = boop(
             &scratch,
             &["db", "SELECT outcome FROM agent_delivery_transition"],
         );
         let rows = String::from_utf8_lossy(&rows.stdout);
-        assert!(
-            rows.contains("appended"),
-            "{}: no delivery row in the scratch store\n{rows}",
-            case.entry
-        );
+        if live_result {
+            assert!(
+                rows.contains("appended"),
+                "{}: no delivery row in the scratch store\n{rows}",
+                case.entry
+            );
+        } else {
+            assert!(skipped, "{}: no recipient result\n{stdout}", case.entry);
+            assert!(
+                rows.is_empty(),
+                "{}: unproved route got mail\n{rows}",
+                case.entry
+            );
+        }
     }
 }
 

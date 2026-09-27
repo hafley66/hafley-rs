@@ -100,6 +100,7 @@ fn one_lane_exit_writes_exactly_one_result_row() {
         post_pr: false,
         pr_base: "main".to_owned(),
         verify: None,
+        timeout_secs: None,
     };
     std::thread::spawn(move || {
         let _ = boop::supervise::run(lane, &mut DoneChannel);

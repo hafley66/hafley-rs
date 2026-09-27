@@ -121,6 +121,8 @@ mod t_150_fast_scm_kotlin;
 mod t_155_cleave_ts;
 #[path = "156_cleave_play.rs"]
 mod t_156_cleave_play;
+#[path = "156_stratify.rs"]
+mod t_156_stratify;
 #[path = "157_fast_scm_rows.rs"]
 mod t_157_fast_scm_rows;
 #[path = "158_fast_scm_kotlin.rs"]

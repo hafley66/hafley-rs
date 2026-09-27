@@ -46,11 +46,11 @@ REGISTER: one path per kind of caller. A pane registers itself by running a
   harness TUI through Boop; a pane-less agent (a coordinator with no tmux
   session, or a native subagent) registers by name:
     boop tui <harness> [--cwd <dir>] [--name <id>]      interactive pane
-    boop beep agent register <name> [--parent <id>]     pane-less route
+    boop me register <name> [--parent <id>]            pane-less route
 
 SPAWN: every lane spawn goes through lane create; bare tmux spawns leave no
 edge and stay invisible to tracking:
-    boop beep lane create --branch feature/<name> --brief <abs-path> \\
+    boop job create --branch feature/<name> --brief <abs-path> \\
       --preset <p> [--goal <text>] [--wait] [--mail-dir <d>] [--dry-run]
   ONE derivation, from the whole branch name: `feature/schema-emit` gives lane
   id and tmux session `feature-schema-emit` (`/` spelled `-`, the one character
@@ -89,7 +89,7 @@ COMPLETION: the supervisor writes ONE row `lane <id> done rc=<n>` into the
   `--wait` blocks on that row and exits with the lane's rc, so spawn-and-join is
   one command; `--wait-timeout <s>` (default 3600, 0 waits forever) exits 124.
   The same wait after the fact is the one wait verb, given the lane's name:
-    boop wait <lane> [--wait-timeout <s>]
+    boop job wait <lane> [--timeout <s>]
   A wait whose lane route goes dead with no row exits 3 instead of blocking.
 
 COMMIT PUSH: a lane reports by committing; its parent watches HEAD. Every
@@ -99,7 +99,7 @@ COMMIT PUSH: a lane reports by committing; its parent watches HEAD. Every
   Boop-Ask     the one question, required on a blocked commit
   Boop-Check   an optional validation receipt, `<command> -> <result>`
   A blocked commit mints a request and takes the door, ending a
-  `boop wait <lane>`; a done commit stays in the mailbox and the result row
+  `boop job wait <lane>`; a done commit stays in the mailbox and the result row
   carries the head. The parent watches the worktree reflog (its mtime plus the
   git-write tool-call nudge); BOOP_COMMIT_QUIET_SECS (default 3) coalesces a
   burst into one row `old..new n=<count>`, and one push per commit goes to each
@@ -111,13 +111,13 @@ COMMIT PUSH: a lane reports by committing; its parent watches HEAD. Every
     boop beep agent subscribe <lane|children|*> [--mode door|mailbox] [--as <me>]
     boop beep agent unsubscribe <lane|children|*> [--as <me>]
   `children` writes one row per current child plus a wildcard row. At spawn:
-    boop beep lane create --branch feature/<name> --brief <abs-path> \\
+    boop job create --branch feature/<name> --brief <abs-path> \\
       --preset <p> --commit-push mailbox
   Absent a row the parent's kind picks the default.
 
 PR PUSH: a lane can finish by opening a PR; any PR a lane or a coordinator
   opens is pushed once to the route's subscribers.
-    boop beep lane create --branch feature/<name> --brief <abs-path> \\
+    boop job create --branch feature/<name> --brief <abs-path> \\
       --post-pr [--pr-base <branch>]
   Config `post-pr` (global or per preset) is the default; `--no-post-pr`
   overrides it. The supervisor's `gh pr create` and transcript ingest both
@@ -128,7 +128,7 @@ RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
   exits with the rc it already mailed; residency reads `retired` and the
   parent gets one `note` row. Nothing is lost: the conversation id is pinned
   in ~/.agent/lanes/<lane>/conversation and the exact spawn in spawn.json.
-    boop beep <lane> <body>
+    boop mail send --to <lane> <body>
   to a retired lane replays that spawn, re-registers the route, resumes the
   pinned conversation, waits up to 60 s for the supervisor to report live,
   and hands it the body as its opening turn. The send's wait then ends on the
@@ -136,9 +136,9 @@ RETIRE + REVIVE: a lane whose result row is written and then sees no mail for
   A coordinator pane (`boop tui <harness>`) killed without `/exit` (tmux server
   death, SIGKILL, sleep) comes back on the conversation its route already holds.
   After a tmux server death this is the one command to type:
-    boop beep lane revive --dead [--since 1h] [--yes] [--socket <s>]
-    boop beep lane revive --list [--json]      look, do not spawn
-    boop beep lane revive <name>               one route by name
+    boop job revive --dead [--since 1h] [--yes] [--socket <s>]
+    boop job revive --list [--json]      look, do not spawn
+    boop job revive <name>               one route by name
   The precondition is THREE route fields: harness, session_id and cwd. A dead
   coordinator row carrying all three prints REVIVABLE in `lane list`; one
   missing a field is named and skipped by --dead. --dead offers kind=coordinator
@@ -169,24 +169,24 @@ DEBUG: what just went wrong, without opening a log:
   nothing when it is clean.
 
 LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
-    1. process alive:    boop beep ps <lane>
+    1. process alive:    boop job get <lane>
     2. worktree changed: git -C <worktree> status --short
   A REPORT.md at the root alone proves nothing; check its mtime and first line
   against the lane you dispatched.
-  `boop beep lane list --all` adds what the registry does not hold: unregistered
+  `boop job list --all` adds what the registry does not hold: unregistered
   tmux sessions and claude Agent-tool worktrees, with measured liveness for
   pane-less routes.
 
 MONITOR: one lane report joins route state, resolved trace sessions, latest-turn
 token deltas, the last 100 structured events, supervisor logs, report progress,
 mail and exit state:
-    boop beep lane get <lane>
+    boop job get <lane>
   `phase` distinguishes active thinking, active tool work, clean completion,
   pre-model death, silent death, failed completion, idle, and unknown. Use
-  `boop beep lane get <lane> --touched` to include worktree changes.
+  `boop job get <lane> --touched` to include worktree changes.
 
 TRANSPORT: every lane pane runs ONE command, whatever the harness:
-    boop beep lane run --lane <id> --harness <h> --brief <abs> --model <m>
+    boop job run --lane <id> --harness <h> --brief <abs> --model <m>
   That supervisor owns the harness conversation and the lane's mailbox. It opens
   the conversation with the brief, drains the mailbox every 700 ms, and starts a
   resume turn for anything the harness would not take mid-turn. Nothing is ever
@@ -207,7 +207,7 @@ DELIVERY: what one send does after the row is written.
   walked (appended, held-for-turn-boundary, queued-in-hook-inbox,
   pasted-into-pane, held-in-mailbox, accepted-by-harness):
     boop db \"SELECT * FROM agent_delivery_transition ORDER BY sequence\"
-  and `boop wait <message-id>` prints that history.
+  and `boop mail wait <message-id>` prints that history.
   A route takes at most its live connects' worth of door pushes per window
   (lane children, floor BOOP_DOOR_FLOOR=32, window BOOP_DOOR_WINDOW_SECS=60);
   past that it is cooled off for BOOP_DOOR_COOLDOWN_SECS=300, the row lands
@@ -231,12 +231,21 @@ REMINDERS: recurring sends to an existing explicit route, no agent spawn:
   Native doors and existing supervised lanes are supported. ACPX mode is held
   with an explanation because the configured queue can accept without a turn.
 
-SEND: one verb, `boop beep`. It sends and then blocks for the answer:
-    boop beep <route> <body> [--timeout <s>] [--kind <k>] [--as <name>]
-    boop beep <route> <body> --no-wait          send and return
+MARKDOWN MAIL: opt in to watching a directory; each ready `.md` file is
+  imported once, delivered, then moved under its receipt-state directory:
+    boop mail watch <dir> [--once] [--mail-dir <dir>]
+  YAML-style frontmatter accepts `to`, `from`, `harness`, `cwd`, `worktree`,
+  optional `branch`, and optional `preset`. `to` falls back to the filename
+  stem. Unknown recipients need `harness`, `cwd`, and `worktree`; refusal is
+  recorded in the mail row. Files with only an appended receipt after a watcher
+  restart move to `uncertain/` for inspection without automatic redelivery.
+
+SEND: one verb, `boop mail send`. It sends and then blocks for the answer:
+    boop mail send --to <route> <body> [--timeout <s>] [--kind <k>] [--as <name>]
+    boop mail send --to <route> <body> --no-wait   send and return
   <route> is a lane, a coordinator, a native, or one of two aliases:
-    boop beep parent \"done with x\"      the caller's own parent edge
-    boop beep children \"stop\"           every live child of the caller
+    boop mail send --to parent \"done with x\"   the caller's own parent edge
+    boop mail send --to children \"stop\"        every live child of the caller
   Neither end of an alias edge is spelled by the caller; the registry holds it.
 SHOUT + SCREAM: the broadcast pair, scoped to every connected agent (live
   panes and registered pane-less routes), the caller excepted:
@@ -256,9 +265,9 @@ SHOUT + SCREAM: the broadcast pair, scoped to every connected agent (live
   It walks the same ladder every send walks, prints the rung that took the row,
   then blocks. Exits: 0 on a reply or the recipient's turn ending, 124 on the
   timeout, 3 when the route dies first. The last line is always the next
-  command: `boop wait <id>` after an answer, `boop debug <route>` after a
+  command: `boop mail wait <id>` after an answer, `boop debug <route>` after a
   failure. `--as <name>` is the sender when the whoami ladder cannot say it,
-  the same spelling `boop wait --me --as <name>` takes.
+  the same spelling `boop mail wait --me --as <name>` takes.
   A route named after a `beep` subcommand (lane, agent, ps, pstree, harness) is
   unreachable and says so; rename it.
 
@@ -266,10 +275,10 @@ WAIT: every agent can background a shell, so the universal push is a block.
   A wait on a door-delivered hail also ends when the recipient's turn ends
   (claude registry status, codex thread/status/changed, opencode session.idle),
   printing `<route> turn ended (<status>)`; a reply mail ends it sooner.
-    boop wait <message-id>          the reply to what you just sent
-    boop wait <lane>                a registered lane's result row, its rc
-    boop wait --me [--as <name>]    the next unread mail addressed to you
-  A wip commit arrives as your next prompt; `boop wait --me` serves the rows
+    boop mail wait <message-id>     the reply to what you just sent
+    boop job wait <lane>            a registered lane's result row, its rc
+    boop mail wait --me [--as <name>]   the next unread mail addressed to you
+  A wip commit arrives as your next prompt; `boop mail wait --me` serves the rows
   that stop at the mailbox (yield, head_rewound, a done commit and result), so a
   coordinator running lanes keeps one armed.
   Default timeout 540s (under the 10-minute cap a background shell gives you),
@@ -396,10 +405,10 @@ IDENTITY: two rungs only: `--as <name>`, then the BOOP_SESSION env stamp.
   `boop tui` writes the stamp; a session that predates it passes
   BOOP_SESSION=<name> on spawns or `--as` on every verb. A native subagent
   shares its spawner's process, so the stamp names the spawner:
-    boop beep agent register <name> --parent <route>
+    boop me register <name> --parent <route>
   prints the instruction; every verb the native runs carries `--as <name>`.
   A bare `wait --me` under a lane stamp with live native children is refused
-  with the candidates listed. `boop whoami` prints which rung named you.
+  with the candidates listed. `boop me whoami` prints which rung named you.
 
 PRESETS: model spelling is presets only; `boop config presets` lists name,
   harness, model, effort, bin (`--format json` prints the same rows as a JSON
@@ -432,7 +441,7 @@ LAWS:
     edge and no tracking.
   2 Claude-model workers on the user's own plan are the coordinator's native
     subagents (Agent tool). Lanes are for opencode, codex, kimi and ccz.
-  3 A lane can die silently. Liveness is TWO checks: `boop beep ps <lane>`
+  3 A lane can die silently. Liveness is reported by `boop job get <lane>`
     AND `git -C <worktree> status --short`. A REPORT.md alone proves nothing.
   4 Give each lane its own CARGO_TARGET_DIR; boop places it and reclaims it,
     so no lane and no hand-run spawn shares one.
@@ -441,14 +450,14 @@ LAWS:
   6 `lane delete --state dead` removes each dead lane's own worktree and
     nothing above it; `--dry-run` first. Nothing in boop runs rm -rf on
     .boop-worktrees.
-  7 `boop beep message ack` proves a read at best, never compliance.
+  7 A mail receipt proves a read at best, never compliance.
   8 Codex native subagents need sandbox_mode=danger-full-access plus ACP
     session mode agent-full-access, or their boop calls cannot write the mail
     dir or .git/worktrees.
   9 Yield, head_rewound and done-status commit rows stay in the mailbox; a wip
     commit and a blocked commit take the door for subscribed routes (the parent
-    by default). The parent collects the mailbox rows with `boop wait <lane>`
-    for an rc, a backgrounded `boop wait --me &` for the batch.
+    by default). The parent collects the mailbox rows with `boop job wait <lane>`
+    for an rc, a backgrounded `boop mail wait --me &` for the batch.
 
 BUILD: hafley-rs crates/boop; `cargo install --path crates/boop --force` from
   main installs ~/.cargo/bin/boop. `boop --version` prints version and sha.

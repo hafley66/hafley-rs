@@ -1356,6 +1356,14 @@ fn revive_route(
         .as_deref()
         .context("route records no session id")?;
     let cwd = route.cwd.as_deref().context("route records no cwd")?;
+    if let Ok(crate::cli::shout::Reach::LivePane(pane)) =
+        crate::cli::shout::prove_route(registry, route, socket, &mut |socket, target| {
+            boop::tmux::mux().target_alive(socket, target)
+        })
+    {
+        println!("already-live {name} ({harness} session {session} in {pane})");
+        return Ok(());
+    }
     if let Some(owner) = live_session_owner(registry, dir, name, route)? {
         anyhow::bail!("route {name} is live: {owner}; stop it before reviving");
     }

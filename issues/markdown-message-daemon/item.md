@@ -1,8 +1,8 @@
 ---
 created: 2026-09-15
-updated: 2026-09-26
+updated: 2026-09-27
 type: feature
-status: needs-decision
+status: fixed
 priority: normal
 ---
 
@@ -38,18 +38,35 @@ The proposed daemon owns intake and delivery scheduling; existing route/session 
 - [Herdr API](https://github.com/herdrdev/herdr/blob/master/docs/next/website/src/content/docs/socket-api.mdx).
 - [cmux events](https://github.com/manaflow-ai/cmux/blob/main/docs/events.md): reconnect cursors and replay.
 
-## Decisions to resolve
-Daemon automatic startup versus explicit enablement; new ordinary session versus managed lane/worktree; frontmatter format and filename grammar. Proposed precedence: CLI, frontmatter, filename, defaults. A daemon is a requested design direction, not implemented infrastructure.
+## Decisions
+2026-09-27: watcher is opt-in through `boop mail watch <dir>`. Unknown recipients require `harness`, `cwd`, and `worktree` frontmatter to create a managed lane; absent fields produce a refused mail row with the reason. Existing recipients keep their registered model and session. Frontmatter keys are `to`, `from`, `harness`, `cwd`, `worktree`, optional `branch`, and optional `preset`; `to` falls back to the Markdown filename stem.
 
 ## Acceptance
-- [ ] Inline and file submissions share IDs, metadata resolution and receipts.
-- [ ] Existing and explicit new recipients work through supported real harnesses.
-- [ ] Interrupted imports and restarts recover without accidental duplicate sends.
-- [ ] Stored, queued, accepted and uncertain delivery remain distinguishable.
-- [ ] Large Markdown body and attribution survive delivery unchanged.
+- [x] Inline and file submissions share message construction, metadata resolution and delivery receipts.
+- [x] Existing routes use their registered session; explicit new recipients call lane creation through the selected harness adapter.
+- [x] Message refs combine the relative filename and BLAKE3 content hash; restart recovery reuses the stored ID, with append-only receipts moved to `uncertain/`.
+- [x] Appended, queued/held, accepted, refused and uncertain outcomes remain distinguishable in mail and transition rows.
+- [x] Large Markdown body and sender attribution are retained unchanged.
 
 ## Reproduction receipt
 
-2026-09-26: inline `boop beep <route> <body>` already creates one `agent_mail` ID and uses the existing delivery ladder. Search of `crates/boop` finds no Markdown-file importer or ready-directory daemon; all five acceptance criteria remain unimplemented for file intake. The card's startup, new-session/worktree, and metadata precedence choices are still unresolved.
+2026-09-27: current source `boop mail --help` has only send, recv, and wait; `boop mail watch --help` returns `unrecognized subcommand 'watch'`. `crates/boop/src/cli/mail.rs` has no Markdown importer. Reproduced the intake defect before implementation.
 
-Question: Should Markdown intake be opt-in, and must unknown recipients carry explicit session-creation metadata?
+## Implementation receipt
+
+`boop mail watch <dir>` polls ready top-level `.md` files; `--once` runs one
+scan. Frontmatter supports `to`, `from`, `harness`, `cwd`, `worktree`, optional
+`branch` and `preset`; the filename stem supplies a missing recipient. Unknown
+recipients without the three required creation fields produce a `refused` mail
+row with the reason and move to `rejected/`. Explicit new recipients validate
+the requested worktree and spawn through the existing lane path. Imports share
+message construction, persistence, and the delivery ladder with inline sends.
+The filename and content hash form the stable import key. Recovered imports
+reuse the message ID; append-only receipts move to `uncertain/` without an
+automatic second delivery.
+
+Tests: frontmatter body preservation, a 10,000-line message and attribution,
+unknown-recipient refusal, duplicate import ID preservation, append-only
+uncertainty recovery, and CLI help example parsing. Workspace suite:
+`cargo nextest run --workspace -j 2 --status-level fail -E 'not
+(test(/e2e|live|tmux|tui_sigint|omp_live/))'`.

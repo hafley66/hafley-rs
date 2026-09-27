@@ -1,8 +1,11 @@
 use std::collections::BTreeMap;
+use std::fs;
 use std::io::Write;
-use std::path::Path;
+use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use anyhow::{Context, Result};
+use rusqlite::OptionalExtension;
 use tracing::{debug, info, warn};
 
 use boop::bus::Route;
@@ -171,21 +174,8 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
             "a body is required with --kind {kind}; only `yield` carries a default body"
         ),
     };
-    let message = bus::Message {
-        id: bus::mint_id(),
-        from: sender.clone(),
-        to: to.clone(),
-        from_timestamp: bus::now_iso(),
-        to_timestamp: None,
-        kind: send.kind.to_owned().into(),
-        reply_to: None,
-        body,
-        r#ref: None,
-        rc: None,
-        detail: None,
-    };
-    append_message_to(&dir, send.box_name.unwrap_or("bus"), &message)?;
-    record_control_edge(&message)?;
+    let message = new_message(&sender, &to, body, send.kind, None, None);
+    persist_message(&dir, send.box_name.unwrap_or("bus"), &message)?;
     if let Some(source) = parent_source {
         println!("{sender} -> {to} (parent from {source})");
     }
@@ -207,6 +197,272 @@ pub(crate) fn run_send(registry: &Registry, send: Outbound<'_>) -> Result<()> {
         return Ok(());
     }
     push_wait(&dir, &to, &message.id, send.timeout_secs)
+}
+
+fn persist_message(dir: &Path, mailbox: &str, message: &bus::Message) -> Result<()> {
+    append_message_to(dir, mailbox, message)?;
+    record_control_edge(message)
+}
+
+fn new_message(
+    from: &str,
+    to: &str,
+    body: String,
+    kind: &str,
+    reference: Option<String>,
+    detail: Option<String>,
+) -> bus::Message {
+    bus::Message {
+        id: bus::mint_id(),
+        from: from.to_owned(),
+        to: to.to_owned(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: kind.to_owned().into(),
+        reply_to: None,
+        body,
+        r#ref: reference,
+        rc: None,
+        detail,
+    }
+}
+
+#[derive(Default, Debug, PartialEq, Eq)]
+struct MarkdownMessage {
+    to: Option<String>,
+    from: Option<String>,
+    harness: Option<String>,
+    cwd: Option<PathBuf>,
+    worktree: Option<PathBuf>,
+    branch: Option<String>,
+    preset: Option<String>,
+    body: String,
+}
+
+fn parse_markdown_message(input: &str) -> Result<MarkdownMessage> {
+    let Some(rest) = input.strip_prefix("---\n") else {
+        return Ok(MarkdownMessage {
+            body: input.to_owned(),
+            ..MarkdownMessage::default()
+        });
+    };
+    let end = rest
+        .find("\n---\n")
+        .context("frontmatter must close with `---` on its own line")?;
+    let mut message = MarkdownMessage {
+        body: rest[end + 5..].to_owned(),
+        ..MarkdownMessage::default()
+    };
+    let mut seen = BTreeMap::new();
+    for line in rest[..end].lines() {
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            continue;
+        }
+        let (key, value) = line
+            .split_once(':')
+            .with_context(|| format!("invalid Markdown message metadata line: {line}"))?;
+        let key = key.trim();
+        let value = value.trim();
+        anyhow::ensure!(!key.is_empty(), "metadata keys cannot be empty");
+        anyhow::ensure!(
+            seen.insert(key.to_owned(), ()).is_none(),
+            "duplicate metadata key `{key}`"
+        );
+        let value = value
+            .strip_prefix('"')
+            .and_then(|value| value.strip_suffix('"'))
+            .or_else(|| {
+                value
+                    .strip_prefix('\'')
+                    .and_then(|value| value.strip_suffix('\''))
+            })
+            .unwrap_or(value);
+        match key {
+            "to" | "recipient" => message.to = Some(value.to_owned()),
+            "from" => message.from = Some(value.to_owned()),
+            "harness" => message.harness = Some(value.to_owned()),
+            "cwd" => message.cwd = Some(PathBuf::from(value)),
+            "worktree" => message.worktree = Some(PathBuf::from(value)),
+            "branch" => message.branch = Some(value.to_owned()),
+            "preset" => message.preset = Some(value.to_owned()),
+            _ => anyhow::bail!("unsupported Markdown message metadata key `{key}`"),
+        }
+    }
+    Ok(message)
+}
+
+pub(crate) fn run_watch(
+    registry: &Registry,
+    directory: &Path,
+    mail_dir_arg: Option<&Path>,
+    once: bool,
+) -> Result<()> {
+    anyhow::ensure!(
+        directory.is_dir(),
+        "mail watch directory does not exist: {}",
+        directory.display()
+    );
+    let mailbox = mail_dir(mail_dir_arg)?;
+    loop {
+        let mut files = fs::read_dir(directory)
+            .with_context(|| format!("read Markdown mail directory {}", directory.display()))?
+            .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+            .filter(|path| path.extension().is_some_and(|extension| extension == "md"))
+            .collect::<Vec<_>>();
+        files.sort();
+        for path in files {
+            if let Err(error) = process_markdown_file(registry, directory, &mailbox, &path) {
+                warn!(path = %path.display(), %error, "Markdown mail file was not consumed");
+            }
+        }
+        if once {
+            return Ok(());
+        }
+        std::thread::sleep(Duration::from_millis(500));
+    }
+}
+
+fn process_markdown_file(
+    registry: &Registry,
+    directory: &Path,
+    mailbox: &Path,
+    path: &Path,
+) -> Result<()> {
+    let bytes = fs::read(path).with_context(|| format!("read {}", path.display()))?;
+    let content = std::str::from_utf8(&bytes)
+        .with_context(|| format!("Markdown mail file is not UTF-8: {}", path.display()))?;
+    let parsed = parse_markdown_message(content)?;
+    let routes = bus::read_routes(mailbox)?;
+    let fallback_to = path.file_stem().and_then(|name| name.to_str());
+    let to = parsed
+        .to
+        .as_deref()
+        .or(fallback_to)
+        .filter(|to| !to.trim().is_empty())
+        .context("message recipient is missing from `to:` and filename")?;
+    let unknown = !routes.contains_key(to);
+    let reference = format!(
+        "markdown:{}:{}",
+        path.strip_prefix(directory)
+            .unwrap_or(path)
+            .to_string_lossy(),
+        blake3::hash(&bytes).to_hex()
+    );
+    let existing = all_messages(mailbox)?
+        .into_iter()
+        .find(|message| message.r#ref.as_deref() == Some(reference.as_str()));
+    let mut reason = if unknown {
+        match (&parsed.harness, &parsed.cwd, &parsed.worktree) {
+            (Some(_), Some(_), Some(_)) => None,
+            _ => Some(format!(
+                "refused unknown recipient `{to}`: add `harness`, `cwd`, and `worktree` session metadata"
+            )),
+        }
+    } else {
+        None
+    };
+
+    if let Some(existing) = existing {
+        if last_delivery_state(mailbox, &existing.id)?.as_deref() == Some("appended") {
+            let store = bus::open_store(mailbox)?;
+            store.connection().execute(
+                "UPDATE agent_mail SET detail = ?1 WHERE message_id = ?2",
+                rusqlite::params![
+                    "delivery uncertain after watcher interruption; inspect its receipt before retrying",
+                    existing.id
+                ],
+            )?;
+            line(&format!(
+                "{} uncertain; inspect its delivery receipt",
+                existing.id
+            ));
+            archive_markdown_file(directory, path, &reference, false, true)?;
+            return Ok(());
+        }
+        deliver_hail(registry, mailbox, &existing, None)?;
+        archive_markdown_file(directory, path, &reference, reason.is_some(), false)?;
+        return Ok(());
+    }
+
+    if unknown && reason.is_none() {
+        let branch = parsed.branch.as_deref();
+        if let Err(error) = crate::cli::job::create_from_markdown_mail(
+            registry,
+            to,
+            parsed.harness.as_deref().unwrap(),
+            parsed.cwd.as_deref().unwrap(),
+            parsed.worktree.as_deref().unwrap(),
+            branch,
+            parsed.preset.as_deref(),
+            mailbox,
+        ) {
+            reason = Some(format!(
+                "refused unknown recipient `{to}`: session creation failed: {error:#}"
+            ));
+        }
+    }
+    let rejected = reason.is_some();
+
+    let from = parsed.from.unwrap_or_else(|| sender_name(&routes, None));
+    let message = new_message(
+        &from,
+        to,
+        parsed.body,
+        if reason.is_some() {
+            "refused"
+        } else {
+            "request"
+        },
+        Some(reference.clone()),
+        reason.clone(),
+    );
+    persist_message(mailbox, "bus", &message)?;
+    deliver_hail(registry, mailbox, &message, None)?;
+    if let Some(reason) = reason {
+        line(&format!("{} refused: {reason}", message.id));
+    } else {
+        line(&format!("{} -> {} ({})", message.id, message.to, reference));
+    }
+    archive_markdown_file(directory, path, &reference, rejected, false)
+}
+
+fn last_delivery_state(directory: &Path, message_id: &str) -> Result<Option<String>> {
+    let store = bus::open_store(directory)?;
+    store
+        .connection()
+        .query_row(
+            "SELECT outcome FROM agent_delivery_transition WHERE message_id = ?1 ORDER BY sequence DESC LIMIT 1",
+            [message_id],
+            |row| row.get(0),
+        )
+        .optional()
+        .map_err(Into::into)
+}
+
+fn archive_markdown_file(
+    directory: &Path,
+    path: &Path,
+    reference: &str,
+    rejected: bool,
+    uncertain: bool,
+) -> Result<()> {
+    let state = if rejected {
+        "rejected"
+    } else if uncertain {
+        "uncertain"
+    } else {
+        "processed"
+    };
+    let folder = directory.join(state);
+    fs::create_dir_all(&folder)?;
+    let suffix = reference.rsplit(':').next().unwrap_or("message");
+    let name = path
+        .file_name()
+        .context("mail path has no filename")?
+        .to_string_lossy();
+    let target = folder.join(format!("{name}.{suffix}"));
+    fs::rename(path, &target)
+        .with_context(|| format!("archive {} as {}", path.display(), target.display()))
 }
 
 /// Who the row is from: `--as`, else the identity ladder's own name, else the
@@ -881,6 +1137,142 @@ mod delivery_report_tests {
         )
         .unwrap();
         assert_eq!(std::fs::read_to_string(&unavailable).unwrap(), "fixture");
+    }
+}
+
+#[cfg(test)]
+mod markdown_watch_tests {
+    use super::{
+        all_messages, append_message, last_delivery_state, parse_markdown_message,
+        process_markdown_file,
+    };
+    use boop::bus;
+    use boop::registry::Registry;
+    use std::fs;
+
+    #[test]
+    fn frontmatter_is_removed_and_body_bytes_are_retained() {
+        let body = "line one\n\nline two\n";
+        let parsed = parse_markdown_message(&format!(
+            "---\nto: agent-a\nfrom: parent\nharness: codex\ncwd: /repo\nworktree: /repo/.boop-worktrees/feature/a\n---\n{body}"
+        ))
+        .unwrap();
+        assert_eq!(parsed.to.as_deref(), Some("agent-a"));
+        assert_eq!(parsed.from.as_deref(), Some("parent"));
+        assert_eq!(parsed.body, body);
+    }
+
+    #[test]
+    fn registered_recipient_uses_the_shared_message_and_receipt_path() {
+        let root = crate::cli::testkit::temp_mail_dir();
+        let watch = root.join("watch");
+        let mailbox = root.join("mail");
+        fs::create_dir_all(&watch).unwrap();
+        fs::create_dir_all(&mailbox).unwrap();
+        let path = watch.join("agent-a.md");
+        let body = format!(
+            "Exact body.\n\n{}",
+            "large markdown section\n".repeat(10_000)
+        );
+        let source = format!("---\nto: agent-a\nfrom: coordinator-x\n---\n{body}");
+        fs::write(&path, source).unwrap();
+        let route = boop::bus::Route {
+            kind: "native".into(),
+            ..Default::default()
+        };
+        bus::write_route(&mailbox, "agent-a", &route).unwrap();
+
+        process_markdown_file(&Registry::with(Vec::new()), &watch, &mailbox, &path).unwrap();
+
+        let rows = all_messages(&mailbox).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].from, "coordinator-x");
+        assert_eq!(rows[0].body, body);
+        assert_eq!(rows[0].kind.as_str(), "request");
+        assert_eq!(
+            last_delivery_state(&mailbox, &rows[0].id)
+                .unwrap()
+                .as_deref(),
+            Some("held-in-mailbox")
+        );
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn unknown_recipient_without_session_metadata_is_refused_once_with_a_reason_row() {
+        let root = crate::cli::testkit::temp_mail_dir();
+        let watch = root.join("watch");
+        let mailbox = root.join("mail");
+        fs::create_dir_all(&watch).unwrap();
+        fs::create_dir_all(&mailbox).unwrap();
+        let path = watch.join("missing-agent.md");
+        let source = "---\nfrom: parent\n---\nKeep this body unchanged.\n";
+        fs::write(&path, source).unwrap();
+        let registry = Registry::with(Vec::new());
+
+        process_markdown_file(&registry, &watch, &mailbox, &path).unwrap();
+
+        let rows = all_messages(&mailbox).unwrap();
+        assert_eq!(rows.len(), 1);
+        assert_eq!(rows[0].to, "missing-agent");
+        assert_eq!(rows[0].from, "parent");
+        assert_eq!(rows[0].body, "Keep this body unchanged.\n");
+        assert_eq!(rows[0].kind.as_str(), "refused");
+        assert!(rows[0]
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("harness`, `cwd`, and `worktree`"));
+        assert_eq!(fs::read_dir(watch.join("rejected")).unwrap().count(), 1);
+
+        let archived = fs::read_dir(watch.join("rejected"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        fs::copy(&archived, &path).unwrap();
+        process_markdown_file(&registry, &watch, &mailbox, &path).unwrap();
+        assert_eq!(all_messages(&mailbox).unwrap().len(), 1);
+        let _ = fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn appended_only_import_is_marked_uncertain_after_restart() {
+        let root = crate::cli::testkit::temp_mail_dir();
+        let watch = root.join("watch");
+        let mailbox = root.join("mail");
+        fs::create_dir_all(&watch).unwrap();
+        fs::create_dir_all(&mailbox).unwrap();
+        let path = watch.join("known-agent.md");
+        let source = "---\nto: known-agent\n---\nA stable request body.\n";
+        fs::write(&path, source).unwrap();
+        let hash = blake3::hash(source.as_bytes()).to_hex();
+        let message = boop::bus::Message {
+            id: boop::bus::mint_id(),
+            from: "markdown".into(),
+            to: "known-agent".into(),
+            from_timestamp: boop::bus::now_iso(),
+            to_timestamp: None,
+            kind: "request".into(),
+            reply_to: None,
+            body: "A stable request body.\n".into(),
+            r#ref: Some(format!("markdown:known-agent.md:{hash}")),
+            rc: None,
+            detail: None,
+        };
+        append_message(&mailbox, &message).unwrap();
+
+        process_markdown_file(&Registry::with(Vec::new()), &watch, &mailbox, &path).unwrap();
+
+        assert_eq!(all_messages(&mailbox).unwrap().len(), 1);
+        assert!(all_messages(&mailbox).unwrap()[0]
+            .detail
+            .as_deref()
+            .unwrap()
+            .contains("delivery uncertain"));
+        assert_eq!(fs::read_dir(watch.join("uncertain")).unwrap().count(), 1);
+        let _ = fs::remove_dir_all(root);
     }
 }
 

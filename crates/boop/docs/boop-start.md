@@ -17,17 +17,18 @@ boop-start: ready in 15.4s (boop-start: cargo fetch and boop tests into ...)
 boop-start: no recipe in /path/to/repo, nothing to warm
 ```
 
-`boop beep lane create --dry-run` prints which of the two a real spawn would
+`boop job create --dry-run` prints which of the two a real spawn would
 take, and the justfile path the recipe comes from. `--no-start` skips the whole
 step and says so.
 
-A native has no injected first turn, so `boop beep agent register --worktree <dir>` warms that tree and prints the two lines to its own stdout.
+A native has no injected first turn, so `boop me register <name>` is the pane-less registration entry point.
 
 The registration's last line tells the native how to name itself. A native
 subagent runs inside its spawner's process, so no export can reach it and the
 identity ladder's env rung keeps naming the spawner. Every verb the native runs
-carries the name: `boop wait --me --as native-n1`, `boop beep <route> "<body>"
---as native-n1`, `boop beep parent "<body>" --as native-n1`. A bare `--me`
+carries the name: `boop mail wait --me --as native-n1`, `boop mail send --to
+<route> "<body>" --as native-n1`, `boop mail send --to parent "<body>"
+--as native-n1`. A bare `--me`
 under a lane stamp that has live native children is refused with the
 candidates listed (native-subagent-identity), never watched on the wrong
 mailbox.

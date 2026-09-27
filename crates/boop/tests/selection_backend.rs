@@ -510,9 +510,9 @@ fn deleted_route_does_not_reuse_selection() {
     assert!(String::from_utf8_lossy(&out.stderr).contains("no Boop recipients selected"));
 }
 
-/// RECEIPT. An explicit `--to` naming an unknown route fails and sends
-/// nothing, never widening to the live broadcast. Sabotage: treating the
-/// emptied explicit set as a bare broadcast writes two rows.
+/// RECEIPT. An explicit `--to` naming an unknown route fails without printing
+/// a never-live recipient row or widening to the broadcast. Sabotage: treating
+/// the emptied explicit set as a bare broadcast writes two rows.
 #[test]
 fn explicit_unknown_recipients_never_fall_back_to_broadcast() {
     let scratch = Scratch::new("explicit-stale");
@@ -533,7 +533,8 @@ fn explicit_unknown_recipients_never_fall_back_to_broadcast() {
     ]);
     assert!(!output.status.success(), "unknown target must fail");
     let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(stdout.contains("no-route ghost"), "{stdout}");
+    assert!(stdout.is_empty(), "{stdout}");
+    assert!(String::from_utf8_lossy(&output.stderr).contains("ghost"));
     assert!(
         scratch
             .sql("SELECT 'count=' || COUNT(*) FROM agent_mail")
@@ -571,12 +572,10 @@ fn empty_selection_errors_without_broadcast() {
         .contains("count=0"));
 }
 
-/// RECEIPT. `shout --selected` sends to exactly the selected route and the
-/// `--as` sender is honored even when it is not a registered route.
-/// Sabotage: an unregistered `--as instant` downgraded to `coordinator`, or the
-/// unselected route also receiving a row.
+/// RECEIPT. `shout --selected` applies liveness proof to the selected snapshot;
+/// registered pane-less rows are skipped and never receive a mail row.
 #[test]
-fn selected_sends_only_to_the_selected_route() {
+fn selected_shout_skips_a_registered_route_without_live_proof() {
     let scratch = Scratch::new("selected");
     scratch.write_registry(
         r#"{"live1":{"kind":"coordinator","harness":"codex"},
@@ -603,10 +602,11 @@ fn selected_sends_only_to_the_selected_route() {
     );
 
     let rows = scratch.sql("SELECT to_route || '|' || from_route FROM agent_mail");
-    assert!(rows.contains("live2|instant"), "{rows}");
+    assert!(rows.is_empty(), "stale registered route got a row: {rows}");
     assert!(
-        !rows.contains("live1|"),
-        "unselected route got a row: {rows}"
+        String::from_utf8_lossy(&output.stdout).contains("1 skipped"),
+        "{}",
+        String::from_utf8_lossy(&output.stdout)
     );
 }
 

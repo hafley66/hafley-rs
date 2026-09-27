@@ -8,8 +8,8 @@ use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
     CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError,
-    OpResult, QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, TrailArgs,
-    WatchArgs,
+    OpResult, QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, StratifyArgs,
+    TrailArgs, WatchArgs,
 };
 
 fn command(cmd: Cmd) -> Ryi {
@@ -284,6 +284,10 @@ pub fn scip(args: &ScipArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Sen
 }
 pub fn graph(args: &GraphArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     stream(command(Cmd::Graph(args.clone())))
+}
+
+pub fn stratify(args: &StratifyArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Stratify(args.clone())))
 }
 pub fn query(args: &QueryArgs) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
     stream(command(Cmd::Query(args.clone())))

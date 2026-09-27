@@ -141,7 +141,7 @@ impl Parser for OxcParser {
             source_type_for(path).ok_or_else(|| ParseError::NoGrammar(path.to_string()))?;
         let src = std::str::from_utf8(content).map_err(|err| ParseError::Utf8(err.to_string()))?;
         let ret = oxc_parser::Parser::new(arena, src, source_type).parse();
-        if ret.panicked {
+        if ret.fatal_error {
             return Err(ParseError::Parse(format!("oxc panicked on {path}")));
         }
         Ok(ret.program)
@@ -180,7 +180,11 @@ fn push_with_module_bodies<'s, 'a>(
         match module_decl_of(stmt) {
             Some(module) => push_with_module_bodies(module_block(module), out),
             None => {
-                if let Some(global) = global_decl_of(stmt) {
+                if let Some(module) = external_module_decl_of(stmt) {
+                    if let Some(body) = &module.body {
+                        push_with_module_bodies(&body.body, out);
+                    }
+                } else if let Some(global) = global_decl_of(stmt) {
                     push_with_module_bodies(&global.body.body, out);
                 }
             }
@@ -192,8 +196,21 @@ fn push_with_module_bodies<'s, 'a>(
 fn global_decl_of<'s, 'a>(stmt: &'s ts::Statement<'a>) -> Option<&'s ts::TSGlobalDeclaration<'a>> {
     match stmt {
         ts::Statement::TSGlobalDeclaration(global) => Some(global),
-        ts::Statement::ExportNamedDeclaration(export) => match &export.declaration {
-            Some(ts::Declaration::TSGlobalDeclaration(global)) => Some(global),
+        ts::Statement::ExportDeclaration(export) => match &export.declaration {
+            ts::Declaration::TSGlobalDeclaration(global) => Some(global.as_ref()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+fn external_module_decl_of<'s, 'a>(
+    stmt: &'s ts::Statement<'a>,
+) -> Option<&'s ts::TSExternalModuleDeclaration<'a>> {
+    match stmt {
+        ts::Statement::TSExternalModuleDeclaration(module) => Some(module),
+        ts::Statement::ExportDeclaration(export) => match &export.declaration {
+            ts::Declaration::TSExternalModuleDeclaration(module) => Some(module.as_ref()),
             _ => None,
         },
         _ => None,
@@ -201,11 +218,13 @@ fn global_decl_of<'s, 'a>(stmt: &'s ts::Statement<'a>) -> Option<&'s ts::TSGloba
 }
 
 /// The `TSModuleDeclaration` a statement declares, bare or `export`-wrapped.
-fn module_decl_of<'s, 'a>(stmt: &'s ts::Statement<'a>) -> Option<&'s ts::TSModuleDeclaration<'a>> {
+fn module_decl_of<'s, 'a>(
+    stmt: &'s ts::Statement<'a>,
+) -> Option<&'s ts::TSNamespaceDeclaration<'a>> {
     match stmt {
-        ts::Statement::TSModuleDeclaration(module) => Some(module),
-        ts::Statement::ExportNamedDeclaration(export) => match &export.declaration {
-            Some(ts::Declaration::TSModuleDeclaration(module)) => Some(module),
+        ts::Statement::TSNamespaceDeclaration(module) => Some(module),
+        ts::Statement::ExportDeclaration(export) => match &export.declaration {
+            ts::Declaration::TSNamespaceDeclaration(module) => Some(module.as_ref()),
             _ => None,
         },
         _ => None,
@@ -214,13 +233,12 @@ fn module_decl_of<'s, 'a>(stmt: &'s ts::Statement<'a>) -> Option<&'s ts::TSModul
 
 /// `namespace A.B {}` nests one `TSModuleDeclaration` per dotted segment and
 /// only the innermost carries the block; `declare module "x";` carries none.
-fn module_block<'s, 'a>(decl: &'s ts::TSModuleDeclaration<'a>) -> &'s [ts::Statement<'a>] {
+fn module_block<'s, 'a>(decl: &'s ts::TSNamespaceDeclaration<'a>) -> &'s [ts::Statement<'a>] {
     let mut current = decl;
     loop {
-        match current.body.as_ref() {
-            Some(ts::TSModuleDeclarationBody::TSModuleBlock(block)) => return &block.body,
-            Some(ts::TSModuleDeclarationBody::TSModuleDeclaration(inner)) => current = inner,
-            None => return &[],
+        match &current.body {
+            ts::TSNamespaceDeclarationBody::TSModuleBlock(block) => return &block.body,
+            ts::TSNamespaceDeclarationBody::TSNamespaceDeclaration(inner) => current = inner,
         }
     }
 }
@@ -242,11 +260,7 @@ impl Project<TypeF> for TypeProjector {
         for stmt in with_module_bodies(&program.body) {
             use ts::Statement as S;
             match stmt {
-                S::ExportNamedDeclaration(export) => {
-                    if let Some(decl) = &export.declaration {
-                        decl_entity(decl, strings, sink);
-                    }
-                }
+                S::ExportDeclaration(export) => decl_entity(&export.declaration, strings, sink),
                 S::ExportDefaultDeclaration(export) => match &export.declaration {
                     ts::ExportDefaultDeclarationKind::ClassDeclaration(class) => {
                         class_entity(class, strings, sink)
@@ -348,11 +362,7 @@ fn ts_doc_anchors(program: &Program<'_>) -> Vec<(u32, Span, Option<String>)> {
         use ts::Statement as S;
         let at = stmt.span().start;
         match stmt {
-            S::ExportNamedDeclaration(e) => {
-                if let Some(d) = &e.declaration {
-                    ts_decl_anchor(d, at, &mut out);
-                }
-            }
+            S::ExportDeclaration(e) => ts_decl_anchor(&e.declaration, at, &mut out),
             S::ExportDefaultDeclaration(e) => match &e.declaration {
                 ts::ExportDefaultDeclarationKind::ClassDeclaration(c) => {
                     ts_class_anchor(c, at, &mut out)
@@ -812,10 +822,8 @@ fn edge_candidates(program: &Program<'_>, strings: &mut Strings, sink: &mut Fami
     for stmt in with_module_bodies(&program.body) {
         use ts::Statement as S;
         match stmt {
-            S::ExportNamedDeclaration(export) => {
-                if let Some(decl) = &export.declaration {
-                    decl_edge_candidates(decl, strings, sink);
-                }
+            S::ExportDeclaration(export) => {
+                decl_edge_candidates(&export.declaration, strings, sink);
             }
             S::ExportDefaultDeclaration(export) => match &export.declaration {
                 ts::ExportDefaultDeclarationKind::ClassDeclaration(class) => {
@@ -943,6 +951,24 @@ fn fn_body_uses(
     }
 }
 
+fn arrow_body_uses(
+    owner: oxc_span::Span,
+    type_parameters: &Option<oxc_allocator::Box<ts::TSTypeParameterDeclaration>>,
+    body: &ts::ArrowFunctionBody,
+    strings: &mut Strings,
+    sink: &mut FamilyBundle<TypeF>,
+) {
+    let params = param_constraint_candidates(owner, type_parameters, strings, sink);
+    let mut collector = TypeRefCollector {
+        exclude: &params,
+        out: Vec::new(),
+    };
+    collector.visit_arrow_function_body(body);
+    for name in collector.out {
+        push_candidate(sink, strings, owner, &name, TypeEdgeKind::Uses);
+    }
+}
+
 /// A named `function foo(...)`. Anonymous functions have no owner, so skip
 /// (v5 `ts_function_edges`).
 fn fn_edge_candidates(func: &ts::Function, strings: &mut Strings, sink: &mut FamilyBundle<TypeF>) {
@@ -972,10 +998,10 @@ fn var_fn_edge_candidates(
         };
         match &declarator.init {
             Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
-                fn_body_uses(
+                arrow_body_uses(
                     declarator.span,
                     &arrow.type_parameters,
-                    Some(&arrow.body),
+                    &arrow.body,
                     strings,
                     sink,
                 );
@@ -1002,14 +1028,14 @@ fn class_edge_candidates(class: &ts::Class, strings: &mut Strings, sink: &mut Fa
     let Some(_) = &class.id else { return };
     let owner = class.span;
     let params = param_constraint_candidates(owner, &class.type_parameters, strings, sink);
-    if let Some(sup) = &class.super_class {
-        if let ts::Expression::Identifier(idr) = sup {
+    if let Some(heritage) = &class.heritage {
+        if let ts::Expression::Identifier(idr) = &heritage.expression {
             push_candidate(sink, strings, owner, &idr.name, TypeEdgeKind::Impl);
         }
-    }
-    if let Some(args) = &class.super_type_arguments {
-        for ty in &args.params {
-            refs_candidates(sink, strings, owner, ty, &params, TypeEdgeKind::Impl);
+        if let Some(args) = &heritage.type_arguments {
+            for ty in &args.params {
+                refs_candidates(sink, strings, owner, ty, &params, TypeEdgeKind::Impl);
+            }
         }
     }
     for imp in &class.implements {
@@ -1085,7 +1111,7 @@ fn interface_edge_candidates(
     let owner = interface.span;
     let params = param_constraint_candidates(owner, &interface.type_parameters, strings, sink);
     for ext in &interface.extends {
-        if let ts::Expression::Identifier(idr) = &ext.expression {
+        if let ts::TSTypeName::IdentifierReference(idr) = &ext.type_name {
             push_candidate(sink, strings, owner, &idr.name, TypeEdgeKind::Generic);
         }
         if let Some(args) = &ext.type_arguments {
@@ -1202,10 +1228,8 @@ fn tsi_rows(
     for stmt in with_module_bodies(&program.body) {
         use ts::Statement as S;
         match stmt {
-            S::ExportNamedDeclaration(export) => {
-                if let Some(decl) = &export.declaration {
-                    tsi_decl(decl, src, strings, &mut names, &mut state);
-                }
+            S::ExportDeclaration(export) => {
+                tsi_decl(&export.declaration, src, strings, &mut names, &mut state);
             }
             S::ExportDefaultDeclaration(export) => match &export.declaration {
                 ts::ExportDefaultDeclarationKind::ClassDeclaration(class) => {
@@ -1655,7 +1679,9 @@ fn tsi_class(
         names,
         state,
     );
-    if let Some(ts::Expression::Identifier(idr)) = &class.super_class {
+    if let Some(ts::Expression::Identifier(idr)) =
+        class.heritage.as_ref().map(|heritage| &heritage.expression)
+    {
         let target = names.named(strings, &idr.name, to_span(idr.span));
         tsi_conforms(owner, target, names);
     }
@@ -1749,7 +1775,7 @@ fn tsi_interface(
         state,
     );
     for extended in &interface.extends {
-        let span = extended.expression.span();
+        let span = extended.type_name.span();
         let text = tsi_text(src, span).to_string();
         let target = names.named(strings, &text, to_span(span));
         tsi_conforms(owner, target, names);
@@ -2162,21 +2188,18 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                     }
                 }
             }
-            ts::Statement::ExportNamedDeclaration(export) => {
-                // `export {a} from './m'` only; `export {a}` (no source) is a
-                // local export marker, not a module specifier.
-                if let Some(source) = &export.source {
-                    for spec in &export.specifiers {
-                        let name = module_export_name(&spec.exported);
-                        rows.push(ScannedSpecifier {
-                            span: spec.span,
-                            name,
-                            kind: SpecifierKind::Reexport,
-                            module: source.value.as_str(),
-                            module_span: source.span,
-                            imported: renamed(module_export_name(&spec.local), name),
-                        });
-                    }
+            ts::Statement::ExportFromDeclaration(export) => {
+                let source = &export.source;
+                for spec in &export.specifiers {
+                    let name = module_export_name(&spec.exported);
+                    rows.push(ScannedSpecifier {
+                        span: spec.span,
+                        name,
+                        kind: SpecifierKind::Reexport,
+                        module: source.value.as_str(),
+                        module_span: source.span,
+                        imported: renamed(module_export_name(&spec.local), name),
+                    });
                 }
             }
             ts::Statement::ExportAllDeclaration(export) => {
@@ -2325,11 +2348,7 @@ fn call_defs(program: &Program<'_>, strings: &mut Strings, sink: &mut FamilyBund
     for stmt in with_module_bodies(&program.body) {
         use ts::Statement as S;
         match stmt {
-            S::ExportNamedDeclaration(export) => {
-                if let Some(decl) = &export.declaration {
-                    call_decl_def(decl, strings, sink);
-                }
-            }
+            S::ExportDeclaration(export) => call_decl_def(&export.declaration, strings, sink),
             S::ExportDefaultDeclaration(export) => match &export.declaration {
                 ts::ExportDefaultDeclarationKind::ClassDeclaration(class) => {
                     class_call_defs(class, strings, sink)
@@ -2472,11 +2491,7 @@ fn lambda_entry_stmt(walker: &mut LambdaDefs, stmt: &ts::Statement) {
                 walker.visit_function_body(body);
             }
         }
-        S::ExportNamedDeclaration(export) => {
-            if let Some(decl) = &export.declaration {
-                lambda_entry_decl(walker, decl);
-            }
-        }
+        S::ExportDeclaration(export) => lambda_entry_decl(walker, &export.declaration),
         S::ClassDeclaration(class) => lambda_entry_class(walker, class),
         S::VariableDeclaration(_) | S::ExpressionStatement(_) | S::ReturnStatement(_) => {
             walker.visit_statement(stmt);
@@ -2580,7 +2595,7 @@ impl<'a> OxcVisit<'a> for LambdaDefs {
         if matches!(&declarator.id, ts::BindingPattern::BindingIdentifier(_)) {
             match &declarator.init {
                 Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
-                    self.visit_function_body(&arrow.body);
+                    self.visit_arrow_function_body(&arrow.body);
                     return;
                 }
                 Some(ts::Expression::FunctionExpression(func)) => {
@@ -2985,11 +3000,7 @@ fn df_flow_stmt(
                 df_flow_body(body, file, &fn_sym, strings, &mut scope, sink);
             }
         }
-        S::ExportNamedDeclaration(export) => {
-            if let Some(decl) = &export.declaration {
-                df_flow_decl(decl, file, strings, sink);
-            }
-        }
+        S::ExportDeclaration(export) => df_flow_decl(&export.declaration, file, strings, sink),
         S::ExportDefaultDeclaration(export) => match &export.declaration {
             ts::ExportDefaultDeclarationKind::FunctionDeclaration(func) => {
                 if let Some(body) = func.body.as_deref() {
@@ -3128,6 +3139,26 @@ fn df_lift_fn(
     }
 }
 
+fn df_lift_arrow(
+    params: &ts::FormalParameters,
+    body: &ts::ArrowFunctionBody,
+    file: &str,
+    fn_sym: &str,
+    strings: &mut Strings,
+    sink: &mut FamilyBundle<DfF>,
+) {
+    if let ts::ArrowFunctionBody::FunctionBody(body) = body {
+        df_lift_fn(params, body, false, file, fn_sym, strings, sink);
+        return;
+    }
+    let expression = body.to_expression();
+    let mut scope = Scope::new();
+    df_seed_params(params, strings, &mut scope, sink);
+    let value = df_flow_expr(expression, file, fn_sym, strings, &mut scope, sink);
+    let ret = df_push(sink, strings, expression.span(), DfNodeKind::Ret, None);
+    df_edge(sink, value, ret);
+}
+
 fn df_flow_body_stmt(
     stmt: &ts::Statement,
     file: &str,
@@ -3147,15 +3178,7 @@ fn df_flow_body_stmt(
                     match &declarator.init {
                         Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
                             let sym = format!("{file}::function::{}", binding.name);
-                            df_lift_fn(
-                                &arrow.params,
-                                &arrow.body,
-                                arrow.expression,
-                                file,
-                                &sym,
-                                strings,
-                                sink,
-                            );
+                            df_lift_arrow(&arrow.params, &arrow.body, file, &sym, strings, sink);
                             continue;
                         }
                         Some(ts::Expression::FunctionExpression(func)) => {
@@ -3569,15 +3592,7 @@ fn df_flow_expr(
         // `closure` VALUE node carrying that exact sym as its name.
         E::ArrowFunctionExpression(arrow) => {
             let lam_sym = format!("{fn_sym}::closure::{}", span.start);
-            df_lift_fn(
-                &arrow.params,
-                &arrow.body,
-                arrow.expression,
-                file,
-                &lam_sym,
-                strings,
-                sink,
-            );
+            df_lift_arrow(&arrow.params, &arrow.body, file, &lam_sym, strings, sink);
             df_push(sink, strings, span, DfNodeKind::Closure, Some(&lam_sym))
         }
         E::FunctionExpression(func) => match func.body.as_deref() {
@@ -3903,8 +3918,8 @@ fn var_decl_of<'a>(stmt: &'a ts::Statement<'a>) -> Option<&'a ts::VariableDeclar
     use ts::Statement as S;
     match stmt {
         S::VariableDeclaration(v) => Some(v),
-        S::ExportNamedDeclaration(exp) => match &exp.declaration {
-            Some(ts::Declaration::VariableDeclaration(v)) => Some(v),
+        S::ExportDeclaration(exp) => match &exp.declaration {
+            ts::Declaration::VariableDeclaration(v) => Some(v.as_ref()),
             _ => None,
         },
         _ => None,
@@ -3916,8 +3931,8 @@ fn enum_decl_of<'a>(stmt: &'a ts::Statement<'a>) -> Option<&'a ts::TSEnumDeclara
     use ts::Statement as S;
     match stmt {
         S::TSEnumDeclaration(en) => Some(en),
-        S::ExportNamedDeclaration(exp) => match &exp.declaration {
-            Some(ts::Declaration::TSEnumDeclaration(en)) => Some(en),
+        S::ExportDeclaration(exp) => match &exp.declaration {
+            ts::Declaration::TSEnumDeclaration(en) => Some(en.as_ref()),
             _ => None,
         },
         _ => None,
@@ -4196,7 +4211,7 @@ impl Source for TsSource {
                     let src = std::str::from_utf8(content)
                         .map_err(|err| ParseError::Utf8(err.to_string()))?;
                     let parsed = oxc_parser::Parser::new(&arena, src, source_type).parse();
-                    if parsed.panicked {
+                    if parsed.fatal_error {
                         return Err(ParseError::Parse(format!("oxc panicked on {path}")));
                     }
                     Ok(parsed)

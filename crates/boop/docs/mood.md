@@ -8,7 +8,7 @@ One attribute row on a session: names the text format agents mail that session i
 | `boop me mood` | print the caller's effective mood |
 | `boop me mood --clear` | delete the caller's own mood row |
 | `boop me` | prints `mood: <name> (set by <session>)` after registering |
-| `boop beep lane create --mood <name>` | set the spawned child lane's mood |
+| `boop job create --mood <name>` | set the spawned child lane's mood |
 | `boop db "select * from agent_session_attr"` | the rows, as always |
 
 `boop me mood` also takes `--as <session>` to name the session explicitly when the caller cannot be resolved from the environment.

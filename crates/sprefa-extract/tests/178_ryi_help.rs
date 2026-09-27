@@ -7,7 +7,7 @@ fn generated_clap_help_matches_captured_main() {
     let fixtures = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/fixtures/ryi_help");
     for verb in [
         "root", "fast", "slow", "scip", "graph", "cleave", "move", "rename", "query", "region",
-        "watch", "diff", "ingest", "schema", "trail",
+        "watch", "diff", "ingest", "schema", "trail", "stratify",
     ] {
         let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
         if verb != "root" {

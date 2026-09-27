@@ -35,11 +35,11 @@ Three namespaces. Everything else is deleted or folded. Additive migration: old 
 
 | namespace | verbs | today's spelling |
 |---|---|---|
-| `boop job` | `create`, `list`, `get`, `wait [<job>...]` (none = all my children), `kill <job> [--signal]`, `signal <sig> [--children]`, `rm <job>` (forget, carcass-safe), `attach <job>`, `pane <job>`, `run` (hidden, pane-only) | `beep lane *`, `beep agent register` (a job with no pane) |
-| `boop mail` | `send --to <job> \| --parent \| --children --body`, `recv [--me]` (the inbox drain), `wait <id> \| --me` | `beep hail`, `tell-parent`, `tell-children`, `inbox`, `wait` |
-| `boop me` | `whoami`, `mood`, `favorite`, `register` (pane adoption) | `whoami`, `me *`, `adopt` |
-| stays | `db`, `debug`, `config`, `host chat` | unchanged |
-| goes | `agent`, `concatmap` (coroutine is dl6's, hafley-rs `boop-concatmap-state-in-store`), `beep` as a word, 16 hidden pre-split verbs, 34 `--mail-dir` declarations (one global flag) | |
+| `boop job` | `create`, `list`, `get`, `wait [<job>...]` (none = all my children), `kill <job>`, `signal <sig> [--children]`, `rm <job>` (forget, carcass-safe), `attach <job>`, `pane <job>`, `run` (hidden, pane-only) | `beep lane *`, `beep agent register` (a job with no pane) |
+| `boop mail` | `send --to <job> <body>`, `recv`, `wait <id> \| --me` | `beep hail`, `tell-parent`, `tell-children`, `inbox`, `wait` |
+| `boop me` | `whoami`, `mood`, `favorite`, `register` (pane-less route registration) | `whoami`, `me *`, `adopt` |
+| stays | `db`, `debug`, `config` | unchanged |
+| goes | `host chat` (resident host removed with archived ACP-host experiment), `agent`, `concatmap` (coroutine is dl6's, hafley-rs `boop-concatmap-state-in-store`), `beep` as a word, 16 hidden pre-split verbs, 34 `--mail-dir` declarations (one global flag) | |
 
 This is the surface a dl6-generated OpenAPI describes as `/jobs`, `/mail`, `/me`; the fold happens first so the generated spec is clean on day one (sprefa `openapi-clap-uds-lab`, `boop-hosted-in-dl6`).
 
@@ -102,7 +102,7 @@ example printed by `boop concatmap --help`.
 | 2 | `boop-crate-split` (DONE): the five crates above, one commit per crate extraction in dependency order (store, acp, harness, proc, cli), one PR | L | 1 | compile-time boundaries before renaming verbs |
 | 3 | `boop-job-namespace` (new): `boop job *` + `boop mail *` + `boop me *`, old spellings hidden aliases, `wait` for all, `kill` vs `rm`, `signal --children`, `attach`, per-job `--timeout` | M | 2 | the verb table in section 2 |
 | 4 | `boop-mail-dir-global-flag` (existing) + `boop-hidden-verbs-retire` (existing) | S | 3 | delete the aliases and the 34 flags after one release |
-| 5 | sprefa `boop-hosted-in-dl6`: the OpenAPI for `/jobs /mail /me` generated from dl6 | - | 3 | the generated surface replaces the hand one |
+| 5 | `sprefa boop-hosted-in-dl6` | obsolete | 3 | retired with the no-server/no-daemon decision |
 
 ## 5. Why this shape, and the neighbours
 

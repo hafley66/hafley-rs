@@ -117,6 +117,7 @@ fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> 
         Some(Cmd::Ingest(args)) => ("ingest", serde_json::to_value(args)?),
         Some(Cmd::Schema) => ("schema", serde_json::json!({})),
         Some(Cmd::Trail(args)) => ("trail", serde_json::to_value(args)?),
+        Some(Cmd::Stratify(args)) => ("stratify", serde_json::to_value(args)?),
     };
     Ok(pair)
 }
@@ -149,6 +150,7 @@ async fn run() -> Result<i32, ClientError> {
         "ingest" => "/ingest",
         "schema" => "/schema",
         "trail" => "/trail",
+        "stratify" => "/stratify",
         _ => return Err(format!("no HTTP path for {verb}").into()),
     };
     let mut builder = Request::builder().method(method).uri(format!("http://ryi{path}")).header("te", "trailers");

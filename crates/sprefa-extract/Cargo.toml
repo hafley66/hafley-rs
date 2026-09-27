@@ -53,15 +53,15 @@ globset = "0.4"
 # The Program<'a> borrows the Allocator + source text, so parse ties content to
 # 'a (the GAT seam). Commit 2b: TypeF entities; commit 2c: the arrow-type sigs
 # (oxc_ast_visit walks type annotations for the named references they reference).
-oxc_allocator = "0.135"
-oxc_parser = "0.135"
-oxc_ast = "0.135"
-oxc_ast_visit = "0.135"
-oxc_span = "0.135"
-oxc_syntax = "0.135"
+oxc_allocator = "0.151"
+oxc_parser = "0.151"
+oxc_ast = "0.151"
+oxc_ast_visit = "0.151"
+oxc_span = "0.151"
+oxc_syntax = "0.151"
 # The exact identifier spans `extract rename` needs. Default features empty; +1
 # crate, candidates measured in plans/2026-08-27-extract-rename.PLAN.md:222-251.
-oxc_semantic = "0.135"
+oxc_semantic = "0.151"
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The ESM/CJS + tsconfig resolution algorithm the `move` verb needs: extension
 # aliases (`./x.js` naming `x.ts`), `index`, package `exports`/`main`, tsconfig
@@ -69,7 +69,7 @@ oxc_semantic = "0.135"
 # alternatives measured are in `lang/ts_resolve.rs` and the arc-3 plan table
 # (swc's resolver is not a standalone crate; the `tsconfig` crates parse config
 # without resolving; a hand-rolled probe re-derives a tested algorithm).
-oxc_resolver = "11.24"
+oxc_resolver = "11.24.3"
 # syn is the Rust AST front-end v5 carried (src/graph/typegraph/rust). The
 # `full` feature parses Item::*; `visit` drives the call-site/call-def walks;
 # `extra-traits` for derive Eq on AST nodes some helpers pattern-match. Ported
@@ -80,7 +80,7 @@ oxc_resolver = "11.24"
 syn = { version = "2", features = ["full", "visit", "parsing", "extra-traits"] }
 proc-macro2 = { version = "1", features = ["span-locations"] }
 # ra_ap_syntax and salsa remain for the optional rust checker tier.
-ra_ap_syntax = "0.0.349"
+ra_ap_syntax = "0.0.352"
 salsa = { version = "0.28.2", default-features = false, features = ["macros", "rayon"] }
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The rust CHECKER tier: rust-analyzer's own name resolution and type inference,
@@ -92,12 +92,12 @@ salsa = { version = "0.28.2", default-features = false, features = ["macros", "r
 # via rustc-dev (nightly-only, unstable ABI, no semver); running `rust-analyzer
 # scip` as a subprocess (measured already as `rust.scip_override.call.tsv`, and
 # it re-parses instead of sharing this crate's arena).
-ra_ap_hir = { version = "0.0.349", optional = true }
-ra_ap_ide = { version = "0.0.349", optional = true }
-ra_ap_ide_db = { version = "0.0.349", optional = true }
-ra_ap_load-cargo = { version = "0.0.349", optional = true }
-ra_ap_project_model = { version = "0.0.349", optional = true }
-ra_ap_vfs = { version = "0.0.349", optional = true }
+ra_ap_hir = { version = "0.0.352", optional = true }
+ra_ap_ide = { version = "0.0.352", optional = true }
+ra_ap_ide_db = { version = "0.0.352", optional = true }
+ra_ap_load-cargo = { version = "0.0.352", optional = true }
+ra_ap_project_model = { version = "0.0.352", optional = true }
+ra_ap_vfs = { version = "0.0.352", optional = true }
 # tree-sitter is the Go AST front-end v5 carried (src/graph/typegraph/go.rs).
 # Byte-identical with the versions this lock already carried when they became
 # direct, so the lock did not move: one copy each. The same story holds for the

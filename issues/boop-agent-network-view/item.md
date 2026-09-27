@@ -2,7 +2,7 @@
 created: 2026-08-17
 updated: 2026-08-18
 type: feature
-status: open
+status: fixed
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-observability, component-query]
@@ -179,20 +179,24 @@ report (`const SESSION_GRAPH_SQL` at line 103, with
 
 ## Acceptance Criteria
 
-- [ ] `boop beep agent waterfall --since <ms|duration> [--cwd <p>] --format json|ndjson|table` exists and returns the four `kind` classes in one result set.
-- [ ] The SQL lives as a named constant beside `SESSION_GRAPH_SQL` in `_0_session_graph.rs`; no interpolated values, `:since` and `:cwd` are bound.
-- [ ] The read opens the store READ-ONLY (see `@boop-db-readonly-open`).
-- [ ] Output over the live store is under 10 seconds for a 24 h window; the measured number is in the PR body.
-- [ ] EXPLAIN QUERY PLAN shows SEARCH rather than SCAN on `agent_trace_event` (`idx_trace_event_lane_time`) and `agent_lane` (`idx_lane_lane`); pasted in the PR body.
-- [ ] A schema-version constant travels with the payload so the TS side can reject a mismatch.
-- [ ] Documented: the `dict_session` two-namespace trap and the `agent_trace_span` bridge, so the viewer knows why a lane row has no turns.
-- [ ] Reported to the hafley-rxjs navigator: `2_tree.ts` filters on edge kind `spawn` while boop emits `spawned`, dropping every real edge.
+- [x] `boop beep agent waterfall --since <ms|duration> [--cwd <p>] --format json|ndjson|table` exists and returns the four `kind` classes in one result set.
+- [x] The SQL lives as `AGENT_WATERFALL_SQL` beside `SESSION_GRAPH_SQL` in `crates/boop-store/src/_0_session_graph.rs`; `:since`, `:cwd`, and `:schema_version` are bound.
+- [x] The read uses `Store::open_readonly` through the shared `open_ro_store` path.
+- [x] Live-store 24 h read: 0.26 s, 10,551 rows across 238 lanes.
+- [x] EXPLAIN QUERY PLAN test asserts `SEARCH ... idx_trace_event_lane_time` and `SEARCH ... idx_lane_lane`, with no table scan on either relation.
+- [x] `schema_version` is returned on every row from `AGENT_SESSION_GRAPH_SCHEMA_VERSION`.
+- [x] `dict_session` has separate lane-name and harness-session namespaces. `agent_trace_span` bridges them by `trace_id`, with `lane-create` and `supervisor-conversation` attachments; a lane-name row therefore does not join directly to its transcript turns.
+- [x] Navigator handoff recorded: `2_tree.ts` filters for `spawn`, while Boop writes `spawned`; this drops the stored parent-child edges.
 
 ## Tests Run
 
+- `cargo nextest run -p boop -p boop-store -j 2 -E 'test(/waterfall_query|waterfall_plan|beep_agent_waterfall/)'`: 3 passed.
+- `cargo nextest run --workspace -j 2 --status-level fail -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'`: 1,356 passed, 201 skipped, 1 leaky.
+- `cargo nextest run --features cli -j 2 --test all` from `crates/sprefa-extract`: 1,114 passed, 18 skipped, 2 slow.
+
 ## Implementation Notes
 
-Read-only scouting; nothing was changed to produce this card.
+`boop beep agent waterfall --since 24h --format json` returned all four kinds on the live store in 0.26 s. The query plan test pins searches through `idx_lane_lane` and `idx_trace_event_lane_time`.
 
 ## Decisions
 

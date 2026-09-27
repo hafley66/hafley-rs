@@ -4,20 +4,21 @@ Usage: ryii [OPTIONS] [PATH]...
        ryii <COMMAND>
 
 Commands:
-  fast    Syntax-only whole-project facts (no compiler)
-  slow    The SCIP oracle written as fast's tables
-  scip    Raw SCIP index rows
-  graph   Ask one question of the resolved call/type graph
-  cleave  Move one item into another file, with its imports
-  move    Move a file and repair every specifier that names it
-  rename  Rename a symbol and every occurrence bound to it
-  query   Run a tree-sitter query over files
-  region  Replace a generated region between sprefa markers
-  watch   Stream fact deltas as the worktree changes
-  diff    Fact delta between two commits
-  ingest  Validate and re-emit foreign TSI JSONL
-  schema  Print the output record schema
-  trail   Print the last N runs from the trail
+  fast      Syntax-only whole-project facts (no compiler)
+  slow      The SCIP oracle written as fast's tables
+  scip      Raw SCIP index rows
+  graph     Ask one question of the resolved call/type graph
+  cleave    Move one item into another file, with its imports
+  move      Move a file and repair every specifier that names it
+  rename    Rename a symbol and every occurrence bound to it
+  query     Run a tree-sitter query over files
+  region    Replace a generated region between sprefa markers
+  watch     Stream fact deltas as the worktree changes
+  diff      Fact delta between two commits
+  ingest    Validate and re-emit foreign TSI JSONL
+  schema    Print the output record schema
+  trail     Print the last N runs from the trail
+  stratify  Rank files from entrypoints and propose dependency-first numeric prefixes
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -50,4 +51,4 @@ Options:
 
 Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text
 SQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.
-Build: git hash: a467904e85eb, datetime: 2026-09-27T01:47:16Z
+Build: git hash: abb071eb69a0, datetime: 2026-09-27T10:57:04Z

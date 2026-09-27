@@ -3,7 +3,7 @@ created: 2026-08-22
 updated: 2026-08-22
 type: epic
 owner: hafley66
-status: open
+status: obsolete
 priority: high
 ---
 
@@ -25,3 +25,7 @@ One `Harness` object per agent CLI; a claude TUI hails a codex or opencode TUI a
 | 4 | retire-tui-channels-codex-proxy | M | 3 |
 | 5 | instant-harness-store-dedupe | S | 2 |
 | 6 | branch-worktree-cleanup | S | 4 |
+
+## Resolution
+
+Repro receipt (2026-09-27): `cargo nextest run -p boop-proc -j 2 -E 'test(/a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed/)'` passes; the current registry dispatches through the recipient's `Harness::door()`, contains the five built-in adapters, and the planned identity/capability, live-session, and door cards are already landed. The remaining `Spawner` / `TranscriptSource` extraction is a method-location refactor with no current harness behavior failure to reproduce.
