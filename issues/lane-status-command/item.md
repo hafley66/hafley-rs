@@ -1,8 +1,8 @@
 ---
 created: 2026-08-13
-updated: 2026-09-14
+updated: 2026-09-26
 type: task
-status: open
+status: obsolete
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, artifact-cli, component-status]
@@ -10,6 +10,7 @@ lane: boop-cli
 lane_seq: 5
 collision: [boop-db-cli]
 blocked_by: ['@lane-runtime-identity', '@lane-tracing-events']
+closed: 2026-09-26
 ---
 
 # 005 Add lane status command
@@ -50,3 +51,9 @@ Observed 2026-08-14: two read-only audit lanes exited rc=1 before attaching a su
 ### 2026-09-14T13:59:48Z · @codex
 
 Cleanup 2026-09-14: typed lane-status candidate retained at archive/boop-cleanup-20260914/feature/lane-status-command-terra (99ada50b7a49d28188506968023b1c4286e74d42). 8_lane_status.rs is absent from current main. Review and port its useful fields through the current CLI architecture. Worktree removed; generated bench-grid deletion backed up. Source-only audit, no new test pass.
+
+## Resolution
+
+### 2026-09-27T03:30:19Z · @issuectl
+
+Current CLI exposes beep lane get/list and db status; the requested boop db lane status form and the recorded public boop lane commands are absent from current help.
