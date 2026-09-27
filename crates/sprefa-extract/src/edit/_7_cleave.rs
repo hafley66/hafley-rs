@@ -2632,11 +2632,11 @@ fn rust_module_declared(cx: &MoveCx, dest: &str) -> bool {
         ]);
     } else {
         candidates.extend([format!("{parent}.rs"), format!("{parent}/mod.rs")]);
-        if parent == "src" {
+        if parent == "src" || parent.ends_with("/src") {
             candidates.extend([
-                "src/lib.rs".to_string(),
-                "src/main.rs".to_string(),
-                "src/mod.rs".to_string(),
+                format!("{parent}/lib.rs"),
+                format!("{parent}/main.rs"),
+                format!("{parent}/mod.rs"),
             ]);
         }
     }

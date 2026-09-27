@@ -41,3 +41,5 @@ Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dr
 ### 2026-09-27 · @codex
 
 Receipt: `t_166_cleave_rust` passed (18 tests), including `undeclared_destinations_stop_before_rewriting_callers` and `a_missing_destination_is_created_with_every_use_line`.
+
+Follow-up receipt: package-nested `src/lib.rs` declarations are recognized; the combined `t_166_cleave_rust` and `t_173_move_cross_crate` targets passed (33 tests).
