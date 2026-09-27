@@ -1,6 +1,6 @@
 ---
 created: 2026-09-19
-updated: 2026-09-26
+updated: 2026-09-27
 type: improvement
 status: open
 priority: low
@@ -64,8 +64,9 @@ as the failure.
 
 - [x] Test files using `#[test]` import `oh::test`.
 - [x] Scanner test fails with the file paths when an import is missing.
-- [ ] Scanner identifies newly added test functions that have no test attribute.
+- [x] Scanner identifies `test_*` functions without a test attribute.
+- [ ] Scanner detects newly added tests with arbitrary names without relying on the `test_*` prefix.
 
 ## Progress receipt
 
-2026-09-26: `oh_testkit::every_test_file_imports_oh_test` passes in default and `fmt,sqlite-sink` feature modes. It checks Rust files under `crates/hafley-observe/src` and `tests`.
+2026-09-27: Reproduced the gap with `tests/_stampless_candidate.rs` containing `fn test_unstamped_candidate() {}`; `oh_testkit::every_test_file_imports_oh_test` passed without reporting it. The scanner now parses Rust items and reports `test_*` functions without `#[test]` or `#[oh::test]`. Fixture test and the 8-test `oh_testkit` suite pass. It continues to check `#[test]` files for `use oh::test;`.

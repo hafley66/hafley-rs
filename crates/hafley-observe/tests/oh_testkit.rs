@@ -3,6 +3,42 @@ extern crate hafley_observe as oh;
 oh::counting_allocator!();
 
 use oh::test;
+use syn::visit::Visit;
+use syn::ItemFn;
+
+fn unstamped_test_functions(path: &str, source: &str) -> Vec<String> {
+    struct TestFunctions<'a> {
+        path: &'a str,
+        unstamped: Vec<String>,
+    }
+
+    impl<'ast> Visit<'ast> for TestFunctions<'_> {
+        fn visit_item_fn(&mut self, function: &'ast ItemFn) {
+            let is_test_name = function.sig.ident.to_string().starts_with("test_");
+            let has_test_attribute = function.attrs.iter().any(|attribute| {
+                let path = attribute.path();
+                path.is_ident("test")
+                    || (path.segments.len() == 2
+                        && path.segments[0].ident == "oh"
+                        && path.segments[1].ident == "test")
+            });
+            if is_test_name && !has_test_attribute {
+                self.unstamped
+                    .push(format!("{}:{}", self.path, function.sig.ident));
+            }
+            syn::visit::visit_item_fn(self, function);
+        }
+    }
+
+    let mut functions = TestFunctions {
+        path,
+        unstamped: Vec::new(),
+    };
+    let parsed = syn::parse_file(source)
+        .unwrap_or_else(|error| panic!("could not parse Rust source {path}: {error}"));
+    functions.visit_file(&parsed);
+    functions.unstamped
+}
 use std::panic::{catch_unwind, AssertUnwindSafe};
 
 #[test(time_ms = 1000, logs = 4)]
@@ -119,13 +155,27 @@ fn every_test_file_imports_oh_test() {
         .into_iter()
         .filter_map(|path| {
             let source = std::fs::read_to_string(&path).expect("Rust source");
-            (source.contains("#[test") && !source.contains("use oh::test;"))
-                .then(|| path.strip_prefix(root).unwrap().display().to_string())
+            let relative = path.strip_prefix(root).unwrap().display().to_string();
+            let mut findings = unstamped_test_functions(&relative, &source);
+            if source.contains("#[test") && !source.contains("use oh::test;") {
+                findings.push(relative);
+            }
+            (!findings.is_empty()).then_some(findings)
         })
+        .flatten()
         .collect();
     assert!(
         unstamped.is_empty(),
-        "test attributes without `use oh::test;`:\n{}",
+        "unstamped test functions or test files without `use oh::test;`:\n{}",
         unstamped.join("\n")
+    );
+}
+
+#[test(time_ms = 1000, logs = 5)]
+fn scanner_flags_test_prefixed_functions_without_test_attributes() {
+    let source = "fn test_missing_attribute() {}\nfn helper() {}\n#[oh::test] fn test_stamped() {}";
+    assert_eq!(
+        unstamped_test_functions("fixture.rs", source),
+        ["fixture.rs:test_missing_attribute"]
     );
 }

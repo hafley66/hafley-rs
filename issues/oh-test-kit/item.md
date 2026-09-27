@@ -91,4 +91,4 @@ HTTP client into every consumer.
 
 ## Progress receipt
 
-2026-09-26: added `hafley-observe-macros`, the `oh::test`/`budget`/`instrument_all`/`skip` attributes, synchronous per-callsite log and elapsed-time checks, optional peak allocation checks, and `default = []`. Default package run: 19 passed. `--features fmt,sqlite-sink`: 29 passed. `instrument_all` file-module diagnostic test passed; inner-attribute diagnostic, SIGTERM drain/replay, and lab minting remain open.
+2026-09-27: The code remains hosted in `crates/hafley-observe` (`src/11_testkit.rs`, `tests/oh_testkit.rs`) with proc-macro attributes in the sibling `hafley-observe-macros` crate. The target `oh_testkit` suite passes 8 tests after adding scanner coverage. Inner-attribute diagnostics, SIGTERM drain/replay, and lab minting remain open as listed above.
