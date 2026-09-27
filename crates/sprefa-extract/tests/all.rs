@@ -191,6 +191,8 @@ mod t_181_ts_ladder;
 mod t_182_client_daemon;
 #[path = "183_fast_path_spelling.rs"]
 mod t_183_fast_path_spelling;
+#[path = "184_fast_recursive_receiver.rs"]
+mod t_184_fast_recursive_receiver;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]

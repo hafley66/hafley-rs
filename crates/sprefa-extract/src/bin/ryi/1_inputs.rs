@@ -1,5 +1,5 @@
-//! `Inputs` -> one ordered, deduped file list. Directories and globs walk through
-//! soopy (gitignore-aware worktree walk in a repository, directory snapshot outside).
+//! `Inputs` -> one ordered, deduped file list. Directories and globs use an
+//! ignore-aware filesystem walk; file bytes and content IDs are produced later.
 
 use std::collections::HashSet;
 use std::io::BufRead;

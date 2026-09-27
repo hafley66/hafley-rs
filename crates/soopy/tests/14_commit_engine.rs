@@ -5,7 +5,7 @@ use std::sync::Arc;
 use soopy::{
     CommitEngine, CommitFailpoint, CommitRefusal, ContentId, FileModeObservation,
     InMemoryStageStore, MutationPlan, ObjectId, PlannedFile, PlannedFileKind, RepoPath, RootPath,
-    SourcePath, SourceRoot, SourceRootId, StageStore,
+    SourcePath, SourceRoot, SourceRootId, StageId, StageStore,
 };
 
 fn temp_dir(label: &str) -> std::path::PathBuf {
@@ -230,6 +230,88 @@ fn failpoint_after_operation_replays_idempotently() {
     assert!(!state
         .join("checkpoints")
         .join(format!("{}.progress", transaction.id))
+        .exists());
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(state);
+}
+
+#[test]
+fn external_writer_after_preflight_is_refused_by_recovery() {
+    let root = temp_dir("external_writer");
+    let transaction = stage(
+        &root,
+        vec![replace_file(&root, "file.txt", b"before", b"stage")],
+    );
+    let state = temp_dir("external_writer_state");
+    let engine = CommitEngine::open(&root, &state).unwrap();
+    assert!(matches!(
+        engine.commit_with_failpoint(&transaction, Some(CommitFailpoint::BeforeOperation(0))),
+        Err(CommitRefusal::Failpoint {
+            point: CommitFailpoint::BeforeOperation(0)
+        })
+    ));
+    fs::write(root.join("file.txt"), b"external writer").unwrap();
+
+    assert!(matches!(
+        engine.recover(transaction.id),
+        Err(CommitRefusal::RecoveryRequired { stage_id, .. }) if stage_id == transaction.id
+    ));
+    assert_eq!(fs::read(root.join("file.txt")).unwrap(), b"external writer");
+    assert!(engine.journal_path_for(transaction.id).exists());
+    let _ = fs::remove_dir_all(root);
+    let _ = fs::remove_dir_all(state);
+}
+
+#[test]
+fn subprocess_interruption_entrypoint() {
+    let Ok(root) = std::env::var("SOOPY_COMMIT_CHILD_ROOT") else {
+        return;
+    };
+    let root = std::path::PathBuf::from(root);
+    let state = std::path::PathBuf::from(std::env::var("SOOPY_COMMIT_CHILD_STATE").unwrap());
+    let id_path = std::path::PathBuf::from(std::env::var("SOOPY_COMMIT_CHILD_ID").unwrap());
+    let transaction = stage(
+        &root,
+        vec![replace_file(&root, "file.txt", b"before", b"stage")],
+    );
+    fs::write(&id_path, transaction.id.to_string()).unwrap();
+    let engine = CommitEngine::open(&root, &state).unwrap();
+    assert!(matches!(
+        engine.commit_with_failpoint(&transaction, Some(CommitFailpoint::AfterOperation(0))),
+        Err(CommitRefusal::Failpoint {
+            point: CommitFailpoint::AfterOperation(0)
+        })
+    ));
+    std::process::exit(86);
+}
+
+#[test]
+fn subprocess_termination_after_apply_recovers_on_restart() {
+    let root = temp_dir("subprocess_recovery");
+    fs::write(root.join("file.txt"), b"before").unwrap();
+    let state = temp_dir("subprocess_recovery_state");
+    let id_path = state.join("stage-id.txt");
+    let output = Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("t14_commit_engine::subprocess_interruption_entrypoint")
+        .env("SOOPY_COMMIT_CHILD_ROOT", &root)
+        .env("SOOPY_COMMIT_CHILD_STATE", &state)
+        .env("SOOPY_COMMIT_CHILD_ID", &id_path)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(86));
+    assert_eq!(fs::read(root.join("file.txt")).unwrap(), b"stage");
+
+    let stage_id: StageId = fs::read_to_string(&id_path).unwrap().parse().unwrap();
+    let receipt = CommitEngine::open(&root, &state)
+        .unwrap()
+        .recover(stage_id)
+        .unwrap();
+    assert_eq!(receipt.stage_id, stage_id);
+    assert_eq!(fs::read(root.join("file.txt")).unwrap(), b"stage");
+    assert!(!CommitEngine::open(&root, &state)
+        .unwrap()
+        .journal_path_for(stage_id)
         .exists());
     let _ = fs::remove_dir_all(root);
     let _ = fs::remove_dir_all(state);

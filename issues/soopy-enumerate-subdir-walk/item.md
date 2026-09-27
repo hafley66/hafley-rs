@@ -2,7 +2,7 @@
 created: 2026-09-25
 updated: 2026-09-26
 type: bug
-status: open
+status: obsolete
 priority: normal
 labels: [extract]
 ---
@@ -26,4 +26,4 @@ Found by fork inputs-cli (branch ryi/inputs-cli). Out of that fork's scope: soop
 
 ## Repro receipt
 
-2026-09-26: `ryii fast crates/soopy/src` exits 0 over 29 files; this does not measure visited directories or file hashes. The CLI no longer calls Soopy enumeration for this worktree input after `read-side-off-soopy`; the library-level hash gate and timing receipt remain unchecked.
+2026-09-26: current `ryii query --root "$PWD" --query '(function_item) @function' crates/soopy/src` completed with 386 rows; the input path expands via `ignore::WalkBuilder` in `1_inputs.rs`, so the reported Soopy repo-root walk/hash defect does not occur in current `ryii` inputs. `Soopy::enumerate` retains its API-level behavior for callers that request `SourceEntry` content IDs.
