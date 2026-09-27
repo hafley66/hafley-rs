@@ -71,6 +71,17 @@ same "schema"                        "$soopy" - schema
 same "missing path exit code"        "$soopy" - fast does/not/exist.rs
 same "fast . again (warm)"           "$soopy" - fast .
 
+rss_mb() { ps -o rss= -p "$(cat "$XDG_CACHE_HOME/ryi/ryi.pid")" | awk '{printf "%d", $1/1024}'; }
+for _ in 1 2; do (cd "$soopy" && "$ryi" fast . >/dev/null 2>&1); done
+base=$(rss_mb)
+for _ in $(seq 3 10); do (cd "$soopy" && "$ryi" fast . >/dev/null 2>&1); done
+last=$(rss_mb)
+if [ "$last" -le $((base * 3 / 2)) ]; then
+  row ok "daemon rss after 10 warm calls <= 1.5x call 2" "${base}MB -> ${last}MB"
+else
+  row FAIL "daemon rss after 10 warm calls <= 1.5x call 2" "${base}MB -> ${last}MB"
+fi
+
 echo "== lifecycle"
 if [ -S "$sock" ] && [ -f "$XDG_CACHE_HOME/ryi/ryi.pid" ]; then
   row ok "daemon up after ryi calls" "pid=$(cat "$XDG_CACHE_HOME/ryi/ryi.pid")"
