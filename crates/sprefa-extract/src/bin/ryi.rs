@@ -377,6 +377,12 @@ impl From<String> for RyiExit {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mimalloc")]
+    unsafe {
+        // mimalloc v3 option 15 is purge_delay (milliseconds); set it before
+        // any allocator use so freed pages become purgeable immediately.
+        libmimalloc_sys::mi_option_set(15, 0);
+    }
+    #[cfg(feature = "mimalloc")]
     cap_memory();
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
         return server_auto::daemon(

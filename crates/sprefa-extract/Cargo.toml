@@ -37,6 +37,9 @@ memchr = { version = "2", optional = true }
 # ~2% self time in frees on the go corpus. Kept behind a feature until it wins
 # on all three corpora; default build is byte-identical and allocator-unchanged.
 mimalloc = { version = "0.1", optional = true }
+# Direct access to mimalloc's request-time collection and option APIs. This is
+# the same libmimalloc-sys version already pulled by `mimalloc` above.
+libmimalloc-sys = { version = "0.1.49", features = ["extended"], optional = true }
 # Hard heap ceiling for the ryi bin (RYI_MAX_MEM_MB). Candidates: cap (allocator
 # wrapper, limit settable at runtime), stats_alloc (counts only), setrlimit (RLIMIT_AS unenforced on macOS).
 cap = { version = "0.1.2", optional = true }
@@ -318,7 +321,7 @@ read = [
 ]
 cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
-mimalloc = ["dep:mimalloc", "dep:cap"]
+mimalloc = ["dep:mimalloc", "dep:cap", "dep:libmimalloc-sys"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out
 # of `cli`: it pulls the whole rust-analyzer crate graph (380s cold build).
 rust-checker = [

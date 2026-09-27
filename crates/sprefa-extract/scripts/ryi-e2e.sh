@@ -71,6 +71,19 @@ same "schema"                        "$soopy" - schema
 same "missing path exit code"        "$soopy" - fast does/not/exist.rs
 same "fast . again (warm)"           "$soopy" - fast .
 
+# Purged mimalloc pages can remain RSS-resident until reclaimed by the OS; gate
+# the committed physical footprint that vmmap reports.
+footprint_mb() { vmmap --summary "$(cat "$XDG_CACHE_HOME/ryi/ryi.pid")" | awk '/^Physical footprint:/ {gsub(/M/, "", $3); printf "%d", $3; exit}'; }
+for _ in 1 2; do (cd "$soopy" && "$ryi" fast . >/dev/null 2>&1); done
+base=$(footprint_mb)
+for _ in $(seq 3 10); do (cd "$soopy" && "$ryi" fast . >/dev/null 2>&1); done
+last=$(footprint_mb)
+if [ "$((last * 4))" -le "$((base * 5))" ]; then
+  row ok "daemon footprint after 10 warm calls <= 1.25x call 2" "${base}MB -> ${last}MB"
+else
+  row FAIL "daemon footprint after 10 warm calls <= 1.25x call 2" "${base}MB -> ${last}MB"
+fi
+
 echo "== lifecycle"
 if [ -S "$sock" ] && [ -f "$XDG_CACHE_HOME/ryi/ryi.pid" ]; then
   row ok "daemon up after ryi calls" "pid=$(cat "$XDG_CACHE_HOME/ryi/ryi.pid")"

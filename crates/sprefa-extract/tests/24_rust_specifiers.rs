@@ -41,9 +41,9 @@ fn rust_use_and_mod_specifiers() {
             ("reexport", "kappa", Some("iota::kappa"), 433),
             ("reexport", "mu", Some("lambda::mu"), 463),
             ("reexport", "nu", Some("nu"), 479),
-            ("named", "omicron", Some("omicron"), 501),
-            ("named", "pi", Some("pi"), 514),
-            ("named", "sigma", Some("rho.rs"), 527),
+            ("module", "omicron", Some("omicron"), 501),
+            ("module", "pi", Some("pi"), 514),
+            ("module", "sigma", Some("rho.rs"), 527),
             ("named", "phi", Some("upsilon::phi"), 585),
         ]
     );

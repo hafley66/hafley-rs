@@ -243,6 +243,15 @@ fn produce(ryi: Ryi) -> Rows {
                 outcome
             })
         });
+        #[cfg(feature = "mimalloc")]
+        if chunked {
+            sprefa_extract::extract_pool().broadcast(|_| unsafe {
+                libmimalloc_sys::mi_collect(true);
+            });
+            unsafe {
+                libmimalloc_sys::mi_collect(true);
+            }
+        }
         if let Err(error) = result {
             let _ = tx.send(Err(error));
         }
