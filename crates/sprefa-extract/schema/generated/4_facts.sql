@@ -460,6 +460,32 @@ CREATE TABLE IF NOT EXISTS "graph_edge" (
     "to_line" INTEGER
 );
 
+CREATE TABLE IF NOT EXISTS "external_crate_decline" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "from_path" TEXT NOT NULL,
+    "from_name" TEXT,
+    "type_name" TEXT NOT NULL,
+    "crate_name" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "kind" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "graph_decline" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "from_path" TEXT NOT NULL,
+    "from_name" TEXT,
+    "type_name" TEXT NOT NULL,
+    "crate_name" TEXT NOT NULL,
+    "reason" TEXT NOT NULL,
+    "kind" TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "graph_path" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

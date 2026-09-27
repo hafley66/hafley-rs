@@ -3885,6 +3885,200 @@
     ]
   },
   {
+    "record": "external_crate_decline",
+    "table": "external_crate_decline",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "external_crate_decline"
+      },
+      {
+        "name": "from_path",
+        "path": [
+          "from_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_name",
+        "path": [
+          "from_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "type_name",
+        "path": [
+          "type_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "crate_name",
+        "path": [
+          "crate_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "path": [
+          "reason"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "kind",
+        "path": [
+          "kind"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "graph_decline",
+    "table": "graph_decline",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "graph_decline"
+      },
+      {
+        "name": "from_path",
+        "path": [
+          "from_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "from_name",
+        "path": [
+          "from_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "type_name",
+        "path": [
+          "type_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "crate_name",
+        "path": [
+          "crate_name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "reason",
+        "path": [
+          "reason"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "kind",
+        "path": [
+          "kind"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
     "record": "graph_path",
     "table": "graph_path",
     "columns": [
