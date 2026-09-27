@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-27
 type: improvement
-status: open
+status: obsolete
 priority: low
 related: ['@oh-test-kit']
 labels: [observability]
@@ -65,8 +65,8 @@ as the failure.
 - [x] Test files using `#[test]` import `oh::test`.
 - [x] Scanner test fails with the file paths when an import is missing.
 - [x] Scanner identifies `test_*` functions without a test attribute.
-- [ ] Scanner detects newly added tests with arbitrary names without relying on the `test_*` prefix.
+- [x] Scanner detects newly added tests with arbitrary names without relying on the `test_*` prefix.
 
 ## Progress receipt
 
-2026-09-27: Reproduced the gap with `tests/_stampless_candidate.rs` containing `fn test_unstamped_candidate() {}`; `oh_testkit::every_test_file_imports_oh_test` passed without reporting it. The scanner now parses Rust items and reports `test_*` functions without `#[test]` or `#[oh::test]`. Fixture test and the 8-test `oh_testkit` suite pass. It continues to check `#[test]` files for `use oh::test;`.
+2026-09-27 repro receipt: temporary `tests/_arbitrary_named_stampless.rs` with `#[test] fn arbitrary_named_test_without_oh_import() {}` made `cargo nextest run -p hafley-observe -j 2 --test oh_testkit --filter-expr 'test(every_test_file_imports_oh_test)'` fail and name that exact path; the missing arbitrary-name case is already detected by the file-wide import check.
