@@ -2,7 +2,7 @@
 created: 2026-09-17
 updated: 2026-09-27
 type: improvement
-status: in-progress
+status: fixed
 priority: normal
 labels: [domain-boop, deferred]
 ---
@@ -46,3 +46,7 @@ Current repro: installed boop --help has no guard option and the current boop so
 ### 2026-09-27 · user decision
 
 Suspend API: the supervisor stays outside the harness child process group. Start the harness child with `process_group(0)` using `std::os::unix::process::CommandExt`; pause and resume the group through `nix::sys::signal::killpg(pgid, SIGSTOP/SIGCONT)`. Verify with a `sleep 30` child spawned through the same path, `ps -o stat`, stop/continue assertions, then kill it.
+
+### 2026-09-27 · @codex
+
+Fixed in `39b0687a`; `cargo nextest run -p boop-proc -j 2 -E 'test(resource_guard::)'` passed 3 tests, including the owned process-group pause/resume receipt.
