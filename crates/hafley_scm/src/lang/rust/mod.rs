@@ -33,6 +33,8 @@ mod tree_entity_rows;
 mod tree_module_resolution_rows;
 #[path = "20_tree_module_specifier_rows.rs"]
 mod tree_module_specifier_rows;
+#[path = "22_tree_receiver_rows.rs"]
+mod tree_receiver_rows;
 #[path = "18_tree_type_candidate_rows.rs"]
 mod tree_type_candidate_rows;
 #[path = "13_tsi_syntax_rows.rs"]
@@ -78,6 +80,7 @@ pub use tree_call_rows::{call_metadata_rows_from_tree, call_site_rows_from_tree}
 pub use tree_entity_rows::type_entity_rows_from_tree;
 pub use tree_module_resolution_rows::module_resolution_rows_from_tree;
 pub use tree_module_specifier_rows::module_specifier_rows_from_tree;
+pub use tree_receiver_rows::receiver_rows_from_tree;
 pub use tree_type_candidate_rows::type_candidate_rows_from_tree;
 pub use tsi_syntax_rows::{tsi_syntax_rows, Arg as TsiSyntaxArg, TsiSyntaxRows};
 pub use type_candidate_rows::{

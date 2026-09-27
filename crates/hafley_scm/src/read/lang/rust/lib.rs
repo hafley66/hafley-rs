@@ -253,14 +253,7 @@ impl Source for RustSource {
                             );
                         }
                         if let Some(tree) = tree.as_ref() {
-                            project_call(
-                                &parsed.file,
-                                line_starts,
-                                tree,
-                                content,
-                                &mut strings,
-                                &mut bundle,
-                            );
+                            project_call(tree, content, &mut strings, &mut bundle);
                         }
                         splice_macro_expansions(src, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
