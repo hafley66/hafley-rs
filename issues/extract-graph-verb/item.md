@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-20
+updated: 2026-09-26
 type: feature
-status: needs-decision
+status: obsolete
 priority: normal
 epic: ryi-new-verbs
 labels: [extract]
@@ -132,3 +132,7 @@ Session 2026-09-18 design pass. Fable review overruled on cutting --from/--uses 
 ### 2026-09-20T18:12:21Z · @chris
 
 2026-09-20: split into graph-callers-arm, graph-from-arm, graph-uses-arm under ryi-new-verbs; this card is the umbrella and closes when all three do.
+
+### 2026-09-26 · @codex
+
+Repro: `ryii graph --uses Widget tests/fixtures/graph_rust/0_widget.rs tests/fixtures/graph_rust/1_reader.rs` exits 0 with 8 edges.
