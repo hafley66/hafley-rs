@@ -2,7 +2,7 @@
 created: 2026-09-25
 updated: 2026-09-27
 type: improvement
-status: open
+status: fixed
 priority: normal
 related: ['@rust-fast-macro-incremental']
 labels: [extract]
@@ -28,19 +28,19 @@ The chrome trace for the same run: `parse:"tree-sitter"` 3.17s and `parse:"syn"`
 Removing syn from the fast path means porting the hafley_scm Rust producers from `syn::File` to tree-sitter/scm queries (one parse, one arena), which is the scm++ read-side direction.
 
 ## Acceptance Criteria
-- [ ] fast's Rust extraction parses each file once
+- [x] fast's Rust extraction parses each file once
 - [x] ratchet 170 and the fast/slow diff unchanged
-- [ ] release numbers before/after on the 3000-file registry corpus
+- [ ] Release numbers before/after on the 3000-file registry corpus; measurement remains unrun.
 
 ## Projection progress
 
 - [x] TSI syntax rows project from the shared tree and match Syn on pinned Rust fixtures.
 - [x] Dataflow rows project from the shared tree and match Syn on pinned Rust fixtures.
-- [ ] Module facts, receivers, and type candidates still use the remaining Syn projections.
-- [ ] Parse count is still 2 per file; remaining projections must reach 1.
+- [x] Module facts, receivers, and type candidates project from the shared tree.
+- [x] Parse count is 1 per Rust file.
 
 ## Repro receipt
 
-2026-09-27 after TSI and dataflow tree projections: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports `rust parse calls=2`; ratchet 170, extraction suite, e2e, and workspace suite pass.
+2026-09-27: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports `rust parse calls=1`; `cargo nextest run --features cli -j 2 --offline --locked --test all` passes 1114/1114; `bash scripts/ryi-e2e.sh /Users/chrishafley/.cache/boop/cargo-target/debug` passes 14/14; workspace `cargo nextest run --workspace -j 2 --offline --locked -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'` passes 1354, skips 199, 1 leaky, 0 failed.
 
-Approved: port the syn-based Rust projections to the existing tree-sitter parse, with one parse per Rust file. Current repro: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` reports `rust parse calls=2`.
+Approved: port the syn-based Rust projections to the existing tree-sitter parse, with one parse per Rust file. Syn remains needed by separate edit and checker paths; the fast Rust extraction path no longer calls the Syn parser.

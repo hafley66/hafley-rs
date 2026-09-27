@@ -1,6 +1,5 @@
-//! The Rust extractor arm: syn front-end for type/call/df/const, the shared
-//! tree-sitter walk for cst. Mirrors TsSource (same shape, different front-end): cst via the shared walk
-//! grammar + one SCM-owned `syn` parse feeding the type/call/df/const projections.
+//! The Rust extractor arm reuses one tree-sitter parse for CST, type, call,
+//! dataflow, and module projections.
 //! Type edges ride `TypeFAux` candidates out of the one parse (port of v5
 //! `edges_from`: field/variant/generic/impl — v5 rust emits NO param/returns
 //! and NO uses). Resolve<CallF> is NameResolve primary, ScipOverride on scip
@@ -18,8 +17,8 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use hafley_scm::lang::rust::{
-    call_metadata_rows_from_tree, call_site_rows_from_tree, line_col_to_byte, parse_rust_syntax,
-    rust_combined_query, CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
+    call_metadata_rows_from_tree, call_site_rows_from_tree, line_col_to_byte, rust_combined_query,
+    CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
 
 use super::fallback::cst_bundle_from_tree;
@@ -79,12 +78,10 @@ mod df;
 use df::project_df;
 
 // ════════════════════════════════════════════════════════════════════════════
-// RustSource: the Rust Source (cst via the shared tree-sitter walk + type/call/df via syn).
+// RustSource: the Rust Source, with fast projections over a shared tree-sitter parse.
 //
-// The two-parser, masked shape (mirrors TsSource). cst runs through the shared
-// (one dep = the CST floor for every lang); type/call/df run through ONE syn
-// parse (three masked projections over the same tree). ONE shared `Strings`
-// across all four families.
+// The masked shape reuses one parse for each requested family and shares one
+// `Strings` table across the output.
 // ════════════════════════════════════════════════════════════════════════════
 
 fn rust_call_query() -> &'static hafley_scm::QueryExt {
@@ -104,8 +101,8 @@ fn rust_combined_query_ext() -> &'static hafley_scm::QueryExt {
 }
 
 /// The Rust `Source`. `matches` = the path ends in `.rs`. CST uses the shared
-/// grammar; type/call/df/const reuse one SCM-owned `syn` parse. Expanded-call
-/// rows are produced by SCM and mapped back to source bytes.
+/// grammar; type/call/df/module facts reuse the same tree. Expanded-call rows
+/// are produced by SCM and mapped back to source bytes.
 #[derive(Default)]
 pub struct RustSource;
 
@@ -153,8 +150,7 @@ impl Source for RustSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // One tree backs the named CST walk, call definitions, and fast rows.
-        // The syn projections below retain their existing separate parse.
+        // One tree backs every Rust fast projection.
         let tree = if mask.cst || mask.types || mask.call || mask.df {
             let parse_span = trace::parse_span("rust", "tree-sitter");
             let _parse_guard = parse_span.enter();
@@ -189,39 +185,23 @@ impl Source for RustSource {
             None
         };
 
-        // type/call/df via ONE syn parse (masked). Owns no arena (syn::File is
-        // owned); the line_starts table bridges proc_macro2 line/col to byte
-        // spans once, shared across the masked projections. A failed parse leaves
-        // all three None (partial output: cst above may still be Some).
+        // Type/call/dataflow/module facts share the caller's Rust tree. Refuse
+        // error-recovery trees to retain the previous parse-failure shape.
         let mut types = None;
         let mut call = None;
         let mut df = None;
         let mut rust_module = None;
         if mask.types || mask.call || mask.df {
-            if let Ok(src) = std::str::from_utf8(content) {
-                let parsed = {
-                    let span = trace::parse_span("rust", "syn");
-                    let _entered = span.enter();
-                    parse_rust_syntax(src)
-                };
-                if let Ok(parsed) = parsed {
-                    let line_starts = &parsed.line_starts;
-                    rust_module = Some(tree.as_ref().map_or_else(
-                        || {
-                            super::rust_modules::rust_module_facts_from_parsed(
-                                &parsed.file,
-                                line_starts,
-                            )
-                        },
-                        |tree| super::rust_modules::rust_module_facts_from_tree(tree, content),
+            if let (Ok(src), Some(tree)) = (std::str::from_utf8(content), tree.as_ref()) {
+                if !tree.root_node().has_error() {
+                    rust_module = Some(super::rust_modules::rust_module_facts_from_tree(
+                        tree, content,
                     ));
                     if mask.types {
                         let span = trace::family_span("rust", "type");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<TypeF>::default();
-                        if let Some(tree) = tree.as_ref() {
-                            project_types(tree, content, &mut strings, &mut bundle);
-                        }
+                        project_types(tree, content, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, 0);
                         types = Some(bundle);
                     }
@@ -238,9 +218,7 @@ impl Source for RustSource {
                                 &mut bundle,
                             );
                         }
-                        if let Some(tree) = tree.as_ref() {
-                            project_call(tree, content, &mut strings, &mut bundle);
-                        }
+                        project_call(tree, content, &mut strings, &mut bundle);
                         splice_macro_expansions(src, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
                         call = Some(bundle);
@@ -249,9 +227,7 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "df");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<DfF>::default();
-                        if let Some(tree) = tree.as_ref() {
-                            project_df(tree, path, content, &mut strings, &mut bundle);
-                        }
+                        project_df(tree, path, content, &mut strings, &mut bundle);
                         trace::record_bundle(&span, &bundle, 0);
                         df = Some(bundle);
                     }

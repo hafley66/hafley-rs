@@ -214,7 +214,7 @@ fn summary_rows_sort_by_micros_descending() {
 /// Every lang hashes ONCE, the extract cache key in `dispatch.rs`; a door that
 /// needs the id reads it back. failure-modes 107 owns the count.
 const HASHES_PER_FILE: [(&str, u64); 3] = [("go", 1), ("ts", 1), ("rust", 1)];
-const PARSES_PER_FILE: u64 = 2;
+const PARSES_PER_FILE: [(&str, u64); 3] = [("go", 2), ("ts", 2), ("rust", 1)];
 
 /// The chain phase's site count on `go_residual/callers.go`, hand-counted off
 /// the phase table and pinned so a chain walk that doubles is a FAIL.
@@ -237,6 +237,10 @@ fn phase_calls_per_file_are_pinned() {
             .iter()
             .find_map(|(name, count)| (*name == lang).then_some(*count))
             .expect("every lang in the corpus is priced");
+        let want_parses = PARSES_PER_FILE
+            .iter()
+            .find_map(|(name, count)| (*name == lang).then_some(*count))
+            .expect("every lang in the corpus has a parse budget");
         for file in files {
             let table = phases_of(&format!("tests/fixtures/{file}"));
             let (hash_files, hash_calls, _) = phase_row(&table, lang, "hash")
@@ -249,7 +253,7 @@ fn phase_calls_per_file_are_pinned() {
             let (parse_files, _, _) = phase_row(&table, lang, "parse")
                 .unwrap_or_else(|| panic!("no {lang} parse row for {file} in\n{table}"));
             assert_eq!(
-                parse_files, PARSES_PER_FILE,
+                parse_files, want_parses,
                 "{lang} parsed {file} {parse_files} times\n{table}"
             );
             let (flatten_files, _, _) = phase_row(&table, "-", "flatten")
