@@ -310,6 +310,16 @@ struct BodyTypeWalk {
 }
 
 impl<'ast> Visit<'ast> for BodyTypeWalk {
+    fn visit_expr_struct(&mut self, expr: &'ast syn::ExprStruct) {
+        if let Some(to) = path_name(&expr.path) {
+            self.candidates.push(TypeCandidateRow {
+                to,
+                kind: TypeCandidateKind::Uses,
+            });
+        }
+        syn::visit::visit_expr_struct(self, expr);
+    }
+
     fn visit_generic_argument(&mut self, arg: &'ast syn::GenericArgument) {
         let ty = match arg {
             syn::GenericArgument::Type(ty) => Some(ty),
