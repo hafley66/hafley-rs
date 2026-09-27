@@ -36,8 +36,8 @@ Live `%375` was `hafley-rs-4`, 179x51. The read-only `~/.agent/boop.db` lookup f
 - [x] An extended span stops before composer, Claude status lines and tmux status rows.
 - [x] A turn label is never placed on a row whose text belongs to an earlier turn's code block.
 - [x] Generic `boop-turnvis` matching has no Claude-name branch; the adapter supplies its source-match policy.
-- [ ] The tooltip shows route, pane, harness session id and rung.
+- [x] The tooltip shows route, pane, harness session id and rung.
 
 2026-09-27: `t1_harness_boundaries::behavioral_harness_dispatch_stays_in_adapters` reproduced the generic `harness != "claude"` branch in `boop-turnvis/src/lib.rs:499`. Turn matching now takes an evidence policy; the Claude adapter supplies the two-row-or-prompt-marker rule. `cargo nextest run -p boop-turnvis -j 2` passed 10 tests, and the boundary test passed in `cargo nextest run -p boop -p boop-turnvis -j 2`. That full run encountered a separate Codex live-test update prompt at `0.156.1 → 0.157.1`.
 
-2026-09-27 current-tree repro: `claude_375_does_not_claim_prior_code_or_terminal_chrome` passes (1/1), so the turn-label regression is already fixed here. Remaining blocker: the tooltip implementation is at `instant/src/terminal.ts`, but this checkout contains no `instant/src/terminal.ts` or `PaneSessionBinding` source (`rg --files` found only the issue references and `crates/boop/examples/instant_views.rs`). The full `%375` capture and turns 890-914, and the tooltip identity change/test, remain open until that source tree is available.
+2026-09-27 current-tree repro: `claude_375_does_not_claim_prior_code_or_terminal_chrome` passes (1/1), so the turn-label regression is already fixed here. Tooltip implementation and regression tests are committed in Instant worktree branch `fix/turn-attrib-tooltip`, commit `355dfb99` (`Show full pane session identity in terminal tooltip`). The focused Vitest passes 2/2, the two `boop_mux_session` Rust tests pass, and `pnpm exec tsc --noEmit --pretty false` passes. Remaining gate: the full `%375` capture and turns 890-914 fixture is still unchecked.
