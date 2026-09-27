@@ -4631,9 +4631,9 @@ dependencies = [
 
 [[package]]
 name = "salsa-macro-rules"
-version = "0.28.4"
+version = "0.28.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40bc5a70f76d5f539e1e2f892006f523669845b6c879a70b3ed1996f47cfbb2e"
+checksum = "85f4b7d4405540bbd6d4ffa52d4322d983f3781954d3073067ac1bdb028459b3"
 
 [[package]]
 name = "salsa-macros"
