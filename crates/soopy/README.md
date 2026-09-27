@@ -129,6 +129,31 @@ just test-soopy-multi-repo-refresh
 just perf-soopy-multi-repo-refresh
 ```
 
+### Transaction visibility and recovery
+
+`CommitEngine` holds a root-scoped advisory lock while it validates the staged
+operations, writes the journal, and applies operations in sequence. The lock
+coordinates other `CommitEngine` users that resolve to the same lock path;
+unrelated filesystem writers do not acquire it. Preflight rejects source bytes
+or modes that already differ from the sealed stage. A write that lands after
+preflight can race with apply and may be overwritten by replace, move, or
+delete. If a process stops after the journal is published, recovery classifies
+each path against the journal's before/after state and refuses a divergent
+external write with `RecoveryRequired`, preserving the journal for inspection.
+
+Replace and create publish one file through a temporary-file rename, move uses
+one filesystem rename, and delete unlinks one file. Those per-operation effects
+do not give readers a whole-tree snapshot: a multi-file commit can be observed
+between operations. Whole-tree snapshot isolation remains a separate
+requirement.
+
+`CommitFailpoint` tests exercise operation-boundary returns in-process. The
+`subprocess_termination_after_apply_recovers_on_restart` test exits a child
+process after an operation boundary, then recovers in the parent process.
+Neither test simulates power loss or validates storage-controller behavior.
+The subprocess test's platform and filesystem are recorded in the issue
+receipt; other filesystems and platforms remain unverified.
+
 ## Data model
 
 ```text
