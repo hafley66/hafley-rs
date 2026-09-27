@@ -1,9 +1,9 @@
 ---
 created: 2026-08-16
-updated: 2026-08-16
+updated: 2026-09-26
 type: epic
 owner: chrishafley
-status: open
+status: obsolete
 priority: high
 labels: [domain-soopy, intent-architecture, artifact-runtime]
 ---
@@ -39,3 +39,7 @@ The detailed archaeology, type proposal, library survey, lifecycle, and implemen
 - [x] cargo clippy -p soopy --all-targets -- -D warnings
 - [x] just test-source-mutations
 - [x] just perf-source-mutations
+
+## Repro receipt
+
+2026-09-26: current `ryii move --help` exits 0 with the staged mutation interface; this completed contract epic has no current command defect reproduced, only deferred scale gates.
