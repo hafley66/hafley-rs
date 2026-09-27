@@ -1,12 +1,14 @@
 ---
 created: 2026-08-19
-updated: 2026-08-20
+updated: 2026-09-27
 type: task
-status: testing
+status: done
 priority: high
 epic: boop-process
 size: L
 blocked_by: ['@boop-main-split']
+closed: 2026-09-27
+closed_by: codex
 ---
 
 # Split boop into boop-store / boop-harness / boop-mail / boop-proc / boop-cli
@@ -103,4 +105,8 @@ Fixed on this branch, three runner-only gaps that base CI never reached because 
 - boop_start_warm and the boop-start worktree tests assert 'just' is on PATH; the test job installs it now.
 - semver named four crates absent at baseline-rev; the package list is computed from what git finds at the base sha, so a crate added later joins by itself.
 
+## Resolution
 
+### 2026-09-27T04:26:21Z · @codex
+
+Current workspace metadata contains boop, boop-store, boop-harness, boop-proc, and boop-acp; installed Boop reports its CLI version and renders the current help contract. Split acceptance checklist is complete.
