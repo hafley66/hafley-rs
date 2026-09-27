@@ -1303,6 +1303,7 @@ enum LaneCmd {
         mail_dir: Option<PathBuf>,
     },
     /// Stop a lane and forget it, or bulk-delete by state.
+    #[command(alias = "rm")]
     Delete {
         /// One lane: kill its pane and drop its route. Omit for a bulk delete
         /// by `--state`.
@@ -1323,6 +1324,12 @@ enum LaneCmd {
         /// unmerged one is kept.
         #[arg(long = "merged-into", value_name = "BRANCH")]
         merged_into: Option<String>,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
+    /// Stop a lane process and retain its route and result history.
+    Kill {
+        lane: String,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },

@@ -2467,6 +2467,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                 anyhow::bail!("name a lane to delete, or pass --state dead for a bulk delete")
             }
         },
+        LaneCmd::Kill { lane, mail_dir } => run_lane_kill(mail_dir.as_deref(), &lane),
         LaneCmd::Prune { dry_run, mail_dir } => run_lane_prune(mail_dir.as_deref(), dry_run),
         LaneCmd::Route { lane, mail_dir } => run_resolve(&lane, mail_dir.as_deref()),
         LaneCmd::Pane {
@@ -3485,6 +3486,35 @@ pub(crate) fn run_lane_delete(
     }
     info!(lane, route_only, "lane route deleted");
     println!("deleted {lane}");
+    Ok(())
+}
+
+/// Stop a lane's tmux session while retaining its route, worktree and mail
+/// history so callers can still inspect and wait on its recorded result.
+pub(crate) fn run_lane_kill(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    let routes = bus::read_routes(&dir)?;
+    let route = routes
+        .get(lane)
+        .with_context(|| format!("no registry route for lane `{lane}`"))?;
+    let target = route
+        .tmux
+        .as_deref()
+        .with_context(|| format!("lane `{lane}` has no tmux session to kill"))?;
+    let socket = route.socket.as_deref();
+    let session = if target.starts_with('%') {
+        tmux::mux()
+            .session_of_pane(socket, target)
+            .with_context(|| format!("cannot resolve tmux session for lane `{lane}`"))?
+    } else {
+        target.to_owned()
+    };
+    match tmux::mux().has_session(socket, &session) {
+        Ok(true) => tmux::mux().kill_session(socket, &session)?,
+        Ok(false) => {}
+        Err(error) => anyhow::bail!("tmux unreachable, refusing to kill {lane}: {error}"),
+    }
+    println!("killed {lane}; route retained");
     Ok(())
 }
 
