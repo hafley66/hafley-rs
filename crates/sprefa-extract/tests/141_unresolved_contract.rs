@@ -37,6 +37,15 @@ fn ok_stdout(args: &[&str]) -> String {
     String::from_utf8(output.stdout).expect("stdout is UTF-8")
 }
 
+#[test]
+fn help_states_the_resolve_sqlite_phase_contract() {
+    let help = ok_stdout(&["--help"]);
+    assert!(help.contains(
+        "SQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only."
+    ));
+    assert!(help.contains("Every SQLite unresolved row has its path."));
+}
+
 fn sqlite_export(db: &std::path::Path, args: &[&str]) {
     let mut full: Vec<&str> = args.to_vec();
     full.push("--sqlite");

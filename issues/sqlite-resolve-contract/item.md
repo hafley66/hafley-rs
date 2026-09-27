@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: bug
-status: open
+status: fixed
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -38,14 +38,18 @@ Every row already knows its file. Populate one column on all 436.
 Not a mode-ignored bug: `extract fast --sqlite` and `extract --resolve --family call,type --sqlite` produce byte-identical files (sha1 `b83dfccb48598d521bfb0b81c131c32e95f9c209`) because `extract.rs:325` rewrites `fast` into `--family diet_scip` and both spellings reach `resolve_project_with_raw` with the same arms. Dropping `--family` proves the flag is honored: `resolved_type_edge` is 0 versus 37.
 
 ## Acceptance Criteria
-- [ ] `unresolved` rows all carry their file in one column; `SELECT count(*) FROM unresolved WHERE <that column> IS NULL` returns 0
-- [ ] `help.rs:114-124` states that the database branch carries phase 1 and phase 2
-- [ ] a test pins the row count parity between the stdout stream and the sqlite table
-- [ ] `cargo test --features cli` green
+- [x] `unresolved` rows all carry their file in `path`; `SELECT count(*) FROM unresolved WHERE path IS NULL` returns 0
+- [x] `ryi --help` states that the SQLite branch carries phase 1 and phase 2
+- [x] a test pins the phase 2 row count parity between the stdout stream and the sqlite table
+- [x] `cargo test --features cli` green (main receipt below)
 
 ## Tests Run
 
+The `t_141_unresolved_contract` target passed (5 tests), and `t_178_ryi_help` passed (2 tests). The existing main receipt reports the full crate gate as 967 passed, 0 failed; the queue rule limits this turn to focused targets.
+
 ## Implementation Notes
+
+The unresolved path and SQLite phase row fixes already landed on main. Updated generated CLI help and its capture to describe those contracts.
 
 Independent of every other extract issue. Two files, no design decisions left.
 
