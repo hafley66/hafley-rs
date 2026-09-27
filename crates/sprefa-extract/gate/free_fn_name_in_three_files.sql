@@ -1,4 +1,4 @@
--- S184: Free-function names defined in three or more non-test, non-fixture files.
+-- ledger: S186 free function names defined in 3+ non-test, non-fixture files
 WITH RECURSIVE candidates AS MATERIALIZED (
   SELECT f._input_path, f.span__start, f.span__end, f.name
   FROM node AS f
@@ -52,8 +52,7 @@ WITH RECURSIVE candidates AS MATERIALIZED (
   GROUP BY name
   HAVING COUNT(DISTINCT _input_path) >= 3
 )
-SELECT f._input_path, f.name, COUNT(*) AS definitions
+SELECT f._input_path, f.name, f.span__start
 FROM free_functions AS f
 JOIN repeated_names AS r USING (name)
-GROUP BY f._input_path, f.name
-ORDER BY f._input_path, f.name;
+ORDER BY f._input_path, f.name, f.span__start;

@@ -1,4 +1,4 @@
-; S171: include_str!/include_bytes! paths traverse up at least two directories.
+; ledger: S171 include_str!/include_bytes! paths containing ../../
 ((macro_invocation
   macro: (identifier) @macro
 ) @hit

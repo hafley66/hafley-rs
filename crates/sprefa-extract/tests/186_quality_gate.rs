@@ -29,7 +29,7 @@ fn query_rule_finds_direct_git_launch_in_fixture() {
     )
     .expect("write fixture");
 
-    let stdout = query_rule("S038_command_new_git.scm", &source);
+    let stdout = query_rule("git_subprocess.scm", &source);
     assert!(stdout.contains("\"line\":1"), "expected hit, got {stdout}");
     assert!(
         stdout.contains("\"hit\":"),
@@ -62,12 +62,12 @@ fn measured_behavior() {
     .expect("write fixture");
 
     for rule in [
-        "S029_environment_lookup_per_row.scm",
-        "S144_windows_with_dynamic_len.scm",
-        "S147_unescaped_sqlite_uri_format.scm",
-        "S171_include_str_sibling_path.scm",
-        "S182_timed_asserting_test_body.scm",
-        "S183_external_tool_command_tests.scm",
+        "env_read_in_request_path.scm",
+        "windows_of_dynamic_len.scm",
+        "sqlite_uri_unescaped.scm",
+        "include_str_across_crates.scm",
+        "wall_clock_assert_in_test.scm",
+        "external_tool_in_test.scm",
     ] {
         let output = query_rule(rule, &source);
         assert!(!output.trim().is_empty(), "{rule} did not find its fixture");
@@ -98,7 +98,7 @@ fn sqlite_rule_counts_function_names_across_three_files() {
 
     let rule = std::fs::read_to_string(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/gate/S184_function_names_in_three_files.sql"
+        "/gate/free_fn_name_in_three_files.sql"
     ))
     .expect("read SQL rule");
     let mut child = Command::new("sqlite3")
@@ -125,7 +125,7 @@ fn sqlite_rule_counts_function_names_across_three_files() {
     assert_eq!(rows.lines().count(), 3, "unexpected rows: {rows}");
     for source in sources {
         assert!(
-            rows.contains(&format!("{}\tshared_name\t1", source.display())),
+            rows.contains(&format!("{}\tshared_name\t0", source.display())),
             "missing definition for {} in {rows}",
             source.display()
         );

@@ -29,34 +29,35 @@ failed=0
 context_query='(function_item name: (identifier) @name) @hit'
 
 while IFS= read -r rule_file; do
-  id=$(basename -- "$rule_file" | cut -d_ -f1)
-  ext=${rule_file##*.}
-  raw="$tmp/$id.raw"
-  defs="$tmp/$id.defs"
-  current="$tmp/$id.current"
-  allow="$crate_dir/gate/allow/$id.txt"
-  case "$id" in
-    S029) rule_roots=(crates/sprefa-extract/src/bin crates/sprefa-extract/src/edit) ;;
-    S182|S183) rule_roots=("${test_roots[@]}") ;;
+  filename=$(basename -- "$rule_file")
+  rule=${filename%.*}
+  ext=${filename##*.}
+  description=$(sed -E '1s/^[;#-]+ ledger: S[0-9]+ //' "$rule_file" | head -n 1)
+  raw="$tmp/$rule.raw"
+  current="$tmp/$rule.current"
+  allow="$crate_dir/gate/allow/$rule.txt"
+  case "$rule" in
+    env_read_in_request_path) rule_roots=(crates/sprefa-extract/src/bin crates/sprefa-extract/src/edit) ;;
+    wall_clock_assert_in_test|external_tool_in_test) rule_roots=("${test_roots[@]}") ;;
     *) rule_roots=("${roots[@]}") ;;
   esac
 
   if [[ "$ext" == scm ]]; then
     query=$(cat -- "$rule_file")
     (cd "$repo_root" && RUST_LOG=off "$ryii" query --pattern '*.rs' --query "$query" "${rule_roots[@]}") >"$raw"
-    (cd "$repo_root" && RUST_LOG=off "$ryii" query --pattern '*.rs' --query "$context_query" "${rule_roots[@]}") >"$defs"
-    python3 - "$id" "$raw" "$defs" >"$current" <<'PY'
+    (cd "$repo_root" && RUST_LOG=off "$ryii" query --pattern '*.rs' --query "$context_query" "${rule_roots[@]}") >"$tmp/$rule.defs"
+    python3 - "$raw" "$tmp/$rule.defs" >"$current" <<'PY'
 import collections
 import json
 import sys
 
-rule_id, raw_path, defs_path = sys.argv[1:]
+raw_path, defs_path = sys.argv[1:]
 definitions = collections.defaultdict(list)
 for line in open(defs_path, encoding="utf-8"):
     row = json.loads(line)
     definitions[row["path"]].append((row["line"], row["end_line"], row["name"]))
 
-counts = collections.Counter()
+hits = collections.defaultdict(list)
 for line in open(raw_path, encoding="utf-8"):
     row = json.loads(line)
     path, hit_line = row["path"], row["line"]
@@ -65,16 +66,12 @@ for line in open(raw_path, encoding="utf-8"):
         for start, end, name in definitions.get(path, ())
         if start <= hit_line <= end
     ]
-    if owners:
-        item = "fn::" + min(owners)[2]
-    else:
-        item = "item::<file-scope>"
-    if rule_id == "S029" and item == "item::<file-scope>":
-        continue
-    counts[(path, item, rule_id)] += 1
+    item = "fn::" + min(owners)[2] if owners else "item::<file-scope>"
+    hits[(path, item)].append(hit_line)
 
-for (path, item, rule_id), count in sorted(counts.items()):
-    print(f"{path}\t{item}\t{rule_id}\t{count}")
+for (path, item), lines in sorted(hits.items()):
+    for hit_line in sorted(lines):
+        print(f"{path}\t{item}\t{hit_line}")
 PY
   else
     sqlite_path="$tmp/source.db"
@@ -82,18 +79,25 @@ PY
       (cd "$repo_root" && RUST_LOG=off "$ryii" fast --sqlite "$sqlite_path" "${roots[@]}") >/dev/null
     fi
     sqlite3 -tabs -noheader "$sqlite_path" <"$rule_file" >"$raw"
-    python3 - "$id" "$raw" >"$current" <<'PY'
+    python3 - "$raw" "$repo_root" >"$current" <<'PY'
 import collections
+import pathlib
 import sys
 
-rule_id, raw_path = sys.argv[1:]
-counts = collections.Counter()
+raw_path, repo_root = sys.argv[1:]
+hits = collections.defaultdict(list)
 for line in open(raw_path, encoding="utf-8"):
-    path, name, count = line.rstrip("\n").split("\t")
-    counts[(path, "fn::" + name, rule_id)] += int(count)
+    path, name, start = line.rstrip("\n").split("\t")
+    source = pathlib.Path(path)
+    if not source.is_absolute():
+        source = pathlib.Path(repo_root, source)
+    content = source.read_bytes()
+    line_number = content[:int(start)].count(b"\n") + 1
+    hits[(path, "fn::" + name)].append(line_number)
 
-for (path, item, rule_id), count in sorted(counts.items()):
-    print(f"{path}\t{item}\t{rule_id}\t{count}")
+for (path, item), lines in sorted(hits.items()):
+    for hit_line in sorted(lines):
+        print(f"{path}\t{item}\t{hit_line}")
 PY
   fi
 
@@ -102,32 +106,43 @@ PY
     exit 2
   fi
   if [[ "$update_allowlists" == 1 ]]; then
-    cp -- "$current" "$allow"
+    python3 - "$current" >"$allow" <<'PY'
+import collections
+import sys
+counts = collections.Counter()
+for line in open(sys.argv[1], encoding="utf-8"):
+    path, item, _line = line.rstrip("\n").split("\t")
+    counts[(path, item)] += 1
+for (path, item), count in sorted(counts.items()):
+    print(f"{path}\t{item}\t{count}")
+PY
     continue
   fi
-  python3 - "$allow" "$current" "$id" <<'PY' || failed=1
+  python3 - "$allow" "$current" "$rule" "$description" <<'PY' || failed=1
 import collections
 import sys
 
-allow_path, current_path, rule_id = sys.argv[1:]
-def read_counts(path):
-    counts = {}
-    for line in open(path, encoding="utf-8"):
-        path, item, row_rule, count = line.rstrip("\n").split("\t")
-        if row_rule != rule_id:
-            raise SystemExit(f"{path}: expected rule {rule_id}, found {row_rule}")
-        counts[(path, item, row_rule)] = int(count)
-    return counts
+allow_path, current_path, rule, description = sys.argv[1:]
+baseline = {}
+for line in open(allow_path, encoding="utf-8"):
+    if not line.strip():
+        continue
+    path, item, count = line.rstrip("\n").split("\t")
+    baseline[(path, item)] = int(count)
+current = collections.defaultdict(list)
+for line in open(current_path, encoding="utf-8"):
+    path, item, hit_line = line.rstrip("\n").split("\t")
+    current[(path, item)].append(int(hit_line))
 
-baseline = read_counts(allow_path)
-current = read_counts(current_path)
-for key, count in sorted(current.items()):
-    previous = baseline.get(key, 0)
-    if count > previous:
-        path, item, _ = key
-        print(f"{path} [{item}] [{rule_id}] count {previous} -> {count}")
-        sys.exit(1)
+new_hits = []
+for key, lines in current.items():
+    lines.sort()
+    new_hits.extend((key[0], hit_line) for hit_line in lines[baseline.get(key, 0):])
+for path, hit_line in sorted(new_hits):
+    print(f"{path}:{hit_line} {rule}: {description}")
+if new_hits:
+    sys.exit(1)
 PY
-done < <(find "$crate_dir/gate" -maxdepth 1 -type f \( -name 'S*.scm' -o -name 'S*.sql' \) -print | sort)
+done < <(find "$crate_dir/gate" -maxdepth 1 -type f \( -name '*.scm' -o -name '*.sql' \) -print | sort)
 
 exit "$failed"

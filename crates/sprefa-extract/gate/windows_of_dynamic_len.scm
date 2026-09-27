@@ -1,4 +1,4 @@
-; S144: windows(x.len()) can panic when x has an empty spelling.
+; ledger: S144 windows(x.len()) calls
 ((call_expression
   function: (field_expression field: (field_identifier) @method)
   arguments: (arguments

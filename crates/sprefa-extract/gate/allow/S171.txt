@@ -1,3 +1,0 @@
-crates/hafley_scm/src/read/lang/go_checker.rs	item::<file-scope>	S171	3
-crates/hafley_scm/src/read/lang/kotlin.rs	item::<file-scope>	S171	1
-crates/hafley_scm/src/read/lang/ts.rs	item::<file-scope>	S171	1

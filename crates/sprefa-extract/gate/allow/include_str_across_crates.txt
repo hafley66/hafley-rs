@@ -1,0 +1,3 @@
+crates/hafley_scm/src/read/lang/go_checker.rs	item::<file-scope>	3
+crates/hafley_scm/src/read/lang/kotlin.rs	item::<file-scope>	1
+crates/hafley_scm/src/read/lang/ts.rs	item::<file-scope>	1

@@ -1,4 +1,4 @@
-; S182: test functions assert over wall-clock measurements, directly or via a wall helper.
+; ledger: S182 timing assertions using Instant::now or wall helper functions
 ((source_file
   (attribute_item) @attribute
   .

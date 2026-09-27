@@ -1,4 +1,4 @@
-; S147: format! literals combine a file: URI with a ?mode= option.
+; ledger: S147 format! literals containing file: and ?mode=
 ((macro_invocation
   macro: (identifier) @macro
 ) @hit
