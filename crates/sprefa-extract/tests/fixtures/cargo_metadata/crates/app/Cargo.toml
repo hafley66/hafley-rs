@@ -1,0 +1,14 @@
+[package]
+name = "metadata-app"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+path = "src/lib_entry.rs"
+
+[[bin]]
+name = "x"
+path = "src/bin/x.rs"
+
+[dependencies]
+renamed = { workspace = true }

@@ -405,9 +405,18 @@ pub fn fold_edges(
     universe: &BTreeSet<String>,
     tsconfig: &TsconfigPaths,
 ) -> Vec<FlatFact> {
+    fold_edges_with_rust_targets(rows, universe, tsconfig, &BTreeSet::new())
+}
+
+fn fold_edges_with_rust_targets(
+    rows: &[SpecifierRow],
+    universe: &BTreeSet<String>,
+    tsconfig: &TsconfigPaths,
+    rust_targets: &BTreeSet<String>,
+) -> Vec<FlatFact> {
     let mut crossings: BTreeMap<(&str, String, &'static str), BTreeSet<&str>> = BTreeMap::new();
     for row in rows {
-        let (Some(target), _) = resolve_row(row, universe, tsconfig) else {
+        let (Some(target), _) = resolve_row(row, universe, tsconfig, rust_targets) else {
             continue;
         };
         if target == row.from_path {
@@ -441,9 +450,18 @@ pub fn fold_unresolved(
     universe: &BTreeSet<String>,
     tsconfig: &TsconfigPaths,
 ) -> Vec<FlatFact> {
+    fold_unresolved_with_rust_targets(rows, universe, tsconfig, &BTreeSet::new())
+}
+
+fn fold_unresolved_with_rust_targets(
+    rows: &[SpecifierRow],
+    universe: &BTreeSet<String>,
+    tsconfig: &TsconfigPaths,
+    rust_targets: &BTreeSet<String>,
+) -> Vec<FlatFact> {
     let mut stops: BTreeSet<(&str, &str, &'static str)> = BTreeSet::new();
     for row in rows {
-        let (target, policy) = resolve_row(row, universe, tsconfig);
+        let (target, policy) = resolve_row(row, universe, tsconfig, rust_targets);
         if target.is_some() {
             continue;
         }
@@ -471,10 +489,23 @@ fn resolve_row(
     row: &SpecifierRow<'_>,
     universe: &BTreeSet<String>,
     tsconfig: &TsconfigPaths,
+    rust_targets: &BTreeSet<String>,
 ) -> (Option<String>, Policy) {
     match row.kind {
-        SpecifierKind::Module => resolve_rust_module(row.from_path, row.module, false, universe),
-        SpecifierKind::ModulePath => resolve_rust_module(row.from_path, row.module, true, universe),
+        SpecifierKind::Module => resolve_rust_module(
+            row.from_path,
+            row.module,
+            false,
+            universe,
+            rust_targets.contains(row.from_path),
+        ),
+        SpecifierKind::ModulePath => resolve_rust_module(
+            row.from_path,
+            row.module,
+            true,
+            universe,
+            rust_targets.contains(row.from_path),
+        ),
         _ => resolve_specifier(row.from_path, row.module, universe, tsconfig),
     }
 }
@@ -488,12 +519,11 @@ fn resolve_rust_module(
     module: &str,
     path_attribute: bool,
     universe: &BTreeSet<String>,
+    crate_root: bool,
 ) -> (Option<String>, Policy) {
     let parent = from_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
     let file = from_path.rsplit('/').next().unwrap_or(from_path);
     let stem = file.strip_suffix(".rs").unwrap_or(file);
-    let crate_root = nearest_manifest_dir(from_path, universe)
-        .is_some_and(|manifest_dir| is_cargo_root(from_path, &manifest_dir));
     let module_dir = if crate_root || stem == "mod" {
         parent.to_owned()
     } else if parent.is_empty() {
@@ -518,55 +548,6 @@ fn resolve_rust_module(
         }
     }
     (None, Policy::RelativeUnresolved)
-}
-
-fn nearest_manifest_dir(from_path: &str, universe: &BTreeSet<String>) -> Option<String> {
-    let mut directory = from_path.rsplit_once('/').map(|(dir, _)| dir).unwrap_or("");
-    loop {
-        let manifest = if directory.is_empty() {
-            "Cargo.toml".to_owned()
-        } else {
-            format!("{directory}/Cargo.toml")
-        };
-        if universe.contains(&manifest) {
-            return Some(directory.to_owned());
-        }
-        let Some((parent, _)) = directory.rsplit_once('/') else {
-            if directory.is_empty() {
-                return None;
-            }
-            directory = "";
-            continue;
-        };
-        directory = parent;
-    }
-}
-
-fn is_cargo_root(from_path: &str, manifest_dir: &str) -> bool {
-    let relative = if manifest_dir.is_empty() {
-        from_path
-    } else {
-        let Some(relative) = from_path
-            .strip_prefix(manifest_dir)
-            .and_then(|path| path.strip_prefix('/'))
-        else {
-            return false;
-        };
-        relative
-    };
-    if matches!(relative, "build.rs" | "src/lib.rs" | "src/main.rs") {
-        return true;
-    }
-
-    let parts: Vec<&str> = relative.split('/').collect();
-    match parts.as_slice() {
-        [directory, file] if matches!(*directory, "tests" | "examples" | "benches") => {
-            file.ends_with(".rs")
-        }
-        ["src", "bin", file] => file.ends_with(".rs"),
-        ["src", "bin", _target, "main.rs"] => true,
-        _ => false,
-    }
 }
 
 #[cfg(test)]
@@ -710,8 +691,21 @@ mod rust_module_resolution_tests {
             let universe = std::iter::once("crates/foo/Cargo.toml".to_owned())
                 .chain(files.iter().map(|file| (*file).to_owned()))
                 .collect();
-            let observed =
-                resolve_rust_module(from, module, *kind == SpecifierKind::ModulePath, &universe);
+            let crate_root = !matches!(
+                *name,
+                "nested non-root"
+                    | "mod.rs"
+                    | "directory mod.rs fallback"
+                    | "path attribute from a non-root"
+                    | "deep main is a non-root"
+            );
+            let observed = resolve_rust_module(
+                from,
+                module,
+                *kind == SpecifierKind::ModulePath,
+                &universe,
+                crate_root,
+            );
             let expected = (Some((*expected).to_owned()), *policy);
             if observed != expected {
                 failures.push(format!("{name}: expected {expected:?}, got {observed:?}"));
@@ -754,6 +748,30 @@ pub fn diet_file_edges(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
         .map(|input| project_relative(&input.path, &root_absolute))
         .collect::<Result<_, _>>()?;
     let universe: BTreeSet<String> = relative.iter().cloned().collect();
+    let rust_targets: BTreeSet<String> = if relative.iter().any(|path| path.ends_with(".rs")) {
+        let rust_paths: Vec<PathBuf> = relative
+            .iter()
+            .filter(|path| path.ends_with(".rs"))
+            .map(|path| root_absolute.join(path))
+            .collect();
+        let mut targets = BTreeSet::new();
+        for workspace in crate::read::cargo_metadata::workspace_roots(root, &rust_paths) {
+            let metadata = crate::read::cargo_metadata::load(&workspace)?;
+            targets.extend(
+                crate::read::cargo_metadata::targets(&metadata)
+                    .into_keys()
+                    .filter_map(|source| {
+                        source
+                            .strip_prefix(&root_absolute)
+                            .ok()
+                            .map(|path| path.to_string_lossy().replace('\\', "/"))
+                    }),
+            );
+        }
+        targets
+    } else {
+        BTreeSet::new()
+    };
     let tsconfig = TsconfigPaths::read(root);
 
     let rows: Vec<SpecifierRow> = inputs
@@ -772,8 +790,13 @@ pub fn diet_file_edges(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
         })
         .collect();
     span.record("specifiers", rows.len() as u64);
-    let mut facts = fold_edges(&rows, &universe, &tsconfig);
-    facts.extend(fold_unresolved(&rows, &universe, &tsconfig));
+    let mut facts = fold_edges_with_rust_targets(&rows, &universe, &tsconfig, &rust_targets);
+    facts.extend(fold_unresolved_with_rust_targets(
+        &rows,
+        &universe,
+        &tsconfig,
+        &rust_targets,
+    ));
     Ok(facts)
 }
 

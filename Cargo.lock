@@ -1578,6 +1578,7 @@ name = "hafley_scm"
 version = "0.0.1"
 dependencies = [
  "basic-toml",
+ "cargo_metadata",
  "gomod-parser",
  "hafley-observe",
  "ignore",

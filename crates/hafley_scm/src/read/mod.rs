@@ -13,6 +13,12 @@ pub use request_root::{
 };
 
 pub mod cache;
+#[cfg(feature = "rust")]
+pub mod cargo_metadata;
+#[cfg(feature = "rust")]
+pub use cargo_metadata::{
+    load as cargo_workspace_metadata, targets as rust_cargo_targets, RustTarget,
+};
 pub mod cfg;
 pub mod cpg_decode;
 pub mod cpg_types;

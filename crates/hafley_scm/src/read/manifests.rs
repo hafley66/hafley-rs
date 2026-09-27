@@ -13,6 +13,7 @@
 //! whole universe, exactly as `crate::read::deps` treats its own.
 
 use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
 
 use gomod_parser::{GoMod, Replacement};
 
@@ -241,7 +242,76 @@ pub fn package_edges(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectE
             text,
         });
     }
-    Ok(fold_package_edges(&manifests))
+    let cargo_manifests: BTreeSet<String> = manifests
+        .iter()
+        .filter(|manifest| manifest.kind == ManifestKind::Cargo)
+        .map(|manifest| manifest.path.clone())
+        .collect();
+    let non_cargo: Vec<Manifest> = manifests
+        .into_iter()
+        .filter(|manifest| manifest.kind != ManifestKind::Cargo)
+        .collect();
+    let mut edges = fold_package_edges(&non_cargo);
+    if !cargo_manifests.is_empty() {
+        let relative_manifest = |path: &Path| -> Result<String, ProjectError> {
+            project_relative(&path.to_string_lossy(), &root_absolute)
+        };
+        let cargo_paths: Vec<PathBuf> = request
+            .paths
+            .iter()
+            .filter(|path| {
+                ManifestKind::of_path(&path.to_string_lossy()) == Some(ManifestKind::Cargo)
+            })
+            .filter_map(|path| std::fs::canonicalize(crate::read::io_path(path)).ok())
+            .collect();
+        let workspaces = crate::read::cargo_metadata::workspace_roots(root, &cargo_paths);
+        let metadata = workspaces
+            .iter()
+            .map(|workspace| crate::read::cargo_metadata::load(workspace))
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut cargo_edges = BTreeSet::new();
+        for metadata in metadata {
+            let package_by_manifest = crate::read::cargo_metadata::packages(&metadata);
+            for (source_manifest, package) in &package_by_manifest {
+                let Ok(source) = relative_manifest(source_manifest) else {
+                    continue;
+                };
+                if !cargo_manifests.contains(&source) {
+                    continue;
+                }
+                for dependency in &package.dependencies {
+                    let Some(path) = &dependency.path else {
+                        continue;
+                    };
+                    let target_manifest = PathBuf::from(path.as_str()).join("Cargo.toml");
+                    let Ok(target) = relative_manifest(&target_manifest) else {
+                        continue;
+                    };
+                    if source == target || !cargo_manifests.contains(&target) {
+                        continue;
+                    }
+                    let kind = match dependency.kind {
+                        cargo_metadata::DependencyKind::Development => "dev",
+                        cargo_metadata::DependencyKind::Build => "build",
+                        _ => "normal",
+                    };
+                    cargo_edges.insert((source.clone(), target, kind));
+                }
+            }
+        }
+        edges.extend(
+            cargo_edges
+                .into_iter()
+                .map(
+                    |(src_manifest, dst_manifest, kind)| FlatFact::PackageEdgeRow {
+                        src_manifest,
+                        dst_manifest,
+                        kind: kind.to_owned(),
+                    },
+                ),
+        );
+    }
+    Ok(edges)
 }
 
 /// Serialize package edges to sorted JSONL lines.
