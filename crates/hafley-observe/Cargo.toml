@@ -44,9 +44,11 @@ tracing-subscriber.workspace = true
 tracing-capture = "0.1.0"
 tracing-tunnel = "0.1.0"
 hafley-observe-macros = { path = "../hafley-observe-macros", optional = true }
+signal-hook = "0.4"
 # The process sampler reads rusage through this; it is compiled on every build
 # so the harness can measure with the layers off.
 libc = "0.2"
+serde_json = "1"
 tracing-chrome = { version = "0.7.2", optional = true }
 rusqlite = { version = "0.40", default-features = false, features = ["trace"], optional = true }
 tracing-opentelemetry = { version = "0.33", default-features = false, optional = true }
@@ -69,7 +71,6 @@ sysinfo = { version = "0.35", default-features = false, optional = true }
 
 [dev-dependencies]
 hafley-observe = { path = ".", features = ["oh"] }
-serde_json = "1"
 syn = { version = "2", features = ["full", "visit"] }
 
 [[bin]]

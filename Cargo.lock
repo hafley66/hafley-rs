@@ -1556,6 +1556,7 @@ dependencies = [
  "opentelemetry_sdk",
  "rusqlite",
  "serde_json",
+ "signal-hook",
  "syn 2.0.119",
  "sysinfo 0.35.2",
  "tokio",

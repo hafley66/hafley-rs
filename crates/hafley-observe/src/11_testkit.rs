@@ -1,9 +1,10 @@
 use std::cell::Cell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, VecDeque};
+use std::io::Write;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use tracing::{Event, Subscriber};
 use tracing_subscriber::layer::{Context, Layer};
@@ -39,9 +40,22 @@ impl Default for Budget {
 #[derive(Default)]
 struct Counts {
     sites: Mutex<BTreeMap<String, usize>>,
+    events: Mutex<VecDeque<String>>,
+    last_event_at: AtomicU64,
 }
 
 struct CountLayer(Arc<Counts>);
+
+const RING_CAPACITY: usize = 256;
+
+#[derive(Default)]
+struct EventFields(Vec<String>);
+
+impl tracing::field::Visit for EventFields {
+    fn record_debug(&mut self, field: &tracing::field::Field, value: &dyn std::fmt::Debug) {
+        self.0.push(format!("{}={value:?}", field.name()));
+    }
+}
 
 impl<S: Subscriber> Layer<S> for CountLayer {
     fn on_event(&self, event: &Event<'_>, _ctx: Context<'_, S>) {
@@ -53,6 +67,22 @@ impl<S: Subscriber> Layer<S> for CountLayer {
             metadata.target()
         );
         *self.0.sites.lock().unwrap().entry(site).or_default() += 1;
+        let mut fields = EventFields::default();
+        event.record(&mut fields);
+        let message = format!(
+            "{} {} {}",
+            epoch_millis(),
+            metadata.target(),
+            fields.0.join(" ")
+        );
+        self.0
+            .last_event_at
+            .store(epoch_millis(), Ordering::Relaxed);
+        let mut events = self.0.events.lock().unwrap();
+        if events.len() == RING_CAPACITY {
+            events.pop_front();
+        }
+        events.push_back(message);
     }
 }
 
@@ -89,13 +119,39 @@ pub fn run<T>(name: &'static str, budget: Budget, body: impl FnOnce() -> T) -> T
     });
     let _depth = RunDepthGuard::enter();
     let counts = Arc::new(Counts::default());
-    let subscriber = tracing_subscriber::registry().with(CountLayer(Arc::clone(&counts)));
+    let replay = std::env::var_os("OH_REPLAY").is_some();
+    let terminating =
+        Arc::clone(TERMINATION_REQUESTED.get_or_init(|| Arc::new(AtomicBool::new(false))));
+    if !nested && !replay {
+        terminating.store(false, Ordering::Relaxed);
+    }
+    let signal_id = if !nested && !replay {
+        signal_hook::flag::register(signal_hook::consts::SIGTERM, Arc::clone(&terminating)).ok()
+    } else {
+        None
+    };
     let memory_start = CountingAllocator::reset_peak();
     let start = Instant::now();
-    let result =
-        tracing::subscriber::with_default(subscriber, || catch_unwind(AssertUnwindSafe(body)));
+    let result = if replay {
+        let subscriber = tracing_subscriber::registry()
+            .with(tracing_subscriber::fmt::layer().with_writer(std::io::stderr))
+            .with(CountLayer(Arc::clone(&counts)));
+        tracing::subscriber::with_default(subscriber, || catch_unwind(AssertUnwindSafe(body)))
+    } else {
+        let subscriber = tracing_subscriber::registry().with(CountLayer(Arc::clone(&counts)));
+        tracing::subscriber::with_default(subscriber, || catch_unwind(AssertUnwindSafe(body)))
+    };
     let elapsed = start.elapsed();
 
+    let should_replay =
+        !nested && !replay && (terminating.load(Ordering::Relaxed) || result.is_err());
+    if should_replay {
+        drain(&counts, seed());
+        replay_test(name, seed());
+    }
+    if let Some(id) = signal_id {
+        signal_hook::low_level::unregister(id);
+    }
     let result = match result {
         Ok(value) => value,
         Err(payload) => resume_unwind(payload),
@@ -135,6 +191,64 @@ pub fn run<T>(name: &'static str, budget: Budget, body: impl FnOnce() -> T) -> T
         );
     }
     result
+}
+
+/// Returns the seed carried by the current test process and any replay child.
+pub fn seed() -> u64 {
+    std::env::var("OH_SEED")
+        .ok()
+        .and_then(|value| value.parse().ok())
+        .unwrap_or_else(epoch_millis)
+}
+
+/// Returns whether the test process received SIGTERM while an `oh::test` ran.
+pub fn termination_requested() -> bool {
+    TERMINATION_REQUESTED
+        .get()
+        .is_some_and(|requested| requested.load(Ordering::Relaxed))
+}
+
+static TERMINATION_REQUESTED: OnceLock<Arc<AtomicBool>> = OnceLock::new();
+
+fn epoch_millis() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis()
+        .min(u64::MAX as u128) as u64
+}
+
+fn drain(counts: &Counts, seed: u64) {
+    let drained_at = epoch_millis();
+    let last_event_at = counts.last_event_at.load(Ordering::Relaxed);
+    let receipt = format!("drained_at={drained_at} last_event_at={last_event_at} seed={seed}\n");
+    let mut stderr = std::io::stderr().lock();
+    for event in counts.events.lock().unwrap().iter() {
+        let _ = writeln!(stderr, "oh::ring {event}");
+    }
+    let _ = writeln!(stderr, "oh::drain {receipt}");
+    let _ = stderr.flush();
+    if let Some(path) = std::env::var_os("OH_DRAIN_PATH") {
+        let _ = std::fs::write(path, receipt);
+    }
+}
+
+fn replay_test(name: &str, seed: u64) {
+    let exact = std::thread::current().name().unwrap_or(name).to_owned();
+    let status = std::env::current_exe().and_then(|executable| {
+        std::process::Command::new(executable)
+            .arg("--exact")
+            .arg(exact)
+            .arg("--nocapture")
+            .env("OH_REPLAY", "1")
+            .env("OH_SEED", seed.to_string())
+            .status()
+    });
+    match status {
+        Ok(status) if status.success() => {}
+        Ok(status) => panic!("oh::test {name} replay exited with {status}"),
+        Err(error) => panic!("oh::test {name} replay failed to start: {error}"),
+    }
 }
 
 /// A process-wide live and peak allocation counter for consumers that install

@@ -84,11 +84,11 @@ HTTP client into every consumer.
 - [x] `instrument_all` emits a named error for file modules (macro unit test)
 - [ ] `instrument_all` emits a named error for inner macro attributes (stable Rust rejects the syntax before proc-macro expansion)
 - [x] time, log, and memory budgets each fail a test that exceeds them
-- [ ] ring drain emits `drained_at` and `last_event_at` on SIGTERM
-- [ ] replay re-exec carries the seed and switches the subscriber
-- [ ] lab minting is a CLI subcommand with a build output (`find .. -iname '*new-lab*'` found no source script in this checkout)
+- [x] ring drain emits `drained_at` and `last_event_at` on SIGTERM
+- [x] replay re-exec carries the seed and switches the subscriber
+- [x] lab minting is an `oh lab new` CLI subcommand that writes a seeded crate and prints its build output
 - [x] `default = []`
 
 ## Progress receipt
 
-2026-09-27: The code remains hosted in `crates/hafley-observe` (`src/11_testkit.rs`, `tests/oh_testkit.rs`) with proc-macro attributes in the sibling `hafley-observe-macros` crate. The macros and testkit are gated by `hafley-observe/oh`, selected only through its dev-dependency. Subscriber features remain opt-in; `boop` selects `fmt` for its log output. `cargo nextest run -p hafley-observe --test oh_testkit --test bounded_loops -j 2` passed 9 tests, including the universal loop scan. Inner-attribute diagnostics, SIGTERM drain/replay, and lab minting remain open as listed above.
+2026-09-27: `oh::test` now holds a 256-event ring, drains event rows with `drained_at` and `last_event_at` on SIGTERM or failure, and re-execs the selected test with the same `OH_SEED` under the direct fmt subscriber. `cargo nextest run -p hafley-observe -j 2 --test bounded_loops --test oh_testkit --test oh_cli` passed 13 tests, including subprocess SIGTERM/replay and CLI surface checks. `oh lab new --title gate-smoke --manifest crates/hafley-observe/Cargo.toml --root /tmp/oh-lab-gate-smoke` created an indexed `lab-20260927-gate-smoke` crate and its offline `cargo check` passed. `cargo nextest run -p sqlite-ext -j 2 --test 2_load_plugins` passed 3 tests with the updated fixture lockfile. Workspace gate `cargo nextest run --workspace -j 2 -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'` passed 1,340 tests, 0 failed, 199 skipped. Stable Rust rejects inner macro attributes during parsing (`E0658`) before `instrument_all` runs; that diagnostic acceptance remains open.

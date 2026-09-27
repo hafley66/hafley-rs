@@ -179,3 +179,73 @@ fn scanner_flags_test_prefixed_functions_without_test_attributes() {
         ["fixture.rs:test_missing_attribute"]
     );
 }
+
+#[test(time_ms = 10_000, logs = 8)]
+fn sigterm_drain_reexecutes_with_the_same_seed_and_direct_subscriber() {
+    if std::env::var_os("OH_REPLAY").is_some() {
+        return;
+    }
+    let ready = std::env::temp_dir().join(format!("oh-sigterm-ready-{}", std::process::id()));
+    let drain = std::env::temp_dir().join(format!("oh-sigterm-drain-{}", std::process::id()));
+    let replayed = std::env::temp_dir().join(format!("oh-sigterm-replay-{}", std::process::id()));
+    let _ = std::fs::remove_file(&ready);
+    let _ = std::fs::remove_file(&drain);
+    let _ = std::fs::remove_file(&replayed);
+    let child = std::process::Command::new(std::env::current_exe().unwrap())
+        .arg("--exact")
+        .arg("sigterm_replay_target")
+        .arg("--nocapture")
+        .env("OH_SEED", "4242")
+        .env("OH_READY_PATH", &ready)
+        .env("OH_DRAIN_PATH", &drain)
+        .env("OH_REPLAY_PATH", &replayed)
+        .spawn()
+        .expect("spawn signal fixture");
+
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !ready.exists() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(ready.exists(), "child never entered the annotated test");
+    let signal_result = unsafe { libc::kill(child.id() as i32, libc::SIGTERM) };
+    assert_eq!(signal_result, 0, "send SIGTERM to the child");
+    let output = child.wait_with_output().expect("wait for replay child");
+    let _ = std::fs::remove_file(ready);
+    let receipt = std::fs::read_to_string(&drain).expect("drain receipt");
+    let replay_receipt = std::fs::read_to_string(&replayed).expect("replay receipt");
+    let _ = std::fs::remove_file(drain);
+    let _ = std::fs::remove_file(replayed);
+    assert!(output.status.success(), "{}", output.status);
+    assert!(receipt.contains("drained_at="), "{receipt}");
+    assert!(receipt.contains("last_event_at="), "{receipt}");
+    assert!(receipt.contains("seed=4242"), "{receipt}");
+    assert_eq!(replay_receipt, "seed=4242 direct_subscriber=true\n");
+}
+
+#[test(time_ms = 10_000, logs = 8)]
+fn sigterm_replay_target() {
+    let Some(ready) = std::env::var_os("OH_READY_PATH") else {
+        return;
+    };
+    if std::env::var_os("OH_REPLAY").is_some() {
+        assert_eq!(oh::testkit::seed(), 4242);
+        std::fs::write(
+            std::env::var_os("OH_REPLAY_PATH").unwrap(),
+            "seed=4242 direct_subscriber=true\n",
+        )
+        .unwrap();
+        tracing::info!(target: "oh_replay_fixture", "seed={}", oh::testkit::seed());
+        return;
+    }
+
+    tracing::info!(target: "oh_sigterm_fixture", "before signal");
+    std::fs::write(ready, b"ready").unwrap();
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    while !oh::testkit::termination_requested() && std::time::Instant::now() < deadline {
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    assert!(
+        oh::testkit::termination_requested(),
+        "SIGTERM was not observed"
+    );
+}
