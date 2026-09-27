@@ -351,6 +351,39 @@ fn unsupported_macro_items_are_ungraded_and_fail_the_plan() {
 }
 
 #[test]
+fn macro_rules_items_are_named_unsupported() {
+    let fixture = fixture("basic", "macro-rules-item");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod opts;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/opts.rs"),
+        "macro_rules! param { ($value:expr) => { $value }; }\npub(crate) fn read() -> u32 { param!(1) }\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/opts.rs#param", "src/moved.rs"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains("unsupported macro_rules! macro"),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(

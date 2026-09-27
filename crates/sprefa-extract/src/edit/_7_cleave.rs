@@ -2215,7 +2215,19 @@ fn macro_item_rows(text: &str) -> Result<Vec<UnsupportedMacroItem>, String> {
         let syn::Item::Macro(item) = item else {
             continue;
         };
-        if item.ident.is_some() {
+        if let Some(ident) = &item.ident {
+            if item
+                .mac
+                .path
+                .segments
+                .last()
+                .is_some_and(|segment| segment.ident == "macro_rules")
+            {
+                unsupported.push(UnsupportedMacroItem {
+                    name: ident.to_string(),
+                    macro_name: "macro_rules".to_string(),
+                });
+            }
             continue;
         }
         let Some(macro_name) = item
