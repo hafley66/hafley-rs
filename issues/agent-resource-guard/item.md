@@ -1,8 +1,8 @@
 ---
 created: 2026-09-17
-updated: 2026-09-17
+updated: 2026-09-27
 type: improvement
-status: open
+status: needs-info
 priority: normal
 labels: [domain-boop, deferred]
 ---
@@ -31,3 +31,14 @@ Deterministic fake-tree/clock tests for identity reuse, sustained breach, cancel
 
 ## Related priority
 [Instant turn-square tracker](../../../instant/issues/tui-renderer-testing/item.md). Existing substrate: boop-store/src/proc.rs and boop-acp LaneChannel::interrupt.
+
+## Decisions
+
+### 2026-09-27T04:06:56Z · @codex
+
+Revived by the 2026-09-27 request to process all non-graph agent-* cards. Current installed boop --help exposes no resource-guard option, and the current boop-* source has no resource-guard implementation.
+
+### 2026-09-27T04:10:23Z · @codex
+
+Current repro: installed boop --help has no guard option and the current boop source has no guard monitor. The issue specifies cancellation followed by pausing the verified owned process tree, but the supervisor runs in that tree and no process-suspend API exists. Resolve the process ownership boundary before implementing pause/resume.
+
