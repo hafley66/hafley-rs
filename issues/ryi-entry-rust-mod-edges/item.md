@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 labels: [extract]
 closed: 2026-09-25
@@ -24,3 +24,7 @@ closed: 2026-09-25
 
 ## Implementation Notes
 Planned as the modrows milestone of plans/2026-09-25-ryi-cli-cleanup.md.
+
+## Repro receipt
+
+2026-09-26: current `ryii fast --entry crates/soopy/src/lib.rs crates/soopy/src` reaches 28/29 Rust files; the sole missing file is independent `main.rs`, so `mod x;` edges are present.
