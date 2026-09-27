@@ -212,14 +212,14 @@ pub fn answer(
 #[cfg(feature = "ts-checker")]
 const DRIVER: &str = include_str!("ts_checker.mjs");
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Serialize)]
-struct DriverRequest<'a> {
-    root: &'a Path,
-    files: &'a [(String, PathBuf)],
+pub(super) struct DriverRequest<'a> {
+    pub(super) root: &'a Path,
+    pub(super) files: &'a [(String, PathBuf)],
     /// The checker walk is the tier's expensive half and answers no resolve
     /// site, so it runs only for a stream that carries the TSI envelope.
-    tsi: bool,
+    pub(super) tsi: bool,
 }
 
 /// One `[start, end, name, dst_path, dst_name, dst_offset]` wire row.

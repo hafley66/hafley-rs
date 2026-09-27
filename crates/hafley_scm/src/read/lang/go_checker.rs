@@ -390,73 +390,6 @@ const DRIVER_MOD: &str = include_str!("../../../../sprefa-extract/tools/go_check
 #[cfg(feature = "go-checker")]
 const DRIVER_SUM: &str = include_str!("../../../../sprefa-extract/tools/go_checker/go.sum");
 
-#[cfg(feature = "go-checker")]
-#[derive(serde::Serialize)]
-struct DriverRequest<'a> {
-    root: &'a Path,
-    files: &'a [(String, PathBuf)],
-    /// The checker walk is the tier's expensive half and answers no resolve
-    /// site, so it runs only for a stream that carries the TSI envelope.
-    tsi: bool,
-}
-
-/// One `[start, end, name, dst_path, dst_name, dst_offset]` wire row.
-#[cfg(feature = "go-checker")]
-type WireRow = (u32, u32, String, String, String, u32);
-
-#[cfg(feature = "go-checker")]
-#[derive(serde::Deserialize)]
-struct WireFile {
-    path: String,
-    calls: Vec<WireRow>,
-    types: Vec<WireRow>,
-    /// `[relation, arg, ...]` per row; the ordinal is the wire's, minted here.
-    #[serde(default)]
-    tsi: Vec<Vec<serde_json::Value>>,
-}
-
-#[cfg(feature = "go-checker")]
-#[derive(serde::Deserialize)]
-struct WireStats {
-    stats: WireCosts,
-    #[serde(default)]
-    coverage: Vec<(String, bool, Option<String>)>,
-}
-
-#[cfg(feature = "go-checker")]
-#[derive(serde::Deserialize)]
-struct WireCosts {
-    #[serde(rename = "loadMs")]
-    load_ms: u64,
-    #[serde(rename = "walkMs")]
-    walk_ms: u64,
-    files: usize,
-}
-
-#[cfg(feature = "go-checker")]
-#[derive(serde::Deserialize)]
-#[serde(untagged)]
-enum WireLine {
-    File(WireFile),
-    Stats(WireStats),
-}
-
-#[cfg(feature = "go-checker")]
-fn into_refs(rows: Vec<WireRow>) -> Vec<GoCheckerRef> {
-    rows.into_iter()
-        .map(
-            |(start, end, name, dst_path, dst_name, dst_offset)| GoCheckerRef {
-                start,
-                end,
-                name,
-                dst_path,
-                dst_name,
-                dst_offset,
-            },
-        )
-        .collect()
-}
-
 /// One driver row `[relation, arg, ...]` into a fact. A row the registry does
 /// not know, or an argument it cannot decode, stops the tier.
 #[cfg(feature = "go-checker")]
@@ -534,7 +467,7 @@ pub fn answer(
     let stage = GoCheckerError::NoDriver;
     std::fs::create_dir_all(&dir).map_err(|err| stage(err.to_string()))?;
     let request = dir.join("request.json");
-    let body = serde_json::to_vec(&DriverRequest { root, files, tsi })
+    let body = serde_json::to_vec(&super::ts_checker::DriverRequest { root, files, tsi })
         .map_err(|err| stage(err.to_string()))?;
     std::fs::write(&request, body).map_err(|err| stage(err.to_string()))?;
 
