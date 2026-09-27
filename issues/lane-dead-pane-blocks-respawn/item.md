@@ -1,10 +1,11 @@
 ---
 created: 2026-09-05
-updated: 2026-09-05
+updated: 2026-09-26
 type: bug
-status: open
+status: obsolete
 priority: normal
 epic: boop-process
+closed: 2026-09-26
 ---
 
 # A dead tmux pane keeps a lane name and blocks respawn with duplicate session
@@ -49,3 +50,9 @@ have to compose one.
       with a message naming the session and the command that clears it.
 - [ ] A test drives a fake multiplexer through exit-then-respawn under one lane
       name.
+
+## Resolution
+
+### 2026-09-27T02:55:42Z · @issuectl
+
+Repro receipt (boop 0.0.10 49124370-dirty): lane create --help says dead names reset on every create and --reclaim is a no-op alias; source test lane_carcass::dead name respawns with no flag covers exit then respawn.
