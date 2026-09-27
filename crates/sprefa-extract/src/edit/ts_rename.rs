@@ -7,7 +7,7 @@
 //! The importer graph comes off `TsRehome::import_refs` (`ts_rehome.rs:33`),
 //! which already resolves every specifier through `oxc_resolver`.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Mutex, OnceLock};
 
@@ -59,6 +59,25 @@ impl Rename for TsSource {
             .map_err(|_| not_found(request))?;
         let semantic = SemanticBuilder::new().build(&program).semantic;
         let scoping = semantic.scoping();
+
+        let property_declarations = property_declarations(&program, &request.old);
+        if !property_declarations.is_empty() {
+            let declaration = match (request.at, property_declarations.as_slice()) {
+                (None, [one]) => one,
+                (Some(at), declarations) => declarations
+                    .iter()
+                    .filter(|decl| decl.span.start <= at && at < decl.span.end)
+                    .max_by_key(|decl| decl.span.start)
+                    .ok_or_else(|| not_found(request))?,
+                (None, many) => {
+                    return Err(ambiguous(
+                        request,
+                        many.iter().map(|decl| to_span(decl.span)).collect(),
+                    ))
+                }
+            };
+            return property_refs(cx, request, declaration);
+        }
 
         let mut every: Vec<SymbolId> = scoping
             .scope_descendants_from_root()
@@ -127,15 +146,19 @@ impl Rename for TsSource {
 
     fn respell_symbol(
         &self,
-        _cx: &RenameCx,
+        cx: &RenameCx,
         request: &RenameRequest,
         reference: &SymbolRef,
     ) -> Option<Respell> {
+        let shorthand = property_pattern_shorthand(cx, reference);
         Some(Respell {
             file: reference.file.clone(),
             span: reference.span,
-            text: request.new.clone(),
-            receipt: None,
+            text: match shorthand {
+                true => format!("{}: {}", request.new, request.old),
+                false => request.new.clone(),
+            },
+            receipt: shorthand.then(|| "shorthand".to_string()),
         })
     }
 
@@ -455,6 +478,281 @@ fn scan_member_seats(program: &Program<'_>, old: &str) -> Vec<MemberSeat> {
     seats
 }
 
+struct PropertyDecl {
+    owner: String,
+    span: oxc_span::Span,
+}
+
+fn property_declarations(program: &Program<'_>, old: &str) -> Vec<PropertyDecl> {
+    let mut scan = PropertyDeclScan {
+        old,
+        owners: Vec::new(),
+        declarations: Vec::new(),
+    };
+    scan.visit_program(program);
+    scan.declarations
+}
+
+struct PropertyDeclScan<'a> {
+    old: &'a str,
+    owners: Vec<String>,
+    declarations: Vec<PropertyDecl>,
+}
+
+impl<'a> Visit<'a> for PropertyDeclScan<'a> {
+    fn visit_class(&mut self, class: &ts::Class<'a>) {
+        self.owners.push(
+            class
+                .id
+                .as_ref()
+                .map_or_else(String::new, |id| id.name.to_string()),
+        );
+        oxc_ast_visit::walk::walk_class(self, class);
+        self.owners.pop();
+    }
+
+    fn visit_property_definition(&mut self, property: &ts::PropertyDefinition<'a>) {
+        if property_key_name(&property.key) == Some(self.old) {
+            if let Some(owner) = self.owners.last().filter(|owner| !owner.is_empty()) {
+                self.declarations.push(PropertyDecl {
+                    owner: owner.clone(),
+                    span: property.key.span(),
+                });
+            }
+        }
+        oxc_ast_visit::walk::walk_property_definition(self, property);
+    }
+
+    fn visit_ts_interface_declaration(&mut self, interface: &ts::TSInterfaceDeclaration<'a>) {
+        self.owners.push(interface.id.name.to_string());
+        oxc_ast_visit::walk::walk_ts_interface_declaration(self, interface);
+        self.owners.pop();
+    }
+
+    fn visit_ts_property_signature(&mut self, property: &ts::TSPropertySignature<'a>) {
+        if property_key_name(&property.key) == Some(self.old) {
+            if let Some(owner) = self.owners.last() {
+                self.declarations.push(PropertyDecl {
+                    owner: owner.clone(),
+                    span: property.key.span(),
+                });
+            }
+        }
+        oxc_ast_visit::walk::walk_ts_property_signature(self, property);
+    }
+
+    fn visit_ts_type_alias_declaration(&mut self, alias: &ts::TSTypeAliasDeclaration<'a>) {
+        if let ts::TSType::TSTypeLiteral(literal) = &alias.type_annotation {
+            for member in &literal.members {
+                if let ts::TSSignature::TSPropertySignature(property) = member {
+                    if property_key_name(&property.key) == Some(self.old) {
+                        self.declarations.push(PropertyDecl {
+                            owner: alias.id.name.to_string(),
+                            span: property.key.span(),
+                        });
+                    }
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_ts_type_alias_declaration(self, alias);
+    }
+
+    fn visit_variable_declarator(&mut self, variable: &ts::VariableDeclarator<'a>) {
+        if let (
+            ts::BindingPattern::BindingIdentifier(identifier),
+            Some(ts::Expression::ObjectExpression(object)),
+        ) = (&variable.id, variable.init.as_ref())
+        {
+            for property in &object.properties {
+                if let ts::ObjectPropertyKind::ObjectProperty(property) = property {
+                    if property_key_name(&property.key) == Some(self.old) {
+                        self.declarations.push(PropertyDecl {
+                            owner: identifier.name.to_string(),
+                            span: property.key.span(),
+                        });
+                    }
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, variable);
+    }
+}
+
+fn property_key_name<'a>(key: &'a ts::PropertyKey<'a>) -> Option<&'a str> {
+    match key {
+        ts::PropertyKey::StaticIdentifier(ident) => Some(ident.name.as_str()),
+        _ => None,
+    }
+}
+
+fn property_refs(
+    cx: &RenameCx,
+    request: &RenameRequest,
+    declaration: &PropertyDecl,
+) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
+    let parser = OxcParser;
+    let mut refs = vec![SymbolRef {
+        file: request.anchor.clone(),
+        span: to_span(declaration.span),
+        role: RefRole::Definition,
+        text: request.old.clone(),
+    }];
+    let mut stops = Vec::new();
+    for file in cx.files_of(&TsSource) {
+        let Some(text) = cx.text(file) else {
+            continue;
+        };
+        let arena = parser.make_arena();
+        let Ok(program) = parser.parse(&arena, file, text.as_bytes()) else {
+            continue;
+        };
+        let mut scan = PropertyUseScan {
+            owner: &declaration.owner,
+            old: &request.old,
+            typed_names: HashSet::new(),
+            classes: Vec::new(),
+            refs: Vec::new(),
+            stops: Vec::new(),
+        };
+        scan.visit_program(&program);
+        refs.extend(scan.refs.into_iter().map(|span| SymbolRef {
+            file: file.to_string(),
+            span: to_span(span),
+            role: RefRole::Read,
+            text: request.old.clone(),
+        }));
+        let line_starts = build_line_starts(&text);
+        stops.extend(scan.stops.into_iter().map(|seat| SymbolSeat {
+            file: file.to_string(),
+            span: to_span(seat),
+            line: line_starts.partition_point(|start| *start <= seat.start) as u32,
+            reaches: String::new(),
+            form: "untyped property access",
+        }));
+    }
+    if !stops.is_empty() {
+        return Err(RenameStop::Dynamic(stops));
+    }
+    if refs.len() == 1 {
+        return Err(RenameStop::NotFound {
+            anchor: request.anchor.clone(),
+            old: request.old.clone(),
+        });
+    }
+    Ok((settle(refs), Vec::new()))
+}
+
+struct PropertyUseScan<'a> {
+    owner: &'a str,
+    old: &'a str,
+    typed_names: HashSet<String>,
+    classes: Vec<String>,
+    refs: Vec<oxc_span::Span>,
+    stops: Vec<oxc_span::Span>,
+}
+
+impl<'a> PropertyUseScan<'a> {
+    fn add_typed_binding(
+        &mut self,
+        pattern: &ts::BindingPattern<'a>,
+        annotation: Option<&ts::TSTypeAnnotation<'a>>,
+    ) {
+        let Some(annotation) = annotation else {
+            return;
+        };
+        let Some(ty) = referenced_type(&annotation.type_annotation) else {
+            return;
+        };
+        if ty == self.owner {
+            if let ts::BindingPattern::BindingIdentifier(identifier) = pattern {
+                self.typed_names.insert(identifier.name.to_string());
+            }
+        }
+    }
+}
+
+fn referenced_type<'a>(ty: &'a ts::TSType<'a>) -> Option<&'a str> {
+    match ty {
+        ts::TSType::TSTypeReference(reference) => match &reference.type_name {
+            ts::TSTypeName::IdentifierReference(ident) => Some(ident.name.as_str()),
+            ts::TSTypeName::QualifiedName(name) => Some(name.right.name.as_str()),
+            ts::TSTypeName::ThisExpression(_) => None,
+        },
+        _ => None,
+    }
+}
+
+impl<'a> Visit<'a> for PropertyUseScan<'a> {
+    fn visit_formal_parameter(&mut self, parameter: &ts::FormalParameter<'a>) {
+        self.add_typed_binding(&parameter.pattern, parameter.type_annotation.as_deref());
+        oxc_ast_visit::walk::walk_formal_parameter(self, parameter);
+    }
+
+    fn visit_variable_declarator(&mut self, variable: &ts::VariableDeclarator<'a>) {
+        self.add_typed_binding(&variable.id, variable.type_annotation.as_deref());
+        if let (
+            ts::BindingPattern::BindingIdentifier(identifier),
+            Some(ts::Expression::ObjectExpression(object)),
+        ) = (&variable.id, variable.init.as_ref())
+        {
+            if identifier.name.as_str() == self.owner
+                && object.properties.iter().any(|property| {
+                    matches!(property,
+                        ts::ObjectPropertyKind::ObjectProperty(property)
+                            if property_key_name(&property.key) == Some(self.old))
+                })
+            {
+                self.typed_names.insert(identifier.name.to_string());
+            }
+        }
+        if let (
+            ts::BindingPattern::ObjectPattern(pattern),
+            Some(ts::Expression::Identifier(receiver)),
+        ) = (&variable.id, variable.init.as_ref())
+        {
+            if self.typed_names.contains(receiver.name.as_str()) {
+                for property in &pattern.properties {
+                    if property_key_name(&property.key) == Some(self.old) {
+                        self.refs.push(property.key.span());
+                    }
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, variable);
+    }
+
+    fn visit_class(&mut self, class: &ts::Class<'a>) {
+        self.classes.push(
+            class
+                .id
+                .as_ref()
+                .map_or_else(String::new, |id| id.name.to_string()),
+        );
+        oxc_ast_visit::walk::walk_class(self, class);
+        self.classes.pop();
+    }
+
+    fn visit_static_member_expression(&mut self, expression: &ts::StaticMemberExpression<'a>) {
+        if expression.property.name.as_str() == self.old {
+            let typed = match &expression.object {
+                ts::Expression::Identifier(identifier) => {
+                    self.typed_names.contains(identifier.name.as_str())
+                }
+                ts::Expression::ThisExpression(_) => {
+                    self.classes.last().is_some_and(|class| class == self.owner)
+                }
+                _ => false,
+            };
+            if typed {
+                self.refs.push(expression.property.span());
+            } else {
+                self.stops.push(expression.property.span());
+            }
+        }
+        self.visit_expression(&expression.object);
+    }
+}
+
 fn dynamic_seats(seats: &[MemberSeat], line_starts: &[u32], file: &str) -> Vec<SymbolSeat> {
     seats
         .iter()
@@ -492,6 +790,37 @@ fn member_abstains(seats: &[MemberSeat], text: &str, file: &str, old: &str) -> V
 struct MemberScan<'a> {
     old: &'a str,
     seats: Vec<MemberSeat>,
+}
+
+fn property_pattern_shorthand(cx: &RenameCx, reference: &SymbolRef) -> bool {
+    let Some(text) = cx.text(&reference.file) else {
+        return false;
+    };
+    let parser = OxcParser;
+    let arena = parser.make_arena();
+    let Ok(program) = parser.parse(&arena, &reference.file, text.as_bytes()) else {
+        return false;
+    };
+    let mut scan = PatternShorthandScan {
+        target: reference.span,
+        found: false,
+    };
+    scan.visit_program(&program);
+    scan.found
+}
+
+struct PatternShorthandScan {
+    target: Span,
+    found: bool,
+}
+
+impl<'a> Visit<'a> for PatternShorthandScan {
+    fn visit_binding_property(&mut self, property: &ts::BindingProperty<'a>) {
+        if property.shorthand && to_span(property.key.span()) == self.target {
+            self.found = true;
+        }
+        oxc_ast_visit::walk::walk_binding_property(self, property);
+    }
 }
 
 impl<'a> Visit<'a> for MemberScan<'a> {
