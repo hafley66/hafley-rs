@@ -1276,6 +1276,21 @@ impl Plan {
         };
         let mut out = Vec::new();
         let (at, block) = self.import_block(&facts.text);
+        if facts.text.is_empty() {
+            let moving = self.moving_text.join("\n");
+            let text = if block.is_empty() {
+                moving
+            } else {
+                format!("{block}\n{moving}")
+            };
+            out.push(Respell {
+                file: self.rows.dest.clone(),
+                span: Span::anchor(0),
+                text,
+                receipt: None,
+            });
+            return out;
+        }
         if block != facts.text[..at as usize] {
             out.push(Respell {
                 file: self.rows.dest.clone(),
