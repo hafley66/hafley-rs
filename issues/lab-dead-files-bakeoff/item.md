@@ -32,3 +32,14 @@ L1 sqlite view `dead_file` over `file_edge` (entry points: package.json main/exp
 ## Acceptance
 
 Every disagreement listed with cause. Every command under `timeout 10`, every ryi run under `HAFLEY_TRACE`. Verdict sentence only, no recommendation.
+
+## Reproduction receipt
+
+2026-09-26: fixture comparison on `crates/sprefa-extract/tests/fixtures/ts5_findings`:
+
+- `timeout 10 madge --json --extensions ts crates/sprefa-extract/tests/fixtures/ts5_findings`: 61 files, 32 edges.
+- `timeout 10 madge --orphans --extensions ts crates/sprefa-extract/tests/fixtures/ts5_findings`: 32 orphans.
+- `HAFLEY_TRACE=1 timeout 10 /Users/chrishafley/.cache/boop/cargo-target/debug/ryii --deps --root crates/sprefa-extract/tests/fixtures/ts5_findings crates/sprefa-extract/tests/fixtures/ts5_findings`: 33 `file_edge` rows; comparing destinations against the 61 fixture files gives 32 zero-inbound files.
+- The two orphan sets were equal: 0 madge-only, 0 ryi-only. `knip` is unavailable (`command -v knip` returned no path).
+
+Still open: run `timeout 10 knip --reporter json <typescript-repository>` and repeat the madge/ryii comparison on the real TypeScript repository the user selects. `crates/boop-turnvis` has no TypeScript source in this checkout. No `crates/lab-20260921-dead-files-bakeoff` implementation or three-way report exists yet.
