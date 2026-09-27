@@ -699,7 +699,7 @@ fn project_call(
     // The import table is what a selector call's receiver is checked against,
     // so the specifiers land before the sites that read them.
     go_module_specifiers(root, src, strings, sink);
-    let imports = go_import_bindings(sink, strings);
+    let imports = go_import_bindings(&sink.aux.specifiers, strings);
     go_walk_call_sites(root, src, strings, sink, &imports);
     let field_types = go_field_types(root, src);
     go_collect_receivers(root, src, blob, strings, sink, &imports, &field_types);
@@ -708,11 +708,11 @@ fn project_call(
 /// Qualifier -> import path, per the `go_module_specifiers` table above: a
 /// plain spec binds its path's last segment, `_` and `.` bind no qualifier.
 fn go_import_bindings(
-    sink: &FamilyBundle<CallF>,
+    specifiers: &[Specifier],
     strings: &Strings,
 ) -> std::collections::HashMap<String, String> {
     let mut bindings = std::collections::HashMap::new();
-    for specifier in &sink.aux.specifiers {
+    for specifier in specifiers {
         if !matches!(specifier.kind, SpecifierKind::Named) {
             continue;
         }
@@ -3293,7 +3293,10 @@ pub fn go_file_facts_of_source(tree: &tree_sitter::Tree, src: &str) -> GoFileFac
     let mut facts = GoFileFacts::default();
     let src = src.as_bytes();
     go_collect_file_facts(tree.root_node(), src, &mut facts);
-    go_collect_file_imports(tree.root_node(), src, &mut facts.imports);
+    let mut strings = Strings::new();
+    let mut specifiers = Vec::new();
+    go_walk_import_specs(tree.root_node(), src, &mut strings, &mut specifiers);
+    facts.imports = go_import_bindings(&specifiers, &strings);
     facts.fields = go_field_types(tree.root_node(), src);
     facts
 }
@@ -3541,29 +3544,6 @@ fn go_collect_embed_facts(spec: tree_sitter::Node, src: &[u8], facts: &mut GoFil
         facts
             .embeds
             .insert(go_text(name_node, src).to_string(), embeds);
-    }
-}
-
-/// The `go_import_bindings` table off a dedicated parse: a plain spec binds
-/// its path's last segment, `_` and `.` bind no qualifier.
-fn go_collect_file_imports(node: tree_sitter::Node, src: &[u8], out: &mut HashMap<String, String>) {
-    if node.kind() == "import_spec" {
-        let path = path_of_import_spec(node, src);
-        match leading_name(node) {
-            Some(name_node) if name_node.kind() == "package_identifier" => {
-                out.insert(go_text(name_node, src).to_string(), path);
-            }
-            Some(_) => {}
-            None => {
-                let tail = path.rsplit('/').next().unwrap_or(&path).to_string();
-                out.insert(tail, path);
-            }
-        }
-        return;
-    }
-    let mut cursor = node.walk();
-    for child in node.children(&mut cursor) {
-        go_collect_file_imports(child, src, out);
     }
 }
 
@@ -4170,7 +4150,7 @@ impl Resolve<CallF> for GoSource {
                     .position(|j| j.as_ref().map_or(false, |(b, _)| *b == blob))?;
                 Some((index, joined, doc_ix))
             });
-        let imports = go_import_bindings(call, &output.strings);
+        let imports = go_import_bindings(&call.aux.specifiers, &output.strings);
         // The one-hop return-type inference: phase 1 recorded every `x := f()`
         // bind site and every receiver site whose operand it bound. Resolution
         // runs in SOURCE ORDER (a chain `b := a.M()` needs `a` bound first), so
