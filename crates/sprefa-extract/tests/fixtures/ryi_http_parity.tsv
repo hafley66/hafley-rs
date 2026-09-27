@@ -2,8 +2,8 @@ fast    cli     322 97e58c9e70ac
 fast    router  322 97e58c9e70ac
 slow    cli     371 834e48c2b5f1
 slow    router  371 834e48c2b5f1
-scip    cli     220 70f48c1f1e47
-scip    router  220 70f48c1f1e47
+scip    cli     228 3cec8a59f4e0
+scip    router  228 3cec8a59f4e0
 graph   cli      14 7d486d030709
 graph   router   14 7d486d030709
 cleave  cli       4 65889261c505

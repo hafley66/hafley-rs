@@ -1,6 +1,6 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-27
 type: task
 status: needs-decision
 priority: normal
@@ -28,3 +28,7 @@ Run the existing ratchet command with `RATCHET_BUMP=1` against the named sprefa 
 ## Decision
 
 Should nonzero wrong-target rows block the ratchet update until each class has a follow-up issue?
+
+## Queue receipt
+
+Measurement gate remains unchecked per the 2026-09-27 queue instruction. Exact measurement command when authorized: from `~/projects/sprefa`, `RATCHET_BUMP=1 just extract-ratchet`. It runs the six SCIP ratchet legs; no CodeQL command is part of this gate. Wrong-target policy remains undecided, so status stays `needs-decision`.

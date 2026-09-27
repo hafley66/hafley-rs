@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-27
 type: task
-status: needs-decision
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -23,6 +23,8 @@ Per AGENTS.md division of labor: the DL7 rule set is the spec of Resolve<CallF>.
 ## Plan
 
 After authorization for the `~/projects/sprefa` lane, add a DL7 `corpus_unique` rule over the existing fast JSONL facts, run it and the Rust resolver on the same 18-file CTF snapshot, compare normalized edge keys and origins, then either record a zero-diff receipt or file each discrepancy with its minimal reproducer and rule boundary.
+
+Reproduction receipt: `ryii fast crates/sprefa-extract/src` emits 5 `resolved_edge` rows with `resolution_origin=corpus_unique`; the card's `extract fast` verb is retired, so its stated defect does not reproduce on current `ryii`.
 
 ## Decision
 

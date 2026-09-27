@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-27
 type: improvement
-status: needs-decision
+status: open
 priority: normal
 labels: [extract]
 ---
@@ -37,4 +37,37 @@ Capture release baselines for the three named corpora, then move fast-path rows 
 
 ## Decisions
 
-Should the first migration slice cover SCM capture rows only, or convert every fast-path fact family in one pass?
+2026-09-27: migrate SCM capture rows first. Each slice must match the golden set and e2e output byte-for-byte before the next slice begins.
+
+## Reproduction receipt
+
+Current release `ryii fast` reproduced the row and serialization path. On the first 3,000 lexically sorted `*.rs` files under `~/.cargo/registry/src`, it emitted 1,593,102 JSONL rows (421,958,775 bytes) in 51.53 s, with 1,689,255,936 bytes maximum resident memory. The current implementation collects `Vec<FlatFact>` in `read/project.rs` and `sorted_lines` serializes each row into a `Vec<String>` then globally sorts it (`read/project.rs:522-530, 1758-1767`); SCM capture rows own `text: String` (`read/lang/7_scm_rows.rs:48-50`).
+
+Release baseline (`RUST_LOG=error ryii fast <corpus> > /dev/null`):
+
+| corpus | rows | output bytes | wall | max RSS |
+| --- | ---: | ---: | ---: | ---: |
+| `crates/sprefa-extract/src` | 56,912 | 10,195,719 | 0.39 s | 174,571,520 B |
+| `~/projects/typespec/packages` | 354,417 | 94,619,922 | 2.14 s | 871,464,960 B |
+| first 3,000 sorted `*.rs` paths from `~/.cargo/registry/src` via `ryii fast -` | 1,593,102 | 421,958,775 | 51.53 s | 1,689,255,936 B |
+
+## Slice 1: SCM capture columns (2026-09-27)
+
+SCM captures now retain a per-file source buffer, interned query-label ids, and
+parallel start/end columns. Capture text is borrowed from the source when a
+projection needs it. Sorted JSONL output for all three corpus inputs compared
+byte-for-byte equal to the release baseline.
+
+| corpus | rows | bytes | before wall / max RSS | after wall / max RSS |
+| --- | ---: | ---: | ---: | ---: |
+| `crates/sprefa-extract/src` | 56,912 | 10,195,719 | 0.39 s / 174,571,520 B | 0.33 s / 156,844,032 B |
+| `~/projects/typespec/packages` | 354,417 | 94,619,922 | 2.14 s / 871,464,960 B | 1.91 s / 749,387,776 B |
+| first 3,000 sorted registry `*.rs` paths | 1,593,102 | 421,958,775 | 51.53 s / 1,689,255,936 B | 59.18 s / 1,399,144,448 B |
+
+Evidence: SCM row goldens and CLI/e2e checks passed; release `cmp` passed on all
+three outputs; `cargo nextest run --manifest-path crates/sprefa-extract/Cargo.toml
+--features cli -j 2 --test all` passed 1,120 tests; the requested workspace
+nextest command passed 1,378 tests. This proves only the SCM capture slice; the
+other fast-row storage and serialization slices remain.
+
+The registry input list for the before/after runs was written to `/tmp/fast-rows-registry-3000.list` with `find ~/.cargo/registry/src -type f -name '*.rs' -print | sort | head -3000`. Release outputs were captured at `/tmp/fast-rows-before-{sprefa,typespec,registry}.jsonl`; elapsed time and RSS were captured with `/usr/bin/time -lp`.
