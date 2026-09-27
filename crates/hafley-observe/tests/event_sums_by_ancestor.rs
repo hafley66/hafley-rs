@@ -1,5 +1,7 @@
+extern crate hafley_observe as oh;
 use hafley_observe::sqlite::SQLITE_TARGET;
 use hafley_observe::CountRecorder;
+use oh::test;
 use rusqlite::Connection;
 use tracing_subscriber::prelude::*;
 

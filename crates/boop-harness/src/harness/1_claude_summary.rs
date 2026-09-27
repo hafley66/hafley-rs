@@ -26,7 +26,14 @@ fn summary(text: &str) -> bool {
 /// The hook remains active for mixed-harness inputs and filters every source
 /// row by its harness.
 pub fn locate_visible_turns(lines: &[LogicalLine], turns: &[BoopTurn]) -> Vec<VisibleTurn> {
-    boop_turnvis::locate_visible_turns_with(lines, turns, Some(anchor))
+    boop_turnvis::locate_visible_turns_with_policy(lines, turns, Some(anchor), accept_turn_match)
+}
+
+pub fn accept_turn_match(turn: &BoopTurn, evidence: boop_turnvis::MatchEvidence) -> bool {
+    turn.harness != "claude"
+        || turn.role != "user"
+        || evidence.matched_rows >= 2
+        || evidence.has_prompt_marker
 }
 
 /// Input keys the claude TUI prints inside `Name(…)`, in the order it prefers them.

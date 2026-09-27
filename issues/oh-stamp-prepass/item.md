@@ -1,6 +1,6 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 type: improvement
 status: open
 priority: low
@@ -12,7 +12,7 @@ labels: [observability]
 
 ## Description
 
-Idea only. Do not act. Written down so it survives the session.
+Stamping support is implemented in `hafley-observe`: tests import `oh::test`, and a scanner test fails when a test file contains the builtin-looking `#[test]` spelling without that import. Existing process-global subscriber tests use the fully qualified builtin test attribute so `oh::test` does not replace their dispatcher.
 
 ## The problem
 
@@ -59,3 +59,14 @@ Whether the scanner can distinguish `#[test]` resolved to `oh::test` from the bu
 without doing name resolution. A grep sees the same three characters either way, so it
 likely has to check for the `use oh::test;` import at file scope and treat its absence
 as the failure.
+
+## Acceptance
+
+- [x] Test files using `#[test]` import `oh::test`.
+- [x] Scanner test fails with the file paths when an import is missing.
+- [x] Scanner identifies `test_*` functions without a test attribute.
+- [ ] Scanner detects newly added tests with arbitrary names without relying on the `test_*` prefix.
+
+## Progress receipt
+
+2026-09-27: Reproduced the gap with `tests/_stampless_candidate.rs` containing `fn test_unstamped_candidate() {}`; `oh_testkit::every_test_file_imports_oh_test` passed without reporting it. The scanner now parses Rust items and reports `test_*` functions without `#[test]` or `#[oh::test]`. Fixture test and the 8-test `oh_testkit` suite pass. It continues to check `#[test]` files for `use oh::test;`.

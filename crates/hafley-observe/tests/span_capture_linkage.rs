@@ -1,3 +1,5 @@
+extern crate hafley_observe as oh;
+use oh::test;
 use tracing_capture::{CaptureLayer, SharedStorage};
 use tracing_subscriber::prelude::*;
 

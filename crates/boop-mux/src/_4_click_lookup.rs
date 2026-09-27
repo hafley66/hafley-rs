@@ -226,6 +226,7 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
     let own = PathBuf::from(search_root);
     let worktrees = worktrees_of(&own);
     let trunk = worktrees.first().map(|(dir, _)| canonical(dir));
+    let own_is_trunk = trunk.as_ref() == Some(&canonical(&own));
     let label = |dir: &Path, fallback: &str| {
         let dir = canonical(dir);
         if trunk.as_ref() == Some(&dir) {
@@ -259,20 +260,25 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
     }
     let mut seen: Vec<PathBuf> = groups.iter().map(|group| canonical(&group.dir)).collect();
     seen.extend(worktrees.iter().map(|(dir, _)| canonical(dir)));
-    let beside = worktrees.first().map_or(own, |(dir, _)| dir.clone());
-    for repo in repos_beside(&beside) {
-        if seen.contains(&canonical(&repo)) {
-            continue;
+    // Sibling repositories are a choice rung from the trunk checkout. A pane
+    // in a linked worktree keeps its bare-name search within that repository's
+    // checkout set, preserving linked-worktree and document-local lookup.
+    if own_is_trunk {
+        let beside = worktrees.first().map_or(own, |(dir, _)| dir.clone());
+        for repo in repos_beside(&beside) {
+            if seen.contains(&canonical(&repo)) {
+                continue;
+            }
+            let name = repo
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            groups.push(ExactGroup {
+                label: format!("sibling {name}"),
+                dir: repo,
+                source: "sibling",
+            });
         }
-        let name = repo
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        groups.push(ExactGroup {
-            label: format!("sibling {name}"),
-            dir: repo,
-            source: "sibling",
-        });
     }
     groups
 }
@@ -469,18 +475,13 @@ pub fn resolve_fs(token: &str, roots: &[Root], home: &str) -> ResolveResult {
         return ResolveResult::Miss;
     }
     let entries = index_for(Path::new(&search_root));
-    // A bare filename is a choice between every checkout of the pane's
-    // repository that holds one: its own, then the other worktrees (untracked
-    // files in an ignored `.boop-worktrees` lane included). A token with a
-    // directory in it stays with the pane's checkout while any rung there
-    // answers. Sibling repositories rank only a token with a directory in it.
+    // A bare filename is a choice across every reachable checkout: the pane's
+    // repository, its worktrees (including ignored `.boop-worktrees`), and
+    // sibling repositories. A token with a directory in it stays with the
+    // pane's checkout while any rung there answers.
     let groups = exact_groups(&search_root, roots);
-    let checkouts = groups
-        .iter()
-        .filter(|group| group.source != "sibling")
-        .count();
     let bare = !tail.trim_end_matches('/').contains('/');
-    let ranked = if bare { 0..checkouts } else { 0..1 };
+    let ranked = if bare { 0..groups.len() } else { 0..1 };
     if let Some(found) = answer_exact(exact_matches(&rel, &groups, ranked), &groups, line) {
         return found;
     }
@@ -966,6 +967,7 @@ mod tests {
         put(&trunk.join(".boop-worktrees/chore/x/plans/p/index.html"));
         let sibling = base.join("projects/instant");
         put(&sibling.join("src/plugins/files/1_FileTree.tsx"));
+        put(&sibling.join("docs/index.html"));
         git_in(&sibling, &["init", "-q", "-b", "main"]);
         clear_index_cache();
         (scratch, base)
@@ -976,12 +978,12 @@ mod tests {
     }
 
     /// RECEIPT (click-bare-name-choices). A bare filename lists every
-    /// reachable match: the pane's checkout (trunk), its linked worktree, and
-    /// the untracked file in a `.boop-worktrees` lane the trunk ignores. The
-    /// tracked copies of `site/index.html` in the other worktrees are the
-    /// trunk's file on another branch and stay out.
+    /// reachable match across the pane's checkout (trunk), its linked
+    /// worktree, the untracked ignored `.boop-worktrees` lane, and a sibling
+    /// repository. Tracked copies at the same checkout-relative path in other
+    /// worktrees stay deduplicated.
     #[test]
-    fn a_bare_filename_lists_every_worktree_match_grouped_by_root() {
+    fn a_bare_filename_lists_every_match_across_worktree_and_sibling_roots() {
         let (_scratch, base) = lane_tree();
         let hit = pane(&base.join("projects/trunk").to_string_lossy());
         let lookup = cmd_click_lookup(&hit, "index.html", None, &base.to_string_lossy());
@@ -992,6 +994,7 @@ mod tests {
         "projects/trunk/site/index.html",
         "projects/trunk-feat/docs/index.html",
         "projects/trunk/.boop-worktrees/chore/x/plans/p/index.html",
+        "projects/instant/docs/index.html",
     ],
     line: None,
     via: "exact",
@@ -999,8 +1002,28 @@ mod tests {
         "trunk",
         "worktree feat",
         "worktree chore/x",
+        "sibling instant",
     ],
 }"#
+        );
+    }
+
+    #[test]
+    fn pane_local_bare_filename_wins_before_cross_root_choices() {
+        let (_scratch, base) = lane_tree();
+        let local = base.join("projects/trunk/index.html");
+        put(&local);
+        let hit = pane(&base.join("projects/trunk").to_string_lossy());
+        let lookup = cmd_click_lookup(&hit, "index.html", None, &base.to_string_lossy());
+        assert_eq!(
+            lookup.result,
+            ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: local.to_string_lossy().into_owned(),
+                    line: None,
+                    source: "cwd",
+                },
+            }
         );
     }
 

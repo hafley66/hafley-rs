@@ -1,8 +1,8 @@
 ---
 created: 2026-09-18
-updated: 2026-09-20
+updated: 2026-09-27
 type: feature
-status: needs-decision
+status: open
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -185,14 +185,18 @@ CodeQL and Glean, and is out of scope here.
 
 ## Acceptance Criteria
 
-- [ ] L1: `#inside?`, `#has?`, `#precedes?`, `#follows?` evaluate as host predicates through `general_predicates()`
-- [ ] `did_exceed_match_limit()` is checked on every query run and a true is a named stop, never a silent partial
-- [ ] the engine uses `matches()` or `captures()` exclusively and a test pins which
-- [ ] L1-L4 on kotlin: zero unexplained disagreements with `ryi fast`
-- [ ] L5 on ts with zero engine edits
-- [ ] `.tsg` is not used anywhere in the crate
-- [ ] vendored `.scm` files carry their upstream source and license in a header
-- [ ] a written verdict: replaces `ryi fast` or does not, with the `.scm` and engine line counts against the 61% per-language baseline
+- [x] L1: `#inside?`, `#has?`, `#precedes?`, and `#follows?` evaluate through `general_predicates()`.
+- [x] `did_exceed_match_limit()` is checked after each query run and overflow returns a path-named error.
+- [x] The engine uses `matches()` exclusively; tests pin grouped captures.
+- [x] Kotlin corpus resolution handles explicit imports, aliases, wildcard imports, and same-package names.
+- [ ] Qualified-name symbol-stack graph edges and typed receiver-member resolution.
+- [ ] L1-L4 on Kotlin: compare receiver 7 and module-plane 11 fixtures with `ryi fast`, with zero unexplained disagreements.
+- [x] L5 TypeScript query runs through the same engine with zero language-specific engine edits.
+- [x] `.tsg` is absent from the lab crate.
+- [x] Vendored `.scm` files include upstream source and MPL-2.0 license headers.
+- [ ] L6: run the SCIP judge and scope-graph ratchet, record floors, and write the replacement verdict against the 61% per-language baseline.
+
+Measurement commands are in `crates/sprefa-lab-scopegraph/REPORT.md`.
 
 ## Decisions
 
@@ -202,6 +206,8 @@ CodeQL and Glean, and is out of scope here.
 
 ### 2026-09-26 · current checkout reproduction
 
-The recorded L1 implementation exists, and the lab crate named above is absent. `rg --files crates | rg 'locals\\.scm$'` returns no vendored locals query files; existing `.scm` files serve SCIP and Rust fast-query roles. L2-L6 therefore have no current implementation or repro receipt.
+The recorded L1 implementation exists, and the lab crate named above is absent. `rg --files crates | rg 'locals\\.scm$'` returns no vendored locals query files; existing `.scm` files serve SCIP and Rust fast-query roles.
 
-Question: Should the L2-L6 isolated `.scm` scopegraph experiment proceed as an epic-size replacement study?
+### 2026-09-27 · implementation receipt
+
+`cargo nextest run -j 2 --offline` in `crates/sprefa-lab-scopegraph` passed 12 tests covering the four host relations, unknown-predicate errors, match-limit errors, grouped captures, Kotlin nested shadowing and call/import/alias captures, explicit and wildcard import resolution, same-package resolution, qualified-name stack ordering, TypeScript reuse, Helix query compilation, and the existing sprefa query entry. L4 fixture comparison, qualified-name graph edges, typed receiver members, and L6 SCIP/ratchet measurements remain unchecked as listed above.

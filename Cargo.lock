@@ -1542,6 +1542,8 @@ dependencies = [
 name = "hafley-observe"
 version = "0.1.2"
 dependencies = [
+ "hafley-observe",
+ "hafley-observe-macros",
  "libc",
  "metrics",
  "metrics-process",
@@ -1553,6 +1555,7 @@ dependencies = [
  "opentelemetry_sdk",
  "rusqlite",
  "serde_json",
+ "syn 2.0.119",
  "sysinfo 0.35.2",
  "tokio",
  "tracing",
@@ -1563,6 +1566,15 @@ dependencies = [
  "tracing-tracy",
  "tracing-tunnel",
  "tracy-client",
+]
+
+[[package]]
+name = "hafley-observe-macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
 ]
 
 [[package]]

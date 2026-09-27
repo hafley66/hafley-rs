@@ -1,6 +1,8 @@
 //! Every loop in `src` names the constant that bounds it, and the listing this
 //! test prints is the receipt: one line per loop against its budget.
 
+extern crate hafley_observe as oh;
+use oh::test;
 use std::fs;
 use std::path::{Path, PathBuf};
 

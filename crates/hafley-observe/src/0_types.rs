@@ -87,6 +87,7 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::OutputFormat;
+    use oh::test;
 
     #[test]
     fn output_format_vocabulary_is_fixed() {

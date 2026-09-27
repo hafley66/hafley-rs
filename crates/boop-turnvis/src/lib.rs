@@ -55,6 +55,14 @@ pub struct VisibleTurn {
 /// from verbatim source rows.
 pub type SummaryAnchor = fn(&[LogicalLine], &[BoopTurn], &mut Vec<VisibleTurn>);
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct MatchEvidence {
+    pub matched_rows: usize,
+    pub has_prompt_marker: bool,
+}
+
+pub type TurnMatchPolicy = fn(&BoopTurn, MatchEvidence) -> bool;
+
 const LEADING_MARKERS: &[char] = &[
     '│', '┃', '┆', '┊', '╎', '╏', '┌', '└', '├', '┬', '╭', '╰', '>', '*', '•', '●', '◉', '⏺', '⏵',
     '◆', '›', '❯', '»', '▶', '🭬', '✨', '✳', '✻', '⎿', '━', '─', '┏', '┓', '┗', '┛', '┠', '┨', '┯',
@@ -357,6 +365,15 @@ enum Step {
     Down,
 }
 
+fn is_terminal_chrome(text: &str) -> bool {
+    let text = text.trim_start();
+    text.starts_with('❯')
+        || text.starts_with("Opus ")
+        || text.starts_with("✻ ")
+        || text.starts_with("✓ Update installed")
+        || (text.contains(" ctx ") && text.contains(" in ") && text.contains(" out"))
+}
+
 fn extend_to(screen: &[ScreenRow], anchor: usize, limit: usize, step: Step) -> usize {
     let Some(at) = screen
         .iter()
@@ -382,7 +399,11 @@ fn extend_to(screen: &[ScreenRow], anchor: usize, limit: usize, step: Step) -> u
         } else {
             edge >= limit
         };
-        if !inside || row.normalized.is_empty() || row.normalized == "output" {
+        if !inside
+            || row.normalized.is_empty()
+            || row.normalized == "output"
+            || is_terminal_chrome(&row.line.text)
+        {
             break;
         }
         reached = edge;
@@ -456,6 +477,15 @@ pub fn locate_visible_turns_with(
     turns: &[BoopTurn],
     summary_anchor: Option<SummaryAnchor>,
 ) -> Vec<VisibleTurn> {
+    locate_visible_turns_with_policy(lines, turns, summary_anchor, |_, _| true)
+}
+
+pub fn locate_visible_turns_with_policy(
+    lines: &[LogicalLine],
+    turns: &[BoopTurn],
+    summary_anchor: Option<SummaryAnchor>,
+    accept: impl Fn(&BoopTurn, MatchEvidence) -> bool,
+) -> Vec<VisibleTurn> {
     let screen: Vec<ScreenRow> = lines
         .iter()
         .map(|line| ScreenRow {
@@ -482,6 +512,18 @@ pub fn locate_visible_turns_with(
         .zip(candidates)
         .filter_map(|(source, candidate)| candidate.then_some(source))
         .filter_map(|source| monotonic_turn_match(&screen, source))
+        .filter(|matched| {
+            accept(
+                &matched.source.turn,
+                MatchEvidence {
+                    matched_rows: matched.hits.len(),
+                    has_prompt_marker: matched
+                        .hits
+                        .iter()
+                        .any(|hit| hit.line.text.trim_start().starts_with('❯')),
+                },
+            )
+        })
         .collect();
     let marked_user_prompt = |m: &TurnMatch| {
         m.source.turn.role == "user"

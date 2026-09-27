@@ -24,8 +24,13 @@ pub mod sqlite;
 #[cfg(feature = "sqlite-sink")]
 #[path = "5a_sqlite_memory.rs"]
 pub mod sqlite_memory;
+#[cfg(feature = "oh")]
+#[path = "11_testkit.rs"]
+pub mod testkit;
 #[path = "10_tracy.rs"]
 pub mod tracy;
+
+extern crate self as oh;
 
 pub use _0_types::{Config, OutputFormat, ParseOutputFormatError};
 pub use _1_format::{env_filter, format_layer, FormatConfig, DEFAULT_FILTER_VARIABLE};
@@ -37,9 +42,12 @@ pub use _4_counts::{
     EventStats, EventSums, FieldStats, Growth, SpanCounts,
 };
 pub use flush::{Flush, ParseFlushError, Row, Sink, Writer};
+#[cfg(feature = "oh")]
+pub use hafley_observe_macros::{budget, instrument_all, skip, test};
 pub use instruments::{proc_layer, span_layer};
 pub use rusage::{layer as rusage_layer, sample as process_sample, Usage};
 pub use sink::SinkLayer;
+pub use tracing::instrument;
 pub use tracy::layer as tracy_layer;
 
 pub use _2_otlp::otlp_layer;

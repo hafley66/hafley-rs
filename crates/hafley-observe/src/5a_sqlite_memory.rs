@@ -74,6 +74,7 @@ pub fn record_memory(connection: &Connection, phase: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use oh::test;
 
     #[test]
     fn memory_gauges_include_connection_state() -> rusqlite::Result<()> {

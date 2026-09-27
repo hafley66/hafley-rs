@@ -379,14 +379,11 @@ fn respells(cx: &MoveCx) -> Result<Vec<Respell>, String> {
         return Err(errors.join("\n"));
     }
     for arm in rehomes() {
-        let mut refs = arm.core.import_refs(cx);
+        let mut extra_refs = Vec::new();
         if let Some(leg) = arm.manifests {
-            refs.extend(leg.manifest_refs(cx));
+            extra_refs.extend(leg.manifest_refs(cx));
         }
-        for reference in &refs {
-            let Some(respell) = arm.core.respell(cx, reference) else {
-                continue;
-            };
+        for respell in arm.core.plan_respells(cx, &extra_refs) {
             let key = (respell.file.clone(), respell.span.start);
             if let Some((other, text)) = claimed.get(&key) {
                 if *other == arm.name() && *text == respell.text {

@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: open
+status: fixed
 priority: normal
 ---
 
@@ -21,3 +21,14 @@ Same gap as the sibling-repo tail match: rank_exact only reads the doc/cwd repo'
 ### 2026-09-25T14:39:17Z · @claude
 
 880eb92d moves the fs lookup into boop-mux (cmd_click_lookup, no boop-* deps); 4b2b1f92: bare names choose across trunk + worktrees incl untracked .boop-worktrees; directory tails reach sibling repos. Tests: boop-mux 50, boop-harness 235 + 11 integration pass; instant cargo check clean. Open: bare names do not rank siblings (existing test pins Miss); a pane-local file still wins over choices; same-relative-path worktree rows are deduped.
+
+## Acceptance
+
+- [x] Bare filenames from the trunk list matches in the pane checkout, linked worktrees, ignored `.boop-worktrees`, and sibling repositories. A linked-worktree pane lists its own checkout set.
+- [x] A pane-local exact path wins before cross-root choices.
+- [x] Same checkout-relative files tracked in other worktrees are deduplicated.
+- [x] Choices carry the root or worktree label for each returned path.
+
+## Repro receipt
+
+2026-09-26: `cbe1b551` made sibling repositories part of every bare-name search. The regression reproduced as `a_ref_in_a_document_resolves_from_the_document` returning two sibling paths instead of `Miss`, and `the_lookup_from_a_linked_worktree_needs_only_the_filesystem` including a sibling result. `exact_groups` now adds sibling groups only when the pane is at the trunk checkout; linked worktrees retain their own checkout set. `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run -p boop-harness -p boop-mux -j 2`: 311 passed, 2 skipped, 0 failed.

@@ -1,6 +1,6 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-26
 type: feature
 status: open
 priority: normal
@@ -79,11 +79,16 @@ HTTP client into every consumer.
 
 ## Acceptance Criteria
 
-- [ ] `oh` attribute crate exists with `test`, `budget`, `instrument_all`, `skip`
-- [ ] `use oh::test;` plus bare `#[test]` works end to end
-- [ ] `instrument_all` emits a named error for the two nightly-gated forms
-- [ ] time, log, and memory budgets each fail a test that exceeds them
+- [x] `oh` attribute crate exists with `test`, `budget`, `instrument_all`, `skip`
+- [x] `use oh::test;` plus bare `#[test]` works end to end
+- [x] `instrument_all` emits a named error for file modules (macro unit test)
+- [ ] `instrument_all` emits a named error for inner macro attributes (stable Rust rejects the syntax before proc-macro expansion)
+- [x] time, log, and memory budgets each fail a test that exceeds them
 - [ ] ring drain emits `drained_at` and `last_event_at` on SIGTERM
 - [ ] replay re-exec carries the seed and switches the subscriber
-- [ ] lab minting is a CLI subcommand with a build output
-- [ ] `default = []`
+- [ ] lab minting is a CLI subcommand with a build output (`find .. -iname '*new-lab*'` found no source script in this checkout)
+- [x] `default = []`
+
+## Progress receipt
+
+2026-09-27: The code remains hosted in `crates/hafley-observe` (`src/11_testkit.rs`, `tests/oh_testkit.rs`) with proc-macro attributes in the sibling `hafley-observe-macros` crate. The macros and testkit are gated by `hafley-observe/oh`, selected only through its dev-dependency. Subscriber features remain opt-in; `boop` selects `fmt` for its log output. `cargo nextest run -p hafley-observe --test oh_testkit --test bounded_loops -j 2` passed 9 tests, including the universal loop scan. Inner-attribute diagnostics, SIGTERM drain/replay, and lab minting remain open as listed above.

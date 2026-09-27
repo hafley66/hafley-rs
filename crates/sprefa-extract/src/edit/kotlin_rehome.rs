@@ -1,7 +1,6 @@
 //! `impl Rehome for KotlinSource`: every question `extract move` asks a
-//! language, answered for Kotlin. Import headers come off the same
-//! tree-sitter-kotlin query `lang/kotlin.rs` already carries
-//! (`kt_header_facts`), including the package declaration.
+//! language, answered for Kotlin. Import headers, package facts, and relocation
+//! spellings come from `hafley_scm::read::lang::kotlin_modules`.
 //! @comment-ok: module header, the seam list every lang file opens with
 //!
 //! A Kotlin import is `package.Decl` and the `package` declaration is truth
@@ -31,13 +30,14 @@ use crate::edit_seams::ImportRef;
 use crate::edit_seams::ImportRefKind;
 use crate::edit_seams::Rehome;
 use crate::edit_seams::Respell;
-use crate::family::SpecifierKind;
-use crate::lang::kotlin::{kt_first_child, kt_header_facts, kt_parse, kt_text};
 use crate::lang::KotlinSource;
-use crate::move_cx::{dirname, owned_by, MoveCx};
+use crate::move_cx::{owned_by, MoveCx};
 use crate::project::extract_pool;
-use crate::shape::Strings;
 use crate::types::LangKind;
+use hafley_scm::read::lang::kotlin_modules::{
+    kt_move_facts, kt_move_package, kt_move_plan, kt_rewrite_import, kt_rewrite_import_path,
+    KtMoveFacts, KtMovePlan,
+};
 use hafley_scm::span::Span;
 
 /// The moved file's own `package a.b` declaration, a kind only Kotlin constructs.
@@ -68,7 +68,13 @@ impl Rehome for KotlinSource {
                     if !carries_package(&bytes, &packages) {
                         return None;
                     }
-                    scan_file(String::from_utf8(bytes).ok()?)
+                    if let Some(plan) = plans.iter().find(|plan| plan.old_rel == *rel) {
+                        return Some(FileScan {
+                            facts: plan.facts.clone(),
+                            text: String::from_utf8(bytes).ok()?,
+                        });
+                    }
+                    scan_file(rel, String::from_utf8(bytes).ok()?)
                 })
                 .collect()
         });
@@ -88,13 +94,20 @@ impl Rehome for KotlinSource {
         for (rel, scan) in corpus.iter().zip(&scans) {
             let Some(scan) = scan else { continue };
             for plan in &plans {
-                if *rel != plan.old_rel && scan.package() == Some(plan.old_package.as_str()) {
-                    let count = bare_uses(&scan.text, &plan.decls);
+                if *rel != plan.old_rel
+                    && scan
+                        .facts
+                        .package
+                        .as_ref()
+                        .map(|package| package.name.as_str())
+                        == Some(plan.old_package.as_str())
+                {
+                    let count = bare_uses(&scan.text, &plan.top_level);
                     if count > 0 {
                         *bare.entry(plan.old_rel.as_str()).or_default() += count;
                     }
                 }
-                for row in &scan.imports {
+                for row in &scan.facts.imports {
                     // A wildcard may still cover the moved decls and the package
                     // may hold other files: counted, never rewritten.
                     if row.wildcard {
@@ -103,13 +116,13 @@ impl Rehome for KotlinSource {
                         }
                         continue;
                     }
-                    if rewrite(plan, &row.path).is_none() {
+                    if kt_rewrite_import(plan, &row.path).is_none() {
                         continue;
                     }
                     refs.push(ImportRef {
                         importer: rel.to_string(),
                         literal: Span {
-                            start: row.start,
+                            start: row.span.start,
                             len: row.path.len() as u32,
                         },
                         text: row.path.clone(),
@@ -138,40 +151,76 @@ impl Rehome for KotlinSource {
     }
 
     fn respell(&self, cx: &MoveCx, reference: &ImportRef) -> Option<Respell> {
-        // ONE plan, re-derived off the same read of the same (still unwritten)
-        // file `import_refs` read, so the two calls share no state.
+        // Single-reference compatibility path. The move planner uses
+        // `plan_respells` for the whole batch without reparsing here.
         let plan = plan_move(cx, &reference.target, cx.destination(&reference.target)?).ok()?;
-        let text = match reference.kind {
-            PACKAGE_DECL => plan.new_package.clone(),
-            ImportRefKind::Import => rewrite(&plan, &reference.text)?,
-            _ => return None,
-        };
-        (text != reference.text).then(|| Respell {
-            file: reference.importer.clone(),
-            span: reference.literal,
-            text,
-            receipt: None,
-        })
+        respell_with_plan(reference, &plan)
     }
+
+    fn plan_respells(&self, cx: &MoveCx, extra_refs: &[ImportRef]) -> Vec<Respell> {
+        let references = self.import_refs(cx);
+        let packages: BTreeMap<String, (String, String)> = references
+            .iter()
+            .filter(|reference| reference.kind == PACKAGE_DECL)
+            .filter_map(|reference| {
+                let new = cx.destination(&reference.target)?;
+                Some((
+                    reference.target.clone(),
+                    (
+                        reference.text.clone(),
+                        kt_move_package(&reference.target, new, &reference.text)?,
+                    ),
+                ))
+            })
+            .collect();
+        let mut respells: Vec<Respell> = references
+            .iter()
+            .filter_map(|reference| {
+                let (old_package, new_package) = packages.get(&reference.target)?;
+                let text = match reference.kind {
+                    PACKAGE_DECL => new_package.clone(),
+                    ImportRefKind::Import => {
+                        kt_rewrite_import_path(old_package, new_package, &reference.text)?
+                    }
+                    _ => return None,
+                };
+                (text != reference.text).then(|| Respell {
+                    file: reference.importer.clone(),
+                    span: reference.literal,
+                    text,
+                    receipt: None,
+                })
+            })
+            .collect();
+        respells.extend(
+            extra_refs
+                .iter()
+                .filter_map(|reference| self.respell(cx, reference)),
+        );
+        respells
+    }
+}
+
+fn respell_with_plan(reference: &ImportRef, plan: &KtMovePlan) -> Option<Respell> {
+    let text = match reference.kind {
+        PACKAGE_DECL => plan.new_package.clone(),
+        ImportRefKind::Import => kt_rewrite_import(plan, &reference.text)?,
+        _ => return None,
+    };
+    (text != reference.text).then(|| Respell {
+        file: reference.importer.clone(),
+        span: reference.literal,
+        text,
+        receipt: None,
+    })
 }
 
 // ── the move plan ───────────────────────────────────────────────────────────
 
 /// One moved Kotlin file resolved to the import rewrite it implies.
-struct KotlinMove {
-    old_rel: String,
-    old_package: String,
-    new_package: String,
-    /// The span of the package NAME in the moved file's own declaration.
-    package_span: Span,
-    /// Top-level decl names the moved file exports: the only names whose
-    /// imports respell, since an import names a decl and not a file.
-    decls: BTreeSet<String>,
-}
-
 /// Every Kotlin move this run makes, and the named stop for each one whose
 /// package cannot be derived. A stop rewrites nothing; the file still moves.
-fn plans(cx: &MoveCx) -> (Vec<KotlinMove>, Vec<String>) {
+fn plans(cx: &MoveCx) -> (Vec<KtMovePlan>, Vec<String>) {
     let mut plans = Vec::new();
     let mut stops = Vec::new();
     for (old, new) in cx.moved() {
@@ -186,161 +235,23 @@ fn plans(cx: &MoveCx) -> (Vec<KotlinMove>, Vec<String>) {
     (plans, stops)
 }
 
-fn plan_move(cx: &MoveCx, old: &str, new: &str) -> Result<KotlinMove, String> {
+fn plan_move(cx: &MoveCx, old: &str, new: &str) -> Result<KtMovePlan, String> {
     let text = cx
         .text(old)
         .ok_or_else(|| format!("{old}: not readable as UTF-8 kotlin"))?;
-    let scan = scan_file(text).ok_or_else(|| format!("{old}: does not parse as kotlin"))?;
-    let (package_span, old_package) = scan
-        .package
-        .ok_or_else(|| format!("{old}: no package declaration, so its decls are not importable"))?;
-    let root = source_root(old, &old_package).ok_or_else(|| {
-        format!(
-            "{old}: its directory {} does not match its declared package {old_package}, \
-             so extract move will not guess the package {new} lands in",
-            shown(dirname(old))
-        )
-    })?;
-    let new_package = package_for(new, &root).ok_or_else(|| {
-        format!(
-            "{new}: outside the source root {} that {old} sits under",
-            shown(&root)
-        )
-    })?;
-    if new_package.is_empty() {
-        return Err(format!(
-            "{new}: sits at the source root {}, so it lands in the default package \
-             and its decls stop being importable",
-            shown(&root)
-        ));
-    }
-    Ok(KotlinMove {
-        old_rel: old.to_string(),
-        old_package,
-        new_package,
-        package_span,
-        decls: scan.decls,
-    })
+    kt_move_plan(old, new, text.as_bytes())
 }
 
-fn shown(dir: &str) -> &str {
-    match dir.is_empty() {
-        true => "the corpus root",
-        false => dir,
-    }
-}
-
-/// The source root `root` such that `dirname(rel) == root/<package as dirs>`,
-/// `""` being the corpus root. None when the layout disagrees with the package.
-fn source_root(rel: &str, package: &str) -> Option<String> {
-    let dir = dirname(rel);
-    if package.is_empty() {
-        return Some(dir.to_string());
-    }
-    let suffix = package.replace('.', "/");
-    if dir == suffix {
-        return Some(String::new());
-    }
-    dir.strip_suffix(&format!("/{suffix}")).map(str::to_string)
-}
-
-/// The package `rel` answers to under `root`, or None when it sits outside it.
-fn package_for(rel: &str, root: &str) -> Option<String> {
-    let dir = dirname(rel);
-    let within = if root.is_empty() {
-        dir
-    } else if dir == root {
-        ""
-    } else {
-        dir.strip_prefix(&format!("{root}/"))?
-    };
-    Some(within.replace('/', "."))
-}
-
-/// `old_package.Decl[.Nested]` re-aimed at the new package, or None when the
-/// path names another file's decl, another package, or nothing that moved.
-fn rewrite(plan: &KotlinMove, path: &str) -> Option<String> {
-    let rest = path.strip_prefix(&plan.old_package)?.strip_prefix('.')?;
-    let head = rest.split('.').next().unwrap_or(rest);
-    plan.decls
-        .contains(head)
-        .then(|| format!("{}.{rest}", plan.new_package))
-}
-
-// ── the tree-sitter scan ────────────────────────────────────────────────────
+// ── the owned Kotlin syntax rows ───────────────────────────────────────────
 
 struct FileScan {
-    /// The package NAME's span and text, when the file declares one.
-    package: Option<(Span, String)>,
-    imports: Vec<ImportRow>,
-    decls: BTreeSet<String>,
+    facts: KtMoveFacts,
     text: String,
 }
 
-impl FileScan {
-    fn package(&self) -> Option<&str> {
-        self.package.as_ref().map(|(_, name)| name.as_str())
-    }
-}
-
-/// `start` + `path.len()` spans the dotted path ALONE; `import_header` itself
-/// runs on through an alias, a `.*` and the line terminator.
-struct ImportRow {
-    start: u32,
-    path: String,
-    wildcard: bool,
-}
-
-fn scan_file(text: String) -> Option<FileScan> {
-    let tree = kt_parse(&text)?;
-    let root = tree.root_node();
-    let source = text.as_bytes();
-    let mut strings = Strings::new();
-    let mut rows = Vec::new();
-    let package = kt_header_facts(&tree, source, &mut strings, &mut rows);
-    let imports = rows
-        .into_iter()
-        .filter_map(|row| {
-            let path = strings.lookup(row.module?).to_string();
-            (!path.is_empty()).then(|| ImportRow {
-                start: row.span.start,
-                path,
-                wildcard: matches!(row.kind, SpecifierKind::Namespace),
-            })
-        })
-        .collect();
-    Some(FileScan {
-        package,
-        imports,
-        decls: top_level_decls(root, source),
-        text,
-    })
-}
-
-/// Every name an importer can spell after the package: the DIRECT children of
-/// the file, since a nested decl is reached through its owner's name.
-fn top_level_decls(root: tree_sitter::Node, source: &[u8]) -> BTreeSet<String> {
-    let mut cursor = root.walk();
-    let children: Vec<tree_sitter::Node<'_>> = root.named_children(&mut cursor).collect();
-    children
-        .into_iter()
-        .filter_map(|child| decl_name(child, source))
-        .collect()
-}
-
-fn decl_name(node: tree_sitter::Node, source: &[u8]) -> Option<String> {
-    let identifier = match node.kind() {
-        "class_declaration" | "object_declaration" | "type_alias" => {
-            kt_first_child(node, "type_identifier")?
-        }
-        "function_declaration" => kt_first_child(node, "simple_identifier")?,
-        "property_declaration" => {
-            let variable = kt_first_child(node, "variable_declaration")?;
-            kt_first_child(variable, "simple_identifier")?
-        }
-        _ => return None,
-    };
-    Some(kt_text(identifier, source).trim_matches('`').to_string())
+fn scan_file(path: &str, text: String) -> Option<FileScan> {
+    let facts = kt_move_facts(path, text.as_bytes())?;
+    Some(FileScan { facts, text })
 }
 
 // ── the corpus filter and the bare-use count ────────────────────────────────

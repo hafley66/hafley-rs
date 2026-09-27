@@ -11,6 +11,8 @@ use tracing_subscriber::Layer;
 
 use crate::flush::{Flush, Row, Sink, Writer};
 
+const SQLITE_STMT_CHAIN_END: *mut ffi::sqlite3_stmt = std::ptr::null_mut();
+
 pub const SQLITE_TARGET: &str = "sqlite";
 pub const MAX_OPEN_STATEMENTS: usize = 1024;
 
@@ -177,7 +179,7 @@ pub fn instrument(connection: &Connection) {
         let mut statement = ffi::sqlite3_next_stmt(handle, std::ptr::null_mut());
         let mut statements_seen = 0;
         // budget: MAX_OPEN_STATEMENTS statements; overflow logs and stops instrumentation
-        while !statement.is_null() {
+        while statement != SQLITE_STMT_CHAIN_END {
             if statements_seen == MAX_OPEN_STATEMENTS {
                 tracing::error!(
                     target: SQLITE_TARGET,

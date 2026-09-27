@@ -208,11 +208,19 @@ pub fn project(
             to_turnvis(turn, aliases)
         })
         .collect();
-    let located = boop_turnvis::locate_visible_turns_with(
-        &lines,
-        &sources,
-        adapter.and_then(|adapter| adapter.screen_anchor()),
-    );
+    let located = match adapter.and_then(|adapter| adapter.turn_match_policy()) {
+        Some(accept) => boop_turnvis::locate_visible_turns_with_policy(
+            &lines,
+            &sources,
+            adapter.and_then(|adapter| adapter.screen_anchor()),
+            accept,
+        ),
+        None => boop_turnvis::locate_visible_turns_with(
+            &lines,
+            &sources,
+            adapter.and_then(|adapter| adapter.screen_anchor()),
+        ),
+    };
     let pins = pinned_of(&turns, options);
     let pin_ids: Vec<String> = pins.iter().map(|turn| turn_id(turn)).collect();
     let listed = listed_of(&turns);

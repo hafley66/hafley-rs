@@ -1,6 +1,8 @@
 #![cfg(feature = "sqlite-sink")]
 
+extern crate hafley_observe as oh;
 use hafley_observe::sqlite::{query_plan, StatementFinding, MAX_OPEN_STATEMENTS};
+use oh::test;
 use rusqlite::Connection;
 use tracing_capture::{CaptureLayer, SharedStorage};
 use tracing_subscriber::prelude::*;
