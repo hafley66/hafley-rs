@@ -14,7 +14,9 @@ test("generation is deterministic and checked-in artifacts are current", async (
 });
 
 test("TypeSpec span fields match the existing Rust contracts", async () => {
-  const source = await readFile(join(repository, "src/types.rs"), "utf8");
+  const source = await Promise.all(["0_span.rs", "1_span_out.rs"]
+    .map(name => readFile(join(schemaDirectory, "generated", name), "utf8")))
+    .then(files => files.join("\n"));
   const models = JSON.parse(files.get("3_models.json"));
   const rustScalars = { uint32: "u32" };
   for (const model of models) {

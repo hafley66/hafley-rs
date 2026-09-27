@@ -35,7 +35,7 @@ use crate::read::project::ResolveDrop;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Resolve,
+    containing_def_site, corpus_defs, covering_def, own_blob, DefIndex, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};

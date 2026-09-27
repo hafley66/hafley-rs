@@ -610,8 +610,8 @@ impl<'a> Visit<'a> for RuntimeModuleRequests {
     }
 }
 
-/// Dispatch and the module plane run on the same extraction worker. A local
-/// slot keeps concurrent workers from replacing one another's facts.
+// Dispatch and the module plane run on the same extraction worker. A local
+// slot keeps concurrent workers from replacing one another's facts.
 thread_local! {
     static TS_MODULE_FACTS_HANDOFF: std::cell::RefCell<
         Option<(String, crate::read::shape::ContentId, ModuleFacts)>,

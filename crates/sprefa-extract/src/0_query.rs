@@ -1,6 +1,6 @@
 use crate::cli::QueryArgs;
 use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use sprefa_extract::{content_id_of, query_tree_sitter_spans, RyiLang, TreeSitterQuery};
 

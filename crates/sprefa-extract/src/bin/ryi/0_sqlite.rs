@@ -373,6 +373,7 @@ impl Database {
         Ok(())
     }
 
+    #[cfg(test)]
     pub fn finish(self) -> Result<()> {
         self.finish_to(&mut std::io::stdout().lock())
     }

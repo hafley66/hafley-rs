@@ -1807,11 +1807,11 @@ pub struct ProjectCx<'a> {
     pub witness: bool,
 }
 
-/// The blob of the output currently being resolved. Thread-local rather than a
-/// `ProjectCx` field so the per-file resolve loop can run on the extract pool:
-/// each worker pins its own current blob, and a shared `&ProjectCx` stays Sync.
-/// `None` in hand-built contexts (unit tests), where `own_blob` falls back to
-/// the deterministic span-count rule.
+// The blob of the output currently being resolved. Thread-local rather than a
+// `ProjectCx` field so the per-file resolve loop can run on the extract pool:
+// each worker pins its own current blob, and a shared `&ProjectCx` stays Sync.
+// `None` in hand-built contexts (unit tests), where `own_blob` falls back to
+// the deterministic span-count rule.
 thread_local! {
     static OWN: std::cell::RefCell<Option<ContentId>> = const { std::cell::RefCell::new(None) };
 }

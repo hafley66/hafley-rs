@@ -21,7 +21,7 @@ model SpanArg { span: [string, uint32, uint32]; }
 model TextArg { text: string; }
 model IntArg { int: int64; }
 model AtomArg { atom: string; }
-union TsiArg { id: IdArg, span: SpanArg, text: TextArg, int: IntArg, atom: AtomArg }
+union TsiArg { Id: IdArg, Span: SpanArg, Text: TextArg, Int: IntArg, Atom: AtomArg }
 
 // One `ryi rename` site the arm found and declined to plan; `reason` is an
 // `UnresolvedReason::as_str` spelling.
