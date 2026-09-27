@@ -2,7 +2,7 @@
 created: 2026-09-20
 updated: 2026-09-20
 type: feature
-status: open
+status: needs-decision
 priority: normal
 epic: ryi-new-verbs
 labels: [extract, artifact-cli]
@@ -112,3 +112,5 @@ SELECT depth, count(*) FROM reach GROUP BY depth ORDER BY depth;
 ## Comments
 
 ## Decisions
+
+Should bare `--from NAME` remain a multi-definition seed while adding exact `--from PATH:NAME`, or should the arm require an exact path-qualified root?
