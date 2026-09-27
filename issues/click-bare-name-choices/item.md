@@ -24,11 +24,11 @@ Same gap as the sibling-repo tail match: rank_exact only reads the doc/cwd repo'
 
 ## Acceptance
 
-- [x] Bare filenames list matches in the pane checkout, linked worktrees, ignored `.boop-worktrees`, and sibling repositories.
+- [x] Bare filenames from the trunk list matches in the pane checkout, linked worktrees, ignored `.boop-worktrees`, and sibling repositories. A linked-worktree pane lists its own checkout set.
 - [x] A pane-local exact path wins before cross-root choices.
 - [x] Same checkout-relative files tracked in other worktrees are deduplicated.
 - [x] Choices carry the root or worktree label for each returned path.
 
 ## Repro receipt
 
-2026-09-26: before fix, `a_bare_filename_lists_every_match_across_worktree_and_sibling_roots` returned 3 paths and omitted `projects/instant/docs/index.html`; expected 4. Commit `cbe1b551` expands the bare-name search across all exact groups. `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run -p boop-mux -j 2 -E 'test(a_bare_filename_lists_every_match_across_worktree_and_sibling_roots) | test(pane_local_bare_filename_wins_before_cross_root_choices)'`: 2 passed.
+2026-09-26: `cbe1b551` made sibling repositories part of every bare-name search. The regression reproduced as `a_ref_in_a_document_resolves_from_the_document` returning two sibling paths instead of `Miss`, and `the_lookup_from_a_linked_worktree_needs_only_the_filesystem` including a sibling result. `exact_groups` now adds sibling groups only when the pane is at the trunk checkout; linked worktrees retain their own checkout set. `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run -p boop-harness -p boop-mux -j 2`: 311 passed, 2 skipped, 0 failed.

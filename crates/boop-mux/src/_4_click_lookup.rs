@@ -226,6 +226,7 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
     let own = PathBuf::from(search_root);
     let worktrees = worktrees_of(&own);
     let trunk = worktrees.first().map(|(dir, _)| canonical(dir));
+    let own_is_trunk = trunk.as_ref() == Some(&canonical(&own));
     let label = |dir: &Path, fallback: &str| {
         let dir = canonical(dir);
         if trunk.as_ref() == Some(&dir) {
@@ -259,20 +260,25 @@ fn exact_groups(search_root: &str, roots: &[Root]) -> Vec<ExactGroup> {
     }
     let mut seen: Vec<PathBuf> = groups.iter().map(|group| canonical(&group.dir)).collect();
     seen.extend(worktrees.iter().map(|(dir, _)| canonical(dir)));
-    let beside = worktrees.first().map_or(own, |(dir, _)| dir.clone());
-    for repo in repos_beside(&beside) {
-        if seen.contains(&canonical(&repo)) {
-            continue;
+    // Sibling repositories are a choice rung from the trunk checkout. A pane
+    // in a linked worktree keeps its bare-name search within that repository's
+    // checkout set, preserving linked-worktree and document-local lookup.
+    if own_is_trunk {
+        let beside = worktrees.first().map_or(own, |(dir, _)| dir.clone());
+        for repo in repos_beside(&beside) {
+            if seen.contains(&canonical(&repo)) {
+                continue;
+            }
+            let name = repo
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            groups.push(ExactGroup {
+                label: format!("sibling {name}"),
+                dir: repo,
+                source: "sibling",
+            });
         }
-        let name = repo
-            .file_name()
-            .map(|name| name.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        groups.push(ExactGroup {
-            label: format!("sibling {name}"),
-            dir: repo,
-            source: "sibling",
-        });
     }
     groups
 }
