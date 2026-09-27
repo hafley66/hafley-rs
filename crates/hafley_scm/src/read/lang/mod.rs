@@ -38,24 +38,25 @@ pub enum CheckerAnswer {
 }
 
 fn answer_of(
-    reference: &CheckerRef,
+    reference: (&str, &str, u32),
     facets: &[FamilyTag],
     blob_of: &HashMap<&str, &ContentId>,
     defs: &DefIndex,
 ) -> Option<CheckerAnswer> {
-    if reference.dst_path.is_empty() {
+    let (dst_path, dst_name, dst_offset) = reference;
+    if dst_path.is_empty() {
         return Some(CheckerAnswer::External);
     }
-    let blob = *blob_of.get(reference.dst_path.as_str())?;
-    let sites = defs.map.get(reference.dst_name.as_str())?;
+    let blob = *blob_of.get(dst_path)?;
+    let sites = defs.map.get(dst_name)?;
     facets.iter().find_map(|facet| {
         let in_file: Vec<&DefSite> = sites
             .iter()
             .filter(|site| &site.blob == blob && site.family == *facet)
             .collect();
-        let covering = in_file.iter().find(|site| {
-            site.span.start <= reference.dst_offset && reference.dst_offset < site.span.end()
-        });
+        let covering = in_file
+            .iter()
+            .find(|site| site.span.start <= dst_offset && dst_offset < site.span.end());
         let chosen = match covering {
             Some(site) => *site,
             None if in_file.len() == 1 => in_file[0],

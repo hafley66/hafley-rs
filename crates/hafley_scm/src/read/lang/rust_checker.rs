@@ -6,10 +6,10 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub use super::CheckerAnswer;
-use super::CALL_FACETS;
+use super::{answer_of, CALL_FACETS};
 use crate::read::shape::FamilyTag;
 use crate::read::tsi::stamp_digests;
-use crate::read::types::{ContentId, DefIndex, DefSite};
+use crate::read::types::{ContentId, DefIndex};
 use hafley_scm::span::Span;
 
 /// One resolved reference. Offsets are the parse plane's unit (a line's start
@@ -144,7 +144,16 @@ impl RustCheckerIndex {
         for (path, refs) in answers.calls {
             let mut bounds: Vec<Bound> = Vec::with_capacity(refs.len());
             for reference in refs {
-                match answer_of(&reference, CALL_FACETS, &blob_of, defs) {
+                match answer_of(
+                    (
+                        &reference.dst_path,
+                        &reference.dst_name,
+                        reference.dst_offset,
+                    ),
+                    CALL_FACETS,
+                    &blob_of,
+                    defs,
+                ) {
                     Some(answer) => {
                         index.external += (answer == CheckerAnswer::External) as usize;
                         bounds.push(Bound {
@@ -165,7 +174,16 @@ impl RustCheckerIndex {
             let mut bounds: Vec<Bound> = Vec::with_capacity(refs.len());
             let mut first_answer: HashMap<String, (CheckerAnswer, bool)> = HashMap::new();
             for reference in refs {
-                let Some(answer) = answer_of(&reference, TYPE_FACETS, &blob_of, defs) else {
+                let Some(answer) = answer_of(
+                    (
+                        &reference.dst_path,
+                        &reference.dst_name,
+                        reference.dst_offset,
+                    ),
+                    TYPE_FACETS,
+                    &blob_of,
+                    defs,
+                ) else {
                     index.unjoined += 1;
                     continue;
                 };
@@ -261,36 +279,6 @@ impl crate::read::tsi::SemanticRows for RustCheckerIndex {
 }
 
 const TYPE_FACETS: &[FamilyTag] = &[FamilyTag::Type];
-
-/// The declaration identifier's offset picks between several defs of one name in
-/// one file; a lone def of the name binds without it, which mbe expansion needs.
-fn answer_of(
-    reference: &CheckerRef,
-    facets: &[FamilyTag],
-    blob_of: &HashMap<&str, &ContentId>,
-    defs: &DefIndex,
-) -> Option<CheckerAnswer> {
-    if reference.dst_path.is_empty() {
-        return Some(CheckerAnswer::External);
-    }
-    let blob = *blob_of.get(reference.dst_path.as_str())?;
-    let sites = defs.map.get(reference.dst_name.as_str())?;
-    facets.iter().find_map(|facet| {
-        let in_file: Vec<&DefSite> = sites
-            .iter()
-            .filter(|site| &site.blob == blob && site.family == *facet)
-            .collect();
-        let covering = in_file.iter().find(|site| {
-            site.span.start <= reference.dst_offset && reference.dst_offset < site.span.end()
-        });
-        let chosen = match covering {
-            Some(site) => *site,
-            None if in_file.len() == 1 => in_file[0],
-            None => return None,
-        };
-        Some(CheckerAnswer::Corpus(chosen.blob.clone(), chosen.span))
-    })
-}
 
 /// Run the checker over `root` and answer every reference in `files`
 /// (supplied path, absolute path).

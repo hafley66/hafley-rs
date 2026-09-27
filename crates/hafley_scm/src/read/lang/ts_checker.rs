@@ -99,7 +99,16 @@ impl TsCheckerIndex {
         for (path, refs) in answers.calls {
             let mut bounds: Vec<Bound> = Vec::with_capacity(refs.len());
             for reference in refs {
-                match answer_of(&reference, CALL_FACETS, &blob_of, defs) {
+                match answer_of(
+                    (
+                        &reference.dst_path,
+                        &reference.dst_name,
+                        reference.dst_offset,
+                    ),
+                    CALL_FACETS,
+                    &blob_of,
+                    defs,
+                ) {
                     Some(answer) => {
                         index.external += (answer == TsCheckerAnswer::External) as usize;
                         bounds.push(Bound {
@@ -118,7 +127,16 @@ impl TsCheckerIndex {
         for (path, refs) in answers.types {
             let mut by_name: HashMap<String, Option<TsCheckerAnswer>> = HashMap::new();
             for reference in refs {
-                let Some(answer) = answer_of(&reference, TYPE_FACETS, &blob_of, defs) else {
+                let Some(answer) = answer_of(
+                    (
+                        &reference.dst_path,
+                        &reference.dst_name,
+                        reference.dst_offset,
+                    ),
+                    TYPE_FACETS,
+                    &blob_of,
+                    defs,
+                ) else {
                     index.unjoined += 1;
                     continue;
                 };
