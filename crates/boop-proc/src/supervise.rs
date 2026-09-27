@@ -651,10 +651,7 @@ pub struct Hail {
 /// Every unacked message addressed to `lane` whose id is not already in
 /// `seen`. Reading is enough to own it; the ack is written on delivery.
 pub fn pending(dir: &Path, lane: &str, seen: &BTreeSet<String>) -> Result<Vec<Hail>> {
-    let mut rows = Vec::new();
-    for path in bus::read_boxes(dir)? {
-        rows.extend(bus::parse_box(&path));
-    }
+    let rows = bus::messages_for_route(dir, lane)?;
     Ok(bus::unacked(&rows)
         .into_iter()
         .filter(|row| row.to == lane)

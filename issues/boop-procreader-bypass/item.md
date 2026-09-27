@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-17
+updated: 2026-09-26
 type: improvement
-status: open
+status: done
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
 size: S
+closed: 2026-09-26
 ---
 
 # ProcReader bypassed by two call sites; descendent_count misspelled
@@ -44,3 +45,9 @@ warning, `tests/host_chat.rs:44` `needless_borrow`, present at daa2b0a.
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
 
 Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `src/**` (`tracing` only), no em dashes, banned identifiers `provenance`/`substrate`/`load-bearing`/`regime`.
+
+## Resolution
+
+### 2026-09-27T03:27:49Z · @issuectl
+
+Current source routes both process reads through ProcReader, uses descendant_count, and the injectable fake-reader test is present in crates/boop/src/cli/job.rs and crates/boop-store/src/proc.rs.

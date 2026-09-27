@@ -1,12 +1,13 @@
 ---
 created: 2026-08-17
-updated: 2026-08-18
+updated: 2026-09-26
 type: feature
-status: open
+status: obsolete
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, needs-chris]
 size: M
+closed: 2026-09-26
 ---
 
 # concatmap is a coroutine: concatMap of run-pair bundles into an upserted resident session
@@ -41,3 +42,9 @@ Plan and target program: sprefa `plans/2026-08-18-boop-resident-coroutine.md`.
 ## Fork, Chris
 
 Order guarantee within a tick (host refuses out-of-order run vs one-demand-per-tick); store bind poll vs sqlite hook; base on `feature/dl6-boop-concatmap-golden` (sprefa `27b15b2`, hafley-rs `6b6315f`) or redo.
+
+## Resolution
+
+### 2026-09-27T03:30:19Z · @issuectl
+
+Current boop --help has no host or concatmap verb, and the card depends on the retired boop host chat path.

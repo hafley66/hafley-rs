@@ -1,13 +1,14 @@
 ---
 created: 2026-08-22
-updated: 2026-08-22
+updated: 2026-09-26
 type: chore
-status: open
+status: obsolete
 priority: normal
 epic: harness-interface
 related: ['@retire-tui-channels-codex-proxy']
 labels: [domain-boop, needs-chris]
 size: S
+closed: 2026-09-26
 ---
 
 # Delete superseded branches and worktrees, open the PR
@@ -23,3 +24,9 @@ After cards 1–4 land on main. Counts re-measured 2026-08-22 evening: 80 local 
 - [ ] `git branch | wc -l` ≤ 15 (soopy ×9 untouched)
 - [ ] `git worktree list | wc -l` ≤ 12
 - [ ] one open PR: `refactor/harness-interface`
+
+## Resolution
+
+### 2026-09-27T03:22:38Z · @issuectl
+
+Repro receipt (2026-09-26): PR #47 is already merged; the named stale refs were absent, merged, or removed, while current inventory is 313 local branches and 23 worktrees, so the August ≤15/≤12 caps no longer describe this cleanup set.

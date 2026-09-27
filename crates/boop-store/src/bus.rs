@@ -1173,6 +1173,36 @@ pub fn messages_in(store: &crate::ident::Store) -> Result<Vec<Message>> {
     Ok(out)
 }
 
+/// Every envelope addressed to one route, in append order.
+pub fn messages_for_route(dir: &Path, route: &str) -> Result<Vec<Message>> {
+    let store = open_store(dir)?;
+    let mut statement = store.connection().prepare(
+        "SELECT message_id, from_route, to_route, from_timestamp, to_timestamp,
+                kind, reply_to, body, ref_id, rc, detail
+         FROM agent_mail WHERE to_route = ?1 ORDER BY seq",
+    )?;
+    let rows = statement.query_map([route], |row| {
+        Ok(Message {
+            id: row.get(0)?,
+            from: row.get(1)?,
+            to: row.get(2)?,
+            from_timestamp: row.get(3)?,
+            to_timestamp: row.get(4)?,
+            kind: row.get::<_, String>(5)?.into(),
+            reply_to: row.get(6)?,
+            body: row.get(7)?,
+            r#ref: row.get(8)?,
+            rc: row.get(9)?,
+            detail: row.get(10)?,
+        })
+    })?;
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row?);
+    }
+    Ok(out)
+}
+
 /// Every envelope in the mailbox `dir` addresses.
 pub fn read_messages(dir: &Path) -> Result<Vec<Message>> {
     messages_in(&open_store(dir)?)
@@ -1797,6 +1827,37 @@ mod tests {
             error.to_string().contains("without a delivery transition"),
             "{error}"
         );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn recipient_reads_use_the_covering_mail_index() {
+        let dir = temp_dir("recipient-index");
+        for i in 0..128 {
+            let mut row = send(&format!("m-route-{i}"));
+            row.to = format!("lane-{}", i % 16);
+            super::append(&dir, "bus", &row).unwrap();
+        }
+
+        let rows = super::messages_for_route(&dir, "lane-7").unwrap();
+        assert_eq!(rows.len(), 8);
+        assert!(rows.iter().all(|row| row.to == "lane-7"));
+
+        let store = super::open_store(&dir).unwrap();
+        let mut plan = store
+            .connection()
+            .prepare(
+                "EXPLAIN QUERY PLAN SELECT message_id FROM agent_mail
+                 WHERE to_route = ?1 ORDER BY seq",
+            )
+            .unwrap();
+        let details = plan
+            .query_map(["lane-7"], |row| row.get::<_, String>(3))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap()
+            .join(" ");
+        assert!(details.contains("idx_mail_to"), "query plan: {details}");
         let _ = std::fs::remove_dir_all(&dir);
     }
 
