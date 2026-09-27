@@ -11,9 +11,13 @@
 use std::collections::HashMap;
 use std::time::Duration;
 
+use crate::read::shape::FamilyTag;
 use crate::read::tsi::FactOut;
 use crate::read::types::ContentId;
 use crate::span::Span;
+
+const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
+const TYPE_FACETS: &[FamilyTag] = &[FamilyTag::Type, FamilyTag::Call];
 
 /// One resolved reference shared by checker tiers with the same wire shape.
 #[derive(Clone, Debug)]

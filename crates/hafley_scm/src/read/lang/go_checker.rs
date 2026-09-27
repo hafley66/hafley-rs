@@ -13,6 +13,7 @@ pub use super::{
     CheckerAnswer as GoCheckerAnswer, CheckerAnswers as GoCheckerAnswers,
     CheckerRef as GoCheckerRef,
 };
+use super::{CALL_FACETS, TYPE_FACETS};
 use crate::read::shape::{FamilyTag, NodeRef};
 use crate::read::types::{
     CallEdgeKind, CallF, ContentId, DefIndex, DefSite, ProjectEdge, ResolutionOrigin, RyiOutput,
@@ -372,14 +373,6 @@ fn stamp_digests(
         })
         .collect()
 }
-
-/// A call answer prefers the call facet and settles for the type facet: a
-/// conversion-shaped constructor's only def may be a type entity.
-const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
-/// Type prefers type and settles for call, the way the ts tier does: go's own
-/// type resolve joins through facet-agnostic corpus defs, so a type-only
-/// fallback would answer less than the leg it displaces.
-const TYPE_FACETS: &[FamilyTag] = &[FamilyTag::Type, FamilyTag::Call];
 
 /// The declaration identifier's offset picks between several defs of one name
 /// in one file; a lone def of the name binds without it.
