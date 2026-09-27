@@ -1,9 +1,9 @@
 ---
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-26
 type: task
 reporter: chrishafley
-status: untriaged
+status: obsolete
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -24,3 +24,7 @@ CommitEngine uses a root lock, preflight, journal and sequential file operations
 - [ ] Keep whole-tree snapshot isolation an explicit separate requirement, not an implied guarantee.
 ## Tests Run
 Source and failpoint tests inspected; no execution or reproduced data-loss claim. Related: @soopy-mutation-commit.
+
+## Repro receipt
+
+2026-09-26: current `ryii move` dry-run on a temporary file exits 0, preserves source bytes, and creates no destination; the card reports no reproduced data-loss defect.
