@@ -1,6 +1,6 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-27
 type: bug
 status: open
 priority: high
@@ -64,15 +64,35 @@ Record as much relational data as possible at each tick, event and update: pid, 
 
 ## Acceptance Criteria
 
-- [ ] Design doc lands with type signatures, join pseudo-code, instance lifetimes, storage layout, read/write sequence, uniqueness conditions
-- [ ] The six-session chain above reconstructs as one trace
-- [ ] Trace survives wrapper death, machine restart, and a claude started outside `boop tui`
-- [ ] Join carries an explicit budget with a named diagnostic
+- [x] Design doc has type signatures, join pseudo-code, instance lifetimes, storage layout, read/write sequence, uniqueness conditions (`TASKS/boop-observation-trace.BRIEF.md`).
+- [x] A six-session fixture chain derives one component while an unrelated session with the same cwd stays separate.
+- [x] An explicit Claude `continued-in` transcript relation is stored idempotently and its materialized trace survives closing/reopening the store and `Store::rebuild`.
+- [x] Join input has named observation, relation, and session budgets; limit and ambiguous-continuation tests pin diagnostics.
+- [x] Schema v37 migration seeds observations from existing `agent_trace_span` rows.
+- [ ] The six historical sessions in the description reconstruct as one trace from their available durable observations.
+- [ ] Trace survives wrapper death, machine restart, and a Claude session started outside `boop tui` when there is no explicit `continued-in` record. Process and pane joins need host/tmux-server incarnation evidence before they can merge.
+- [ ] Measure observation write rate, daily row count, and SQLite bytes on the selected real database.
 
 ## Reproduction receipt
 
-Current-code repro: `rg -n 'continued-in|attach_trace|SyncDecision::for_session' crates/boop/src/cli/db.rs crates/boop-harness/src crates/boop-store/src/ident.rs` finds `SyncDecision::for_session` queues unknown session IDs and trace attachment only in the supervisor/TUI paths; no `continued-in` relation parser or transcript-sync trace writer exists. A restarted writer therefore leaves the newly synced session without a predecessor relation. Existing measurements above are historical corroboration; no external database was opened.
+Baseline repro before the 2026-09-27 implementation: `rg -n 'continued-in|attach_trace|SyncDecision::for_session' crates/boop/src/cli/db.rs crates/boop-harness/src crates/boop-store/src/ident.rs` finds `SyncDecision::for_session` queues unknown session IDs and trace attachment only in the supervisor/TUI paths; no `continued-in` relation parser or transcript-sync trace writer exists. A restarted writer therefore leaves the newly synced session without a predecessor relation. Existing measurements above are historical corroboration; no external database was opened.
 
 ## Implementation Notes
 
-Design first, no code. The type, join, storage, lifetime, and gate plan is in `TASKS/boop-observation-trace.BRIEF.md`. Remaining acceptance criteria require implementation and a real-database measurement.
+The user directed implementation of the written design. The type, join, storage, lifetime, and gate plan is in `TASKS/boop-observation-trace.BRIEF.md`. The compatibility span projection now handles explicit transcript relations and legacy spans. Host/server-incarnation matching and real-database historical reconstruction remain open.
+
+
+## Implementation receipt (2026-09-27)
+
+Red: before the fix, ingesting a Claude `type: continued-in` record stored zero relations and left `session-after` without a trace. Green: `continued_in_transcript_relation_is_projected_by_claude_adapter` verifies the Claude adapter decodes the record and calls the shared per-record projector callback; the producer-keyed `ContinuedIn` relation derives/materializes connected membership into the compatibility spans. `continued_in_relation_preserves_trace_after_writer_exit` verifies retry idempotency, close/reopen durability, and `Store::rebuild`. The Claude-specific record check lives in `harness/claude.rs`; `behavioral_harness_dispatch_stays_in_adapters` passes. The six-session pure join fixture, shared-cwd isolation, ambiguous-edge retention without cross-trace merging, all three named join budgets, and the v37 legacy-span migration pass. `cargo nextest run -p boop-store --locked -j 2 --no-fail-fast` passes 241/241; `cargo nextest run --workspace --locked -j 2 -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))' --status-level leak --final-status-level fail` passes 1386/1386 with 1 known leak and 203 skipped.
+
+The historical-chain reconstruction and real-database rate/size measurement remain unchecked. Read-only measurement command, with output kept in the lane scratch directory:
+
+```sh
+for sample in 1 2; do
+  date +%s
+  sqlite3 -readonly /Users/chrishafley/.agent/boop.db \
+    "SELECT source.value, COUNT(*) FROM agent_session_observation observation JOIN dict_observation_source source ON source.id = observation.source_id GROUP BY source.value ORDER BY source.value; SELECT COUNT(*) AS relations FROM agent_session_relation; PRAGMA page_count; PRAGMA page_size;"
+  sleep 60
+done > /Users/chrishafley/.cache/lanes/the-gang-graph/trace-db-measurement.txt
+```

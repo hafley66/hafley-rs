@@ -460,7 +460,10 @@ mod tests {
             .execute_batch("DROP TABLE agent_reminder; PRAGMA user_version = 36;")
             .unwrap();
         let migrated = bus::open_store(&f.dir).unwrap();
-        assert_eq!(migrated.schema_version().unwrap(), 37);
+        assert_eq!(
+            migrated.schema_version().unwrap(),
+            crate::ident::SCHEMA_VERSION
+        );
         assert!(migrated.reminders().unwrap().is_empty());
         migrated
             .reminder_add("after-upgrade", "recipient", "body", 1000, NOW + 2000, NOW)

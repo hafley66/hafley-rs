@@ -321,6 +321,44 @@ impl Harness for Claude {
         })
     }
 
+    fn ingest(
+        &self,
+        store: &boop_store::ident::Store,
+        session: &SessionRef,
+        from: u64,
+    ) -> anyhow::Result<boop_store::session::Ingested> {
+        boop_store::ident::project_transcript_with(store, session, from, |store, session, value| {
+            if value.get("type").and_then(Value::as_str) != Some("continued-in") {
+                return Ok(());
+            }
+            let from_session = value
+                .get("sessionId")
+                .and_then(Value::as_str)
+                .unwrap_or(&session.session_id);
+            let to_session = value
+                .get("continuedInSessionId")
+                .and_then(Value::as_str)
+                .unwrap_or("");
+            if !from_session.is_empty() && !to_session.is_empty() {
+                let observed_at_ms = value
+                    .get("timestamp")
+                    .and_then(Value::as_str)
+                    .and_then(parse_iso_ms)
+                    .unwrap_or(0);
+                store.record_session_relation(&boop_store::SessionRelation {
+                    relation_key: format!("claude-continued-in:{from_session}:{to_session}"),
+                    from_session: from_session.to_owned(),
+                    to_session: to_session.to_owned(),
+                    kind: boop_store::SessionRelationKind::ContinuedIn,
+                    source: "claude-transcript".into(),
+                    observed_at_ms,
+                    matched_identity_key: None,
+                })?;
+            }
+            Ok(())
+        })
+    }
+
     /// `send_midflight` is false since the lane channel became ACP:
     /// `session/prompt` is one request per turn and a second one before the
     /// first resolves is out of protocol.
@@ -1190,6 +1228,36 @@ mod tests {
     use boop_store::testing::TempRepo;
 
     use super::{parse_iso_ms, Claude};
+
+    #[test]
+    fn continued_in_transcript_relation_is_projected_by_claude_adapter() {
+        let transcript = temp_path("continued-in-adapter.jsonl");
+        write_lines(
+            &transcript,
+            &[
+                r#"{"type":"continued-in","timestamp":"2026-09-27T12:00:00.000Z","sessionId":"session-before","continuedInSessionId":"session-after"}"#,
+            ],
+        );
+        let metadata = transcript.metadata().unwrap();
+        let mut session = session_for(&transcript, metadata.len());
+        session.session_id = "session-before".into();
+        let db_path = temp_path("continued-in-adapter.sqlite");
+        let _ = std::fs::remove_file(&db_path);
+        let store = boop_store::ident::Store::open(db_path.clone()).unwrap();
+        store
+            .attach_trace("session-before", "trace-before", "native-tui-session", 10)
+            .unwrap();
+
+        Claude.ingest(&store, &session, 0).unwrap();
+
+        assert_eq!(
+            store.trace_of("session-after").unwrap().as_deref(),
+            Some("trace-before")
+        );
+        drop(store);
+        let _ = std::fs::remove_file(db_path);
+        let _ = std::fs::remove_file(transcript);
+    }
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_claude_{}_{}", std::process::id(), name))

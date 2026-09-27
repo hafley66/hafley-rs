@@ -14,6 +14,9 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
+use crate::_0_trace_identity::{
+    derive_traces, SessionObservation, SessionRelation, SessionRelationKind, TraceJoinLimits,
+};
 use crate::session::{Ingested, KnownSession, KnownSessions, SessionRef};
 
 /// Every SQLite connection waits for a contending reader or the one WAL writer
@@ -63,7 +66,8 @@ pub struct Store {
 /// 35 = agent_turn.source_class distinguishes human input from harness injection.
 /// 36 = favorite-context and project-membership SQL views.
 /// 37 = durable expiring reminders over the mailbox.
-pub const SCHEMA_VERSION: i64 = 37;
+/// 38 = durable session identity observations and continuation relations.
+pub const SCHEMA_VERSION: i64 = 38;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -617,6 +621,12 @@ pub const USER_AUTHORED: &[&str] = &[
     "agent_tag_link",
 ];
 
+const TRACE_IDENTITY_CARRIED: &[&str] = &[
+    "agent_session_observation",
+    "agent_session_relation",
+    "agent_trace_span",
+];
+
 /// One user-authored table as it stood before the drop: the columns the
 /// restore writes back, and one value per column per row.
 pub(crate) struct CarriedTable {
@@ -639,6 +649,49 @@ impl CarriedTable {
 /// hands out ids in a different order.
 fn carry_select(table: &str) -> String {
     match table {
+        "agent_session_observation" => "SELECT observation.observation_key,
+                                                session.value AS session_id,
+                                                observation.observed_ts,
+                                                harness.value AS harness,
+                                                cwd.value AS cwd,
+                                                observation.pid,
+                                                observation.parent_pid,
+                                                pane.value AS pane,
+                                                tui.value AS tui_session,
+                                                source.value AS source
+                                           FROM agent_session_observation observation
+                                           JOIN dict_session session ON session.id = observation.session_id
+                                           LEFT JOIN dict_harness harness ON harness.id = observation.harness_id
+                                           LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
+                                           LEFT JOIN dict_pane pane ON pane.id = observation.pane_id
+                                           LEFT JOIN dict_tui_session tui ON tui.id = observation.tui_session_id
+                                           JOIN dict_observation_source source ON source.id = observation.source_id
+                                          ORDER BY observation.observation_id"
+            .to_owned(),
+        "agent_session_relation" => "SELECT relation.relation_key,
+                                            source_session.value AS from_session,
+                                            target_session.value AS to_session,
+                                            kind.value AS kind,
+                                            source.value AS source,
+                                            relation.observed_ts,
+                                            relation.matched_identity_key
+                                       FROM agent_session_relation relation
+                                       JOIN dict_session source_session ON source_session.id = relation.from_session
+                                       JOIN dict_session target_session ON target_session.id = relation.to_session
+                                       JOIN dict_session_relation_kind kind ON kind.id = relation.kind_id
+                                       JOIN dict_observation_source source ON source.id = relation.source_id
+                                      ORDER BY relation.relation_id"
+            .to_owned(),
+        "agent_trace_span" => "SELECT session.value AS session,
+                                      trace.value AS trace,
+                                      attach.value AS attach,
+                                      span.attached_ts
+                                 FROM agent_trace_span span
+                                 JOIN dict_session session ON session.id = span.session_id
+                                 JOIN dict_trace trace ON trace.id = span.trace_id
+                                 JOIN dict_attach attach ON attach.id = span.attach_id
+                                ORDER BY span.attached_ts, session.value"
+            .to_owned(),
         "agent_favorite" => "SELECT f.favorite_id AS favorite_id, m.body AS body, f.note AS note,
                                     f.source AS source, f.created_ts AS created_ts,
                                     m.first_ts AS first_ts
@@ -661,6 +714,18 @@ fn text_at(row: &[rusqlite::types::Value], at: usize, what: &str) -> Result<Stri
     match row.get(at) {
         Some(rusqlite::types::Value::Text(text)) => Ok(text.clone()),
         _ => anyhow::bail!("{what} is not text"),
+    }
+}
+
+fn optional_text_at(
+    row: &[rusqlite::types::Value],
+    at: usize,
+    what: &str,
+) -> Result<Option<String>> {
+    match row.get(at) {
+        Some(rusqlite::types::Value::Null) => Ok(None),
+        Some(rusqlite::types::Value::Text(text)) => Ok(Some(text.clone())),
+        _ => anyhow::bail!("{what} is not text or NULL"),
     }
 }
 
@@ -1123,6 +1188,21 @@ impl Store {
             if self.schema_version()? < 37 {
                 self.connection.execute_batch("PRAGMA user_version = 37;")?;
             }
+            if self.schema_version()? < 38 {
+                self.connection.execute_batch(SESSION_IDENTITY_SCHEMA)?;
+                let source_id =
+                    self.intern("dict_observation_source", "legacy-agent-trace-span")?;
+                self.connection.execute(
+                    "INSERT OR IGNORE INTO agent_session_observation
+                       (observation_key, session_id, observed_ts, source_id)
+                     SELECT 'legacy-agent-trace-span:' || session.value || ':' || span.attached_ts,
+                            span.session_id, span.attached_ts, ?1
+                       FROM agent_trace_span span
+                       JOIN dict_session session ON session.id = span.session_id",
+                    params![source_id],
+                )?;
+                self.connection.execute_batch("PRAGMA user_version = 38;")?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1144,7 +1224,7 @@ impl Store {
             self.reminders()?.is_empty(),
             "store has durable reminders; stop schedules before rebuilding the projection"
         );
-        let carried = self.carry_user_authored()?;
+        let carried = self.carry_rebuild_state()?;
         let mut names = Vec::new();
         {
             let mut statement = self.connection.prepare(
@@ -1155,9 +1235,10 @@ impl Store {
                 names.push(row?);
             }
         }
-        for name in &names {
+        for name in names.iter().rev() {
             self.connection
-                .execute_batch(&format!("DROP TABLE IF EXISTS \"{name}\""))?;
+                .execute_batch(&format!("DROP TABLE IF EXISTS \"{name}\""))
+                .with_context(|| format!("drop table {name} during rebuild"))?;
         }
         self.connection.execute_batch(SCHEMA)?;
         self.connection.execute_batch(MAILBOX_SCHEMA)?;
@@ -1166,15 +1247,17 @@ impl Store {
         self.connection.execute_batch(crate::reminder::SCHEMA)?;
         self.seed_moods()?;
         self.stamp_version()?;
-        self.restore_user_authored(&carried)?;
+        self.restore_rebuild_state(&carried)?;
+        self.rebuild_trace_projection()?;
         self.connection.execute_batch("VACUUM")?;
         Ok(())
     }
 
     /// Read every user-authored table into memory, ahead of the drop.
-    fn carry_user_authored(&self) -> Result<Vec<CarriedTable>> {
+    fn carry_rebuild_state(&self) -> Result<Vec<CarriedTable>> {
         USER_AUTHORED
             .iter()
+            .chain(TRACE_IDENTITY_CARRIED.iter())
             .map(|table| self.carry_table(table))
             .collect()
     }
@@ -1207,7 +1290,7 @@ impl Store {
 
     /// Write the carried rows back onto the fresh schema, in list order so a
     /// comment lands before the targets and forks that name it.
-    fn restore_user_authored(&self, carried: &[CarriedTable]) -> Result<()> {
+    fn restore_rebuild_state(&self, carried: &[CarriedTable]) -> Result<()> {
         let mut moved: BTreeMap<i64, i64> = BTreeMap::new();
         for table in carried {
             self.restore_table(table, &mut moved)?;
@@ -1263,6 +1346,123 @@ impl Store {
                     row[at] =
                         rusqlite::types::Value::Text(crate::tags::moved_source(&source, moved));
                     self.insert_carried(carried, &row)?;
+                }
+                Ok(())
+            }
+            "agent_session_observation" => {
+                for row in &carried.rows {
+                    let session_id = self.session_id(&text_at(
+                        row,
+                        carried.column("session_id")?,
+                        "observation session",
+                    )?)?;
+                    let harness_id =
+                        optional_text_at(row, carried.column("harness")?, "observation harness")?
+                            .map(|value| self.intern("dict_harness", &value))
+                            .transpose()?;
+                    let cwd_id = optional_text_at(row, carried.column("cwd")?, "observation cwd")?
+                        .map(|value| self.intern("dict_cwd", &value))
+                        .transpose()?;
+                    let pane_id =
+                        optional_text_at(row, carried.column("pane")?, "observation pane")?
+                            .map(|value| self.intern("dict_pane", &value))
+                            .transpose()?;
+                    let tui_session_id = optional_text_at(
+                        row,
+                        carried.column("tui_session")?,
+                        "observation TUI session",
+                    )?
+                    .map(|value| self.intern("dict_tui_session", &value))
+                    .transpose()?;
+                    let source_id = self.intern(
+                        "dict_observation_source",
+                        &text_at(row, carried.column("source")?, "observation source")?,
+                    )?;
+                    self.connection.execute(
+                        "INSERT OR IGNORE INTO agent_session_observation
+                           (observation_key, session_id, observed_ts, harness_id, cwd_id,
+                            pid, parent_pid, pane_id, tui_session_id, source_id)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+                        params![
+                            text_at(row, carried.column("observation_key")?, "observation key")?,
+                            session_id,
+                            int_at(row, carried.column("observed_ts")?, "observation timestamp")?,
+                            harness_id,
+                            cwd_id,
+                            row[carried.column("pid")?],
+                            row[carried.column("parent_pid")?],
+                            pane_id,
+                            tui_session_id,
+                            source_id,
+                        ],
+                    )?;
+                }
+                Ok(())
+            }
+            "agent_session_relation" => {
+                for row in &carried.rows {
+                    let from_session = self.session_id(&text_at(
+                        row,
+                        carried.column("from_session")?,
+                        "relation source session",
+                    )?)?;
+                    let to_session = self.session_id(&text_at(
+                        row,
+                        carried.column("to_session")?,
+                        "relation target session",
+                    )?)?;
+                    let kind_id = self.intern(
+                        "dict_session_relation_kind",
+                        &text_at(row, carried.column("kind")?, "relation kind")?,
+                    )?;
+                    let source_id = self.intern(
+                        "dict_observation_source",
+                        &text_at(row, carried.column("source")?, "relation source")?,
+                    )?;
+                    self.connection.execute(
+                        "INSERT OR IGNORE INTO agent_session_relation
+                           (relation_key, from_session, to_session, kind_id, source_id,
+                            observed_ts, matched_identity_key)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                        params![
+                            text_at(row, carried.column("relation_key")?, "relation key")?,
+                            from_session,
+                            to_session,
+                            kind_id,
+                            source_id,
+                            int_at(row, carried.column("observed_ts")?, "relation timestamp")?,
+                            row[carried.column("matched_identity_key")?],
+                        ],
+                    )?;
+                }
+                Ok(())
+            }
+            "agent_trace_span" => {
+                for row in &carried.rows {
+                    let session = text_at(row, carried.column("session")?, "trace session")?;
+                    let session_id = self.session_id(&session)?;
+                    let trace_id = self.intern(
+                        "dict_trace",
+                        &text_at(row, carried.column("trace")?, "trace name")?,
+                    )?;
+                    let attach_id = self.intern(
+                        "dict_attach",
+                        &text_at(row, carried.column("attach")?, "trace attach rule")?,
+                    )?;
+                    let attached_ts =
+                        int_at(row, carried.column("attached_ts")?, "trace timestamp")?;
+                    self.connection.execute(
+                        "INSERT OR IGNORE INTO agent_trace
+                           (trace_id, root_session_id, started_ts)
+                         VALUES (?1, ?2, ?3)",
+                        params![trace_id, session_id, attached_ts],
+                    )?;
+                    self.connection.execute(
+                        "INSERT OR REPLACE INTO agent_trace_span
+                           (session_id, trace_id, attach_id, attached_ts)
+                         VALUES (?1, ?2, ?3, ?4)",
+                        params![session_id, trace_id, attach_id, attached_ts],
+                    )?;
                 }
                 Ok(())
             }
@@ -2240,6 +2440,278 @@ impl Store {
             .optional()?)
     }
 
+    pub fn record_session_observation(&self, observation: &SessionObservation) -> Result<bool> {
+        let session_id = self.session_id(&observation.session_id)?;
+        let harness_id = observation
+            .harness
+            .as_deref()
+            .map(|value| self.intern("dict_harness", value))
+            .transpose()?;
+        let cwd_id = observation
+            .cwd
+            .as_deref()
+            .map(|value| self.intern("dict_cwd", value))
+            .transpose()?;
+        let pane_id = observation
+            .pane_id
+            .as_deref()
+            .map(|value| self.intern("dict_pane", value))
+            .transpose()?;
+        let tui_session_id = observation
+            .tui_session_id
+            .as_deref()
+            .map(|value| self.intern("dict_tui_session", value))
+            .transpose()?;
+        let source_id = self.intern("dict_observation_source", &observation.source)?;
+        Ok(self.connection.execute(
+            "INSERT OR IGNORE INTO agent_session_observation
+               (observation_key, session_id, observed_ts, harness_id, cwd_id,
+                pid, parent_pid, pane_id, tui_session_id, source_id)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+            params![
+                observation.observation_key,
+                session_id,
+                observation.observed_at_ms as i64,
+                harness_id,
+                cwd_id,
+                observation.pid.map(i64::from),
+                observation.parent_pid.map(i64::from),
+                pane_id,
+                tui_session_id,
+                source_id,
+            ],
+        )? > 0)
+    }
+
+    pub fn record_session_relation(&self, relation: &SessionRelation) -> Result<bool> {
+        self.connection
+            .execute_batch("SAVEPOINT session_relation")?;
+        let mut ambiguity = None;
+        let result = (|| {
+            let from_session = self.session_id(&relation.from_session)?;
+            let to_session = self.session_id(&relation.to_session)?;
+            let kind_id = self.intern("dict_session_relation_kind", relation.kind.as_str())?;
+            let source_id = self.intern("dict_observation_source", &relation.source)?;
+            let inserted = self.connection.execute(
+                "INSERT OR IGNORE INTO agent_session_relation
+                   (relation_key, from_session, to_session, kind_id, source_id,
+                    observed_ts, matched_identity_key)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                params![
+                    relation.relation_key,
+                    from_session,
+                    to_session,
+                    kind_id,
+                    source_id,
+                    relation.observed_at_ms as i64,
+                    relation.matched_identity_key,
+                ],
+            )? > 0;
+            if inserted {
+                if let Err(error) = self.rebuild_trace_projection() {
+                    if matches!(
+                        error.downcast_ref::<crate::_0_trace_identity::TraceJoinDiagnostic>(),
+                        Some(
+                            crate::_0_trace_identity::TraceJoinDiagnostic::AmbiguousRelation { .. }
+                        )
+                    ) {
+                        ambiguity = Some(error.to_string());
+                    } else {
+                        return Err(error);
+                    }
+                }
+            }
+            Ok(inserted)
+        })();
+        match result {
+            Ok(inserted) => {
+                self.connection.execute_batch("RELEASE session_relation")?;
+                if let Some(diagnostic) = ambiguity {
+                    tracing::warn!(
+                        diagnostic = %diagnostic,
+                        "session relation stored without merging an ambiguous trace component"
+                    );
+                }
+                Ok(inserted)
+            }
+            Err(error) => {
+                let _ = self
+                    .connection
+                    .execute_batch("ROLLBACK TO session_relation; RELEASE session_relation");
+                Err(error)
+            }
+        }
+    }
+
+    fn rebuild_trace_projection(&self) -> Result<()> {
+        let limits = TraceJoinLimits::default();
+        let observation_count: usize = self.connection.query_row(
+            "SELECT COUNT(*) FROM agent_session_observation",
+            [],
+            |row| row.get::<_, i64>(0).map(|count| count as usize),
+        )?;
+        if observation_count > limits.max_observations {
+            return Err(anyhow::Error::new(
+                crate::_0_trace_identity::TraceJoinDiagnostic::ObservationBudgetExceeded {
+                    limit: limits.max_observations,
+                    observed: observation_count,
+                },
+            ));
+        }
+        let relation_count: usize = self.connection.query_row(
+            "SELECT COUNT(*) FROM agent_session_relation",
+            [],
+            |row| row.get::<_, i64>(0).map(|count| count as usize),
+        )?;
+        if relation_count > limits.max_relations {
+            return Err(anyhow::Error::new(
+                crate::_0_trace_identity::TraceJoinDiagnostic::RelationBudgetExceeded {
+                    limit: limits.max_relations,
+                    observed: relation_count,
+                },
+            ));
+        }
+        let observations = {
+            let mut statement = self.connection.prepare(
+                "SELECT observation.observation_key, session.value, observation.observed_ts,
+                        harness.value, cwd.value, observation.pid, observation.parent_pid,
+                        pane.value, tui.value, source.value
+                   FROM agent_session_observation observation
+                   JOIN dict_session session ON session.id = observation.session_id
+                   LEFT JOIN dict_harness harness ON harness.id = observation.harness_id
+                   LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
+                   LEFT JOIN dict_pane pane ON pane.id = observation.pane_id
+                   LEFT JOIN dict_tui_session tui ON tui.id = observation.tui_session_id
+                   JOIN dict_observation_source source ON source.id = observation.source_id
+                  ORDER BY observation.observed_ts, observation.observation_id",
+            )?;
+            let rows = statement.query_map([], |row| {
+                Ok(SessionObservation {
+                    observation_key: row.get(0)?,
+                    session_id: row.get(1)?,
+                    observed_at_ms: row.get::<_, i64>(2)? as u64,
+                    harness: row.get(3)?,
+                    cwd: row.get(4)?,
+                    pid: row.get::<_, Option<i64>>(5)?.map(|value| value as u32),
+                    parent_pid: row.get::<_, Option<i64>>(6)?.map(|value| value as u32),
+                    pane_id: row.get(7)?,
+                    tui_session_id: row.get(8)?,
+                    source: row.get(9)?,
+                })
+            })?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let relations = {
+            let mut statement = self.connection.prepare(
+                "SELECT relation.relation_key, source.value, target.value, kind.value,
+                        origin.value, relation.observed_ts, relation.matched_identity_key
+                   FROM agent_session_relation relation
+                   JOIN dict_session source ON source.id = relation.from_session
+                   JOIN dict_session target ON target.id = relation.to_session
+                   JOIN dict_session_relation_kind kind ON kind.id = relation.kind_id
+                   JOIN dict_observation_source origin ON origin.id = relation.source_id
+                  ORDER BY relation.observed_ts, relation.relation_id",
+            )?;
+            let rows = statement.query_map([], |row| {
+                let kind: String = row.get(3)?;
+                Ok(SessionRelation {
+                    relation_key: row.get(0)?,
+                    from_session: row.get(1)?,
+                    to_session: row.get(2)?,
+                    kind: SessionRelationKind::from_str(&kind).ok_or_else(|| {
+                        rusqlite::Error::InvalidColumnType(
+                            3,
+                            "kind".into(),
+                            rusqlite::types::Type::Text,
+                        )
+                    })?,
+                    source: row.get(4)?,
+                    observed_at_ms: row.get::<_, i64>(5)? as u64,
+                    matched_identity_key: row.get(6)?,
+                })
+            })?;
+            rows.collect::<rusqlite::Result<Vec<_>>>()?
+        };
+        let traces =
+            derive_traces(&observations, &relations, limits).map_err(anyhow::Error::new)?;
+        let derived_attach = self.intern("dict_attach", "derived-session-relation")?;
+        for trace in traces.iter().filter(|trace| !trace.evidence.is_empty()) {
+            let mut existing = BTreeMap::new();
+            for session in &trace.sessions {
+                let attached: Option<(i64, i64)> = self
+                    .connection
+                    .query_row(
+                        "SELECT span.trace_id, trace.started_ts
+                           FROM agent_trace_span span
+                           JOIN dict_session member ON member.id = span.session_id
+                           JOIN agent_trace trace ON trace.trace_id = span.trace_id
+                          WHERE member.value = ?1",
+                        params![session],
+                        |row| Ok((row.get(0)?, row.get(1)?)),
+                    )
+                    .optional()?;
+                if let Some((trace_id, started_ts)) = attached {
+                    existing.entry(trace_id).or_insert(started_ts);
+                }
+            }
+            if existing.len() > 1 {
+                tracing::warn!(
+                    diagnostic = "conflicting-existing-trace-attachments",
+                    session_count = trace.sessions.len(),
+                    trace_count = existing.len(),
+                    "trace projection skipped a relation component with conflicting existing spans"
+                );
+                continue;
+            }
+            let trace_id = if let Some((&trace_id, _)) = existing.iter().next() {
+                trace_id
+            } else {
+                self.intern("dict_trace", &format!("trace-{}", trace.root_session))?
+            };
+            let root_id = self.session_id(&trace.root_session)?;
+            let started_ts = observations
+                .iter()
+                .filter(|observation| trace.sessions.contains(&observation.session_id))
+                .map(|observation| observation.observed_at_ms as i64)
+                .min()
+                .unwrap_or(0);
+            self.connection.execute(
+                "INSERT OR IGNORE INTO agent_trace (trace_id, root_session_id, started_ts)
+                 VALUES (?1, ?2, ?3)",
+                params![trace_id, root_id, started_ts],
+            )?;
+            for session in &trace.sessions {
+                let session_id = self.session_id(session)?;
+                let attached_ts = observations
+                    .iter()
+                    .filter(|observation| observation.session_id == *session)
+                    .map(|observation| observation.observed_at_ms as i64)
+                    .min()
+                    .or_else(|| {
+                        trace
+                            .evidence
+                            .iter()
+                            .filter(|relation| {
+                                relation.from_session == *session || relation.to_session == *session
+                            })
+                            .map(|relation| relation.observed_at_ms as i64)
+                            .min()
+                    })
+                    .unwrap_or(started_ts);
+                self.connection.execute(
+                    "INSERT INTO agent_trace_span
+                       (session_id, trace_id, attach_id, attached_ts)
+                     VALUES (?1, ?2, ?3, ?4)
+                     ON CONFLICT(session_id) DO UPDATE SET
+                       trace_id = excluded.trace_id,
+                       attach_id = excluded.attach_id",
+                    params![session_id, trace_id, derived_attach, attached_ts],
+                )?;
+            }
+        }
+        Ok(())
+    }
+
     /// Put `session` under `trace`, recording which rule decided it. The first
     /// span of a trace becomes its root. A session already attached stays put:
     /// re-attaching is how two arcs would silently merge.
@@ -2257,6 +2729,18 @@ impl Store {
              VALUES (?1, ?2, ?3, ?4)",
             params![session_id, trace_id, attach_id, ts as i64],
         )?;
+        self.record_session_observation(&SessionObservation {
+            observation_key: format!("trace-attach:{session}:{ts}"),
+            session_id: session.to_owned(),
+            observed_at_ms: ts,
+            harness: None,
+            cwd: None,
+            pid: None,
+            parent_pid: None,
+            pane_id: None,
+            tui_session_id: None,
+            source: "trace-attach".into(),
+        })?;
         Ok(())
     }
 
@@ -2326,6 +2810,32 @@ impl Store {
                 params![event.event_key],
                 |row| row.get(0),
             )?;
+            let mut observed_sessions = BTreeMap::new();
+            for session in [
+                Some(event.lane.as_str()),
+                event.session.as_deref(),
+                event.from_lane.as_deref(),
+                event.to_lane.as_deref(),
+            ]
+            .into_iter()
+            .flatten()
+            {
+                observed_sessions.insert(session, ());
+            }
+            for session in observed_sessions.keys() {
+                self.record_session_observation(&SessionObservation {
+                    observation_key: format!("trace-event:{}:{session}", event.event_key),
+                    session_id: (*session).to_owned(),
+                    observed_at_ms: event.created_ts,
+                    harness: None,
+                    cwd: None,
+                    pid: None,
+                    parent_pid: None,
+                    pane_id: None,
+                    tui_session_id: None,
+                    source: "trace-event".into(),
+                })?;
+            }
             self.prune_trace_events_in_transaction(TRACE_EVENT_RETENTION_LIMIT)?;
             Ok(event_id)
         })();
@@ -2960,6 +3470,18 @@ impl Store {
                     tmux_session
                 ],
             )?;
+            self.record_session_observation(&SessionObservation {
+                observation_key: format!("live-status:{session}:{ts}"),
+                session_id: session.to_owned(),
+                observed_at_ms: ts,
+                harness: None,
+                cwd: None,
+                pid: pid.and_then(|value| u32::try_from(value).ok()),
+                parent_pid: None,
+                pane_id: tmux_pane.map(str::to_owned),
+                tui_session_id: None,
+                source: "live-status".into(),
+            })?;
             let unchanged = open
                 .as_ref()
                 .map(|(_, st, pg, pn)| *st == status_id && *pg == pid && *pn == pane_id)
@@ -3715,6 +4237,29 @@ pub fn sync_session_with(
             .map(|duration| duration.as_millis() as u64)
             .unwrap_or(0),
     );
+    store.record_session_observation(&SessionObservation {
+        observation_key: format!("transcript-sync:{}:{observed_ts}", session.session_id),
+        session_id: session.session_id.clone(),
+        observed_at_ms: observed_ts,
+        harness: Some(session.harness.as_str().to_owned()),
+        cwd: session.cwd.clone(),
+        pid: pid.and_then(|value| u32::try_from(value).ok()),
+        parent_pid: None,
+        pane_id: session.tmux.clone(),
+        tui_session_id: None,
+        source: "transcript-sync".into(),
+    })?;
+    if let Some(parent) = &session.parent {
+        store.record_session_relation(&SessionRelation {
+            relation_key: format!("parent-child:{parent}:{}", session.session_id),
+            from_session: parent.clone(),
+            to_session: session.session_id.clone(),
+            kind: SessionRelationKind::ParentChild,
+            source: "transcript-session-metadata".into(),
+            observed_at_ms: observed_ts,
+            matched_identity_key: None,
+        })?;
+    }
     // A transcript refresh supplies file facts. Explicit process/pane
     // observations own liveness once present; absent fields cannot erase them.
     if pid.is_some() || session.tmux.is_some() || store.live_row(&session.session_id)?.is_none() {
@@ -3742,6 +4287,16 @@ pub fn sync_session_with(
 
 /// The byte-offset transcript projection, which is every file-backed harness.
 pub fn project_transcript(store: &Store, session: &SessionRef, from: u64) -> Result<Ingested> {
+    project_transcript_with(store, session, from, |_, _, _| Ok(()))
+}
+
+/// The pieces an adapter needs to write turns and facts of its own.
+pub fn project_transcript_with(
+    store: &Store,
+    session: &SessionRef,
+    from: u64,
+    mut on_record: impl FnMut(&Store, &SessionRef, &serde_json::Value) -> Result<()>,
+) -> Result<Ingested> {
     let mut file = std::fs::File::open(&session.path)
         .map_err(|error| anyhow::anyhow!("open {}: {error}", session.path.display()))?;
     let result = crate::tail::read_complete_lines(&mut file, from)?;
@@ -3770,6 +4325,7 @@ pub fn project_transcript(store: &Store, session: &SessionRef, from: u64) -> Res
     for line in &result.lines {
         project_line(store, session, line, &mut walk)?;
         let value: serde_json::Value = serde_json::from_slice(&line.bytes).unwrap_or_default();
+        on_record(store, session, &value)?;
         let record_id = value
             .get("uuid")
             .and_then(serde_json::Value::as_str)
@@ -4591,6 +5147,49 @@ const TURN_SOURCE_SCHEMA: &str = "
 ALTER TABLE agent_turn ADD COLUMN source_class TEXT NOT NULL DEFAULT 'unknown';
 ";
 
+const SESSION_IDENTITY_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS dict_observation_source (
+  id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS dict_session_relation_kind (
+  id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS dict_tui_session (
+  id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS agent_session_observation (
+  observation_id INTEGER PRIMARY KEY,
+  observation_key TEXT NOT NULL UNIQUE,
+  session_id INTEGER NOT NULL REFERENCES dict_session(id),
+  observed_ts INTEGER NOT NULL,
+  harness_id INTEGER REFERENCES dict_harness(id),
+  cwd_id INTEGER REFERENCES dict_cwd(id),
+  pid INTEGER,
+  parent_pid INTEGER,
+  pane_id INTEGER REFERENCES dict_pane(id),
+  tui_session_id INTEGER REFERENCES dict_tui_session(id),
+  source_id INTEGER NOT NULL REFERENCES dict_observation_source(id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_observation_session_time
+  ON agent_session_observation(session_id, observed_ts);
+CREATE INDEX IF NOT EXISTS idx_session_observation_source_time
+  ON agent_session_observation(source_id, observed_ts);
+CREATE TABLE IF NOT EXISTS agent_session_relation (
+  relation_id INTEGER PRIMARY KEY,
+  relation_key TEXT NOT NULL UNIQUE,
+  from_session INTEGER NOT NULL REFERENCES dict_session(id),
+  to_session INTEGER NOT NULL REFERENCES dict_session(id),
+  kind_id INTEGER NOT NULL REFERENCES dict_session_relation_kind(id),
+  source_id INTEGER NOT NULL REFERENCES dict_observation_source(id),
+  observed_ts INTEGER NOT NULL,
+  matched_identity_key TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_session_relation_from ON agent_session_relation(from_session);
+CREATE INDEX IF NOT EXISTS idx_session_relation_to ON agent_session_relation(to_session);
+CREATE INDEX IF NOT EXISTS idx_session_relation_source_time
+  ON agent_session_relation(source_id, observed_ts);
+";
+
 const SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS dict_session (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 CREATE TABLE IF NOT EXISTS dict_harness (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
@@ -4765,6 +5364,50 @@ CREATE TABLE IF NOT EXISTS agent_trace_span (
   attached_ts INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_span_trace ON agent_trace_span(trace_id);
+
+CREATE TABLE IF NOT EXISTS dict_observation_source (
+  id INTEGER PRIMARY KEY,
+  value TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS dict_session_relation_kind (
+  id INTEGER PRIMARY KEY,
+  value TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS dict_tui_session (
+  id INTEGER PRIMARY KEY,
+  value TEXT NOT NULL UNIQUE
+);
+CREATE TABLE IF NOT EXISTS agent_session_observation (
+  observation_id INTEGER PRIMARY KEY,
+  observation_key TEXT NOT NULL UNIQUE,
+  session_id INTEGER NOT NULL REFERENCES dict_session(id),
+  observed_ts INTEGER NOT NULL,
+  harness_id INTEGER REFERENCES dict_harness(id),
+  cwd_id INTEGER REFERENCES dict_cwd(id),
+  pid INTEGER,
+  parent_pid INTEGER,
+  pane_id INTEGER REFERENCES dict_pane(id),
+  tui_session_id INTEGER REFERENCES dict_tui_session(id),
+  source_id INTEGER NOT NULL REFERENCES dict_observation_source(id)
+);
+CREATE INDEX IF NOT EXISTS idx_session_observation_session_time
+  ON agent_session_observation(session_id, observed_ts);
+CREATE INDEX IF NOT EXISTS idx_session_observation_source_time
+  ON agent_session_observation(source_id, observed_ts);
+CREATE TABLE IF NOT EXISTS agent_session_relation (
+  relation_id INTEGER PRIMARY KEY,
+  relation_key TEXT NOT NULL UNIQUE,
+  from_session INTEGER NOT NULL REFERENCES dict_session(id),
+  to_session INTEGER NOT NULL REFERENCES dict_session(id),
+  kind_id INTEGER NOT NULL REFERENCES dict_session_relation_kind(id),
+  source_id INTEGER NOT NULL REFERENCES dict_observation_source(id),
+  observed_ts INTEGER NOT NULL,
+  matched_identity_key TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_session_relation_from ON agent_session_relation(from_session);
+CREATE INDEX IF NOT EXISTS idx_session_relation_to ON agent_session_relation(to_session);
+CREATE INDEX IF NOT EXISTS idx_session_relation_source_time
+  ON agent_session_relation(source_id, observed_ts);
 
 CREATE TABLE IF NOT EXISTS agent_lane (
   spawn_id INTEGER PRIMARY KEY,
@@ -5229,8 +5872,8 @@ mod tests {
     use rusqlite::{params, Connection};
 
     use super::{
-        project_transcript, sync_session_with, Store, TraceEvent as LaneTraceEvent, BUSY_TIMEOUT,
-        SCHEMA, SCHEMA_VERSION, USER_AUTHORED,
+        project_transcript, sync_session_with, SessionRelation, SessionRelationKind, Store,
+        TraceEvent as LaneTraceEvent, BUSY_TIMEOUT, SCHEMA, SCHEMA_VERSION, USER_AUTHORED,
     };
 
     static CURSOR_SQL: AtomicUsize = AtomicUsize::new(0);
@@ -5785,7 +6428,8 @@ mod tests {
         store
             .connection
             .execute_batch(
-                "DROP VIEW IF EXISTS v_turn_cwd;
+                "DROP VIEW IF EXISTS v_session_project;
+                 DROP VIEW IF EXISTS v_turn_cwd;
                  ALTER TABLE agent_turn RENAME TO agent_turn_v26;
                  CREATE TABLE agent_turn (
                    session_id INTEGER NOT NULL,
@@ -6378,6 +7022,138 @@ mod tests {
         assert!(store.trace_sessions("trace-two").unwrap().is_empty());
         drop(store);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn continued_in_relation_preserves_trace_after_writer_exit() {
+        let (db_path, store) = fresh_store("continued-in-trace");
+        store
+            .attach_trace("session-before", "trace-before", "native-tui-session", 10)
+            .unwrap();
+        let relation = SessionRelation {
+            relation_key: "claude-continued-in:session-before:session-after".into(),
+            from_session: "session-before".into(),
+            to_session: "session-after".into(),
+            kind: SessionRelationKind::ContinuedIn,
+            source: "claude-transcript".into(),
+            observed_at_ms: 1,
+            matched_identity_key: None,
+        };
+        assert!(store.record_session_relation(&relation).unwrap());
+
+        let relation_count: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_session_relation", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(relation_count, 1);
+        assert!(!store.record_session_relation(&relation).unwrap());
+        let retried_count: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_session_relation", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(
+            retried_count, 1,
+            "re-sync keeps one producer-keyed relation"
+        );
+        assert_eq!(
+            store.trace_of("session-after").unwrap().as_deref(),
+            Some("trace-before"),
+            "a durable continued-in relation must survive the writer process"
+        );
+        drop(store);
+        let reopened = Store::open(db_path.clone()).unwrap();
+        assert_eq!(
+            reopened.trace_of("session-after").unwrap().as_deref(),
+            Some("trace-before"),
+            "the materialized trace survives closing and reopening the store"
+        );
+        reopened.rebuild().unwrap();
+        assert_eq!(
+            reopened.trace_of("session-after").unwrap().as_deref(),
+            Some("trace-before"),
+            "the stored relation and compatibility span survive a full rebuild"
+        );
+        drop(reopened);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn v37_migration_seeds_observations_from_legacy_trace_spans() {
+        let (db_path, store) = fresh_store("v37-trace-observations");
+        store
+            .attach_trace("legacy-session", "trace-legacy", "lane-create", 42)
+            .unwrap();
+        store
+            .connection
+            .execute_batch("PRAGMA user_version = 37;")
+            .unwrap();
+        drop(store);
+
+        let migrated = Store::open(db_path.clone()).unwrap();
+        assert_eq!(migrated.schema_version().unwrap(), SCHEMA_VERSION);
+        let count: i64 = migrated
+            .connection
+            .query_row(
+                "SELECT COUNT(*) FROM agent_session_observation observation
+                   JOIN dict_observation_source source ON source.id = observation.source_id
+                  WHERE source.value = 'legacy-agent-trace-span'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        drop(migrated);
+        let _ = std::fs::remove_file(&db_path);
+    }
+
+    #[test]
+    fn ambiguous_continuation_is_stored_without_merging_trace_spans() {
+        let (db_path, store) = fresh_store("ambiguous-session-relation");
+        store
+            .attach_trace("old-a", "trace-a", "native-tui-session", 10)
+            .unwrap();
+        store
+            .attach_trace("old-b", "trace-b", "native-tui-session", 11)
+            .unwrap();
+        store
+            .record_session_relation(&SessionRelation {
+                relation_key: "continued-in:old-a:new".into(),
+                from_session: "old-a".into(),
+                to_session: "new".into(),
+                kind: SessionRelationKind::ContinuedIn,
+                source: "test".into(),
+                observed_at_ms: 12,
+                matched_identity_key: None,
+            })
+            .unwrap();
+        store
+            .record_session_relation(&SessionRelation {
+                relation_key: "continued-in:old-b:new".into(),
+                from_session: "old-b".into(),
+                to_session: "new".into(),
+                kind: SessionRelationKind::ContinuedIn,
+                source: "test".into(),
+                observed_at_ms: 13,
+                matched_identity_key: None,
+            })
+            .unwrap();
+
+        let relation_count: i64 = store
+            .connection
+            .query_row("SELECT COUNT(*) FROM agent_session_relation", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(relation_count, 2, "ambiguous evidence remains durable");
+        assert_eq!(store.trace_of("old-a").unwrap().as_deref(), Some("trace-a"));
+        assert_eq!(store.trace_of("old-b").unwrap().as_deref(), Some("trace-b"));
+        assert_eq!(store.trace_of("new").unwrap().as_deref(), Some("trace-a"));
+        drop(store);
+        let _ = std::fs::remove_file(&db_path);
     }
 
     /// The brief on disk is edited after the lane runs; the stored copy is the

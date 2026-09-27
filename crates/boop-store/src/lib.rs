@@ -8,6 +8,8 @@
 
 #[cfg(feature = "agent-read")]
 pub mod _0_session_graph;
+#[path = "0_trace_identity.rs"]
+pub mod _0_trace_identity;
 #[cfg(feature = "agent-read")]
 pub mod activity;
 pub mod bus;
@@ -41,6 +43,10 @@ pub use _0_session_graph::{
     AgentSessionGraphQuery, AgentSessionGraphRuntime, AgentSessionIdentity, AgentSessionNode,
     AgentShellNode, LoadAgentSessionGraph, SessionGraphReader, AGENT_SESSION_GRAPH_SCHEMA_VERSION,
     AGENT_WATERFALL_SQL,
+};
+pub use _0_trace_identity::{
+    derive_traces, DerivedTrace, SessionObservation, SessionRelation, SessionRelationKind,
+    TraceJoinDiagnostic, TraceJoinLimits,
 };
 #[cfg(feature = "agent-read")]
 pub use activity::{ActivityCount, ActivityScope, ToolResultAvailability};
