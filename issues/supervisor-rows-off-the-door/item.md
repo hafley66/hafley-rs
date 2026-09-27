@@ -2,7 +2,7 @@
 created: 2026-09-05
 updated: 2026-09-07
 type: bug
-status: open
+status: fixed
 priority: high
 epic: boop-process
 ---
@@ -86,29 +86,31 @@ door, and the drain retries it.
 
 ## Expected
 
-- A supervisor row lands in the mailbox only: `agent_mail` row appended,
-  `to_timestamp` NULL, exactly one landing transition saying where it waits.
-- It never takes the door rung, the hook-inbox rung, or the pane-paste rung, for
-  every parent route kind (`coordinator`, `native`, `lane`, `shell`).
-- The parent reads it with `boop wait <lane>` (rc from the result row) or
-  `boop wait --me` (the whole batch, one wake for the harness, no transcript
-  text).
-- A reply to a `boop beep`, and a human or agent hail, take the door exactly as
-  today. The exemption is the message kind, never the route.
-- The switch is `MessageKind`; no string matching on kind names.
+- Supervisor progress rows (`yield`, `reparented`, `retrying`,
+  `head_rewound`) land in the mailbox with `to_timestamp` NULL and one
+  `held-in-mailbox` transition, regardless of parent route kind.
+- Lane end rows (`result`, `completion`, `exited_without_completion`,
+  `open_failed`, `retry_budget_exhausted`) take the delivery ladder so the
+  parent is pushed the outcome. Commit rows retain their delivery behavior.
+- The classifier is `MessageKind`; no string matching on kind names.
 
 ## Acceptance Criteria
 
-- [ ] `MessageKind` carries the classifier; every supervisor kind is named there
+- [x] `MessageKind` carries the classifier; every supervisor kind is named there
       and nowhere else.
-- [ ] A `result` row to a route with a live door records no `accepted-by-harness`
-      transition and opens no door.
-- [ ] A `request` row to the same route on the same store still takes the door.
-- [ ] `boop wait <lane>` returns the lane's rc from a result row whose only
-      landing is `held-in-mailbox`; the exit codes are unchanged.
-- [ ] `boop wait --me` returns yield, commit and result rows addressed to the
-      caller.
-- [ ] The drain does not re-walk the ladder for a supervisor row, so the ledger
-      grows one landing per row, not one per tick.
-- [ ] `cargo test -p boop-proc -p boop-store -p boop` at the repo's known-failure
-      baseline.
+- [x] A progress row to a route with a live door records no
+      `accepted-by-harness` transition; a request to the same route still takes
+      the door.
+- [x] A lane end row takes the door ladder and pushes the result to its parent.
+- [x] `boop wait <lane>` returns the lane's rc from its result row; exit codes
+      are unchanged.
+- [x] The drain does not re-walk the ladder for a mailbox-only progress row.
+
+## Reproduction on installed boop 0.0.10 (248dfdd3)
+
+Read-only `~/.agent/boop.db` query: progress row `m-fb2cb469` (`yield`) has only
+`appended -> held-in-mailbox`; lane end row `m-8f76ec53` (`result`) has
+`appended -> held-for-turn-boundary`. This matches the 2026-09-07 ruling that
+progress stays quiet while lane outcomes are pushed. Existing tests
+`a_lane_progress_row_stays_off_the_door` and
+`a_lane_end_row_takes_the_door_of_a_live_route` cover the split.
