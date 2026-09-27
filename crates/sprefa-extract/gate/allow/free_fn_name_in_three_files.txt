@@ -1,21 +1,10 @@
 crates/hafley_scm/src/cst.rs	fn::parse	1
 crates/hafley_scm/src/lang/rust/10_module_resolution_rows.rs	fn::collect	1
 crates/hafley_scm/src/lang/rust/10_module_resolution_rows.rs	fn::principal_ty	1
-crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::def_span	1
 crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::df_edge	1
-crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::df_push	1
-crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::project_df	1
-crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::syn_span	1
 crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::tree_text	1
-crates/hafley_scm/src/lang/rust/12_receiver_rows.rs	fn::syn_span	1
-crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::syn_span	1
 crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tree_text	1
-crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tsi_application	1
-crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tsi_callable	1
-crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tsi_declaration	1
-crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tsi_generics	1
 crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tsi_primitive_id	1
-crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tsi_type_id	1
 crates/hafley_scm/src/lang/rust/17_tree_entity_rows.rs	fn::collect_items	1
 crates/hafley_scm/src/lang/rust/17_tree_entity_rows.rs	fn::named_children	1
 crates/hafley_scm/src/lang/rust/17_tree_entity_rows.rs	fn::node_text	1
@@ -77,8 +66,6 @@ crates/hafley_scm/src/read/lang/go.rs	fn::scip_call_target	1
 crates/hafley_scm/src/read/lang/go_checker.rs	fn::answer	2
 crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::last_segment_text	1
 crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_application	1
-crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_callable	1
-crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_declaration	1
 crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_generics	1
 crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_primitive_id	1
 crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_rows	1
@@ -86,7 +73,6 @@ crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_type_alias	1
 crates/hafley_scm/src/read/lang/go_type_edges.rs	fn::tsi_type_id	1
 crates/hafley_scm/src/read/lang/kotlin.rs	fn::call_drops	1
 crates/hafley_scm/src/read/lang/kotlin.rs	fn::clean_block_comment	1
-crates/hafley_scm/src/read/lang/kotlin.rs	fn::def_span	1
 crates/hafley_scm/src/read/lang/kotlin.rs	fn::df_edge	1
 crates/hafley_scm/src/read/lang/kotlin.rs	fn::df_push	1
 crates/hafley_scm/src/read/lang/kotlin.rs	fn::fn_sigs	1
@@ -99,7 +85,6 @@ crates/hafley_scm/src/read/lang/kotlin_receivers.rs	fn::is_type_node	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::last_segment_text	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_application	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_class	1
-crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_declaration	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_generics	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_primitive_id	1
 crates/hafley_scm/src/read/lang/kotlin_type_edges.rs	fn::tsi_rows	1
@@ -127,7 +112,6 @@ crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::resolve_type_dst	1
 crates/hafley_scm/src/read/lang/python/_0_source.rs	fn::scip_call_target	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::last_segment_text	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_application	1
-crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_callable	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_class	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_generics	1
 crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_primitive_id	1
@@ -137,11 +121,9 @@ crates/hafley_scm/src/read/lang/python/_1_type_edges.rs	fn::tsi_type_id	1
 crates/hafley_scm/src/read/lang/rust/1_type.rs	fn::project_types	1
 crates/hafley_scm/src/read/lang/rust/1_type.rs	fn::resolve_type_dst	1
 crates/hafley_scm/src/read/lang/rust/2_call.rs	fn::call_drops	1
-crates/hafley_scm/src/read/lang/rust/2_call.rs	fn::def_span	1
 crates/hafley_scm/src/read/lang/rust/2_call.rs	fn::project_call	1
 crates/hafley_scm/src/read/lang/rust/2_call.rs	fn::scip_call_target	1
 crates/hafley_scm/src/read/lang/rust/3_df.rs	fn::project_df	1
-crates/hafley_scm/src/read/lang/rust/lib.rs	fn::syn_span	1
 crates/hafley_scm/src/read/lang/rust_checker.rs	fn::answer	2
 crates/hafley_scm/src/read/lang/rust_checker_ra.rs	fn::answer	1
 crates/hafley_scm/src/read/lang/rust_modules.rs	fn::named_children	1
@@ -166,7 +148,6 @@ crates/hafley_scm/src/read/lang/ts_checker.rs	fn::answer	2
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::collect	1
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::to_span	1
 crates/hafley_scm/src/read/tsi/ingest.rs	fn::ingest	1
-crates/hafley_scm/src/span.rs	fn::def_span	1
 crates/hafley_scm/src/span.rs	fn::node_text	1
 crates/ryi/src/gen/client_auto.rs	fn::main	1
 crates/ryi/src/gen/client_auto.rs	fn::run	1
