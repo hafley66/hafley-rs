@@ -607,7 +607,7 @@ fn validated_moves(
 
 /// The destination does not exist yet, so only its deepest existing ancestor can
 /// be canonicalized; the tail is re-appended so root-relative stripping still holds.
-fn canonical_unborn(path: &Path) -> PathBuf {
+pub(crate) fn canonical_unborn(path: &Path) -> PathBuf {
     let path = normalize(path);
     let mut tail = Vec::new();
     let mut probe = path.as_path();

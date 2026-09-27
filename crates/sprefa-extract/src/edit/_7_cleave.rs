@@ -15,9 +15,9 @@ use sprefa_extract::move_stage::{
     state_root, Mirror, VerifyJournal,
 };
 use sprefa_extract::{
-    cleave_for, directory_path, directory_source, dispatch, flatten_each, normalize,
-    replace_action, resolve_project, scm_facts, Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms,
-    ResolveRequest, Respell, ScipMode, ScipRecords, Span,
+    cleave_for, directory_path, directory_source, dispatch, flatten_each, replace_action,
+    resolve_project, scm_facts, Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms, ResolveRequest,
+    Respell, ScipMode, ScipRecords, Span,
 };
 
 const PRODUCER: &str = "extract-cleave";
@@ -701,8 +701,11 @@ impl Plan {
     ) -> Result<Self, String> {
         let root = cx.root().to_path_buf();
         let (src, item) = split_target(target)?;
-        let src = within_root(&root, &anchor_file_in(&cx, &src)?)?;
-        let dest = within_root(&root, &canonical_unborn(&absolute(dest)?))?;
+        let src = super::source_move::within_root(&root, &anchor_file_in(&cx, &src)?)?;
+        let dest = super::source_move::within_root(
+            &root,
+            &super::source_move::canonical_unborn(&super::source_move::absolute(dest)?),
+        )?;
         if !cx.contains(&src) {
             return Err(format!("cleave source is outside the corpus: {src}"));
         }
@@ -2558,7 +2561,7 @@ fn split_target(target: &str) -> Result<(PathBuf, String), String> {
 fn plan_root(requested: Option<&PathBuf>, src: &Path) -> Result<PathBuf, String> {
     let root = match requested {
         Some(root) => {
-            let root = absolute(root)?;
+            let root = super::source_move::absolute(root)?;
             if !root.is_dir() {
                 return Err(format!("--root is not a directory: {}", root.display()));
             }
@@ -2578,7 +2581,7 @@ fn plan_root(requested: Option<&PathBuf>, src: &Path) -> Result<PathBuf, String>
 
 /// SRC as `anchor_file` finds it, or a file an earlier batch row created.
 fn anchor_file_in(cx: &MoveCx, path: &Path) -> Result<PathBuf, String> {
-    let unborn = canonical_unborn(&absolute(path)?);
+    let unborn = super::source_move::canonical_unborn(&super::source_move::absolute(path)?);
     match cx
         .rel(&unborn)
         .is_some_and(|rel| cx.overlaid().contains_key(&rel))
@@ -2589,48 +2592,12 @@ fn anchor_file_in(cx: &MoveCx, path: &Path) -> Result<PathBuf, String> {
 }
 
 fn anchor_file(path: &Path) -> Result<PathBuf, String> {
-    let path = absolute(path)?;
+    let path = super::source_move::absolute(path)?;
     if !path.is_file() {
         return Err(format!("cleave source is not a file: {}", path.display()));
     }
     path.canonicalize()
         .map_err(|error| format!("canonicalize {}: {error}", path.display()))
-}
-
-fn absolute(path: &Path) -> Result<PathBuf, String> {
-    if path.is_absolute() {
-        return Ok(normalize(path));
-    }
-    let cwd = crate::ops::request_root();
-    Ok(normalize(&cwd.join(path)))
-}
-
-/// DEST need not exist yet, so only its deepest existing ancestor canonicalizes;
-/// the tail is re-appended so root-relative stripping still holds.
-fn canonical_unborn(path: &Path) -> PathBuf {
-    let path = normalize(path);
-    let mut tail = Vec::new();
-    let mut probe = path.as_path();
-    loop {
-        if let Ok(real) = probe.canonicalize() {
-            let mut out = real;
-            for part in tail.iter().rev() {
-                out.push(part);
-            }
-            return out;
-        }
-        let (Some(parent), Some(name)) = (probe.parent(), probe.file_name()) else {
-            return path;
-        };
-        tail.push(name.to_os_string());
-        probe = parent;
-    }
-}
-
-fn within_root(root: &Path, path: &Path) -> Result<String, String> {
-    path.strip_prefix(root)
-        .map(|relative| relative.to_string_lossy().replace('\\', "/"))
-        .map_err(|_| format!("{} is outside root {}", path.display(), root.display()))
 }
 
 /// One package as a cleave judges it: directory, name, the ident a path spells
