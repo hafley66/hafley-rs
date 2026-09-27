@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-26
 type: feature
-status: deferred
+status: needs-decision
 priority: normal
 epic: ryi-fast-tier
 related: ['@local-binding-inference', '@extract-graph-verb', '@kind-vocab-constraint']
@@ -96,3 +96,9 @@ relation belongs to before writing either.
 - [ ] the fixpoint terminates and the termination is asserted, not assumed
 - [ ] the split agrees with `--family scip` over the same corpus wherever scip has an answer
 - [ ] the rules live on the side `AGENTS.md:19-30` assigns them, and the issue records which
+
+## Repro receipt
+
+2026-09-26: current `ryii fast` leaves both `String.contains` and `Vec.contains` unresolved with reason `inferred` in a two-parameter fixture.
+
+Decision: add the initializer relation in this producer queue, or implement the recursive rules in dl8 as the card specifies?
