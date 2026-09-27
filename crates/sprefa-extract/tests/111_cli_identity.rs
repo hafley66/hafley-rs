@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn extract(args: &[&str]) -> std::process::Output {
-    // stderr identity below needs a clock-free stream.
+    // stderr identity below needs a clock-free stream; default is info (src/trace.rs:580).
     Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .env("RUST_LOG", "off")
@@ -36,7 +36,6 @@ fn help_names_the_build_and_mode_aliases() {
     assert!(help.contains(&format!("datetime: {}", ryi_proto::BUILD_DATETIME)));
     assert!(help.contains("  fast "));
     assert!(help.contains("  slow "));
-    assert!(help.contains("default warn"));
     assert!(help.contains("sprefa_extract=info,hafley_scm=info"));
     assert!(help.contains("HAFLEY_LOG_FORMAT"));
 }

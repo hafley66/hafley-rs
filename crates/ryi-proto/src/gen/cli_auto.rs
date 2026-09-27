@@ -14,7 +14,7 @@ use crate::ops_auto::TrailArgs;
 use crate::ops_auto::WatchArgs;
 
 #[derive(clap::Parser, Debug)]
-#[command(name = "ryi", version, about = "Source files -> flat graph facts (JSONL on stdout, or --sqlite)", after_help = concat!("Logging: RUST_LOG (default warn; set sprefa_extract=info,hafley_scm=info for span timings), HAFLEY_LOG_FORMAT=json|text\nSQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.\nBuild: git hash: ", env!("SPREFA_BUILD_GIT_HASH"), ", datetime: ", env!("SPREFA_BUILD_DATETIME"), ""), args_conflicts_with_subcommands = true, subcommand_negates_reqs = true, disable_help_subcommand = true)]
+#[command(name = "ryi", version, about = "Source files -> flat graph facts (JSONL on stdout, or --sqlite)", after_help = concat!("Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nSQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.\nBuild: git hash: ", env!("SPREFA_BUILD_GIT_HASH"), ", datetime: ", env!("SPREFA_BUILD_DATETIME"), ""), args_conflicts_with_subcommands = true, subcommand_negates_reqs = true, disable_help_subcommand = true)]
 pub struct Ryi {
   #[command(subcommand)]
   pub cmd: Option<Cmd>,#[command(flatten)]

@@ -142,7 +142,7 @@ fn broken_pipe_exits_0_silently() {
     std::fs::write(&file, body).unwrap();
 
     // This asserts stderr is silent on EPIPE, so it opts out of the
-    // INFO spans require an explicit RUST_LOG override.
+    // sprefa_extract=info default (src/trace.rs:580).
     let mut child = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg(file.to_str().unwrap())
         .env("RUST_LOG", "off")

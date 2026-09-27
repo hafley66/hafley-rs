@@ -48,6 +48,6 @@ Options:
   -h, --help                 Print help
   -V, --version              Print version
 
-Logging: RUST_LOG (default warn; set sprefa_extract=info,hafley_scm=info for span timings), HAFLEY_LOG_FORMAT=json|text
+Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text
 SQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.
-Build: git hash: 7174f603bac5, datetime: 2026-09-26T04:51:41Z
+Build: git hash: a467904e85eb, datetime: 2026-09-27T01:47:16Z

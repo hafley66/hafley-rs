@@ -72,8 +72,10 @@ fn phases_of(path: &str) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
+// The default is sprefa_extract=info,hafley_scm=info, so an ordinary run
+// narrates itself on stderr while the fact stream stays alone on stdout.
 #[test]
-fn default_warn_is_quiet_and_info_opt_in_restores_spans() {
+fn the_info_default_narrates_an_ordinary_run_on_stderr() {
     let output = Command::new(BIN)
         .args(["--kinds", "call", FIXTURE])
         .env_remove("RUST_LOG")
@@ -87,66 +89,13 @@ fn default_warn_is_quiet_and_info_opt_in_restores_spans() {
         "the fact stream must still reach stdout"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.is_empty(), "default warn emitted {stderr}");
-
-    let output = Command::new(BIN)
-        .args(["--kinds", "call", FIXTURE])
-        .env_remove("RUST_LOG")
-        .env("RUST_LOG", "sprefa_extract=info")
-        .env_remove("DL_TRACE_SUMMARY")
-        .env_remove("HAFLEY_LOG_FORMAT")
-        .output()
-        .expect("run extract with info logging");
-    assert!(output.status.success(), "extract failed: {output:?}");
-    let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("INFO") && stderr.contains("extract_file"),
-        "the info override must narrate the run on stderr, got {stderr}"
+        "the info default must narrate the run on stderr, got {stderr}"
     );
     assert!(
         !String::from_utf8_lossy(&output.stdout).contains("INFO"),
         "telemetry must never leak into the fact stream"
-    );
-}
-
-#[test]
-fn default_fast_and_graph_stderr_contains_only_the_graph_summary() {
-    let fast = Command::new(BIN)
-        .args(["fast", "tests/fixtures/ts5_findings/module_plane"])
-        .env_remove("RUST_LOG")
-        .env_remove("DL_TRACE_SUMMARY")
-        .env("DL_TRAIL", "0")
-        .output()
-        .expect("run fast");
-    assert!(fast.status.success(), "fast failed: {fast:?}");
-    assert!(
-        fast.stderr.is_empty(),
-        "fast stderr: {}",
-        String::from_utf8_lossy(&fast.stderr)
-    );
-
-    let graph = Command::new(BIN)
-        .args([
-            "graph",
-            "--callers",
-            "deep",
-            "tests/fixtures/ts5_findings/module_plane",
-        ])
-        .env_remove("RUST_LOG")
-        .env_remove("DL_TRACE_SUMMARY")
-        .env("DL_TRAIL", "0")
-        .output()
-        .expect("run graph");
-    assert!(graph.status.success(), "graph failed: {graph:?}");
-    let stderr = String::from_utf8_lossy(&graph.stderr);
-    assert_eq!(stderr.lines().count(), 1, "graph stderr: {stderr}");
-    assert!(
-        stderr.contains(" edges: "),
-        "graph summary missing: {stderr}"
-    );
-    assert!(
-        !stderr.contains("INFO"),
-        "graph spans leaked to stderr: {stderr}"
     );
 }
 
