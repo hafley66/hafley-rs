@@ -1167,6 +1167,24 @@ mod tests {
         assert!(forwarded.is_empty());
     }
 
+    #[test]
+    fn route_session_keeps_the_registered_codex_pane() {
+        let route = boop_store::bus::route_from_value(&serde_json::json!({
+            "harness": "codex",
+            "session_id": "thread-1",
+            "tmux": "projects-2:%3418",
+            "appServerSocket": "/tmp/codex-app-server.sock"
+        }));
+
+        let session = CodexDoor::machine()
+            .live_session_for_route(&route)
+            .unwrap()
+            .expect("route-scoped Codex session");
+
+        assert_eq!(session.session_id, "thread-1");
+        assert_eq!(session.tmux_pane.as_deref(), Some("projects-2:%3418"));
+    }
+
     /// A revived route must name its old thread before the TUI sends any
     /// app-server response. Instant reads this route to attribute pane rows.
     #[test]
