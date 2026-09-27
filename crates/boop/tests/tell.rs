@@ -378,18 +378,21 @@ fn beep_children_as_uses_the_selected_routes_native_session_not_the_env_stamp() 
 }
 
 #[test]
-fn boop_help_doctrine_names_the_one_send_and_the_wait() {
+fn boop_help_doctrine_names_the_current_send_and_wait_commands() {
     let fixture = Fixture::new("help");
     let output = fixture.boop(&["--help"]);
     assert!(output.status.success(), "stderr: {}", stderr(&output));
     let text = stdout(&output);
-    assert!(text.contains("boop beep <route> <body>"), "stdout: {text}");
-    assert!(text.contains("boop beep parent"), "stdout: {text}");
-    assert!(text.contains("boop beep children"), "stdout: {text}");
-    assert!(text.contains("boop wait --me"), "stdout: {text}");
-    assert!(text.contains("boop wait <lane>"), "stdout: {text}");
+    assert!(
+        text.contains("boop mail send --to <route> <body>"),
+        "stdout: {text}"
+    );
+    assert!(text.contains("boop mail send --to parent"), "stdout: {text}");
+    assert!(text.contains("boop mail send --to children"), "stdout: {text}");
+    assert!(text.contains("boop mail wait --me"), "stdout: {text}");
+    assert!(text.contains("boop job wait <lane>"), "stdout: {text}");
     assert!(text.contains("boop tui <harness>"), "stdout: {text}");
-    assert!(text.contains("boop beep agent register"), "stdout: {text}");
+    assert!(text.contains("boop me register"), "stdout: {text}");
     // Deleted spellings never resurface in the doctrine text.
     for deleted in [
         "boop push <route>",

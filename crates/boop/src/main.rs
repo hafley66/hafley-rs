@@ -47,7 +47,7 @@ fn parse_env_kv(value: &str) -> Result<String, String> {
 #[command(
     name = "boop",
     version = boop::BUILD,
-    about = "Cross-harness agent transcript reader: drive agents with `beep`, read what they did with `db`",
+    about = "Cross-harness agent transcript reader: drive jobs with `job`, read what agents did with `db`",
     after_help = doctrine()
 )]
 struct Cli {
@@ -2624,6 +2624,16 @@ mod tests {
                 ..
             })
         ));
+    }
+
+    #[test]
+    fn root_help_lists_only_canonical_namespaces_and_help() {
+        let visible = Cli::command()
+            .get_subcommands()
+            .filter(|command| !command.is_hide_set())
+            .map(|command| command.get_name().to_owned())
+            .collect::<Vec<_>>();
+        assert_eq!(visible, ["job", "mail", "db", "debug", "me", "config"]);
     }
 
     /// RECEIPT. `beep agent subscribe` defaults to the door, takes a mailbox
