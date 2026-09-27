@@ -2,14 +2,24 @@
 created: 2026-09-14
 updated: 2026-09-27
 type: feature
-status: done
+status: in-progress
 priority: normal
-closed: 2026-09-27
 ---
 
 ## Description
 
-Ported the durable expiring reminder slice from the retained historical branch. Schedules use explicit existing routes, persist claims in the mailbox store, and require a turn-end or threaded reply before another occurrence can be claimed. No lane is created or revived by the runner. ACPX routes remain held because queue admission does not prove a recipient turn.
+Re-evaluating the committed durable expiring reminder slice against scheduler libraries before resuming the archive port.
+
+## Scheduler candidates
+
+| Candidate | Persistence | Fits one SQLite mailbox | Dependency weight | Maintenance |
+|---|---|---|---|---|
+| `tokio-cron-scheduler` | Optional PostgreSQL or NATS persistence; no SQLite backend | No; adding either persistence service duplicates the mailbox store | High; Tokio plus a separate persistence client/backend | Active crate, but persistence lifecycle is separate from Boop mailbox receipts |
+| `apalis` + SQLite | Persistent SQLite task backend; cron stream is in-memory and can pipe to storage | Partial; SQLite is supported, but jobs and mailbox/turn receipts use different storage semantics and retry state | High; async worker, SQL backend, codec and worker stack | Active project with split core/backend/cron crates |
+| `clokwerk` | In-memory scheduler; no persistence | No; restart loses scheduled state | Low; scheduler and time support | Small synchronous scheduler, no durable storage layer |
+| Plain `due_at` rows in `boop.db`, drained by the existing supervisor tick | SQLite rows in the existing mailbox database | Yes; schedule claim, message append, expiry and delivery receipt can share the current store | None added | Local schema and tick code maintained with the mailbox implementation |
+
+**Pick:** plain due rows. The libraries provide either ephemeral schedules or an independent persisted job queue; none fits the existing single-mailbox transaction and turn-receipt contract without adding a second scheduling state machine. `tokio-cron-scheduler` persistence backends are PostgreSQL/NATS; Apalis documents SQLite storage and an in-memory cron source; clokwerk documents an in-memory scheduler. Sources: [tokio-cron-scheduler persistence](https://docs.rs/crate/tokio-cron-scheduler/latest/source/postgres.md), [Apalis architecture](https://apalis.dev/docs/introduction/architecture), [clokwerk Scheduler](https://docs.rs/clokwerk/latest/clokwerk/struct.Scheduler.html).
 
 ## Acceptance Criteria
 
