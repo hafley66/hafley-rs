@@ -71,7 +71,7 @@ sysinfo = { version = "0.35", default-features = false, optional = true }
 
 [dev-dependencies]
 hafley-observe = { path = ".", features = ["oh"] }
-syn = { version = "2", features = ["full", "visit"] }
+syn = { version = "3", features = ["full", "visit"] }
 
 [[bin]]
 name = "watch-the-watchman"

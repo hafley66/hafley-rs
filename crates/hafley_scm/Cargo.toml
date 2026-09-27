@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 tree-sitter = "0.25"
 serde = { version = "1", features = ["derive"] }
-syn = { version = "2", features = ["full", "visit", "parsing", "extra-traits"], optional = true }
+syn = { version = "3", features = ["full", "visit", "parsing", "extra-traits"], optional = true }
 proc-macro2 = { version = "1", features = ["span-locations"], optional = true }
 ra_ap_syntax = { version = "0.0.352", optional = true }
 ra_ap_mbe = { version = "0.0.352", optional = true }
@@ -64,7 +64,7 @@ ra_ap_project_model = { version = "0.0.352", optional = true }
 ra_ap_vfs = { version = "0.0.352", optional = true }
 
 [features]
-default = ["rust_syn"]
+default = ["read"]
 rust_syn = [
     "dep:syn",
     "dep:proc-macro2",
@@ -77,22 +77,34 @@ rust_syn = [
     "dep:salsa",
 ]
 
-read = [
-    "rust_syn",
+shared = [
     "dep:memchr", "dep:ignore",
-    "dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_ast", "dep:oxc_ast_visit", "dep:oxc_span",
-    "dep:oxc_syntax", "dep:oxc_semantic", "dep:oxc_resolver",
-    "dep:tree-sitter-go", "dep:tree-sitter-python", "dep:tree-sitter-kotlin-sg",
-    "dep:tree-sitter-prolog", "dep:tree-sitter-json", "dep:tree-sitter-yaml",
-    "dep:tree-sitter-toml-ng", "dep:tree-sitter-md", "dep:tree-sitter-html",
-    "dep:tree-sitter-gdscript", "dep:tree-sitter-commonlisp", "dep:tree-sitter-rust",
-    "dep:tree-sitter-typescript", "dep:tree-sitter-javascript",
-    "dep:serde_json", "dep:basic-toml", "dep:gomod-parser", "dep:regex", "dep:soopy",
+    "dep:serde_json", "dep:regex", "dep:soopy", "dep:basic-toml",
     "dep:prost", "dep:rusqlite", "dep:rayon", "dep:quick_cache", "dep:tracing",
 ]
-cli = ["read", "dep:hafley-observe", "dep:libc", "dep:tracing-subscriber"]
+rust = ["shared", "rust_syn", "dep:tree-sitter-rust"]
+typescript = [
+    "shared",
+    "dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_ast", "dep:oxc_ast_visit", "dep:oxc_span",
+    "dep:oxc_syntax", "dep:oxc_semantic", "dep:oxc_resolver",
+    "dep:tree-sitter-typescript", "dep:tree-sitter-javascript",
+]
+go = ["shared", "dep:tree-sitter-go", "dep:gomod-parser"]
+kotlin = ["shared", "dep:tree-sitter-kotlin-sg"]
+python = ["shared", "dep:tree-sitter-python"]
+prolog = ["shared", "dep:tree-sitter-prolog"]
+markdown = ["shared", "dep:tree-sitter-md"]
+data = ["shared", "dep:tree-sitter-json", "dep:tree-sitter-yaml", "dep:tree-sitter-toml-ng", "dep:basic-toml"]
+fallback = ["shared", "dep:tree-sitter-html"]
+gdscript = ["shared", "dep:tree-sitter-gdscript"]
+commonlisp = ["shared", "dep:tree-sitter-commonlisp"]
+read = [
+    "shared", "rust", "typescript", "go", "kotlin", "python", "prolog",
+    "markdown", "data", "fallback", "gdscript", "commonlisp",
+]
+cli = ["shared", "dep:hafley-observe", "dep:libc", "dep:tracing-subscriber"]
 rust-checker = [
-    "read",
+    "shared", "rust",
     "dep:ra_ap_hir",
     "dep:ra_ap_ide",
     "dep:ra_ap_ide_db",
@@ -100,8 +112,8 @@ rust-checker = [
     "dep:ra_ap_project_model",
     "dep:ra_ap_vfs",
 ]
-ts-checker = ["read"]
-go-checker = ["read"]
+ts-checker = ["shared", "typescript"]
+go-checker = ["shared", "go"]
 
 [dev-dependencies]
 tree-sitter-rust = "0.24"

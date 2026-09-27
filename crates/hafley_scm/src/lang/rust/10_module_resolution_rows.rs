@@ -125,7 +125,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
                 .push(span_range(line_starts, item.ident.span())),
             syn::Item::Impl(item) => {
                 if let Some(self_type) = principal_ty(&item.self_ty) {
-                    let trait_name = item.trait_.as_ref().and_then(|(_, path, _)| {
+                    let trait_name = item.trait_.as_ref().and_then(|(path, _)| {
                         path.segments
                             .last()
                             .map(|segment| segment.ident.to_string())

@@ -16,13 +16,17 @@ pub mod cache;
 pub mod cfg;
 pub mod cpg_decode;
 pub mod cpg_types;
+#[cfg(feature = "read")]
 pub mod deps;
 pub mod dispatch;
 pub mod family;
 pub mod lang;
+#[cfg(feature = "read")]
 pub mod manifests;
+#[cfg(feature = "read")]
 pub mod project;
 #[path = "1_reach.rs"]
+#[cfg(feature = "read")]
 pub mod reach;
 pub mod rows;
 pub mod schema;
@@ -34,6 +38,7 @@ pub mod scip_v5_rels;
 pub mod seams;
 pub mod shape;
 #[path = "2_slow.rs"]
+#[cfg(feature = "read")]
 pub mod slow;
 pub mod source;
 pub mod trace;
@@ -50,6 +55,7 @@ pub use cpg_types::{
     CpgEdge, CpgEdgeKind, CpgImport, CpgImportError, CpgNode, CpgNodeKind, CpgProperty,
     CpgPropertyValue,
 };
+#[cfg(feature = "read")]
 pub use deps::{resolve_specifier, Policy, TsconfigPaths};
 pub use dispatch::dispatch;
 pub use family::{
@@ -58,31 +64,53 @@ pub use family::{
     FlowF, MethodOwner, ProjectEdge, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
     TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeFAux, TypeSig,
 };
+#[cfg(feature = "commonlisp")]
+pub use lang::CommonlispSource;
+#[cfg(feature = "data")]
+pub use lang::DataSource;
+#[cfg(feature = "fallback")]
+pub use lang::FallbackSource;
+#[cfg(feature = "gdscript")]
+pub use lang::GdscriptSource;
+#[cfg(feature = "go")]
+pub use lang::GoSource;
+#[cfg(feature = "kotlin")]
+pub use lang::KotlinSource;
+#[cfg(feature = "markdown")]
+pub use lang::MarkdownSource;
+#[cfg(feature = "prolog")]
+pub use lang::PrologSource;
+#[cfg(feature = "python")]
+pub use lang::PythonSource;
+#[cfg(feature = "rust")]
+pub use lang::RustSource;
 pub use lang::{
     dl6_db_path, find_owned_region, open_dl6_readonly, open_readonly, owned_region_markers,
     propose_owned_region, query_source, query_source_facts, query_tree_sitter,
-    query_tree_sitter_spans, respell, scm_edges, scm_facts, source_for, sources, ts_specifiers,
-    ByteRange, CommonlispSource, DataSource, FactError, FactSet, FallbackSource, GdscriptSource,
-    GitBlobFact, GoSource, KotlinSource, MarkdownSource, OwnedRegion, OwnedRegionError,
-    OwnedRegionProposal, PrologSource, PythonSource, RustSource, RyiLang, ScmEdge,
+    query_tree_sitter_spans, scm_edges, scm_facts, source_for, sources, ByteRange, FactError,
+    FactSet, GitBlobFact, OwnedRegion, OwnedRegionError, OwnedRegionProposal, RyiLang, ScmEdge,
     SourceCaptureFact, SourceMatchFact, SourcePlace, SourceQuery, SourceQueryError,
     SourceQueryFact, SourceQueryFacts, SourceQueryOutput, SourceReplacementFact,
     SourceRevisionFact, TreeSitterQuery, TreeSitterQueryMatch, TreeSitterSpannedCapture,
-    TreeSitterSpannedMatch, TsResolver, TsSource, TsSpecifier, DL6_DB_RELATIVE_PATH,
-    SOURCE_FACT_PROTOCOL,
+    TreeSitterSpannedMatch, DL6_DB_RELATIVE_PATH, SOURCE_FACT_PROTOCOL,
 };
+#[cfg(feature = "typescript")]
+pub use lang::{respell, ts_specifiers, TsResolver, TsSource, TsSpecifier};
+#[cfg(feature = "read")]
 pub use manifests::{
     fold_package_edges, package_edges, package_edges_jsonl, Manifest, ManifestKind,
 };
+#[cfg(feature = "read")]
 pub use project::{
     diet_scip, diet_scip_jsonl, diet_scip_streamed, diet_scip_with_raw, extract_pool,
     resolve_project, resolve_project_jsonl, resolve_project_with_raw,
     resolve_project_with_tsi_tiers, scip_facts, scip_facts_jsonl, scip_family,
     scip_family_from_index, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
-    scip_index_location, sorted_lines, DietRow, FsBlobSource, ProjectError, RawProjectFact,
-    ResolveArm, ResolveArms, ResolveRequest, ResolveWithRawError, ScipFamilyRequest, ScipMode,
-    SourceTreeBlobSource, RESOLVE_ARMS,
+    scip_index_location, sorted_lines, CheckerTier, DietRow, FsBlobSource, ProjectError,
+    RawProjectFact, ResolveArm, ResolveArms, ResolveRequest, ResolveWithRawError,
+    ScipFamilyRequest, ScipMode, SourceTreeBlobSource, CHECKER_TIERS, RESOLVE_ARMS,
 };
+#[cfg(feature = "read")]
 pub use reach::{reach_files, REACH_DEPTH_CAP};
 pub use rows::{Edge, FamilyBundle, Node};
 pub use scip::{
@@ -108,6 +136,7 @@ pub use seams::{
 pub use shape::{
     content_id_of, ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID,
 };
+#[cfg(feature = "read")]
 pub use slow::{slow_project, slow_project_with_raw};
 pub use soopy::{
     ContentId as SourceContentId, Pattern as SourcePattern, ReadRequest as SourceReadRequest,

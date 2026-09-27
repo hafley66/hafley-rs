@@ -57,6 +57,16 @@ fn project_cst(root: tree_sitter::Node, strings: &mut Strings, sink: &mut Family
 }
 
 impl Source for CommonlispSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: false,
+            call: false,
+            df: false,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "commonlisp"
     }

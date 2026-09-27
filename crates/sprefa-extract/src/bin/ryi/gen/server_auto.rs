@@ -149,6 +149,7 @@ macro_rules! raw_handler {
     };
 }
 
+stream_handler!(capabilities, "capabilities", CapabilitiesArgs, capabilities);
 raw_handler!(cleave, "cleave", CleaveArgs, cleave);
 raw_handler!(r#move, "move", MoveArgs, r#move);
 raw_handler!(rename, "rename", RenameArgs, rename);
@@ -468,6 +469,7 @@ impl Drop for RequestGuard {
 
 fn request_verb(path: &str) -> &'static str {
     match path {
+        "/capabilities" => "capabilities",
         "/extract" => "extract",
         "/fast" => "fast",
         "/slow" => "slow",
@@ -518,6 +520,7 @@ fn router(state: DaemonState) -> axum::Router {
     axum::Router::new()
         .route("/__handshake", get(handshake))
         .route("/__shutdown", post(shutdown))
+        .route("/capabilities", get(capabilities))
         .route("/extract", post(extract))
         .route("/fast", post(fast))
         .route("/slow", post(slow))

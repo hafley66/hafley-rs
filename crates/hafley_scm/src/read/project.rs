@@ -47,8 +47,8 @@ use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
 use crate::read::trace::stage_span;
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
-    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
-    UnresolvedReason,
+    flow_edges, CallF, ProjectEdge, ResolutionOrigin, ResolveDrop, ScipError, ScipIndex,
+    ScipSource, TypeF,
 };
 use crate::read::wire::{flatten_flow, FlatFact};
 
@@ -801,26 +801,22 @@ fn tsi_relations(rows: &[crate::read::tsi::FactOut]) -> Vec<String> {
 /// a stream carries a semantic run only where one actually answered.
 fn semantic_runs(cx: &ProjectCx, inputs: &[ProjectInput]) -> Vec<(&'static str, RunOut)> {
     let scope: Vec<String> = inputs.iter().map(|input| input.blob.to_string()).collect();
-    let tiers = [
-        ("ts", cx.indexes.ts_checker.get().is_some(), "tsc"),
-        (
-            "rust",
-            cx.indexes.rust_checker.get().is_some(),
-            "rust-analyzer",
-        ),
-        ("go", cx.indexes.go_checker.get().is_some(), "go-types"),
-    ];
-    tiers
-        .into_iter()
-        .filter(|(_, loaded, _)| *loaded)
+    CHECKER_TIERS
+        .iter()
+        .filter(|tier| match tier.language {
+            "ts" => cx.indexes.ts_checker.get().is_some(),
+            "rust" => cx.indexes.rust_checker.get().is_some(),
+            "go" => cx.indexes.go_checker.get().is_some(),
+            _ => false,
+        })
         .enumerate()
-        .map(|(rank, (lang, _, tool))| {
+        .map(|(rank, tier)| {
             (
-                lang,
+                tier.language,
                 RunOut {
                     run: rank as u32 + 1,
                     mode: Mode::Semantic,
-                    tool: tool.to_string(),
+                    tool: tier.tool.to_string(),
                     // The tier reports no version of its own, and a run row
                     // that borrows this crate's would name the wrong compiler.
                     version: String::new(),
@@ -830,6 +826,27 @@ fn semantic_runs(cx: &ProjectCx, inputs: &[ProjectInput]) -> Vec<(&'static str, 
         })
         .collect()
 }
+
+/// Compiler checker tiers available to project resolution.
+pub struct CheckerTier {
+    pub language: &'static str,
+    pub tool: &'static str,
+}
+
+pub static CHECKER_TIERS: &[CheckerTier] = &[
+    CheckerTier {
+        language: "ts",
+        tool: "tsc",
+    },
+    CheckerTier {
+        language: "rust",
+        tool: "rust-analyzer",
+    },
+    CheckerTier {
+        language: "go",
+        tool: "go-types",
+    },
+];
 
 /// Everything the envelope files beside the rows it numbers.
 struct Envelope<'a> {
@@ -2193,14 +2210,6 @@ pub struct ResolveArm {
     /// Which types plane the `types` arm reads. Also the phase-1 mask
     /// `read_inputs` dispatches this language under.
     pub type_plane: TypePlane,
-}
-
-/// One call site a `Resolve<CallF>` arm dropped: where, why, and the callee as
-/// written. `Vec<ProjectEdge>` has no seat for a non-edge, so the arm says here.
-pub struct ResolveDrop {
-    pub span: Span,
-    pub reason: UnresolvedReason,
-    pub detail: String,
 }
 
 /// One row per `Source` in `lang::sources()`; an impl with no row here is

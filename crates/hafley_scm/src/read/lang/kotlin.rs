@@ -34,7 +34,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
-use super::fallback::cst_bundle_from_tree;
+use super::cst_bundle::cst_bundle_from_tree;
 use crate::read::family::{
     CallEdgeKind, CallF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind, DfParam, DocFact, DocTag,
     ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
@@ -1376,6 +1376,16 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 pub struct KotlinSource;
 
 impl Source for KotlinSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "kotlin"
     }
@@ -1513,6 +1523,7 @@ impl Source for KotlinSource {
             data: None,
             scm_captures,
             kotlin_module,
+            #[cfg(feature = "rust")]
             rust_module: None,
         }
     }
@@ -1894,7 +1905,7 @@ pub fn call_drops(
     output: &RyiOutput,
     cx: &ProjectCx,
     edges: &[ProjectEdge<CallF>],
-) -> Vec<crate::read::project::ResolveDrop> {
+) -> Vec<crate::read::types::ResolveDrop> {
     let (Some(call), Some(def_index)) = (&output.call, cx.indexes.def_index.get()) else {
         return Vec::new();
     };
@@ -1938,7 +1949,7 @@ pub fn call_drops(
                     }
                 }
             };
-            crate::read::project::ResolveDrop {
+            crate::read::types::ResolveDrop {
                 span: site.span,
                 reason,
                 detail: callee.to_string(),

@@ -24,7 +24,7 @@ use crate::read::family::{
     TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
 use crate::read::lang::call_kinds::MODULE_CALLER;
-use crate::read::lang::fallback::cst_bundle;
+use crate::read::lang::cst_bundle::cst_bundle;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
@@ -2497,6 +2497,16 @@ fn py_flow_expr(
 pub struct PythonSource;
 
 impl Source for PythonSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "python"
     }
@@ -2576,7 +2586,9 @@ impl Source for PythonSource {
             df,
             data: None,
             scm_captures: None,
+            #[cfg(feature = "kotlin")]
             kotlin_module: None,
+            #[cfg(feature = "rust")]
             rust_module: None,
         }
     }

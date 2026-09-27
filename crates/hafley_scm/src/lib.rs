@@ -9,7 +9,7 @@ pub mod lang;
 
 pub mod atoms;
 pub mod cst;
-#[cfg(feature = "read")]
+#[cfg(feature = "shared")]
 pub mod read;
 pub mod span;
 pub use types::*;

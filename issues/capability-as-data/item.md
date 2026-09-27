@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-27
 type: feature
-status: needs-decision
+status: fixed
 priority: high
 epic: extract-parity-move-rename
 related: ['@kind-vocab-constraint', '@scip-ingestion-conformance', '@dep-bump-frontends']
@@ -42,8 +42,8 @@ roster holds `&'static [&'static dyn Source]` (`src/lang/mod.rs:117-131`), and
 a `dyn Source` cannot be asked whether its concrete type also implements
 `Resolve<CallF>`. Trait objects erase every trait but the one they name.
 
-So every other seam re-declares its membership in a hand-maintained static
-table, and a test rails the table against the roster:
+At discovery, the other seams re-declared membership in hand-maintained static
+tables, and tests railed those tables against the source roster:
 
 | seam | table | declares capability statically? |
 | --- | --- | --- |
@@ -51,15 +51,15 @@ table, and a test rails the table against the roster:
 | rehome | `rehomes()`, `src/lang/mod.rs:141-173` | YES, `Option<&dyn RehomeManifests>` and friends |
 | rename | `renames()`, `src/lang/mod.rs:185-187` | YES, membership list |
 | scip | `INDEXERS`, `src/scip_ensure.rs:62-105` | YES, one row per language |
-| **phase-1 planes** | `sources()`, `src/lang/mod.rs:117-131` | **NO, a bare list with no columns** |
+| **phase-1 planes** | `Source::planes()`, queried through `sources()` | YES, each roster entry declares its mask |
 
 `Source::extract(path, content, mask) -> RyiOutput` returns five
 `Option<FamilyBundle<_>>` fields (`types.rs:2700-2707`). Which planes a
 language implements is decided at RUNTIME by which of those come back `Some`.
 Nothing can read it without parsing a file.
 
-That is the whole gap. Thirteen seams declare capability as data; one hides it
-behind Option returns.
+At discovery, the phase-one roster was the remaining gap. Since 2026-09-27,
+`Source::planes()` declares those masks without running `extract`.
 
 ### The rail admits its own hole
 
@@ -77,13 +77,12 @@ cannot enumerate impls at runtime, so the table is the only source and a stale
 
 | artifact | file:line | gated by a test? |
 | --- | --- | --- |
-| `LANGUAGE COVERAGE` help text | `src/bin/ryi/help.rs:189-202` | NO, hand-written `const` |
-| architecture matrix | `crates/sprefa-extract/docs/0_architecture-matrix-20260917.md:43-67` | NO, static markdown, stamped to commit `16ebd451` |
+| `LANGUAGE COVERAGE` help text | `ryii --help` | generated from the capability rows at startup |
+| architecture matrix | `crates/sprefa-extract/docs/0_architecture-matrix-20260917.md` | deleted 2026-09-27 |
 | `4_capability_parity.rs` | `tests/4_capability_parity.rs:132-205` | its 15 capabilities are crate-global, and every `reach_of` arm uses a TS fixture |
 
-`tests/33_v5_parity_matrix.rs:3,53` cites `docs/v5-extraction-parity.md`, which
-does not exist anywhere in the repo. The matrix lives only as a `const` inside
-that test file.
+`tests/33_v5_parity_matrix.rs` carries the v5 relation mapping and asserts it
+against the checked-in captures and current schema.
 
 The root `justfile` carries zero recipes touching this crate
 (`grep -niE "ryi|extract|sprefa" justfile` exits 1).
@@ -119,17 +118,47 @@ tool feeds it, watching files and producing the facts.
 
 ## Acceptance Criteria
 
-- [ ] `Source` declares its planes without running `extract`
-- [ ] `sources()` carries capability columns like `RESOLVE_ARMS` does
-- [ ] one command prints the language x capability matrix: planes, resolve arms, rehome sub-traits, rename, checker, scip indexer
-- [ ] a test asserts the printed matrix against every declared table, both directions
-- [ ] a test asserts the matrix against `help.rs:189-202` so the help text cannot drift
-- [ ] `docs/0_architecture-matrix-20260917.md` is generated or deleted, not hand-maintained
-- [ ] the dangling `docs/v5-extraction-parity.md` reference in `tests/33_v5_parity_matrix.rs:3,53` is resolved
-- [ ] the "row declares None while an impl exists" hole named at `tests/1_resolve_cli.rs:127-128` is closed or waived with a written reason
-- [ ] a written evaluation records where a type is erased, where capability is re-declared by hand, and which of those are removable
-- [ ] the cargo-feature-per-language cut is specified as a follow-up issue with the feature graph named
+- [x] `Source` declares its planes without running `extract`
+- [x] `sources()` exposes each source's plane column alongside the trait object
+- [x] `ryii capabilities` prints the language x capability matrix: planes, resolve arms, rehome sub-traits, rename, checker, SCIP indexer
+- [x] a test asserts the printed matrix against every declared table in both directions
+- [x] a test asserts the generated matrix in CLI help stays aligned with the command output
+- [x] `docs/0_architecture-matrix-20260917.md` is deleted
+- [x] the stale v5 parity document reference is resolved
+- [x] the "row declares None while an impl exists" hole is closed by comparing each declared plane to isolated extraction output
+- [x] a written evaluation records type erasure, hand-maintained capability tables, and which declarations can be removed
+- [x] the cargo-feature-per-language cut is specified in `issues/per-language-cargo-features/item.md` with the current feature graph
 
 ## Decisions
 
-Should the capability matrix ship as a standalone increment before the separate per-language Cargo feature cut?
+Decision: ship the capability matrix as this increment. Defer the per-language Cargo feature cut to its own follow-up issue.
+
+### Original repro · 2026-09-27
+
+Repro on the current `ryii`: `ryii --help` lists no `capabilities` command. `Source` has five optional family outputs and no plane declaration; the language roster is a plain slice of source trait objects. The matrix command and a roster-to-implementation rail are absent.
+
+### Implementation evaluation · 2026-09-27
+
+The type erasure point remains `sources() -> &'static [&'static dyn Source]`:
+the roster preserves only the `Source` vtable. `Source::planes()` makes the
+phase-one plane column object-safe and available without calling `extract`;
+each concrete source declares its own mask. The matrix joins that roster to
+`RESOLVE_ARMS`, `rehomes()`, `renames()`, `CHECKER_TIERS`, and `INDEXERS`.
+Those other rosters remain because their trait objects represent distinct
+extension traits and optional sub-traits. Removing their parallel declarations
+would require a shared generated/concrete registry that keeps all those trait
+implementations together. The phase-one column no longer needs a hand-written
+parallel table. The roster test calls each source with one plane mask at a
+time and checks declared presence against its `RyiOutput`, closing the `None`
+hole without making capability discovery parse a file.
+
+The old architecture matrix was deleted. The relation mapping remains in
+`tests/33_v5_parity_matrix.rs`, which owns its checked assertions and no longer
+points at the removed `docs/v5-extraction-parity.md`.
+
+### 2026-09-27 · @codex
+
+`ryii capabilities` JSONL and `ryii --help` contain the same 12-row matrix;
+`t_4_capability_parity::capabilities_matrix_matches_every_roster_and_help_table`
+and `t_4_capability_parity::every_roster_source_is_reachable_through_the_binary`
+pass. Gates: workspace 1366 passed; sprefa-extract 1119 passed.

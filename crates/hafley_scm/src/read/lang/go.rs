@@ -26,7 +26,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
-use super::fallback::cst_bundle;
+use super::cst_bundle::cst_bundle;
 use super::go_modules::{is_exported, GoModuleIndex};
 use crate::read::family::{
     CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind, DfParam,
@@ -34,7 +34,6 @@ use crate::read::family::{
     SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF,
     TypeSig,
 };
-use crate::read::project::ResolveDrop;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
@@ -43,6 +42,7 @@ use crate::read::seams::{
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
+use crate::read::types::ResolveDrop;
 use crate::read::types::{PathIndex, ScipIndex, UnresolvedReason};
 
 // ── the tree-sitter-go parse (one parse feeds type/call/df) ──────────────────
@@ -2728,6 +2728,16 @@ fn df_edge(sink: &mut FamilyBundle<DfF>, src: NodeRef, dst: NodeRef) {
 pub struct GoSource;
 
 impl Source for GoSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: true,
+            df: true,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "go"
     }
@@ -2808,7 +2818,9 @@ impl Source for GoSource {
             df,
             data: None,
             scm_captures: None,
+            #[cfg(feature = "kotlin")]
             kotlin_module: None,
+            #[cfg(feature = "rust")]
             rust_module: None,
         }
     }

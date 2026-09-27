@@ -123,12 +123,12 @@ impl Census<'_> {
                     self.ty(owner, elem, root, "tuple-elem");
                 }
             }
-            syn::Type::BareFn(t) => {
+            syn::Type::FnPtr(t) => {
                 for input in &t.inputs {
                     self.ty(owner, &input.ty, root, "bare-fn");
                 }
                 if let syn::ReturnType::Type(_, inner) = &t.output {
-                    self.ty(owner, inner, root, "bare-fn");
+                    self.ty(owner, inner.as_ref(), root, "bare-fn");
                 }
             }
             syn::Type::ImplTrait(t) => {
@@ -180,7 +180,7 @@ impl Census<'_> {
             }
             if let syn::PathArguments::Parenthesized(args) = &seg.arguments {
                 for input in &args.inputs {
-                    self.ty(owner, input, root, "fn-trait-arg");
+                    self.ty(owner, &input.ty, root, "fn-trait-arg");
                 }
                 if let syn::ReturnType::Type(_, inner) = &args.output {
                     self.ty(owner, inner, root, "fn-trait-ret");
@@ -201,7 +201,7 @@ impl Census<'_> {
                 for bound in &t.bounds {
                     self.bound(owner, bound, "bound", "head");
                 }
-                if let Some(default) = &t.default {
+                if let Some((_, default)) = &t.default {
                     self.ty(owner, default, "generic-param-default", "head");
                 }
             }
@@ -293,7 +293,7 @@ impl Census<'_> {
                 };
                 self.ty(&owner, &imp.self_ty, "impl-self-ty", "head");
                 self.generics(&owner, &imp.generics);
-                if let Some((_, path, _)) = &imp.trait_ {
+                if let Some((path, _)) = &imp.trait_ {
                     self.path(&owner, path, "impl-trait", "head");
                 }
                 for member in &imp.items {

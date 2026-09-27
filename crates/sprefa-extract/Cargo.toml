@@ -24,15 +24,15 @@ features = ["cli"]
 [workspace]
 
 [build-dependencies]
-hafley_scm = { path = "../hafley_scm", default-features = false }
+hafley_scm = { path = "../hafley_scm", default-features = false, optional = true }
 tree-sitter = "0.25"
-tree-sitter-kotlin-sg = "0.4"
+tree-sitter-kotlin-sg = { version = "0.4", optional = true }
 
 [dependencies]
 ryi-proto = { path = "../ryi-proto", optional = true }
 # The newline scan behind the per-document line table. Already unified in the
 # workspace lock through regex/aho-corasick, so this pins no new copy.
-memchr = "2"
+memchr = { version = "2", optional = true }
 # Allocator candidate (2026-08-29 speed lane): the default nanov2 malloc shows
 # ~2% self time in frees on the go corpus. Kept behind a feature until it wins
 # on all three corpora; default build is byte-identical and allocator-unchanged.
@@ -47,21 +47,21 @@ cap = { version = "0.1.2", optional = true }
 # `DirectoryRoot::snapshot` hashes every file it visits, which a path-only move
 # corpus scan must not pay; `walkdir` is `ignore`'s own dependency with no
 # filter_entry-by-name convenience. The move corpus walk is the one caller.
-ignore = "0.4"
-globset = "0.4"
+ignore = { version = "0.4", optional = true }
+globset = { version = "0.4", optional = true }
 # oxc arena AST front-end for TS/JS (v5 carried these; src/graph/typegraph/ts).
 # The Program<'a> borrows the Allocator + source text, so parse ties content to
 # 'a (the GAT seam). Commit 2b: TypeF entities; commit 2c: the arrow-type sigs
 # (oxc_ast_visit walks type annotations for the named references they reference).
-oxc_allocator = "0.151"
-oxc_parser = "0.151"
-oxc_ast = "0.151"
-oxc_ast_visit = "0.151"
-oxc_span = "0.151"
-oxc_syntax = "0.151"
+oxc_allocator = { version = "0.151", optional = true }
+oxc_parser = { version = "0.151", optional = true }
+oxc_ast = { version = "0.151", optional = true }
+oxc_ast_visit = { version = "0.151", optional = true }
+oxc_span = { version = "0.151", optional = true }
+oxc_syntax = { version = "0.151", optional = true }
 # The exact identifier spans `extract rename` needs. Default features empty; +1
 # crate, candidates measured in plans/2026-08-27-extract-rename.PLAN.md:222-251.
-oxc_semantic = "0.151"
+oxc_semantic = { version = "0.151", optional = true }
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The ESM/CJS + tsconfig resolution algorithm the `move` verb needs: extension
 # aliases (`./x.js` naming `x.ts`), `index`, package `exports`/`main`, tsconfig
@@ -69,7 +69,7 @@ oxc_semantic = "0.151"
 # alternatives measured are in `lang/ts_resolve.rs` and the arc-3 plan table
 # (swc's resolver is not a standalone crate; the `tsconfig` crates parse config
 # without resolving; a hand-rolled probe re-derives a tested algorithm).
-oxc_resolver = "11.24.3"
+oxc_resolver = { version = "11.24.3", optional = true }
 # syn is the Rust AST front-end v5 carried (src/graph/typegraph/rust). The
 # `full` feature parses Item::*; `visit` drives the call-site/call-def walks;
 # `extra-traits` for derive Eq on AST nodes some helpers pattern-match. Ported
@@ -77,11 +77,11 @@ oxc_resolver = "11.24.3"
 # (syn 2 dropped its `span-locations` feature), gated by proc-macro2's
 # `span-locations`; v6 Span is byte offsets, bridged by the line_starts table
 # in lang/rust.rs.
-syn = { version = "2", features = ["full", "visit", "parsing", "extra-traits"] }
-proc-macro2 = { version = "1", features = ["span-locations"] }
+syn = { version = "3", features = ["full", "visit", "parsing", "extra-traits"], optional = true }
+proc-macro2 = { version = "1", features = ["span-locations"], optional = true }
 # ra_ap_syntax and salsa remain for the optional rust checker tier.
-ra_ap_syntax = "0.0.352"
-salsa = { version = "0.28.2", default-features = false, features = ["macros", "rayon"] }
+ra_ap_syntax = { version = "0.0.352", optional = true }
+salsa = { version = "0.28.2", default-features = false, features = ["macros", "rayon"], optional = true }
 # @comment-ok: build-vs-buy candidate table, the law every dep comment here carries.
 # The rust CHECKER tier: rust-analyzer's own name resolution and type inference,
 # in-process, same pins as the expander above. `load-cargo` reads `cargo
@@ -106,20 +106,20 @@ ra_ap_vfs = { version = "0.0.352", optional = true }
 # tree-sitter 0.25's `Language::new` wraps (v5's exact `go_parse` shape). Byte
 # spans come straight off the nodes (`start_byte`/`end_byte`); no line/col bridge.
 tree-sitter = "0.25"
-tree-sitter-go = "0.23"
+tree-sitter-go = { version = "0.23", optional = true }
 # tree-sitter-python is the Python front-end v5 carried; already in the lock
 # when it became direct, so cargo unifies it: one copy, no dupe.
-tree-sitter-python = "0.23"
+tree-sitter-python = { version = "0.23", optional = true }
 # tree-sitter-kotlin-sg is the Kotlin AST front-end v5 carried
 # (src/graph/typegraph/kotlin.rs; root Cargo.toml pins the same crate, so the v6
 # parse is byte-identical to the v5 oracle's). It is ALREADY in this lock as an
 # (0.4.1), exports `LANGUAGE: LanguageFn` like tree-sitter-go 0.23, and deps
 # only `tree-sitter-language` + `cc` (no
 # tree-sitter core): cargo UNIFIES it, one copy, no dupes.
-tree-sitter-kotlin-sg = "0.4"
+tree-sitter-kotlin-sg = { version = "0.4", optional = true }
 # MIT superset grammar for ISO Prolog plus the SWI/DCG/ProbLog syntax used by
 # v6/prolog. ABI 14 and LanguageFn match the tree-sitter 0.25 runtime above.
-tree-sitter-prolog = "0.1"
+tree-sitter-prolog = { version = "0.1", optional = true }
 # The `data` family's three grammars, v5's `src/datapath.rs` plane ported.
 # yaml/toml-ng match v5's own pins (root Cargo.toml:129-130). json is 0.23, NOT
 # v5's 0.24 (root Cargo.toml:108): 0.23.0 was already in the lock when it
@@ -127,9 +127,9 @@ tree-sitter-prolog = "0.1"
 # TWICE (0.23.0 + 0.24.8) against zero copies on 0.23. JSON's node vocabulary
 # (object/pair/array/string/number/true/false/null) is identical across the two,
 # and no v5 oracle facet judges this plane.
-tree-sitter-json = "0.23"
-tree-sitter-yaml = "0.7"
-tree-sitter-toml-ng = "0.7"
+tree-sitter-json = { version = "0.23", optional = true }
+tree-sitter-yaml = { version = "0.7", optional = true }
+tree-sitter-toml-ng = { version = "0.7", optional = true }
 # tree-sitter-md is the markdown front-end v5 carries (root Cargo.toml:116,
 # src/cst.rs + src/ingest/mod.rs). LANGUAGE = block, INLINE_LANGUAGE = inline.
 
@@ -137,17 +137,17 @@ tree-sitter-toml-ng = "0.7"
 # only tree-sitter-language, pairing with the 0.25 runtime.
 
 # `md` exposes LANGUAGE, `md_inline` INLINE_LANGUAGE; both drop in unchanged.
-tree-sitter-md = "0.5"
+tree-sitter-md = { version = "0.5", optional = true }
 # tree-sitter-html is the html front-end (the FallbackSource grammar); already
 # in the lock when it became direct, so cargo UNIFIES one copy, no new
 # tree-sitter.
-tree-sitter-html = "0.23"
+tree-sitter-html = { version = "0.23", optional = true }
 # tree-sitter-gdscript is the GDScript front-end (Godot's `.gd`). Adjudication
 # against THIS lock: tree-sitter-gdscript 6.1.0, +1 crate, deps only
 # tree-sitter-language + cc (no tree-sitter core). Nothing cheaper exists:
 # (lib.rs:240-263), so the cst-only FallbackSource cannot take the extension. ABI 14, inside the 13..=15 window tree-sitter 0.25.10 accepts
 # (lib.rs:663-668), and it exports `LANGUAGE: LanguageFn` like tree-sitter-go.
-tree-sitter-gdscript = "6"
+tree-sitter-gdscript = { version = "6", optional = true }
 # tree-sitter-commonlisp is the Lisp front-end. Candidates measured against this
 # lock: tree-sitter-commonlisp 0.4.1, +1 crate, tree-sitter-language + cc, ABI
 # 14 (the one taken); tree-sitter-scheme 0.24.7 (same shape; a second lisp
@@ -158,38 +158,38 @@ tree-sitter-gdscript = "6"
 # `LANGUAGE_COMMONLISP: LanguageFn` (0.4.1 binds the const to the grammar name,
 # not to `LANGUAGE`), ABI 14. SupportLang has no lisp variant, so no fallback
 # route exists here either.
-tree-sitter-commonlisp = "0.4"
+tree-sitter-commonlisp = { version = "0.4", optional = true }
 # tree-sitter-rust 0.24.2 is ALREADY in this lock
 # transitive, so the direct pin unifies to one copy and adds no grammar.
-tree-sitter-rust = "0.24"
+tree-sitter-rust = { version = "0.24", optional = true }
 # tree-sitter-typescript ships BOTH the typescript and tsx grammars
 # (LANGUAGE_TYPESCRIPT / LANGUAGE_TSX); tree-sitter-javascript covers .js/.jsx.
 # One dep each for BOTH ts grammars; the plain-javascript grammar covers
 # .js/.jsx.
-tree-sitter-typescript = "0.23"
-tree-sitter-javascript = "0.23"
+tree-sitter-typescript = { version = "0.23", optional = true }
+tree-sitter-javascript = { version = "0.23", optional = true }
 # The `.scm` engine the Rust CallF defs run through: `#has-ancestor?`/`#has?`
 # over a native tree-sitter query, one MatchArena per run.
-hafley_scm = { path = "../hafley_scm", features = ["read"] }
+hafley_scm = { path = "../hafley_scm", default-features = false }
 # serde on the FLAT wire envelope only (never on the generic Node<F>). The store
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }
-serde_json = "1"
+serde_json = { version = "1", optional = true }
 # basic-toml reads Cargo.toml for the package_edge arm. Candidates measured into
 # THIS lock: basic-toml +1 crate (serde only, already here), toml 1.1 +4
 # (toml_datetime/toml_parser/toml_writer/serde_spanned), cargo-manifest +14.
 # A manifest read that fails degrades to no edges, so the TOML subset is enough:
 # every Cargo.toml in this repository parses with it.
-basic-toml = "0.1"
+basic-toml = { version = "0.1", optional = true }
 # gomod-parser reads go.mod for the same arm; its Replacement::FilePath vs
 # ::Module split is exactly the workspace-local test. +2 crates (it and winnow);
 # gomod-rs is +4 (nom, nom_locate, minimal-lexical, bytecount) for spans nothing
 # here needs, and tree-sitter-gomod is a whole grammar for a line format.
-gomod-parser = "0.5"
-regex = "1"
+gomod-parser = { version = "0.5", optional = true }
+regex = { version = "1", optional = true }
 # Repository/revision/path enumeration and Git batch reads live in the
 # standalone hafley-rs crate. Extract consumes its source coordinates and bytes.
-soopy = { path = "../soopy" }
+soopy = { path = "../soopy", optional = true }
 # prost decodes index.scip for the ScipSource seam (commit 4c). v5's pairing
 # (scip = "0.7.1" + protobuf = "3.7"; src/scip_import.rs) was REJECTED here:
 # protobuf 3.7.2 hard-deps thiserror 1, a NEW dup against this tree's
@@ -200,7 +200,7 @@ soopy = { path = "../soopy" }
 # over proto/scip.proto (run anywhere; diff the result against the committed
 # file) - the prost-build route was measured to fork `cargo tree -d` with
 # build-kind dup groups (bitflags/regex/prost via tempfile/prost-build).
-prost = "0.13"
+prost = { version = "0.13", optional = true }
 # @comment-ok: build-vs-buy candidate table, the law this file's every dep
 # comment already carries.
 # The read side of the dl6 store, behind `FactSet`. Same 0.40 pin and
@@ -209,24 +209,24 @@ prost = "0.13"
 # (run.rs:289) - it already depends on this one (its Cargo.toml:31), so reuse is
 # a cycle; sprefa-store's sea-orm/sqlx reader - async, banned above the SqlRunner
 # seam. `trace` is what the once-per-run statement count is measured on.
-rusqlite = { version = "0.40", features = ["bundled", "limits", "trace", "vtab"] }
+rusqlite = { version = "0.40", features = ["bundled", "limits", "trace", "vtab"], optional = true }
 # Batch-local text offsets keep each value at 16 bytes. FxHasher fingerprints
 # short strings; hashbrown's prehashed table compares bytes without rehashing.
-rustc-hash = "2"
-hashbrown = "0.16"
+rustc-hash = { version = "2", optional = true }
+hashbrown = { version = "0.16", optional = true }
 # Atomic, no-clobber publication of a CLI SQLite export. Reuses the tempfile
 # version already in this lock through rust-analyzer; no custom temp-file protocol.
 tempfile = { version = "3", optional = true }
 # rayon drives the per-file extraction pool. A dedicated pool (never the global
 # one) so nothing else in the process inherits the cap.
-rayon = "1"
+rayon = { version = "1", optional = true }
 # The content-keyed extraction cache. Weight-bounded and concurrent (sharded,
 # &self methods), so the rayon workers all hit it. Weight is an output estimate.
-quick_cache = "0.7"
+quick_cache = { version = "0.7", optional = true }
 # tracing is the LIBRARY half only: spans and events, no subscriber. Same pair
 # and versions the engine crate carries (sprefa-engine-rs/Cargo.toml:36-37), so
 # one process linking both installs one subscriber that sees both crates.
-tracing = "0.1"
+tracing = { version = "0.1", optional = true }
 hafley-observe = { path = "../hafley-observe", optional = true }
 # getloadavg beside every timing, so a wall number reports the machine it was
 # taken on. Already unified in this lock through soopy -> rustix -> errno.
@@ -290,13 +290,39 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-cli = ["dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+default = ["read"]
+shared = [
+    "hafley_scm/shared", "dep:memchr", "dep:ignore", "dep:globset", "dep:serde_json",
+    "dep:regex", "dep:soopy", "dep:prost", "dep:rusqlite", "dep:rustc-hash",
+    "dep:hashbrown", "dep:rayon", "dep:quick_cache", "dep:tracing",
+]
+rust = ["shared", "hafley_scm/rust", "dep:syn", "dep:proc-macro2", "dep:ra_ap_syntax", "dep:salsa", "dep:tree-sitter-rust"]
+typescript = [
+    "shared", "hafley_scm/typescript", "dep:oxc_allocator", "dep:oxc_parser", "dep:oxc_ast",
+    "dep:oxc_ast_visit", "dep:oxc_span", "dep:oxc_syntax", "dep:oxc_semantic",
+    "dep:oxc_resolver", "dep:tree-sitter-typescript", "dep:tree-sitter-javascript",
+]
+go = ["shared", "hafley_scm/go", "dep:tree-sitter-go", "dep:gomod-parser"]
+kotlin = ["shared", "hafley_scm/kotlin", "dep:tree-sitter-kotlin-sg", "dep:hafley_scm"]
+python = ["shared", "hafley_scm/python", "dep:tree-sitter-python"]
+prolog = ["shared", "hafley_scm/prolog", "dep:tree-sitter-prolog"]
+markdown = ["shared", "hafley_scm/markdown", "dep:tree-sitter-md"]
+data = ["shared", "hafley_scm/data", "dep:tree-sitter-json", "dep:tree-sitter-yaml", "dep:tree-sitter-toml-ng", "dep:basic-toml"]
+fallback = ["shared", "hafley_scm/fallback", "dep:tree-sitter-html"]
+gdscript = ["shared", "hafley_scm/gdscript", "dep:tree-sitter-gdscript"]
+commonlisp = ["shared", "hafley_scm/commonlisp", "dep:tree-sitter-commonlisp"]
+read = [
+    "hafley_scm/read",
+    "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "markdown",
+    "data", "fallback", "gdscript", "commonlisp",
+]
+cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc", "dep:cap"]
 # The rust checker tier, `--features cli,rust-checker`. Off by default and out
 # of `cli`: it pulls the whole rust-analyzer crate graph (380s cold build).
 rust-checker = [
-    "hafley_scm/rust-checker",
+    "rust", "hafley_scm/rust-checker",
     "dep:ra_ap_hir",
     "dep:ra_ap_ide",
     "dep:ra_ap_ide_db",
@@ -306,11 +332,11 @@ rust-checker = [
 ]
 # The ts checker tier, `--features cli,ts-checker`. Off by default and out of
 # `cli`: it pulls no crate, but it makes every ts resolve able to spawn `node`.
-ts-checker = ["hafley_scm/ts-checker"]
+ts-checker = ["typescript", "hafley_scm/ts-checker"]
 # The go checker tier, `--features cli,go-checker`. Off by default and out of
 # `cli` for the same reason as its ts twin: it pulls no crate, and it makes
 # every go resolve able to spawn the `go` toolchain.
-go-checker = ["hafley_scm/go-checker"]
+go-checker = ["go", "hafley_scm/go-checker"]
 
 [[test]]
 name = "all"
@@ -319,7 +345,7 @@ path = "tests/all.rs"
 [[bin]]
 name = "ryii"
 path = "src/bin/ryi.rs"
-required-features = ["cli"]
+required-features = ["cli", "read"]
 
 # @comment-ok: build-vs-buy candidate table, the law this file's every dep
 # comment carries. getrusage for the ratchet's peak-RSS row: libc is one

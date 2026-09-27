@@ -7,9 +7,9 @@ use std::sync::{mpsc, Arc, Mutex};
 use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
-    CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs, OpError,
-    OpResult, QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs, StratifyArgs,
-    TrailArgs, WatchArgs,
+    CapabilitiesArgs, CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs,
+    OpError, OpResult, QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs,
+    StratifyArgs, TrailArgs, WatchArgs,
 };
 
 fn command(cmd: Cmd) -> Ryi {
@@ -320,6 +320,12 @@ pub fn trail(args: &TrailArgs) -> OpResult<Vec<u8>> {
 
 pub fn ingest(args: &IngestArgs) -> OpResult<Vec<u8>> {
     one(command(Cmd::Ingest(args.clone())))
+}
+
+pub fn capabilities(
+    _args: &CapabilitiesArgs,
+) -> Box<dyn Iterator<Item = OpResult<Vec<u8>>> + Send> {
+    stream(command(Cmd::Capabilities))
 }
 
 #[cfg(test)]

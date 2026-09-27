@@ -105,6 +105,16 @@ fn project_block_tree(
 }
 
 impl Source for MarkdownSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: true,
+            call: false,
+            df: false,
+            data: false,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "markdown"
     }

@@ -67,20 +67,35 @@ impl RyiLang {
     /// YAML `language:` field both arrive here.
     pub fn parse_name(name: &str) -> Option<Self> {
         match name {
+            #[cfg(feature = "rust")]
             "rust" | "rs" => Some(Self::Rust),
+            #[cfg(feature = "typescript")]
             "typescript" | "ts" => Some(Self::TypeScript),
+            #[cfg(feature = "typescript")]
             "tsx" => Some(Self::Tsx),
+            #[cfg(feature = "typescript")]
             "javascript" | "js" => Some(Self::JavaScript),
+            #[cfg(feature = "go")]
             "go" | "golang" => Some(Self::Go),
+            #[cfg(feature = "kotlin")]
             "kotlin" | "kt" => Some(Self::Kotlin),
+            #[cfg(feature = "python")]
             "python" | "py" => Some(Self::Python),
+            #[cfg(feature = "prolog")]
             "prolog" => Some(Self::Prolog),
+            #[cfg(feature = "markdown")]
             "markdown" | "md" => Some(Self::Markdown),
+            #[cfg(feature = "markdown")]
             "markdown_inline" | "md_inline" => Some(Self::MarkdownInline),
+            #[cfg(feature = "gdscript")]
             "gdscript" | "gd" => Some(Self::Gdscript),
+            #[cfg(feature = "commonlisp")]
             "commonlisp" | "lisp" | "cl" => Some(Self::Commonlisp),
+            #[cfg(feature = "fallback")]
             "html" | "htm" => Some(Self::Html),
+            #[cfg(feature = "data")]
             "json" => Some(Self::Json),
+            #[cfg(feature = "data")]
             "yaml" | "yml" => Some(Self::Yaml),
             _ => None,
         }
@@ -91,25 +106,54 @@ impl RyiLang {
     /// (prolog/_0_source.rs:25, markdown/_0_source.rs:86).
     pub fn tree_sitter_language(&self) -> tree_sitter::Language {
         match self {
+            #[cfg(feature = "rust")]
             Self::Rust => tree_sitter::Language::new(tree_sitter_rust::LANGUAGE),
+            #[cfg(feature = "typescript")]
             Self::TypeScript => {
                 tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
             }
+            #[cfg(feature = "typescript")]
             Self::Tsx => tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX),
+            #[cfg(feature = "typescript")]
             Self::JavaScript => tree_sitter::Language::new(tree_sitter_javascript::LANGUAGE),
+            #[cfg(feature = "go")]
             Self::Go => tree_sitter::Language::new(tree_sitter_go::LANGUAGE),
+            #[cfg(feature = "kotlin")]
             Self::Kotlin => tree_sitter::Language::new(tree_sitter_kotlin_sg::LANGUAGE),
+            #[cfg(feature = "python")]
             Self::Python => tree_sitter::Language::new(tree_sitter_python::LANGUAGE),
+            #[cfg(feature = "prolog")]
             Self::Prolog => tree_sitter::Language::new(tree_sitter_prolog::LANGUAGE),
+            #[cfg(feature = "markdown")]
             Self::Markdown => tree_sitter::Language::new(tree_sitter_md::LANGUAGE),
+            #[cfg(feature = "markdown")]
             Self::MarkdownInline => tree_sitter::Language::new(tree_sitter_md::INLINE_LANGUAGE),
+            #[cfg(feature = "gdscript")]
             Self::Gdscript => tree_sitter::Language::new(tree_sitter_gdscript::LANGUAGE),
+            #[cfg(feature = "commonlisp")]
             Self::Commonlisp => {
                 tree_sitter::Language::new(tree_sitter_commonlisp::LANGUAGE_COMMONLISP)
             }
+            #[cfg(feature = "fallback")]
             Self::Html => tree_sitter::Language::new(tree_sitter_html::LANGUAGE),
+            #[cfg(feature = "data")]
             Self::Json => tree_sitter::Language::new(tree_sitter_json::LANGUAGE),
+            #[cfg(feature = "data")]
             Self::Yaml => tree_sitter::Language::new(tree_sitter_yaml::LANGUAGE),
+            #[cfg(not(all(
+                feature = "rust",
+                feature = "typescript",
+                feature = "go",
+                feature = "kotlin",
+                feature = "python",
+                feature = "prolog",
+                feature = "markdown",
+                feature = "data",
+                feature = "fallback",
+                feature = "gdscript",
+                feature = "commonlisp",
+            )))]
+            _ => panic!("grammar feature for {} is disabled", self.name()),
         }
     }
 

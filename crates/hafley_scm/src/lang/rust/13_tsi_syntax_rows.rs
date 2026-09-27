@@ -387,7 +387,7 @@ fn tsi_impl(
         strings,
         names,
     );
-    if let Some((_, path, _)) = &block.trait_ {
+    if let Some((path, _)) = &block.trait_ {
         if let (Some(name), Some(segment)) = (path_name(path), path.segments.last()) {
             let span = syn_span(line_starts, segment.ident.span());
             let contract = names.named(strings, &name, span);
@@ -672,11 +672,15 @@ fn type_text(ty: &Type) -> String {
             type_text(&inner.elem),
             array_len_text(&inner.len)
         ),
-        Type::BareFn(inner) => {
+        Type::FnPtr(inner) => {
             let inputs: Vec<String> = inner.inputs.iter().map(|arg| type_text(&arg.ty)).collect();
             match &inner.output {
                 ReturnType::Type(_, returned) => {
-                    format!("fn({}) -> {}", inputs.join(", "), type_text(returned))
+                    format!(
+                        "fn({}) -> {}",
+                        inputs.join(", "),
+                        type_text(returned.as_ref())
+                    )
                 }
                 ReturnType::Default => format!("fn({})", inputs.join(", ")),
             }
@@ -688,10 +692,9 @@ fn type_text(ty: &Type) -> String {
         Type::Paren(inner) => format!("({})", type_text(&inner.elem)),
         Type::Path(inner) => path_text(&inner.path),
         Type::Ptr(inner) => {
-            let mode = if inner.mutability.is_some() {
-                "mut "
-            } else {
-                "const "
+            let mode = match inner.mutability {
+                syn::PointerMutability::Mut(_) => "mut ",
+                syn::PointerMutability::Const(_) => "const ",
             };
             format!("*{mode}{}", type_text(&inner.elem))
         }
@@ -749,13 +752,17 @@ fn path_text(path: &Path) -> String {
                 }
             }
             PathArguments::Parenthesized(arguments) => {
-                let inputs: Vec<String> = arguments.inputs.iter().map(type_text).collect();
+                let inputs: Vec<String> = arguments
+                    .inputs
+                    .iter()
+                    .map(|input| type_text(&input.ty))
+                    .collect();
                 out.push('(');
                 out.push_str(&inputs.join(", "));
                 out.push(')');
                 if let ReturnType::Type(_, returned) = &arguments.output {
                     out.push_str(" -> ");
-                    out.push_str(&type_text(returned));
+                    out.push_str(&type_text(returned.as_ref()));
                 }
             }
         }

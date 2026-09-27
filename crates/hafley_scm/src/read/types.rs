@@ -668,6 +668,15 @@ pub enum UnresolvedReason {
     FanoutCap,
 }
 
+/// One call site a `Resolve<CallF>` arm dropped: where, why, and the callee as
+/// written. Kept with the shared read types so language front ends do not need
+/// the whole-project resolver enabled to expose their drop rows.
+pub struct ResolveDrop {
+    pub span: Span,
+    pub reason: UnresolvedReason,
+    pub detail: String,
+}
+
 impl UnresolvedReason {
     pub const fn as_str(self) -> &'static str {
         match self {
@@ -1858,20 +1867,28 @@ pub struct IndexBag {
     pub joined_documents: std::sync::OnceLock<Vec<Option<(ContentId, Vec<u8>)>>>,
     pub paths: std::sync::OnceLock<PathIndex>,
     pub kinds: std::sync::OnceLock<KindIndex>,
+    #[cfg(feature = "typescript")]
     pub ts_modules: std::sync::OnceLock<crate::read::lang::ts_resolve::TsModuleIndex>,
     /// the rust module plane, same discipline as `ts_modules`.
+    #[cfg(feature = "rust")]
     pub rust_modules: std::sync::OnceLock<crate::read::lang::rust_modules::RustModuleIndex>,
     /// the go module plane, same discipline as `ts_modules`/`rust_modules`.
+    #[cfg(feature = "go")]
     pub go_modules: std::sync::OnceLock<crate::read::lang::go_modules::GoModuleIndex>,
     /// the python module plane, same discipline as `ts_modules`.
+    #[cfg(feature = "python")]
     pub py_modules: std::sync::OnceLock<crate::read::lang::python::PyModuleIndex>,
     /// the kotlin module plane, same discipline as `ts_modules`.
+    #[cfg(feature = "kotlin")]
     pub kt_modules: std::sync::OnceLock<crate::read::lang::kotlin_modules::KtModuleIndex>,
     /// the rust CHECKER tier's answers, joined to corpus def coordinates. Unset
     /// without `--rust-checker`, and unset when the workspace load fell back.
+    #[cfg(feature = "rust")]
     pub rust_checker: std::sync::OnceLock<crate::read::lang::rust_checker::RustCheckerIndex>,
     /// the ts CHECKER tier's answers, same discipline as `rust_checker`.
+    #[cfg(feature = "typescript")]
     pub ts_checker: std::sync::OnceLock<crate::read::lang::ts_checker::TsCheckerIndex>,
+    #[cfg(feature = "go")]
     pub go_checker: std::sync::OnceLock<crate::read::lang::go_checker::GoCheckerIndex>,
 }
 
@@ -2623,7 +2640,9 @@ pub struct RyiOutput {
     pub df: Option<FamilyBundle<DfF>>,
     pub data: Option<FamilyBundle<DataF>>,
     pub scm_captures: Option<crate::read::lang::scm_rows::ScmCaptures>,
+    #[cfg(feature = "kotlin")]
     pub kotlin_module: Option<crate::read::lang::kotlin_modules::KtModuleFacts>,
+    #[cfg(feature = "rust")]
     pub rust_module: Option<crate::read::lang::rust_modules::RustModuleFacts>,
 }
 
@@ -2632,6 +2651,8 @@ pub struct RyiOutput {
 pub trait Source: Sync + Send {
     fn name(&self) -> &'static str;
     fn matches(&self, path: &str) -> bool;
+    /// The extraction planes this source can project, declared without parsing.
+    fn planes(&self) -> FamilyMask;
     /// One parse per backing engine, masked projections. Owns the arena(s)
     /// internally; returns owned output (no borrowed parse crosses the seam).
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput;

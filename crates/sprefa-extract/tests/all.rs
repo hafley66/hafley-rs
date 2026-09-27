@@ -195,6 +195,8 @@ mod t_182_client_daemon;
 mod t_183_fast_path_spelling;
 #[path = "184_fast_recursive_receiver.rs"]
 mod t_184_fast_recursive_receiver;
+#[path = "184_language_feature_matrix.rs"]
+mod t_184_language_feature_matrix;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]
