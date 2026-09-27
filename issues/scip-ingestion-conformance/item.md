@@ -142,6 +142,6 @@ is updated from 220 to 228 rows for this index fixture.
 
 Verification: the new Rust fixture test, the contains target fixture test, and
 the CLI/router/socket parity test passed; the full sprefa-extract suite passed
-1,121 tests. The workspace suite is the remaining gate for this slice. Schema
-field coverage, per-language fixtures, and instance-level unclassified-drop
-accounting remain open.
+1,121 tests. The subsequent full workspace suite passed 1,378 tests (1 leaky),
+with 203 skipped. Schema field coverage, per-language fixtures, and
+instance-level unclassified-drop accounting remain open.
