@@ -102,7 +102,7 @@ example printed by `boop concatmap --help`.
 | 2 | `boop-crate-split` (DONE): the five crates above, one commit per crate extraction in dependency order (store, acp, harness, proc, cli), one PR | L | 1 | compile-time boundaries before renaming verbs |
 | 3 | `boop-job-namespace` (new): `boop job *` + `boop mail *` + `boop me *`, old spellings hidden aliases, `wait` for all, `kill` vs `rm`, `signal --children`, `attach`, per-job `--timeout` | M | 2 | the verb table in section 2 |
 | 4 | `boop-mail-dir-global-flag` (existing) + `boop-hidden-verbs-retire` (existing) | S | 3 | delete the aliases and the 34 flags after one release |
-| 5 | sprefa `boop-hosted-in-dl6`: the OpenAPI for `/jobs /mail /me` generated from dl6 | - | 3 | the generated surface replaces the hand one |
+| 5 | `sprefa boop-hosted-in-dl6` | obsolete | 3 | retired with the no-server/no-daemon decision |
 
 ## 5. Why this shape, and the neighbours
 

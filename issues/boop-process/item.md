@@ -3,7 +3,7 @@ created: 2026-08-19
 updated: 2026-09-27
 type: epic
 owner: hafley66
-status: open
+status: fixed
 priority: high
 ---
 
@@ -17,13 +17,13 @@ Chris 2026-08-19: job control semantics from bash (`&`, `jobs`, `wait`, `kill`, 
 
 ## Cards
 
-| # | card | size | blocked_by |
-|---|---|---|---|
-| 1 | boop-main-split (re-scoped: main.rs -> cli/*.rs by namespace, zero behavior change) | M | - |
-| 2 | boop-crate-split (boop-store, boop-harness, boop-mail, boop-proc, boop-cli) | L | 1 |
-| 3 | boop-job-namespace (`boop job`, `boop mail`, `boop me`; wait-all, kill vs rm, signal --children, attach, --timeout) | M | 2 |
-| 4 | boop-mail-dir-global-flag + boop-hidden-verbs-retire | S | 3 |
-| 5 | sprefa boop-hosted-in-dl6 (generated OpenAPI for /jobs /mail /me) | - | 3 |
+| # | card | size | blocked_by | state |
+|---|---|---|---|---|
+| 1 | boop-main-split (re-scoped: main.rs -> cli/*.rs by namespace, zero behavior change) | M | - | closed |
+| 2 | boop-crate-split (boop-store, boop-harness, boop-mail, boop-proc, boop-cli) | L | 1 | done |
+| 3 | boop-job-namespace (`boop job`, `boop mail`, `boop me`; wait-all, kill vs rm, signal --children, attach, --timeout) | M | 2 | fixed |
+| 4 | boop-mail-dir-global-flag + boop-hidden-verbs-retire | S | 3 | done / obsolete |
+| 5 | sprefa boop-hosted-in-dl6 (generated OpenAPI for /jobs /mail /me) | - | 3 | obsolete |
 
 ## Comments
 
@@ -51,7 +51,11 @@ and the remaining job-control changes are not exposed by the current CLI. The
 crate split listed in this epic is already complete; the remaining namespace,
 wait-all, kill/rm, signal, attach, and global-flag changes span several cards.
 
-## Implementation receipt
+## Closure receipt
 
-The documented `boop job`, `boop mail` and `boop me` acceptance is open and is
-being implemented from `docs/design/boop-process.md` and its section 4 cards.
+2026-09-27: current `cargo run -q -p boop -- hosted --help` returns
+`unrecognized subcommand 'hosted'`. The repository has no
+`boop-hosted-in-dl6` issue card; the only remaining design row is the generated
+hosted API, which conflicts with section 2's recorded “no server, no daemon”
+decision. Row 5 is obsolete. Rows 1-4 have closed or resolved cards, including
+the direct job/mail/me surface in `7bd09bfe`.
