@@ -189,6 +189,8 @@ mod t_181_server_modes;
 mod t_181_ts_ladder;
 #[path = "182_client_daemon.rs"]
 mod t_182_client_daemon;
+#[path = "183_fast_path_spelling.rs"]
+mod t_183_fast_path_spelling;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]

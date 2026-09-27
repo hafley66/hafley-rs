@@ -309,8 +309,11 @@ pub fn module_target(from: &str, qualifier: &[&str]) -> Option<ModuleTarget> {
 /// The crate directory holding `path`: the prefix ending at the segment before
 /// the first `src`. None where the file sits outside a Cargo layout.
 pub fn crate_root_of(path: &str) -> Option<String> {
-    let (root, _) = path.split_once("/src/")?;
-    Some(root.to_string())
+    if let Some((root, _)) = path.split_once("/src/") {
+        Some(root.to_string())
+    } else {
+        path.strip_prefix("src/").map(|_| String::new())
+    }
 }
 
 /// One corpus `DefSite` examined while learning a file's own blob. The term
