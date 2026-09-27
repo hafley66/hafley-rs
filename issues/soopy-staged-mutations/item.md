@@ -3,7 +3,7 @@ created: 2026-08-16
 updated: 2026-09-26
 type: epic
 owner: chrishafley
-status: obsolete
+status: open
 priority: high
 labels: [domain-soopy, intent-architecture, artifact-runtime]
 ---
@@ -42,4 +42,4 @@ The detailed archaeology, type proposal, library survey, lifecycle, and implemen
 
 ## Repro receipt
 
-2026-09-26: current `ryii move --help` exits 0 with the staged mutation interface; this completed contract epic has no current command defect reproduced, only deferred scale gates.
+2026-09-26: scale acceptance remains unchecked for large edit sets, large files, and many repositories; this epic stays open until those gates have receipts.
