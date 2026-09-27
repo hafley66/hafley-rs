@@ -4,6 +4,7 @@
 
 | Gate | Receipt |
 |---|---|
+| Kotlin declaration scope | Forward `later()` was red as `NoDefinition`; namespace/type names now bind from the enclosing declaration scope regardless of source order, while a later `val` remains `DefinitionAfterReference`. Local suite passes 14/14. |
 | L1 relation predicates | Tests cover `#inside?`, `#has?`, `#precedes?`, and `#follows?` through `Query::general_predicates()` on Rust syntax. |
 | Match-limit rail | Every `run_query` drains `matches()` and checks `did_exceed_match_limit()`; overflow returns `MatchLimit { path }`. |
 | Grouped captures | The query runner uses `matches()` only; a two-capture fixture asserts both captures remain grouped in one result. |
@@ -14,9 +15,11 @@
 | Typed Kotlin receivers | Parameter types, constructor property types, and generic upper bounds resolve member accesses, including chained class properties, to the declaring file and definition span. |
 | L5 TypeScript query | Helix `_typescript`, `ecma`, and `typescript` locals query files are vendored; the existing Kotlin-tested engine resolves a TypeScript parameter with no language-specific engine change. |
 
-The query evaluator and local scope resolver total 456 lines. Kotlin `locals.scm` totals 73 lines, including source/license attribution and lab query additions.
+The query evaluator and local scope resolver total 486 lines. Kotlin `locals.scm` totals 73 lines, including source/license attribution and lab query additions.
 
-Kotlin fixture comparison and the final verdict remain open gates. The comparison runs below exercise the receiver and module-resolution implementation.
+The forward-declaration reproducer passed after the scope fix; the lab suite is 14/14. The checked-in Ryi Kotlin receiver/module fixture tests passed 8/8. The pinned SCIP judge and fast-SCM ratchet tests passed 3/3. The byte-equal ryi/ryii e2e script passed 14/14 from a lane-scratch copy configured to keep temporary output outside `/tmp`. The workspace suite passed 1379/1379 with 203 skipped and one previously recorded leaky case (`boop-acp::channel::claude::tests::streamed_activity_is_reported_to_the_stall_watchdog`).
+
+The L4 lab-versus-`ryi fast` resolution/unresolved-set comparison and the L6 lab-edge SCIP comparison plus replacement verdict remain open gates. The commands below exercise the current Kotlin receiver/module and pinned SCIP implementations; the lab output comparison and 61% line-count verdict still need measurements.
 
 ## Remaining measurement gates
 

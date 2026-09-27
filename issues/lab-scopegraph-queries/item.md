@@ -189,6 +189,7 @@ CodeQL and Glean, and is out of scope here.
 - [x] `did_exceed_match_limit()` is checked after each query run and overflow returns a path-named error.
 - [x] The engine uses `matches()` exclusively; tests pin grouped captures.
 - [x] Kotlin corpus resolution handles explicit imports, aliases, wildcard imports, and same-package names.
+- [x] Kotlin local resolution hoists function and type declarations into their enclosing scope while preserving source order for value bindings.
 - [x] Qualified-name symbol-stack graph edges and typed receiver-member resolution.
 - [ ] L1-L4 on Kotlin: compare receiver 7 and module-plane 11 fixtures with `ryi fast`, with zero unexplained disagreements.
 - [x] L5 TypeScript query runs through the same engine with zero language-specific engine edits.
@@ -211,3 +212,7 @@ The recorded L1 implementation exists, and the lab crate named above is absent. 
 ### 2026-09-27 · implementation receipt
 
 The initial current-checkout reproduction on `w: Widget` / `w.run()` had no member access in `ScopeGraph` and no edge from the call to `Widget.run`. `cargo nextest run --locked -j 2 --offline` in `crates/sprefa-lab-scopegraph` passes 13 tests, including qualified-name stack transition edges and typed receiver resolution for parameters, class-property chains, and generic bounds. The workspace gate passed 1,340 tests with 0 failures and 199 skipped. The L4 fixture comparison and L6 SCIP/ratchet measurements remain open as listed above.
+
+### 2026-09-27 · forward declaration reproduction
+
+Red: `kotlin_top_level_functions_resolve_before_declaration_but_values_do_not` observed `later()` with `definition=None, unresolved=NoDefinition` for `fun caller() = later(); fun later() = 1`. Green: namespace/type definitions attach to the containing scope and resolve independent of source order; the same test passes while a later `val item` remains `DefinitionAfterReference`. The corpus test now asserts a sibling function call resolves locally; its cross-file same-package case remains pinned in `Main.kt`. The lab suite passes 14/14. The `sprefa-extract` query entry now uses the crate's public re-exports with only shared, Kotlin, and TypeScript features enabled. L4 fixture comparisons and L6 SCIP/ratchet measurements remain unchecked with their commands in `REPORT.md`.

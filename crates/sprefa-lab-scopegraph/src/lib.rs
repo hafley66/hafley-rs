@@ -24,12 +24,10 @@ pub fn sprefa_query<'a>(
     language: &str,
     query: &str,
     source: &'a [u8],
-) -> Result<Vec<sprefa_extract::lang::TreeSitterSpannedMatch>, Box<dyn std::error::Error>> {
-    let request = sprefa_extract::lang::TreeSitterQuery {
+) -> Result<Vec<sprefa_extract::TreeSitterSpannedMatch>, Box<dyn std::error::Error>> {
+    let request = sprefa_extract::TreeSitterQuery {
         language: language.into(),
         query: query.into(),
     };
-    Ok(sprefa_extract::lang::query_tree_sitter_spans(
-        source, &request,
-    )?)
+    Ok(sprefa_extract::query_tree_sitter_spans(source, &request)?)
 }

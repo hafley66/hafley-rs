@@ -110,8 +110,8 @@ pub fn resolve(captures: impl IntoIterator<Item = Capture>, source_len: usize) -
         .collect::<Vec<_>>();
     let mut definitions = Vec::new();
     for capture in definition_captures {
-        let scope = innermost_scope(&scopes, capture.start, capture.end);
         let role = capture.label["local.definition.".len()..].to_string();
+        let scope = definition_scope(&scopes, &capture, &role);
         let definition = Definition {
             name: capture.text.clone(),
             role,
@@ -153,7 +153,10 @@ pub fn resolve(captures: impl IntoIterator<Item = Capture>, source_len: usize) -
             if let Some(found) = matching
                 .iter()
                 .copied()
-                .filter(|index| definitions[*index].capture.start <= capture.start)
+                .filter(|index| {
+                    definitions[*index].capture.start <= capture.start
+                        || matches!(definitions[*index].role.as_str(), "namespace" | "type")
+                })
                 .max_by_key(|index| definitions[*index].capture.start)
             {
                 definition = Some(found);
@@ -180,6 +183,33 @@ pub fn resolve(captures: impl IntoIterator<Item = Capture>, source_len: usize) -
         definitions,
         references,
     }
+}
+
+fn definition_scope(scopes: &[Scope], capture: &Capture, role: &str) -> usize {
+    if matches!(role, "namespace" | "type") {
+        let declaration = capture
+            .ancestor_kinds
+            .iter()
+            .zip(&capture.ancestors)
+            .find(|(kind, _)| {
+                matches!(
+                    kind.as_str(),
+                    "function_declaration" | "class_declaration" | "object_declaration"
+                )
+            })
+            .map(|(_, span)| *span);
+        if let Some(parent) = declaration
+            .and_then(|(start, end)| {
+                scopes
+                    .iter()
+                    .find(|scope| scope.start == start && scope.end == end)
+            })
+            .and_then(|scope| scope.parent)
+        {
+            return parent;
+        }
+    }
+    innermost_scope(scopes, capture.start, capture.end)
 }
 
 fn innermost_scope(scopes: &[Scope], start: usize, end: usize) -> usize {

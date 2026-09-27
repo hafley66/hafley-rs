@@ -29,7 +29,7 @@ fn typescript_reuses_the_scope_engine_without_language_engine_edits() {
 
 #[test]
 fn sprefa_dependency_supplies_the_existing_parse_and_query_entry() {
-    let spans = sprefa_query("rust", "(identifier) @name", b"fn f() {} ").unwrap();
+    let spans = sprefa_query("kotlin", "(simple_identifier) @name", b"fun f() {} ").unwrap();
     assert_eq!(spans.len(), 1);
     assert_eq!(spans[0].captures[0].text, "f");
 }
@@ -113,10 +113,10 @@ fn kotlin_corpus_resolves_explicit_and_wildcard_imports_and_same_package_names()
     }));
     let helper = &corpus.units["app/Helper.kt"];
     assert!(helper.graph.references.iter().any(|reference| {
-        reference
-            .external
-            .as_ref()
-            .is_some_and(|target| target.name == "helper" && target.resolution == "same_package")
+        reference.name == "helper"
+            && reference
+                .definition
+                .is_some_and(|definition| helper.graph.definitions[definition].role == "namespace")
     }));
 }
 
@@ -346,5 +346,36 @@ fn unknown_general_predicate_is_a_named_error() {
     assert_eq!(
         error,
         query::QueryFailure::UnknownPredicate("unknown?".into())
+    );
+}
+
+#[test]
+fn kotlin_top_level_functions_resolve_before_declaration_but_values_do_not() {
+    let source =
+        "fun caller() = later()\nfun later() = 1\nfun values() { consume(item); val item = 1 }";
+    let graph = analyze(
+        Language::new(tree_sitter_kotlin_sg::LANGUAGE),
+        source,
+        include_str!("../queries/kotlin/locals.scm"),
+        Path::new("forward.kt"),
+    )
+    .unwrap();
+    let later = graph
+        .references
+        .iter()
+        .find(|reference| reference.name == "later")
+        .unwrap();
+    assert!(
+        later.definition.is_some(),
+        "later function should resolve: {later:?}"
+    );
+    let item = graph
+        .references
+        .iter()
+        .find(|reference| reference.name == "item")
+        .unwrap();
+    assert_eq!(
+        item.unresolved,
+        Some(sprefa_lab_scopegraph::scope::UnresolvedReason::DefinitionAfterReference)
     );
 }

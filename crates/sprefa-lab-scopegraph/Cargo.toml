@@ -10,7 +10,7 @@ publish = false
 path = "src/lib.rs"
 
 [dependencies]
-sprefa-extract = { path = "../sprefa-extract", default-features = false }
+sprefa-extract = { path = "../sprefa-extract", default-features = false, features = ["shared", "kotlin", "typescript"] }
 streaming-iterator = "0.1"
 tree-sitter = "0.25"
 tree-sitter-kotlin-sg = "0.4"
