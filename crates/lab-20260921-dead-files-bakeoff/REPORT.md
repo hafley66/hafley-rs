@@ -13,6 +13,8 @@ Rust verdict: pending the source module reachability and `dead_code` measurement
 
 ## Remaining measurements
 
+These gates remain pending: `knip` is not installed, no user-selected TypeScript repository is recorded, and the Rust comparisons are measurement runs. The command lines below are the exact reruns; the three-way report stays incomplete until their outputs are compared.
+
 Run on the user-selected TypeScript repository:
 
 ```sh

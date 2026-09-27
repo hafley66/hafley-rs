@@ -45,6 +45,8 @@ Open-gate commands are recorded in `crates/lab-20260921-dead-files-bakeoff/REPOR
 
 2026-09-27 before implementation: `find crates -maxdepth 2 -type d -name 'lab-*'` returned no lab crate; `crates/lab-20260921-dead-files-bakeoff` and its `REPORT.md` were absent.
 
+2026-09-27 current-ryii repro: `HAFLEY_TRACE=1 timeout 10 /Users/chrishafley/.cache/boop/cargo-target/debug/ryii --deps --root crates/sprefa-extract/tests/fixtures/ts5_findings crates/sprefa-extract/tests/fixtures/ts5_findings > /tmp/dead-files-ryi-current.jsonl` completed and emitted 33 `file_edge` rows for the 61-file fixture. The existing fixture comparison is current; Knip, a user-selected repository, and the Rust measurements remain open gates with exact commands in `REPORT.md`.
+
 2026-09-26: fixture comparison on `crates/sprefa-extract/tests/fixtures/ts5_findings`:
 
 - `timeout 10 madge --json --extensions ts crates/sprefa-extract/tests/fixtures/ts5_findings`: 61 files, 32 edges.
