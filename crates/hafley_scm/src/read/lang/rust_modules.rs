@@ -41,7 +41,7 @@ struct StarImport {
 }
 
 /// One file's `use`/`mod` facts, carried from phase 1 into project resolve.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RustModuleFacts {
     uses: Vec<UseBinding>,
     stars: Vec<StarImport>,
@@ -74,14 +74,14 @@ pub struct RustModuleFacts {
 }
 
 /// One trait declaration's fn set.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraitEntry {
     pub name: String,
     pub fns: Vec<TraitFn>,
 }
 
 /// One fn of a trait: `default` marks a fn with a body.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TraitFn {
     pub name: String,
     pub span: Span,
@@ -105,26 +105,24 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
 pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
     let macros = hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts);
-    rust_module_facts_from_rows(parsed, line_starts, rows, macros)
+    rust_module_facts_from_rows(rows, macros, syn_module_extras(parsed, line_starts))
 }
 
-pub fn rust_module_facts_from_tree(
-    parsed: &syn::File,
-    line_starts: &[u32],
-    tree: &tree_sitter::Tree,
-    source: &[u8],
-) -> RustModuleFacts {
+pub fn rust_module_facts_from_tree(tree: &tree_sitter::Tree, source: &[u8]) -> RustModuleFacts {
     let rows = hafley_scm::lang::rust::module_resolution_rows_from_tree(tree, source);
     let macros = hafley_scm::lang::rust::macro_invocation_rows_from_tree(tree, source);
-    rust_module_facts_from_rows(parsed, line_starts, rows, macros)
+    rust_module_facts_from_rows(rows, macros, tree_module_extras(tree, source))
 }
 
-fn rust_module_facts_from_rows(
-    parsed: &syn::File,
-    line_starts: &[u32],
-    rows: hafley_scm::lang::rust::ModuleResolutionRows,
-    macros: Vec<hafley_scm::lang::rust::MacroInvocationRow>,
-) -> RustModuleFacts {
+#[derive(Default)]
+struct ModuleExtras {
+    assoc_types: Vec<(String, String, Span)>,
+    method_returns: Vec<(String, String, String)>,
+    call_result_receivers: Vec<(Span, String, String)>,
+    private_defs: HashSet<String>,
+}
+
+fn syn_module_extras(parsed: &syn::File, line_starts: &[u32]) -> ModuleExtras {
     let mut return_walk = ReturnReceiverWalk {
         line_starts,
         method_returns: Vec::new(),
@@ -171,6 +169,239 @@ fn rust_module_facts_from_rows(
         })
         .flatten()
         .collect();
+    let private_defs = parsed
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Struct(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Enum(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Union(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Type(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Trait(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Fn(item) => Some((&item.sig.ident, &item.vis)),
+            syn::Item::Const(item) => Some((&item.ident, &item.vis)),
+            syn::Item::Static(item) => Some((&item.ident, &item.vis)),
+            _ => None,
+        })
+        .filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
+        .map(|(ident, _)| ident.to_string())
+        .collect();
+    ModuleExtras {
+        assoc_types,
+        method_returns: return_walk.method_returns,
+        call_result_receivers: return_walk.receivers,
+        private_defs,
+    }
+}
+
+fn tree_module_extras(tree: &tree_sitter::Tree, source: &[u8]) -> ModuleExtras {
+    let root = tree.root_node();
+    let mut extras = ModuleExtras::default();
+    for item in named_children(root) {
+        if !matches!(
+            item.kind(),
+            "struct_item"
+                | "enum_item"
+                | "union_item"
+                | "type_item"
+                | "trait_item"
+                | "function_item"
+                | "const_item"
+                | "static_item"
+        ) || named_children(item).iter().any(|child| {
+            child.kind() == "visibility_modifier" && tree_text(*child, source).trim() == "pub"
+        }) {
+            continue;
+        }
+        if let Some(name) = item.child_by_field_name("name") {
+            extras
+                .private_defs
+                .insert(tree_text(name, source).to_owned());
+        }
+    }
+    collect_tree_module_extras(root, source, &mut extras);
+    extras
+}
+
+fn collect_tree_module_extras(
+    node: tree_sitter::Node<'_>,
+    source: &[u8],
+    extras: &mut ModuleExtras,
+) {
+    match node.kind() {
+        "trait_item" => {
+            if let (Some(owner), Some(body)) = (
+                node.child_by_field_name("name"),
+                node.child_by_field_name("body"),
+            ) {
+                let owner = tree_text(owner, source).to_owned();
+                for assoc in named_children(body)
+                    .into_iter()
+                    .filter(|child| child.kind() == "associated_type")
+                {
+                    if let Some(name) = assoc.child_by_field_name("name") {
+                        extras.assoc_types.push((
+                            owner.clone(),
+                            tree_text(name, source).to_owned(),
+                            Span {
+                                start: name.start_byte() as u32,
+                                len: (name.end_byte() - name.start_byte()) as u32,
+                            },
+                        ));
+                    }
+                }
+            }
+        }
+        "impl_item" => {
+            let owner = node
+                .child_by_field_name("type")
+                .and_then(|ty| tree_principal_type(ty, source));
+            if let (Some(owner), Some(body)) = (owner, node.child_by_field_name("body")) {
+                for method in named_children(body)
+                    .into_iter()
+                    .filter(|child| child.kind() == "function_item")
+                {
+                    let (Some(name), Some(return_type)) = (
+                        method.child_by_field_name("name"),
+                        method.child_by_field_name("return_type"),
+                    ) else {
+                        continue;
+                    };
+                    let Some(return_type) = tree_principal_type(return_type, source) else {
+                        continue;
+                    };
+                    extras.method_returns.push((
+                        owner.clone(),
+                        tree_text(name, source).to_owned(),
+                        if return_type == "Self" {
+                            owner.clone()
+                        } else {
+                            return_type
+                        },
+                    ));
+                }
+            }
+        }
+        "call_expression" => {
+            if let Some(function) = node.child_by_field_name("function") {
+                if function.kind() == "field_expression" {
+                    if let (Some(receiver), Some(method)) = (
+                        function.child_by_field_name("value"),
+                        function.child_by_field_name("field"),
+                    ) {
+                        if receiver.kind() == "call_expression" {
+                            if let Some(inner_function) = receiver.child_by_field_name("function") {
+                                if matches!(
+                                    inner_function.kind(),
+                                    "scoped_identifier" | "scoped_type_identifier"
+                                ) {
+                                    let path = tree_text(inner_function, source)
+                                        .trim_start_matches("::")
+                                        .split("::")
+                                        .map(str::trim)
+                                        .filter(|part| !part.is_empty())
+                                        .collect::<Vec<_>>();
+                                    if path.len() >= 2 {
+                                        extras.call_result_receivers.push((
+                                            Span {
+                                                start: method.start_byte() as u32,
+                                                len: (method.end_byte() - method.start_byte())
+                                                    as u32,
+                                            },
+                                            path[path.len() - 2].to_owned(),
+                                            path[path.len() - 1].to_owned(),
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+    for child in named_children(node) {
+        collect_tree_module_extras(child, source, extras);
+    }
+}
+
+fn tree_principal_type(node: tree_sitter::Node<'_>, source: &[u8]) -> Option<String> {
+    match node.kind() {
+        "unit_type" => None,
+        "reference_type" | "pointer_type" | "parenthesized_type" => node
+            .child_by_field_name("type")
+            .or_else(|| {
+                named_children(node)
+                    .into_iter()
+                    .find(|child| is_tree_type(child.kind()))
+            })
+            .and_then(|child| tree_principal_type(child, source)),
+        "generic_type" => {
+            let head = node.child_by_field_name("type")?;
+            let name = tree_text(head, source).rsplit("::").next()?.to_owned();
+            if matches!(name.as_str(), "Result" | "Option") {
+                let args = node.child_by_field_name("type_arguments")?;
+                named_children(args)
+                    .into_iter()
+                    .find(|arg| is_tree_type(arg.kind()))
+                    .and_then(|arg| tree_principal_type(arg, source))
+            } else {
+                Some(name)
+            }
+        }
+        "dynamic_type" => node
+            .child_by_field_name("trait")
+            .and_then(|trait_path| tree_principal_type(trait_path, source)),
+        "trait_object" | "abstract_type" => {
+            let bounds = named_children(node);
+            (bounds.len() == 1)
+                .then(|| tree_principal_type(bounds[0], source))
+                .flatten()
+        }
+        "type_identifier" | "primitive_type" | "scoped_type_identifier" => Some(
+            tree_text(node, source)
+                .trim()
+                .rsplit("::")
+                .next()?
+                .to_owned(),
+        ),
+        _ => None,
+    }
+}
+
+fn is_tree_type(kind: &str) -> bool {
+    matches!(
+        kind,
+        "type_identifier"
+            | "primitive_type"
+            | "scoped_type_identifier"
+            | "generic_type"
+            | "reference_type"
+            | "pointer_type"
+            | "tuple_type"
+            | "array_type"
+            | "slice_type"
+            | "function_type"
+            | "dynamic_type"
+            | "unit_type"
+    )
+}
+
+fn named_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Node<'_>> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).collect()
+}
+
+fn tree_text<'a>(node: tree_sitter::Node<'_>, source: &'a [u8]) -> &'a str {
+    std::str::from_utf8(&source[node.byte_range()]).expect("Rust source is UTF-8")
+}
+
+fn rust_module_facts_from_rows(
+    rows: hafley_scm::lang::rust::ModuleResolutionRows,
+    macros: Vec<hafley_scm::lang::rust::MacroInvocationRow>,
+    extras: ModuleExtras,
+) -> RustModuleFacts {
     RustModuleFacts {
         uses: rows
             .uses
@@ -253,9 +484,9 @@ fn rust_module_facts_from_rows(
                     .collect(),
             })
             .collect(),
-        assoc_types,
-        method_returns: return_walk.method_returns,
-        call_result_receivers: return_walk.receivers,
+        assoc_types: extras.assoc_types,
+        method_returns: extras.method_returns,
+        call_result_receivers: extras.call_result_receivers,
         aliases: rows
             .aliases
             .into_iter()
@@ -264,23 +495,7 @@ fn rust_module_facts_from_rows(
                 len: range.end - range.start,
             })
             .collect(),
-        private_defs: parsed
-            .items
-            .iter()
-            .filter_map(|item| match item {
-                syn::Item::Struct(item) => Some((&item.ident, &item.vis)),
-                syn::Item::Enum(item) => Some((&item.ident, &item.vis)),
-                syn::Item::Union(item) => Some((&item.ident, &item.vis)),
-                syn::Item::Type(item) => Some((&item.ident, &item.vis)),
-                syn::Item::Trait(item) => Some((&item.ident, &item.vis)),
-                syn::Item::Fn(item) => Some((&item.sig.ident, &item.vis)),
-                syn::Item::Const(item) => Some((&item.ident, &item.vis)),
-                syn::Item::Static(item) => Some((&item.ident, &item.vis)),
-                _ => None,
-            })
-            .filter(|(_, vis)| !matches!(vis, syn::Visibility::Public(_)))
-            .map(|(ident, _)| ident.to_string())
-            .collect(),
+        private_defs: extras.private_defs,
         macro_invocations: macros
             .into_iter()
             .map(|row| {
@@ -2386,4 +2601,117 @@ fn named_defs(
         .collect();
     defs.iter()
         .filter(move |(span, name, _)| !shared.contains(span) || !clean.contains(name.as_str()))
+}
+
+#[cfg(test)]
+mod tree_facts_tests {
+    use super::*;
+
+    #[test]
+    fn tree_module_facts_match_syn_across_pinned_rust_fixtures() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let mut pending = vec![
+            root.join("../sprefa-extract/tests/fixtures/ratchet_soopy/src"),
+            root.join("../sprefa-extract/tests/fixtures/type_ladder_scope/src"),
+            root.join("../sprefa-extract/tests/fixtures/call_ladder/src"),
+            root.join("../sprefa-extract/tests/fixtures/rust_visibility"),
+        ];
+        let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+        let mut parser = tree_sitter::Parser::new();
+        parser.set_language(&language).expect("Rust grammar loads");
+        while let Some(dir) = pending.pop() {
+            for entry in std::fs::read_dir(&dir).expect("fixture directory reads") {
+                let path = entry.expect("fixture entry reads").path();
+                if path.is_dir() {
+                    pending.push(path);
+                    continue;
+                }
+                if path.extension().and_then(std::ffi::OsStr::to_str) != Some("rs") {
+                    continue;
+                }
+                let source = std::fs::read(&path).expect("fixture source reads");
+                let source_text = std::str::from_utf8(&source).expect("fixture source is UTF-8");
+                let parsed = hafley_scm::lang::rust::parse_rust_syntax(source_text)
+                    .expect("Syn parses fixture");
+                let tree = parser
+                    .parse(&source, None)
+                    .expect("tree-sitter parses fixture");
+                let syn_facts = rust_module_facts_from_parsed(&parsed.file, &parsed.line_starts);
+                let tree_facts = rust_module_facts_from_tree(&tree, &source);
+                assert_eq!(tree_facts.uses, syn_facts.uses, "uses: {}", path.display());
+                assert_eq!(
+                    tree_facts.stars,
+                    syn_facts.stars,
+                    "stars: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.inline_mods,
+                    syn_facts.inline_mods,
+                    "inline modules: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.mod_decls,
+                    syn_facts.mod_decls,
+                    "mod decls: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.impls,
+                    syn_facts.impls,
+                    "impls: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.enums,
+                    syn_facts.enums,
+                    "enums: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.traits,
+                    syn_facts.traits,
+                    "traits: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.assoc_types,
+                    syn_facts.assoc_types,
+                    "assoc types: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.method_returns,
+                    syn_facts.method_returns,
+                    "method returns: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.call_result_receivers,
+                    syn_facts.call_result_receivers,
+                    "call result receivers: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.aliases,
+                    syn_facts.aliases,
+                    "aliases: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.private_defs,
+                    syn_facts.private_defs,
+                    "private defs: {}",
+                    path.display()
+                );
+                assert_eq!(
+                    tree_facts.macro_invocations,
+                    syn_facts.macro_invocations,
+                    "macro invocations: {}",
+                    path.display()
+                );
+            }
+        }
+    }
 }

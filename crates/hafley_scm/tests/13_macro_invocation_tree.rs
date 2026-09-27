@@ -10,6 +10,7 @@ fn tree_macro_invocation_rows_match_syn_across_rust_fixtures() {
     let roots = [
         fixture_root.join("../sprefa-extract/tests/fixtures/ratchet_soopy/src"),
         fixture_root.join("../sprefa-extract/tests/fixtures/type_ladder_scope/src"),
+        fixture_root.join("../sprefa-extract/tests/fixtures/call_ladder/src"),
     ];
     let mut pending = roots.to_vec();
     while let Some(path) = pending.pop() {

@@ -213,14 +213,7 @@ impl Source for RustSource {
                                 line_starts,
                             )
                         },
-                        |tree| {
-                            super::rust_modules::rust_module_facts_from_tree(
-                                &parsed.file,
-                                line_starts,
-                                tree,
-                                content,
-                            )
-                        },
+                        |tree| super::rust_modules::rust_module_facts_from_tree(tree, content),
                     ));
                     if mask.types {
                         let span = trace::family_span("rust", "type");
