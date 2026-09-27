@@ -1,0 +1,10 @@
+crates/hafley_scm/src/cst.rs:111
+crates/hafley_scm/src/read/2_slow.rs:702
+crates/hafley_scm/src/read/cpg_decode.rs:81
+crates/hafley_scm/src/read/lang/rust/lib.rs:240
+crates/hafley_scm/src/read/lang/rust_modules.rs:2656
+crates/hafley_scm/src/read/project.rs:3408
+crates/sprefa-extract/src/0_graph.rs:816
+crates/sprefa-extract/src/bin/ryi/0_sqlite.rs:705
+crates/sprefa-extract/src/bin/ryi/ops.rs:341
+crates/sprefa-extract/src/edit/_7_cleave.rs:2819
