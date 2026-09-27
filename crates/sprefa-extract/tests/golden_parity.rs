@@ -731,13 +731,16 @@ fn type_edge_resolve_parity_rust() {
                         cand.kind.as_str()
                     )
                 })
-                // v6 minds an impl block's bare self-type head as a `uses`
-                // row and callable signature refs as param/returns rows.
-                // Neither belongs to the v5 parity subset.
+                // Keep the established self-type exclusion and drop only the
+                // added Engine struct-literal uses from sample.rs and docs.rs.
                 .filter(|row| {
                     let mut parts = row.split('\t').skip(1);
                     let (owner, to, kind) = (parts.next(), parts.next(), parts.next());
+                    let struct_literal = owner == Some("make_engine")
+                        && to == Some("Engine")
+                        && kind == Some("uses");
                     !(owner == to && kind == Some("uses"))
+                        && !struct_literal
                         && !matches!(kind, Some("param" | "returns"))
                 })
                 .collect();
