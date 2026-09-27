@@ -293,7 +293,7 @@ features = ["env-filter", "json"]
 optional = true
 
 [features]
-default = ["read"]
+default = ["read", "graph"]
 shared = [
     "hafley_scm/shared", "dep:memchr", "dep:ignore", "dep:globset", "dep:serde_json",
     "dep:regex", "dep:soopy", "dep:prost", "dep:rusqlite", "dep:rustc-hash",
@@ -309,6 +309,7 @@ go = ["shared", "hafley_scm/go", "dep:tree-sitter-go", "dep:gomod-parser"]
 kotlin = ["shared", "hafley_scm/kotlin", "dep:tree-sitter-kotlin-sg", "dep:hafley_scm"]
 python = ["shared", "hafley_scm/python", "dep:tree-sitter-python"]
 prolog = ["shared", "hafley_scm/prolog", "dep:tree-sitter-prolog"]
+graph = ["shared", "hafley_scm/graph"]
 markdown = ["shared", "hafley_scm/markdown", "dep:tree-sitter-md"]
 data = ["shared", "hafley_scm/data", "dep:tree-sitter-json", "dep:tree-sitter-yaml", "dep:tree-sitter-toml-ng", "dep:basic-toml"]
 fallback = ["shared", "hafley_scm/fallback", "dep:tree-sitter-html"]
