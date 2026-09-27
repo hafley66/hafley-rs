@@ -2,6 +2,7 @@
 //! interrupt) per connected agent, through the same ladder every send walks.
 
 use std::collections::BTreeMap;
+use std::net::TcpStream;
 use std::path::Path;
 use std::time::Duration;
 
@@ -9,7 +10,7 @@ use anyhow::{Context, Result};
 use tracing::info;
 
 use boop::bus::Route;
-use boop::live::{LiveSession, LiveStatus};
+use boop::live::{DoorAddress, LiveSession, LiveStatus};
 use boop::registry::Registry;
 use boop::{bus, identity, lane, tmux};
 
@@ -39,45 +40,6 @@ pub(crate) enum Reach {
     LivePane(String),
     /// A pane-less coordinator or native: addressable while registered.
     DoorOnly,
-    /// Nothing live to address: a dropped pane, or a lane with no pane (a
-    /// retired lane is revived by its own send, never by a broadcast).
-    Dead(&'static str),
-}
-
-/// How one route stands right now. `alive` is the tmux seam
-/// `(socket, target) -> live`, injected so selection needs no server.
-fn reach_of(route: &Route, alive: &mut impl FnMut(Option<&str>, &str) -> bool) -> Reach {
-    match route.tmux.as_deref().filter(|t| !t.is_empty()) {
-        Some(target) if alive(None, target) => {
-            Reach::LivePane(boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned()))
-        }
-        Some(_) => Reach::Dead("tmux target is gone"),
-        None => match route.kind.as_str() {
-            "coordinator" | "native" => Reach::DoorOnly,
-            _ => Reach::Dead("no pane"),
-        },
-    }
-}
-
-/// Every connected route except the caller; `alive` is the tmux seam
-/// `(socket, target) -> live`, injected so selection needs no server.
-pub(crate) fn connected<'a>(
-    routes: &'a BTreeMap<String, Route>,
-    caller: Option<&str>,
-    mut alive: impl FnMut(Option<&str>, &str) -> bool,
-) -> Vec<(&'a str, &'a Route, Reach)> {
-    routes
-        .iter()
-        .filter(|(name, _)| Some(name.as_str()) != caller)
-        .filter_map(|(name, route)| {
-            let reach = reach_of(route, &mut alive);
-            matches!(reach, Reach::LivePane(_) | Reach::DoorOnly).then_some((
-                name.as_str(),
-                route,
-                reach,
-            ))
-        })
-        .collect()
 }
 
 /// Who the broadcast is from: an explicit `--as` is the sender even when it is
@@ -124,6 +86,121 @@ pub(crate) struct Broadcast<'a> {
     pub as_name: Option<&'a str>,
     /// A scream sends keys and cancel rows; a shout sends rows only.
     pub interrupt: bool,
+    pub verbose: bool,
+    pub json: bool,
+}
+
+/// A route must resolve through its declared harness at this send and still
+/// occupy the registered pane/process or answer its registered door.
+pub(crate) fn prove_route(
+    registry: &Registry,
+    route: &Route,
+    socket: Option<&str>,
+    alive: &mut impl FnMut(Option<&str>, &str) -> bool,
+) -> std::result::Result<Reach, &'static str> {
+    let id = route.harness.ok_or("route declares no harness")?;
+    let harness = registry.get(id);
+    let session = harness
+        .live()
+        .live_session_for_route(route)
+        .map_err(|_| "harness session lookup failed")?
+        .ok_or("no live harness session")?;
+    if session.harness != id {
+        return Err("live session belongs to a different harness");
+    }
+    if session.pid.is_some_and(|pid| !boop::live::pid_alive(pid)) {
+        return Err("harness process is gone");
+    }
+    if let Some(target) = route.tmux.as_deref().filter(|target| !target.is_empty()) {
+        if !alive(socket, target) {
+            return Err("tmux target is gone");
+        }
+        let pane = boop::live::pane_of_target(target).unwrap_or_else(|| target.to_owned());
+        if session.tmux_pane.as_deref() != Some(pane.as_str()) {
+            return Err("pane is occupied by a different session");
+        }
+        if session.pid.is_none() {
+            prove_door(&session.door)?;
+        }
+        return Ok(Reach::LivePane(pane));
+    }
+    prove_door(&session.door)?;
+    Ok(Reach::DoorOnly)
+}
+
+fn prove_door(door: &DoorAddress) -> std::result::Result<(), &'static str> {
+    match door {
+        DoorAddress::UnixSocket { path, .. } => {
+            std::os::unix::net::UnixStream::connect(path)
+                .map_err(|_| "harness door is unavailable")?;
+        }
+        DoorAddress::AppServer { socket, .. } => {
+            std::os::unix::net::UnixStream::connect(socket)
+                .map_err(|_| "harness door is unavailable")?;
+        }
+        DoorAddress::Http { base, .. } => {
+            let host = base.host_str().ok_or("harness door has no host")?;
+            let port = base
+                .port_or_known_default()
+                .ok_or("harness door has no port")?;
+            use std::net::ToSocketAddrs;
+            let address = (host, port)
+                .to_socket_addrs()
+                .map_err(|_| "harness door is unavailable")?
+                .next()
+                .ok_or("harness door is unavailable")?;
+            TcpStream::connect_timeout(&address, Duration::from_millis(250))
+                .map_err(|_| "harness door is unavailable")?;
+        }
+        DoorAddress::None => return Err("harness publishes no door"),
+    }
+    Ok(())
+}
+
+/// The registry row tracks consecutive failed proofs and keeps dead routes
+/// excluded until a successful proof or route re-registration.
+fn record_proof(
+    store: &boop::ident::Store,
+    name: &str,
+    result: &std::result::Result<Reach, &'static str>,
+) -> Result<bool> {
+    store.connection().execute_batch(
+        "CREATE TABLE IF NOT EXISTS agent_route_liveness (
+           route TEXT PRIMARY KEY REFERENCES agent_route(route) ON DELETE CASCADE,
+           misses INTEGER NOT NULL DEFAULT 0,
+           dead INTEGER NOT NULL DEFAULT 0,
+           last_reason TEXT
+         ) WITHOUT ROWID;",
+    )?;
+    let dead: bool = store.connection().query_row(
+        "SELECT COALESCE((SELECT dead FROM agent_route_liveness WHERE route=?1), 0)",
+        [name],
+        |row| row.get(0),
+    )?;
+    match result {
+        Ok(_) => {
+            store.connection().execute(
+                "INSERT INTO agent_route_liveness(route,misses,dead,last_reason) VALUES (?1,0,0,NULL)
+                 ON CONFLICT(route) DO UPDATE SET misses=0,dead=0,last_reason=NULL",
+                [name],
+            )?;
+            Ok(false)
+        }
+        Err(reason) => {
+            store.connection().execute(
+                "INSERT INTO agent_route_liveness(route,misses,dead,last_reason) VALUES (?1,1,0,?2)
+                 ON CONFLICT(route) DO UPDATE SET
+                   misses=misses+1,dead=CASE WHEN misses+1>=2 THEN 1 ELSE dead END,last_reason=excluded.last_reason",
+                rusqlite::params![name, reason],
+            )?;
+            let now_dead: bool = store.connection().query_row(
+                "SELECT dead FROM agent_route_liveness WHERE route=?1",
+                [name],
+                |row| row.get(0),
+            )?;
+            Ok(dead || now_dead)
+        }
+    }
 }
 
 /// One row (and, for a scream, one key press) per connected route, ending in
@@ -137,60 +214,92 @@ pub(crate) fn run_broadcast(
     let routes = bus::read_routes(&dir)?;
     let caller = caller_name(&routes, broadcast.as_name);
     let mux = tmux::mux();
+    let store = bus::open_store(&dir)?;
 
     // An explicit set is a snapshot: every requested route is reported, never
     // silently widened to a broadcast and never a silent success when none of
     // them is reachable.
-    let mut unreachable: Vec<String> = Vec::new();
     let mut targets: Vec<(String, &Route, Reach)> = Vec::new();
-    match broadcast.targets {
+    let mut skipped = 0usize;
+    let mut skipped_rows = Vec::new();
+    let mut seen = std::collections::BTreeSet::new();
+    let candidates: Vec<(&str, &Route)> = match broadcast.targets {
         Some(names) => {
             if names.is_empty() {
                 anyhow::bail!("no explicit recipients given");
             }
-            let mut seen = std::collections::BTreeSet::new();
-            for name in names {
-                if !seen.insert(name) {
-                    continue;
+            names
+                .iter()
+                .filter(|name| seen.insert(name.as_str()))
+                .filter_map(|name| {
+                    routes
+                        .get(name.as_str())
+                        .map(|route| (name.as_str(), route))
+                })
+                .collect()
+        }
+        None => routes
+            .iter()
+            .filter(|(name, _)| Some(name.as_str()) != caller.as_deref())
+            .map(|(name, route)| (name.as_str(), route))
+            .collect(),
+    };
+    let requested: std::collections::BTreeSet<&str> = broadcast
+        .targets
+        .into_iter()
+        .flatten()
+        .map(String::as_str)
+        .collect();
+    let missing_routes: Vec<&str> = requested
+        .iter()
+        .filter(|name| !routes.contains_key(**name))
+        .copied()
+        .collect();
+    for missing in &missing_routes {
+        skipped += 1;
+        if broadcast.verbose {
+            skipped_rows.push((*missing, "unknown route"));
+        }
+    }
+    for (name, route) in candidates {
+        let proof = prove_route(registry, route, None, &mut |socket, target| {
+            mux.target_alive(socket, target)
+        });
+        let already_dead = record_proof(&store, name, &proof)?;
+        match proof {
+            Ok(reach) if !already_dead => targets.push((name.to_owned(), route, reach)),
+            Ok(_) => {
+                skipped += 1;
+                if broadcast.verbose {
+                    skipped_rows.push((name, "route is marked dead"));
                 }
-                let Some(route) = routes.get(name.as_str()) else {
-                    println!("no-route {name} (unknown route)");
-                    unreachable.push(name.clone());
-                    continue;
-                };
-                let reach = reach_of(route, &mut |socket, target| {
-                    mux.target_alive(socket, target)
-                });
-                match reach {
-                    Reach::LivePane(_) | Reach::DoorOnly => {
-                        targets.push((name.clone(), route, reach));
-                    }
-                    Reach::Dead(why) => {
-                        println!("no-route {name} ({why})");
-                        unreachable.push(name.clone());
-                    }
+            }
+            Err(reason) => {
+                skipped += 1;
+                if broadcast.verbose {
+                    skipped_rows.push((name, reason));
                 }
             }
         }
-        None => {
-            targets = connected(&routes, caller.as_deref(), |socket, target| {
-                mux.target_alive(socket, target)
-            })
-            .into_iter()
-            .map(|(name, route, reach)| (name.to_owned(), route, reach))
-            .collect();
-        }
     }
     if targets.is_empty() {
-        if unreachable.is_empty() {
-            println!("no connected agent to receive a broadcast");
-            return Ok(());
+        if !broadcast.json && !missing_routes.is_empty() {
+            anyhow::bail!("unknown recipient routes: {}", missing_routes.join(", "));
         }
-        anyhow::bail!("no reachable recipients: {}", unreachable.join(", "));
+        if broadcast.json {
+            println!("{{\"landed\":[],\"failed\":[],\"skipped\":{skipped}}}");
+        } else {
+            for (name, why) in skipped_rows {
+                println!("skipped {name} ({why})");
+            }
+            println!("0 landed, 0 failed, {skipped} skipped");
+        }
+        return Ok(());
     }
-    let store = bus::open_store(&dir)?;
     let budget = boop::mail::DoorBudget::from_env();
     let (mut landed, mut cooled, mut dead) = (0usize, 0usize, 0usize);
+    let mut landed_rows = Vec::new();
+    let mut failed_rows = Vec::new();
     let mut interrupted_panes = BTreeMap::new();
     for (name, route, reach) in &targets {
         let name: &str = name;
@@ -202,7 +311,6 @@ pub(crate) fn run_broadcast(
         let ready = if broadcast.interrupt && route.kind.as_str() != "lane" {
             if let Reach::LivePane(pane) = reach {
                 if let Some(ready) = interrupted_panes.get(pane) {
-                    println!("interrupt-skipped {name} (pane {pane} already addressed)");
                     *ready
                 } else {
                     let ready = press_interrupt_keys(registry, name, route, reach)?;
@@ -234,10 +342,14 @@ pub(crate) fn run_broadcast(
         crate::cli::mail::record_control_edge(&message)?;
         if !ready {
             dead += 1;
-            println!(
-                "no-route {name} (interrupt not confirmed idle; message {} held in mailbox)",
-                message.id
-            );
+            let why = "interrupt not confirmed idle";
+            failed_rows.push(serde_json::json!({"route":name,"why":why}));
+            if !broadcast.json {
+                println!(
+                    "failed {name} ({why}; message {} held in mailbox)",
+                    message.id
+                );
+            }
             continue;
         }
         let landing = boop::mail::deliver_hail_budgeted(
@@ -256,19 +368,41 @@ pub(crate) fn run_broadcast(
         match landing.rung {
             rung if rung.carried_the_body() || owned_inbox => {
                 landed += 1;
-                println!("landed {name} {} ({})", message.id, rung.as_str());
+                landed_rows.push(name);
+                if !broadcast.json {
+                    println!("landed {name} {} ({})", message.id, rung.as_str());
+                }
             }
             boop::mail::Rung::CoolOff => {
                 cooled += 1;
-                println!("cooled-off {name} {} ({})", message.id, landing.detail());
+                failed_rows.push(serde_json::json!({"route":name,"why":landing.detail()}));
+                if !broadcast.json {
+                    println!("failed {name} {} ({})", message.id, landing.detail());
+                }
             }
             _ => {
                 dead += 1;
-                println!("no-route {name} ({})", landing.detail());
+                failed_rows.push(serde_json::json!({"route":name,"why":landing.detail()}));
+                if !broadcast.json {
+                    println!("failed {name} ({})", landing.detail());
+                }
             }
         }
     }
-    println!("{landed} landed, {cooled} cooled-off, {dead} no-route");
+    if broadcast.json {
+        println!(
+            "{}",
+            serde_json::json!({"landed":landed_rows,"failed":failed_rows,"skipped":skipped})
+        );
+    } else {
+        for (name, why) in skipped_rows {
+            println!("skipped {name} ({why})");
+        }
+        println!(
+            "{landed} landed, {} failed, {skipped} skipped",
+            cooled + dead
+        );
+    }
     info!(landed, cooled, dead, "broadcast complete");
     Ok(())
 }
@@ -285,14 +419,12 @@ fn press_interrupt_keys(
         return Ok(None);
     }
     let Some(id) = route.harness else {
-        println!("interrupt-skipped {name} (route declares no harness)");
         return Ok(None);
     };
     let harness = registry.get(id);
     let session = match harness.live().live_session_for_route(route) {
         Ok(session) => session,
-        Err(error) => {
-            println!("interrupt-skipped {name} (live session lookup failed: {error})");
+        Err(_) => {
             return Ok(None);
         }
     };
@@ -302,8 +434,7 @@ fn press_interrupt_keys(
         harness.capabilities().interrupt_keys,
     ) {
         Ok(key) => key,
-        Err(why) => {
-            println!("interrupt-skipped {name} ({why})");
+        Err(_) => {
             return Ok(None);
         }
     };
@@ -314,16 +445,9 @@ fn press_interrupt_keys(
     tmux::mux()
         .send_key_named(None, pane, key)
         .with_context(|| format!("interrupt {name} in pane {pane}"))?;
-    println!("interrupt-sent {name} in {pane} with {key}");
     match harness.door().notify_idle(&session, Duration::from_secs(2)) {
-        Ok(_) => {
-            println!("interrupted {name} in {pane} (idle confirmed)");
-            Ok(Some(true))
-        }
-        Err(error) => {
-            println!("interrupt-unconfirmed {name} ({error})");
-            Ok(Some(false))
-        }
+        Ok(_) => Ok(Some(true)),
+        Err(_) => Ok(Some(false)),
     }
 }
 
@@ -331,7 +455,68 @@ fn press_interrupt_keys(
 mod tests {
     use super::*;
     use boop::harness::HarnessId;
-    use std::collections::BTreeSet;
+
+    struct StubLive(Vec<LiveSession>);
+
+    impl boop::live::LiveSessions for StubLive {
+        fn live_sessions(&self) -> Result<Vec<LiveSession>> {
+            Ok(self.0.clone())
+        }
+    }
+
+    struct StubHarness(StubLive);
+
+    static STUB_CAPABILITIES: boop::harness::Capabilities = boop::harness::Capabilities {
+        bans_plan_family_models: false,
+        lanes: boop::harness::LanePolicy::CoordinatorSubagentsOnly,
+        variant: boop::harness::VariantSupport::None,
+        mail: boop::harness::MailPolicy::Door,
+        image_paste_keys: None,
+        interrupt_keys: None,
+        native_tui_projector: false,
+        wrapper_owns_alternate_screen: false,
+        native_backend: boop::harness::NativeBackendSupport::Unsupported,
+        native_settings: boop::harness::NativeSettingsSupport::Unsupported("test"),
+        registry_names_processes: true,
+    };
+
+    impl boop::harness::Harness for StubHarness {
+        fn id(&self) -> HarnessId {
+            HarnessId::Claude
+        }
+
+        fn mock_tui_launch(
+            &self,
+            _: &boop::harness::mock_tui::MockTuiContext<'_>,
+        ) -> Result<boop::harness::mock_tui::MockTuiLaunch> {
+            anyhow::bail!("stub has no mock launch")
+        }
+
+        fn capabilities(&self) -> &'static boop::harness::Capabilities {
+            &STUB_CAPABILITIES
+        }
+
+        fn live(&self) -> &dyn boop::live::LiveSessions {
+            &self.0
+        }
+
+        fn sessions(&self) -> Result<Vec<boop::harness::SessionRef>> {
+            Ok(Vec::new())
+        }
+
+        fn read_from(
+            &self,
+            _: &boop::harness::SessionRef,
+            offset: u64,
+        ) -> Result<boop::harness::ReadChunk> {
+            Ok(boop::harness::ReadChunk {
+                events: Vec::new(),
+                next_offset: offset,
+                reset: false,
+                skipped: 0,
+            })
+        }
+    }
 
     fn route(kind: &str, harness: Option<HarnessId>, tmux: Option<&str>) -> Route {
         Route {
@@ -353,39 +538,115 @@ mod tests {
         }
     }
 
-    fn registry_of(rows: &[(&str, &str, Option<&str>)]) -> BTreeMap<String, Route> {
-        rows.iter()
-            .map(|(name, kind, tmux)| {
-                (
-                    name.to_string(),
-                    route(kind, Some(HarnessId::Claude), *tmux),
-                )
-            })
-            .collect()
+    #[test]
+    fn dead_door_is_skipped_without_a_delivery_attempt() {
+        use boop::live::DoorAddress;
+        assert_eq!(
+            prove_door(&DoorAddress::UnixSocket {
+                path: std::env::temp_dir()
+                    .join(format!("boop-missing-door-{}", std::process::id())),
+                token: None,
+            }),
+            Err("harness door is unavailable")
+        );
     }
 
-    /// RECEIPT. Live panes and pane-less coordinators, never the caller or a
-    /// dead pane; sabotage: dropping the caller filter shouts at the shouter.
     #[test]
-    fn connected_routes_are_live_panes_and_paneless_coordinators() {
-        let routes = registry_of(&[
-            ("caller", "coordinator", Some("sess:0.0")),
-            ("lane-live", "lane", Some("sess:0.1")),
-            ("lane-dead", "lane", Some("gone:0.0")),
-            ("lane-retired", "lane", None),
-            ("coord-paneless", "coordinator", None),
-            ("native", "native", None),
-        ]);
-        let live: BTreeSet<&str> = ["sess:0.0", "sess:0.1"].into_iter().collect();
-        let picked = connected(&routes, Some("caller"), |_, target| live.contains(target));
-        let names: Vec<&str> = picked.iter().map(|(name, _, _)| *name).collect();
+    fn broadcast_proofs_select_only_the_registered_harness_in_the_registered_pane() {
+        use boop::live::{DoorAddress, LiveSessionScope};
+        let current_pid = std::process::id();
+        let live = |session_id: &str, pane: Option<&str>, pid, door| LiveSession {
+            harness: HarnessId::Claude,
+            session_id: session_id.into(),
+            pid,
+            cwd: None,
+            tmux_pane: pane.map(str::to_owned),
+            status: LiveStatus::Idle,
+            door,
+            observed_ms: 0,
+            started_ms: None,
+            scope: LiveSessionScope::Root,
+            parent_session: None,
+        };
+        let missing_socket = std::env::temp_dir().join(format!("boop-no-sock-{}", current_pid));
+        let registry = Registry::with(vec![Box::new(StubHarness(StubLive(vec![
+            live("live", Some("%77"), Some(current_pid), DoorAddress::None),
+            live("dead", None, Some(987_654), DoorAddress::None),
+            live(
+                "door",
+                None,
+                None,
+                DoorAddress::UnixSocket {
+                    path: missing_socket,
+                    token: None,
+                },
+            ),
+            live("reused", Some("%99"), Some(current_pid), DoorAddress::None),
+        ])))]);
+        let mut live_pane = route("lane", Some(HarnessId::Claude), Some("%77"));
+        live_pane.session_id = Some("live".into());
+        let mut dead_pid = route("process", Some(HarnessId::Claude), None);
+        dead_pid.session_id = Some("dead".into());
+        let harnessless = route("lane", None, Some("%2"));
+        let mut dead_door = route("coordinator", Some(HarnessId::Claude), None);
+        dead_door.session_id = Some("door".into());
+        let mut reused = route("lane", Some(HarnessId::Claude), Some("%88"));
+        reused.session_id = Some("reused".into());
+
         assert_eq!(
-            names,
-            ["coord-paneless", "lane-live", "native"],
-            "{names:?}"
+            prove_route(&registry, &live_pane, None, &mut |_, _| true),
+            Ok(Reach::LivePane("%77".into()))
         );
-        let reaches: Vec<&Reach> = picked.iter().map(|(_, _, reach)| reach).collect();
-        assert_eq!(reaches[1], &Reach::LivePane("sess:0.1".into()));
+        assert_eq!(
+            prove_route(&registry, &dead_pid, None, &mut |_, _| true),
+            Err("harness process is gone")
+        );
+        assert_eq!(
+            prove_route(&registry, &harnessless, None, &mut |_, _| true),
+            Err("route declares no harness")
+        );
+        assert_eq!(
+            prove_route(&registry, &dead_door, None, &mut |_, _| true),
+            Err("harness door is unavailable")
+        );
+        assert_eq!(
+            prove_route(&registry, &reused, None, &mut |_, _| true),
+            Err("pane is occupied by a different session")
+        );
+    }
+
+    #[test]
+    fn two_failed_proofs_mark_a_route_dead_until_a_live_proof_or_registration() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path();
+        let route = route("coordinator", Some(HarnessId::Claude), None);
+        bus::write_route(path, "coord", &route).unwrap();
+        let store = bus::open_store(path).unwrap();
+        let failed = Err("no live harness session");
+        assert!(!record_proof(&store, "coord", &failed).unwrap());
+        assert!(record_proof(&store, "coord", &failed).unwrap());
+        assert!(!record_proof(&store, "coord", &Ok(Reach::DoorOnly)).unwrap());
+        let state: (i64, i64, Option<String>) = store
+            .connection()
+            .query_row(
+                "SELECT misses,dead,last_reason FROM agent_route_liveness WHERE route='coord'",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+            )
+            .unwrap();
+        assert_eq!(state, (0, 0, None));
+        assert!(!record_proof(&store, "coord", &failed).unwrap());
+        assert!(record_proof(&store, "coord", &failed).unwrap());
+        bus::write_route(path, "coord", &route).unwrap();
+        let reset: i64 = store
+            .connection()
+            .query_row(
+                "SELECT COUNT(*) FROM agent_route_liveness WHERE route='coord'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(reset, 0);
     }
 
     /// RECEIPT. The fallback spelling exists and stays the stop-gap phrase.
@@ -411,16 +672,12 @@ mod tests {
         );
     }
 
-    /// The tmux seam stays a closure, so selection needs no server.
-    #[test]
-    fn paneless_lanes_are_dead_and_never_revived() {
-        let routes = registry_of(&[("retired", "lane", None)]);
-        assert!(connected(&routes, None, |_, _| true).is_empty());
-    }
-
     #[test]
     fn caller_name_resolves_registered_senders_and_honors_explicit_as() {
-        let routes = registry_of(&[("root", "coordinator", Some("sess:0.0"))]);
+        let routes = BTreeMap::from([(
+            "root".to_owned(),
+            route("coordinator", Some(HarnessId::Claude), Some("sess:0.0")),
+        )]);
         assert_eq!(caller_name(&routes, Some("root")).as_deref(), Some("root"));
         assert_eq!(
             caller_name(&routes, Some("ghost")).as_deref(),

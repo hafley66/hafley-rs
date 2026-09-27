@@ -1752,6 +1752,8 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
             body,
             as_name,
             kind,
+            verbose,
+            json,
             mail_dir,
         } => {
             let dir = crate::cli::mail_dir(mail_dir.as_deref())?;
@@ -1772,12 +1774,16 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
                     as_name: as_name.as_deref(),
                     targets: explicit.then_some(targets.as_slice()),
                     interrupt: false,
+                    verbose,
+                    json,
                 },
             )
         }
         BeepCmd::Scream {
             body,
             as_name,
+            verbose,
+            json,
             mail_dir,
         } => crate::cli::shout::run_broadcast(
             registry,
@@ -1788,6 +1794,8 @@ pub(crate) fn run_beep(registry: &Registry, cmd: BeepCmd) -> Result<()> {
                 as_name: as_name.as_deref(),
                 targets: None,
                 interrupt: true,
+                verbose,
+                json,
             },
         ),
     }

@@ -1095,6 +1095,12 @@ enum BeepCmd {
         /// The mail kind the rows wear.
         #[arg(long, default_value = "hail")]
         kind: String,
+        /// Include recipients skipped by liveness proof.
+        #[arg(long)]
+        verbose: bool,
+        /// Print one JSON result object.
+        #[arg(long)]
+        json: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
@@ -1106,6 +1112,12 @@ enum BeepCmd {
         /// Who the rows are from, when the whoami ladder cannot say.
         #[arg(long = "as", value_name = "NAME")]
         as_name: Option<String>,
+        /// Include recipients skipped by liveness proof.
+        #[arg(long)]
+        verbose: bool,
+        /// Print one JSON result object.
+        #[arg(long)]
+        json: bool,
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },

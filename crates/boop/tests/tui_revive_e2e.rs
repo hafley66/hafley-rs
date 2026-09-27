@@ -647,11 +647,15 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         "revived screen",
     );
 
-    // Step 5: a live target refuses a second revive.
+    // Step 5: a live target is a one-line no-op on a second revive.
     let again = scratch.boop(&as_args(&scratch.revive_args(&[&scratch.route])));
     let message = String::from_utf8_lossy(&again.stderr).into_owned();
     assert!(
-        !again.status.success() && message.contains("is live:"),
+        again.status.success()
+            && String::from_utf8_lossy(&again.stdout)
+                .starts_with(&format!("already-live {} (", scratch.route))
+            && String::from_utf8_lossy(&again.stdout).lines().count() == 1
+            && !message.contains("WARN"),
         "{}: a second revive answered {:?} / {message:?}",
         case.entry,
         String::from_utf8_lossy(&again.stdout)

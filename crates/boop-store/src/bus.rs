@@ -1233,6 +1233,14 @@ fn upsert_route(store: &crate::ident::Store, id: &str, route: &Route) -> Result<
     // an insert, so it fires every `REFERENCES agent_route(route) ON DELETE
     // CASCADE` child (agent_route_selection) on each route rewrite. The update
     // form leaves child rows attached to the same route row.
+    store.connection().execute_batch(
+        "CREATE TABLE IF NOT EXISTS agent_route_liveness (
+           route TEXT PRIMARY KEY REFERENCES agent_route(route) ON DELETE CASCADE,
+           misses INTEGER NOT NULL DEFAULT 0,
+           dead INTEGER NOT NULL DEFAULT 0,
+           last_reason TEXT
+         ) WITHOUT ROWID;",
+    )?;
     store.connection().execute(
         "INSERT INTO agent_route
            (route, kind, harness, tmux, cwd, model, mode, session_id, source_path,
@@ -1271,6 +1279,9 @@ fn upsert_route(store: &crate::ident::Store, id: &str, route: &Route) -> Result<
             route.app_server_socket,
         ],
     )?;
+    store
+        .connection()
+        .execute("DELETE FROM agent_route_liveness WHERE route=?1", [id])?;
     Ok(())
 }
 
