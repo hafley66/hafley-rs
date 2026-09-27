@@ -104,14 +104,14 @@ fn scope_lookup<'a>(scope: &'a TypeScope, name: &str) -> Option<&'a TypeBinding>
 
 /// The callables one `namespace X {}` body declares, as (name, span). Only the
 /// body's own statements: a nested namespace seats its own members.
-fn namespace_member_spans(module: &ts::TSModuleDeclaration) -> Vec<(String, (u32, u32))> {
-    let Some(ts::TSModuleDeclarationBody::TSModuleBlock(block)) = &module.body else {
+fn namespace_member_spans(module: &ts::TSNamespaceDeclaration) -> Vec<(String, (u32, u32))> {
+    let ts::TSNamespaceDeclarationBody::TSModuleBlock(block) = &module.body else {
         return Vec::new();
     };
     let mut members = Vec::new();
     for statement in &block.body {
         let declaration = match statement {
-            ts::Statement::ExportNamedDeclaration(export) => export.declaration.as_ref(),
+            ts::Statement::ExportDeclaration(export) => Some(&export.declaration),
             other => other.as_declaration(),
         };
         match declaration {
@@ -356,10 +356,15 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         if let Some(id) = &class.id {
             let name = id.name.to_string();
             let seat = self.seat(&name, class.span.start, class.span.end);
-            if let Some(base) = class.super_class.as_ref().and_then(|ext| match ext {
-                ts::Expression::Identifier(id) => Some(id.name.to_string()),
-                _ => None,
-            }) {
+            if let Some(base) =
+                class
+                    .heritage
+                    .as_ref()
+                    .and_then(|heritage| match &heritage.expression {
+                        ts::Expression::Identifier(id) => Some(id.name.to_string()),
+                        _ => None,
+                    })
+            {
                 self.facts.extends_of.entry(seat).or_default().push(base);
             }
             for element in &class.body.body {
@@ -399,7 +404,7 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         let name = interface.id.name.to_string();
         let seat = self.seat(&name, interface.span.start, interface.span.end);
         for ext in &interface.extends {
-            if let ts::Expression::Identifier(id) = &ext.expression {
+            if let ts::TSTypeName::IdentifierReference(id) = &ext.type_name {
                 self.facts
                     .extends_of
                     .entry(seat)
@@ -439,18 +444,16 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
         oxc_ast_visit::walk::walk_ts_interface_declaration(self, interface);
     }
 
-    fn visit_ts_module_declaration(&mut self, module: &ts::TSModuleDeclaration<'a>) {
-        if let ts::TSModuleDeclarationName::Identifier(id) = &module.id {
-            let members = namespace_member_spans(module);
-            for seat in [module.span.start, id.span.start] {
-                self.facts
-                    .namespace_members
-                    .entry(seat)
-                    .or_default()
-                    .extend(members.iter().cloned());
-            }
+    fn visit_ts_namespace_declaration(&mut self, module: &ts::TSNamespaceDeclaration<'a>) {
+        let members = namespace_member_spans(module);
+        for seat in [module.span.start, module.id.span.start] {
+            self.facts
+                .namespace_members
+                .entry(seat)
+                .or_default()
+                .extend(members.iter().cloned());
         }
-        oxc_ast_visit::walk::walk_ts_module_declaration(self, module);
+        oxc_ast_visit::walk::walk_ts_namespace_declaration(self, module);
     }
 
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
@@ -655,7 +658,7 @@ pub fn facts_of(
     let source_type = super::ts::source_type_for(path)?;
     let allocator = Allocator::default();
     let ret = Parser::new(&allocator, src, source_type).parse();
-    if ret.panicked {
+    if ret.fatal_error {
         return None;
     }
     let mut walker = ReceiverWalker::default();

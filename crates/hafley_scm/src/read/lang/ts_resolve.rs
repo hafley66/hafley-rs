@@ -261,7 +261,7 @@ pub fn module_facts(path: &str, content: &[u8]) -> Option<ModuleFacts> {
     let source = std::str::from_utf8(content).ok()?;
     let allocator = Allocator::default();
     let parsed = oxc_parser::Parser::new(&allocator, source, source_type).parse();
-    if parsed.panicked {
+    if parsed.fatal_error {
         return None;
     }
     Some(ts_module_facts_from_parsed(&parsed))

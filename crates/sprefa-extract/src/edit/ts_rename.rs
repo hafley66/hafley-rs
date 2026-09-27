@@ -57,7 +57,10 @@ impl Rename for TsSource {
         let program = parser
             .parse(&arena, &request.anchor, text.as_bytes())
             .map_err(|_| not_found(request))?;
-        let semantic = SemanticBuilder::new().build(&program).semantic;
+        let semantic = SemanticBuilder::new()
+            .with_build_nodes(true)
+            .build(&program)
+            .semantic;
         let scoping = semantic.scoping();
 
         let property_declarations = property_declarations(&program, &request.old);
@@ -291,7 +294,10 @@ fn importer_seats(cx: &RenameCx, rel: &str, sources: &BTreeSet<u32>, name: &str)
     let Ok(program) = parser.parse(&arena, rel, text.as_bytes()) else {
         return out;
     };
-    let semantic = SemanticBuilder::new().build(&program).semantic;
+    let semantic = SemanticBuilder::new()
+        .with_build_nodes(true)
+        .build(&program)
+        .semantic;
     for statement in &program.body {
         match statement {
             ts::Statement::ImportDeclaration(import) => {
@@ -308,10 +314,8 @@ fn importer_seats(cx: &RenameCx, rel: &str, sources: &BTreeSet<u32>, name: &str)
                     import_seat(&semantic, rel, named, name, &mut out);
                 }
             }
-            ts::Statement::ExportNamedDeclaration(export) => {
-                let Some(source) = &export.source else {
-                    continue;
-                };
+            ts::Statement::ExportFromDeclaration(export) => {
+                let source = &export.source;
                 if !sources.contains(&source.span.start) {
                     continue;
                 }
@@ -873,15 +877,12 @@ fn role_of(reference: &Reference) -> RefRole {
 /// An aliased clause pins the public name, so no importer of it needs repairing.
 fn exports_bare(program: &Program<'_>, name: &str) -> bool {
     program.body.iter().any(|statement| match statement {
-        ts::Statement::ExportNamedDeclaration(export) if export.source.is_none() => {
-            export
-                .declaration
-                .as_ref()
-                .is_some_and(|declaration| declares(declaration, name))
-                || export.specifiers.iter().any(|specifier| {
-                    plain_name(&specifier.local) == Some(name)
-                        && one_token(specifier.local.span(), specifier.exported.span())
-                })
+        ts::Statement::ExportDeclaration(export) => declares(&export.declaration, name),
+        ts::Statement::ExportNamedDeclaration(export) => {
+            export.specifiers.iter().any(|specifier| {
+                plain_name(&specifier.local) == Some(name)
+                    && one_token(specifier.local.span(), specifier.exported.span())
+            })
         }
         _ => false,
     })

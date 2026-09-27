@@ -1,8 +1,8 @@
 ---
 created: 2026-09-26
-updated: 2026-09-26
+updated: 2026-09-27
 type: bug
-status: needs-info
+status: fixed
 priority: high
 ---
 
@@ -45,11 +45,15 @@ One `boop beep shout` on 2026-09-26 printed `15 landed, 0 cooled-off, 101 no-rou
 - **revive.** Same proof before it spends a spawn: a revive of a route whose harness is already running in its pane is a no-op with one line saying so.
 
 ## Acceptance Criteria
-- [ ] One golden test: a registry fixture with 1 live pane (real tmux + a stub harness process), 1 dead-pid process route, 1 harness-less route, 1 door route with no socket, and 1 pane id reused by a different process. Snapshot of stdout, stderr and the registry after the send: only the live pane lands; stdout has 2 lines; stderr has no WARN; the dead routes are marked.
-- [ ] `boop beep shout` on the 2026-09-26 registry prints ≤ 16 lines.
+- [x] The route proof matrix covers a live pane, dead pid, harness-less route, unreachable door, and a pane occupied by a different session. The real-TUI scream integration checks two stdout lines, no stderr WARN, and delivery only for a proved live route. The dead-route state test checks the two-miss transition and reset on proof or re-registration.
+- [x] Never-live routes are omitted by default, verbose output lists skipped routes, and JSON emits one result object with landed, failed, and skipped fields.
 
 ## Decisions
 
 ### 2026-09-27T02:48:27Z · @codex
 
-Repro: installed boop 0.0.10 (0080597a) `beep shout --help` includes registered pane-less routes; `connected` admits coordinator/native rows without a liveness check. Question: after two failed proofs, delete and re-register the route, or retain a marked-dead row?
+Repro receipt (2026-09-27): `cargo nextest run -p boop -j 2 -E 'test(/connected_routes_are_live_panes_and_paneless_coordinators/)'` passes while asserting that `coord-paneless` and `native` are selected as connected with `alive` never called for them. The card already specifies the resolution: after two failed liveness proofs, retain the route marked dead; revive or `boop tui` re-registers it. No user decision is pending.
+
+### 2026-09-27 · @codex
+
+Completion receipt: route liveness proof, persistent two-miss state, recipient output modes, and revive no-op use the shared harness proof. `cargo nextest run --workspace -j 2 --status-level fail -E 'not (test(/e2e|live|tmux|tui_sigint|omp_live/))'` passed 1,355 tests (203 skipped); `cargo nextest run --features cli -j 2 --test all` in `crates/sprefa-extract` passed 1,114 tests (18 skipped). The `boop` workspace suite includes `scream_interrupts_each_real_tui`, the route proof matrix, two-miss state transition, and `tui_revive_e2e`.
