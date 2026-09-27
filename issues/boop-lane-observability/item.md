@@ -1,9 +1,9 @@
 ---
 created: 2026-08-13
-updated: 2026-08-17
+updated: 2026-09-27
 type: epic
 owner: chrishafley
-status: open
+status: needs-decision
 priority: high
 labels: [domain-boop, intent-observability]
 related: ['@boop-pane-liveness']
@@ -43,3 +43,18 @@ Make one boop command report whether an agent lane is alive, executing model tur
 - [ ] cargo test -p boop-mux
 - [ ] traced OpenCode fixture
 - [ ] traced Codex fixture
+
+## Reproduction on installed boop 0.0.10 (248dfdd3)
+
+`boop beep lane list`, `boop beep ps`, `boop beep pstree`, and `boop beep lane
+get <lane>` remain separate surfaces. The lane detail output has route/session
+fields; `ps` has process usage. Help exposes no canonical sequence and the
+listed surfaces do not report turn/token deltas, transcript/report progress, or
+structured supervisor events together.
+
+## Decision needed
+
+Should the canonical monitor be one aggregate `lane status` output assembled
+from route, process, trace and usage data, or should it be the time-ordered
+waterfall payload described by `boop-agent-network-view` plus a documented CLI
+sequence?
