@@ -1,6 +1,6 @@
 //! THE PARITY MATRIX, AS A TEST.
 //!
-//! `docs/v5-extraction-parity.md` maps every v5 built-in relation to a v6
+//! `tests/33_v5_parity_matrix.rs` maps every v5 built-in relation to a v6
 //! record tag. Nothing kept that mapping from rotting: a renamed record, a
 //! deleted one, or a language quietly gaining a plane all left the document
 //! saying something that was true last month.
@@ -50,7 +50,7 @@ fn repo_file(relative: &str) -> PathBuf {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// THE MATRIX. One row per v5 built-in relation that docs/v5-extraction-parity.md
+// THE MATRIX. One row per v5 built-in relation that this test's contract
 // scores `identical` or `superset` in an extraction plane, paired with the v6
 // record tag that answers it. Rows the matrix scores `subset`, `missing` or
 // `n/a` are NOT here: this table is the set of claims that must stay true.

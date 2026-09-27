@@ -1,0 +1,6 @@
+Declared language and tooling capabilities
+
+Usage: ryii capabilities
+
+Options:
+  -h, --help  Print help

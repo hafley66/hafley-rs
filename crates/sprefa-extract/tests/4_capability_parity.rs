@@ -47,7 +47,11 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use sprefa_extract::{dispatch, flatten_jsonl, sources, FamilyMask};
+use serde_json::Value;
+use sprefa_extract::{
+    dispatch, flatten_jsonl, rehomes, renames, sources, CheckerTier, FamilyMask, CHECKER_TIERS,
+    INDEXERS, RESOLVE_ARMS,
+};
 
 const BIN: &str = env!("CARGO_BIN_EXE_ryii");
 
@@ -109,6 +113,64 @@ fn every_roster_source_is_reachable_through_the_binary() {
         });
         let output = dispatch(fixture, &content, FamilyMask::ALL)
             .unwrap_or_else(|| panic!("{fixture} routes to no Source, so it cannot cover {name}"));
+        let source = sources()
+            .iter()
+            .find(|source| source.name() == *name)
+            .expect("fixture source remains in the roster");
+        let declared = source.planes();
+        for (plane, enabled, mask) in [
+            (
+                "cst",
+                declared.cst,
+                FamilyMask {
+                    cst: true,
+                    ..FamilyMask::NONE
+                },
+            ),
+            (
+                "types",
+                declared.types,
+                FamilyMask {
+                    types: true,
+                    ..FamilyMask::NONE
+                },
+            ),
+            (
+                "call",
+                declared.call,
+                FamilyMask {
+                    call: true,
+                    ..FamilyMask::NONE
+                },
+            ),
+            (
+                "df",
+                declared.df,
+                FamilyMask {
+                    df: true,
+                    ..FamilyMask::NONE
+                },
+            ),
+            (
+                "data",
+                declared.data,
+                FamilyMask {
+                    data: true,
+                    ..FamilyMask::NONE
+                },
+            ),
+        ] {
+            let projected = dispatch(fixture, &content, mask).expect("fixture routes to a Source");
+            let present = match plane {
+                "cst" => projected.cst.is_some(),
+                "types" => projected.types.is_some(),
+                "call" => projected.call.is_some(),
+                "df" => projected.df.is_some(),
+                "data" => projected.data.is_some(),
+                _ => unreachable!(),
+            };
+            assert_eq!(present, enabled, "{name} {plane} plane");
+        }
         let from_library = flatten_jsonl(&output);
         assert!(
             !from_library.is_empty(),
@@ -122,6 +184,206 @@ fn every_roster_source_is_reachable_through_the_binary() {
             "{name}: the binary's stream and the library's flatten disagree over {fixture}"
         );
     }
+}
+
+fn matrix_help_table(rows: &[Value]) -> String {
+    let mut output = String::from(
+        "LANGUAGE     PLANES                 RESOLVE  REHOME                 RENAME  CHECKER         SCIP\n",
+    );
+    for row in rows {
+        let language = row["language"].as_str().unwrap_or("");
+        let planes = row["planes"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect::<Vec<_>>()
+            .join(",");
+        let resolve = format!(
+            "{}{}",
+            row["resolve"]["call"]
+                .as_bool()
+                .unwrap_or(false)
+                .then_some("call")
+                .unwrap_or(""),
+            row["resolve"]["types"]
+                .as_bool()
+                .unwrap_or(false)
+                .then_some("+types")
+                .unwrap_or("")
+        );
+        let rehome = if row["rehome"].is_null() {
+            String::new()
+        } else {
+            ["manifests", "shim", "text_spellings", "plan_check"]
+                .into_iter()
+                .filter(|key| row["rehome"][key].as_bool() == Some(true))
+                .collect::<Vec<_>>()
+                .join(",")
+        };
+        let checker = row["checker"].as_str().unwrap_or("-");
+        let scip = row["scip_indexer"].as_str().unwrap_or("-");
+        let rename = if row["rename"].as_bool().unwrap_or(false) {
+            "yes"
+        } else {
+            "no"
+        };
+        output.push_str(&format!(
+            "{language:<12} {planes:<22} {resolve:<8} {rehome:<22} {rename:<7} {checker:<15} {scip}\n"
+        ));
+    }
+    output
+}
+
+#[test]
+fn capabilities_matrix_matches_every_roster_and_help_table() {
+    let rows: Vec<Value> = run(&["capabilities"])
+        .iter()
+        .map(|line| serde_json::from_str(line).expect("capability JSONL row"))
+        .collect();
+    let source_names: Vec<&str> = rows
+        .iter()
+        .filter(|row| row["source"] == true)
+        .map(|row| row["language"].as_str().unwrap())
+        .collect();
+    assert_eq!(
+        source_names,
+        sources()
+            .iter()
+            .map(|source| source.name())
+            .collect::<Vec<_>>()
+    );
+
+    for source in sources() {
+        let row = rows
+            .iter()
+            .find(|row| row["language"] == source.name())
+            .expect("source has matrix row");
+        let planes = source.planes();
+        for (name, present) in [
+            ("cst", planes.cst),
+            ("types", planes.types),
+            ("call", planes.call),
+            ("df", planes.df),
+            ("data", planes.data),
+        ] {
+            assert_eq!(
+                row["planes"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|plane| plane == name),
+                present,
+                "{} plane {name}",
+                source.name()
+            );
+        }
+        let resolve = RESOLVE_ARMS.iter().find(|arm| arm.name == source.name());
+        assert_eq!(row["resolve"]["declared"], resolve.is_some());
+        assert_eq!(
+            row["resolve"]["call"],
+            resolve.is_some_and(|arm| arm.call.is_some())
+        );
+        assert_eq!(
+            row["resolve"]["types"],
+            resolve.is_some_and(|arm| arm.types.is_some())
+        );
+        let rehome = rehomes().iter().find(|arm| arm.name() == source.name());
+        assert_eq!(row["rehome"].is_null(), rehome.is_none());
+        if let Some(rehome) = rehome {
+            assert_eq!(row["rehome"]["core"], true);
+            assert_eq!(row["rehome"]["manifests"], rehome.manifests.is_some());
+            assert_eq!(row["rehome"]["shim"], rehome.shim.is_some());
+            assert_eq!(
+                row["rehome"]["text_spellings"],
+                rehome.text_spellings.is_some()
+            );
+            assert_eq!(row["rehome"]["plan_check"], rehome.plan_check.is_some());
+        }
+        assert_eq!(
+            row["rename"],
+            renames().iter().any(|arm| arm.name() == source.name())
+        );
+        let checker: Option<&CheckerTier> = CHECKER_TIERS
+            .iter()
+            .find(|tier| tier.language == source.name());
+        assert_eq!(
+            row["checker"],
+            checker
+                .map(|tier| Value::from(tier.tool))
+                .unwrap_or(Value::Null)
+        );
+        let indexer_name = match source.name() {
+            "ts" => "typescript",
+            "kotlin" => "kotlin/java",
+            other => other,
+        };
+        let indexer = INDEXERS.iter().find(|indexer| indexer.lang == indexer_name);
+        assert_eq!(
+            row["scip_indexer"],
+            indexer
+                .map(|row| Value::from(row.lang))
+                .unwrap_or(Value::Null)
+        );
+    }
+
+    let mut declared_resolve: Vec<&str> = RESOLVE_ARMS.iter().map(|arm| arm.name).collect();
+    let mut matrix_resolve: Vec<&str> = rows
+        .iter()
+        .filter(|row| row["resolve"]["declared"] == true)
+        .map(|row| row["language"].as_str().unwrap())
+        .collect();
+    declared_resolve.sort_unstable();
+    matrix_resolve.sort_unstable();
+    assert_eq!(matrix_resolve, declared_resolve);
+
+    let mut declared_rehome: Vec<&str> = rehomes().iter().map(|arm| arm.name()).collect();
+    let mut matrix_rehome: Vec<&str> = rows
+        .iter()
+        .filter(|row| !row["rehome"].is_null())
+        .map(|row| row["language"].as_str().unwrap())
+        .collect();
+    declared_rehome.sort_unstable();
+    matrix_rehome.sort_unstable();
+    assert_eq!(matrix_rehome, declared_rehome);
+
+    let mut declared_rename: Vec<&str> = renames().iter().map(|arm| arm.name()).collect();
+    let mut matrix_rename: Vec<&str> = rows
+        .iter()
+        .filter(|row| row["rename"] == true)
+        .map(|row| row["language"].as_str().unwrap())
+        .collect();
+    declared_rename.sort_unstable();
+    matrix_rename.sort_unstable();
+    assert_eq!(matrix_rename, declared_rename);
+
+    let mut declared_checkers: Vec<&str> = CHECKER_TIERS.iter().map(|tier| tier.language).collect();
+    let mut matrix_checkers: Vec<&str> = rows
+        .iter()
+        .filter(|row| !row["checker"].is_null())
+        .map(|row| row["language"].as_str().unwrap())
+        .collect();
+    declared_checkers.sort_unstable();
+    matrix_checkers.sort_unstable();
+    assert_eq!(matrix_checkers, declared_checkers);
+
+    let mut declared_indexers: Vec<&str> = INDEXERS.iter().map(|indexer| indexer.lang).collect();
+    let mut matrix_indexers: Vec<&str> = rows
+        .iter()
+        .filter(|row| !row["scip_indexer"].is_null())
+        .map(|row| row["scip_indexer"].as_str().unwrap())
+        .collect();
+    declared_indexers.sort_unstable();
+    matrix_indexers.sort_unstable();
+    assert_eq!(matrix_indexers, declared_indexers);
+
+    let help = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .arg("--help")
+        .output()
+        .expect("ryii help runs");
+    assert!(help.status.success());
+    let help = String::from_utf8(help.stdout).unwrap();
+    assert!(help.contains(&matrix_help_table(&rows)));
 }
 
 // ════════════════════════════════════════════════════════════════════════════

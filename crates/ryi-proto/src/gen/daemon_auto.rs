@@ -48,6 +48,7 @@ impl Request {
 
 pub fn request_uses_stdin(verb: &str, args: &serde_json::Value) -> bool {
     let names: &[&str] = match verb {
+        "capabilities" => &[],
         "extract" => &["paths"],
         "fast" => &["paths"],
         "slow" => &["paths"],

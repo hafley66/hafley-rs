@@ -17,6 +17,16 @@ use crate::read::types::{DataDoc, DataF, DataFAux, DataFormat, DataValueKind, Da
 pub struct DataSource;
 
 impl Source for DataSource {
+    fn planes(&self) -> crate::read::source::FamilyMask {
+        crate::read::source::FamilyMask {
+            cst: true,
+            types: false,
+            call: false,
+            df: false,
+            data: true,
+        }
+    }
+
     fn name(&self) -> &'static str {
         "data"
     }

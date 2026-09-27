@@ -13,11 +13,14 @@ using Daemon;
 @rootArgs(FileArgs)
 @argsConflictsWithSubcommands
 @doc("Source files -> flat graph facts (JSONL on stdout, or --sqlite)")
-@afterHelp("Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nSQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.\nBuild: git hash: $SPREFA_BUILD_GIT_HASH, datetime: $SPREFA_BUILD_DATETIME")
+@afterHelp("Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text\nCapabilities: `ryii capabilities` prints the declared language matrix.\nSQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.\nBuild: git hash: $SPREFA_BUILD_GIT_HASH, datetime: $SPREFA_BUILD_DATETIME")
 namespace Ryi;
 
 /** Unmodified stdin bytes, including newlines and non-JSON content. */
 model RawByteStream is HttpStream<bytes, "application/octet-stream", bytes>;
+
+/** Declared language and tooling capabilities */
+op capabilities(): JsonlStream<jsonValue>;
 
 /** Extract file facts with the root flags */
 op extract(args: FileArgs, @bodyRoot input: RawByteStream): JsonlStream<jsonValue>;

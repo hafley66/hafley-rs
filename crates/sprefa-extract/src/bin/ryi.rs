@@ -60,6 +60,9 @@ mod server_auto;
 #[path = "ryi/ops.rs"]
 mod ops;
 
+#[path = "ryi/capabilities.rs"]
+mod capabilities;
+
 #[macro_export]
 macro_rules! outln {
     ($($arg:tt)*) => { $crate::ops::print_line(format_args!($($arg)*)) };
@@ -529,7 +532,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         argv.insert(2, flag);
         argv.insert(3, value);
     }
-    let ryi = match Ryi::command()
+    let ryi = match cli_command()
         .name(daemon_auto::SERVER_BIN)
         .try_get_matches_from(argv)
         .and_then(|matches| Ryi::from_arg_matches(&matches))
@@ -564,6 +567,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         Some(Cmd::Slow(slow)) => return run_slow(slow, None),
         Some(Cmd::Scip(args)) => return run_scip(args, None),
         Some(Cmd::Ingest(args)) => return run_ingest(args, None),
+        Some(Cmd::Capabilities) => {
+            capabilities::write_to(std::io::stdout().lock())?;
+            return Ok(());
+        }
         Some(Cmd::Schema) => return print_schema(&mut std::io::stdout().lock()),
         Some(Cmd::Trail(args)) => return print_trail(args.runs, &mut std::io::stdout().lock()),
         Some(Cmd::Watch(args)) => return watch::run(args),
@@ -615,6 +622,18 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut output = sqlite::Output::new(cli.sqlite.as_deref())?;
     extract_to(&cli, tier, &mut output)?;
     output.finish()
+}
+
+fn cli_command() -> clap::Command {
+    let mut command = Ryi::command();
+    let mut after_help = command
+        .get_after_help()
+        .map(ToString::to_string)
+        .unwrap_or_default();
+    after_help.push_str("\nDeclared language capabilities:\n");
+    after_help.push_str(&capabilities::help_table());
+    command = command.after_help(after_help);
+    command
 }
 
 fn write_formatted_rows(
@@ -675,6 +694,9 @@ fn run_formatted(ryi: Ryi, out: &mut dyn Write) -> Result<(), Box<dyn std::error
         Some(Cmd::Schema) => write_formatted_one(out, ops::schema(&Default::default())),
         Some(Cmd::Trail(args)) => write_formatted_one(out, ops::trail(&args)),
         Some(Cmd::Ingest(args)) => write_formatted_one(out, ops::ingest(&args)),
+        Some(Cmd::Capabilities) => {
+            write_formatted_rows(out, ops::capabilities(&Default::default()))
+        }
     }
 }
 
@@ -690,6 +712,8 @@ fn run_verb(
         Some(Cmd::Slow(args)) => run_slow(args, Some(writer)),
         Some(Cmd::Scip(args)) => run_scip(args, Some(writer)),
         Some(Cmd::Ingest(args)) => run_ingest(args, Some(writer)),
+        Some(Cmd::Capabilities) => capabilities::write_to(writer)
+            .map_err(|error| RyiExit::new(1, error.to_string()).into()),
         Some(Cmd::Schema) => print_schema(&mut writer),
         Some(Cmd::Trail(args)) => print_trail(args.runs, &mut writer),
         Some(Cmd::Watch(args)) => watch::run_to(args, writer, cancelled),

@@ -4,21 +4,22 @@ Usage: ryii [OPTIONS] [PATH]...
        ryii <COMMAND>
 
 Commands:
-  fast      Syntax-only whole-project facts (no compiler)
-  slow      The SCIP oracle written as fast's tables
-  scip      Raw SCIP index rows
-  graph     Ask one question of the resolved call/type graph
-  cleave    Move one item into another file, with its imports
-  move      Move a file and repair every specifier that names it
-  rename    Rename a symbol and every occurrence bound to it
-  query     Run a tree-sitter query over files
-  region    Replace a generated region between sprefa markers
-  watch     Stream fact deltas as the worktree changes
-  diff      Fact delta between two commits
-  ingest    Validate and re-emit foreign TSI JSONL
-  schema    Print the output record schema
-  trail     Print the last N runs from the trail
-  stratify  Rank files from entrypoints and propose dependency-first numeric prefixes
+  capabilities  Declared language and tooling capabilities
+  fast          Syntax-only whole-project facts (no compiler)
+  slow          The SCIP oracle written as fast's tables
+  scip          Raw SCIP index rows
+  graph         Ask one question of the resolved call/type graph
+  cleave        Move one item into another file, with its imports
+  move          Move a file and repair every specifier that names it
+  rename        Rename a symbol and every occurrence bound to it
+  query         Run a tree-sitter query over files
+  region        Replace a generated region between sprefa markers
+  watch         Stream fact deltas as the worktree changes
+  diff          Fact delta between two commits
+  ingest        Validate and re-emit foreign TSI JSONL
+  schema        Print the output record schema
+  trail         Print the last N runs from the trail
+  stratify      Rank files from entrypoints and propose dependency-first numeric prefixes
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -50,5 +51,20 @@ Options:
   -V, --version              Print version
 
 Logging: RUST_LOG (default sprefa_extract=info,hafley_scm=info), HAFLEY_LOG_FORMAT=json|text
+Capabilities: `ryii capabilities` prints the declared language matrix.
 SQLite with --resolve stores phase 1 per-file and phase 2 project rows; stdout streams phase 2 only. Every SQLite unresolved row has its path.
-Build: git hash: abb071eb69a0, datetime: 2026-09-27T10:57:04Z
+Build: <stamp>
+Declared language capabilities:
+LANGUAGE     PLANES                 RESOLVE  REHOME                 RENAME  CHECKER         SCIP
+rust         cst,types,call,df      call+types manifests,plan_check   yes     rust-analyzer   rust
+go           cst,types,call,df      call+types                        no      go-types        go
+kotlin       cst,types,call,df      call+types                        yes     -               kotlin/java
+markdown     cst,types              +types                          no      -               -
+prolog       cst,types,call,df      call                            yes     -               -
+python       cst,types,call,df      call+types                        no      -               python
+data         cst,data                                               no      -               -
+ts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsc             typescript
+gdscript     cst                                                    no      -               -
+commonlisp   cst                                                    no      -               -
+fallback     cst,call               call                            no      -               -
+cpp                                                                 no      -               cpp
