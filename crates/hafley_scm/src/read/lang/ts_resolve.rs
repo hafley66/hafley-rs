@@ -874,7 +874,7 @@ impl TsModuleIndex {
             index
                 .shared
                 .insert(path.clone(), std::sync::Arc::from(path.as_str()));
-            if let Ok(real) = std::fs::canonicalize(path) {
+            if let Ok(real) = std::fs::canonicalize(crate::read::io_path(Path::new(path))) {
                 by_real_path.entry(real).or_insert_with(|| path.clone());
             }
         }
@@ -911,8 +911,10 @@ impl TsModuleIndex {
             })
             .filter_map(|(path, _)| {
                 let directory = Path::new(path).parent()?.to_path_buf();
-                let manifest: serde_json::Value =
-                    serde_json::from_slice(&std::fs::read(path).ok()?).ok()?;
+                let manifest: serde_json::Value = serde_json::from_slice(
+                    &std::fs::read(crate::read::io_path(Path::new(path))).ok()?,
+                )
+                .ok()?;
                 let mut links = Vec::new();
                 for section in [
                     "dependencies",
@@ -932,7 +934,9 @@ impl TsModuleIndex {
                         else {
                             continue;
                         };
-                        if let Ok(target) = directory.join(relative).canonicalize() {
+                        if let Ok(target) =
+                            crate::read::io_path(&directory.join(relative)).canonicalize()
+                        {
                             links.push((name.clone(), target));
                         }
                     }
@@ -950,7 +954,8 @@ impl TsModuleIndex {
                 .unwrap_or_default();
             // TsconfigDiscovery::Auto walks from the importing file. Give the
             // resolver an absolute path even when ryi received relative inputs.
-            let from = std::fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
+            let from = std::fs::canonicalize(crate::read::io_path(Path::new(path)))
+                .unwrap_or_else(|_| crate::read::io_path(Path::new(path)));
             let links = Path::new(path)
                 .ancestors()
                 .find_map(|ancestor| linked_packages.get(ancestor));

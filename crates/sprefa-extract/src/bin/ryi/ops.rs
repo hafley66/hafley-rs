@@ -116,10 +116,10 @@ pub(crate) fn with_request_context<T>(
     run: impl FnOnce() -> T,
 ) -> T {
     let guard = RequestContextGuard {
-        root: REQUEST_ROOT.with(|slot| slot.replace(Some(root))),
+        root: REQUEST_ROOT.with(|slot| slot.replace(Some(root.clone()))),
         diagnostics: REQUEST_DIAGNOSTICS.with(|slot| slot.replace(diagnostics)),
     };
-    let result = run();
+    let result = sprefa_extract::with_io_root(root, run);
     drop(guard);
     result
 }

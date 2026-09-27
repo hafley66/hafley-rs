@@ -53,6 +53,8 @@ same() {
 
 soopy=$repo/crates/soopy
 fx=$here/tests/fixtures
+cp -R "$fx/type_ladder" "$out/type_ladder"
+type_ladder=$out/type_ladder
 paths=$out/paths
 printf 'src/lib.rs\nsrc/_1a_path.rs\n' >"$paths"
 
@@ -61,9 +63,9 @@ same "fast . (soopy)"                "$soopy" - fast .
 same "fast src/lib.rs (soopy)"       "$soopy" - fast src/lib.rs
 same "fast \$PWD (soopy)"            "$soopy" - fast "$soopy"
 same "fast - path list on stdin"     "$soopy" "$paths" fast -
-same "slow . (type_ladder)"          "$fx/type_ladder" - slow .
+same "slow . (type_ladder)"          "$type_ladder" - slow .
 same "graph --callers (call_ladder)" "$fx/call_ladder" - graph --callers new .
-same "query (type_ladder)"           "$fx/type_ladder" - query --query '(struct_item name: (type_identifier) @n)' src
+same "query (type_ladder)"           "$type_ladder" - query --query '(struct_item name: (type_identifier) @n)' src
 same "schema"                        "$soopy" - schema
 same "missing path exit code"        "$soopy" - fast does/not/exist.rs
 same "fast . again (warm)"           "$soopy" - fast .
