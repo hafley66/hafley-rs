@@ -8,50 +8,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::read::shape::FamilyTag;
-use crate::read::types::{ContentId, DefIndex, DefSite};
+use super::{answer_of, CALL_FACETS, TYPE_FACETS};
+pub use super::{
+    CheckerAnswer as TsCheckerAnswer, CheckerAnswers as TsCheckerAnswers,
+    CheckerRef as TsCheckerRef,
+};
+use crate::read::tsi::stamp_digests;
+use crate::read::types::{ContentId, DefIndex};
 use hafley_scm::span::Span;
 
-/// One resolved reference. Offsets are the UTF-8 byte offset `to_span` writes;
-/// the driver converts out of TypeScript's UTF-16 positions before emitting.
-#[derive(Clone, Debug)]
-pub struct TsCheckerRef {
-    pub start: u32,
-    pub end: u32,
-    pub name: String,
-    /// Empty when the checker resolved the reference OUTSIDE the resolve
-    /// universe: `lib.d.ts`, a dependency, a file this run was not handed.
-    pub dst_path: String,
-    pub dst_name: String,
-    /// The declaration identifier's offset: several defs in one file share a name.
-    pub dst_offset: u32,
-}
-
-/// What the checker knows about one reference. `External` is knowledge, not
-/// absence: no corpus edge exists, so no name-match leg may invent one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum TsCheckerAnswer {
-    Corpus(ContentId, Span),
-    External,
-}
-
-/// The driver's return: resolved references per referring file, plus the two
-/// costs the tier is judged on separately.
-#[derive(Default)]
-pub struct TsCheckerAnswers {
-    pub calls: HashMap<String, Vec<TsCheckerRef>>,
-    pub types: HashMap<String, Vec<TsCheckerRef>>,
-    /// The checker walk's own rows, ids run-local across the whole program. Empty
-    /// unless the caller asked for them: the walk is not free.
-    pub tsi: Vec<crate::read::tsi::FactOut>,
-    /// (relation, complete, diagnostic). A claim about the whole run, never a file.
-    pub coverage: Vec<(String, bool, Option<String>)>,
-    /// `ts.createProgram` over the supplied roots: parse, bind, module resolution.
-    pub load: Duration,
-    /// The per-file resolve walk over the loaded program.
-    pub walk: Duration,
-    pub files_answered: usize,
-}
+type Bound = super::CheckerBound;
 
 /// Why the tier could not run. Every one falls back to the syntax leg.
 #[derive(Debug)]
@@ -76,15 +42,6 @@ impl std::fmt::Display for TsCheckerError {
             Self::Budget(secs) => write!(f, "the driver exceeded {secs}s"),
         }
     }
-}
-
-/// One resolved reference, already joined to a corpus definition coordinate.
-#[derive(Clone, Debug)]
-struct Bound {
-    start: u32,
-    end: u32,
-    name: String,
-    answer: TsCheckerAnswer,
 }
 
 /// Every answer joined ONCE to a `(blob, def span)` at build time; per-file
@@ -142,7 +99,16 @@ impl TsCheckerIndex {
         for (path, refs) in answers.calls {
             let mut bounds: Vec<Bound> = Vec::with_capacity(refs.len());
             for reference in refs {
-                match answer_of(&reference, CALL_FACETS, &blob_of, defs) {
+                match answer_of(
+                    (
+                        &reference.dst_path,
+                        &reference.dst_name,
+                        reference.dst_offset,
+                    ),
+                    CALL_FACETS,
+                    &blob_of,
+                    defs,
+                ) {
                     Some(answer) => {
                         index.external += (answer == TsCheckerAnswer::External) as usize;
                         bounds.push(Bound {
@@ -161,7 +127,16 @@ impl TsCheckerIndex {
         for (path, refs) in answers.types {
             let mut by_name: HashMap<String, Option<TsCheckerAnswer>> = HashMap::new();
             for reference in refs {
-                let Some(answer) = answer_of(&reference, TYPE_FACETS, &blob_of, defs) else {
+                let Some(answer) = answer_of(
+                    (
+                        &reference.dst_path,
+                        &reference.dst_name,
+                        reference.dst_offset,
+                    ),
+                    TYPE_FACETS,
+                    &blob_of,
+                    defs,
+                ) else {
                     index.unjoined += 1;
                     continue;
                 };
@@ -219,68 +194,8 @@ impl crate::read::tsi::SemanticRows for TsCheckerIndex {
     }
 }
 
-/// The driver wrote each span's SUPPLIED path; a corpus path becomes the file's
-/// content digest and any other path stays as it is, naming a file off-corpus.
-fn stamp_digests(
-    rows: Vec<crate::read::tsi::FactOut>,
-    corpus: &[(String, ContentId)],
-) -> Vec<crate::read::tsi::FactOut> {
-    let digest_of: HashMap<&str, String> = corpus
-        .iter()
-        .map(|(path, blob)| (path.as_str(), blob.to_string()))
-        .collect();
-    rows.into_iter()
-        .map(|mut row| {
-            for arg in &mut row.args {
-                if let crate::read::tsi::Arg::Span(key, _, _) = arg {
-                    if let Some(digest) = digest_of.get(key.as_str()) {
-                        *key = digest.clone();
-                    }
-                }
-            }
-            row
-        })
-        .collect()
-}
-
-/// A call answer prefers the call facet and settles for the type facet: a class
-/// named by `new C()` is a call whose only def may be a type entity.
-const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
-/// Type prefers type and SETTLES FOR CALL, unlike the rust tier: ts's own
-/// `resolve_type_dst` joins through facet-agnostic `corpus_defs`, so a
-/// type-only fallback would answer less than the leg it displaces.
-const TYPE_FACETS: &[FamilyTag] = &[FamilyTag::Type, FamilyTag::Call];
-
 /// The declaration identifier's offset picks between several defs of one name
 /// in one file; a lone def of the name binds without it.
-fn answer_of(
-    reference: &TsCheckerRef,
-    facets: &[FamilyTag],
-    blob_of: &HashMap<&str, &ContentId>,
-    defs: &DefIndex,
-) -> Option<TsCheckerAnswer> {
-    if reference.dst_path.is_empty() {
-        return Some(TsCheckerAnswer::External);
-    }
-    let blob = *blob_of.get(reference.dst_path.as_str())?;
-    let sites = defs.map.get(reference.dst_name.as_str())?;
-    facets.iter().find_map(|facet| {
-        let in_file: Vec<&DefSite> = sites
-            .iter()
-            .filter(|site| &site.blob == blob && site.family == *facet)
-            .collect();
-        let covering = in_file.iter().find(|site| {
-            site.span.start <= reference.dst_offset && reference.dst_offset < site.span.end()
-        });
-        let chosen = match covering {
-            Some(site) => *site,
-            None if in_file.len() == 1 => in_file[0],
-            None => return None,
-        };
-        Some(TsCheckerAnswer::Corpus(chosen.blob.clone(), chosen.span))
-    })
-}
-
 /// Run the checker over `root` and answer every reference in `files`
 /// (supplied path, absolute path).
 #[cfg(not(feature = "ts-checker"))]
@@ -297,21 +212,21 @@ pub fn answer(
 #[cfg(feature = "ts-checker")]
 const DRIVER: &str = include_str!("ts_checker.mjs");
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Serialize)]
-struct DriverRequest<'a> {
-    root: &'a Path,
-    files: &'a [(String, PathBuf)],
+pub(super) struct DriverRequest<'a> {
+    pub(super) root: &'a Path,
+    pub(super) files: &'a [(String, PathBuf)],
     /// The checker walk is the tier's expensive half and answers no resolve
     /// site, so it runs only for a stream that carries the TSI envelope.
-    tsi: bool,
+    pub(super) tsi: bool,
 }
 
 /// One `[start, end, name, dst_path, dst_name, dst_offset]` wire row.
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 type WireRow = (u32, u32, String, String, String, u32);
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 struct WireFile {
     path: String,
@@ -322,7 +237,7 @@ struct WireFile {
     tsi: Vec<Vec<serde_json::Value>>,
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 struct WireStats {
     stats: WireCosts,
@@ -330,7 +245,7 @@ struct WireStats {
     coverage: Vec<(String, bool, Option<String>)>,
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 struct WireCosts {
     #[serde(rename = "loadMs")]
@@ -340,7 +255,7 @@ struct WireCosts {
     files: usize,
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum WireLine {
@@ -348,7 +263,7 @@ enum WireLine {
     Stats(WireStats),
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 fn into_refs(rows: Vec<WireRow>) -> Vec<TsCheckerRef> {
     rows.into_iter()
         .map(
@@ -362,6 +277,36 @@ fn into_refs(rows: Vec<WireRow>) -> Vec<TsCheckerRef> {
             },
         )
         .collect()
+}
+
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
+pub(super) fn parse_driver_stdout<E>(
+    stdout: &str,
+    mut into_fact: impl FnMut(Vec<serde_json::Value>) -> Result<crate::read::tsi::FactOut, E>,
+    failed: impl Fn(String) -> E,
+) -> Result<TsCheckerAnswers, E> {
+    let mut answers = TsCheckerAnswers::default();
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        match serde_json::from_str::<WireLine>(line) {
+            Ok(WireLine::File(file)) => {
+                for row in file.tsi {
+                    answers.tsi.push(into_fact(row)?);
+                }
+                answers
+                    .calls
+                    .insert(file.path.clone(), into_refs(file.calls));
+                answers.types.insert(file.path, into_refs(file.types));
+            }
+            Ok(WireLine::Stats(WireStats { stats, coverage })) => {
+                answers.load = Duration::from_millis(stats.load_ms);
+                answers.walk = Duration::from_millis(stats.walk_ms);
+                answers.files_answered = stats.files;
+                answers.coverage = coverage;
+            }
+            Err(err) => return Err(failed(err.to_string())),
+        }
+    }
+    Ok(answers)
 }
 
 /// One driver row `[relation, arg, ...]` into a fact. A row the registry does
@@ -425,27 +370,7 @@ pub fn answer(
 
     let stdout = std::fs::read_to_string(dir.join("indexer.stdout.log"))
         .map_err(|err| TsCheckerError::Failed(err.to_string()))?;
-    let mut answers = TsCheckerAnswers::default();
-    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        match serde_json::from_str::<WireLine>(line) {
-            Ok(WireLine::File(file)) => {
-                for row in file.tsi {
-                    answers.tsi.push(into_fact(row)?);
-                }
-                answers
-                    .calls
-                    .insert(file.path.clone(), into_refs(file.calls));
-                answers.types.insert(file.path, into_refs(file.types));
-            }
-            Ok(WireLine::Stats(WireStats { stats, coverage })) => {
-                answers.load = Duration::from_millis(stats.load_ms);
-                answers.walk = Duration::from_millis(stats.walk_ms);
-                answers.files_answered = stats.files;
-                answers.coverage = coverage;
-            }
-            Err(err) => return Err(TsCheckerError::Failed(err.to_string())),
-        }
-    }
+    let answers = parse_driver_stdout(&stdout, into_fact, TsCheckerError::Failed)?;
     let _ = std::fs::remove_dir_all(&dir);
     Ok(answers)
 }

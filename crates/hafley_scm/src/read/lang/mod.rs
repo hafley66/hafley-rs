@@ -8,6 +8,83 @@
 //! (cst likewise + type/call/df via oxc); anything else with a linked grammar
 //! falls to `FallbackSource` (cst-only).
 
+use std::collections::HashMap;
+use std::time::Duration;
+
+use crate::read::shape::FamilyTag;
+use crate::read::tsi::FactOut;
+use crate::read::types::{ContentId, DefIndex, DefSite};
+use crate::span::Span;
+
+const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
+const TYPE_FACETS: &[FamilyTag] = &[FamilyTag::Type, FamilyTag::Call];
+
+/// One resolved reference shared by checker tiers with the same wire shape.
+#[derive(Clone, Debug)]
+pub struct CheckerRef {
+    pub start: u32,
+    pub end: u32,
+    pub name: String,
+    pub dst_path: String,
+    pub dst_name: String,
+    pub dst_offset: u32,
+}
+
+/// The checker's resolution for a reference into or outside the corpus.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum CheckerAnswer {
+    Corpus(ContentId, Span),
+    External,
+}
+
+fn answer_of(
+    reference: (&str, &str, u32),
+    facets: &[FamilyTag],
+    blob_of: &HashMap<&str, &ContentId>,
+    defs: &DefIndex,
+) -> Option<CheckerAnswer> {
+    let (dst_path, dst_name, dst_offset) = reference;
+    if dst_path.is_empty() {
+        return Some(CheckerAnswer::External);
+    }
+    let blob = *blob_of.get(dst_path)?;
+    let sites = defs.map.get(dst_name)?;
+    facets.iter().find_map(|facet| {
+        let in_file: Vec<&DefSite> = sites
+            .iter()
+            .filter(|site| &site.blob == blob && site.family == *facet)
+            .collect();
+        let covering = in_file
+            .iter()
+            .find(|site| site.span.start <= dst_offset && dst_offset < site.span.end());
+        let chosen = match covering {
+            Some(site) => *site,
+            None if in_file.len() == 1 => in_file[0],
+            None => return None,
+        };
+        Some(CheckerAnswer::Corpus(chosen.blob.clone(), chosen.span))
+    })
+}
+
+struct CheckerBound {
+    start: u32,
+    end: u32,
+    name: String,
+    answer: CheckerAnswer,
+}
+
+/// The driver output shared by checker tiers with the same answer shape.
+#[derive(Default)]
+pub struct CheckerAnswers {
+    pub calls: HashMap<String, Vec<CheckerRef>>,
+    pub types: HashMap<String, Vec<CheckerRef>>,
+    pub tsi: Vec<FactOut>,
+    pub coverage: Vec<(String, bool, Option<String>)>,
+    pub load: Duration,
+    pub walk: Duration,
+    pub files_answered: usize,
+}
+
 #[path = "0_call_kinds.rs"]
 pub mod call_kinds;
 #[cfg(feature = "commonlisp")]
@@ -75,7 +152,7 @@ pub mod source_facts;
 pub mod source_query;
 #[cfg(feature = "typescript")]
 pub mod ts;
-#[cfg(feature = "typescript")]
+#[cfg(any(feature = "typescript", feature = "go-checker"))]
 pub mod ts_checker;
 #[cfg(feature = "typescript")]
 pub mod ts_paths;
