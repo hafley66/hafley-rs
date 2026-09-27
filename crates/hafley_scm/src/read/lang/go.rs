@@ -3116,13 +3116,7 @@ pub fn go_package_dir(module: &GoModule, import_path: &str) -> Option<PathBuf> {
 /// Directory equality over supplied paths: `./a/x.go` and `a/x.go` name one
 /// directory, and no arm may resolve on the spelling difference.
 pub fn same_dir(left: &Path, right: &Path) -> bool {
-    let strip = |path: &Path| -> Vec<std::ffi::OsString> {
-        path.components()
-            .filter(|part| !matches!(part, Component::CurDir))
-            .map(|part| part.as_os_str().to_os_string())
-            .collect()
-    };
-    strip(left) == strip(right)
+    normalize_dir(left) == normalize_dir(right)
 }
 
 /// The scip-resolved corpus target of one call site: the site's occurrence
