@@ -39,6 +39,7 @@ pub fn slow_project_with_raw<E>(
     checkers: bool,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
+    let io_root = crate::read::io_path(root);
     let inputs = crate::read::project::read_inputs_streamed(
         files,
         false,
@@ -47,12 +48,12 @@ pub fn slow_project_with_raw<E>(
     )?;
     let mut facts = Vec::new();
     let index = match index {
-        Some(path) => crate::read::scip_decode::load_index(path)
+        Some(path) => crate::read::scip_decode::load_index(&crate::read::io_path(path))
             .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?,
         None => {
             let report = ensure_index_picked_for_root(
-                root,
-                &default_cache_dir(root),
+                &io_root,
+                &default_cache_dir(&io_root),
                 IndexBudget::from_env(),
                 None,
             );
@@ -69,9 +70,9 @@ pub fn slow_project_with_raw<E>(
                 .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?
         }
     };
-    facts.extend(project_index(&inputs, root, index));
+    facts.extend(project_index(&inputs, &io_root, index));
     if checkers {
-        facts.extend(checker_facts(files, root).map_err(ResolveWithRawError::Project)?);
+        facts.extend(checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?);
     }
     Ok(facts)
 }
