@@ -1,6 +1,6 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-27
 type: feature
 status: fixed
 priority: normal
@@ -64,6 +64,7 @@ G1 verification receipts:
 - `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --features cli,read --locked -j 2 --test all -E 'test(/t_17_cfg_first_plane::|t_124_cfg_python_prolog::|control_slice_returns_a_closed_statement_set/)'`: 17 passed.
 - `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo test --features cli,read --test all -j 2`: 1,130 passed, 0 failed, 18 ignored.
 - Review follow-up: replaced the hand-written post-dominator fixpoint with `petgraph::algo::dominators::simple_fast` over the reversed per-callable CFG. `cargo check -p hafley_scm --offline -j 2` passes; the same focused CFG/slice selection passes 17/17 with `petgraph` 0.8.3 in both lockfiles.
+- Review follow-up: isolated petgraph, post-dominance, CDG emission, and slicing behind the default-on `graph` feature; `read` no longer enables petgraph. `cargo check --no-default-features --features cli,read --offline --locked -j 2` passes, and the focused CDG/slice tests pass 2/2 with graph enabled.
 
 ## Implementation Notes
 

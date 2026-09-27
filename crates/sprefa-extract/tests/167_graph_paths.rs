@@ -103,6 +103,7 @@ fn flow_paths_follow_derived_interprocedural_edges() {
 }
 
 #[test]
+#[cfg(feature = "graph")]
 fn control_slice_returns_a_closed_statement_set() {
     let path = "tests/fixtures/graph_ts/5_slice.ts";
     let source = include_str!("fixtures/graph_ts/5_slice.ts");

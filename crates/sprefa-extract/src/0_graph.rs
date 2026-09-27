@@ -11,9 +11,11 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
+#[cfg(feature = "graph")]
+use sprefa_extract::{cfg_facts, FamilyTag};
 use sprefa_extract::{
-    cfg_facts, newline_offsets, resolve_project_with_tsi_tiers, slow_project, FamilyTag, FlatFact,
-    ResolveArms, ResolveRequest, ScipMode, ScipRecords,
+    newline_offsets, resolve_project_with_tsi_tiers, slow_project, FlatFact, ResolveArms,
+    ResolveRequest, ScipMode, ScipRecords,
 };
 
 use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
@@ -656,9 +658,14 @@ pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    #[cfg(feature = "graph")]
     if let Some(seed) = cli.slice.as_deref() {
         emit_rows(&slice_at(seed)?, output)?;
         return Ok(());
+    }
+    #[cfg(not(feature = "graph"))]
+    if cli.slice.is_some() {
+        return Err("--slice requires the graph feature".into());
     }
     let arm = match (
         &cli.callers,
@@ -727,10 +734,12 @@ pub fn run_to(
     Ok(())
 }
 
+#[cfg(feature = "graph")]
 type CfgNodeKey = (u32, u32, String);
 
 /// Return the backward control-dependence closure of the CFG node covering a
 /// source byte. Output rows reuse the existing cfg_node record shape.
+#[cfg(feature = "graph")]
 fn slice_at(seed: &str) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
     let (path, byte) = seed.rsplit_once(':').ok_or("--slice expects PATH:BYTE")?;
     let byte: u32 = byte.parse()?;

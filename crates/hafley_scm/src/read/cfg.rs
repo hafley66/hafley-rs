@@ -14,7 +14,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+#[cfg(feature = "graph")]
 use petgraph::algo::dominators::simple_fast;
+#[cfg(feature = "graph")]
 use petgraph::graph::{DiGraph, NodeIndex};
 
 use crate::read::lang::source_for;
@@ -520,11 +522,13 @@ impl<'a> CfgBuild<'a> {
             }
             None => self.edge(entry, exit, CfgEdgeKind::Exit),
         }
+        #[cfg(feature = "graph")]
         self.control_dependence(entry, exit);
     }
 
     /// Add control-dependence edges from CFG post-dominators. Every edge stays
     /// in `CfgF`; `Control` is an additional edge kind in that family.
+    #[cfg(feature = "graph")]
     fn control_dependence(&mut self, entry: NodeRef, exit: NodeRef) {
         let start = entry.0 as usize;
         let end = self.bundle.nodes.len();

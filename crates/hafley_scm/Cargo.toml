@@ -65,7 +65,7 @@ ra_ap_project_model = { version = "0.0.352", optional = true }
 ra_ap_vfs = { version = "0.0.352", optional = true }
 
 [features]
-default = ["read"]
+default = ["read", "graph"]
 rust_syn = [
     "dep:syn",
     "dep:proc-macro2",
@@ -94,13 +94,17 @@ go = ["shared", "dep:tree-sitter-go", "dep:gomod-parser"]
 kotlin = ["shared", "dep:tree-sitter-kotlin-sg"]
 python = ["shared", "dep:tree-sitter-python"]
 prolog = ["shared", "dep:tree-sitter-prolog"]
+# Petgraph is reserved for post-dominance and control-dependence queries that
+# recursive SQLite CTEs do not express simply; graph reachability and paths
+# remain SQL-backed.
+graph = ["shared", "dep:petgraph"]
 markdown = ["shared", "dep:tree-sitter-md"]
 data = ["shared", "dep:tree-sitter-json", "dep:tree-sitter-yaml", "dep:tree-sitter-toml-ng", "dep:basic-toml"]
 fallback = ["shared", "dep:tree-sitter-html"]
 gdscript = ["shared", "dep:tree-sitter-gdscript"]
 commonlisp = ["shared", "dep:tree-sitter-commonlisp"]
 read = [
-    "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "dep:petgraph",
+    "shared", "rust", "typescript", "go", "kotlin", "python", "prolog",
     "markdown", "data", "fallback", "gdscript", "commonlisp",
 ]
 cli = ["shared", "dep:hafley-observe", "dep:libc", "dep:tracing-subscriber"]

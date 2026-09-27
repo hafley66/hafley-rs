@@ -170,6 +170,7 @@ fn cfg_edges(path: &str, source: &str) -> BTreeSet<String> {
 }
 
 #[test]
+#[cfg(feature = "graph")]
 fn ts_if_emits_control_dependence_in_the_cfg_family() {
     let source =
         "function choose(flag: boolean) { if (flag) { left(); } else { right(); } after(); }";

@@ -1346,6 +1346,7 @@ pub enum CfgEdgeKind {
     Jump,
     Exit,
     Throw,
+    #[cfg(feature = "graph")]
     Control,
 }
 
@@ -1357,6 +1358,7 @@ impl CfgEdgeKind {
             CfgEdgeKind::Jump => "jump",
             CfgEdgeKind::Exit => "exit",
             CfgEdgeKind::Throw => "throw",
+            #[cfg(feature = "graph")]
             CfgEdgeKind::Control => "control",
         }
     }
