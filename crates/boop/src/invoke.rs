@@ -10,6 +10,7 @@
 
 use std::path::Path;
 
+use boop::{BuildInfo, BUILD_INFO};
 use boop_store::{Store, TraceEvent};
 use clap::parser::ValueSource;
 use clap::{ArgAction, ArgMatches, Command};
@@ -31,6 +32,7 @@ pub struct Invocation {
     pub started_ms: u64,
     pub lane: Option<String>,
     pub harness: Option<String>,
+    pub build: BuildInfo,
 }
 
 /// The normalized subcommand path from clap's argv walk, e.g. `beep lane send`.
@@ -151,6 +153,7 @@ pub fn begin(
         started_ms,
         lane: None,
         harness: None,
+        build: BUILD_INFO,
     }
 }
 
@@ -174,6 +177,9 @@ fn detail_json(invocation: &Invocation, outcome: &str, elapsed_ms: u64) -> Strin
         "harness": invocation.harness,
         "lane": invocation.lane,
         "duration_ms": elapsed_ms,
+        "version": invocation.build.version,
+        "build_sha": invocation.build.sha,
+        "build_ts": invocation.build.timestamp,
     })
     .to_string()
 }
@@ -447,6 +453,81 @@ mod tests {
         assert_eq!(rows[1].finished_ts, Some(2_012));
         assert!(rows[1].detail.contains("db"));
         assert!(!rows[1].detail.contains("boop-cli/"));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn start_and_finish_share_the_build_identity_in_sqlite() {
+        let path = temp_path("build-identity");
+        let _ = std::fs::remove_file(&path);
+        Store::open(path.clone()).expect("initialise the analytics store");
+        let invocation = begin("beep".to_owned(), &Command::new("boop"), None, 4_000);
+        assert!(start_with(&path, &invocation));
+        assert!(finish_with(&path, &invocation, 7, "ok"));
+
+        let store = Store::open(path.clone()).unwrap();
+        let rows = store.query_trace_events(None, 10).unwrap();
+        assert_eq!(rows.len(), 2);
+        let start: serde_json::Value = serde_json::from_str(&rows[0].detail).unwrap();
+        let finish: serde_json::Value = serde_json::from_str(&rows[1].detail).unwrap();
+        for field in ["version", "build_sha", "build_ts"] {
+            assert_eq!(start[field], finish[field], "shared {field}");
+        }
+        assert_eq!(start["version"], serde_json::json!(BUILD_INFO.version));
+        assert_eq!(start["build_sha"], serde_json::json!(BUILD_INFO.sha));
+        assert!(!BUILD_INFO.sha.is_empty());
+        assert!(BUILD_INFO.timestamp.contains('T'));
+        assert!(BUILD_INFO.timestamp.ends_with('Z'));
+        let _ = std::fs::remove_file(path);
+    }
+
+    #[test]
+    fn invocation_rows_group_by_distinct_build_sha() {
+        let path = temp_path("builds");
+        let _ = std::fs::remove_file(&path);
+        Store::open(path.clone()).expect("initialise the analytics store");
+        let first = Invocation {
+            build: BuildInfo {
+                version: "0.0.10",
+                sha: "aaaa1111",
+                timestamp: "2026-09-10T00:00:00Z",
+            },
+            ..begin("db".to_owned(), &Command::new("boop"), None, 5_000)
+        };
+        let second = Invocation {
+            build: BuildInfo {
+                version: "0.0.11",
+                sha: "bbbb2222",
+                timestamp: "2026-09-11T00:00:00Z",
+            },
+            ..begin("db".to_owned(), &Command::new("boop"), None, 5_100)
+        };
+        assert!(start_with(&path, &first));
+        assert!(finish_with(&path, &first, 3, "ok"));
+        assert!(start_with(&path, &second));
+        assert!(finish_with(&path, &second, 4, "ok"));
+
+        let connection = rusqlite::Connection::open(&path).unwrap();
+        let mut statement = connection
+            .prepare(
+                "SELECT json_extract(e.detail, '$.build_sha'), COUNT(*)
+                   FROM agent_trace_event e
+                   JOIN dict_trace_kind k ON k.id = e.kind_id
+                  WHERE k.value = 'cli-invocation'
+                  GROUP BY 1 ORDER BY 1",
+            )
+            .unwrap();
+        let counts = statement
+            .query_map([], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+            })
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(
+            counts,
+            vec![("aaaa1111".to_owned(), 2), ("bbbb2222".to_owned(), 2)]
+        );
         let _ = std::fs::remove_file(path);
     }
 
