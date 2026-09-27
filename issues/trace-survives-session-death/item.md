@@ -69,6 +69,10 @@ Record as much relational data as possible at each tick, event and update: pid, 
 - [ ] Trace survives wrapper death, machine restart, and a claude started outside `boop tui`
 - [ ] Join carries an explicit budget with a named diagnostic
 
+## Reproduction receipt
+
+Current-code repro: `rg -n 'continued-in|attach_trace|SyncDecision::for_session' crates/boop/src/cli/db.rs crates/boop-harness/src crates/boop-store/src/ident.rs` finds `SyncDecision::for_session` queues unknown session IDs and trace attachment only in the supervisor/TUI paths; no `continued-in` relation parser or transcript-sync trace writer exists. A restarted writer therefore leaves the newly synced session without a predecessor relation. Existing measurements above are historical corroboration; no external database was opened.
+
 ## Implementation Notes
 
-Brief written at `TASKS/boop-observation-trace.BRIEF.md`. Design first, no code.
+Design first, no code. The type, join, storage, lifetime, and gate plan is in `TASKS/boop-observation-trace.BRIEF.md`. Remaining acceptance criteria require implementation and a real-database measurement.
