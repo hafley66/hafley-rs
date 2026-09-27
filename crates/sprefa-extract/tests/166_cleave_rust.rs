@@ -232,7 +232,7 @@ fn default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files() {
     assert!(!default.contains(&"scratch.rs".to_string()), "{default:?}");
     assert!(explicit.contains(&"scratch.rs".to_string()), "{explicit:?}");
     assert!(
-        !explicit.contains(&".probe/noise.rs".to_string()),
+        explicit.contains(&".probe/noise.rs".to_string()),
         "{explicit:?}"
     );
 }
