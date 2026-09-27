@@ -191,7 +191,14 @@ fn is_order_independent_definition(definition: &Definition) -> bool {
             && !definition.capture.ancestor_kinds.iter().any(|kind| {
                 matches!(
                     kind.as_str(),
-                    "function_declaration" | "lambda_literal" | "anonymous_function"
+                    "function_declaration"
+                        | "lambda_literal"
+                        | "anonymous_function"
+                        | "anonymous_initializer"
+                        | "property_accessor"
+                        | "getter"
+                        | "setter"
+                        | "secondary_constructor"
                 )
             }))
 }

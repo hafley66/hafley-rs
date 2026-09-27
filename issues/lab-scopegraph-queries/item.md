@@ -220,3 +220,8 @@ Red: `kotlin_top_level_functions_resolve_before_declaration_but_values_do_not` o
 ### 2026-09-27 · Kotlin property order follow-up
 
 Red: `kotlin_top_level_functions_resolve_before_declaration_but_values_do_not` failed on `fun topUser() = x; val x = 1` with `definition=None`. Green: top-level and class-member `val` properties now resolve independent of source order; the function-body `val item` remains `DefinitionAfterReference`. Targeted test passes. L4/L6 measurement gates remain open with their existing commands.
+
+
+### 2026-09-27 · body-local property order follow-up
+
+Red: with top-level/class-member property hoisting enabled, `init { consume(initItem); val initItem = 1 }` resolved the later local, and the getter body showed the same forward binding. Added regression rows for `anonymous_initializer`, getter, setter, and secondary-constructor bodies. Green: each local remains `DefinitionAfterReference`; the top-level/class-member properties still resolve before their declarations. Lab test `kotlin_top_level_functions_resolve_before_declaration_but_values_do_not` passes. L4/L6 measurement gates remain open.
