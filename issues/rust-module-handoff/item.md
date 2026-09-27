@@ -1,8 +1,8 @@
 ---
 created: 2026-09-23
-updated: 2026-09-23
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 closed: 2026-09-23
 commits:
@@ -25,3 +25,7 @@ rust_module_facts() first calls take_rust_module_facts(), but rust_stash_module_
 ### 2026-09-24T02:00:56Z · @issuectl
 
 Rust extraction now carries module rows from its syn parse into project resolve; the regression test proves resolve uses that output without reparsing source bytes.
+
+## Repro receipt
+
+2026-09-26: `DL_TRAIL=0 DL_TRACE_SUMMARY=1 ryii fast crates/sprefa-extract/tests/fixtures/rust_findings/module_plane/crate_a/src/lib.rs` reports two parser calls (tree-sitter and syn); the extra resolve parse does not reproduce.

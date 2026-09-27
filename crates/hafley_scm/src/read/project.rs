@@ -983,13 +983,14 @@ fn load_rust_checker(
 ) -> Result<crate::read::lang::rust_checker::RustCheckerIndex, String> {
     // A relative root reaches rust-analyzer as a relative `AbsPathBuf` and its
     // workspace discovery then finds only part of the crate graph.
-    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let io_root = crate::read::io_path(root);
+    let root = std::fs::canonicalize(&io_root).unwrap_or(io_root);
     let files: Vec<(String, PathBuf)> = inputs
         .iter()
         .filter(|input| input.path.ends_with(".rs"))
         .map(|input| {
-            let absolute =
-                std::fs::canonicalize(&input.path).unwrap_or_else(|_| PathBuf::from(&input.path));
+            let io_path = crate::read::io_path(Path::new(&input.path));
+            let absolute = std::fs::canonicalize(&io_path).unwrap_or(io_path);
             (input.path.clone(), absolute)
         })
         .collect();
@@ -1046,7 +1047,8 @@ fn load_ts_checker(
     corpus: &[(String, ContentId)],
     cx: &ProjectCx,
 ) -> Result<crate::read::lang::ts_checker::TsCheckerIndex, String> {
-    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let io_root = crate::read::io_path(root);
+    let root = std::fs::canonicalize(&io_root).unwrap_or(io_root);
     let files: Vec<(String, PathBuf)> = inputs
         .iter()
         .filter(|input| {
@@ -1056,8 +1058,8 @@ fn load_ts_checker(
                 .any(|suffix| path.ends_with(suffix))
         })
         .map(|input| {
-            let absolute =
-                std::fs::canonicalize(&input.path).unwrap_or_else(|_| PathBuf::from(&input.path));
+            let io_path = crate::read::io_path(Path::new(&input.path));
+            let absolute = std::fs::canonicalize(&io_path).unwrap_or(io_path);
             (input.path.clone(), absolute)
         })
         .collect();
@@ -1094,13 +1096,14 @@ fn load_go_checker(
     corpus: &[(String, ContentId)],
     cx: &ProjectCx,
 ) -> Result<crate::read::lang::go_checker::GoCheckerIndex, String> {
-    let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let io_root = crate::read::io_path(root);
+    let root = std::fs::canonicalize(&io_root).unwrap_or(io_root);
     let files: Vec<(String, PathBuf)> = inputs
         .iter()
         .filter(|input| input.path.ends_with(".go"))
         .map(|input| {
-            let absolute =
-                std::fs::canonicalize(&input.path).unwrap_or_else(|_| PathBuf::from(&input.path));
+            let io_path = crate::read::io_path(Path::new(&input.path));
+            let absolute = std::fs::canonicalize(&io_path).unwrap_or(io_path);
             (input.path.clone(), absolute)
         })
         .collect();
@@ -1250,12 +1253,13 @@ pub struct ScipFamilyRequest<'a> {
 /// killing its caller (v5's law) and an empty stream reads as "this project has
 /// no symbols", which is a worse lie than a failure.
 pub fn scip_family(request: &ScipFamilyRequest) -> Result<Vec<FlatFact>, ProjectError> {
+    let io_root = crate::read::io_path(request.root);
     let cache = match request.cache_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => crate::read::scip_ensure::default_cache_dir(request.root),
+        Some(dir) => crate::read::io_path(dir),
+        None => crate::read::scip_ensure::default_cache_dir(&io_root),
     };
     let report = crate::read::scip_ensure::ensure_index_picked_for_root(
-        request.root,
+        &io_root,
         &cache,
         request.budget,
         request.indexer,
@@ -1296,7 +1300,7 @@ fn scip_family_from_path(
     // The decode is indexer-agnostic (one prost decode serves every indexer),
     // so any roster entry loads any index, including a merged multi-language one.
     let index = ScipTypescript
-        .load(index_path)
+        .load(&crate::read::io_path(index_path))
         .map_err(ProjectError::Scip)?;
     let slug = match request.slug {
         Some(slug) => slug.to_string(),
@@ -1334,7 +1338,7 @@ fn scip_index_staleness(
     project_root: &Path,
     index: &ScipIndex,
 ) -> (Option<u64>, &'static str) {
-    let index_mtime = std::fs::File::open(index_path)
+    let index_mtime = std::fs::File::open(crate::read::io_path(index_path))
         .and_then(|file| file.metadata())
         .and_then(|metadata| metadata.modified())
         .ok();
@@ -1346,7 +1350,7 @@ fn scip_index_staleness(
     let mut uncertain = false;
     for document in &index.documents {
         let source_path = project_root.join(&document.relative_path);
-        let source_mtime = std::fs::File::open(&source_path)
+        let source_mtime = std::fs::File::open(crate::read::io_path(&source_path))
             .and_then(|file| file.metadata())
             .and_then(|metadata| metadata.modified());
         match source_mtime {
@@ -1375,11 +1379,12 @@ fn unix_millis(time: std::time::SystemTime) -> Option<u64> {
 /// that wants both the rows and the path calls `scip_family` and this in the
 /// same process: the second call takes the reuse branch by construction.
 pub fn scip_index_location(request: &ScipFamilyRequest) -> Option<PathBuf> {
+    let io_root = crate::read::io_path(request.root);
     let cache = match request.cache_dir {
-        Some(dir) => dir.to_path_buf(),
-        None => crate::read::scip_ensure::default_cache_dir(request.root),
+        Some(dir) => crate::read::io_path(dir),
+        None => crate::read::scip_ensure::default_cache_dir(&io_root),
     };
-    crate::read::scip_ensure::index_path(request.root, &cache)
+    crate::read::scip_ensure::index_path(&io_root, &cache)
 }
 
 /// Serialize the `scip` family to sorted JSONL lines.
@@ -2065,7 +2070,7 @@ fn load_scip(
             // `load` is indexer-agnostic (one prost decode serves every
             // indexer), so any roster entry decodes any index.
             return ScipTypescript
-                .load(path)
+                .load(&crate::read::io_path(path))
                 .map(Some)
                 .map_err(ProjectError::Scip);
         }
@@ -2083,9 +2088,10 @@ fn load_scip(
     // reading must never write to. `ryi slow ROOT` and the engine's scip
     // hosts are the callers that mean "index this repository" and they keep
     // `default_cache_dir`.
-    let cache = crate::read::scip_ensure::external_cache_dir(root);
+    let io_root = crate::read::io_path(root);
+    let cache = crate::read::scip_ensure::external_cache_dir(&io_root);
     let report = crate::read::scip_ensure::ensure_index_for_set(
-        root,
+        &io_root,
         &cache,
         IndexBudget::from_env(),
         Some(&set),
@@ -3115,7 +3121,8 @@ impl SourceTreeBlobSource {
         revision: soopy::Revision,
         patterns: &[soopy::Pattern],
     ) -> Result<Self, String> {
-        let root = root.as_ref();
+        let io_root = crate::read::io_path(root.as_ref());
+        let root = io_root.as_path();
         let repository = soopy::discover(root).map_err(|error| error.to_string())?;
         let prefix = project_prefix(root, &repository.root)?;
         let mut tree = soopy::SourceTree::open(repository);
@@ -3149,7 +3156,8 @@ impl SourceTreeBlobSource {
     /// (corpus ingest and the SCIP document reader), so it pays for the corpus,
     /// not the repository.
     pub fn open_files(root: impl AsRef<Path>, files: &[&str]) -> Result<Self, String> {
-        let root = root.as_ref();
+        let io_root = crate::read::io_path(root.as_ref());
+        let root = io_root.as_path();
         let repository = soopy::discover(root).map_err(|error| error.to_string())?;
         let prefix = project_prefix(root, &repository.root)?;
         let mut tree = soopy::SourceTree::open(repository.clone());
@@ -3251,7 +3259,8 @@ impl SourceTreeBlobSource {
 /// the two coincide. Both sides are canonical (soopy canonicalizes the
 /// repository root in `open`), so the strip is symlink-safe.
 fn project_prefix(root: &Path, repo_root: &Path) -> Result<String, String> {
-    let project_root = std::fs::canonicalize(root).map_err(|error| error.to_string())?;
+    let project_root =
+        std::fs::canonicalize(crate::read::io_path(root)).map_err(|error| error.to_string())?;
     Ok(project_root
         .strip_prefix(repo_root)
         .map_err(|_| {
@@ -3297,7 +3306,9 @@ impl BlobSource for SourceTreeBlobSource {
 
 impl FsBlobSource {
     pub fn new(root: impl Into<PathBuf>) -> Self {
-        Self { root: root.into() }
+        Self {
+            root: crate::read::io_path(&root.into()),
+        }
     }
 
     /// The `ProjectCx.reader` shape: a borrowed closure over this source.
@@ -3310,7 +3321,7 @@ impl FsBlobSource {
 
 impl BlobSource for FsBlobSource {
     fn blob(&self, path: &str) -> Option<Vec<u8>> {
-        std::fs::read(self.root.join(path)).ok()
+        std::fs::read(crate::read::io_path(&self.root.join(path))).ok()
     }
 }
 

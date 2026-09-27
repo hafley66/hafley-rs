@@ -3706,6 +3706,7 @@ dependencies = [
  "daemonize",
  "fs4",
  "futures-util",
+ "globset",
  "gomod-parser",
  "hafley-observe",
  "hafley_scm",

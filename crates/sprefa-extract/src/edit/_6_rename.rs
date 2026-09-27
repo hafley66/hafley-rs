@@ -528,7 +528,7 @@ fn requested_renames(cli: &RenameArgs) -> Result<Vec<(PathBuf, String, String)>,
 /// `anchor<TAB>old<TAB>new` per line. A short row is an error, never a silent
 /// skip: a dropped row is a rename that never happens.
 fn read_rename_list(path: &Path) -> Result<Vec<(PathBuf, String, String)>, RenameError> {
-    let text = std::fs::read_to_string(path)
+    let text = std::fs::read_to_string(sprefa_extract::io_path(path))
         .map_err(|error| plan_error(format!("read rename list {}: {error}", path.display())))?;
     let mut rows = Vec::new();
     for (index, line) in text.lines().enumerate() {

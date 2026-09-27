@@ -262,6 +262,9 @@ fn direct_server_and_daemon_client_replacement_and_idle_exit() {
             "{args:?} exit code"
         );
         assert_eq!(daemon.stdout, direct.stdout, "{args:?} stdout");
+        if args[1] == "does/not/exist.rs" {
+            assert_eq!(daemon.stderr, direct.stderr, "{args:?} stderr");
+        }
     }
     assert!(relative_daemon.stop(), "relative daemon exited");
 

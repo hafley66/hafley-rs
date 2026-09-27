@@ -136,7 +136,7 @@ impl TsconfigPaths {
     /// Read `<root>/tsconfig.json`. A missing or unparseable file is an empty
     /// config, never an error.
     pub fn read(root: &Path) -> Self {
-        std::fs::read_to_string(root.join("tsconfig.json"))
+        std::fs::read_to_string(crate::read::io_path(&root.join("tsconfig.json")))
             .ok()
             .map(|text| Self::parse(&text))
             .unwrap_or_default()
@@ -491,8 +491,8 @@ pub fn diet_file_edges(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
     let _entered = span.enter();
     let inputs = read_inputs(request.paths)?;
     span.record("files", inputs.len() as u64);
-    let root_absolute =
-        std::fs::canonicalize(root).map_err(|err| ProjectError::Read(root.to_path_buf(), err))?;
+    let root_absolute = std::fs::canonicalize(crate::read::io_path(root))
+        .map_err(|err| ProjectError::Read(root.to_path_buf(), err))?;
     let relative: Vec<String> = inputs
         .iter()
         .map(|input| project_relative(&input.path, &root_absolute))
@@ -531,8 +531,8 @@ pub fn diet_file_edges_jsonl(request: &ResolveRequest) -> Result<Vec<String>, Pr
 /// One supplied path as a project-relative slash path. Canonicalized on both
 /// sides so a relative argument and an absolute root still meet.
 pub fn project_relative(path: &str, root_absolute: &Path) -> Result<String, ProjectError> {
-    let absolute =
-        std::fs::canonicalize(path).map_err(|err| ProjectError::Read(PathBuf::from(path), err))?;
+    let absolute = std::fs::canonicalize(crate::read::io_path(Path::new(path)))
+        .map_err(|err| ProjectError::Read(PathBuf::from(path), err))?;
     absolute
         .strip_prefix(root_absolute)
         .map(|relative| relative.to_string_lossy().replace('\\', "/"))

@@ -50,6 +50,8 @@ impl RenameCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
+        let io_root = hafley_scm::read::io_path(root);
+        let root = io_root.as_path();
         let files = walk_files(root)?;
         Ok(Self {
             root: root.to_path_buf(),

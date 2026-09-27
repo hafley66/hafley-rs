@@ -1,9 +1,9 @@
 ---
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-26
 type: improvement
 reporter: chrishafley
-status: untriaged
+status: obsolete
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -24,3 +24,7 @@ crates/soopy/README.md DryRun section documents that CommitEngine::open_dry_run 
 No claim that the current documented implementation is broken. Track API misuse risk; preserve the existing non-durable benchmark capability.
 ## Tests Run
 README and source inspected; tests not executed.
+
+## Repro receipt
+
+2026-09-26: current `ryii move old.rs new.rs --root <temp>` previews a staged move, exits 0, keeps `old.rs`, and creates no `new.rs`; the no-write preview contract holds.

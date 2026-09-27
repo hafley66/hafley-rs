@@ -285,7 +285,9 @@ fn source_set_for_root_excluding(
     root: &Path,
     cache_dir: Option<&Path>,
 ) -> Result<IndexSet, String> {
-    let cache_dir = cache_dir.map(Path::to_path_buf);
+    let io_root = crate::read::io_path(root);
+    let root = io_root.as_path();
+    let cache_dir = cache_dir.map(crate::read::io_path);
     let walk = WalkBuilder::new(root)
         .follow_links(true)
         .hidden(false)
@@ -1111,8 +1113,11 @@ pub fn fresh_index_for_set(root: &Path, set_digest: &str) -> Option<PathBuf> {
 /// `index_path` with the freshness ask. `Some(digest)` keeps only candidates
 /// whose recorded set digest equals it; mtime then breaks the remaining tie.
 pub fn index_path_for_set(root: &Path, cache_dir: &Path, want: Option<&str>) -> Option<PathBuf> {
+    let io_root = crate::read::io_path(root);
+    let io_cache = crate::read::io_path(cache_dir);
     let explicit = std::env::var_os("SPREFA_SCIP_INDEX")
         .map(PathBuf::from)
+        .map(|path| crate::read::io_path(&path))
         .filter(|path| path.is_file());
     if let (Some(explicit), Some(digest)) = (explicit.as_ref(), want) {
         if recorded_digest(explicit).as_deref() == Some(digest) {
@@ -1120,9 +1125,9 @@ pub fn index_path_for_set(root: &Path, cache_dir: &Path, want: Option<&str>) -> 
         }
     }
     [
-        root.join("index.scip"),
-        cache_dir.join("index.scip"),
-        root.join(".dl").join("index.scip"),
+        io_root.join("index.scip"),
+        io_cache.join("index.scip"),
+        io_root.join(".dl").join("index.scip"),
     ]
     .into_iter()
     .chain(explicit.filter(|_| want.is_none()))

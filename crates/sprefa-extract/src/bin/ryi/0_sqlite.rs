@@ -262,14 +262,15 @@ impl Database {
         if path.as_os_str().is_empty() || path == Path::new(":memory:") {
             return Err("--sqlite requires a filesystem path for a new database".into());
         }
-        if std::fs::symlink_metadata(path).is_ok() {
+        let destination = sprefa_extract::io_path(path);
+        if std::fs::symlink_metadata(&destination).is_ok() {
             return Err(format!(
                 "--sqlite: {} already exists; supply a new database path",
                 path.display()
             )
             .into());
         }
-        let parent = path
+        let parent = destination
             .parent()
             .filter(|p| !p.as_os_str().is_empty())
             .unwrap_or(Path::new("."));
@@ -277,12 +278,7 @@ impl Database {
             .prefix(".extract-sqlite-")
             .tempfile_in(parent)?;
         let connection = Connection::open(temporary.path())?;
-        Self::furnish(
-            connection,
-            Some(temporary),
-            Some(std::path::absolute(path)?),
-            true,
-        )
+        Self::furnish(connection, Some(temporary), Some(destination), true)
     }
 
     pub fn source(&mut self, path: &str, digest: String) -> Result<()> {
@@ -481,7 +477,7 @@ impl Output {
     /// Point `path`-named row lookups at a readable root: `ryi scip` and
     /// `ryi slow` name every indexed document, not just supplied paths.
     pub fn set_line_root(&mut self, root: Option<PathBuf>) {
-        self.line_root = root;
+        self.line_root = root.map(|root| sprefa_extract::io_path(&root));
     }
     /// Bytes written to stdout so far, the trail's write-phase figure.
     pub fn stdout_bytes(&self) -> u64 {

@@ -9,6 +9,7 @@
 //! @comment-ok: module header, the seam list every lang file opens with
 
 use std::collections::{BTreeSet, HashMap};
+use std::path::Path;
 use std::sync::{Arc, Mutex, OnceLock};
 
 use oxc_allocator::Allocator;
@@ -649,7 +650,7 @@ pub fn facts_of(
         }
     }
     let path = paths?.get(blob)?;
-    let bytes = std::fs::read(path).ok()?;
+    let bytes = std::fs::read(crate::read::io_path(Path::new(path))).ok()?;
     let src = std::str::from_utf8(&bytes).ok()?;
     let source_type = super::ts::source_type_for(path)?;
     let allocator = Allocator::default();

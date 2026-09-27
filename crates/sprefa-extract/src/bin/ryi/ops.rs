@@ -115,11 +115,14 @@ pub(crate) fn with_request_context<T>(
     diagnostics: Option<Diagnostics>,
     run: impl FnOnce() -> T,
 ) -> T {
+    let library_diagnostics = diagnostics.clone();
     let guard = RequestContextGuard {
         root: REQUEST_ROOT.with(|slot| slot.replace(Some(root.clone()))),
         diagnostics: REQUEST_DIAGNOSTICS.with(|slot| slot.replace(diagnostics)),
     };
-    let result = sprefa_extract::with_io_root(root, run);
+    let result = sprefa_extract::with_diagnostic_sink(library_diagnostics, || {
+        sprefa_extract::with_io_root(root, run)
+    });
     drop(guard);
     result
 }
@@ -231,14 +234,7 @@ fn produce(ryi: Ryi) -> Rows {
                 OP_SINK.with(|slot| *slot.borrow_mut() = Some(sink.clone()));
                 let outcome =
                     crate::run_verb(ryi, Box::new(sink.clone()), Some(operation_cancelled))
-                        .map_err(|error| {
-                            let message = if error.message.is_empty() {
-                                format!("ryi exited {}", error.code)
-                            } else {
-                                error.message
-                            };
-                            OpError(message, error.code)
-                        });
+                        .map_err(|error| OpError(error.message, error.code));
                 OP_SINK.with(|slot| *slot.borrow_mut() = None);
                 sink.0.lock().unwrap().flush_pending()?;
                 if let Some(error) = OP_WRITE_ERROR.with(|failure| failure.borrow_mut().take()) {

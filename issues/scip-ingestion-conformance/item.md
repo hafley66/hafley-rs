@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-20
+updated: 2026-09-26
 type: feature
-status: deferred
+status: needs-decision
 priority: high
 epic: extract-parity-move-rename
 related: ['@k3-kotlin-scip-ratchet', '@fast-path-recursive-inference']
@@ -123,3 +123,9 @@ the same way a golden does.
 ### 2026-09-20T17:52:18Z · @chris
 
 2026-09-20: punted. Epic, needs mechanical leaf breakdown before any lane. extract-fast-slow-trait-divide is now its child.
+
+## Repro receipt
+
+2026-09-26: current `ryii scip --raw` on `ratchet_soopy/index.scip` emits 1,921 `std` and 4,400 `core` mentions; normal `ryii scip` emits 0 such relation mentions.
+
+Decision: ingest external-crate SCIP symbols, or record explicit waivers for external documents and narrow the conformance target?

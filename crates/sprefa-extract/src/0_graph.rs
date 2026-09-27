@@ -423,16 +423,16 @@ fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
                 |row| matches!(row, FlatFact::GraphPathChange { change, .. } if change == "added"),
             )
             .count();
-        eprintln!(
+        crate::ops::print_diagnostic(format_args!(
             "{} path changes: {} added, {} removed",
             rows.len(),
             added,
             rows.len() - added
-        );
+        ));
         return;
     }
     if matches!(arm, Arm::CallPath(_) | Arm::TypePath(_) | Arm::FlowPath(_)) {
-        eprintln!("{} paths", rows.len());
+        crate::ops::print_diagnostic(format_args!("{} paths", rows.len()));
         return;
     }
     let mut split = GradeSplit::default();
@@ -444,13 +444,13 @@ fn emit_summary_line(rows: &[FlatFact], arm: &Arm<'_>, compared: bool) {
             _ => {}
         }
     }
-    eprintln!(
+    crate::ops::print_diagnostic(format_args!(
         "{} edges: {} +, {} ~, {} -",
         rows.len(),
         split.plus,
         split.tilde,
         split.minus
-    );
+    ));
 }
 
 /// Which resolve arm each question needs, and which view answers it.
@@ -646,7 +646,9 @@ pub fn run_to(
         _ => unreachable!("the clap ArgGroup requires one of the six"),
     };
     let rows = if let Some(revision) = &cli.at {
-        let root = fs::canonicalize(cli.inputs.root.as_ref().expect("clap requires the root"))?;
+        let root = fs::canonicalize(sprefa_extract::io_path(
+            cli.inputs.root.as_ref().expect("clap requires the root"),
+        ))?;
         let selected: Vec<PathBuf> = cli
             .inputs
             .paths

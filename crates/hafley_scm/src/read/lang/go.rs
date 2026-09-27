@@ -3076,7 +3076,7 @@ pub struct GoModule {
 pub fn go_module_of(path: &str) -> Option<GoModule> {
     let mut dir = Path::new(path).parent()?;
     loop {
-        if let Ok(text) = std::fs::read_to_string(dir.join("go.mod")) {
+        if let Ok(text) = std::fs::read_to_string(crate::read::io_path(&dir.join("go.mod"))) {
             let module = text
                 .lines()
                 .find_map(|line| line.trim().strip_prefix("module "))?;
@@ -3271,7 +3271,7 @@ pub fn go_is_method_def(path: &str, span: Span) -> bool {
 }
 
 fn go_parse_file_facts(path: &str) -> GoFileFacts {
-    let Ok(bytes) = std::fs::read(path) else {
+    let Ok(bytes) = std::fs::read(crate::read::io_path(Path::new(path))) else {
         return GoFileFacts::default();
     };
     let Ok(src) = std::str::from_utf8(&bytes) else {

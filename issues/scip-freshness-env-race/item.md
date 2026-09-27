@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 labels: [extract]
 closed: 2026-09-25
@@ -17,3 +17,7 @@ closed: 2026-09-25
 
 ## Acceptance Criteria
 - [ ] every test in the file that reaches `index_path_for_set` holds `ENVIRONMENT`
+
+## Repro receipt
+
+2026-09-26: all 15 `t_scip_freshness` tests pass, including `stale_set_rebuilds_and_the_original_set_still_hits`; the environment race does not reproduce.
