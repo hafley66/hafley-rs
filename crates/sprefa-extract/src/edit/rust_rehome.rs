@@ -842,6 +842,7 @@ fn manifest_respell(cx: &MoveCx, reference: &ImportRef) -> Option<(String, Optio
 /// arm holds the tree still and writes `#[path]`, this one moves the tree.
 struct Relocation {
     name: String,
+    old_name: String,
     /// Module path from the crate root, before and after the batch.
     old_path: Vec<String>,
     new_path: Vec<String>,
@@ -853,6 +854,8 @@ struct Relocation {
     decl: Span,
     decl_text: String,
     vis: String,
+    /// The module name changes while its declaring parent stays in place.
+    rename_in_place: bool,
     /// The `#[path = ".."] ` the new parent needs when the destination file's
     /// name is not the module's; empty when rustc's own probe finds it.
     aim: String,
@@ -898,14 +901,24 @@ fn relocate_plan(cx: &MoveCx) -> &'static RelocatePlan {
 }
 
 fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
+    let mut plan = RelocatePlan::default();
+    let roots = crate_roots(cx);
+    for (old, new) in cx.moved().iter().filter(|(old, _)| old.ends_with(".rs")) {
+        if owning_root(old, roots).is_some() && owning_root(new, roots).is_none() {
+            plan.errors.push(format!(
+                "move destination {new} is outside the source Rust crate root for {old}"
+            ));
+        }
+    }
+    if !plan.errors.is_empty() {
+        return plan;
+    }
     if cross::active(cx) {
         return cross::build(cx);
     }
-    let mut plan = RelocatePlan::default();
     if !cx.relocate_mod() {
         return plan;
     }
-    let roots = crate_roots(cx);
     let scanned = relocate_scan(cx);
 
     let mut moves: BTreeMap<String, Relocation> = BTreeMap::new();
@@ -1021,6 +1034,28 @@ fn build_relocate_plan(cx: &MoveCx) -> RelocatePlan {
     }
 
     for (target, relocation) in &moves {
+        if relocation.rename_in_place {
+            let replacement = relocation.decl_text.replace(
+                &format!("mod {}", relocation.old_name),
+                &format!("mod {}", relocation.name),
+            );
+            plan.edits.insert(
+                (relocation.old_parent.clone(), relocation.decl.start),
+                RelocateEdit {
+                    importer: relocation.old_parent.clone(),
+                    span: relocation.decl,
+                    text: relocation.decl_text.clone(),
+                    target: target.clone(),
+                    kind: MOD_RELOCATE_OUT,
+                    replacement,
+                    receipt: Some(format!(
+                        "relocate mod {} -> {} in {}",
+                        relocation.old_name, relocation.name, relocation.old_parent
+                    )),
+                },
+            );
+            continue;
+        }
         plan.edits.insert(
             (relocation.old_parent.clone(), relocation.decl.start),
             RelocateEdit {
@@ -1122,7 +1157,7 @@ fn widen_privates(
                 runs.iter().any(|run| {
                     run.idents
                         .windows(2)
-                        .any(|pair| pair[0] == relocation.name && pair[1] == item.name)
+                        .any(|pair| pair[0] == relocation.old_name && pair[1] == item.name)
                         && !here_after(cx, roots, rel).is_some_and(|here| here.starts_with(&home))
                 })
             });
@@ -1166,6 +1201,9 @@ fn insert_decls(
 ) {
     let mut by_parent: BTreeMap<&String, Vec<(&String, &Relocation)>> = BTreeMap::new();
     for (target, relocation) in moves {
+        if relocation.rename_in_place {
+            continue;
+        }
         by_parent
             .entry(&relocation.new_parent)
             .or_default()
@@ -1281,9 +1319,15 @@ fn plan_relocation(
     if old_path.is_empty() || new_path.is_empty() {
         return Ok(None);
     }
-    if old_path[..old_path.len() - 1] == new_path[..new_path.len() - 1] {
+    if old_path == new_path {
         return Ok(None);
     }
+    let rename_in_place = old_path[..old_path.len() - 1] == new_path[..new_path.len() - 1];
+    let old_name = decl.name.clone();
+    let name = match decl.attr.is_some() {
+        true => old_name.clone(),
+        false => new_path.last().cloned().unwrap_or_else(|| old_name.clone()),
+    };
     let candidates = parent_files(&root, &new_path[..new_path.len() - 1]);
     let Some((edit_at, lands_at)) = candidates
         .iter()
@@ -1304,7 +1348,8 @@ fn plan_relocation(
         return Ok(None);
     };
     Ok(Some(Relocation {
-        name: decl.name.clone(),
+        name,
+        old_name,
         old_path,
         new_path,
         old_parent: parent_rel.to_string(),
@@ -1312,6 +1357,7 @@ fn plan_relocation(
         decl: span,
         decl_text: text,
         vis: decl.vis.clone(),
+        rename_in_place,
         aim,
     }))
 }

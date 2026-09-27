@@ -992,6 +992,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
             one.old.clone(),
             Relocation {
                 name: one.name.clone(),
+                old_name: one.name.clone(),
                 old_path: one.old_path.clone(),
                 new_path: one.new_path.clone(),
                 old_parent: parent.clone(),
@@ -999,6 +1000,7 @@ pub(super) fn build(cx: &MoveCx) -> RelocatePlan {
                 decl: *span,
                 decl_text: text.clone(),
                 vis: one.vis.clone(),
+                rename_in_place: false,
                 aim: one.aim.clone(),
             },
         );
