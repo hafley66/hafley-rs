@@ -14,6 +14,9 @@
 
 use std::collections::{HashMap, HashSet};
 
+use petgraph::algo::dominators::simple_fast;
+use petgraph::graph::{DiGraph, NodeIndex};
+
 use crate::read::lang::source_for;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::shape::{NodeRef, Span, Strings};
@@ -563,64 +566,16 @@ impl<'a> CfgBuild<'a> {
             return;
         }
 
-        let mut post = vec![vec![false; count]; count];
-        for &node in &nodes {
-            if node == exit || successors[node].is_empty() {
-                post[node][node] = true;
-            } else {
-                for &candidate in &nodes {
-                    post[node][candidate] = true;
-                }
+        let mut reversed = DiGraph::<(), ()>::new();
+        for _ in 0..count {
+            reversed.add_node(());
+        }
+        for (from, next) in successors.iter().enumerate() {
+            for &to in next {
+                reversed.add_edge(NodeIndex::new(to), NodeIndex::new(from), ());
             }
         }
-        loop {
-            let mut changed = false;
-            for &node in nodes.iter().rev() {
-                if node == exit || successors[node].is_empty() {
-                    continue;
-                }
-                let mut next = vec![true; count];
-                let reachable_successors: Vec<usize> = successors[node]
-                    .iter()
-                    .copied()
-                    .filter(|&successor| reachable[successor])
-                    .collect();
-                if reachable_successors.is_empty() {
-                    next.fill(false);
-                } else {
-                    for successor in reachable_successors {
-                        for candidate in 0..count {
-                            next[candidate] &= post[successor][candidate];
-                        }
-                    }
-                }
-                next[node] = true;
-                if post[node] != next {
-                    post[node] = next;
-                    changed = true;
-                }
-            }
-            if !changed {
-                break;
-            }
-        }
-
-        let mut immediate = vec![None; count];
-        for &node in &nodes {
-            if node == exit {
-                continue;
-            }
-            let strict: Vec<usize> = nodes
-                .iter()
-                .copied()
-                .filter(|&candidate| candidate != node && post[node][candidate])
-                .collect();
-            immediate[node] = strict.iter().copied().find(|&candidate| {
-                strict
-                    .iter()
-                    .all(|&other| other == candidate || post[candidate][other])
-            });
-        }
+        let post_dominators = simple_fast(&reversed, NodeIndex::new(exit));
 
         let mut controls = Vec::new();
         for &controller in &nodes {
@@ -638,19 +593,29 @@ impl<'a> CfgBuild<'a> {
             if targets.len() < 2 {
                 continue;
             }
-            let stop = immediate[controller];
+            let controller_ix = NodeIndex::new(controller);
+            let stop = post_dominators.immediate_dominator(controller_ix);
             for target in targets {
-                if post[controller][target] {
-                    continue;
-                }
-                let mut runner = Some(target);
-                let mut visited = HashSet::new();
-                while let Some(node) = runner {
-                    if Some(node) == stop || !visited.insert(node) {
+                let target_ix = NodeIndex::new(target);
+                let mut ancestor = Some(controller_ix);
+                let mut target_post_dominates_controller = false;
+                while let Some(node) = ancestor {
+                    if node == target_ix {
+                        target_post_dominates_controller = true;
                         break;
                     }
-                    controls.push((controller, node));
-                    runner = immediate[node];
+                    ancestor = post_dominators.immediate_dominator(node);
+                }
+                if target_post_dominates_controller {
+                    continue;
+                }
+                let mut runner = Some(target_ix);
+                while let Some(node) = runner {
+                    if Some(node) == stop {
+                        break;
+                    }
+                    controls.push((controller, node.index()));
+                    runner = post_dominators.immediate_dominator(node);
                 }
             }
         }

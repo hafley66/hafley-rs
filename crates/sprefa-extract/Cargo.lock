@@ -925,6 +925,7 @@ dependencies = [
  "oxc_semantic",
  "oxc_span",
  "oxc_syntax",
+ "petgraph",
  "proc-macro2",
  "prost 0.13.5",
  "quick_cache",
@@ -2153,6 +2154,7 @@ dependencies = [
  "fixedbitset",
  "hashbrown 0.15.5",
  "indexmap",
+ "serde",
 ]
 
 [[package]]

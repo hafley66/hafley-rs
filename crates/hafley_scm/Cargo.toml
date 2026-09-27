@@ -51,6 +51,7 @@ rusqlite = { version = "0.40", features = ["bundled", "limits", "trace"], option
 rayon = { version = "1", optional = true }
 quick_cache = { version = "0.7", optional = true }
 tracing = { version = "0.1", optional = true }
+petgraph = { version = "0.8.3", optional = true }
 # `cli`: the subscriber half of read/trace.rs.
 hafley-observe = { path = "../hafley-observe", optional = true }
 libc = { version = "0.2", optional = true }
@@ -99,7 +100,7 @@ fallback = ["shared", "dep:tree-sitter-html"]
 gdscript = ["shared", "dep:tree-sitter-gdscript"]
 commonlisp = ["shared", "dep:tree-sitter-commonlisp"]
 read = [
-    "shared", "rust", "typescript", "go", "kotlin", "python", "prolog",
+    "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "dep:petgraph",
     "markdown", "data", "fallback", "gdscript", "commonlisp",
 ]
 cli = ["shared", "dep:hafley-observe", "dep:libc", "dep:tracing-subscriber"]

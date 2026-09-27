@@ -63,6 +63,7 @@ G1 verification receipts:
 - Red: before control-dependence generation, the new `ts_if_emits_control_dependence_in_the_cfg_family` assertion has no `control` edges for either arm. Green: it now pins the branch-to-arm edges, and `control_slice_returns_a_closed_statement_set` pins the backwards closure for `allow()` without including `after()`.
 - `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --features cli,read --locked -j 2 --test all -E 'test(/t_17_cfg_first_plane::|t_124_cfg_python_prolog::|control_slice_returns_a_closed_statement_set/)'`: 17 passed.
 - `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo test --features cli,read --test all -j 2`: 1,130 passed, 0 failed, 18 ignored.
+- Review follow-up: replaced the hand-written post-dominator fixpoint with `petgraph::algo::dominators::simple_fast` over the reversed per-callable CFG. `cargo check -p hafley_scm --offline -j 2` passes; the same focused CFG/slice selection passes 17/17 with `petgraph` 0.8.3 in both lockfiles.
 
 ## Implementation Notes
 
