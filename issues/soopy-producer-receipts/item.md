@@ -3,7 +3,7 @@ created: 2026-09-07
 updated: 2026-09-26
 type: task
 reporter: chrishafley
-status: obsolete
+status: open
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -28,4 +28,4 @@ Source inspected; peer documentation compared; no comparative benchmark run. Rel
 
 ## Repro receipt
 
-2026-09-26: current `ryii move` on a temporary `old.rs` emits a dry-run preview, preserves old bytes, and creates no destination; no current mutation-command defect reproduces.
+2026-09-26: `ryii move` exercises the built-in move adapter only; its dry-run preview does not execute a real external producer or produce comparable phase and memory receipts. Producer-integration gates remain unchecked.
