@@ -2,12 +2,13 @@
 created: 2026-08-22
 updated: 2026-08-22
 type: chore
-status: closed
+status: done
 priority: normal
 epic: harness-interface
 related: ['@mail-over-doors']
 labels: [domain-boop, intent-implementation]
 size: M
+closed: 2026-08-22
 ---
 
 # Delete tui/opencode/kimi channels and the codex InspectingProxy

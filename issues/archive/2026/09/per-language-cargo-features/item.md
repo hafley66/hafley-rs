@@ -3,7 +3,7 @@ created: 2026-09-27
 updated: 2026-09-27
 type: feature
 status: fixed
-priority: medium
+priority: normal
 epic: capability-as-data
 related: ['@capability-as-data']
 labels: [extract, cargo-features]

@@ -2,11 +2,12 @@
 created: 2026-08-17
 updated: 2026-08-19
 type: improvement
-status: closed
+status: done
 priority: normal
 epic: boop-process
 labels: [domain-boop, intent-implementation]
 size: M
+closed: 2026-08-20
 ---
 
 # main.rs is 6061 lines with 930 inline test lines and 120 free functions
