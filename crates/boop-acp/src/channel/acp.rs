@@ -86,6 +86,7 @@ fn adapter_supports_midturn_steering(adapter: &[&str]) -> bool {
 
 /// How long the opening handshake (spawn, `initialize`, session) may take.
 const OPEN_TIMEOUT: Duration = Duration::from_secs(120);
+static NEXT_AGENT_PID_FILE: AtomicU64 = AtomicU64::new(1);
 
 /// What the sync side asks the connection thread to do.
 #[derive(Debug)]
@@ -118,6 +119,7 @@ pub struct AcpChannel {
     tool_calls: Arc<Mutex<Vec<ToolCallFact>>>,
     turn_running: bool,
     codex_steering: bool,
+    process_group: Option<i32>,
 }
 
 impl AcpChannel {
@@ -140,17 +142,17 @@ impl AcpChannel {
         let cwd = std::fs::canonicalize(&spec.cwd)
             .with_context(|| format!("resolve acp session cwd {}", spec.cwd.display()))?;
         let lane = spec.lane.clone();
-        let agent = AcpAgent::new(AcpAgentConfig::new(program).args(args.to_vec())).with_debug(
-            move |line, direction| match direction {
-                LineDirection::Stderr => {
-                    debug!(
-                        lane = lane.as_deref().unwrap_or_default(),
-                        line, "acp agent stderr"
-                    )
-                }
-                _ => debug!(?direction, line, "acp wire"),
-            },
-        );
+        let (agent, process_group_file) = agent_with_process_group(program, args);
+        let _process_group_file = ProcessGroupFile(process_group_file.clone());
+        let agent = agent.with_debug(move |line, direction| match direction {
+            LineDirection::Stderr => {
+                debug!(
+                    lane = lane.as_deref().unwrap_or_default(),
+                    line, "acp agent stderr"
+                )
+            }
+            _ => debug!(?direction, line, "acp wire"),
+        });
 
         let (command_tx, command_rx) = tokio::sync::mpsc::unbounded_channel();
         let (note_tx, note_rx) = std::sync::mpsc::channel();
@@ -202,6 +204,7 @@ impl AcpChannel {
             tool_calls,
             turn_running: false,
             codex_steering,
+            process_group: None,
         };
         match channel.notes.recv_timeout(OPEN_TIMEOUT) {
             Ok(Note::Opened(session)) => {
@@ -211,6 +214,10 @@ impl AcpChannel {
                     "acp session opened"
                 );
                 channel.session = Some(session);
+                channel.process_group = process_group_file
+                    .as_deref()
+                    .and_then(|path| std::fs::read_to_string(path).ok())
+                    .and_then(|pid| pid.trim().parse().ok());
                 Ok(channel)
             }
             Ok(Note::OpenFailed(detail)) => anyhow::bail!("acp handshake failed: {detail}"),
@@ -244,6 +251,10 @@ impl LaneChannel for AcpChannel {
 
     fn conversation_id_kind(&self) -> &'static str {
         "acp_session"
+    }
+
+    fn process_group_id(&self) -> Option<i32> {
+        self.process_group
     }
 
     fn start_turn(&mut self, text: &str) -> Result<()> {
@@ -305,10 +316,9 @@ impl LaneChannel for AcpChannel {
     }
 
     fn interrupt(&mut self) -> Result<()> {
-        if self.commands.send(Command::Cancel).is_err() {
-            debug!("acp interrupt reached a closed connection");
-        }
-        Ok(())
+        self.commands
+            .send(Command::Cancel)
+            .map_err(|_| anyhow::anyhow!("the acp connection is closed before cancel was queued"))
     }
 
     fn last_activity_ms(&self) -> Option<u64> {
@@ -332,6 +342,62 @@ impl LaneChannel for AcpChannel {
         }
         self.turn_running = false;
         Ok(())
+    }
+}
+
+fn agent_with_process_group(
+    program: &str,
+    args: &[String],
+) -> (AcpAgent, Option<std::path::PathBuf>) {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::OpenOptionsExt;
+        let nonce = NEXT_AGENT_PID_FILE.fetch_add(1, Ordering::Relaxed);
+        let path = std::env::temp_dir().join(format!(
+            "boop-agent-pgid-{}-{nonce}.txt",
+            std::process::id()
+        ));
+        let created = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&path);
+        if created.is_err() {
+            return (
+                AcpAgent::new(AcpAgentConfig::new(program).args(args.to_vec())),
+                None,
+            );
+        }
+        let mut wrapped = vec![
+            "-c".to_owned(),
+            "printf '%s\\n' \"$$\" > \"$1\"; shift; exec \"$@\"".to_owned(),
+            "boop-agent-pgid".to_owned(),
+            path.display().to_string(),
+        ];
+        wrapped.push(program.to_owned());
+        wrapped.extend(args.iter().cloned());
+        (
+            AcpAgent::new(AcpAgentConfig::new("sh").args(wrapped)),
+            Some(path),
+        )
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = NEXT_AGENT_PID_FILE;
+        (
+            AcpAgent::new(AcpAgentConfig::new(program).args(args.to_vec())),
+            None,
+        )
+    }
+}
+
+struct ProcessGroupFile(Option<std::path::PathBuf>);
+
+impl Drop for ProcessGroupFile {
+    fn drop(&mut self) {
+        if let Some(path) = &self.0 {
+            let _ = std::fs::remove_file(path);
+        }
     }
 }
 
@@ -1205,6 +1271,7 @@ mod tests {
             tool_calls: Arc::new(Mutex::new(Vec::new())),
             turn_running: false,
             codex_steering: false,
+            process_group: None,
         }
     }
 
@@ -1479,6 +1546,8 @@ mod terminal_wire_tests {
     use super::*;
     use std::sync::OnceLock;
 
+    static PROCESS_GROUP: OnceLock<i32> = OnceLock::new();
+
     const FAKE_AGENT: &str = r#"
 import json, sys, time
 
@@ -1587,6 +1656,12 @@ while True:
                 written.display().to_string(),
             ];
             let mut channel = AcpChannel::open(&spec, &command).unwrap();
+            let process_group_id = channel.process_group_id().unwrap();
+            assert_eq!(
+                process_group_id_of(process_group_id as u32),
+                process_group_id
+            );
+            PROCESS_GROUP.set(process_group_id).unwrap();
             channel.start_turn("run the terminals").unwrap();
             let deadline = std::time::Instant::now() + Duration::from_secs(60);
             let verdict = loop {
@@ -1604,12 +1679,33 @@ while True:
         })
     }
 
+    fn process_group_id_of(pid: u32) -> i32 {
+        let output = std::process::Command::new("ps")
+            .args(["-o", "pgid=", "-p", &pid.to_string()])
+            .output()
+            .unwrap();
+        String::from_utf8(output.stdout)
+            .unwrap()
+            .trim()
+            .parse()
+            .unwrap()
+    }
+
     #[test]
     fn initialize_advertises_the_terminal_capability() {
         assert_eq!(
             report()["client_capabilities"]["terminal"],
             serde_json::json!(true)
         );
+    }
+
+    #[test]
+    fn spawned_agent_reports_its_owned_process_group() {
+        let _ = report();
+        let pgid = *PROCESS_GROUP.get().unwrap();
+        assert!(pgid > 0);
+        let supervisor_pgid = process_group_id_of(std::process::id());
+        assert_ne!(pgid, supervisor_pgid);
     }
 
     #[test]

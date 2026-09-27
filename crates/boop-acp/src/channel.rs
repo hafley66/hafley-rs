@@ -200,6 +200,11 @@ pub trait LaneChannel: Send {
         None
     }
 
+    /// Process-group leader pid for a harness child Boop owns, when available.
+    fn process_group_id(&self) -> Option<i32> {
+        None
+    }
+
     /// Take the tool calls observed since the last drain. The default is a
     /// transport that reports none, which every reader treats as no evidence.
     fn drain_tool_calls(&mut self) -> Vec<ToolCallFact> {

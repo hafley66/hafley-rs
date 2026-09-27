@@ -2219,6 +2219,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             no_header,
             socket.as_deref(),
         ),
+        LaneCmd::Resume { lane, mail_dir } => run_lane_resource_resume(mail_dir.as_deref(), &lane),
         LaneCmd::Revive {
             lane,
             dead,
@@ -3183,6 +3184,32 @@ fn reclaim_merged_worktree(
 
 /// Stop one lane and drop its route. Refuses when tmux is unreachable. `--route-only`
 /// drops the registry row and never touches the pane, so the on-exit epilogue can run inside it.
+fn run_lane_resource_resume(mail_dir_arg: Option<&Path>, lane: &str) -> Result<()> {
+    let dir = mail_dir(mail_dir_arg)?;
+    anyhow::ensure!(
+        bus::read_routes(&dir)?.contains_key(lane),
+        "lane `{lane}` has no registered route"
+    );
+    let message = bus::Message {
+        id: bus::mint_id(),
+        from: identity::resolve_as(None)
+            .lane
+            .unwrap_or_else(|| "coordinator".into()),
+        to: lane.to_owned(),
+        from_timestamp: bus::now_iso(),
+        to_timestamp: None,
+        kind: "resume".into(),
+        reply_to: None,
+        body: "resource-guard".into(),
+        r#ref: None,
+        rc: None,
+        detail: None,
+    };
+    append_message(&dir, &message)?;
+    println!("resume requested for {lane} ({})", message.id);
+    Ok(())
+}
+
 pub(crate) fn run_lane_delete(
     mail_dir_arg: Option<&Path>,
     lane: &str,

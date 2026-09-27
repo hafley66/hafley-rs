@@ -31,6 +31,7 @@ pub struct ClaudeChannel {
     turn_receipt: TurnReceipt,
     /// Tool calls seen since the supervisor last drained them.
     tool_calls: Vec<ToolCallFact>,
+    process_group: Option<i32>,
 }
 
 impl ClaudeChannel {
@@ -66,6 +67,11 @@ impl ClaudeChannel {
                 command.args(["--effort", effort.as_str()]);
             }
         }
+        #[cfg(unix)]
+        {
+            use std::os::unix::process::CommandExt;
+            command.process_group(0);
+        }
         let mut child = command
             .current_dir(&spec.cwd)
             .stdin(Stdio::piped())
@@ -73,6 +79,10 @@ impl ClaudeChannel {
             .stderr(boop_store::trail::child_stderr(spec.lane.as_deref()))
             .spawn()
             .context("spawn claude stream-json child")?;
+        #[cfg(unix)]
+        let process_group = Some(child.id() as i32);
+        #[cfg(not(unix))]
+        let process_group = None;
         let stdin = child.stdin.take().context("claude child has no stdin")?;
         let stdout = child.stdout.take().context("claude child has no stdout")?;
         let (sender, events) = channel();
@@ -96,6 +106,7 @@ impl ClaudeChannel {
             last_event_ms,
             turn_receipt: TurnReceipt::default(),
             tool_calls: Vec::new(),
+            process_group,
         })
     }
 
@@ -126,6 +137,10 @@ impl ClaudeChannel {
 impl LaneChannel for ClaudeChannel {
     fn conversation_id(&self) -> Option<String> {
         Some(self.conversation.clone())
+    }
+
+    fn process_group_id(&self) -> Option<i32> {
+        self.process_group
     }
 
     fn start_turn(&mut self, text: &str) -> Result<()> {

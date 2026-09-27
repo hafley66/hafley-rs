@@ -1066,6 +1066,13 @@ enum LaneCmd {
         #[arg(long)]
         mail_dir: Option<PathBuf>,
     },
+    /// Continue an agent process group paused by the RSS guard.
+    Resume {
+        lane: String,
+        /// Directory holding boop.db; defaults to ~/.agent.
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// Make a worktree, spawn the agent, register the route.
     Create {
         /// The lane's whole identity: `feature/<name>`, also fix/, refactor/,

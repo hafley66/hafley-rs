@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
+use crate::resource_guard::{AgentProcessGroup, GuardAction, ResourceGuard, ResourceGuardConfig};
 use boop_acp::channel::{Delivery, LaneChannel, ToolCallFact, TurnEvent, TOOL_STATUS_COMPLETED};
 use boop_store::bus;
 
@@ -1162,6 +1163,29 @@ fn supervise(
         .and_then(|store| store.lane_reported_head(&lane.lane).ok().flatten());
     let mut head_watch = HeadWatch::new(&lane.cwd, reported, commit_quiet());
     let mut disk_watch = DiskWatch::new();
+    let guard_config = ResourceGuardConfig::from_env();
+    let mut resource_guard = ResourceGuard::new(guard_config);
+    let agent_group = if resource_guard.enabled() {
+        channel.process_group_id().and_then(|pid| {
+            u32::try_from(pid)
+                .ok()
+                .and_then(|pid| match AgentProcessGroup::capture(pid) {
+                    Ok(group) => Some(group),
+                    Err(error) => {
+                        warn!(lane = lane.lane, pid, error = %error, "agent resource guard could not verify the child group");
+                        None
+                    }
+                })
+        })
+    } else {
+        None
+    };
+    if resource_guard.enabled() && agent_group.is_none() {
+        warn!(
+            lane = lane.lane,
+            "agent RSS guard enabled without a verified harness process group"
+        );
+    }
     // `conversation_id` may already exist for a freshly opened channel. Codex
     // app-server returns its new thread id from `thread/start` before the first
     // turn, so only the caller's explicit resume input proves that the thread
@@ -1317,6 +1341,129 @@ fn supervise(
                 last_activity.set(std::time::Instant::now());
                 if let Some(store) = mail_store.as_ref() {
                     report_head_move(lane, store, &lane.cwd, mv);
+                }
+            }
+            if resource_guard.due(Instant::now()) {
+                if let Some(group) = agent_group {
+                    match group.sample() {
+                        Ok(sample) => {
+                            let now = Instant::now();
+                            let action = resource_guard.observe(now, sample.rss_bytes);
+                            events.record(
+                                "resource-sample",
+                                TraceRecorder::session(channel),
+                                Some(turn_started),
+                                Some(boop_acp::channel::now_ms()),
+                                None,
+                                Some(
+                                    if sample.rss_bytes
+                                        > guard_config.limit_bytes.unwrap_or(u64::MAX)
+                                    {
+                                        "over-limit"
+                                    } else {
+                                        "within-limit"
+                                    },
+                                ),
+                                None,
+                                None,
+                                &format!(
+                                    "rss_bytes={} process_count={} attribution_us={}",
+                                    sample.rss_bytes,
+                                    sample.process_count,
+                                    sample.attribution.as_micros()
+                                ),
+                            );
+                            match action {
+                                Some(GuardAction::Interrupt) => {
+                                    match channel.interrupt() {
+                                        Ok(()) => {
+                                            info!(lane = lane.lane, rss_bytes = sample.rss_bytes, "agent RSS breach interrupted; grace period started");
+                                            events.record(
+                                                "resource-interrupt",
+                                                TraceRecorder::session(channel),
+                                                Some(turn_started),
+                                                Some(boop_acp::channel::now_ms()),
+                                                None,
+                                                Some("accepted"),
+                                                None,
+                                                None,
+                                                "agent RSS breach interrupted",
+                                            );
+                                        }
+                                        Err(error) => {
+                                            warn!(lane = lane.lane, error = %error, "agent RSS breach interrupt failed");
+                                            events.record(
+                                                "resource-interrupt",
+                                                TraceRecorder::session(channel),
+                                                Some(turn_started),
+                                                Some(boop_acp::channel::now_ms()),
+                                                None,
+                                                Some("failed"),
+                                                None,
+                                                None,
+                                                &error.to_string(),
+                                            );
+                                        }
+                                    }
+                                }
+                                Some(GuardAction::Pause) => match group.pause() {
+                                    Ok(()) => {
+                                        info!(
+                                            lane = lane.lane,
+                                            pgid = group.pgid(),
+                                            rss_bytes = sample.rss_bytes,
+                                            "agent RSS breach paused the owned process group"
+                                        );
+                                        events.record(
+                                            "resource-pause",
+                                            TraceRecorder::session(channel),
+                                            Some(turn_started),
+                                            Some(boop_acp::channel::now_ms()),
+                                            None,
+                                            Some("paused"),
+                                            None,
+                                            None,
+                                            &format!(
+                                                "pgid={} rss_bytes={}",
+                                                group.pgid(),
+                                                sample.rss_bytes
+                                            ),
+                                        );
+                                    }
+                                    Err(error) => {
+                                        warn!(lane = lane.lane, error = %error, "agent RSS breach pause failed");
+                                        events.record(
+                                            "resource-pause",
+                                            TraceRecorder::session(channel),
+                                            Some(turn_started),
+                                            Some(boop_acp::channel::now_ms()),
+                                            None,
+                                            Some("failed"),
+                                            None,
+                                            None,
+                                            &error.to_string(),
+                                        );
+                                        resource_guard.mark_resumed();
+                                    }
+                                },
+                                None => {}
+                            }
+                        }
+                        Err(error) => {
+                            warn!(lane = lane.lane, error = %error, "agent RSS sample failed");
+                            events.record(
+                                "resource-sample",
+                                TraceRecorder::session(channel),
+                                Some(turn_started),
+                                Some(boop_acp::channel::now_ms()),
+                                None,
+                                Some("failed"),
+                                None,
+                                None,
+                                &error.to_string(),
+                            );
+                        }
+                    }
                 }
             }
             let this_turn_activity = channel
@@ -1475,6 +1622,39 @@ fn supervise(
                         "cancel row",
                     );
                     held.push(hail);
+                    continue;
+                }
+                if hail.kind == "resume" && hail.body == "resource-guard" {
+                    if resource_guard.paused() {
+                        if let Some(group) = agent_group {
+                            group.resume()?;
+                            resource_guard.mark_resumed();
+                            record_hail_transition(
+                                events,
+                                &hail,
+                                "resumed-by-supervisor",
+                                "resource guard resume",
+                            );
+                            events.record(
+                                "resource-resume",
+                                TraceRecorder::session(channel),
+                                Some(turn_started),
+                                Some(boop_acp::channel::now_ms()),
+                                None,
+                                Some("resumed"),
+                                Some(&hail.from),
+                                Some(&lane.lane),
+                                &format!("pgid={}", group.pgid()),
+                            );
+                            continue;
+                        }
+                    }
+                    record_hail_transition(
+                        events,
+                        &hail,
+                        "rejected-by-supervisor",
+                        "no paused resource guard",
+                    );
                     continue;
                 }
                 let delivery = match channel.steer(&hail_text(&hail, &mood)) {
@@ -4958,6 +5138,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
         bus::write_route(&dir, "mine", &route(Some("parent"))).unwrap();
         let rows = store
