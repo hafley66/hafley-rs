@@ -4,7 +4,16 @@
 
 pub enum InsertError { Sql(rusqlite::Error), Json(serde_json::Error), OrdinalOverflow, SQLiteLimit(&'static str) }
 
-impl std::fmt::Display for InsertError { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, "{self:?}") } }
+impl std::fmt::Display for InsertError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sql(error) => write!(f, "{error}"),
+            Self::Json(error) => write!(f, "{error}"),
+            Self::OrdinalOverflow => f.write_str("row ordinal overflow"),
+            Self::SQLiteLimit(limit) => write!(f, "SQLite limit exceeded: {limit}"),
+        }
+    }
+}
 
 impl std::error::Error for InsertError {}
 
@@ -79,11 +88,11 @@ pub mod models {
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(untagged)]
     pub enum TsiArg {
-        id(IdArg),
-        span(SpanArg),
-        text(TextArg),
-        int(IntArg),
-        atom(AtomArg),
+        Id(IdArg),
+        Span(SpanArg),
+        Text(TextArg),
+        Int(IntArg),
+        Atom(AtomArg),
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1256,6 +1265,7 @@ pub enum Fact {
 
 impl Fact {
 
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
 
         match self {
@@ -2710,6 +2720,7 @@ impl models::Protocol {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"protocol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\") VALUES (?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2740,6 +2751,7 @@ impl models::Run {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"run\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"mode\", \"tool\", \"version\", \"scope\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2766,6 +2778,7 @@ impl models::Fact {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"fact\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"relation\", \"args\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2791,6 +2804,7 @@ impl models::Witness {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"witness\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"run\", \"method\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2816,6 +2830,7 @@ impl models::Coverage {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"coverage\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"coverage\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2841,6 +2856,7 @@ impl models::Diagnostic {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2872,6 +2888,7 @@ impl models::Node {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2909,6 +2926,7 @@ impl models::Edge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2938,6 +2956,7 @@ impl models::Param {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"param\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -2971,6 +2990,7 @@ impl models::Arg {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"arg\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"pos\", \"arg__start\", \"arg__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3004,6 +3024,7 @@ impl models::DfField {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"df_field\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"name\", \"value__start\", \"value__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3035,6 +3056,7 @@ impl models::DfLit {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"df_lit\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"node__start\", \"node__end\", \"kind\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3066,6 +3088,7 @@ impl models::DfLoop {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"df_loop\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"var\", \"collection\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3101,6 +3124,7 @@ impl models::DfNest {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"df_nest\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"call__start\", \"call__end\", \"loop__start\", \"loop__end\", \"depth\", \"collection\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3128,6 +3152,7 @@ impl models::DfAllocates {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"df_allocates\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3165,6 +3190,7 @@ impl models::Sig {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"sig\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"owner_start\", \"owner_end\", \"slot\", \"pos\", \"ty\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3196,6 +3222,7 @@ impl models::Site {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"callee\", \"callee_path\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3229,6 +3256,7 @@ impl models::Const {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"const\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"field\", \"text\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3260,6 +3288,7 @@ impl models::Doc {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"parent\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3293,6 +3322,7 @@ impl models::DocTag {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"doc_tag\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"tag\", \"arg\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3334,6 +3364,7 @@ impl models::DocNode {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"doc_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"parent\", \"target\", \"title\", \"body__start\", \"body__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3368,6 +3399,7 @@ impl models::DataDoc {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"data_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"span__start\", \"span__end\", \"format\", \"doc\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3403,6 +3435,7 @@ impl models::DataValue {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"data_value\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"ordinal\", \"path\", \"kind\", \"text\", \"span__start\", \"span__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3438,6 +3471,7 @@ impl models::Specifier {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"specifier\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3469,6 +3503,7 @@ impl models::MethodOwner {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3498,6 +3533,7 @@ impl models::CfgScope {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"cfg_scope\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"cfg\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3525,6 +3561,7 @@ impl models::TestOnlyCall {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"test_only_call\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"callee\", \"cfg\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3554,6 +3591,7 @@ impl models::MacroSite {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"macro_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3585,6 +3623,7 @@ impl models::Reference {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"reference\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"functor\", \"position\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3616,6 +3655,7 @@ impl models::Unresolved {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"path\", \"span__start\", \"span__end\", \"reason\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3649,6 +3689,7 @@ impl models::Projectedge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"projectedge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3684,6 +3725,7 @@ impl models::FlowEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"flow_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"kind\", \"from_blob\", \"from__start\", \"from__end\", \"to_blob\", \"to__start\", \"to__end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3725,6 +3767,7 @@ impl models::ResolvedEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"resolved_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"caller_path\", \"caller_name\", \"callee_path\", \"callee_name\", \"caller_site_start\", \"caller_site_end\", \"callee_start\", \"callee_end\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3754,6 +3797,7 @@ impl models::GraphNode {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3789,6 +3833,7 @@ impl models::GraphEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3823,6 +3868,7 @@ impl models::GraphPath {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3858,6 +3904,7 @@ impl models::GraphPathChange {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_path_change\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"change\", \"revision\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3887,6 +3934,7 @@ impl models::GraphRoot {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_root\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"span__start\", \"span__end\", \"found\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3924,6 +3972,7 @@ impl models::ResolvedTypeEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"resolved_type_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"owner_path\", \"owner_name\", \"owner_start\", \"owner_end\", \"target_path\", \"target_name\", \"kind\", \"resolution_origin\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3957,6 +4006,7 @@ impl models::ResolvedImport {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"resolved_import\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"name\", \"local\", \"target_path\", \"target_name\", \"kind\", \"hops\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -3984,6 +4034,7 @@ impl models::FileEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"file_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"dst_path\", \"kind\", \"symbols\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4009,6 +4060,7 @@ impl models::FileUnresolved {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"file_unresolved\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_path\", \"module\", \"reason\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4034,6 +4086,7 @@ impl models::PackageEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"package_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src_manifest\", \"dst_manifest\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4061,6 +4114,7 @@ impl models::File {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"file\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"bytes\", \"lines\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4087,6 +4141,7 @@ impl models::LineStart {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"line_start\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"digest\", \"offsets\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4114,6 +4169,7 @@ impl models::SizeSkip {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"size_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4147,6 +4203,7 @@ impl models::Capture {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4172,6 +4229,7 @@ impl models::Symbol {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4207,6 +4265,7 @@ impl models::Occurrence {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4238,6 +4297,7 @@ impl models::FreeName {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4267,6 +4327,7 @@ impl models::Local {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4292,6 +4353,7 @@ impl models::ScipDef {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_def\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"file\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4315,6 +4377,7 @@ impl models::ScipName {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"name\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4342,6 +4405,7 @@ impl models::ScipRef {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"def_file\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4369,6 +4433,7 @@ impl models::ScipExternalRef {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_external_ref\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"file\", \"symbol\", \"origin\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4394,6 +4459,7 @@ impl models::ScipEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"src\", \"dst\", \"repo\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4417,6 +4483,7 @@ impl models::ScipFnEdge {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_fn_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"caller\", \"callee\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4440,6 +4507,7 @@ impl models::ScipCalleeType {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_callee_type\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"sym\", \"type\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4463,6 +4531,7 @@ impl models::ScipLocal {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4486,6 +4555,7 @@ impl models::ScipImpl {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_impl\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"impl\", \"iface\") VALUES (?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4517,6 +4587,7 @@ impl models::ScipIndex {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_index\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"reused\", \"tool_name\", \"tool_version\", \"documents\", \"index_mtime_unix_ms\", \"staleness\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4544,6 +4615,7 @@ impl models::ScipSkip {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"lang\", \"bin\", \"reason\", \"detail\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4595,6 +4667,7 @@ impl models::ScipOccurrence {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"start\", \"end\", \"roles\", \"definition\", \"import\", \"write_access\", \"read_access\", \"generated\", \"test\", \"forward_definition\", \"syntax_kind\", \"enclosing_start\", \"enclosing_end\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4624,6 +4697,7 @@ impl models::ScipOccurrenceDoc {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_occurrence_doc\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"pos\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4660,6 +4734,7 @@ impl models::ScipDiagnostic {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"start\", \"end\", \"severity\", \"code\", \"message\", \"source\", \"tags\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4689,6 +4764,7 @@ impl models::ScipSymbol {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"symbol\", \"display_name\", \"kind\", \"enclosing_symbol\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4714,6 +4790,7 @@ impl models::ScipDocumentation {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_documentation\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"pos\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4739,6 +4816,7 @@ impl models::ScipSignature {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_signature\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"language\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4768,6 +4846,7 @@ impl models::ScipSignatureOccurrence {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_signature_occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"ref_symbol\", \"start\", \"end\", \"roles\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4800,6 +4879,7 @@ impl models::ScipMetadata {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_metadata\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"version\", \"tool_name\", \"tool_version\", \"tool_arguments\", \"project_root\", \"text_document_encoding\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4827,6 +4907,7 @@ impl models::ScipDocument {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_document\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"language\", \"position_encoding\", \"text\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
@@ -4858,6 +4939,7 @@ impl models::ScipRelationship {
         parameter += 1;
         Ok(parameter)
     }
+    #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"scip_relationship\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"related_symbol\", \"is_reference\", \"is_implementation\", \"is_type_definition\", \"is_definition\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;

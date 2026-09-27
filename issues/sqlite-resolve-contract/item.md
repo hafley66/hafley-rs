@@ -6,6 +6,10 @@ status: fixed
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
+commits:
+- hash: e0a6d16d
+  summary: document SQLite resolve row contract
+closed: 2026-09-26
 ---
 
 # sqlite export: one filename column on unresolved, and a truthful --help
@@ -58,3 +62,21 @@ Independent of every other extract issue. Two files, no design decisions left.
 ### 2026-09-18T22:35:43Z · @claude-513
 
 Lane SQ landed on main at 39189edb, cherry-picked from worktree commit e3af768a which was never compiled in its own lane. Adds crates/sprefa-extract/tests/141_unresolved_contract.rs, 4 tests all passing: phase_one_rows_keep_reason_and_span, no_unresolved_row_leaves_its_file_column_null, stream_and_table_agree_on_phase_two_unresolved_rows, mode_flag_still_honored_after_the_fix. Touches src/project.rs and src/bin/extract/help.rs. Full crate gate 967 passed 0 failed. Acceptance criteria not yet reviewed against the diff.
+
+### 2026-09-27T01:58:06Z · @codex
+
+Repro receipt: current ryi t_141_unresolved_contract (5 tests) and t_178_ryi_help help capture passed; issue body names the retired extract CLI.
+
+### 2026-09-27T01:58:09Z · @intake
+
+Reopened: Current ryi unresolved path and help contract tests pass; report records retired extract CLI paths.
+
+### 2026-09-27T01:58:13Z · @intake
+
+Obsolete: Current ryi unresolved path and help repros pass (t_141: 5 passed; t_178 help: 1 passed); issue body names the retired extract CLI.
+
+## Resolution
+
+### 2026-09-27T02:25:50Z · @issuectl
+
+Fixed by e0a6d16d: ryi help states the SQLite phase 1 and phase 2 contract; t_141_unresolved_contract passed (5 tests).

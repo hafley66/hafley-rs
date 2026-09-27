@@ -2160,10 +2160,6 @@ fn scope_rows(
     let (top_level, root_children) = root_item_spans(rel, text)?;
     let mut decls: Vec<Decl> = Vec::new();
     let mut free = Vec::new();
-    let file = Span {
-        start: 0,
-        len: text.len() as u32,
-    };
     for fact in &facts {
         match fact {
             FlatFact::OccurrenceRow {
