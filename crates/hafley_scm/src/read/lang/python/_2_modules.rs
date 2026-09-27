@@ -34,6 +34,8 @@ pub struct PyModuleFacts {
     /// `def`, `class`, and assignment targets at module depth: the names a
     /// `from m import name` can bind without a further hop.
     top_level: HashSet<String>,
+    /// Names exported by star imports, when the module declares `__all__`.
+    all_names: Option<HashSet<String>>,
 }
 
 /// `None`: a non-python path, or a parse that fails.
@@ -48,6 +50,7 @@ pub fn py_module_facts(path: &str, content: &[u8]) -> Option<PyModuleFacts> {
     let mut facts = PyModuleFacts::default();
     py_walk_imports(root, src, false, &mut facts.imports);
     collect_top_level(root, src, &mut facts.top_level);
+    facts.all_names = collect_all_names(root, src);
     Some(facts)
 }
 
@@ -99,6 +102,57 @@ fn collect_assignment_targets(node: tree_sitter::Node, src: &[u8], out: &mut Has
         }
         _ => {}
     }
+}
+
+/// Module-level `__all__ = [...]` or `__all__ = (...)` string literals.
+fn collect_all_names(root: tree_sitter::Node, src: &[u8]) -> Option<HashSet<String>> {
+    let mut cursor = root.walk();
+    for statement in root.named_children(&mut cursor) {
+        if statement.kind() != "expression_statement" {
+            continue;
+        }
+        let mut children = statement.walk();
+        let Some(assignment) = statement
+            .named_children(&mut children)
+            .find(|child| child.kind() == "assignment")
+        else {
+            continue;
+        };
+        let Some(left) = assignment.child_by_field_name("left") else {
+            continue;
+        };
+        if left.kind() != "identifier" || py_text(left, src) != "__all__" {
+            continue;
+        }
+        let Some(right) = assignment.child_by_field_name("right") else {
+            continue;
+        };
+        if !matches!(right.kind(), "list" | "tuple") {
+            continue;
+        }
+        let mut names = HashSet::new();
+        let mut elements = right.walk();
+        for element in right.named_children(&mut elements) {
+            if let Some(name) = py_string_literal(element, src) {
+                names.insert(name);
+            }
+        }
+        return Some(names);
+    }
+    None
+}
+
+fn py_string_literal(node: tree_sitter::Node, src: &[u8]) -> Option<String> {
+    if node.kind() != "string" {
+        return None;
+    }
+    let mut cursor = node.walk();
+    let content: String = node
+        .named_children(&mut cursor)
+        .filter(|child| child.kind() == "string_content")
+        .map(|child| py_text(child, src))
+        .collect();
+    Some(content)
 }
 
 // ── the module plane proper ──────────────────────────────────────────────────
@@ -161,6 +215,22 @@ impl PyModuleIndex {
         }
         index.facts = files.into_iter().collect();
         index
+    }
+
+    /// Resolve an imported name to its defining module path and name.
+    pub fn resolve_name_target(&self, path: &str, name: &str) -> Option<(String, String)> {
+        let found = self.resolve_name(path, name, &mut Vec::new())?;
+        Some((found.target_path, found.target_name?))
+    }
+
+    fn star_exports(&self, path: &str, name: &str) -> bool {
+        let Some(facts) = self.facts.get(path) else {
+            return false;
+        };
+        facts
+            .all_names
+            .as_ref()
+            .map_or_else(|| !name.starts_with('_'), |all| all.contains(name))
     }
 
     /// `path`'s absolute module name: the package walk up to the first
@@ -315,6 +385,9 @@ impl PyModuleIndex {
             let Some(target) = self.module_file(path, module) else {
                 continue;
             };
+            if !self.star_exports(&target, name) {
+                continue;
+            }
             let Some(hit) = self.resolve_name(&target, name, stack) else {
                 continue;
             };

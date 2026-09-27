@@ -2667,6 +2667,7 @@ fn resolve_type_dst(
     strings: &Strings,
     index: Option<&DefIndex>,
     name: &str,
+    module_leg: Option<(ContentId, Span)>,
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let same_file = types
         .nodes
@@ -2677,6 +2678,9 @@ fn resolve_type_dst(
             .iter()
             .find(|site| site.span == node.span)
             .map(|site| (site.blob.clone(), site.span, ResolutionOrigin::SameFile));
+    }
+    if let Some((blob, span)) = module_leg {
+        return Some((blob, span, ResolutionOrigin::ModulePlane));
     }
     let sites = index.map(|index| corpus_defs(index, name)).unwrap_or(&[]);
     match sites {
@@ -2691,6 +2695,10 @@ impl Resolve<TypeF> for PythonSource {
             return Vec::new();
         };
         let index = cx.indexes.def_index.get();
+        let paths = cx.indexes.paths.get();
+        let modules = cx.indexes.py_modules.get();
+        let own_path = own_blob(cx, output)
+            .and_then(|blob| paths.and_then(|paths| paths.get(&blob).map(str::to_owned)));
         let mut edges = Vec::new();
         for candidate in PythonSource::type_edge_candidates(output) {
             let Some(src_ix) = types
@@ -2700,13 +2708,30 @@ impl Resolve<TypeF> for PythonSource {
             else {
                 continue;
             };
-            let (dst_blob, dst_span, origin) = resolve_type_dst(
-                types,
-                &output.strings,
-                index,
-                output.strings.lookup(candidate.to),
-            )
-            .unwrap_or((ZERO_CONTENT_ID, Span::empty(), ResolutionOrigin::Unresolved));
+            let name = output.strings.lookup(candidate.to);
+            let module_leg = match (modules, own_path.as_deref(), index, paths) {
+                (Some(modules), Some(own_path), Some(index), Some(paths)) => modules
+                    .resolve_name_target(own_path, name)
+                    .and_then(|(target_path, target_name)| {
+                        let sites = corpus_defs(index, &target_name).iter().filter(|site| {
+                            site.family == FamilyTag::Type
+                                && paths.get(&site.blob) == Some(target_path.as_str())
+                        });
+                        let mut matches = sites;
+                        let first = matches.next()?;
+                        matches
+                            .next()
+                            .is_none()
+                            .then(|| (first.blob.clone(), first.span))
+                    }),
+                _ => None,
+            };
+            let (dst_blob, dst_span, origin) =
+                resolve_type_dst(types, &output.strings, index, name, module_leg).unwrap_or((
+                    ZERO_CONTENT_ID,
+                    Span::empty(),
+                    ResolutionOrigin::Unresolved,
+                ));
             edges.push(ProjectEdge::new(
                 NodeRef(src_ix as u32),
                 dst_blob,
