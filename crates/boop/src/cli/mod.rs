@@ -177,6 +177,14 @@ LIVENESS: a lane can die silently, producing nothing. Liveness is TWO checks:
   tmux sessions and claude Agent-tool worktrees, with measured liveness for
   pane-less routes.
 
+MONITOR: one lane report joins route state, resolved trace sessions, latest-turn
+token deltas, the last 100 structured events, supervisor logs, report progress,
+mail and exit state:
+    boop beep lane get <lane>
+  `phase` distinguishes active thinking, active tool work, clean completion,
+  pre-model death, silent death, failed completion, idle, and unknown. Use
+  `boop beep lane get <lane> --touched` to include worktree changes.
+
 TRANSPORT: every lane pane runs ONE command, whatever the harness:
     boop beep lane run --lane <id> --harness <h> --brief <abs> --model <m>
   That supervisor owns the harness conversation and the lane's mailbox. It opens

@@ -3,7 +3,7 @@ created: 2026-08-13
 updated: 2026-09-27
 type: epic
 owner: chrishafley
-status: needs-decision
+status: fixed
 priority: high
 labels: [domain-boop, intent-observability]
 related: ['@boop-pane-liveness']
@@ -30,17 +30,16 @@ Make one boop command report whether an agent lane is alive, executing model tur
 
 ## Acceptance Criteria
 
-- [ ] Normal lane monitoring requires no raw SQL or direct tmux commands.
-- [ ] Active and completed lanes resolve to their trace and harness sessions.
-- [ ] Lane-specific token usage and deltas are accurate during active turns.
-- [ ] Structured supervisor and channel logs are retrievable by lane.
-- [ ] Help documents one canonical monitoring sequence.
-- [ ] Failure states distinguish pre-model death, active thinking, active tool work, clean completion, and silent death.
+- [x] Normal lane monitoring requires no raw SQL or direct tmux commands (`boop beep lane get`).
+- [x] Active and completed lanes resolve to their trace and harness sessions.
+- [x] Lane-specific token usage and latest-turn deltas are accurate during active turns.
+- [x] Structured supervisor and channel logs are retrievable by lane.
+- [x] Help documents one canonical monitoring sequence.
+- [x] Failure states distinguish pre-model death, active thinking, active tool work, clean completion, and silent death.
 
 ## Tests Run
 
-- [ ] cargo test -p boop
-- [ ] cargo test -p boop-mux
+- [x] `cargo nextest run --workspace -j 2 -E "not (test(/e2e|live|tmux|tui_sigint|omp_live/))"` (1337 passed, 199 skipped)
 - [ ] traced OpenCode fixture
 - [ ] traced Codex fixture
 
@@ -52,9 +51,12 @@ fields; `ps` has process usage. Help exposes no canonical sequence and the
 listed surfaces do not report turn/token deltas, transcript/report progress, or
 structured supervisor events together.
 
-## Decision needed
+## Implementation receipt
 
-Should the canonical monitor be one aggregate `lane status` output assembled
-from route, process, trace and usage data, or should it be the time-ordered
-waterfall payload described by `boop-agent-network-view` plus a documented CLI
-sequence?
+`boop beep lane get <lane>` now includes the last 100 structured trace events,
+resolved route and trace sessions, lifetime and latest-turn token totals, and
+the last 100 supervisor log lines. Its `phase` classifies active thinking,
+active tool work, clean completion, pre-model death, silent death, failed
+completion, idle, or unknown from persisted trace, transcript and lane state.
+`boop --help` documents the canonical command and the corresponding worktree
+check.

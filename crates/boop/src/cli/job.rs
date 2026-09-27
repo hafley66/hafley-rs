@@ -3111,11 +3111,131 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
     let expect = boop::trail::read_expect(lane)
         .and_then(|expect| serde_json::to_value(expect).ok())
         .unwrap_or(serde_json::Value::Null);
+    let state = gone.unwrap_or_else(|| lane_state(&dir, lane, &live, route, &routes, &snapshot));
+    let store = boop::Store::open(boop::Store::default_path()?);
+    let (trace, mut sessions, usage, latest_roles, mail) = match store {
+        Ok(store) => {
+            let trace = store.query_recent_trace_events(Some(lane), 100)?;
+            let mut sessions = Vec::new();
+            if let Some(session) = route.session_id.as_deref() {
+                sessions.push(session.to_owned());
+            }
+            for event in &trace {
+                if let Some(session) = event.session.as_deref() {
+                    if !sessions.iter().any(|known| known == session) {
+                        sessions.push(session.to_owned());
+                    }
+                }
+            }
+            let usage = store.token_usage_for_sessions(&sessions)?;
+            let latest_roles = sessions
+                .iter()
+                .map(|session| Ok((session.clone(), store.latest_turn_role(session)?)))
+                .collect::<Result<Vec<_>>>()?;
+            let mail = bus::messages_in(&store)?
+                .into_iter()
+                .filter(|message| message.from == lane || message.to == lane)
+                .rev()
+                .take(20)
+                .map(|message| {
+                    serde_json::json!({
+                        "id": message.id,
+                        "from": message.from,
+                        "to": message.to,
+                        "kind": message.kind.as_str(),
+                        "rc": message.rc,
+                        "detail": message.detail,
+                        "from_timestamp": message.from_timestamp,
+                        "to_timestamp": message.to_timestamp,
+                        "reply_to": message.reply_to,
+                    })
+                })
+                .collect::<Vec<_>>();
+            (trace, sessions, usage, latest_roles, mail)
+        }
+        Err(_) => (Vec::new(), vec![], Vec::new(), Vec::new(), Vec::new()),
+    };
+    sessions.sort();
+    let latest_turn_event = trace
+        .iter()
+        .rev()
+        .find(|event| matches!(event.kind.as_str(), "turn-start" | "turn-finish"));
+    let active_turn = latest_turn_event.is_some_and(|event| event.kind == "turn-start");
+    let latest_turn_session = latest_turn_event.and_then(|event| event.session.as_deref());
+    let latest_role = latest_turn_session
+        .and_then(|session| latest_roles.iter().find(|(id, _)| id == session))
+        .and_then(|(_, role)| role.as_ref())
+        .map(|(_, role)| role.as_str());
+    let exit = trace
+        .iter()
+        .rev()
+        .find(|event| event.kind == "supervisor-exit");
+    let phase = if active_turn && latest_role == Some("tool") {
+        "active_tool_work"
+    } else if active_turn {
+        "active_thinking"
+    } else if exit.is_some_and(|event| event.classification.as_deref() == Some("completed")) {
+        "clean_completion"
+    } else if exit.is_some() {
+        "failed_completion"
+    } else if state == "dead" {
+        if trace.iter().any(|event| event.kind == "turn-start")
+            || usage.iter().any(|row| row.total.calls > 0)
+        {
+            "silent_death"
+        } else {
+            "pre_model_death"
+        }
+    } else if state == "idle" || state == "retired" {
+        "idle"
+    } else {
+        "unknown"
+    };
+    let supervise_log = boop::trail::lane_dir(lane)
+        .ok()
+        .map(|path| path.join(boop::trail::SUPERVISE_LOG))
+        .and_then(|path| std::fs::read_to_string(path).ok())
+        .map(|text| {
+            text.lines()
+                .rev()
+                .take(100)
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .map(str::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    let report = lane_tree(route)
+        .map(|tree| tree.join("REPORT.md"))
+        .and_then(|path| {
+            let metadata = std::fs::metadata(&path).ok()?;
+            let first_line = std::fs::read_to_string(&path)
+                .ok()?
+                .lines()
+                .next()
+                .unwrap_or_default()
+                .to_owned();
+            Some(serde_json::json!({
+                "path": path,
+                "modified": metadata.modified().ok().and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok()).map(|age| age.as_secs()),
+                "first_line": first_line,
+            }))
+        })
+        .unwrap_or(serde_json::Value::Null);
+    let exit = exit.map(|event| {
+        serde_json::json!({
+            "classification": event.classification,
+            "finished_ts": event.finished_ts,
+            "detail": event.detail,
+        })
+    });
     println!(
         "{}",
         serde_json::json!({
             "lane": lane,
-            "state": gone.unwrap_or_else(|| lane_state(&dir, lane, &live, route, &routes, &snapshot)),
+            "state": state,
+            "phase": phase,
             "harness": route.harness,
             "tmux": route.tmux,
             "cwd": route.cwd,
@@ -3123,6 +3243,13 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
             "mode": route.mode,
             "session_id": route.session_id,
             "expect": expect,
+            "trace_sessions": sessions,
+            "token_usage": usage,
+            "trace": trace,
+            "supervise_log": supervise_log,
+            "report": report,
+            "mail": mail,
+            "exit": exit,
         })
     );
     if touched {
