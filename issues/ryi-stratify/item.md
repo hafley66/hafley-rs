@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-20
 type: feature
-status: open
+status: needs-decision
 priority: normal
 epic: ryi-new-verbs
 blocked_by: ['@extract-graph-verb', '@extract-lines-flag']
@@ -123,3 +123,11 @@ Blocked on @extract-graph-verb for the `--from` traversal and on
 ### 2026-09-19T19:12:29Z · @claude-opus-5
 
 Multi-entrypoint, user-set 2026-09-19. --from is repeatable. UNRANKED: the entrypoint set is a union and a file's depth is the MIN over every entrypoint that reaches it. RANKED: --from PATH:NAME=RANK, and a file takes its depth from the highest-ranked entrypoint that reaches it, ties falling back to the min. A file reached by no entrypoint lands in an 'unreached' row and is never renumbered. The stratum row gains a 'via' column naming which entrypoint gave it its depth.
+
+## Plan
+
+After the graph traversal and line output prerequisites settle, compute the reachable file graph, condense cycles into SCCs, and assign deterministic dependency-first strata; join file sizes and resolved edge endpoints for locality scores, derive target sizes from the corpus median, and emit reason-coded move proposals that `ryi move` can validate without applying. Build a fixture covering cycles and all four proposal reasons, assert the tree stays byte-identical, then run the verb on this crate and record the output.
+
+## Next decision
+
+Should `split_candidate` wait until symbol-level SCC cuts exist, or should the initial stratify verb omit split proposals and add them later?

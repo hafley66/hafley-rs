@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: task
-status: open
+status: needs-decision
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -20,3 +20,11 @@ RATCHET.tsv is pinned on fixture corpora only. `just extract-ratchet` with RATCH
 ## Acceptance Criteria
 - [ ] histogram per (lang, origin) on the bench corpora committed next to the plan
 - [ ] wrong_target rows above 0 each get an issue
+
+## Plan
+
+Run the existing ratchet command with `RATCHET_BUMP=1` against the named sprefa bench corpora, record true, wrong-target, and unresolved counts by language and resolution origin beside the plan, verify each language has nonzero join coverage, and open a scoped follow-up for every wrong-target class before accepting updated counts.
+
+## Decision
+
+Should nonzero wrong-target rows block the ratchet update until each class has a follow-up issue?

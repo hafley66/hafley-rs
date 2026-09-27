@@ -1,1 +1,3 @@
-pub struct Widget;
+pub struct Widget {
+    pub value: u8,
+}

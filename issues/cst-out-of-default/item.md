@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-19
 type: improvement
-status: open
+status: done
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -65,3 +65,5 @@ The roster already knows each language's planes (`docs/0_architecture-matrix-202
 ### 2026-09-19T22:02:40Z · @claude-opus-5
 
 Superseded by @default-families-no-conditional, user-set 2026-09-19. The per-language table in this issue is rejected along with the per-file conditional the lane built at 32f82d98. One default for every language, call,type,df, cst always opt-in. Languages with no front-end get a generic CST-derived call plane driven by a call-kind table, since every tree-sitter grammar names its call nodes. A file that yields zero facts discloses the next commands rather than printing a parse tree or nothing. Branch improvement/cst-out-of-default is NOT merged; salvage the wire_golden.jsonl regeneration and the explicit mask in tests/4_capability_parity.rs.
+
+Receipt: superseded by `default-families-no-conditional` (done, landed as `9b25f783`).

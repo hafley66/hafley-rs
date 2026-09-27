@@ -2,7 +2,7 @@
 created: 2026-09-19
 updated: 2026-09-19
 type: feature
-status: open
+status: needs-decision
 priority: high
 epic: extract-parity-move-rename
 related: ['@kind-vocab-constraint', '@scip-ingestion-conformance', '@dep-bump-frontends']
@@ -129,3 +129,7 @@ tool feeds it, watching files and producing the facts.
 - [ ] the "row declares None while an impl exists" hole named at `tests/1_resolve_cli.rs:127-128` is closed or waived with a written reason
 - [ ] a written evaluation records where a type is erased, where capability is re-declared by hand, and which of those are removable
 - [ ] the cargo-feature-per-language cut is specified as a follow-up issue with the feature graph named
+
+## Decisions
+
+Should the capability matrix ship as a standalone increment before the separate per-language Cargo feature cut?

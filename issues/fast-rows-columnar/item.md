@@ -2,7 +2,7 @@
 created: 2026-09-25
 updated: 2026-09-25
 type: improvement
-status: open
+status: needs-decision
 priority: normal
 labels: [extract]
 ---
@@ -30,3 +30,11 @@ Target shape (user direction 2026-09-25): per-file arena (oxc_allocator is linke
 - [ ] no per-row String allocation on the fast path
 - [ ] no global sort of serialized lines; output order still deterministic
 - [ ] release numbers before/after on sprefa-extract/src, typespec/packages and the 3000-file registry corpus
+
+## Plan
+
+Capture release baselines for the three named corpora, then move fast-path rows to per-file arena columns keyed by file id and byte spans with interned names, deriving text and line data at output; preserve deterministic ordering from the input sequence and compare allocations, wall time, and output bytes after each migration slice.
+
+## Decisions
+
+Should the first migration slice cover SCM capture rows only, or convert every fast-path fact family in one pass?

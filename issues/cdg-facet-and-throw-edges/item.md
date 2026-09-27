@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-18
 type: feature
-status: open
+status: needs-decision
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -56,3 +56,7 @@ exit   [2089,2419)
 ## Implementation Notes
 
 Land after `extract-lines-flag` and `extract-graph-verb`. Nothing in those two depends on this.
+
+## Decisions
+
+Should G1 throw-to-catch edges land as a separate increment before G2 post-dominance, CDG, and slicing?
