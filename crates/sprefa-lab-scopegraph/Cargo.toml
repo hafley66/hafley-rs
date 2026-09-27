@@ -1,0 +1,18 @@
+[package]
+name = "sprefa-lab-scopegraph"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[lib]
+path = "src/lib.rs"
+
+[dependencies]
+sprefa-extract = { path = "../sprefa-extract", default-features = false }
+streaming-iterator = "0.1"
+tree-sitter = "0.25"
+tree-sitter-kotlin-sg = "0.4"
+tree-sitter-rust = "0.24"
+tree-sitter-typescript = "0.23"

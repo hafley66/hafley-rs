@@ -5,13 +5,14 @@ resolver = "2"
 # rusqlite). One lockfile cannot hold two libsqlite3-sys versions, so they
 # build as standalone crates in place; excluded dirs are their own workspace
 # roots even under a parent [workspace]. sprefa-extract resolves its own
-# lockfile too, decoupled from the boop/soopy dependency graph. The dead-file
-# bakeoff is an isolated lab workspace with sprefa-extract as a path dependency.
+# lockfile too, decoupled from the boop/soopy dependency graph. The labs own
+# isolated workspaces with sprefa-extract as a path dependency.
 exclude = [
     "crates/ghcache",
     "crates/ghcache-client",
     "crates/sprefa-extract",
     "crates/lab-20260921-dead-files-bakeoff",
+    "crates/sprefa-lab-scopegraph",
 ]
 
 [workspace.package]
