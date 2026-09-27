@@ -64,3 +64,11 @@ token was absent from Codex user/transcript content. The existing supervisor
 predates this source change and must not be restarted, so keep the card open
 until the coordinator installs the commit and a live hail proves both the row
 and transcript text.
+
+### 2026-09-27 · @codex
+
+The coordinator's `m-cbf6330a` delivery reached this Codex context at the turn
+boundary. Its token `BOOP_MIDTURN_PROOF_20260927_A7F3` is now present in this
+turn's transcript, while the recorded ladder still has no `steered` transition.
+This confirms next-turn delivery only; the live mid-turn acceptance criterion
+remains open.
