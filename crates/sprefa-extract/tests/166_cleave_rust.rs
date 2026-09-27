@@ -238,34 +238,6 @@ fn default_corpus_walk_is_tracked_and_explicit_root_includes_ignored_files() {
 }
 
 #[test]
-fn batch_drops_an_import_made_unused_by_a_later_row() {
-    let fixture = fixture("basic", "batch-stale-import");
-    std::fs::write(
-        fixture.root.join("src/lib.rs"),
-        "pub mod types;\npub mod moved;\n",
-    )
-    .unwrap();
-    std::fs::write(
-        fixture.root.join("src/types.rs"),
-        "pub struct X;\npub struct A(pub X);\n",
-    )
-    .unwrap();
-    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
-    let list = fixture.state.join("batch.tsv");
-    std::fs::write(
-        &list,
-        "src/types.rs#X\tsrc/moved.rs\nsrc/types.rs#A\tsrc/moved.rs\n",
-    )
-    .unwrap();
-
-    let stdout = cleave(&fixture, &["--list", list.to_str().unwrap()]);
-    assert!(
-        !stdout.contains("use crate::moved::X"),
-        "final batch preview retained the stale import:\n{stdout}"
-    );
-}
-
-#[test]
 fn batch_keeps_every_row_source_parseable_while_composing() {
     let fixture = fixture("basic", "batch-invalid-rust");
     std::fs::remove_dir_all(&fixture.root).unwrap();

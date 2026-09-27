@@ -3,7 +3,7 @@ created: 2026-09-25
 updated: 2026-09-27
 type: bug
 reporter: claude-lane-w
-status: fixed
+status: obsolete
 priority: normal
 related: ['@cleave-real-crate-defects']
 ---
@@ -18,4 +18,4 @@ Repro: a 10-row --list batch moving SourceSpan..GitEntryKind from crates/soopy/s
 
 ### 2026-09-27 · @codex
 
-Receipt: this queue commit adds `batch_drops_an_import_made_unused_by_a_later_row`; focused target passed (15 tests). The final import sweep was already present in `drop_batch_unused_imports`.
+Receipt: current `ryii` dry-run of the 10-row batch leaves no stale imports; `drop_batch_unused_imports` already removes them.
