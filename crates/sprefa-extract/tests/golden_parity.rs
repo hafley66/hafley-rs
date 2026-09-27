@@ -1930,9 +1930,11 @@ fn call_resolve_scip_ratchet_kotlin() {
     }
     rels.sort();
     let reader = |p: &str| std::fs::read(fixture_root.join(p)).ok();
-    let index_path = ScipJava
-        .build(&fixture_root)
-        .expect("scip-java build failed (the ratchet never fakes green)");
+    let index_path = fixture_root.join("index.scip");
+    assert!(
+        index_path.is_file(),
+        "committed Kotlin SCIP fixture is missing; regenerate with tests/fixtures/kotlin/scip/regen.sh"
+    );
     let scip_index = ScipJava.load(&index_path).expect("scip load");
     let joined = join_documents(&scip_index, &reader);
     assert!(

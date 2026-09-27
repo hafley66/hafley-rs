@@ -34,7 +34,16 @@ fn run(args: &[&str]) -> String {
 
 #[test]
 fn slow_kotlin_fixture_emits_scip_resolved_calls() {
-    let output = run(&["slow", "--no-checker", SCIP_KOTLIN_ROOT]);
+    let index = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join(SCIP_KOTLIN_ROOT)
+        .join("index.scip");
+    let output = run(&[
+        "slow",
+        "--no-checker",
+        "--scip-index",
+        index.to_str().unwrap(),
+        SCIP_KOTLIN_ROOT,
+    ]);
     let rows = output
         .lines()
         .map(|line| serde_json::from_str::<serde_json::Value>(line).expect("slow JSON row"))
