@@ -1,9 +1,9 @@
 ---
 created: 2026-09-07
-updated: 2026-09-07
+updated: 2026-09-26
 type: task
 reporter: chrishafley
-status: untriaged
+status: obsolete
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -25,3 +25,7 @@ crates/soopy/src/_7c_edit_producers.rs exposes from_ast_grep_parts over scalar f
 - [ ] State durability, corpus, hardware, versions and test commands; do not infer speed rankings from unrelated workloads.
 ## Tests Run
 Source inspected; peer documentation compared; no comparative benchmark run. Related: @soopy-staged-mutations, @soopy-edit-producers, @soopy-multi-repo-refresh.
+
+## Repro receipt
+
+2026-09-26: current `ryii move` on a temporary `old.rs` emits a dry-run preview, preserves old bytes, and creates no destination; no current mutation-command defect reproduces.
