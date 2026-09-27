@@ -35,9 +35,10 @@ Every disagreement listed with cause. Every command under `timeout 10`, every ry
 
 - [x] SQLite `dead_file` view and source entry-point exclusion implemented in `crates/lab-20260921-dead-files-bakeoff`.
 - [x] madge fixture comparison lists agreement and both disagreement sets.
-- [ ] Compare TypeScript fixture with Knip and repeat madge/Knip on a user-selected real repository.
-- [ ] Compare Rust `mod` reachability and rustc `dead_code` on `crates/sprefa-extract`.
-- [ ] Complete `REPORT.md` with all language measurements and verdicts.
+- [x] Compare the TypeScript fixture with Knip; list every disagreement and its cause.
+- [ ] Repeat madge and Knip on a user-selected real TypeScript repository.
+- [x] Compare fixture-sized Rust `mod` reachability and rustc `dead_code`.
+- [x] Complete `REPORT.md` with locally runnable measurements and verdicts; only the selected-repository gate remains.
 
 Open-gate commands are recorded in `crates/lab-20260921-dead-files-bakeoff/REPORT.md`.
 
@@ -45,13 +46,15 @@ Open-gate commands are recorded in `crates/lab-20260921-dead-files-bakeoff/REPOR
 
 2026-09-27 before implementation: `find crates -maxdepth 2 -type d -name 'lab-*'` returned no lab crate; `crates/lab-20260921-dead-files-bakeoff` and its `REPORT.md` were absent.
 
-2026-09-27 current-ryii repro: `HAFLEY_TRACE=1 timeout 10 /Users/chrishafley/.cache/boop/cargo-target/debug/ryii --deps --root crates/sprefa-extract/tests/fixtures/ts5_findings crates/sprefa-extract/tests/fixtures/ts5_findings > /tmp/dead-files-ryi-current.jsonl` completed and emitted 33 `file_edge` rows for the 61-file fixture. The existing fixture comparison is current; Knip, a user-selected repository, and the Rust measurements remain open gates with exact commands in `REPORT.md`.
+2026-09-27 current-ryii repro: `HAFLEY_TRACE="$HOME/.cache/lanes/the-gang-graph/dead-files/ryi-ts5-trace.json" timeout 10 "$HOME/.cache/boop/cargo-target/debug/ryii" --deps --root crates/sprefa-extract/tests/fixtures/ts5_findings crates/sprefa-extract/tests/fixtures/ts5_findings > "$HOME/.cache/lanes/the-gang-graph/dead-files/ryi-ts5-relative.jsonl"` completed and emitted 33 `file_edge` rows for the 61-file fixture. Madge and Ryi share 32 orphan paths. Knip and Rust fixture measurements are recorded below; only the user-selected repository remains open.
+
+2026-09-27 measurement receipt: Knip was run with `npx -y knip` against a lane-scratch copy of `ts5_findings` with a minimal package manifest. Comparison: agreement 32, ryi-only 0, Knip-only 29; all Knip-only paths and the no-entrypoint cause are in `REPORT.md`. On the 3-source Rust fixture, `ryi --deps` emitted `file_unresolved` for `mod live;` (`node_modules_boundary`); module reachability found only `src/orphan.rs`, while rustc `dead_code` named an unused item in reachable `src/live.rs`. The lab CLI reported the file-path sets; its JSON-array handling and source-only unresolved-row decoding are covered by two new tests. `cargo nextest run --manifest-path crates/lab-20260921-dead-files-bakeoff/Cargo.toml -j 2 --locked --offline --test 0_dead_files` passed 5/5. The workspace gate passed 1378/1378 with 203 excluded and 1 leaky test. The user-selected real-repository gate is the only remaining measurement.
 
 2026-09-26: fixture comparison on `crates/sprefa-extract/tests/fixtures/ts5_findings`:
 
 - `timeout 10 madge --json --extensions ts crates/sprefa-extract/tests/fixtures/ts5_findings`: 61 files, 32 edges.
 - `timeout 10 madge --orphans --extensions ts crates/sprefa-extract/tests/fixtures/ts5_findings`: 32 orphans.
 - `HAFLEY_TRACE=1 timeout 10 /Users/chrishafley/.cache/boop/cargo-target/debug/ryii --deps --root crates/sprefa-extract/tests/fixtures/ts5_findings crates/sprefa-extract/tests/fixtures/ts5_findings`: 33 `file_edge` rows; comparing destinations against the 61 fixture files gives 32 zero-inbound files.
-- The two orphan sets were equal: 0 madge-only, 0 ryi-only. The lab CLI comparison reports 32 shared paths, 0 ryi-only, and 0 madge-only. `knip` is unavailable (`command -v knip` returned no path).
+- The two orphan sets were equal: 0 madge-only, 0 ryi-only. The lab CLI comparison reports 32 shared paths, 0 ryi-only, and 0 madge-only. Knip was unavailable at this point; the later `npx -y knip` measurement is recorded below.
 
-2026-09-27: fixture e2e `HAFLEY_TRACE=1 timeout 10 .../ryii --deps ...`, `timeout 10 madge --orphans --extensions ts ...`, and the lab comparison report 33 edges, 32 shared orphan paths, and 0 disagreements. `cargo nextest run -j 2 --offline` in the lab crate passed 3 tests: SQLite entry/inbound filtering, three-way orphan comparison, and rustc diagnostic path projection. Real repository, Knip, and Rust measurements remain open; exact commands are in `REPORT.md`.
+2026-09-27: fixture e2e `HAFLEY_TRACE=1 timeout 10 .../ryii --deps ...`, `timeout 10 madge --orphans --extensions ts ...`, and the lab comparison report 33 edges, 32 shared orphan paths, and 0 disagreements. `cargo nextest run -j 2 --offline` in the lab crate passed 3 tests at that point. Subsequent fixture measurements and the updated 5-test receipt are recorded above; only the real-repository measurements remain open.

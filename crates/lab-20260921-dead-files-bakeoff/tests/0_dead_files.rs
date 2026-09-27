@@ -80,3 +80,37 @@ fn rustc_dead_code_diagnostics_project_primary_source_files() {
     );
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn rustc_path_array_compares_against_file_orphans() {
+    let root = fixture(&[
+        ("src/lib.rs", ""),
+        ("src/live.rs", ""),
+        ("src/orphan.rs", ""),
+    ]);
+    let ryi = [types::DeadFile {
+        path: PathBuf::from("src/orphan.rs"),
+    }];
+    let comparison = analyze::compare_orphans(&ryi, r#"["src/live.rs"]"#, &root).unwrap();
+    assert_eq!(
+        comparison,
+        analyze::OrphanComparison {
+            both: vec![],
+            ryi_only: ["src/orphan.rs"].into_iter().map(str::to_owned).collect(),
+            tool_only: ["src/live.rs"].into_iter().map(str::to_owned).collect(),
+        }
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn unresolved_module_rows_without_destinations_are_readable() {
+    let rows = analyze::read_edges(std::io::Cursor::new(
+        r#"{"record":"file_unresolved","src_path":"src/lib.rs","module":"live"}
+"#,
+    ))
+    .unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].record, "file_unresolved");
+    assert_eq!(rows[0].dst_path, "");
+}

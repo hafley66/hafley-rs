@@ -148,6 +148,9 @@ fn collect_tool_paths(value: &Value, paths: &mut BTreeSet<String>) {
         Value::Array(values) => values
             .iter()
             .for_each(|value| collect_tool_paths(value, paths)),
+        Value::String(path) => {
+            paths.insert(path.clone());
+        }
         Value::Object(values) => {
             for (key, value) in values {
                 if matches!(key.as_str(), "file" | "filePath" | "path") {

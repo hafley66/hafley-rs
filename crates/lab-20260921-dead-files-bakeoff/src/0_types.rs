@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub struct FileEdge {
     pub record: String,
     pub src_path: String,
+    #[serde(default)]
     pub dst_path: String,
 }
 
