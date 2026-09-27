@@ -2,7 +2,7 @@
 created: 2026-09-18
 updated: 2026-09-20
 type: feature
-status: open
+status: needs-decision
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
@@ -199,3 +199,9 @@ CodeQL and Glean, and is out of scope here.
 ### 2026-09-20T17:52:18Z · @chris
 
 2026-09-20: L1 (host predicates, .scm -> AstRule) shipped, see crates/sprefa-extract/docs/2_scm-with-ast-grep-relations-20260920.md. L2-L6 (vendored helix locals.scm, scope-tree engine) untouched; no .scm file is vendored in the repo yet.
+
+### 2026-09-26 · current checkout reproduction
+
+The recorded L1 implementation exists, and the lab crate named above is absent. `rg --files crates | rg 'locals\\.scm$'` returns no vendored locals query files; existing `.scm` files serve SCIP and Rust fast-query roles. L2-L6 therefore have no current implementation or repro receipt.
+
+Question: Should the L2-L6 isolated `.scm` scopegraph experiment proceed as an epic-size replacement study?

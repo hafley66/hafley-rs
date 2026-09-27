@@ -2,7 +2,7 @@
 created: 2026-09-26
 updated: 2026-09-26
 type: bug
-status: open
+status: needs-info
 priority: high
 ---
 
@@ -47,3 +47,9 @@ One `boop beep shout` on 2026-09-26 printed `15 landed, 0 cooled-off, 101 no-rou
 ## Acceptance Criteria
 - [ ] One golden test: a registry fixture with 1 live pane (real tmux + a stub harness process), 1 dead-pid process route, 1 harness-less route, 1 door route with no socket, and 1 pane id reused by a different process. Snapshot of stdout, stderr and the registry after the send: only the live pane lands; stdout has 2 lines; stderr has no WARN; the dead routes are marked.
 - [ ] `boop beep shout` on the 2026-09-26 registry prints ≤ 16 lines.
+
+## Decisions
+
+### 2026-09-27T02:48:27Z · @codex
+
+Repro: installed boop 0.0.10 (0080597a) `beep shout --help` includes registered pane-less routes; `connected` admits coordinator/native rows without a liveness check. Question: after two failed proofs, delete and re-register the route, or retain a marked-dead row?

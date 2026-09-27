@@ -93,6 +93,46 @@ fn the_rows_of_one_file_do_not_depend_on_the_other_files() {
     assert_eq!(whole, apart, "per-file purity");
 }
 
+#[test]
+fn combined_kotlin_families_share_one_tree_sitter_parse_per_file() {
+    for (index, file) in kotlin_files().into_iter().enumerate() {
+        let trace = std::env::temp_dir().join(format!(
+            "ryi-158-parse-count-{index}-{}.json",
+            std::process::id()
+        ));
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["--kinds", "cst,type,call,df"])
+            .arg(&file)
+            .env("HAFLEY_TRACE", &trace)
+            .env("RUST_LOG", "sprefa_extract=debug,hafley_scm=debug")
+            .output()
+            .expect("ryii runs");
+        assert!(
+            output.status.success(),
+            "combined Kotlin extraction failed for {}:\n{}",
+            file.display(),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let events: Vec<Value> =
+            serde_json::from_slice(&std::fs::read(&trace).unwrap()).expect("trace is JSON");
+        let parses = events
+            .iter()
+            .filter(|event| {
+                event["ph"] == "B"
+                    && event["name"] == "parse"
+                    && event["args"]["lang"] == "\"kotlin\""
+                    && event["args"]["engine"] == "\"tree-sitter\""
+            })
+            .count();
+        assert_eq!(
+            parses,
+            1,
+            "one Kotlin tree-sitter parse for combined families in {}",
+            file.display()
+        );
+    }
+}
+
 fn kotlin_files() -> Vec<PathBuf> {
     let mut files = Vec::new();
     for fixture in FIXTURES {
