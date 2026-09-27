@@ -19,23 +19,14 @@ mod tests {
     use super::daemon_auto::Request;
 
     #[test]
-    fn client_sends_absolute_paths_and_server_resolves_relative_fallback() {
+    fn request_keeps_path_spelling_and_carries_the_caller_root() {
         let root = std::path::PathBuf::from("/tmp/ryi-request-root");
         let args = serde_json::json!({"paths": ["src", "-"], "entry": "index.ts"});
-        let request = Request::new("fast", root.clone(), &args).unwrap();
-        assert_eq!(
-            request.args,
-            serde_json::json!({
-                "paths": ["/tmp/ryi-request-root/src", "-"],
-                "entry": "/tmp/ryi-request-root/index.ts"
-            })
-        );
-        let relative = Request {
-            request_root: root,
-            args,
-        };
-        let decoded: serde_json::Value = relative.decode("fast").unwrap();
-        assert_eq!(decoded, request.args);
+        let request = Request::new(root.clone(), &args).unwrap();
+        assert_eq!(request.request_root, root);
+        assert_eq!(request.args, args);
+        let decoded: serde_json::Value = request.decode().unwrap();
+        assert_eq!(decoded, args);
     }
 
     #[test]
