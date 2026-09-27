@@ -351,7 +351,7 @@ fn unknown_general_predicate_is_a_named_error() {
 
 #[test]
 fn kotlin_top_level_functions_resolve_before_declaration_but_values_do_not() {
-    let source = "fun caller() = later()\nfun later() = 1\nfun topUser() = x\nval x = 1\nclass C { fun f() = x; val x = 1 }\nfun values() { consume(item); val item = 1 }";
+    let source = "fun caller() = later()\nfun later() = 1\nfun topUser() = x\nval x = 1\nclass C { fun f() = x; val x = 1; init { consume(initItem); val initItem = 1 }; val getter: Int get() { consume(getterItem); val getterItem = 1; return getterItem }; var setter: Int = 0 set(value) { consume(setterItem); val setterItem = 1 }; constructor(value: Boolean) { consume(secondaryItem); val secondaryItem = 1 } }\nfun values() { consume(item); val item = 1 }";
     let graph = analyze(
         Language::new(tree_sitter_kotlin_sg::LANGUAGE),
         source,
@@ -394,13 +394,22 @@ fn kotlin_top_level_functions_resolve_before_declaration_but_values_do_not() {
         member_property,
         "class member property should resolve independent of source order"
     );
-    let item = graph
-        .references
-        .iter()
-        .find(|reference| reference.name == "item")
-        .unwrap();
-    assert_eq!(
-        item.unresolved,
-        Some(sprefa_lab_scopegraph::scope::UnresolvedReason::DefinitionAfterReference)
-    );
+    for local in [
+        "item",
+        "initItem",
+        "getterItem",
+        "setterItem",
+        "secondaryItem",
+    ] {
+        let reference = graph
+            .references
+            .iter()
+            .find(|reference| reference.name == local)
+            .unwrap();
+        assert_eq!(
+            reference.unresolved,
+            Some(sprefa_lab_scopegraph::scope::UnresolvedReason::DefinitionAfterReference),
+            "function/body local {local} must remain source ordered: {reference:?}"
+        );
+    }
 }

@@ -40,3 +40,5 @@ HAFLEY_TRACE=1 cargo nextest run --features cli -j 2 --test all -E 'test(/^t_159
 The final replacement verdict and line-count comparison to the 61% per-language baseline remain pending those receipts.
 
 Property order follow-up: the top-level and class-member property references were red with no definition for `fun f() = x; val x = 1`; both resolve after the change. The function-body local still reports `DefinitionAfterReference`.
+
+Body-local order follow-up: locals in `anonymous_initializer`, getter, setter, and secondary-constructor bodies join function/lambda locals in remaining source-ordered. The regression rows pass with `DefinitionAfterReference`; top-level and class-member property references remain order-independent.
