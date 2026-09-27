@@ -707,9 +707,9 @@ impl TsModuleIndex {
 
     /// Whether this module exports a declaration under its local spelling.
     pub fn exports_local(&self, path: &str, local: &str) -> bool {
-        self.facts.get(path).is_some_and(|facts| {
-            facts.local_exports.values().any(|(name, _)| name == local)
-        })
+        self.facts
+            .get(path)
+            .is_some_and(|facts| facts.local_exports.values().any(|(name, _)| name == local))
     }
 
     /// Parameter count of a named function declaration at its CallF span.

@@ -33,25 +33,46 @@ impl<'ast> Visit<'ast> for Collector<'_> {
 }
 
 fn macro_name(mac: &syn::Macro) -> String {
-    let trailing = mac.path.segments.last().map(|segment| segment.ident.to_string()).unwrap_or_default();
+    let trailing = mac
+        .path
+        .segments
+        .last()
+        .map(|segment| segment.ident.to_string())
+        .unwrap_or_default();
     if trailing != "macro_rules" {
         return trailing;
     }
-    mac.tokens.clone().into_iter().find_map(|token| match token {
-        proc_macro2::TokenTree::Ident(ident) => Some(ident.to_string()),
-        _ => None,
-    }).unwrap_or(trailing)
+    mac.tokens
+        .clone()
+        .into_iter()
+        .find_map(|token| match token {
+            proc_macro2::TokenTree::Ident(ident) => Some(ident.to_string()),
+            _ => None,
+        })
+        .unwrap_or(trailing)
 }
 
-pub fn macro_invocation_rows_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> Vec<MacroInvocationRow> {
-    let mut collector = Collector { line_starts, rows: Vec::new() };
+pub fn macro_invocation_rows_from_parsed(
+    parsed: &syn::File,
+    line_starts: &[u32],
+) -> Vec<MacroInvocationRow> {
+    let mut collector = Collector {
+        line_starts,
+        rows: Vec::new(),
+    };
     collector.visit_file(parsed);
-    collector.rows.sort_by_key(|row| row.range.end - row.range.start);
+    collector
+        .rows
+        .sort_by_key(|row| row.range.end - row.range.start);
     collector.rows
 }
 
 pub fn macro_invocation_rows(content: &[u8]) -> Vec<MacroInvocationRow> {
-    let Ok(text) = std::str::from_utf8(content) else { return Vec::new(); };
-    let Ok(parsed) = syn::parse_file(text) else { return Vec::new(); };
+    let Ok(text) = std::str::from_utf8(content) else {
+        return Vec::new();
+    };
+    let Ok(parsed) = syn::parse_file(text) else {
+        return Vec::new();
+    };
     macro_invocation_rows_from_parsed(&parsed, &build_line_starts(text))
 }

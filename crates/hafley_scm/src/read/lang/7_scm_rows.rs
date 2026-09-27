@@ -12,8 +12,9 @@ use super::scm_store::{NodeKind, Store};
 use crate::read::types::FlatFact;
 
 const ROOT: usize = 0;
-static BUNDLED_QUERIES: OnceLock<Mutex<HashMap<(RyiLang, &'static str), Arc<hafley_scm::QueryExt>>>> =
-    OnceLock::new();
+static BUNDLED_QUERIES: OnceLock<
+    Mutex<HashMap<(RyiLang, &'static str), Arc<hafley_scm::QueryExt>>>,
+> = OnceLock::new();
 
 #[derive(Debug)]
 pub enum ScmError {
@@ -381,8 +382,7 @@ fn arena_captures(
         Arc::clone(query)
     } else {
         let query = Arc::new(
-            hafley_scm::build(&language, query_text)
-                .map_err(|error| scm_error(path, error))?,
+            hafley_scm::build(&language, query_text).map_err(|error| scm_error(path, error))?,
         );
         queries.insert((lang, query_text), Arc::clone(&query));
         query
@@ -560,7 +560,12 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
     let declaring = exports
         .iter()
         .any(|export| first_inside(&definitions, &by_start, export.start, export.end).is_none());
-    let export_nest = Nest::new(exports.iter().map(|export| (export.start, export.end)).collect());
+    let export_nest = Nest::new(
+        exports
+            .iter()
+            .map(|export| (export.start, export.end))
+            .collect(),
+    );
 
     let mut facts = Vec::new();
     for def in &definitions {
@@ -586,7 +591,10 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
             facts.push(FlatFact::LocalRow {
                 enclosing_fn: match def.owner {
                     ROOT => "<root>".into(),
-                    owner => names.get(&owner).cloned().unwrap_or_else(|| "<root>".into()),
+                    owner => names
+                        .get(&owner)
+                        .cloned()
+                        .unwrap_or_else(|| "<root>".into()),
                 },
                 name: def.name.clone(),
                 path: path.to_string(),
@@ -597,7 +605,10 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
     }
 
     let bound: HashSet<(u32, u32)> = definitions.iter().map(|def| (def.start, def.end)).collect();
-    for call in captures.iter().filter(|capture| capture.label == "local.call") {
+    for call in captures
+        .iter()
+        .filter(|capture| capture.label == "local.call")
+    {
         if bound.contains(&(call.start, call.end)) {
             continue;
         }
@@ -615,7 +626,15 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
             decl_end: call.end,
         });
     }
-    facts.extend(free_names(path, file_end, &captures, &scopes, &definitions, &owned, &bound));
+    facts.extend(free_names(
+        path,
+        file_end,
+        &captures,
+        &scopes,
+        &definitions,
+        &owned,
+        &bound,
+    ));
     facts
 }
 
@@ -643,7 +662,10 @@ fn free_names(
         .map(|capture| (capture.start, capture.end))
         .collect();
     let mut facts = Vec::new();
-    for name in captures.iter().filter(|capture| capture.label == "local.reference") {
+    for name in captures
+        .iter()
+        .filter(|capture| capture.label == "local.reference")
+    {
         if bound.contains(&(name.start, name.end)) {
             continue;
         }
@@ -651,10 +673,15 @@ fn free_names(
             continue;
         }
         let path_head = path_heads.contains(&(name.start, name.end));
-        if !path_head && resolve(name, scopes, definitions, owned).is_some_and(|def| def.owner != ROOT) {
+        if !path_head
+            && resolve(name, scopes, definitions, owned).is_some_and(|def| def.owner != ROOT)
+        {
             continue;
         }
-        let owner = top_level(&scopes.scopes, scopes.containing(name.start, name.end, None));
+        let owner = top_level(
+            &scopes.scopes,
+            scopes.containing(name.start, name.end, None),
+        );
         facts.push(FlatFact::FreeNameRow {
             path: path.to_string(),
             owner_start: match owner {
@@ -730,7 +757,12 @@ fn scope_tree(file_end: u32, spans: &[Capture]) -> Scopes {
             parent: None,
         });
     }
-    let nest = Nest::new(scopes.iter().map(|scope| (scope.start, scope.end)).collect());
+    let nest = Nest::new(
+        scopes
+            .iter()
+            .map(|scope| (scope.start, scope.end))
+            .collect(),
+    );
     for index in 1..scopes.len() {
         let (start, end) = (scopes[index].start, scopes[index].end);
         scopes[index].parent = Some(nest.innermost(start, end, Some(index)).unwrap_or(ROOT));

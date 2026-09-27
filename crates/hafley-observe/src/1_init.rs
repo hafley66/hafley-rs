@@ -2,9 +2,9 @@ use std::sync::Arc;
 
 use tracing_subscriber::fmt::writer::BoxMakeWriter;
 use tracing_subscriber::layer::Layered;
-use tracing_subscriber::{EnvFilter, Layer, Registry};
 use tracing_subscriber::layer::SubscriberExt;
 use tracing_subscriber::util::SubscriberInitExt;
+use tracing_subscriber::{EnvFilter, Layer, Registry};
 
 use crate::flush::{Sink, Writer};
 
@@ -42,9 +42,13 @@ pub fn init_with_sinks(
     layers.extend(crate::rusage_layer());
     layers.extend(log_sink_layer(flush));
     layers.extend(sinks.into_iter().map(|sink| {
-        Box::new(SinkLayer::new(Arc::new(Writer::new(sink, flush)))) as Box<dyn Layer<Base> + Send + Sync>
+        Box::new(SinkLayer::new(Arc::new(Writer::new(sink, flush))))
+            as Box<dyn Layer<Base> + Send + Sync>
     }));
-    layers.push(format_layer(FormatConfig::standard(config.format, config.ansi), writer));
+    layers.push(format_layer(
+        FormatConfig::standard(config.format, config.ansi),
+        writer,
+    ));
     layers.extend(crate::otlp_layer(&config));
     crate::instruments::install(&config);
     crate::instruments::start(&config);

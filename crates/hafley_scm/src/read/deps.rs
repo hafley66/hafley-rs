@@ -523,7 +523,9 @@ pub fn diet_file_edges(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
 
 /// Serialize diet file edges to sorted JSONL lines.
 pub fn diet_file_edges_jsonl(request: &ResolveRequest) -> Result<Vec<String>, ProjectError> {
-    Ok(crate::read::project::sorted_lines(diet_file_edges(request)?))
+    Ok(crate::read::project::sorted_lines(diet_file_edges(
+        request,
+    )?))
 }
 
 /// One supplied path as a project-relative slash path. Canonicalized on both

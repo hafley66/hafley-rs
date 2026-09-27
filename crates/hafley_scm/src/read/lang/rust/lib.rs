@@ -18,8 +18,7 @@ use std::collections::BTreeSet;
 use std::sync::LazyLock;
 
 use hafley_scm::lang::rust::{
-    call_metadata_rows, call_site_rows, line_col_to_byte, parse_rust_syntax,
-    rust_combined_query,
+    call_metadata_rows, call_site_rows, line_col_to_byte, parse_rust_syntax, rust_combined_query,
     CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
 };
 
@@ -36,8 +35,7 @@ use crate::read::project::ResolveDrop;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex,
-    Resolve,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
 use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
@@ -72,8 +70,8 @@ use type_facts::{import_bound_target, project_types};
 
 #[path = "2_call.rs"]
 mod call_facts;
-pub use call_facts::{crate_root_of, module_segments, module_target};
 pub use call_facts::{call_drops, own_blob_probes};
+pub use call_facts::{crate_root_of, module_segments, module_target};
 use call_facts::{project_call, scm_call_defs, splice_macro_expansions};
 
 #[path = "3_df.rs"]
@@ -180,9 +178,9 @@ impl Source for RustSource {
         let cst = if mask.cst {
             let span = trace::family_span("rust", "cst");
             let _entered = span.enter();
-            let bundle = tree.as_ref().and_then(|tree| {
-                cst_bundle_from_tree(path, content, tree, &mut strings)
-            });
+            let bundle = tree
+                .as_ref()
+                .and_then(|tree| cst_bundle_from_tree(path, content, tree, &mut strings));
             if let Some(bundle) = &bundle {
                 trace::record_bundle(&span, bundle, 0);
             }
@@ -208,7 +206,10 @@ impl Source for RustSource {
                 };
                 if let Ok(parsed) = parsed {
                     let line_starts = &parsed.line_starts;
-                    rust_module = Some(super::rust_modules::rust_module_facts_from_parsed(&parsed.file, line_starts));
+                    rust_module = Some(super::rust_modules::rust_module_facts_from_parsed(
+                        &parsed.file,
+                        line_starts,
+                    ));
                     if mask.types {
                         let span = trace::family_span("rust", "type");
                         let _entered = span.enter();
@@ -239,7 +240,14 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "df");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<DfF>::default();
-                        project_df(&parsed.file, path, src, line_starts, &mut strings, &mut bundle);
+                        project_df(
+                            &parsed.file,
+                            path,
+                            src,
+                            line_starts,
+                            &mut strings,
+                            &mut bundle,
+                        );
                         trace::record_bundle(&span, &bundle, 0);
                         df = Some(bundle);
                     }

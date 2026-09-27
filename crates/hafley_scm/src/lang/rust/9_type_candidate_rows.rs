@@ -47,14 +47,18 @@ pub struct TypeCandidateGroup {
 
 pub fn type_candidate_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<TypeCandidateGroup> {
     let mut groups = Vec::new();
-    let file_types: Vec<String> = parsed.items.iter().filter_map(|item| match item {
-        syn::Item::Struct(item) => Some(item.ident.to_string()),
-        syn::Item::Enum(item) => Some(item.ident.to_string()),
-        syn::Item::Union(item) => Some(item.ident.to_string()),
-        syn::Item::Type(item) => Some(item.ident.to_string()),
-        syn::Item::Trait(item) => Some(item.ident.to_string()),
-        _ => None,
-    }).collect();
+    let file_types: Vec<String> = parsed
+        .items
+        .iter()
+        .filter_map(|item| match item {
+            syn::Item::Struct(item) => Some(item.ident.to_string()),
+            syn::Item::Enum(item) => Some(item.ident.to_string()),
+            syn::Item::Union(item) => Some(item.ident.to_string()),
+            syn::Item::Type(item) => Some(item.ident.to_string()),
+            syn::Item::Trait(item) => Some(item.ident.to_string()),
+            _ => None,
+        })
+        .collect();
     collect(&parsed.items, line_starts, &file_types, &[], &mut groups);
     groups
 }
@@ -125,11 +129,7 @@ fn collect(
                 let mut candidates = signature_candidates(&item.sig);
                 candidates.extend(body_type_candidates(&item.block));
                 retain_non_generic(&item.sig.generics, &mut candidates);
-                groups.push(declared(
-                    item.sig.ident.span(),
-                    line_starts,
-                    candidates,
-                ));
+                groups.push(declared(item.sig.ident.span(), line_starts, candidates));
             }
             syn::Item::Trait(item) => {
                 let mut candidates = Vec::new();
@@ -194,24 +194,24 @@ fn collect(
                         candidates.extend(body_type_candidates(&method.block));
                         retain_non_generic(&item.generics, &mut candidates);
                         retain_non_generic(&method.sig.generics, &mut candidates);
-                        groups.push(declared(
-                            method.sig.ident.span(),
-                            line_starts,
-                            candidates,
-                        ));
+                        groups.push(declared(method.sig.ident.span(), line_starts, candidates));
                     }
                     if let syn::ImplItem::Type(assoc) = child {
                         if matches!(&assoc.ty, Type::Path(path)
-                            if path.qself.is_none() && path.path.segments.len() == 1
-                                && path.path.segments.first().is_some_and(|segment| {
-                                    matches!(segment.arguments, syn::PathArguments::None)
-                                })) {
+                        if path.qself.is_none() && path.path.segments.len() == 1
+                            && path.path.segments.first().is_some_and(|segment| {
+                                matches!(segment.arguments, syn::PathArguments::None)
+                            }))
+                        {
                             continue;
                         }
-                        let mut candidates: Vec<_> = type_refs(&assoc.ty).into_iter().map(|to| TypeCandidateRow {
-                            to,
-                            kind: TypeCandidateKind::Uses,
-                        }).collect();
+                        let mut candidates: Vec<_> = type_refs(&assoc.ty)
+                            .into_iter()
+                            .map(|to| TypeCandidateRow {
+                                to,
+                                kind: TypeCandidateKind::Uses,
+                            })
+                            .collect();
                         retain_non_generic(&item.generics, &mut candidates);
                         retain_non_generic(&assoc.generics, &mut candidates);
                         groups.push(TypeCandidateGroup {
@@ -238,7 +238,9 @@ fn collect(
             _ => {}
         }
         for group in &mut groups[first..] {
-            group.candidates.retain(|candidate| !shadowed.contains(&candidate.to));
+            group
+                .candidates
+                .retain(|candidate| !shadowed.contains(&candidate.to));
         }
     }
 }
@@ -250,10 +252,11 @@ struct BodyTypeWalk {
 
 impl<'ast> Visit<'ast> for BodyTypeWalk {
     fn visit_pat_type(&mut self, pat: &'ast syn::PatType) {
-        self.candidates.extend(type_refs(&pat.ty).into_iter().map(|to| TypeCandidateRow {
-            to,
-            kind: TypeCandidateKind::Uses,
-        }));
+        self.candidates
+            .extend(type_refs(&pat.ty).into_iter().map(|to| TypeCandidateRow {
+                to,
+                kind: TypeCandidateKind::Uses,
+            }));
         syn::visit::visit_pat_type(self, pat);
     }
 
@@ -272,7 +275,9 @@ fn external_imported_locals(items: &[syn::Item]) -> Vec<String> {
         match tree {
             syn::UseTree::Path(path) => names(&path.tree, out),
             syn::UseTree::Group(group) => {
-                for member in &group.items { names(member, out); }
+                for member in &group.items {
+                    names(member, out);
+                }
             }
             syn::UseTree::Name(name) => out.push(name.ident.to_string()),
             syn::UseTree::Rename(rename) => out.push(rename.rename.to_string()),
@@ -282,8 +287,12 @@ fn external_imported_locals(items: &[syn::Item]) -> Vec<String> {
     let mut out = Vec::new();
     for item in items {
         let syn::Item::Use(item) = item else { continue };
-        let syn::UseTree::Path(root) = &item.tree else { continue };
-        if matches!(root.ident.to_string().as_str(), "crate" | "self" | "super") { continue; }
+        let syn::UseTree::Path(root) = &item.tree else {
+            continue;
+        };
+        if matches!(root.ident.to_string().as_str(), "crate" | "self" | "super") {
+            continue;
+        }
         names(&root.tree, &mut out);
     }
     out
@@ -292,23 +301,45 @@ fn external_imported_locals(items: &[syn::Item]) -> Vec<String> {
 fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
     let mut candidates = Vec::new();
     generic_candidates(&sig.generics, &mut candidates);
-    let bounds: Vec<(String, String)> = sig.generics.params.iter().filter_map(|param| {
-        let GenericParam::Type(param) = param else { return None };
-        let trait_name = param.bounds.iter().find_map(|bound| {
-            let TypeParamBound::Trait(bound) = bound else { return None };
-            path_name(&bound.path)
-        })?;
-        Some((param.ident.to_string(), trait_name))
-    }).chain(sig.generics.where_clause.iter().flat_map(|clause| clause.predicates.iter()).filter_map(|pred| {
-        let WherePredicate::Type(pred) = pred else { return None };
-        let Type::Path(ty) = &pred.bounded_ty else { return None };
-        let ident = ty.path.get_ident()?.to_string();
-        let trait_name = pred.bounds.iter().find_map(|bound| {
-            let TypeParamBound::Trait(bound) = bound else { return None };
-            path_name(&bound.path)
-        })?;
-        Some((ident, trait_name))
-    })).collect();
+    let bounds: Vec<(String, String)> = sig
+        .generics
+        .params
+        .iter()
+        .filter_map(|param| {
+            let GenericParam::Type(param) = param else {
+                return None;
+            };
+            let trait_name = param.bounds.iter().find_map(|bound| {
+                let TypeParamBound::Trait(bound) = bound else {
+                    return None;
+                };
+                path_name(&bound.path)
+            })?;
+            Some((param.ident.to_string(), trait_name))
+        })
+        .chain(
+            sig.generics
+                .where_clause
+                .iter()
+                .flat_map(|clause| clause.predicates.iter())
+                .filter_map(|pred| {
+                    let WherePredicate::Type(pred) = pred else {
+                        return None;
+                    };
+                    let Type::Path(ty) = &pred.bounded_ty else {
+                        return None;
+                    };
+                    let ident = ty.path.get_ident()?.to_string();
+                    let trait_name = pred.bounds.iter().find_map(|bound| {
+                        let TypeParamBound::Trait(bound) = bound else {
+                            return None;
+                        };
+                        path_name(&bound.path)
+                    })?;
+                    Some((ident, trait_name))
+                }),
+        )
+        .collect();
     for arg in &sig.inputs {
         if let syn::FnArg::Typed(arg) = arg {
             candidates.extend(type_refs(&arg.ty).into_iter().map(|to| TypeCandidateRow {
@@ -328,17 +359,27 @@ fn signature_candidates(sig: &syn::Signature) -> Vec<TypeCandidateRow> {
 }
 
 fn retain_non_generic(generics: &syn::Generics, candidates: &mut Vec<TypeCandidateRow>) {
-    let names: Vec<String> = generics.params.iter().filter_map(|param| {
-        let GenericParam::Type(param) = param else { return None };
-        Some(param.ident.to_string())
-    }).collect();
+    let names: Vec<String> = generics
+        .params
+        .iter()
+        .filter_map(|param| {
+            let GenericParam::Type(param) = param else {
+                return None;
+            };
+            Some(param.ident.to_string())
+        })
+        .collect();
     candidates.retain(|candidate| !names.contains(&candidate.to));
 }
 
 fn projection_trait(name: &str, bounds: &[(String, String)]) -> String {
-    let Some((head, slot)) = name.split_once("::") else { return name.to_string() };
-    bounds.iter().find(|(param, _)| param == head)
-        .map_or_else(|| name.to_string(), |(_, trait_name)| format!("{trait_name}::{slot}"))
+    let Some((head, slot)) = name.split_once("::") else {
+        return name.to_string();
+    };
+    bounds.iter().find(|(param, _)| param == head).map_or_else(
+        || name.to_string(),
+        |(_, trait_name)| format!("{trait_name}::{slot}"),
+    )
 }
 
 pub fn bare_self_head(ty: &Type, line_starts: &[u32]) -> Option<(Range<u32>, String)> {

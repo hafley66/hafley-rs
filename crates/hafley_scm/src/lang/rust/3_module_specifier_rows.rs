@@ -113,7 +113,10 @@ fn push_leaf(
     } else {
         let mut segments = prefix.to_vec();
         segments.push(segment.to_string());
-        (alias.unwrap_or_else(|| segment.to_string()), segments.join("::"))
+        (
+            alias.unwrap_or_else(|| segment.to_string()),
+            segments.join("::"),
+        )
     };
     out.push(ModuleSpecifierRow {
         range,

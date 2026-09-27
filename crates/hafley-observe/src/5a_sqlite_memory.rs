@@ -33,8 +33,7 @@ pub fn sample(connection: &Connection) -> Option<SqliteMemory> {
         let db_bytes = |status| {
             let mut current = 0;
             let mut peak = 0;
-            (ffi::sqlite3_db_status(handle, status, &mut current, &mut peak, 0)
-                == ffi::SQLITE_OK)
+            (ffi::sqlite3_db_status(handle, status, &mut current, &mut peak, 0) == ffi::SQLITE_OK)
                 .then_some(current)
         };
         Some(SqliteMemory {
@@ -79,7 +78,9 @@ mod tests {
     #[test]
     fn memory_gauges_include_connection_state() -> rusqlite::Result<()> {
         let connection = Connection::open_in_memory()?;
-        connection.execute_batch("CREATE TABLE sample(k INTEGER PRIMARY KEY, v TEXT); INSERT INTO sample VALUES(1,'a')")?;
+        connection.execute_batch(
+            "CREATE TABLE sample(k INTEGER PRIMARY KEY, v TEXT); INSERT INTO sample VALUES(1,'a')",
+        )?;
         let statement = connection.prepare("SELECT v FROM sample WHERE k=?1")?;
         let measured = sample(&connection).expect("SQLite memory status");
         assert!(measured.allocator_current_bytes >= 0);

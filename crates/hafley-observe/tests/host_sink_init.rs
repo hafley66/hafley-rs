@@ -17,7 +17,10 @@ impl Sink for Recorder {
     }
 
     fn write(&self, rows: &[Row]) {
-        self.rows.lock().expect("recorder lock").extend_from_slice(rows);
+        self.rows
+            .lock()
+            .expect("recorder lock")
+            .extend_from_slice(rows);
     }
 }
 
@@ -45,7 +48,14 @@ fn host_sink_receives_filtered_events() {
         .lock()
         .expect("recorder lock")
         .iter()
-        .map(|row| (row.level, row.name.clone(), row.target.clone(), row.fields.clone()))
+        .map(|row| {
+            (
+                row.level,
+                row.name.clone(),
+                row.target.clone(),
+                row.fields.clone(),
+            )
+        })
         .collect();
     assert_eq!(
         landed,

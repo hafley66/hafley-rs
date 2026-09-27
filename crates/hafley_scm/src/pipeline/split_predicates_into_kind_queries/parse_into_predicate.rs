@@ -27,12 +27,18 @@ pub fn parse_into_predicate(
     let args = &found.args[1..];
     match bare {
         "contains?" => {
-            if args.is_empty() || args.iter().any(|arg| !matches!(arg, QueryPredicateArg::String(_))) {
+            if args.is_empty()
+                || args
+                    .iter()
+                    .any(|arg| !matches!(arg, QueryPredicateArg::String(_)))
+            {
                 return Err(arity(found.args.len()));
             }
             let start = literals.len() as u16;
             for arg in args {
-                let QueryPredicateArg::String(literal) = arg else { unreachable!() };
+                let QueryPredicateArg::String(literal) = arg else {
+                    unreachable!()
+                };
                 literals.push(literal.as_bytes().into());
             }
             Ok(Predicate {
@@ -45,7 +51,11 @@ pub fn parse_into_predicate(
             })
         }
         "has-ancestor?" | "has-parent?" => {
-            if args.is_empty() || args.iter().any(|arg| !matches!(arg, QueryPredicateArg::String(_))) {
+            if args.is_empty()
+                || args
+                    .iter()
+                    .any(|arg| !matches!(arg, QueryPredicateArg::String(_)))
+            {
                 return Err(arity(found.args.len()));
             }
             let mut stop = Stop::End;
@@ -67,7 +77,9 @@ pub fn parse_into_predicate(
             }
             let start = predicate_kinds.len() as u16;
             for arg in kind_args {
-                let QueryPredicateArg::String(kind) = arg else { unreachable!() };
+                let QueryPredicateArg::String(kind) = arg else {
+                    unreachable!()
+                };
                 let index = match kinds.iter().position(|seen| seen.as_ref() == kind.as_ref()) {
                     Some(index) => index,
                     None => {

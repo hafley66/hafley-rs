@@ -34,8 +34,7 @@ pub use _2_otlp::shutdown;
 pub use _3_chrome::{chrome_layer, finish_trace, flush_trace, trace_path, TRACE_PATH_VARIABLE};
 pub use _4_counts::{
     assert_growth, assert_growth_sized, observed_growth, observed_growth_sized, CountRecorder,
-    EventStats, EventSums, FieldStats, Growth,
-    SpanCounts,
+    EventStats, EventSums, FieldStats, Growth, SpanCounts,
 };
 pub use flush::{Flush, ParseFlushError, Row, Sink, Writer};
 pub use instruments::{proc_layer, span_layer};

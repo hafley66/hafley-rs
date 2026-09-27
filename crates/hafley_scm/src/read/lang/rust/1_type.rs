@@ -198,7 +198,8 @@ fn resolve_type_dst(
 ) -> Option<(ContentId, Span, ResolutionOrigin)> {
     let (qualifier, trailing) = type_probe_key(name, kind);
     if let Some(trait_name) = qualifier {
-        if let Some((blob, span)) = modules.and_then(|m| m.assoc_type_target(trait_name, trailing)) {
+        if let Some((blob, span)) = modules.and_then(|m| m.assoc_type_target(trait_name, trailing))
+        {
             return Some((blob, span, ResolutionOrigin::ModulePlane));
         }
     }
@@ -211,7 +212,10 @@ fn resolve_type_dst(
     // The qualifier narrows: only a declaration whose FILE spells a module path
     // ending in it is the one `a::b::C` names.
     let segments: Vec<&str> = qualifier.split("::").collect();
-    let qualifier = segments.iter().map(|segment| (*segment).to_string()).collect::<Vec<_>>();
+    let qualifier = segments
+        .iter()
+        .map(|segment| (*segment).to_string())
+        .collect::<Vec<_>>();
     modules
         .zip(own_path)
         .and_then(|(m, from)| m.qualified_type_target(from, &qualifier, trailing))
@@ -222,7 +226,9 @@ fn resolve_type_dst(
             if head != "Self"
                 && head.chars().next().is_some_and(char::is_uppercase)
                 && index.is_none_or(|index| {
-                    !corpus_defs(index, head).iter().any(|site| site.family == FamilyTag::Type)
+                    !corpus_defs(index, head)
+                        .iter()
+                        .any(|site| site.family == FamilyTag::Type)
                 })
             {
                 return None;
@@ -267,7 +273,10 @@ fn name_match_type_dst(
     {
         return Some((blob, span, ResolutionOrigin::ModulePlane));
     }
-    if modules.zip(own_path).is_some_and(|(m, from)| m.binds_external(from, name)) {
+    if modules
+        .zip(own_path)
+        .is_some_and(|(m, from)| m.binds_external(from, name))
+    {
         return None;
     }
     // These bare names are supplied by the Rust prelude. A same-file
@@ -293,8 +302,16 @@ fn unique_declared_type(
         .unwrap_or(&[])
         .iter()
         .filter(|site| site.family == FamilyTag::Type)
-        .filter(|site| modules.zip(own_path).map_or(true, |(m, from)| m.sees(from, &site.blob)))
-        .filter(|site| !modules.zip(own_path).is_some_and(|(m, from)| m.private_import_target(from, name, &site.blob)))
+        .filter(|site| {
+            modules
+                .zip(own_path)
+                .map_or(true, |(m, from)| m.sees(from, &site.blob))
+        })
+        .filter(|site| {
+            !modules
+                .zip(own_path)
+                .is_some_and(|(m, from)| m.private_import_target(from, name, &site.blob))
+        })
         .collect();
     match declared.as_slice() {
         [only] => Some((only.blob.clone(), only.span)),
@@ -319,12 +336,10 @@ fn module_scoped_type(
         .iter()
         .filter(|site| site.family == FamilyTag::Type)
         .filter(|site| {
-            paths
-                .get(&site.blob)
-                .is_some_and(|path| {
-                    want.covers(&module_segments(path))
-                        && modules.is_none_or(|m| m.sees_path(from, path))
-                })
+            paths.get(&site.blob).is_some_and(|path| {
+                want.covers(&module_segments(path))
+                    && modules.is_none_or(|m| m.sees_path(from, path))
+            })
         })
         .collect();
     match sites.as_slice() {

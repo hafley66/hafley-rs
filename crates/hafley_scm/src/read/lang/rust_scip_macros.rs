@@ -59,12 +59,14 @@ fn invocation_spans(content: &[u8]) -> Vec<InvocationSpan> {
     hafley_scm::lang::rust::macro_invocation_rows(content)
         .into_iter()
         .map(|row| InvocationSpan {
-            span: Span { start: row.range.start, len: row.range.end - row.range.start },
+            span: Span {
+                start: row.range.start,
+                len: row.range.end - row.range.start,
+            },
             macro_name: row.name,
         })
         .collect()
 }
-
 
 /// The identifier-shaped text at `span`, else None. A reference occurrence on
 /// something that is not a plain identifier (a path qualifier, a string) is
@@ -140,12 +142,21 @@ pub fn mint_macro_edges(
         let Some((_, content)) = joined[doc_ix].as_ref() else {
             continue;
         };
-        let invocations = file.output.rust_module.as_ref().map(|module| {
-            module.macro_invocations.iter().map(|(span, macro_name)| InvocationSpan {
-                span: *span,
-                macro_name: macro_name.clone(),
-            }).collect()
-        }).unwrap_or_else(|| invocation_spans(content));
+        let invocations = file
+            .output
+            .rust_module
+            .as_ref()
+            .map(|module| {
+                module
+                    .macro_invocations
+                    .iter()
+                    .map(|(span, macro_name)| InvocationSpan {
+                        span: *span,
+                        macro_name: macro_name.clone(),
+                    })
+                    .collect()
+            })
+            .unwrap_or_else(|| invocation_spans(content));
         if invocations.is_empty() {
             continue;
         }
@@ -159,7 +170,10 @@ pub fn mint_macro_edges(
             .collect();
         sites.sort_unstable();
         for occ in &doc.occurrences {
-            if occ.roles.contains(crate::read::types::OccurrenceRole::DEFINITION) {
+            if occ
+                .roles
+                .contains(crate::read::types::OccurrenceRole::DEFINITION)
+            {
                 continue;
             }
             if index.symbol(occ.symbol).starts_with("local ") {

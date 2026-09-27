@@ -72,9 +72,7 @@ pub const ALLOC_CALLSTACK_DEPTH: u16 = 0;
 macro_rules! tracy_allocator {
     ($name:ident) => {
         #[global_allocator]
-        static $name: $crate::tracy::Allocator = $crate::tracy::Allocator::new(
-            std::alloc::System,
-            $crate::tracy::ALLOC_CALLSTACK_DEPTH,
-        );
+        static $name: $crate::tracy::Allocator =
+            $crate::tracy::Allocator::new(std::alloc::System, $crate::tracy::ALLOC_CALLSTACK_DEPTH);
     };
 }

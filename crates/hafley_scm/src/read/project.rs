@@ -44,12 +44,12 @@ use crate::read::seams::{
 };
 use crate::read::shape::{content_id_of, ContentId, Span, Strings};
 use crate::read::source::{FamilyMask, Resolve, RyiOutput, Source};
+use crate::read::trace::stage_span;
 use crate::read::tsi::types::{CoverageOut, Mode, RunOut, WitnessOut, PROTOCOL_VERSION};
 use crate::read::types::{
     flow_edges, CallF, ProjectEdge, ResolutionOrigin, ScipError, ScipIndex, ScipSource, TypeF,
     UnresolvedReason,
 };
-use crate::read::trace::stage_span;
 use crate::read::wire::{flatten_flow, FlatFact};
 
 /// Which phase-2 arms to run. All default off at the type level so a caller
@@ -351,7 +351,8 @@ fn resolve_pushed<E>(
     scm_paths: Option<&[PathBuf]>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
-    let mut facts = resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
+    let mut facts =
+        resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
         facts.extend(scm.map_err(ResolveWithRawError::Project)?);
     }
@@ -511,8 +512,11 @@ fn resolve_project_inputs(
                 output: input.output.as_ref(),
             })
             .collect();
-        macro_rows =
-            crate::read::lang::rust_scip_macros::mint_macro_edges(&macro_files, &cx, &mut resolved_calls);
+        macro_rows = crate::read::lang::rust_scip_macros::mint_macro_edges(
+            &macro_files,
+            &cx,
+            &mut resolved_calls,
+        );
     }
 
     let emit_stage = stage_span("project_facts").entered();
@@ -671,11 +675,13 @@ pub fn fill_indexes(
         .collect();
     cx.indexes
         .ts_modules
-        .set(stage_span("index_ts_modules").in_scope(|| TsModuleIndex::build(
-            module_files,
-            corpus,
-            cx.indexes.def_index.get().expect("the def index is set"),
-        )))
+        .set(stage_span("index_ts_modules").in_scope(|| {
+            TsModuleIndex::build(
+                module_files,
+                corpus,
+                cx.indexes.def_index.get().expect("the def index is set"),
+            )
+        }))
         .ok()
         .expect("fresh project module plane");
     let rust_module_files: Vec<(String, RustModuleFacts)> = inputs
@@ -684,11 +690,13 @@ pub fn fill_indexes(
         .collect();
     cx.indexes
         .rust_modules
-        .set(stage_span("index_rust_modules").in_scope(|| RustModuleIndex::build(
-            rust_module_files,
-            corpus,
-            cx.indexes.def_index.get().expect("the def index is set"),
-        )))
+        .set(stage_span("index_rust_modules").in_scope(|| {
+            RustModuleIndex::build(
+                rust_module_files,
+                corpus,
+                cx.indexes.def_index.get().expect("the def index is set"),
+            )
+        }))
         .ok()
         .expect("fresh project module plane (rust)");
     let go_module_files: Vec<(String, GoModuleFacts)> = inputs
@@ -700,7 +708,11 @@ pub fn fill_indexes(
     // go.rs only serves library/test paths with no module plane.
     for input in inputs.iter() {
         if let Some(facts) = input.go_module.as_ref().and_then(GoModuleFacts::file_facts) {
-            crate::read::lang::go::go_publish_file_facts(&input.path, Some(&input.blob), facts.clone());
+            crate::read::lang::go::go_publish_file_facts(
+                &input.path,
+                Some(&input.blob),
+                facts.clone(),
+            );
         }
     }
     cx.indexes
@@ -762,8 +774,11 @@ fn syntax_tsi_rows(
         let Some(bundle) = input.output.types.as_ref() else {
             continue;
         };
-        let (rows, next) =
-            crate::read::wire::tsi_rows_rebased(&bundle.aux.tsi, &input.blob.to_string(), out.next_id);
+        let (rows, next) = crate::read::wire::tsi_rows_rebased(
+            &bundle.aux.tsi,
+            &input.blob.to_string(),
+            out.next_id,
+        );
         out.rows.extend(rows);
         out.next_id = next;
     }
@@ -978,14 +993,14 @@ fn load_rust_checker(
             (input.path.clone(), absolute)
         })
         .collect();
-    let answers = match crate::read::lang::rust_checker::answer(&root, &files, CHECKER_BUDGET, cx.witness)
-    {
-        Ok(answers) => answers,
-        Err(err) => {
-            tracing::warn!("rust checker tier off, syntax tier answers alone: {err}");
-            return Err(err.to_string());
-        }
-    };
+    let answers =
+        match crate::read::lang::rust_checker::answer(&root, &files, CHECKER_BUDGET, cx.witness) {
+            Ok(answers) => answers,
+            Err(err) => {
+                tracing::warn!("rust checker tier off, syntax tier answers alone: {err}");
+                return Err(err.to_string());
+            }
+        };
     let index = crate::read::lang::rust_checker::RustCheckerIndex::build(
         answers,
         corpus,
@@ -1397,10 +1412,13 @@ pub fn scip_family_from_index_jsonl(
 /// default; this family is the labelled entry, not a replacement.
 // @comment-ok: one pre-existing diet_scip design note, edited by one line.
 pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
-    let mut inputs = stage_span("read_inputs")
-        .in_scope(|| read_inputs_with_modules(paths, Planes::Fast))?;
+    let mut inputs =
+        stage_span("read_inputs").in_scope(|| read_inputs_with_modules(paths, Planes::Fast))?;
     let scm = stage_span("scm_rows").in_scope(|| scm_rows(paths, &inputs));
-    let skips: Vec<_> = inputs.iter_mut().filter_map(|input| input.size_skip.take()).collect();
+    let skips: Vec<_> = inputs
+        .iter_mut()
+        .filter_map(|input| input.size_skip.take())
+        .collect();
     let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
     facts.extend(skips);
     facts.extend(scm?);
@@ -1410,10 +1428,11 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
 /// The `symbol`/`occurrence`/`local` rows fast reads straight out of
 /// `queries/<lang>/scip.scm`. A language with no query yet contributes none.
 fn scm_rows(paths: &[PathBuf], inputs: &[ProjectInput]) -> Result<Vec<FlatFact>, ProjectError> {
-    let captured: std::collections::HashMap<&str, &crate::read::lang::scm_rows::ScmCaptures> = inputs
-        .iter()
-        .filter_map(|input| Some((input.path.as_str(), input.output.scm_captures.as_ref()?)))
-        .collect();
+    let captured: std::collections::HashMap<&str, &crate::read::lang::scm_rows::ScmCaptures> =
+        inputs
+            .iter()
+            .filter_map(|input| Some((input.path.as_str(), input.output.scm_captures.as_ref()?)))
+            .collect();
     // One file's rows are a function of that file alone, so the files run on
     // the extraction pool and land back in path order.
     let per_file: Vec<Result<Vec<FlatFact>, ProjectError>> = EXTRACT_POOL.install(|| {
@@ -1488,7 +1507,9 @@ pub fn diet_scip_streamed<E>(
     let mut captures: std::collections::HashMap<String, crate::read::lang::scm_rows::ScmCaptures> =
         std::collections::HashMap::new();
     for input in &mut inputs {
-        if let Some(taken) = Arc::get_mut(&mut input.output).and_then(|output| output.scm_captures.take()) {
+        if let Some(taken) =
+            Arc::get_mut(&mut input.output).and_then(|output| output.scm_captures.take())
+        {
             captures.insert(input.path.clone(), taken);
         }
     }
@@ -1533,19 +1554,34 @@ fn definition_bundle<F: crate::read::family::Family>(
 ) -> FamilyBundle<F> {
     let mut result = FamilyBundle::default();
     // Kind lookup needs every call node; only named nodes enter the interner.
-    result.nodes = bundle.nodes.iter().map(|node| {
-        let mut compact = Node::<F>::new(node.span, node.kind.clone());
-        compact.name = node.name.map(|name| strings.intern(source.lookup(name)));
-        compact
-    }).collect();
+    result.nodes = bundle
+        .nodes
+        .iter()
+        .map(|node| {
+            let mut compact = Node::<F>::new(node.span, node.kind.clone());
+            compact.name = node.name.map(|name| strings.intern(source.lookup(name)));
+            compact
+        })
+        .collect();
     result
 }
 
 fn definition_output(output: &RyiOutput) -> RyiOutput {
     let mut strings = Strings::new();
-    let call = output.call.as_ref().map(|bundle| definition_bundle(bundle, &output.strings, &mut strings));
-    let types = output.types.as_ref().map(|bundle| definition_bundle(bundle, &output.strings, &mut strings));
-    RyiOutput { strings, call, types, ..RyiOutput::default() }
+    let call = output
+        .call
+        .as_ref()
+        .map(|bundle| definition_bundle(bundle, &output.strings, &mut strings));
+    let types = output
+        .types
+        .as_ref()
+        .map(|bundle| definition_bundle(bundle, &output.strings, &mut strings));
+    RyiOutput {
+        strings,
+        call,
+        types,
+        ..RyiOutput::default()
+    }
 }
 
 /// Reparse one bounded chunk at a time after the corpus indexes are complete.
@@ -1586,8 +1622,14 @@ fn diet_scip_bounded<E>(
         witness: false,
     };
     {
-        let pairs: Vec<_> = inputs.iter().map(|input| (input.blob.clone(), input.output.as_ref())).collect();
-        let corpus: Vec<_> = inputs.iter().map(|input| (input.path.clone(), input.blob.clone())).collect();
+        let pairs: Vec<_> = inputs
+            .iter()
+            .map(|input| (input.blob.clone(), input.output.as_ref()))
+            .collect();
+        let corpus: Vec<_> = inputs
+            .iter()
+            .map(|input| (input.path.clone(), input.blob.clone()))
+            .collect();
         fill_indexes(&cx, &inputs, &pairs, &corpus);
     }
     for input in &mut inputs {
@@ -1637,10 +1679,13 @@ fn diet_scip_bounded<E>(
     })?;
     for chunk in paths.chunks(8) {
         let rows: Vec<Result<Vec<FlatFact>, ProjectError>> = EXTRACT_POOL.install(|| {
-            chunk.par_iter().map(|path| {
-                crate::read::scm_facts(std::slice::from_ref(path))
-                    .map_err(|error| ProjectError::Scm(error.to_string()))
-            }).collect()
+            chunk
+                .par_iter()
+                .map(|path| {
+                    crate::read::scm_facts(std::slice::from_ref(path))
+                        .map_err(|error| ProjectError::Scm(error.to_string()))
+                })
+                .collect()
         });
         for file in rows {
             for fact in file.map_err(ResolveWithRawError::Project)? {
@@ -1903,57 +1948,69 @@ fn read_chunk(
         .map(|(index, path)| (std::fs::metadata(path).map_or(0, |meta| meta.len()), index))
         .collect();
     order.sort_unstable_by(|left, right| right.cmp(left));
-    let mut indexed: Vec<(usize, Result<Option<ProjectInput>, ProjectError>)> = EXTRACT_POOL.install(|| {
-        order
-            .par_iter()
-            .with_max_len(1)
-            .map(|&(_, index)| (index, &paths[index]))
-            .map(|(index, path)| (index, (|| {
-                let content =
-                    std::fs::read(path).map_err(|err| ProjectError::Read(path.clone(), err))?;
-                let path = path.to_string_lossy().to_string();
-                let size_skip = if matches!(planes, Planes::Fast)
-                    && content.len() as u64 > FAST_DATA_MAX_BYTES
-                    && source_for(&path).is_some_and(|source| source.name() == "data")
-                {
-                    Some(crate::read::wire::size_skip_fact(
-                        &path,
-                        content.len() as u64,
-                        FAST_DATA_MAX_BYTES,
-                    ))
-                } else {
-                    None
-                };
-                let output = if size_skip.is_some() {
-                    Some(Arc::new(RyiOutput::default()))
-                } else {
-                    crate::read::dispatch::dispatch_uncached(&path, &content, resolve_mask(&path, planes))
-                };
-                let module = module_facts_of(&path, &content, modules);
-                let rust_module = rust_module_facts_of(&path, &content, modules, output.as_deref());
-                let go_module = go_module_facts_of(&path, &content, modules);
-                let py_module = py_module_facts_of(&path, &content, modules);
-                let kt_module = kt_module_facts_of(&path, &content, modules, output.as_deref());
-                Ok(output.map(|output| {
-                    let blob = content_id_of(&content);
-                    ProjectInput {
-                        file: Some(crate::read::wire::file_fact_with_content_id(
-                            &path, &content, &blob,
-                        )),
-                        blob,
-                        path,
-                        size_skip,
-                        output,
-                        module,
-                        rust_module,
-                        go_module,
-                        py_module,
-                        kt_module,
-                    }
-                }))
-            })()))
-            .collect()
-    });
+    let mut indexed: Vec<(usize, Result<Option<ProjectInput>, ProjectError>)> = EXTRACT_POOL
+        .install(|| {
+            order
+                .par_iter()
+                .with_max_len(1)
+                .map(|&(_, index)| (index, &paths[index]))
+                .map(|(index, path)| {
+                    (
+                        index,
+                        (|| {
+                            let content = std::fs::read(path)
+                                .map_err(|err| ProjectError::Read(path.clone(), err))?;
+                            let path = path.to_string_lossy().to_string();
+                            let size_skip = if matches!(planes, Planes::Fast)
+                                && content.len() as u64 > FAST_DATA_MAX_BYTES
+                                && source_for(&path).is_some_and(|source| source.name() == "data")
+                            {
+                                Some(crate::read::wire::size_skip_fact(
+                                    &path,
+                                    content.len() as u64,
+                                    FAST_DATA_MAX_BYTES,
+                                ))
+                            } else {
+                                None
+                            };
+                            let output = if size_skip.is_some() {
+                                Some(Arc::new(RyiOutput::default()))
+                            } else {
+                                crate::read::dispatch::dispatch_uncached(
+                                    &path,
+                                    &content,
+                                    resolve_mask(&path, planes),
+                                )
+                            };
+                            let module = module_facts_of(&path, &content, modules);
+                            let rust_module =
+                                rust_module_facts_of(&path, &content, modules, output.as_deref());
+                            let go_module = go_module_facts_of(&path, &content, modules);
+                            let py_module = py_module_facts_of(&path, &content, modules);
+                            let kt_module =
+                                kt_module_facts_of(&path, &content, modules, output.as_deref());
+                            Ok(output.map(|output| {
+                                let blob = content_id_of(&content);
+                                ProjectInput {
+                                    file: Some(crate::read::wire::file_fact_with_content_id(
+                                        &path, &content, &blob,
+                                    )),
+                                    blob,
+                                    path,
+                                    size_skip,
+                                    output,
+                                    module,
+                                    rust_module,
+                                    go_module,
+                                    py_module,
+                                    kt_module,
+                                }
+                            }))
+                        })(),
+                    )
+                })
+                .collect()
+        });
     indexed.sort_unstable_by_key(|(index, _)| *index);
     indexed.into_iter().map(|(_, result)| result).collect()
 }
@@ -1992,8 +2049,12 @@ fn load_scip(
     // hosts are the callers that mean "index this repository" and they keep
     // `default_cache_dir`.
     let cache = crate::read::scip_ensure::external_cache_dir(root);
-    let report =
-        crate::read::scip_ensure::ensure_index_for_set(root, &cache, IndexBudget::from_env(), Some(&set));
+    let report = crate::read::scip_ensure::ensure_index_for_set(
+        root,
+        &cache,
+        IndexBudget::from_env(),
+        Some(&set),
+    );
     let index_path = report.index.ok_or_else(|| {
         ProjectError::ScipIndexerUnavailable(
             report
@@ -2273,7 +2334,10 @@ struct TargetIndex<'a> {
 }
 
 /// First node at a span wins, the order the scan it replaces answered in.
-fn span_names<F: crate::read::family::Family>(bundle: &FamilyBundle<F>, strings: &Strings) -> SpanNames {
+fn span_names<F: crate::read::family::Family>(
+    bundle: &FamilyBundle<F>,
+    strings: &Strings,
+) -> SpanNames {
     let mut names = SpanNames::with_capacity(bundle.nodes.len());
     for node in &bundle.nodes {
         names
@@ -2340,7 +2404,10 @@ fn call_facts(
     for edge in edges {
         // Byte-identical files share a blob: a target in this file's own blob
         // is this file, not whichever copy the blob index met first.
-        let Some(target) = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob)) else {
+        let Some(target) = (edge.dst_blob == input.blob)
+            .then_some(input)
+            .or_else(|| targets.input(&edge.dst_blob))
+        else {
             continue;
         };
         let caller_path = input.path.clone();
@@ -2530,12 +2597,19 @@ fn type_facts(
     let plane = arm_for(&input.path).map_or(TypePlane::Nodes, |arm| arm.type_plane);
     let mut resolved = resolve_type_edges(&input.path, &input.output, cx);
     if let Some(index) = cx.indexes.go_checker.get() {
-        crate::read::lang::go_checker::apply_types(index, &input.path, &input.output, &mut resolved);
+        crate::read::lang::go_checker::apply_types(
+            index,
+            &input.path,
+            &input.output,
+            &mut resolved,
+        );
     }
     resolved
         .iter()
         .filter_map(|edge| {
-            let target = (edge.dst_blob == input.blob).then_some(input).or_else(|| targets.input(&edge.dst_blob))?;
+            let target = (edge.dst_blob == input.blob)
+                .then_some(input)
+                .or_else(|| targets.input(&edge.dst_blob))?;
             let names = targets.type_names.get(&input.blob);
             let (owner, owner_name) = type_owner(plane, input, types, names, edge.src)?;
             trail.push(edge);
@@ -2635,16 +2709,20 @@ pub fn scip_conformances(
             };
             // A SymbolInformation rides the document that MENTIONS the symbol,
             // so the row is filed only against the file that declares it.
-            let Some((def_doc_ix, range)) = crate::read::scip::definition_of(index, doc_ix, info.symbol)
+            let Some((def_doc_ix, range)) =
+                crate::read::scip::definition_of(index, doc_ix, info.symbol)
             else {
                 continue;
             };
             if def_doc_ix != doc_ix {
                 continue;
             }
-            let Some(owner_span) =
-                crate::read::scip::byte_range_at(content, &lines, range, document.position_encoding)
-            else {
+            let Some(owner_span) = crate::read::scip::byte_range_at(
+                content,
+                &lines,
+                range,
+                document.position_encoding,
+            ) else {
                 continue;
             };
             for related in info
@@ -2797,7 +2875,8 @@ fn conformance_tsi_rows(
                 _ => None,
             })
             .collect();
-        let (rebased, after) = crate::read::wire::tsi_rows_rebased(&facts, &input.blob.to_string(), next);
+        let (rebased, after) =
+            crate::read::wire::tsi_rows_rebased(&facts, &input.blob.to_string(), next);
         out.extend(rebased);
         next = after;
     }
@@ -3128,7 +3207,11 @@ mod tests {
             "unparseable falls back"
         );
         assert_eq!(thread_cap_from(None, 12), 11, "hold one core back");
-        assert_eq!(thread_cap_from(None, 64), 63, "no clamp below the core count");
+        assert_eq!(
+            thread_cap_from(None, 64),
+            63,
+            "no clamp below the core count"
+        );
         assert_eq!(thread_cap_from(None, 2), 1);
         assert_eq!(
             thread_cap_from(None, 1),

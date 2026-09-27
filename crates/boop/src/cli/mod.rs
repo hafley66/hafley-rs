@@ -588,7 +588,7 @@ pub(crate) mod testkit {
 mod tests {
     use super::*;
     use crate::cli::testkit::temp_mail_dir;
-    use boop::bus::{Route, read_routes};
+    use boop::bus::{read_routes, Route};
 
     /// RECEIPT (job 1). A route written with --goal round-trips through the
     /// registry.

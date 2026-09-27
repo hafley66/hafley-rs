@@ -43,7 +43,13 @@ fn statements_group_under_the_enclosing_node_kind() {
 #[test]
 fn an_event_field_splits_the_group_by_statement_text() {
     let recorder = run(&[("map", 3)]);
-    let sums = recorder.event_sums(SQLITE_TARGET, tracing::Level::DEBUG, "node", "kind", Some("sql"));
+    let sums = recorder.event_sums(
+        SQLITE_TARGET,
+        tracing::Level::DEBUG,
+        "node",
+        "kind",
+        Some("sql"),
+    );
     let key = ("map".to_string(), "INSERT INTO t VALUES(?1)".to_string());
     assert_eq!(sums[&key].events, 3);
 }

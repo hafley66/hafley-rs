@@ -12,7 +12,10 @@ struct Captured(Arc<Mutex<Vec<u8>>>);
 
 impl Write for Captured {
     fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        self.0.lock().expect("capture lock").extend_from_slice(bytes);
+        self.0
+            .lock()
+            .expect("capture lock")
+            .extend_from_slice(bytes);
         Ok(bytes.len())
     }
 
@@ -32,11 +35,18 @@ fn empty_sink_list_still_formats_events() {
         format: OutputFormat::Human,
         ansi: false,
     };
-    hafley_observe::init_with_sinks(config, BoxMakeWriter::new(move || writer.clone()), Vec::new())
-        .expect("init");
+    hafley_observe::init_with_sinks(
+        config,
+        BoxMakeWriter::new(move || writer.clone()),
+        Vec::new(),
+    )
+    .expect("init");
     tracing::info!(target: "empty_sinks", "probe-line");
     let text = String::from_utf8(captured.0.lock().expect("capture lock").clone()).expect("utf8");
-    let lines: Vec<&str> = text.lines().map(|line| line.split_once("Z ").map_or(line, |(_, rest)| rest)).collect();
+    let lines: Vec<&str> = text
+        .lines()
+        .map(|line| line.split_once("Z ").map_or(line, |(_, rest)| rest))
+        .collect();
     assert_eq!(lines, [" INFO empty_sinks: probe-line"]);
     hafley_observe::shutdown();
 }

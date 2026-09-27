@@ -14,8 +14,8 @@
 //! name-resolved type EDGES (field / impl / uses / ...) are bound by
 //! `Resolve<TypeF>`; phase 1 stays pure-content.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::cell::RefCell;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::OnceLock;
 
 use oxc_allocator::Allocator;
@@ -42,7 +42,7 @@ use crate::read::seams::{
     ParseError, Parser, Project, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::read::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::tsi::Arg;
 use crate::read::types::span_arg;
@@ -2702,7 +2702,11 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
             }
         }
         self.parameter_scopes.push(
-            func.params.items.iter().filter_map(|param| binding_name(&param.pattern)).collect(),
+            func.params
+                .items
+                .iter()
+                .filter_map(|param| binding_name(&param.pattern))
+                .collect(),
         );
         self.depth += 1;
         oxc_ast_visit::walk::walk_function(self, func, flags);
@@ -2714,7 +2718,12 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
         // Arrows have no own declaration name, but they raise the depth so their
         // nested named decls land as Free defs.
         self.parameter_scopes.push(
-            arrow.params.items.iter().filter_map(|param| binding_name(&param.pattern)).collect(),
+            arrow
+                .params
+                .items
+                .iter()
+                .filter_map(|param| binding_name(&param.pattern))
+                .collect(),
         );
         self.depth += 1;
         oxc_ast_visit::walk::walk_arrow_function_expression(self, arrow);
@@ -2730,7 +2739,11 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 path: callee_path(&call.callee, self.content),
             });
         }
-        collect_value_refs(&mut self.value_refs, &call.arguments, &self.parameter_scopes);
+        collect_value_refs(
+            &mut self.value_refs,
+            &call.arguments,
+            &self.parameter_scopes,
+        );
         oxc_ast_visit::walk::walk_call_expression(self, call);
     }
 
@@ -2744,7 +2757,11 @@ impl<'a> OxcVisit<'a> for CallWalker<'_> {
                 path: callee_path(&new_expr.callee, self.content),
             });
         }
-        collect_value_refs(&mut self.value_refs, &new_expr.arguments, &self.parameter_scopes);
+        collect_value_refs(
+            &mut self.value_refs,
+            &new_expr.arguments,
+            &self.parameter_scopes,
+        );
         oxc_ast_visit::walk::walk_new_expression(self, new_expr);
     }
 
@@ -2792,7 +2809,11 @@ fn collect_value_refs(
 ) {
     for argument in arguments {
         if let ts::Argument::Identifier(id) = argument {
-            if parameter_scopes.iter().rev().any(|params| params.iter().any(|param| param == id.name.as_str())) {
+            if parameter_scopes
+                .iter()
+                .rev()
+                .any(|params| params.iter().any(|param| param == id.name.as_str()))
+            {
                 continue;
             }
             out.push((id.span, id.name.to_string()));
@@ -4442,10 +4463,12 @@ pub fn set_resolve_path(path: Option<&str>) {
 }
 
 fn own_path(output: &RyiOutput, cx: &ProjectCx) -> Option<String> {
-    TS_RESOLVE_PATH.with(|slot| slot.borrow().clone()).or_else(|| {
-        let blob = own_blob(cx, output)?;
-        cx.indexes.paths.get()?.get(&blob).map(str::to_owned)
-    })
+    TS_RESOLVE_PATH
+        .with(|slot| slot.borrow().clone())
+        .or_else(|| {
+            let blob = own_blob(cx, output)?;
+            cx.indexes.paths.get()?.get(&blob).map(str::to_owned)
+        })
 }
 
 /// The sites ResolveExport judged AMBIGUOUS (two `export *` arms disagree).
@@ -4487,15 +4510,14 @@ pub fn call_drops(
                     .map(|(_, _, outcome)| outcome)
             });
             if let Some(outcome) = receiver {
-                let reason = match outcome {
-                    ts_receivers::TypeBinding::Decl(_) | ts_receivers::TypeBinding::Field(_, _) => {
-                        return None
-                    }
-                    ts_receivers::TypeBinding::Inferred | ts_receivers::TypeBinding::Shadowed => {
-                        UnresolvedReason::Inferred
-                    }
-                    ts_receivers::TypeBinding::Ambiguous => UnresolvedReason::Ambiguous,
-                };
+                let reason =
+                    match outcome {
+                        ts_receivers::TypeBinding::Decl(_)
+                        | ts_receivers::TypeBinding::Field(_, _) => return None,
+                        ts_receivers::TypeBinding::Inferred
+                        | ts_receivers::TypeBinding::Shadowed => UnresolvedReason::Inferred,
+                        ts_receivers::TypeBinding::Ambiguous => UnresolvedReason::Ambiguous,
+                    };
                 return Some(crate::read::project::ResolveDrop {
                     span: site.span,
                     reason,
@@ -4680,20 +4702,26 @@ impl TsSource {
             let (modules, path) = modules?;
             let own_exported = modules.exports_local(path, callee);
             let own_arity = modules.free_arity(path, span);
-            if sites.iter().filter(|site| {
-                Some(&site.blob) != own
-                    && site.family == FamilyTag::Call
-                    && kinds.is_some_and(|kinds| kinds.get(&site.blob, site.span) == Some(CallKind::Free))
-            }).any(|site| {
-                let other_path = paths.and_then(|paths| paths.get(&site.blob));
-                let mixed_visibility = other_path
-                    .is_none_or(|path| modules.exports_local(path, callee) != own_exported);
-                let different_arity = other_path
-                    .and_then(|path| modules.free_arity(path, site.span))
-                    .zip(own_arity)
-                    .is_some_and(|(other, own)| other != own);
-                mixed_visibility && !different_arity
-            }) {
+            if sites
+                .iter()
+                .filter(|site| {
+                    Some(&site.blob) != own
+                        && site.family == FamilyTag::Call
+                        && kinds.is_some_and(|kinds| {
+                            kinds.get(&site.blob, site.span) == Some(CallKind::Free)
+                        })
+                })
+                .any(|site| {
+                    let other_path = paths.and_then(|paths| paths.get(&site.blob));
+                    let mixed_visibility = other_path
+                        .is_none_or(|path| modules.exports_local(path, callee) != own_exported);
+                    let different_arity = other_path
+                        .and_then(|path| modules.free_arity(path, site.span))
+                        .zip(own_arity)
+                        .is_some_and(|(other, own)| other != own);
+                    mixed_visibility && !different_arity
+                })
+            {
                 return None;
             }
         }

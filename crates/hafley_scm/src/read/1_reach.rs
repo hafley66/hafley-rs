@@ -3,7 +3,9 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
-use crate::read::project::{fill_indexes, import_facts, read_inputs_with_modules, Planes, ProjectError};
+use crate::read::project::{
+    fill_indexes, import_facts, read_inputs_with_modules, Planes, ProjectError,
+};
 use crate::read::seams::{FileSet, IndexBag, ManifestMap, ProjectCx, ProjectDigest};
 use crate::read::shape::ContentId;
 use crate::read::source::RyiOutput;
@@ -39,7 +41,8 @@ pub fn reach_files(
     };
     fill_indexes(&cx, &inputs, &pairs, &corpus);
 
-    let canonical = |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let canonical =
+        |path: &Path| std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let by_canonical: HashMap<PathBuf, usize> = universe
         .iter()
         .enumerate()
@@ -48,10 +51,14 @@ pub fn reach_files(
     let index_of = |spelled: &str| by_canonical.get(&canonical(Path::new(spelled))).copied();
     let mut next: HashMap<usize, Vec<usize>> = HashMap::new();
     for input in &inputs {
-        let Some(from) = index_of(&input.path) else { continue };
+        let Some(from) = index_of(&input.path) else {
+            continue;
+        };
         crate::read::types::set_own(Some(input.blob.clone()));
         for fact in import_facts(input, &cx) {
-            let FlatFact::ResolvedImportRow { target_path, .. } = fact else { continue };
+            let FlatFact::ResolvedImportRow { target_path, .. } = fact else {
+                continue;
+            };
             let target = Path::new(&target_path);
             if let Some(to) = index_of(&target_path) {
                 next.entry(from).or_default().push(to);
@@ -75,7 +82,10 @@ pub fn reach_files(
         let Some(index) = by_canonical.get(&canonical(path)).copied() else {
             return Err(ProjectError::Read(
                 path.clone(),
-                std::io::Error::new(std::io::ErrorKind::NotFound, "entry is not in the input set"),
+                std::io::Error::new(
+                    std::io::ErrorKind::NotFound,
+                    "entry is not in the input set",
+                ),
             ));
         };
         if !reached[index] {

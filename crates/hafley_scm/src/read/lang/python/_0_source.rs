@@ -18,21 +18,20 @@
 use std::collections::BTreeSet;
 
 use crate::read::family::{
-    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
-    DfParam, DocFact, DocTag, ProjectEdge, PyBind, PyCallArg, PyDecor, PyDefault, PyParam,
-    PyRetCall, PyReturn, PySubCall, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
-    TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
+    CallEdgeKind, CallF, CallKind, CallSite, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind, DfParam,
+    DocFact, DocTag, ProjectEdge, PyBind, PyCallArg, PyDecor, PyDefault, PyParam, PyRetCall,
+    PyReturn, PySubCall, ResolutionOrigin, SigSlot, Specifier, SpecifierKind, TypeEdgeCandidate,
+    TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
-use crate::read::lang::fallback::cst_bundle;
 use crate::read::lang::call_kinds::MODULE_CALLER;
+use crate::read::lang::fallback::cst_bundle;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
-    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex,
-    Resolve,
+    containing_def_site, corpus_defs, covering_def, def_named, own_blob, DefIndex, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::read::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{DfLoop, LangKind, ScipIndex};
 
@@ -2716,11 +2715,7 @@ impl PythonSource {
 /// The `__init__` call def of a class named `callee`, same file first, then a
 /// unique corpus blob. `None` when the name is not a class or the class has no
 /// `__init__`.
-fn init_of_class(
-    output: &RyiOutput,
-    index: &DefIndex,
-    callee: &str,
-) -> Option<(ContentId, Span)> {
+fn init_of_class(output: &RyiOutput, index: &DefIndex, callee: &str) -> Option<(ContentId, Span)> {
     // Same file: a TypeF class def named `callee`, and a Method call def named
     // `__init__` whose span sits inside the class span, else the first base
     // class (left to right, depth first) that carries one.

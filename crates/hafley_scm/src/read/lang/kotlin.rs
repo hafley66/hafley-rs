@@ -36,16 +36,16 @@ use std::sync::OnceLock;
 
 use super::fallback::cst_bundle;
 use crate::read::family::{
-    CallEdgeKind, CallF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind,
-    DfParam, DocFact, DocTag, ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier,
-    SpecifierKind, TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
+    CallEdgeKind, CallF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind, DfParam, DocFact, DocTag,
+    ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
+    TypeEdgeCandidate, TypeEdgeKind, TypeEntityKind, TypeF, TypeSig,
 };
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::seams::{
     corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NodeRef, Span, Strings, ZERO_CONTENT_ID};
-use crate::read::source::{RyiOutput, FamilyMask, ProjectCx, Source};
+use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{PathIndex, UnresolvedReason};
 
@@ -661,10 +661,12 @@ fn kt_import_specifiers_from_arena(
         let mut wildcard = false;
         for capture in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
             match query.names[capture.name as usize].as_ref() {
-                "import.span" => header = Some(Span {
-                    start: capture.bytes.start,
-                    len: capture.bytes.end - capture.bytes.start,
-                }),
+                "import.span" => {
+                    header = Some(Span {
+                        start: capture.bytes.start,
+                        len: capture.bytes.end - capture.bytes.start,
+                    })
+                }
                 "import.path" => path = Some(capture.bytes.start..capture.bytes.end),
                 "import.alias" => alias = Some(capture.bytes.start..capture.bytes.end),
                 "import.wildcard" => wildcard = true,
@@ -687,9 +689,16 @@ fn kt_import_specifiers_from_arena(
             })
             .unwrap_or_else(|| last_segment(path));
         rows.push(Specifier {
-            span: Span { start, len: header.end() - start },
+            span: Span {
+                start,
+                len: header.end() - start,
+            },
             name: strings.intern(name),
-            kind: if wildcard { SpecifierKind::Namespace } else { SpecifierKind::Named },
+            kind: if wildcard {
+                SpecifierKind::Namespace
+            } else {
+                SpecifierKind::Named
+            },
             module: Some(strings.intern(path)),
             imported: None,
         });
@@ -706,8 +715,7 @@ pub fn kt_header_facts(
     let root = tree.root_node();
     let language = root.language();
     let query = KOTLIN_FAMILY_QUERY.get_or_init(|| {
-        hafley_scm::build(&language, KOTLIN_SCM)
-            .expect("the bundled Kotlin family query compiles")
+        hafley_scm::build(&language, KOTLIN_SCM).expect("the bundled Kotlin family query compiles")
     });
     let mut arena = hafley_scm::MatchArena::default();
     hafley_scm::run(query, "kotlin-headers", src, tree, u32::MAX, &mut arena)
@@ -729,16 +737,19 @@ pub fn kt_header_facts_from_arena(
             let name = std::str::from_utf8(&src[range.clone()])
                 .expect("Kotlin package identifier is utf8")
                 .to_string();
-            (Span { start: capture.bytes.start, len: capture.bytes.end - capture.bytes.start }, name)
+            (
+                Span {
+                    start: capture.bytes.start,
+                    len: capture.bytes.end - capture.bytes.start,
+                },
+                name,
+            )
         })
     })
 }
 
 /// The first named child of `node` with `kind`.
-pub fn kt_child_kind<'a>(
-    node: tree_sitter::Node<'a>,
-    kind: &str,
-) -> Option<tree_sitter::Node<'a>> {
+pub fn kt_child_kind<'a>(node: tree_sitter::Node<'a>, kind: &str) -> Option<tree_sitter::Node<'a>> {
     node.named_children(&mut node.walk())
         .find(|child| child.kind() == kind)
 }
@@ -1461,7 +1472,13 @@ impl Source for KotlinSource {
                             &mut strings,
                             &mut bundle,
                         );
-                        kt_import_specifiers_from_arena(src_bytes, query, arena, &mut strings, &mut bundle.aux.specifiers);
+                        kt_import_specifiers_from_arena(
+                            src_bytes,
+                            query,
+                            arena,
+                            &mut strings,
+                            &mut bundle.aux.specifiers,
+                        );
                         super::kotlin_receivers::collect_receivers(
                             root,
                             src_bytes,
@@ -1570,10 +1587,8 @@ impl Resolve<CallF> for KotlinSource {
             {
                 Some(ReceiverOutcome::Named(t)) => {
                     let ty = output.strings.lookup(*t);
-                    KotlinSource::receiver_target(
-                        def_index, paths, modules, own_path, ty, callee,
-                    )
-                    .map(|(blob, span)| (blob, span, ResolutionOrigin::Receiver))
+                    KotlinSource::receiver_target(def_index, paths, modules, own_path, ty, callee)
+                        .map(|(blob, span)| (blob, span, ResolutionOrigin::Receiver))
                 }
                 Some(ReceiverOutcome::Inferred) => plan
                     .as_ref()
@@ -1607,9 +1622,7 @@ impl Resolve<CallF> for KotlinSource {
                     match dst {
                         Some(x) => Some(x),
                         None => KotlinSource::call_name_match(output, def_index, callee)
-                            .map(|(blob, span)| {
-                                (blob, span, ResolutionOrigin::CorpusUnique)
-                            }),
+                            .map(|(blob, span)| (blob, span, ResolutionOrigin::CorpusUnique)),
                     }
                 }
             };
@@ -1617,8 +1630,14 @@ impl Resolve<CallF> for KotlinSource {
                 continue;
             };
             edges.push(
-                ProjectEdge::new(caller, dst_blob, dst_span, CallEdgeKind::NameResolve, origin)
-                    .with_call_site(site.span),
+                ProjectEdge::new(
+                    caller,
+                    dst_blob,
+                    dst_span,
+                    CallEdgeKind::NameResolve,
+                    origin,
+                )
+                .with_call_site(site.span),
             );
         }
         edges
@@ -1654,7 +1673,6 @@ impl KotlinSource {
         }
         None
     }
-
 }
 
 impl KotlinSource {
@@ -1682,8 +1700,9 @@ impl KotlinSource {
             .iter()
             .map(|site| (site.blob.clone(), site.span))
             .collect();
-        if let Some(file) =
-            modules.zip(own_path).and_then(|(m, path)| module_type_file(m, path, ty))
+        if let Some(file) = modules
+            .zip(own_path)
+            .and_then(|(m, path)| module_type_file(m, path, ty))
         {
             let narrowed: Vec<(ContentId, Span)> = hits
                 .iter()
@@ -1847,14 +1866,12 @@ impl Resolve<TypeF> for KotlinSource {
                 }
                 _ => None,
             };
-            let (dst_blob, dst_span, origin) = resolve_type_dst(
-                types,
-                &output.strings,
-                index,
-                name,
-                module_leg,
-            )
-            .unwrap_or((ZERO_CONTENT_ID, Span::empty(), ResolutionOrigin::Unresolved));
+            let (dst_blob, dst_span, origin) =
+                resolve_type_dst(types, &output.strings, index, name, module_leg).unwrap_or((
+                    ZERO_CONTENT_ID,
+                    Span::empty(),
+                    ResolutionOrigin::Unresolved,
+                ));
             edges.push(ProjectEdge::new(
                 NodeRef(src_ix as u32),
                 dst_blob,
@@ -1931,7 +1948,6 @@ pub fn call_drops(
 /// it owns members), the kotlin twin of rust's `is_impl_known`.
 fn type_is_corpus(index: &DefIndex, ty: &str) -> bool {
     corpus_defs(index, ty).iter().any(|site| {
-        super::kotlin_receivers::kt_bind_plan_of(&site.blob)
-            .is_some_and(|plan| plan.owns_type(ty))
+        super::kotlin_receivers::kt_bind_plan_of(&site.blob).is_some_and(|plan| plan.owns_type(ty))
     })
 }

@@ -11,11 +11,11 @@ use boop_mux::{Multiplexer, PaneHit, Tmux};
 use boop_store::{SessionTouched, Store};
 use serde::Deserialize;
 
-pub use _1_ladder::{evidence_dirs, resolve, resolve_from_evidence, resolve_in_doc, AgentEvidence};
 pub use _0_roots::click_roots;
+pub use _1_ladder::{evidence_dirs, resolve, resolve_from_evidence, resolve_in_doc, AgentEvidence};
 pub use boop_mux::{
-    clear_index_cache, cmd_click_lookup, doc_roots, git_out, home_dir, repo_root_of, worktrees_of, FsLookup,
-    ResolveResult, ResolvedRef, Root, RootVia,
+    clear_index_cache, cmd_click_lookup, doc_roots, git_out, home_dir, repo_root_of, worktrees_of,
+    FsLookup, ResolveResult, ResolvedRef, Root, RootVia,
 };
 
 const TOUCHED_CAP: usize = 2000;
@@ -47,7 +47,9 @@ fn click_sessions(pane: &PaneHit, given: &[String], store: Option<&Store>) -> Ve
         return given.to_vec();
     }
     let cwd = pane.pane_current_path.to_string_lossy();
-    store.and_then(|store| store.sessions_in_cwd(&cwd, CWD_SESSIONS).ok()).unwrap_or_default()
+    store
+        .and_then(|store| store.sessions_in_cwd(&cwd, CWD_SESSIONS).ok())
+        .unwrap_or_default()
 }
 
 /// Resolve `token` clicked at `cell`. A cell tmux cannot place (no server, a
@@ -70,7 +72,9 @@ pub fn resolve_click(
             pane_col: 0,
             pane_row: 0,
         });
-    let store = Store::default_path().ok().and_then(|path| Store::open_readonly(path).ok());
+    let store = Store::default_path()
+        .ok()
+        .and_then(|path| Store::open_readonly(path).ok());
     let sessions = click_sessions(&pane, sessions, store.as_ref());
     let touched = store
         .as_ref()
@@ -91,7 +95,12 @@ pub fn resolve_click(
     };
     let (kind, path, source, via) = match &result {
         ResolveResult::Hit { reference } => ("hit", reference.path.clone(), reference.source, ""),
-        ResolveResult::Choices { paths, via, .. } => ("choices", paths.first().cloned().unwrap_or_default(), "", *via),
+        ResolveResult::Choices { paths, via, .. } => (
+            "choices",
+            paths.first().cloned().unwrap_or_default(),
+            "",
+            *via,
+        ),
         ResolveResult::Absent { repo, rev, .. } => ("absent", format!("{repo}@{rev}"), "", ""),
         ResolveResult::Miss => ("miss", String::new(), "", ""),
     };
@@ -110,7 +119,13 @@ pub fn resolve_click(
         ms = started.elapsed().as_millis() as u64,
         "resolve_ref"
     );
-    ClickResolution { result, pane, sessions, roots, evidence_paths: touched.paths.len() }
+    ClickResolution {
+        result,
+        pane,
+        sessions,
+        roots,
+        evidence_paths: touched.paths.len(),
+    }
 }
 
 #[cfg(test)]
@@ -133,18 +148,38 @@ mod tests {
     }
 
     fn pane(dir: &Path) -> PaneHit {
-        PaneHit { pane: String::new(), pane_current_path: dir.to_path_buf(), pane_col: 0, pane_row: 0 }
+        PaneHit {
+            pane: String::new(),
+            pane_current_path: dir.to_path_buf(),
+            pane_col: 0,
+            pane_row: 0,
+        }
     }
 
     fn rel(base: &Path, result: ResolveResult) -> ResolveResult {
-        let strip = |path: String| path.strip_prefix(&format!("{}/", base.display())).unwrap_or(&path).to_owned();
+        let strip = |path: String| {
+            path.strip_prefix(&format!("{}/", base.display()))
+                .unwrap_or(&path)
+                .to_owned()
+        };
         match result {
-            ResolveResult::Hit { reference } => {
-                ResolveResult::Hit { reference: ResolvedRef { path: strip(reference.path), ..reference } }
-            }
-            ResolveResult::Choices { paths, line, via, worktrees } => {
-                ResolveResult::Choices { paths: paths.into_iter().map(strip).collect(), line, via, worktrees }
-            }
+            ResolveResult::Hit { reference } => ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: strip(reference.path),
+                    ..reference
+                },
+            },
+            ResolveResult::Choices {
+                paths,
+                line,
+                via,
+                worktrees,
+            } => ResolveResult::Choices {
+                paths: paths.into_iter().map(strip).collect(),
+                line,
+                via,
+                worktrees,
+            },
             other => other,
         }
     }
@@ -165,16 +200,31 @@ mod tests {
         let hit = resolve(lab, &roots, &home, &AgentEvidence::default());
         assert_eq!(
             rel(&base, hit),
-            ResolveResult::Hit { reference: ResolvedRef { path: format!("sqlite_ivm/{lab}"), line: None, source: "cwd" } }
+            ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: format!("sqlite_ivm/{lab}"),
+                    line: None,
+                    source: "cwd"
+                }
+            }
         );
 
         // From another pane's repo, the session's recorded cwd is the root that reaches it.
-        let touched = SessionTouched { paths: Vec::new(), cwds: vec![base.join("sqlite_ivm").display().to_string()] };
+        let touched = SessionTouched {
+            paths: Vec::new(),
+            cwds: vec![base.join("sqlite_ivm").display().to_string()],
+        };
         let roots = click_roots(&pane(&base.join("instant")), &touched);
         let hit = resolve(lab, &roots, &home, &AgentEvidence::default());
         assert_eq!(
             rel(&base, hit),
-            ResolveResult::Hit { reference: ResolvedRef { path: format!("sqlite_ivm/{lab}"), line: None, source: "session" } }
+            ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: format!("sqlite_ivm/{lab}"),
+                    line: None,
+                    source: "session"
+                }
+            }
         );
     }
 
@@ -189,18 +239,32 @@ mod tests {
         let projects = base.join("projects");
         std::fs::create_dir_all(projects.join("hafley-rs/crates")).unwrap();
         std::fs::create_dir_all(projects.join("sqlite_ivm").join(lab)).unwrap();
-        std::fs::write(projects.join("sqlite_ivm").join(lab).join("README.md"), "lab").unwrap();
+        std::fs::write(
+            projects.join("sqlite_ivm").join(lab).join("README.md"),
+            "lab",
+        )
+        .unwrap();
         std::fs::create_dir_all(projects.join("notes")).unwrap();
         git(&projects.join("hafley-rs"), &["init", "-q", "-b", "main"]);
         git(&projects.join("sqlite_ivm"), &["init", "-q", "-b", "main"]);
         let home = base.to_string_lossy().into_owned();
         clear_index_cache();
 
-        let roots = click_roots(&pane(&projects.join("hafley-rs/crates")), &SessionTouched::default());
+        let roots = click_roots(
+            &pane(&projects.join("hafley-rs/crates")),
+            &SessionTouched::default(),
+        );
         assert_eq!(
-            rel(&base, resolve(lab, &roots, &home, &AgentEvidence::default())),
+            rel(
+                &base,
+                resolve(lab, &roots, &home, &AgentEvidence::default())
+            ),
             ResolveResult::Hit {
-                reference: ResolvedRef { path: format!("projects/sqlite_ivm/{lab}"), line: None, source: "sibling" }
+                reference: ResolvedRef {
+                    path: format!("projects/sqlite_ivm/{lab}"),
+                    line: None,
+                    source: "sibling"
+                }
             }
         );
     }
@@ -222,11 +286,20 @@ mod tests {
         let home = base.to_string_lossy().into_owned();
         clear_index_cache();
 
-        let roots = click_roots(&pane(&projects.join("hafley-rs")), &SessionTouched::default());
+        let roots = click_roots(
+            &pane(&projects.join("hafley-rs")),
+            &SessionTouched::default(),
+        );
         assert_eq!(
-            rel(&base, resolve(lab, &roots, &home, &AgentEvidence::default())),
+            rel(
+                &base,
+                resolve(lab, &roots, &home, &AgentEvidence::default())
+            ),
             ResolveResult::Choices {
-                paths: vec![format!("projects/sqlite_ivm/{lab}"), format!("projects/sqlite_ivm-fork/{lab}")],
+                paths: vec![
+                    format!("projects/sqlite_ivm/{lab}"),
+                    format!("projects/sqlite_ivm-fork/{lab}")
+                ],
                 line: None,
                 via: "sibling",
                 worktrees: vec!["sqlite_ivm".into(), "sqlite_ivm-fork".into()],
@@ -255,7 +328,17 @@ mod tests {
         git(&repo, &["init", "-q", "-b", "main"]);
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-qm", "x"]);
-        git(&repo, &["worktree", "add", "-q", "-b", "feat", base.join("hafley-feat").to_str().unwrap()]);
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "feat",
+                base.join("hafley-feat").to_str().unwrap(),
+            ],
+        );
         std::fs::write(base.join("hafley-feat/only-feat.rs"), "f").unwrap();
         std::fs::create_dir_all(base.join("elsewhere/.git")).unwrap();
         std::fs::write(base.join("elsewhere/main.rs"), "m").unwrap();
@@ -264,27 +347,78 @@ mod tests {
         let roots = click_roots(&pane(&base.join("elsewhere")), &SessionTouched::default());
 
         let hit = |path: &str, line: Option<u32>, source: &'static str| ResolveResult::Hit {
-            reference: ResolvedRef { path: path.into(), line, source },
+            reference: ResolvedRef {
+                path: path.into(),
+                line,
+                source,
+            },
         };
         let cases = [
-            ("sibling.md", hit("hafley/docs/plans/sibling.md", None, "doc")),
-            ("crates/scm/src/lang/rust/2_call.rs:790-801", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(790), "repo")),
-            ("2_call.rs:183-198", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(183), "search")),
-            ("2_call.rs:561,583", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(561), "search")),
-            ("rust_modules.rs:1105-1136", hit("hafley/crates/scm/src/rust_modules.rs", Some(1105), "search")),
-            ("scm/src/lang/rust/2_call.rs:12", hit("hafley/crates/scm/src/lang/rust/2_call.rs", Some(12), "search")),
+            (
+                "sibling.md",
+                hit("hafley/docs/plans/sibling.md", None, "doc"),
+            ),
+            (
+                "crates/scm/src/lang/rust/2_call.rs:790-801",
+                hit(
+                    "hafley/crates/scm/src/lang/rust/2_call.rs",
+                    Some(790),
+                    "repo",
+                ),
+            ),
+            (
+                "2_call.rs:183-198",
+                hit(
+                    "hafley/crates/scm/src/lang/rust/2_call.rs",
+                    Some(183),
+                    "search",
+                ),
+            ),
+            (
+                "2_call.rs:561,583",
+                hit(
+                    "hafley/crates/scm/src/lang/rust/2_call.rs",
+                    Some(561),
+                    "search",
+                ),
+            ),
+            (
+                "rust_modules.rs:1105-1136",
+                hit(
+                    "hafley/crates/scm/src/rust_modules.rs",
+                    Some(1105),
+                    "search",
+                ),
+            ),
+            (
+                "scm/src/lang/rust/2_call.rs:12",
+                hit(
+                    "hafley/crates/scm/src/lang/rust/2_call.rs",
+                    Some(12),
+                    "search",
+                ),
+            ),
             ("crates/scm", hit("hafley/crates/scm", None, "repo")),
-            ("only-feat.rs:3", hit("hafley-feat/only-feat.rs", Some(3), "worktree")),
+            (
+                "only-feat.rs:3",
+                hit("hafley-feat/only-feat.rs", Some(3), "worktree"),
+            ),
             ("main.rs", hit("elsewhere/main.rs", None, "cwd")),
         ];
         for (token, want) in cases {
             clear_index_cache();
-            let got = rel(&base, resolve_in_doc(token, &doc, &roots, &home, &AgentEvidence::default()));
+            let got = rel(
+                &base,
+                resolve_in_doc(token, &doc, &roots, &home, &AgentEvidence::default()),
+            );
             assert_eq!(got, want, "{token}");
         }
         // Without the document the pane's repo is the only anchor.
         clear_index_cache();
-        assert_eq!(resolve("sibling.md", &roots, &home, &AgentEvidence::default()), ResolveResult::Miss);
+        assert_eq!(
+            resolve("sibling.md", &roots, &home, &AgentEvidence::default()),
+            ResolveResult::Miss
+        );
     }
 
     /// RECEIPT. A path the pane's checkout lacks, present under several other
@@ -300,7 +434,17 @@ mod tests {
         git(&repo, &["add", "-A"]);
         git(&repo, &["commit", "-qm", "r"]);
         for branch in ["alpha", "beta", "gamma"] {
-            git(&repo, &["worktree", "add", "-q", "-b", branch, base.join(format!("wt-{branch}")).to_str().unwrap()]);
+            git(
+                &repo,
+                &[
+                    "worktree",
+                    "add",
+                    "-q",
+                    "-b",
+                    branch,
+                    base.join(format!("wt-{branch}")).to_str().unwrap(),
+                ],
+            );
         }
         std::fs::create_dir_all(base.join("wt-alpha/plans")).unwrap();
         std::fs::write(base.join("wt-alpha/plans/x.md"), "a").unwrap();
@@ -311,7 +455,10 @@ mod tests {
         let roots = click_roots(&pane(&repo), &SessionTouched::default());
 
         assert_eq!(
-            rel(&base, resolve("plans/x.md:4", &roots, &home, &AgentEvidence::default())),
+            rel(
+                &base,
+                resolve("plans/x.md:4", &roots, &home, &AgentEvidence::default())
+            ),
             ResolveResult::Choices {
                 paths: vec!["wt-alpha/plans/x.md".into(), "wt-gamma/plans/x.md".into()],
                 line: Some(4),
@@ -320,16 +467,41 @@ mod tests {
             }
         );
         assert_eq!(
-            rel(&base, resolve("only-beta.md", &roots, &home, &AgentEvidence::default())),
-            ResolveResult::Hit { reference: ResolvedRef { path: "wt-beta/only-beta.md".into(), line: None, source: "worktree" } }
+            rel(
+                &base,
+                resolve("only-beta.md", &roots, &home, &AgentEvidence::default())
+            ),
+            ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: "wt-beta/only-beta.md".into(),
+                    line: None,
+                    source: "worktree"
+                }
+            }
         );
         // The pane's own checkout wins over every other worktree.
         assert_eq!(
-            rel(&base, resolve("README.md", &roots, &home, &AgentEvidence::default())),
-            ResolveResult::Hit { reference: ResolvedRef { path: "repo/README.md".into(), line: None, source: "cwd" } }
+            rel(
+                &base,
+                resolve("README.md", &roots, &home, &AgentEvidence::default())
+            ),
+            ResolveResult::Hit {
+                reference: ResolvedRef {
+                    path: "repo/README.md".into(),
+                    line: None,
+                    source: "cwd"
+                }
+            }
         );
         assert_eq!(
-            serde_json::to_string(&resolve("plans/x.md", &roots, &home, &AgentEvidence::default())).unwrap().replace(&home, ""),
+            serde_json::to_string(&resolve(
+                "plans/x.md",
+                &roots,
+                &home,
+                &AgentEvidence::default()
+            ))
+            .unwrap()
+            .replace(&home, ""),
             r#"{"kind":"choices","paths":["/wt-alpha/plans/x.md","/wt-gamma/plans/x.md"],"via":"worktree","worktrees":["alpha","gamma"]}"#
         );
     }
@@ -349,26 +521,49 @@ mod tests {
         git(&trunk, &["add", "-A"]);
         git(&trunk, &["commit", "-qm", "site"]);
         let lane = trunk.join(".boop-worktrees/chore/x");
-        git(&trunk, &["worktree", "add", "-q", "-b", "chore/x", lane.to_str().unwrap()]);
+        git(
+            &trunk,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "-b",
+                "chore/x",
+                lane.to_str().unwrap(),
+            ],
+        );
         std::fs::create_dir_all(lane.join("plans/p")).unwrap();
         std::fs::write(lane.join("plans/p/index.html"), "l").unwrap();
         let home = base.to_string_lossy().into_owned();
         clear_index_cache();
 
-        let touched = SessionTouched { paths: vec![lane.join("plans/p/index.html").display().to_string()], cwds: Vec::new() };
+        let touched = SessionTouched {
+            paths: vec![lane.join("plans/p/index.html").display().to_string()],
+            cwds: Vec::new(),
+        };
         let roots = click_roots(&pane(&trunk), &touched);
         let evidence = AgentEvidence::from_touched(&touched, &home);
         assert_eq!(
             rel(&base, resolve("index.html:7", &roots, &home, &evidence)),
             ResolveResult::Hit {
-                reference: ResolvedRef { path: "trunk/.boop-worktrees/chore/x/plans/p/index.html".into(), line: Some(7), source: "touched" }
+                reference: ResolvedRef {
+                    path: "trunk/.boop-worktrees/chore/x/plans/p/index.html".into(),
+                    line: Some(7),
+                    source: "touched"
+                }
             }
         );
         // Without the evidence the filesystem answers with the choice.
         assert_eq!(
-            rel(&base, resolve("index.html", &roots, &home, &AgentEvidence::default())),
+            rel(
+                &base,
+                resolve("index.html", &roots, &home, &AgentEvidence::default())
+            ),
             ResolveResult::Choices {
-                paths: vec!["trunk/site/index.html".into(), "trunk/.boop-worktrees/chore/x/plans/p/index.html".into()],
+                paths: vec![
+                    "trunk/site/index.html".into(),
+                    "trunk/.boop-worktrees/chore/x/plans/p/index.html".into()
+                ],
                 line: None,
                 via: "exact",
                 worktrees: vec!["trunk".into(), "worktree chore/x".into()],

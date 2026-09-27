@@ -18,14 +18,23 @@ pub fn collect_receivers(
     strings: &mut Strings,
     sink: &mut FamilyBundle<CallF>,
 ) {
-    sink.aux.receivers.extend(receiver_rows(parsed, line_starts).into_iter().map(|row| {
-        ReceiverBinding {
-            call_site: Span { start: row.call_site.start, len: row.call_site.len },
-            outcome: match row.outcome {
-                RustReceiverOutcome::Named(name) => ReceiverOutcome::Named(strings.intern(&name)),
-                RustReceiverOutcome::Inferred => ReceiverOutcome::Inferred,
-                RustReceiverOutcome::Shadowed => ReceiverOutcome::Shadowed,
-            },
-        }
-    }));
+    sink.aux
+        .receivers
+        .extend(
+            receiver_rows(parsed, line_starts)
+                .into_iter()
+                .map(|row| ReceiverBinding {
+                    call_site: Span {
+                        start: row.call_site.start,
+                        len: row.call_site.len,
+                    },
+                    outcome: match row.outcome {
+                        RustReceiverOutcome::Named(name) => {
+                            ReceiverOutcome::Named(strings.intern(&name))
+                        }
+                        RustReceiverOutcome::Inferred => ReceiverOutcome::Inferred,
+                        RustReceiverOutcome::Shadowed => ReceiverOutcome::Shadowed,
+                    },
+                }),
+        );
 }

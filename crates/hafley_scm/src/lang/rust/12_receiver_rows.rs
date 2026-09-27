@@ -17,17 +17,27 @@ use super::module_resolution_rows::principal_ty;
 use syn::spanned::Spanned as _;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ReceiverOutcome { Named(String), Inferred, Shadowed }
+pub enum ReceiverOutcome {
+    Named(String),
+    Inferred,
+    Shadowed,
+}
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ReceiverBinding { pub call_site: Span, pub outcome: ReceiverOutcome }
+pub struct ReceiverBinding {
+    pub call_site: Span,
+    pub outcome: ReceiverOutcome,
+}
 
 fn syn_span(line_starts: &[u32], span: proc_macro2::Span) -> Span {
     let start = span.start();
     let end = span.end();
     let start = line_col_to_byte(line_starts, start.line as u32, start.column as u32);
     let end = line_col_to_byte(line_starts, end.line as u32, end.column as u32);
-    Span { start, len: end.saturating_sub(start) }
+    Span {
+        start,
+        len: end.saturating_sub(start),
+    }
 }
 
 /// A fn signature's declared output type, `principal_ty` applied.
@@ -43,10 +53,13 @@ fn receiver_ty(ty: &syn::Type) -> Option<String> {
     match ty {
         syn::Type::Reference(r) => receiver_ty(&r.elem),
         syn::Type::Path(path) if path.path.segments.last()?.ident == "Box" => {
-            let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments else {
+            let syn::PathArguments::AngleBracketed(args) = &path.path.segments.last()?.arguments
+            else {
                 return principal_ty(ty);
             };
-            let Some(syn::GenericArgument::Type(inner)) = args.args.first() else { return principal_ty(ty) };
+            let Some(syn::GenericArgument::Type(inner)) = args.args.first() else {
+                return principal_ty(ty);
+            };
             receiver_ty(inner)
         }
         _ => principal_ty(ty),
@@ -213,7 +226,6 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
         }
         syn::visit::visit_expr_call(self, call);
     }
-
 }
 
 impl<'a> ReceiverWalk<'a> {

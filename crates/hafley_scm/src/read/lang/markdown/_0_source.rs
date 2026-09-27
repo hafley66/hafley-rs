@@ -11,7 +11,7 @@ use crate::read::lang::extract_lang::RyiLang;
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::seams::{corpus_defs, ProjectCx, Resolve};
 use crate::read::shape::{NameId, NodeRef, Span, Strings};
-use crate::read::source::{RyiOutput, FamilyMask, Source};
+use crate::read::source::{FamilyMask, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::{DocNode, DocNodeKind, ProjectEdge, ResolutionOrigin, TypeEdgeKind};
 
