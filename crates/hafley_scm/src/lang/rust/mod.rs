@@ -63,9 +63,7 @@ pub fn rust_combined_query() -> String {
 }
 pub use call_site_rows::{call_site_rows, CallSiteRow, CallSiteRows, ConstInitRow};
 pub use const_string_rows::{const_string_rows, const_string_rows_from_tree, ConstStringRow};
-pub use df_syntax_rows::{
-    df_syntax_rows, df_syntax_rows_from_tree, DfNodeKind as DfSyntaxKind, DfSyntaxRows,
-};
+pub use df_syntax_rows::{df_syntax_rows_from_tree, DfNodeKind as DfSyntaxKind, DfSyntaxRows};
 pub use expanded_call_rows::{expanded_call_rows, ExpandedCallKind, ExpandedCallRows};
 #[cfg(feature = "rust")]
 pub use frontend::{call_query, fast_file_query, RustFastFile};
