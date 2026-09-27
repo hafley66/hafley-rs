@@ -1,8 +1,8 @@
 ---
 created: 2026-08-13
-updated: 2026-08-14
+updated: 2026-09-26
 type: task
-status: open
+status: obsolete
 priority: high
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation, artifact-documentation, intent-doctrine]
@@ -10,6 +10,7 @@ lane: boop-docs
 lane_seq: 8
 collision: [boop-help]
 blocked_by: ['@lane-status-command']
+closed: 2026-09-26
 ---
 
 # 008 Document lane observability doctrine
@@ -44,3 +45,8 @@ Observed 2026-08-14: top-level boop --help documents , while  accepts  and rejec
 
 Correction: top-level boop help documents --wait-timeout SECONDS, while boop beep lane wait accepts --timeout SECONDS and rejects --wait-timeout. Align the doctrine and subcommand contract.
 
+## Resolution
+
+### 2026-09-27T03:30:19Z · @issuectl
+
+Current help documents beep lane list/get, db status and usage, plus debug; the card requires retired boop lane status/usage/tail commands and those forms are absent from current help.
