@@ -12,8 +12,8 @@ use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 use sprefa_extract::{
-    newline_offsets, resolve_project_with_tsi_tiers, slow_project, FlatFact, ResolveArms,
-    ResolveRequest, ScipMode, ScipRecords,
+    cfg_facts, newline_offsets, resolve_project_with_tsi_tiers, slow_project, FamilyTag, FlatFact,
+    ResolveArms, ResolveRequest, ScipMode, ScipRecords,
 };
 
 use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
@@ -656,6 +656,10 @@ pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(seed) = cli.slice.as_deref() {
+        emit_rows(&slice_at(seed)?, output)?;
+        return Ok(());
+    }
     let arm = match (
         &cli.callers,
         &cli.uses,
@@ -721,6 +725,82 @@ pub fn run_to(
     emit_rows(&rows, output)?;
     emit_summary_line(&rows, &arm, cli.compare.is_some());
     Ok(())
+}
+
+type CfgNodeKey = (u32, u32, String);
+
+/// Return the backward control-dependence closure of the CFG node covering a
+/// source byte. Output rows reuse the existing cfg_node record shape.
+fn slice_at(seed: &str) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+    let (path, byte) = seed.rsplit_once(':').ok_or("--slice expects PATH:BYTE")?;
+    let byte: u32 = byte.parse()?;
+    let content = fs::read(sprefa_extract::io_path(Path::new(path)))?;
+    let facts = cfg_facts(path, &content);
+    let key = |span: sprefa_extract::SpanOut, kind: Option<&str>| {
+        (span.start, span.end, kind.unwrap_or_default().to_string())
+    };
+    let mut nodes = BTreeMap::<CfgNodeKey, FlatFact>::new();
+    let mut controls = Vec::<(CfgNodeKey, CfgNodeKey)>::new();
+    for fact in facts {
+        match fact {
+            FlatFact::Node {
+                family: FamilyTag::Cfg,
+                span,
+                kind,
+                name,
+                ..
+            } => {
+                nodes.insert(
+                    (span.start, span.end, kind.clone()),
+                    FlatFact::Node {
+                        fact: None,
+                        family: FamilyTag::Cfg,
+                        span,
+                        kind,
+                        name,
+                    },
+                );
+            }
+            FlatFact::Edge {
+                family: FamilyTag::Cfg,
+                kind,
+                from,
+                from_kind,
+                to,
+                to_kind,
+                ..
+            } if kind == "control" => {
+                controls.push((key(from, from_kind.as_deref()), key(to, to_kind.as_deref())));
+            }
+            _ => {}
+        }
+    }
+    let seed_node = nodes
+        .keys()
+        .filter(|(start, end, kind)| {
+            *start <= byte && byte < *end && !matches!(kind.as_str(), "entry" | "exit")
+        })
+        .min_by_key(|(start, end, _)| end - start)
+        .cloned()
+        .ok_or_else(|| format!("--slice byte {byte} is outside a CFG statement in {path}"))?;
+
+    let mut incoming = HashMap::<CfgNodeKey, Vec<CfgNodeKey>>::new();
+    for (controller, dependent) in controls {
+        incoming.entry(dependent).or_default().push(controller);
+    }
+    let mut selected = BTreeSet::from([seed_node.clone()]);
+    let mut pending = vec![seed_node];
+    while let Some(dependent) = pending.pop() {
+        for controller in incoming.get(&dependent).into_iter().flatten() {
+            if selected.insert(controller.clone()) {
+                pending.push(controller.clone());
+            }
+        }
+    }
+    Ok(selected
+        .into_iter()
+        .filter_map(|node| nodes.remove(&node))
+        .collect())
 }
 
 #[cfg(test)]

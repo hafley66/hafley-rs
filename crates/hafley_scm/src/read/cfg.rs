@@ -517,6 +517,150 @@ impl<'a> CfgBuild<'a> {
             }
             None => self.edge(entry, exit, CfgEdgeKind::Exit),
         }
+        self.control_dependence(entry, exit);
+    }
+
+    /// Add control-dependence edges from CFG post-dominators. Every edge stays
+    /// in `CfgF`; `Control` is an additional edge kind in that family.
+    fn control_dependence(&mut self, entry: NodeRef, exit: NodeRef) {
+        let start = entry.0 as usize;
+        let end = self.bundle.nodes.len();
+        let count = end - start;
+        if !(start..end).any(|node| {
+            matches!(
+                self.bundle.nodes[node].kind,
+                CfgNodeKind::Branch | CfgNodeKind::Loop
+            )
+        }) {
+            return;
+        }
+        let mut successors = vec![Vec::<usize>::new(); count];
+        for edge in &self.bundle.edges {
+            let from = edge.src.0 as usize;
+            let to = edge.dst.0 as usize;
+            if (start..end).contains(&from)
+                && (start..end).contains(&to)
+                && edge.kind != CfgEdgeKind::Control
+            {
+                successors[from - start].push(to - start);
+            }
+        }
+
+        let exit = exit.0 as usize - start;
+        let mut reachable = vec![false; count];
+        let mut work = vec![0];
+        reachable[0] = true;
+        while let Some(node) = work.pop() {
+            for &next in &successors[node] {
+                if !reachable[next] {
+                    reachable[next] = true;
+                    work.push(next);
+                }
+            }
+        }
+        let nodes: Vec<usize> = (0..count).filter(|&node| reachable[node]).collect();
+        if !reachable[exit] {
+            return;
+        }
+
+        let mut post = vec![vec![false; count]; count];
+        for &node in &nodes {
+            if node == exit || successors[node].is_empty() {
+                post[node][node] = true;
+            } else {
+                for &candidate in &nodes {
+                    post[node][candidate] = true;
+                }
+            }
+        }
+        loop {
+            let mut changed = false;
+            for &node in nodes.iter().rev() {
+                if node == exit || successors[node].is_empty() {
+                    continue;
+                }
+                let mut next = vec![true; count];
+                let reachable_successors: Vec<usize> = successors[node]
+                    .iter()
+                    .copied()
+                    .filter(|&successor| reachable[successor])
+                    .collect();
+                if reachable_successors.is_empty() {
+                    next.fill(false);
+                } else {
+                    for successor in reachable_successors {
+                        for candidate in 0..count {
+                            next[candidate] &= post[successor][candidate];
+                        }
+                    }
+                }
+                next[node] = true;
+                if post[node] != next {
+                    post[node] = next;
+                    changed = true;
+                }
+            }
+            if !changed {
+                break;
+            }
+        }
+
+        let mut immediate = vec![None; count];
+        for &node in &nodes {
+            if node == exit {
+                continue;
+            }
+            let strict: Vec<usize> = nodes
+                .iter()
+                .copied()
+                .filter(|&candidate| candidate != node && post[node][candidate])
+                .collect();
+            immediate[node] = strict.iter().copied().find(|&candidate| {
+                strict
+                    .iter()
+                    .all(|&other| other == candidate || post[candidate][other])
+            });
+        }
+
+        let mut controls = Vec::new();
+        for &controller in &nodes {
+            if !matches!(
+                self.bundle.nodes[controller + start].kind,
+                CfgNodeKind::Branch | CfgNodeKind::Loop
+            ) {
+                continue;
+            }
+            let targets: Vec<usize> = successors[controller]
+                .iter()
+                .copied()
+                .filter(|&target| reachable[target])
+                .collect();
+            if targets.len() < 2 {
+                continue;
+            }
+            let stop = immediate[controller];
+            for target in targets {
+                if post[controller][target] {
+                    continue;
+                }
+                let mut runner = Some(target);
+                let mut visited = HashSet::new();
+                while let Some(node) = runner {
+                    if Some(node) == stop || !visited.insert(node) {
+                        break;
+                    }
+                    controls.push((controller, node));
+                    runner = immediate[node];
+                }
+            }
+        }
+        for (controller, dependent) in controls {
+            self.edge(
+                NodeRef((controller + start) as u32),
+                NodeRef((dependent + start) as u32),
+                CfgEdgeKind::Control,
+            );
+        }
     }
 
     fn descendants(&self, node: NodeRef) -> Vec<NodeRef> {

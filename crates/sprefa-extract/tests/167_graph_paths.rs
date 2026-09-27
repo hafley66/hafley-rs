@@ -101,3 +101,41 @@ fn flow_paths_follow_derived_interprocedural_edges() {
         .all(|row| row["witness"].as_array().unwrap().len()
             == row["depth"].as_u64().unwrap() as usize));
 }
+
+#[test]
+fn control_slice_returns_a_closed_statement_set() {
+    let path = "tests/fixtures/graph_ts/5_slice.ts";
+    let source = include_str!("fixtures/graph_ts/5_slice.ts");
+    let byte = source.find("allow()").unwrap() + 1;
+    let seed = format!("{path}:{byte}");
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args(["graph", "--slice", &seed])
+        .output()
+        .expect("graph binary runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rows: Vec<Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert!(!rows.is_empty());
+    assert!(rows
+        .iter()
+        .all(|row| row["record"] == "node" && row["family"] == "cfg"));
+    let selected: Vec<&str> = rows
+        .iter()
+        .filter_map(|row| {
+            let start = row["span"]["start"].as_u64()? as usize;
+            let end = row["span"]["end"].as_u64()? as usize;
+            source.get(start..end)
+        })
+        .collect();
+    assert!(selected.iter().any(|text| text.contains("if (flag)")));
+    assert!(selected.iter().any(|text| text.contains("allow()")));
+    assert!(selected.iter().all(|text| !text.contains("after()")));
+}

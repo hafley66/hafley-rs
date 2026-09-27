@@ -1,6 +1,6 @@
 Ask one question of the resolved call/type graph
 
-Usage: ryii graph [OPTIONS] <--callers <NAME>|--uses <NAME>|--from <NAME>|--call-path <NAME>|--type-path <NAME>|--flow-path <BLOB@START:END>> [PATH]...
+Usage: ryii graph [OPTIONS] <--callers <NAME>|--uses <NAME>|--from <NAME>|--call-path <NAME>|--type-path <NAME>|--flow-path <BLOB@START:END>|--slice <PATH:BYTE>> [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -16,6 +16,7 @@ Options:
       --call-path <NAME>            Shortest call paths from NAME
       --type-path <NAME>            Shortest type-reference paths from NAME
       --flow-path <BLOB@START:END>  Flow paths from BLOB@START:END
+      --slice <PATH:BYTE>           Control-dependence slice at PATH:BYTE
       --sqlite <PATH>               Keep the fact store in a new SQLite database at PATH
       --slow                        Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve
       --timeout <SECS>              Seconds the question may run; past it graph exits 3 [default: 30]
