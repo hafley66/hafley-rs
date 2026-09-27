@@ -2,8 +2,8 @@
 //! holds, never a parsed string. The subscriber install is `cli`-gated: a
 //! library that installs a global subscriber steals the choice from its caller.
 
-use tracing::field::Empty;
 use tracing::Span;
+use tracing::field::Empty;
 
 use crate::read::rows::FamilyBundle;
 use crate::read::types::Family;
@@ -126,7 +126,7 @@ pub fn record_bundle<F: Family>(span: &Span, bundle: &FamilyBundle<F>, sites: us
 
 #[cfg(feature = "cli")]
 pub use sink::{
-    install, load_avg_1min, FamilyRow, PhaseRowOut, RunSnapshot, SummaryLayer, SummaryState,
+    FamilyRow, PhaseRowOut, RunSnapshot, SummaryLayer, SummaryState, install, load_avg_1min,
 };
 
 #[cfg(feature = "cli")]
@@ -139,13 +139,13 @@ mod sink {
 
     use super::Phase;
 
+    use tracing::Subscriber;
     use tracing::field::{Field, Visit};
     use tracing::span::{Attributes, Id, Record};
-    use tracing::Subscriber;
     use tracing_subscriber::layer::{Context, Layer, SubscriberExt};
     use tracing_subscriber::registry::{LookupSpan, SpanRef};
     use tracing_subscriber::util::SubscriberInitExt;
-    use tracing_subscriber::{filter::EnvFilter, Registry};
+    use tracing_subscriber::{Registry, filter::EnvFilter};
 
     /// One (lang, family) row of the exit table.
     #[derive(Default)]
@@ -202,11 +202,7 @@ mod sink {
         let mut avg = [0f64; 3];
         // SAFETY: getloadavg fills at most `nelem` entries of the caller's array.
         let filled = unsafe { libc::getloadavg(avg.as_mut_ptr(), 3) };
-        if filled >= 1 {
-            avg[0]
-        } else {
-            0.0
-        }
+        if filled >= 1 { avg[0] } else { 0.0 }
     }
 
     /// Windows has no `getloadavg` (the `libc` crate declares it for unix
@@ -585,12 +581,10 @@ mod sink {
         let want_summary = !matches!(std::env::var("DL_TRAIL").as_deref(), Ok("0"))
             || matches!(std::env::var("DL_TRACE_SUMMARY").as_deref(), Ok("1"))
             || std::env::args().any(|arg| arg == "--bench");
-        // `info` is one line per file with its phase timings (user-set
-        // 2026-09-18). `RUST_LOG` still overrides.
         let observability = hafley_observe::Config::from_env(
             "sprefa-extract",
             crate::read::RYI_VERSION,
-            "sprefa_extract=info,hafley_scm=info",
+            "warn",
             std::io::IsTerminal::is_terminal(&std::io::stderr()),
         )
         .expect("observability configuration");

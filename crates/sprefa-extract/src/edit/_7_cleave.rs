@@ -11,13 +11,13 @@ use sprefa_extract::edit_seams::CleaveDrag;
 use sprefa_extract::edit_seams::CleavePlan;
 use sprefa_extract::edit_seams::CleaveSpecifier;
 use sprefa_extract::move_stage::{
-    content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit,
-    state_root, Mirror, VerifyJournal,
+    Mirror, VerifyJournal, content_id, print_previews_with as print_previews, run_verify_command,
+    stage_and_commit, state_root,
 };
 use sprefa_extract::{
-    cleave_for, directory_path, directory_source, dispatch, flatten_each, normalize,
-    replace_action, resolve_project, scm_facts, Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms,
-    ResolveRequest, Respell, ScipMode, ScipRecords, Span,
+    Cleave, FamilyMask, FlatFact, MoveCx, ResolveArms, ResolveRequest, Respell, ScipMode,
+    ScipRecords, Span, cleave_for, directory_path, directory_source, dispatch, flatten_each,
+    normalize, replace_action, resolve_project, scm_facts,
 };
 
 const PRODUCER: &str = "extract-cleave";
@@ -139,7 +139,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
     let (first, _) = split_target(&rows[0].0)?;
     let root = plan_root(cli.root.as_ref(), &first)?;
     let state = state_root(cli.state.as_deref())?;
-    let mut cx = MoveCx::open(&root)?;
+    let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
     let mut imports = Imports::read(&cx, &root)?;
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
     crate::outln!("root {}", root.display());
@@ -668,7 +668,7 @@ impl Plan {
         let (target, dest) = single(cli)?;
         let (src, _) = split_target(target)?;
         let root = plan_root(cli.root.as_ref(), &src)?;
-        let cx = MoveCx::open(&root)?;
+        let cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
         let imports = Imports::read(&cx, &root)?;
         Self::build_with(cx, &imports, target, dest, cli.drag)
     }
@@ -784,7 +784,8 @@ impl Plan {
             {
                 travelling.push(plan_row.clone());
             }
-            if source.refs_outside(&row.name, &moving) == 0
+            if source.refs_in(&row.name, &moving) > 0
+                && source.refs_outside(&row.name, &moving) == 0
                 && !source.reexports(row.span)
                 && !source.method_scope(
                     &row.name,

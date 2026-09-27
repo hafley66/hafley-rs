@@ -202,6 +202,66 @@ fn rust_parent_glob_supplies_the_moved_items_type() {
 }
 
 #[test]
+fn untouched_imports_are_not_reported_as_orphans() {
+    let fixture = fixture("basic", "orphan-noise");
+    std::fs::write(
+        fixture.root.join("src/util.rs"),
+        "use crate::config::Config;\nuse crate::log::Log;\n\npub fn target() -> Config { Config::new() }\npub fn untouched() -> Log { Log::new() }\n",
+    )
+    .unwrap();
+    let plan = plan_of(&cleave(
+        &fixture,
+        &["src/util.rs#target", "src/app.rs", "--json"],
+    ));
+    assert!(!names(&plan, "orphans").contains(&"Log".to_string()));
+}
+
+#[test]
+fn default_cleave_logging_hides_per_file_info() {
+    let fixture = fixture("basic", "quiet-default");
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args([
+            "cleave",
+            "src/util.rs#load_config",
+            "src/config.rs",
+            "--root",
+        ])
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env_remove("RUST_LOG")
+        .env_remove("HAFLEY_LOG")
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(0));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("INFO extract_file"), "{stderr}");
+}
+
+#[test]
+fn default_corpus_walk_skips_untracked_and_honors_gitignore() {
+    let fixture = fixture("basic", "corpus-walk");
+    std::fs::write(fixture.root.join("tracked.rs"), "pub fn tracked() {}\n").unwrap();
+    std::fs::write(fixture.root.join("scratch.rs"), "pub fn scratch() {}\n").unwrap();
+    std::fs::write(fixture.root.join(".gitignore"), ".probe/\n").unwrap();
+    std::fs::create_dir_all(fixture.root.join(".probe")).unwrap();
+    std::fs::write(fixture.root.join(".probe/noise.rs"), "pub fn noise() {}\n").unwrap();
+    git(&fixture.root, &["add", "tracked.rs"]);
+
+    let default = sprefa_extract::move_cx::walk_files_with_untracked(&fixture.root, false).unwrap();
+    let explicit = sprefa_extract::move_cx::walk_files_with_untracked(&fixture.root, true).unwrap();
+    assert!(default.contains(&"tracked.rs".to_string()), "{default:?}");
+    assert!(!default.contains(&"scratch.rs".to_string()), "{default:?}");
+    assert!(explicit.contains(&"scratch.rs".to_string()), "{explicit:?}");
+    assert!(
+        !explicit.contains(&".probe/noise.rs".to_string()),
+        "{explicit:?}"
+    );
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(

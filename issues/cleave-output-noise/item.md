@@ -3,7 +3,7 @@ created: 2026-09-26
 updated: 2026-09-26
 type: improvement
 reporter: claude
-status: open
+status: fixed
 priority: low
 related: ['@cleave-cross-crate-reach']
 labels: [extract]
@@ -31,3 +31,7 @@ Output noise from `ryi cleave` on a 140-module binary crate:
 ### 2026-09-26T22:28:00Z · @claude
 
 Re-checked with ryi built from origin/main 7c51f866 (2026-09-26 18:26): all 7 dry-run outputs identical to the 03:24 binary except stage hashes. Still reproduces.
+
+### 2026-09-27 · @codex
+
+Receipt: this queue commit; `t_166_cleave_rust` passed (14 tests).

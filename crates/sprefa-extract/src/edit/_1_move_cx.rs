@@ -47,6 +47,17 @@ impl MoveCx {
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
         let files = walk_files(root)?;
+        Self::from_files(root, files)
+    }
+
+    /// Open a corpus, optionally including untracked files when the caller
+    /// explicitly supplied its root.
+    pub fn open_with_untracked(root: &Path, include_untracked: bool) -> Result<Self, String> {
+        let files = walk_files_with_untracked(root, include_untracked)?;
+        Self::from_files(root, files)
+    }
+
+    fn from_files(root: &Path, files: Vec<String>) -> Result<Self, String> {
         let present = files.iter().cloned().collect();
         Ok(Self {
             root: root.to_path_buf(),
@@ -174,13 +185,39 @@ impl MoveCx {
 /// The path inventory shared by every edit verb. A context calls this once
 /// when its invocation opens and keeps the resulting path order throughout.
 pub fn walk_files(root: &Path) -> Result<Vec<String>, String> {
+    walk_files_with_untracked(root, true)
+}
+
+pub fn walk_files_with_untracked(
+    root: &Path,
+    include_untracked: bool,
+) -> Result<Vec<String>, String> {
+    if !include_untracked {
+        let output = std::process::Command::new("git")
+            .args(["-C", &root.to_string_lossy(), "ls-files", "-z"])
+            .output();
+        if let Ok(output) = output {
+            if output.status.success() {
+                let mut files: Vec<String> = output
+                    .stdout
+                    .split(|byte| *byte == 0)
+                    .filter(|path| !path.is_empty())
+                    .filter_map(|path| std::str::from_utf8(path).ok())
+                    .filter(|path| !path.split('/').any(|part| SKIP_DIRS.contains(&part)))
+                    .map(str::to_string)
+                    .collect();
+                files.sort();
+                return Ok(files);
+            }
+        }
+    }
     let mut files = Vec::new();
     let walk = WalkBuilder::new(root)
         .hidden(false)
-        .ignore(false)
-        .git_ignore(false)
-        .git_global(false)
-        .git_exclude(false)
+        .ignore(true)
+        .git_ignore(true)
+        .git_global(true)
+        .git_exclude(true)
         .filter_entry(|entry| !SKIP_DIRS.contains(&entry.file_name().to_string_lossy().as_ref()))
         .build();
     for entry in walk {
