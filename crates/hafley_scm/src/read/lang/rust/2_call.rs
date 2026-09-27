@@ -1102,8 +1102,6 @@ fn syn_call_metadata(
 /// / ConstInit) + one site per call expression. Port of v5
 /// `rust_call_{defs,sites}_from` + `CallCollector`.
 pub(super) fn project_call(
-    parsed: &syn::File,
-    line_starts: &[u32],
     tree: &tree_sitter::Tree,
     source: &[u8],
     strings: &mut Strings,
@@ -1158,7 +1156,7 @@ pub(super) fn project_call(
     }
 
     module_specifiers(tree, source, strings, sink);
-    super::super::rust_receivers::collect_receivers(parsed, line_starts, strings, sink);
+    super::super::rust_receivers::collect_receivers_from_tree(tree, source, strings, sink);
 }
 
 /// Intern SCM's module rows into the CallF specifier vocabulary.
