@@ -2299,6 +2299,8 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             state,
             harness,
             all,
+            json,
+            no_header,
             socket,
             mail_dir,
         } => run_lane_list(
@@ -2307,6 +2309,8 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
             state.as_deref(),
             harness.as_deref().map(str::parse).transpose()?,
             all,
+            json,
+            no_header,
             socket.as_deref(),
         ),
         LaneCmd::Revive {
@@ -2571,6 +2575,8 @@ pub(crate) fn run_lane_list(
     state_filter: Option<&str>,
     harness_filter: Option<HarnessId>,
     all: bool,
+    json: bool,
+    no_header: bool,
     socket: Option<&str>,
 ) -> Result<()> {
     let dir = mail_dir(mail_dir_arg)?;
@@ -2597,6 +2603,7 @@ pub(crate) fn run_lane_list(
                 .collect()
         })
         .unwrap_or_default();
+    let mut rows: Vec<LaneListRow> = Vec::new();
     for (name, route) in &routes {
         let state = if route.kind == "coordinator" {
             if crate::cli::control::live_session_owner(registry, &dir, name, route)?.is_some() {
@@ -2639,17 +2646,12 @@ pub(crate) fn run_lane_list(
         {
             suffix.push_str(&format!(" PARENT-GONE={gone}"));
         }
-        line(&format!(
-            "{} {} {} {} {} {} {} {}{}",
-            pad(state, 4),
-            pad(name, 16),
-            pad(route.kind.as_str(), 12),
-            pad(route.harness.map_or("-", HarnessId::as_str), 10),
-            pad(route.mode.as_deref().unwrap_or("-"), 6),
-            pad(route.model.as_deref().unwrap_or("-"), 46),
-            pad(route.tmux.as_deref().unwrap_or("-"), 16),
-            route.cwd.as_deref().unwrap_or("-"),
-            suffix,
+        rows.push(LaneListRow::route(
+            name,
+            route,
+            state,
+            lane_age(route.registered_at.as_deref(), now),
+            suffix.trim(),
         ));
     }
     // A retired lane has no route (the pane epilogue dropped it) but keeps
@@ -2664,31 +2666,17 @@ pub(crate) fn run_lane_list(
                 continue;
             }
         }
-        line(&format!(
-            "{} {} {} {} {} {} {} {} REVIVE=boop beep {name} <body>",
-            pad("retired", 4),
-            pad(&name, 16),
-            pad("lane", 12),
-            pad(route.harness.map_or("-", HarnessId::as_str), 10),
-            pad(route.mode.as_deref().unwrap_or("-"), 6),
-            pad(route.model.as_deref().unwrap_or("-"), 46),
-            pad(&spawn.tmux, 16),
-            spawn.cwd,
+        rows.push(LaneListRow::route(
+            &name,
+            &route,
+            "retired",
+            lane_age(route.registered_at.as_deref(), now),
+            &format!("REVIVE=boop beep {name} <body>"),
         ));
     }
     if all {
         for name in unregistered_sessions(&routes, &live) {
-            line(&format!(
-                "{} {} {} {} {} {} {} {}",
-                pad("live", 4),
-                pad(&name, 16),
-                pad("unregistered", 12),
-                pad("-", 10),
-                pad("-", 6),
-                pad("-", 46),
-                pad("-", 16),
-                "-",
-            ));
+            rows.push(LaneListRow::bare(name, "unregistered", "live", ""));
         }
         for (route_name, route) in &routes {
             let Some(harness) = route.harness else {
@@ -2697,24 +2685,154 @@ pub(crate) fn run_lane_list(
             let Some(cwd) = route.cwd.as_deref() else {
                 continue;
             };
-            for (name, path, locked) in registry.get(harness).native_worktrees(cwd) {
+            for (name, _path, locked) in registry.get(harness).native_worktrees(cwd) {
                 let state = if locked { "live" } else { "dead" };
-                line(&format!(
-                    "{} {} {} {} {} {} {} {} PARENT={}",
-                    pad(state, 4),
-                    pad(&name, 16),
-                    pad(&format!("native-{harness}"), 12),
-                    pad("-", 10),
-                    pad("-", 6),
-                    pad("-", 46),
-                    pad("-", 16),
-                    path,
-                    route_name,
+                rows.push(LaneListRow::bare(
+                    name,
+                    &format!("native-{harness}"),
+                    state,
+                    &format!("PARENT={route_name}"),
                 ));
             }
         }
     }
+    if json {
+        for row in &rows {
+            line(&row.json.to_string());
+        }
+    } else {
+        let cells: Vec<[String; 7]> = rows.iter().map(|row| row.cells.clone()).collect();
+        for rendered in render_lane_table(&cells, no_header) {
+            line(&rendered);
+        }
+    }
     Ok(())
+}
+
+struct LaneListRow {
+    cells: [String; 7],
+    json: serde_json::Value,
+}
+
+impl LaneListRow {
+    fn route(name: &str, route: &Route, state: &str, age: String, tail: &str) -> Self {
+        Self {
+            cells: [
+                state.into(),
+                name.into(),
+                route.kind.as_str().into(),
+                route
+                    .harness
+                    .map_or_else(|| "-".into(), |h| h.as_str().into()),
+                route
+                    .model
+                    .as_deref()
+                    .map(trim_lane_model)
+                    .unwrap_or_else(|| "-".into()),
+                age.clone(),
+                tail.into(),
+            ],
+            json: serde_json::json!({
+                "state": state,
+                "name": name,
+                "kind": route.kind.as_str(),
+                "harness": route.harness.map(HarnessId::as_str),
+                "model": route.model,
+                "mode": route.mode,
+                "tmux": route.tmux,
+                "cwd": route.cwd,
+                "age": (age != "-").then_some(age),
+                "tail": tail,
+                "pid": null,
+                "session_id": route.session_id,
+                "parent": route.parent,
+                "registered_at": route.registered_at,
+            }),
+        }
+    }
+
+    fn bare(name: String, kind: &str, state: &str, tail: &str) -> Self {
+        Self {
+            cells: [
+                state.into(),
+                name.clone(),
+                kind.into(),
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                tail.into(),
+            ],
+            json: serde_json::json!({
+                "state": state,
+                "name": name,
+                "kind": kind,
+                "harness": null,
+                "model": null,
+                "mode": null,
+                "tmux": null,
+                "cwd": null,
+                "age": null,
+                "tail": tail,
+                "pid": null,
+                "session_id": null,
+                "parent": null,
+                "registered_at": null,
+            }),
+        }
+    }
+}
+
+fn trim_lane_model(model: &str) -> String {
+    model.chars().take(24).collect()
+}
+
+fn lane_age(registered_at: Option<&str>, now_ms: u64) -> String {
+    registered_at
+        .and_then(parse_iso_ms)
+        .map(|at| format!("{}h", now_ms.saturating_sub(at) / 3_600_000))
+        .unwrap_or_else(|| "-".into())
+}
+
+fn render_lane_table(rows: &[[String; 7]], no_header: bool) -> Vec<String> {
+    const HEADERS: [&str; 7] = ["state", "name", "kind", "harness", "model", "age", "tail"];
+    let keep: Vec<usize> = (0..HEADERS.len())
+        .filter(|&column| {
+            rows.iter()
+                .any(|row| row[column] != "-" && !row[column].is_empty())
+        })
+        .collect();
+    if rows.is_empty() {
+        return Vec::new();
+    }
+    let widths: Vec<usize> = keep
+        .iter()
+        .map(|&column| {
+            HEADERS[column]
+                .len()
+                .max(rows.iter().map(|row| row[column].len()).max().unwrap_or(0))
+        })
+        .collect();
+    let header = keep
+        .iter()
+        .zip(&widths)
+        .map(|(&column, &width)| pad(HEADERS[column], width))
+        .collect::<Vec<_>>()
+        .join(" ")
+        .trim_end()
+        .to_owned();
+    let mut lines = if no_header { Vec::new() } else { vec![header] };
+    for row in rows {
+        lines.push(
+            keep.iter()
+                .zip(&widths)
+                .map(|(&column, &width)| pad(&row[column], width))
+                .collect::<Vec<_>>()
+                .join(" ")
+                .trim_end()
+                .to_owned(),
+        );
+    }
+    lines
 }
 
 /// Epoch-ms of the newest row touching each route, from one mailbox pass. Stale
@@ -4466,6 +4584,44 @@ mod tests {
     use boop::proc::{ProcReader, ProcessInfo, SysinfoSnapshot};
     use boop::registry::Registry;
     use std::collections::{BTreeMap, BTreeSet};
+
+    #[test]
+    fn lane_list_omits_empty_columns_and_bounds_model_width() {
+        let rows = vec![
+            [
+                "dead".into(),
+                "lane-a".into(),
+                "lane".into(),
+                "-".into(),
+                "-".into(),
+                "-".into(),
+                "".into(),
+            ],
+            [
+                "live".into(),
+                "lane-b".into(),
+                "coordinator".into(),
+                "codex".into(),
+                trim_lane_model("provider/this-model-name-is-longer-than-the-table-width"),
+                "0h".into(),
+                "STALE=2h".into(),
+            ],
+        ];
+
+        assert_eq!(
+            render_lane_table(&rows, false),
+            [
+                "state name   kind        harness model                    age tail",
+                "dead  lane-a lane        -       -                        -",
+                "live  lane-b coordinator codex   provider/this-model-name 0h  STALE=2h",
+            ]
+        );
+        assert_eq!(render_lane_table(&rows, true).len(), 2);
+        assert_eq!(
+            trim_lane_model("provider/this-model-name-is-longer"),
+            "provider/this-model-name"
+        );
+    }
 
     /// RECEIPT (native-subagent-identity). pid 34606 sat in `wait --me` for
     /// eight minutes on lane feature-cx-a4's mailbox while four rows to its

@@ -1047,6 +1047,12 @@ enum LaneCmd {
         /// Include unregistered tmux sessions and native Claude subagents.
         #[arg(long)]
         all: bool,
+        /// One JSON object per row; includes the full route fields.
+        #[arg(long)]
+        json: bool,
+        /// Omit the header line; for scripts.
+        #[arg(long = "no-header")]
+        no_header: bool,
         /// Read liveness from this tmux socket; the default server when unset.
         /// Pane ids repeat across sockets, so a throwaway socket needs it.
         #[arg(long)]
