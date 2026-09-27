@@ -8,7 +8,7 @@ use std::sync::{Arc, Mutex};
 
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use ignore::WalkBuilder;
-use sprefa_extract::{source_for, SourcePattern};
+use sprefa_extract::source_for;
 
 use crate::cli::Inputs;
 

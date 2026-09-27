@@ -1,7 +1,5 @@
 //! Item-level Rust string consts from the caller's existing syn parse.
 
-use syn::spanned::Spanned;
-
 use super::call_metadata_rows::span_range;
 
 #[derive(Clone, Debug, Eq, PartialEq)]

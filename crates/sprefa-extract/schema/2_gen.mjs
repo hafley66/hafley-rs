@@ -76,6 +76,16 @@ export async function generate(entry = join(schemaDirectory, "1_sql_trial.tsp"))
   if (facts.diagnostics.length) throw new Error(facts.diagnostics.map(d => formatDiagnostic(d)).join("\n"));
   for (const [name, content] of emitFacts(facts, emitSQL, emitRusqliteTaggedRowWriter)) {
     if (name === "7_writers_auto.rs") {
+      const insertErrorDisplay = `impl std::fmt::Display for InsertError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Sql(error) => write!(f, "{error}"),
+            Self::Json(error) => write!(f, "{error}"),
+            Self::OrdinalOverflow => f.write_str("row ordinal overflow"),
+            Self::SQLiteLimit(limit) => write!(f, "SQLite limit exceeded: {limit}"),
+        }
+    }
+}`;
       const graphRootSpan = `
 fn graph_root_span<'de, D>(deserializer: D) -> Result<Option<models::SpanOut>, D::Error>
 where
@@ -97,6 +107,14 @@ where
 }
 `;
       files.set(name, content
+        .replaceAll(
+          "    pub fn insert(&self, conn:",
+          "    #[cfg(test)]\n    pub fn insert(&self, conn:",
+        )
+        .replace(
+          'impl std::fmt::Display for InsertError { fn fmt(&self, f: &mut std::fmt::Formatter<\'_>) -> std::fmt::Result { write!(f, "{self:?}") } }',
+          insertErrorDisplay,
+        )
         .replace("fn required_nullable", `${graphRootSpan}\nfn required_nullable`)
         .replace(
           "#[serde(deserialize_with = \"super::required_nullable\")]\n        pub span: Option<SpanOut>",

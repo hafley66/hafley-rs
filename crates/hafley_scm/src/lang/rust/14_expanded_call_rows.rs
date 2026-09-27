@@ -55,7 +55,7 @@ pub fn expanded_call_rows(
         return ExpandedCallRows::default();
     };
 
-    let mut defs = call_definition_rows(query, "rust-call", expanded.text.as_bytes(), &tree);
+    let defs = call_definition_rows(query, "rust-call", expanded.text.as_bytes(), &tree);
     let def_ranges = defs.iter().map(|row| row.range.clone()).collect::<Vec<_>>();
     let sites = call_site_rows(&parsed, &build_line_starts(&expanded.text), &def_ranges);
     let mut rows = ExpandedCallRows::default();

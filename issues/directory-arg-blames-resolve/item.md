@@ -2,10 +2,12 @@
 created: 2026-09-18
 updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract, artifact-cli, phase-refinement-1, intent-correctness, component-usage]
+closed: 2026-09-26
+disposition_note: 'Current ryi focused repro passed (kinds_accept_directory_and_multiple_paths_without_resolve: 1 passed, 1114 skipped); the issue describes the retired extract verb.'
 ---
 
 # a directory argument reports a --resolve error when --resolve was never passed
@@ -58,3 +60,23 @@ That is 101 process spawns to answer one question.
 ## Implementation Notes
 
 The current `ryi` input expansion already walks directory arguments. The regression test pins both a directory and two explicit files with `--kinds cst`.
+
+## Comments
+
+### 2026-09-27T01:56:55Z · @codex
+
+Repro receipt: current ryi test kinds_accept_directory_and_multiple_paths_without_resolve passed (1 passed, 1114 skipped); the report uses the retired extract verb.
+
+### 2026-09-27T01:57:03Z · @intake
+
+Reopened: Current ryi input handling passes the focused directory and multi-path repro; the issue body describes retired extract argv.
+
+### 2026-09-27T01:57:06Z · @intake
+
+Obsolete: Current ryi focused repro passed (kinds_accept_directory_and_multiple_paths_without_resolve: 1 passed, 1114 skipped); the issue describes the retired extract verb.
+
+
+
+## Reopen Notes — 2026-09-26
+
+_Add rationale for reopening here._

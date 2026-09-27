@@ -646,7 +646,7 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
         "go" => cfg!(feature = "go-checker"),
         _ => false,
     };
-    let mut want = |lang: &'static str| {
+    let want = |lang: &'static str| {
         if !present.contains(lang) {
             return None;
         }

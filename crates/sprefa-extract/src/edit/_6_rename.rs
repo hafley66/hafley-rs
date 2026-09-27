@@ -7,7 +7,6 @@
 use crate::cli::RenameArgs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::edit_seams::RenameAbstain;
