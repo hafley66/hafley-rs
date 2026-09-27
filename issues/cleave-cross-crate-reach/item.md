@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-27
 type: bug
-status: open
+status: obsolete
 priority: normal
 labels: [extract]
 ---
@@ -18,4 +18,8 @@ Second finding, same run: the destination `hafley_scm/src/types/span.rs` sits un
 
 ## Acceptance Criteria
 - [x] a travelling third-party import missing from DEST's manifest is a named stop (exit 2): `cleave across packages: beta must depend on serde_json (tagged imports Value from serde_json::Value); add the dependency` (tests/173_move_cross_crate.rs)
-- [ ] a cross-crate cleave into a private module either publishes the ancestors (as move does) or spells callers through a public re-export
+- [ ] a cross-crate cleave into a private module either publishes the ancestors (as move does) or spells callers through a public re-export; original source path retired
+
+## Resolution
+
+Receipt: current `ryii` invocation of `crates/sprefa-extract/src/types.rs#Span` exits with `cleave source is not a file`; the source path was removed by the main split.
