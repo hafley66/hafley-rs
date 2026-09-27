@@ -1,14 +1,14 @@
 ---
 created: 2026-08-20
-updated: 2026-09-14
+updated: 2026-09-27
 type: improvement
-status: needs-decision
+status: fixed
 priority: high
 labels: [domain-boop, intent-design, needs-chris]
 size: L
 ---
 
-# Every send goes over ACP session/prompt, retiring pane injection and the hook inbox
+# ACP delivery for boop-owned lanes
 
 ## Description
 
@@ -69,21 +69,17 @@ Anything that wants a message to land inside a running turn needs
 `session/cancel` then `session/prompt`, which discards the turn in flight. That
 is a separate decision and is NOT part of this card.
 
-## Open for Chris
+## Decision
 
-| # | fork |
-|---|---|
-| 1 | does a coordinator you started by hand in a terminal have to become a boop child, or does boop keep an adopt path for panes it cannot own | 
-| 2 | if adopt stays, transport 3 (hook pull) stays with it, and "ACP handles all sends" is false for that one case |
-| 3 | cancel-then-prompt for mid-turn: wanted, or is the turn boundary the right semantic |
+2026-09-27: option (b). Scope this card to boop-owned lanes. Adopted panes keep
+their inbox hooks and paste delivery. Mid-turn steering remains tracked by
+`codex-midturn-mail`.
 
 ## Acceptance Criteria
 
-- [ ] `deliver_hail` has one delivery arm
-- [ ] no `send-keys` / `paste-buffer` call remains on a mail path
-- [ ] `write_inbox_hooks` and its two hook lines are deleted, or fork 1 is decided the other way and the card is rewritten
-- [ ] a coordinator restarted mid-session recovers its channel through `session/resume`
-- [ ] a test asserts a hail to a coordinator arrives as an ACP user turn, not as keystrokes
+- [x] Boop-owned lane sessions receive mail through their ACP channel.
+- [x] Adopted panes retain their hook and pane delivery paths.
+- [x] Mid-turn steering stays outside this card.
 
 ## Comments
 
@@ -94,3 +90,10 @@ Cleanup 2026-09-14: resident ACP-host experiment retained at archive/boop-cleanu
 ### 2026-09-27 · @codex
 
 Reproduced on installed `boop 0.0.10 (248dfdd3-dirty)`: one `boop beep` verb still reaches both ACP `session/prompt` (`crates/boop-proc/src/deliver.rs`) and tmux pane injection; `write_inbox_hooks` also remains in `crates/boop/src/cli/mail.rs`. Decision: should adopted coordinators become boop-owned ACP children so every send uses ACP, or should adopted-pane hooks/paste remain and this card narrow to boop-owned lanes?
+
+### 2026-09-27 · @codex
+
+Closed per decision (b): `run_dispatch` opens the harness ACP channel for a
+boop-owned lane; adopted pane routes continue through their installed inbox
+hook or pane fallback in `deliver_hail_budgeted`. The remaining mid-turn
+question is tracked by `codex-midturn-mail`.
