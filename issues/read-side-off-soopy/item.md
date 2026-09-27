@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: improvement
-status: open
+status: needs-decision
 priority: normal
 epic: ryi-new-verbs
 related: ['@ryi-cli-cleanup']
@@ -28,3 +28,9 @@ Reads in hafley_scm and ryi's read verbs go through soopy. Split by source:
 
 ## Implementation Notes
 Blocked by M6 (read side into hafley_scm).
+
+## Repro receipt
+
+2026-09-26: `ryii fast crates/sprefa-extract/tests/fixtures/graph_rust/1_reader.rs` exits 0; its current `inputs.rs` path calls `soopy::discover` for worktree enumeration.
+
+Decision: replace worktree discovery with `ignore::WalkParallel` now, or retain soopy discovery and narrow this card to byte reads only?
