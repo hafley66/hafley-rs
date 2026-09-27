@@ -3061,6 +3061,24 @@ pub enum FlatFact {
         /// 1-based line of the edge's target declaration, when a span exists.
         to_line: Option<u32>,
     },
+    #[serde(rename = "external_crate_decline")]
+    ExternalCrateDecline {
+        from_path: String,
+        from_name: Option<String>,
+        type_name: String,
+        crate_name: String,
+        reason: String,
+        kind: String,
+    },
+    #[serde(rename = "graph_decline")]
+    GraphDecline {
+        from_path: String,
+        from_name: Option<String>,
+        type_name: String,
+        crate_name: String,
+        reason: String,
+        kind: String,
+    },
     #[serde(rename = "graph_path")]
     GraphPath {
         plane: String,

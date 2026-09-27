@@ -934,6 +934,9 @@ struct CrateDeps {
     normal: HashSet<String>,
     dev: HashSet<String>,
     build: HashSet<String>,
+    external_normal: HashSet<String>,
+    external_dev: HashSet<String>,
+    external_build: HashSet<String>,
 }
 
 impl CrateDeps {
@@ -1207,6 +1210,20 @@ fn crate_deps_of(crate_dirs: &HashMap<String, String>) -> HashMap<String, CrateD
                         }
                         "build-dependencies" => {
                             deps.build.insert(dep);
+                        }
+                        _ => unreachable!(),
+                    }
+                } else {
+                    let external = name.replace('-', "_");
+                    match table {
+                        "dependencies" => {
+                            deps.external_normal.insert(external);
+                        }
+                        "dev-dependencies" => {
+                            deps.external_dev.insert(external);
+                        }
+                        "build-dependencies" => {
+                            deps.external_build.insert(external);
                         }
                         _ => unreachable!(),
                     }
@@ -1875,6 +1892,38 @@ impl RustModuleIndex {
                 .iter()
                 .any(|scope| deps.allows(scope.kind, target_crate))
         })
+    }
+
+    /// Return the declared registry dependency named by a qualified type
+    /// spelling when that dependency has no crate directory in the corpus.
+    pub fn external_type_crate(&self, from: &str, name: &str) -> Option<String> {
+        let own = self.crate_dirs.get(from)?;
+        let scopes = self.target_scopes.get(from)?;
+        let deps = self.crate_deps.get(own)?;
+        let visible = |qualifier: &str| {
+            scopes.iter().any(|scope| match scope.kind {
+                TargetKind::Normal => deps.external_normal.contains(qualifier),
+                TargetKind::Dev => {
+                    deps.external_normal.contains(qualifier)
+                        || deps.external_dev.contains(qualifier)
+                }
+                TargetKind::Build => deps.external_build.contains(qualifier),
+            })
+        };
+        let qualifier = name
+            .split("::")
+            .next()
+            .filter(|qualifier| visible(qualifier))
+            .or_else(|| {
+                self.facts.get(from)?.uses.iter().find_map(|binding| {
+                    (binding.local == name)
+                        .then(|| binding.qualifier.first())
+                        .flatten()
+                        .filter(|qualifier| visible(qualifier))
+                        .map(String::as_str)
+                })
+            })?;
+        Some(qualifier.to_string())
     }
 
     /// Whether `path` binds `local` with a `use` from a crate it cannot see.

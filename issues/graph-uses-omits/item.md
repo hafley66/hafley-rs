@@ -1,8 +1,8 @@
 ---
 created: 2026-09-24
-updated: 2026-09-24
+updated: 2026-09-27
 type: bug
-status: needs-decision
+status: fixed
 priority: normal
 commits:
 - hash: 4b04e07b8c3f4ecbfbeff8f55828771e77a146ff
@@ -40,3 +40,12 @@ The Rust syntax collector now records struct-literal type paths as `uses`; `t_16
 a2d6317c adds Rust function, impl-method, and default-trait-method param/return type candidates in hafley_scm. Dogfood: ryi graph --uses ResolveRequest over project.rs, 0_graph.rs, and 5_diff.rs returns 14 rows. Expression-level struct literals and import references remain outside this candidate set; issue remains open for those sites or an explicit coverage receipt.
 
 Decision needed: Should syntax-only graph resolution follow cross-crate imports and re-exports, or emit an explicit decline/coverage row for these references?
+
+
+### 2026-09-27 · @chris
+
+Decision: resolve syntax-only imports and re-exports when the target crate is in the corpus, using target location. If the target is outside the corpus, emit an explicit decline with reason `external_crate` and the crate name; do not guess. Cover both with two-crate Cargo fixtures.
+
+### 2026-09-27 · @codex
+
+Receipt: `cargo nextest run --features cli -j 2 --test all -E 'test(graph_uses_follows_corpus_crate_reexports_and_declines_registry_crates)'` passes. Its path fixture emits a `graph_edge` to `bridge/src/model.rs::Widget`; its registry fixture emits `graph_decline` with `reason: external_crate` and `crate_name: external_widgets`.
