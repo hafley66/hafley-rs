@@ -8,8 +8,8 @@ use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand, ValueEnum};
 use serde_json::json;
 use soopy::{
-    DurableStageStore, GitFileQuery, Pattern, ReadRequest, Revision, SourceDelta, SourceEntry,
-    SourceQuery, SourceRoot, SourceTree, StageId, StageStore,
+    stage_mutations, CommitEngine, DurableStageStore, GitFileQuery, Pattern, ReadRequest, Revision,
+    SourceDelta, SourceEntry, SourceQuery, SourceRoot, SourceTree, StageId, StageStore,
 };
 use sysinfo::{Pid, ProcessesToUpdate, System};
 
@@ -42,6 +42,28 @@ enum Command {
         id: String,
         #[arg(long, value_name = "PATH")]
         store: PathBuf,
+    },
+    /// Validate a typed StageRequest and durably store its preview without changing target files.
+    Stage {
+        #[arg(long, value_name = "PATH")]
+        store: PathBuf,
+        /// JSON StageRequest file, or `-` to read JSON from stdin.
+        #[arg(long, value_name = "PATH")]
+        request: PathBuf,
+    },
+    /// Apply a sealed stage by its explicit StageId.
+    Commit {
+        id: String,
+        #[arg(long, value_name = "PATH")]
+        store: PathBuf,
+        #[arg(long, value_name = "PATH")]
+        state: PathBuf,
+    },
+    /// Recover or replay an interrupted commit by its explicit StageId.
+    Recover {
+        id: String,
+        #[arg(long, value_name = "PATH")]
+        state: PathBuf,
     },
     /// Observe one cold and three warm tracked-state snapshots and emit one
     /// JSON record for the Just performance gates.
@@ -158,6 +180,14 @@ fn entry_json(entry: &SourceEntry) -> serde_json::Value {
     })
 }
 
+fn refusal_error<T: serde::Serialize>(operation: &str, refusal: &T) -> anyhow::Error {
+    eprintln!(
+        "{}",
+        serde_json::json!({"operation": operation, "result": "refused", "refusal": refusal})
+    );
+    anyhow::anyhow!("{operation} refused")
+}
+
 fn delta_json(delta: &SourceDelta) -> serde_json::Value {
     match delta {
         SourceDelta::Added(entry) => json!({ "kind": "added", "entry": entry_json(entry) }),
@@ -246,10 +276,59 @@ fn main() -> Result<()> {
         println!("{}", serde_json::json!({"discarded": removed}));
         return Ok(());
     }
+    match &cli.command {
+        Command::Stage { store, request } => {
+            let bytes = if request == std::path::Path::new("-") {
+                std::io::read_to_string(std::io::stdin())?
+            } else {
+                std::fs::read_to_string(request)?
+            };
+            let request: soopy::StageRequest = serde_json::from_str(&bytes)?;
+            let mut source = SourceRoot::open_directory(&cli.repo)?;
+            let mut store = DurableStageStore::open(store)?;
+            let stage = stage_mutations(&mut source, &request, &mut store)
+                .map_err(|refusal| refusal_error("stage", &refusal))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&json!({
+                    "stage_id": stage.id.to_string(),
+                    "preview": stage,
+                }))?
+            );
+            return Ok(());
+        }
+        Command::Commit { id, store, state } => {
+            let id = id.parse::<StageId>().map_err(anyhow::Error::msg)?;
+            let store = DurableStageStore::open(store)?;
+            let stage = store
+                .load(id)?
+                .ok_or_else(|| anyhow::anyhow!("stage not found: {id}"))?;
+            let engine = CommitEngine::open(&cli.repo, state)?;
+            let receipt = engine
+                .commit(&stage)
+                .map_err(|refusal| refusal_error("commit", &refusal))?;
+            println!("{}", serde_json::to_string_pretty(&receipt)?);
+            return Ok(());
+        }
+        Command::Recover { id, state } => {
+            let id = id.parse::<StageId>().map_err(anyhow::Error::msg)?;
+            let engine = CommitEngine::open(&cli.repo, state)?;
+            let receipt = engine
+                .recover(id)
+                .map_err(|refusal| refusal_error("recovery", &refusal))?;
+            println!("{}", serde_json::to_string_pretty(&receipt)?);
+            return Ok(());
+        }
+        _ => {}
+    }
     let repository = soopy::discover(&cli.repo)?;
     let mut tree = SourceTree::open(repository);
     match cli.command {
-        Command::ShowStage { .. } | Command::DiscardStage { .. } => unreachable!(),
+        Command::ShowStage { .. }
+        | Command::DiscardStage { .. }
+        | Command::Stage { .. }
+        | Command::Commit { .. }
+        | Command::Recover { .. } => unreachable!(),
         Command::StatusMetrics => {
             let mut source = SourceRoot::discover_git(&cli.repo)?;
             let git = source
