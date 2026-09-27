@@ -28,7 +28,10 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt", "json"]
 
 # A dependency is compiled once per lockfile and then only ever run, so the
 # test suite pays its unoptimized speed on every run for no edit-loop gain.
-# Workspace members stay at opt-level 0; an edit has to rebuild them.
+# Workspace members stay at opt-level 1; an edit has to rebuild them.
+[profile.dev]
+opt-level = 1
+
 [profile.dev.package."*"]
 opt-level = 3
 
