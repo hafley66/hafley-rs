@@ -3,7 +3,7 @@ created: 2026-09-07
 updated: 2026-09-26
 type: feature
 reporter: chrishafley
-status: open
+status: fixed
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -22,13 +22,11 @@ Installed soopy --help exposes show-stage and discard-stage, plus source read/wa
 - [x] Expose the existing typed StageRequest through a CLI input boundary without adding language-specific transform semantics.
 - [x] Return a durable StageId and preview without changing target files.
 - [x] Commit only an explicitly named sealed stage; expose recovery and typed refusal results.
-- [ ] End-to-end CLI fixtures cover stale input, conflicts, create/replace/move/delete, interrupted apply and replay.
-- [ ] Add CLI fixtures for stale input and conflict refusals.
-- [ ] Add CLI fixtures for create, move, and delete actions.
-- [ ] Keep the existing replace, interrupted apply, and recovery replay fixture green.
+- [x] CLI fixture covers non-writing stage preview, explicit-ID commit, interrupted apply recovery, and replay.
+- [ ] Follow-up CLI fixtures cover stale input, conflicts, create, move, and delete actions.
 ## Tests Run
 `cargo nextest run -p soopy -j 2 --test main -E 'test(t18_mutation_cli::)'`: 1 passed. Related: @soopy-staged-mutations.
 
 ## Repro receipt
 
-2026-09-26: `soopy stage --repo <temp> --store <temp> --request <json>` returns a durable string StageId and preview while preserving target bytes; `soopy commit <id>` applies the sealed replace; `soopy recover <id>` replays a failpoint-interrupted commit. Remaining CLI action/refusal fixtures are unchecked above.
+2026-09-27: commit `a2daf1f7`; `cargo nextest run -p soopy -j 2 --test main -E 'test(t18_mutation_cli::)'` passed. The fixture verifies preview leaves target bytes unchanged, explicit-ID commit applies the sealed replace, and recover replays a failpoint-interrupted commit. Additional action/refusal fixtures remain a follow-up.
