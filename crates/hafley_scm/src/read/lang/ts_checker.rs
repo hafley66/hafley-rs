@@ -223,10 +223,10 @@ struct DriverRequest<'a> {
 }
 
 /// One `[start, end, name, dst_path, dst_name, dst_offset]` wire row.
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 type WireRow = (u32, u32, String, String, String, u32);
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 struct WireFile {
     path: String,
@@ -237,7 +237,7 @@ struct WireFile {
     tsi: Vec<Vec<serde_json::Value>>,
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 struct WireStats {
     stats: WireCosts,
@@ -245,7 +245,7 @@ struct WireStats {
     coverage: Vec<(String, bool, Option<String>)>,
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 struct WireCosts {
     #[serde(rename = "loadMs")]
@@ -255,7 +255,7 @@ struct WireCosts {
     files: usize,
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 #[derive(serde::Deserialize)]
 #[serde(untagged)]
 enum WireLine {
@@ -263,7 +263,7 @@ enum WireLine {
     Stats(WireStats),
 }
 
-#[cfg(feature = "ts-checker")]
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
 fn into_refs(rows: Vec<WireRow>) -> Vec<TsCheckerRef> {
     rows.into_iter()
         .map(
@@ -277,6 +277,36 @@ fn into_refs(rows: Vec<WireRow>) -> Vec<TsCheckerRef> {
             },
         )
         .collect()
+}
+
+#[cfg(any(feature = "go-checker", feature = "ts-checker"))]
+pub(super) fn parse_driver_stdout<E>(
+    stdout: &str,
+    mut into_fact: impl FnMut(Vec<serde_json::Value>) -> Result<crate::read::tsi::FactOut, E>,
+    failed: impl Fn(String) -> E,
+) -> Result<TsCheckerAnswers, E> {
+    let mut answers = TsCheckerAnswers::default();
+    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
+        match serde_json::from_str::<WireLine>(line) {
+            Ok(WireLine::File(file)) => {
+                for row in file.tsi {
+                    answers.tsi.push(into_fact(row)?);
+                }
+                answers
+                    .calls
+                    .insert(file.path.clone(), into_refs(file.calls));
+                answers.types.insert(file.path, into_refs(file.types));
+            }
+            Ok(WireLine::Stats(WireStats { stats, coverage })) => {
+                answers.load = Duration::from_millis(stats.load_ms);
+                answers.walk = Duration::from_millis(stats.walk_ms);
+                answers.files_answered = stats.files;
+                answers.coverage = coverage;
+            }
+            Err(err) => return Err(failed(err.to_string())),
+        }
+    }
+    Ok(answers)
 }
 
 /// One driver row `[relation, arg, ...]` into a fact. A row the registry does
@@ -340,27 +370,7 @@ pub fn answer(
 
     let stdout = std::fs::read_to_string(dir.join("indexer.stdout.log"))
         .map_err(|err| TsCheckerError::Failed(err.to_string()))?;
-    let mut answers = TsCheckerAnswers::default();
-    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        match serde_json::from_str::<WireLine>(line) {
-            Ok(WireLine::File(file)) => {
-                for row in file.tsi {
-                    answers.tsi.push(into_fact(row)?);
-                }
-                answers
-                    .calls
-                    .insert(file.path.clone(), into_refs(file.calls));
-                answers.types.insert(file.path, into_refs(file.types));
-            }
-            Ok(WireLine::Stats(WireStats { stats, coverage })) => {
-                answers.load = Duration::from_millis(stats.load_ms);
-                answers.walk = Duration::from_millis(stats.walk_ms);
-                answers.files_answered = stats.files;
-                answers.coverage = coverage;
-            }
-            Err(err) => return Err(TsCheckerError::Failed(err.to_string())),
-        }
-    }
+    let answers = parse_driver_stdout(&stdout, into_fact, TsCheckerError::Failed)?;
     let _ = std::fs::remove_dir_all(&dir);
     Ok(answers)
 }

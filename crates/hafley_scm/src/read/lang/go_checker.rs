@@ -550,27 +550,8 @@ pub fn answer(
 
     let stdout = std::fs::read_to_string(dir.join("indexer.stdout.log"))
         .map_err(|err| GoCheckerError::Failed(err.to_string()))?;
-    let mut answers = GoCheckerAnswers::default();
-    for line in stdout.lines().filter(|line| !line.trim().is_empty()) {
-        match serde_json::from_str::<WireLine>(line) {
-            Ok(WireLine::File(file)) => {
-                for row in file.tsi {
-                    answers.tsi.push(into_fact(row)?);
-                }
-                answers
-                    .calls
-                    .insert(file.path.clone(), into_refs(file.calls));
-                answers.types.insert(file.path, into_refs(file.types));
-            }
-            Ok(WireLine::Stats(WireStats { stats, coverage })) => {
-                answers.load = Duration::from_millis(stats.load_ms);
-                answers.walk = Duration::from_millis(stats.walk_ms);
-                answers.files_answered = stats.files;
-                answers.coverage = coverage;
-            }
-            Err(err) => return Err(GoCheckerError::Failed(err.to_string())),
-        }
-    }
+    let answers =
+        super::ts_checker::parse_driver_stdout(&stdout, into_fact, GoCheckerError::Failed)?;
     let _ = std::fs::remove_dir_all(&dir);
     Ok(answers)
 }

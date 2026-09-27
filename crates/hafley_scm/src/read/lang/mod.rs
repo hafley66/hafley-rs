@@ -152,7 +152,7 @@ pub mod source_facts;
 pub mod source_query;
 #[cfg(feature = "typescript")]
 pub mod ts;
-#[cfg(feature = "typescript")]
+#[cfg(any(feature = "typescript", feature = "go-checker"))]
 pub mod ts_checker;
 #[cfg(feature = "typescript")]
 pub mod ts_paths;
