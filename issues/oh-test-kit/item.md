@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-26
 type: feature
-status: open
+status: needs-decision
 priority: normal
 labels: [observability]
 ---
@@ -87,3 +87,9 @@ HTTP client into every consumer.
 - [ ] replay re-exec carries the seed and switches the subscriber
 - [ ] lab minting is a CLI subcommand with a build output
 - [ ] `default = []`
+
+## Reproduction receipt
+
+2026-09-26: `crates/hafley-observe` currently has no proc-macro dependency, no `oh::test` attributes, and its manifest sets `default = ["fmt", "chrome", "otlp-trace", "sqlite-sink"]`. None of the eight acceptance criteria are implemented end to end. The request spans a new attribute crate, resource budgets, SIGTERM drain/replay, and lab generation.
+
+Question: Should this full OH attribute, budget, drain/replay, and lab-minting scope be pursued as an epic in hafley-rs?
