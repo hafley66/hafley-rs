@@ -1,11 +1,12 @@
 ---
 created: 2026-09-17
-updated: 2026-09-17
+updated: 2026-09-27
 type: improvement
-status: open
+status: obsolete
 priority: normal
 related: ['@mux-paste-path']
 labels: [domain-boop, testing]
+closed: 2026-09-27
 ---
 
 # Consolidate Boop harness and terminal substrate for deterministic live TUI tests
@@ -29,3 +30,9 @@ Targeted tests exercise actual CLI requests and terminal input/output. Capture c
 
 ## Open question
 Pinned llmock v0.1.2 supports tool-call responses but the current fixture path cannot deterministically match subsequent tool results. Confirm sequence support or a cassette before A/tool-only/B acceptance.
+
+## Resolution
+
+### 2026-09-27T05:03:09Z · @issuectl
+
+Repro receipt: ~/.cargo/bin/boop --help lists loopback llmock recipes for every harness; the current card is a consolidation proposal and no runtime failure reproduces.
