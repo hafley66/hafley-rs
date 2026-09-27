@@ -71,9 +71,7 @@ pub fn kt_parse(content: &str) -> Option<tree_sitter::Tree> {
 }
 
 /// UTF-8 text of a tree-sitter node. Port of v5's inline `utf8_text` calls.
-pub fn kt_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
+pub use crate::span::node_text as kt_text;
 
 /// The byte span of a tree-sitter node `[start_byte, end_byte)`.
 pub(super) fn node_span(node: tree_sitter::Node) -> Span {

@@ -60,9 +60,7 @@ pub(super) fn py_parse(content: &str) -> Option<tree_sitter::Tree> {
 }
 
 /// UTF-8 text of a tree-sitter node. Port of v5 `py_text`.
-pub(super) fn py_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
+pub(super) use crate::span::node_text as py_text;
 
 /// The byte span of a tree-sitter node `[start_byte, end_byte)`.
 pub(super) fn node_span(node: tree_sitter::Node) -> crate::read::shape::Span {

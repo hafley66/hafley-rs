@@ -23,6 +23,7 @@ use crate::read::source::{FamilyMask, ProjectCx, RyiOutput, Source};
 use crate::read::trace;
 use crate::read::types::ResolveDrop;
 use crate::read::types::UnresolvedReason;
+use crate::span::node_text;
 use std::collections::BTreeSet;
 
 /// The `CstF` bundle for one file: the `hafley_scm` named-node walk mapped into
@@ -264,11 +265,6 @@ fn head_leaf<'a>(node: tree_sitter::Node<'a>) -> tree_sitter::Node<'a> {
     }
 }
 
-/// The node's own text.
-fn node_text<'a>(node: &tree_sitter::Node<'a>, src: &'a [u8]) -> &'a str {
-    std::str::from_utf8(&src[node.start_byte()..node.end_byte()]).unwrap_or("")
-}
-
 /// One guessed site's callee: the grammar's own seat first (`name`, then
 /// `method`, then `function`), resolved to the seat's LAST name leaf, the
 /// trailing segment of a member chain (`s.fp(...)` names `fp`). `callee_path`
@@ -292,9 +288,9 @@ fn callee_of(
         let Some(leaf) = leaves.last() else {
             continue;
         };
-        let callee = strings.intern(node_text(&leaf, src));
+        let callee = strings.intern(node_text(*leaf, src));
         let seat_text = node_text(&seat, src);
-        let callee_path = (seat_text != node_text(&leaf, src)).then(|| strings.intern(seat_text));
+        let callee_path = (seat_text != node_text(*leaf, src)).then(|| strings.intern(seat_text));
         return Some((callee, callee_path));
     }
     let mut leaves = Vec::new();

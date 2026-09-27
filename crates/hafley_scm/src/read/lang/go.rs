@@ -92,9 +92,7 @@ pub fn go_parse_shared_keyed(
 }
 
 /// UTF-8 text of a tree-sitter node. Port of v5 `go_text`.
-pub fn go_text<'a>(node: tree_sitter::Node, src: &'a [u8]) -> &'a str {
-    node.utf8_text(src).unwrap_or("")
-}
+pub use crate::span::node_text as go_text;
 
 // ════════════════════════════════════════════════════════════════════════════
 // TypeF: entity nodes + arrow-type sigs + type-edge candidates.
