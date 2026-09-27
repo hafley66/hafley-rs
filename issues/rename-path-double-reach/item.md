@@ -1,12 +1,14 @@
 ---
 created: 2026-09-18
-updated: 2026-09-18
+updated: 2026-09-26
 type: bug
-status: open
+status: obsolete
 priority: normal
 epic: extract-parity-move-rename
 related: ['@move-commit-exits-two']
 labels: [extract, artifact-cli, phase-refinement-1, intent-correctness, component-rename, needs-chris]
+closed: 2026-09-26
+disposition_note: The source path and symbol in the report are retired; current ryii cannot resolve the anchor because src/types.rs is absent.
 ---
 
 # rename exits 6 with no plan when #[path] double-reaches a symbol
@@ -55,3 +57,14 @@ routes. If the latter, exit 6 should be a plan.
 - [ ] If planning: `rename src/types.rs#ExtractOutput RyiOutput` produces a plan covering all 170 occurrences across both targets.
 - [ ] If refusing: the message states which flag or tree change unblocks the rename.
 - [ ] A test fixture reproduces a two-route symbol and pins the chosen behavior.
+
+## Comments
+
+### 2026-09-27T02:24:59Z · @codex
+
+Repro receipt: current ryii rename src/types.rs#ExtractOutput RyiOutput exits 2 with rename anchor is not a file; src/types.rs is absent and ExtractOutput has zero current source hits.
+
+### 2026-09-27T02:24:59Z · @intake
+
+Obsolete: The source path and symbol in the report are retired; current ryii cannot resolve the anchor because src/types.rs is absent.
+
