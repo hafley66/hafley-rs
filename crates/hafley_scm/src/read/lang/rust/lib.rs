@@ -13,13 +13,11 @@
 //! parity oracle (v5_normalize) reconstructs the byte as `line_starts[line-1] +
 //! col`, which is exactly `line_col_to_byte`.
 
-use std::collections::BTreeSet;
-use std::sync::LazyLock;
-
 use hafley_scm::lang::rust::{
-    call_metadata_rows_from_tree, call_site_rows_from_tree, line_col_to_byte, rust_combined_query,
-    CallDefinitionKind, RUST_CALL_QUERY, RUST_FAST_QUERY,
+    call_metadata_rows_from_tree, call_site_rows_from_tree, fast_file_query, line_col_to_byte,
+    CallDefinitionKind, RustFastFile, RUST_FAST_QUERY,
 };
+use std::collections::BTreeSet;
 
 use super::fallback::cst_bundle_from_tree;
 use super::rust_checker::CheckerAnswer;
@@ -84,22 +82,6 @@ use df::project_df;
 // `Strings` table across the output.
 // ════════════════════════════════════════════════════════════════════════════
 
-fn rust_call_query() -> &'static hafley_scm::QueryExt {
-    static QUERY: LazyLock<hafley_scm::QueryExt> = LazyLock::new(|| {
-        let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-        hafley_scm::build(&language, RUST_CALL_QUERY).expect("rust call query builds")
-    });
-    &QUERY
-}
-
-fn rust_combined_query_ext() -> &'static hafley_scm::QueryExt {
-    static QUERY: LazyLock<hafley_scm::QueryExt> = LazyLock::new(|| {
-        let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-        hafley_scm::build(&language, &rust_combined_query()).expect("rust combined query builds")
-    });
-    &QUERY
-}
-
 /// The Rust `Source`. `matches` = the path ends in `.rs`. CST uses the shared
 /// grammar; type/call/df/module facts reuse the same tree. Expanded-call rows
 /// are produced by SCM and mapped back to source bytes.
@@ -150,24 +132,14 @@ impl Source for RustSource {
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
 
-        // One tree backs every Rust fast projection.
-        let tree = if mask.cst || mask.types || mask.call || mask.df {
-            let parse_span = trace::parse_span("rust", "tree-sitter");
-            let _parse_guard = parse_span.enter();
-            std::str::from_utf8(content).ok().and_then(|_| {
-                let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-                hafley_scm::cst::parse(&language, content)
-            })
+        // One SCM++ Rust front-end call parses and queries the source once.
+        let parsed = if mask.cst || mask.types || mask.call || mask.df {
+            RustFastFile::extract(path, content)
         } else {
             None
         };
-        let scm_arena = tree.as_ref().map(|tree| {
-            let query = rust_combined_query_ext();
-            let mut arena = hafley_scm::MatchArena::default();
-            hafley_scm::run(query, path, content, tree, u32::MAX, &mut arena)
-                .expect("rust combined query stays within the engine match limit");
-            arena
-        });
+        let tree = parsed.as_ref().map(RustFastFile::tree);
+        let scm_arena = parsed.as_ref().map(RustFastFile::arena);
 
         // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
         // A refused parse leaves cst None (no panic).
@@ -209,9 +181,9 @@ impl Source for RustSource {
                         let span = trace::family_span("rust", "call");
                         let _entered = span.enter();
                         let mut bundle = FamilyBundle::<CallF>::default();
-                        if let Some(arena) = scm_arena.as_ref() {
+                        if let Some(arena) = scm_arena {
                             scm_call_defs(
-                                rust_combined_query_ext(),
+                                fast_file_query(),
                                 content,
                                 arena,
                                 &mut strings,
@@ -236,7 +208,7 @@ impl Source for RustSource {
         }
 
         let scm_captures = scm_arena.as_ref().map(|arena| {
-            super::scm_rows::ScmCaptures::from_arena(rust_combined_query_ext(), arena, content)
+            super::scm_rows::ScmCaptures::from_arena(fast_file_query(), arena, content)
         });
 
         RyiOutput {

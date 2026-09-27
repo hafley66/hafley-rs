@@ -62,7 +62,7 @@ fn phase_row(table: &str, lang: &str, phase: &str) -> Option<(u64, u64, u64)> {
 /// the trail off, so a fixture run never touches `~/.agent`.
 fn phases_of(path: &str) -> String {
     let output = Command::new(BIN)
-        .args(["--kinds", "cst,type,call", path])
+        .args(["--kinds", "cst,type,call,df", path])
         .env_remove("RUST_LOG")
         .env("DL_TRACE_SUMMARY", "1")
         .env("DL_TRAIL", "0")
@@ -250,12 +250,22 @@ fn phase_calls_per_file_are_pinned() {
                 (want_hashes, want_hashes),
                 "{lang} hashed {file} {hash_files} times, want {want_hashes}\n{table}"
             );
-            let (parse_files, _, _) = phase_row(&table, lang, "parse")
+            let (parse_files, parse_calls, _) = phase_row(&table, lang, "parse")
                 .unwrap_or_else(|| panic!("no {lang} parse row for {file} in\n{table}"));
             assert_eq!(
-                parse_files, want_parses,
+                (parse_files, parse_calls),
+                (want_parses, want_parses),
                 "{lang} parsed {file} {parse_files} times\n{table}"
             );
+            if lang == "rust" {
+                let (query_files, query_calls, _) = phase_row(&table, lang, "query")
+                    .unwrap_or_else(|| panic!("no rust query row for {file} in\n{table}"));
+                assert_eq!(
+                    (query_files, query_calls),
+                    (1, 1),
+                    "rust queried {file} {query_calls} times\n{table}"
+                );
+            }
             let (flatten_files, _, _) = phase_row(&table, "-", "flatten")
                 .unwrap_or_else(|| panic!("no flatten row for {file} in\n{table}"));
             assert_eq!(flatten_files, 1, "{file} flattened {flatten_files} times");

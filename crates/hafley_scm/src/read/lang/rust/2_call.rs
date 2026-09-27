@@ -1198,7 +1198,11 @@ pub(super) fn splice_macro_expansions(
     use hafley_scm::lang::rust::ExpandedCallKind;
 
     let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
-    let rows = hafley_scm::lang::rust::expanded_call_rows(src, rust_call_query(), &language);
+    let rows = hafley_scm::lang::rust::expanded_call_rows(
+        src,
+        hafley_scm::lang::rust::call_query(),
+        &language,
+    );
     for row in rows.defs {
         let kind = match row.kind {
             ExpandedCallKind::Free => CallKind::Free,

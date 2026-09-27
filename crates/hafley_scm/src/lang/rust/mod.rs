@@ -14,6 +14,9 @@ mod const_string_rows;
 mod df_syntax_rows;
 #[path = "14_expanded_call_rows.rs"]
 mod expanded_call_rows;
+#[cfg(feature = "read")]
+#[path = "23_frontend.rs"]
+mod frontend;
 #[path = "16_macro_invocation_rows.rs"]
 mod macro_invocation_rows;
 #[path = "10_module_resolution_rows.rs"]
@@ -64,6 +67,8 @@ pub use df_syntax_rows::{
     df_syntax_rows, df_syntax_rows_from_tree, DfNodeKind as DfSyntaxKind, DfSyntaxRows,
 };
 pub use expanded_call_rows::{expanded_call_rows, ExpandedCallKind, ExpandedCallRows};
+#[cfg(feature = "read")]
+pub use frontend::{call_query, fast_file_query, RustFastFile};
 pub use macro_invocation_rows::{
     macro_invocation_rows, macro_invocation_rows_from_parsed, macro_invocation_rows_from_tree,
     MacroInvocationRow,

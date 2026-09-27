@@ -14,6 +14,7 @@ use crate::read::types::Family;
 pub enum Phase {
     Hash,
     Parse,
+    Query,
     Family,
     BindPlan,
     Chain,
@@ -34,6 +35,7 @@ impl Phase {
         match self {
             Phase::Hash => "hash",
             Phase::Parse => "parse",
+            Phase::Query => "query",
             Phase::Family => "family",
             Phase::BindPlan => "bind_plan",
             Phase::Chain => "chain",
@@ -54,6 +56,7 @@ impl Phase {
         let phase = match name {
             "hash" => Phase::Hash,
             "parse" => Phase::Parse,
+            "query" => Phase::Query,
             "family" => Phase::Family,
             "bind_plan" => Phase::BindPlan,
             "chain" => Phase::Chain,
