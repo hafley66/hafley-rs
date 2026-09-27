@@ -117,15 +117,15 @@ fn spawn_spec(
 ) -> SpawnSpec {
     SpawnSpec {
         effort: None,
-        harness: boop::harness::HarnessId::Claude,
-        branch: branch.to_owned(),
-        base_sha: base_sha.to_owned(),
+        harness: Some(boop::harness::HarnessId::Claude),
+        branch: Some(branch.to_owned()),
+        base_sha: Some(base_sha.to_owned()),
         main_tree: false,
         setup: Vec::new(),
         prompt: "do the lane".to_owned(),
         resume_session: None,
         socket: None,
-        worktree_dir: Some(worktree.to_path_buf()),
+        worktree_dir: Some(worktree.display().to_string()),
         repo: repo.to_path_buf(),
         env_stamp: None,
         model: None,
@@ -133,9 +133,10 @@ fn spawn_spec(
         bin: None,
         on_exit: None,
         tmux: None,
-        lane: lane.to_owned(),
+        lane: Some(lane.to_owned()),
         mail_dir: mail_dir.to_path_buf(),
         warm_start: true,
+        ..SpawnSpec::default()
     }
 }
 

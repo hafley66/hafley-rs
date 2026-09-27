@@ -600,6 +600,7 @@ pub(crate) mod testkit {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         }
     }
 }
@@ -631,6 +632,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
         write_route(&dir, "child", route).unwrap();
         let routes = read_routes(&dir).unwrap();

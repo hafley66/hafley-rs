@@ -256,7 +256,7 @@ impl Harness for Codex {
             // under the sessions dir, this handle only anchors the lane.
             path: codex_sessions_dir().unwrap_or_else(|_| cwd.join(".codex-sessions")),
             cwd: Some(cwd.display().to_string()),
-            git_branch: Some(spec.branch.clone()),
+            git_branch: spec.branch.clone(),
             modified_ms: now_ms(),
             size: 0,
             tmux: Some(tmux_name),
@@ -2007,9 +2007,9 @@ mod tests {
     fn spawn_spec(socket: Option<String>) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
             effort: None,
-            harness: HarnessId::Codex,
-            branch: "lane-test".to_owned(),
-            base_sha: "0000000000000000000000000000000000000000".to_owned(),
+            harness: Some(HarnessId::Codex),
+            branch: Some("lane-test".to_owned()),
+            base_sha: Some("0000000000000000000000000000000000000000".to_owned()),
             main_tree: true,
             setup: Vec::new(),
             prompt: "do the lane".to_owned(),
@@ -2023,9 +2023,10 @@ mod tests {
             bin: None,
             on_exit: None,
             tmux: None,
-            lane: "lane-test".to_owned(),
+            lane: Some("lane-test".to_owned()),
             mail_dir: std::env::temp_dir(),
             warm_start: false,
+            ..crate::harness::SpawnSpec::default()
         }
     }
 
@@ -2067,9 +2068,9 @@ mod tests {
         let repo = TempRepo::new();
         let mut req = spawn_spec(Some(guard.socket.clone()));
         req.main_tree = false;
-        req.base_sha = repo.sha.clone();
+        req.base_sha = Some(repo.sha.clone());
         req.repo = repo.dir.clone();
-        req.worktree_dir = Some(repo.worktree.clone());
+        req.worktree_dir = Some(repo.worktree.display().to_string());
         req.model = Some("gpt-5.6-luna@medium".to_owned());
         let codex = Codex;
         let session = codex.spawn(&req).unwrap();

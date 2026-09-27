@@ -170,6 +170,7 @@ fn route(thread: &str, socket: &Path) -> Route {
         base_sha: None,
         worktree_dir: None,
         app_server_socket: Some(socket.display().to_string()),
+        ..Default::default()
     }
 }
 

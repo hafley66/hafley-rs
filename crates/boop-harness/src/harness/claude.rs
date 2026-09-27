@@ -353,7 +353,7 @@ impl Harness for Claude {
             nickname: session_id.clone(),
             path: cwd.join(session_id).with_extension("jsonl"),
             cwd: Some(cwd.display().to_string()),
-            git_branch: Some(spec.branch.clone()),
+            git_branch: spec.branch.clone(),
             modified_ms: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
                 .map(|d| d.as_millis() as u64)
@@ -1345,9 +1345,9 @@ mod tests {
     fn spec(guard: &TmuxGuard) -> crate::harness::SpawnSpec {
         crate::harness::SpawnSpec {
             effort: None,
-            harness: HarnessId::Claude,
-            branch: "lane-test".to_owned(),
-            base_sha: "0000000000000000000000000000000000000000".to_owned(),
+            harness: Some(HarnessId::Claude),
+            branch: Some("lane-test".to_owned()),
+            base_sha: Some("0000000000000000000000000000000000000000".to_owned()),
             main_tree: true,
             setup: Vec::new(),
             prompt: "do the lane".to_owned(),
@@ -1361,9 +1361,10 @@ mod tests {
             bin: None,
             on_exit: None,
             tmux: None,
-            lane: "lane-test".to_owned(),
+            lane: Some("lane-test".to_owned()),
             mail_dir: std::env::temp_dir(),
             warm_start: false,
+            ..crate::harness::SpawnSpec::default()
         }
     }
 
@@ -1383,9 +1384,9 @@ mod tests {
         let worktree = repo.worktree.clone();
         let mut req = spec(&guard);
         req.main_tree = false;
-        req.base_sha = repo.sha.clone();
+        req.base_sha = Some(repo.sha.clone());
         req.repo = repo.dir.clone();
-        req.worktree_dir = Some(worktree.clone());
+        req.worktree_dir = Some(worktree.display().to_string());
         let claude = Claude;
         let session = claude.spawn(&req).unwrap();
         assert_eq!(

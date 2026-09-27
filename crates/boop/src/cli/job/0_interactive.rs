@@ -8,8 +8,10 @@ use boop::registry::Registry;
 pub(super) fn command(spec: &SpawnSpec) -> String {
     let mut command = format!(
         "boop tui {} --name {} --mail-dir {}",
-        spec.harness,
-        shell_quote(&spec.lane),
+        spec.harness
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "unknown".into()),
+        shell_quote(spec.lane.as_deref().unwrap_or("lane")),
         shell_quote(&spec.mail_dir.display().to_string()),
     );
     if let Some(bin) = &spec.bin {
@@ -21,7 +23,7 @@ pub(super) fn command(spec: &SpawnSpec) -> String {
     );
     command.push_str(
         &Registry::discover()
-            .get(spec.harness)
+            .get(spec.harness.expect("interactive spawn requires a harness"))
             .interactive_fork_arguments(
                 &prompt,
                 spec.model.as_deref(),
@@ -46,12 +48,13 @@ pub(super) fn dispatch(
     } else {
         spec.repo.clone()
     };
-    let tmux = spec.tmux.as_deref().unwrap_or(&spec.lane);
+    let lane = spec.lane.as_deref().unwrap_or("lane");
+    let tmux = spec.tmux.as_deref().unwrap_or(lane);
     // Register before starting the native wrapper, which owns subsequent
     // process/session observations. A lane route would reject a TUI owner.
     let route = Route {
         kind: "coordinator".into(),
-        harness: Some(spec.harness),
+        harness: spec.harness,
         tmux: Some(tmux.to_owned()),
         cwd: Some(cwd.display().to_string()),
         model: spec.model.clone(),
@@ -62,13 +65,11 @@ pub(super) fn dispatch(
         goal,
         registered_at: Some(bus::now_iso()),
         base_sha: super::git_head(&cwd.display().to_string())?,
-        worktree_dir: spec
-            .worktree_dir
-            .as_ref()
-            .map(|path| path.display().to_string()),
+        worktree_dir: spec.worktree_dir.clone(),
         app_server_socket: None,
+        ..Route::default()
     };
-    bus::write_route(&spec.mail_dir, &spec.lane, &route)?;
+    bus::write_route(&spec.mail_dir, lane, &route)?;
     boop::tmux::mux().new_detached_session(
         spec.socket.as_deref(),
         tmux,
@@ -78,7 +79,10 @@ pub(super) fn dispatch(
     super::append_message(&spec.mail_dir, message)?;
     println!(
         "interactive {} -> {} (tmux {tmux})",
-        spec.harness, spec.lane
+        spec.harness
+            .map(|id| id.to_string())
+            .unwrap_or_else(|| "unknown".into()),
+        lane
     );
     Ok(())
 }
@@ -91,9 +95,9 @@ mod tests {
     #[test]
     fn claude_fork_command_preserves_settings_and_quotes_the_brief() {
         let spec = SpawnSpec {
-            harness: HarnessId::Claude,
-            branch: "fork/comment-1".into(),
-            base_sha: "main".into(),
+            harness: Some(HarnessId::Claude),
+            branch: Some("fork/comment-1".into()),
+            base_sha: Some("main".into()),
             main_tree: false,
             setup: vec![],
             prompt: "/tmp/Chris's brief.md".into(),
@@ -108,9 +112,10 @@ mod tests {
             bin: Some("ccz".into()),
             on_exit: Some("unwanted-epilogue".into()),
             tmux: Some("fork-comment-1".into()),
-            lane: "fork-comment-1".into(),
+            lane: Some("fork-comment-1".into()),
             mail_dir: "/tmp/mail root".into(),
             warm_start: false,
+            ..SpawnSpec::default()
         };
         assert_eq!(command(&spec), "BOOP_SESSION='fork-comment-1' boop tui claude --name 'fork-comment-1' --mail-dir '/tmp/mail root' --bin 'ccz' -- --model 'claude-fable-5-1' --effort 'high' 'Read the fork context and answer the request in this brief: /tmp/Chris'\\''s brief.md'");
     }

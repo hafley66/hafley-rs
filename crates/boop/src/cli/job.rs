@@ -28,80 +28,30 @@ use crate::{AgentCmd, BeepCmd, HarnessCmd, LaneCmd, LaneMessageCmd, MessageCmd, 
 // dispatch (layer 1 + bus)
 // ---------------------------------------------------------------------------
 
-pub(crate) struct DispatchArgs {
-    pub(crate) interactive: bool,
-    pub(crate) to: String,
-    pub(crate) cwd: String,
-    pub(crate) cmd: String,
-    pub(crate) from: Option<String>,
-    pub(crate) harness: Option<String>,
-    pub(crate) session_id: Option<String>,
-    pub(crate) model: Option<String>,
-    pub(crate) mode: Option<String>,
-    pub(crate) tmux: Option<String>,
-    pub(crate) socket: Option<String>,
-    pub(crate) body: Option<String>,
-    pub(crate) r#ref: Option<String>,
-    pub(crate) mail_dir: Option<PathBuf>,
-    pub(crate) resolve_wait: u64,
-    pub(crate) main_tree: bool,
-    pub(crate) base_sha: Option<String>,
-    /// Reasoning effort from the preset row, spelled as the harness's own
-    /// config flag rather than an `@suffix` on the model.
-    pub(crate) effort: Option<String>,
-    /// opencode reasoning-effort variant, threaded from `lane create`.
-    pub(crate) variant: Option<String>,
-    /// The executable the harness runs as, threaded from `lane create`.
-    pub(crate) bin: Option<String>,
-    /// Overrides the branch name derived from `tmux`/`to`; `lane create`
-    /// sets this from its own `--branch` flag.
-    pub(crate) branch: Option<String>,
-    /// The worktree to create; `None` spawns in `cwd` (`main_tree` decides
-    /// whether that's a fast-forward check or a plain directory).
-    pub(crate) worktree_dir: Option<PathBuf>,
-    /// The lane that summoned this one; written to the route's `parent`.
-    pub(crate) parent: Option<String>,
-    /// What the lane is running toward; written to the route and dispatch mail.
-    pub(crate) goal: Option<String>,
-    /// Shell appended after the harness command; `lane create --parent` and
-    /// foreground `lane create --wait` compose the completion hail here.
-    pub(crate) on_exit: Option<String>,
-    /// Run the repo's `boop-start` recipe in a new worktree before spawning.
-    pub(crate) warm_start: bool,
-    /// `KEY=VAL` pairs the lane's spawn inherits, shell-quoted onto the
-    /// supervisor command after boop's own stamps.
-    pub(crate) env: Vec<(String, String)>,
-    /// The `agent_lane` row id `lane create` minted for this run, written onto
-    /// the spawn record so a resume can prove it is the same run. A bare
-    /// `dispatch` mints none.
-    pub(crate) spawn_id: Option<i64>,
-    /// Finish by opening a PR; written onto the spawn record.
-    pub(crate) post_pr: bool,
-    /// The `gh pr create --base` branch; written onto the spawn record.
-    pub(crate) pr_base: Option<String>,
-}
+pub(crate) type DispatchArgs = boop::harness::SpawnSpec;
 
-pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()> {
-    let adapter = registry.resolve(args.harness.as_deref())?;
+pub(crate) fn run_dispatch(registry: &Registry, mut args: DispatchArgs) -> Result<()> {
+    let lane_id = args.lane.clone().context("dispatch requires a lane")?;
+    let adapter = registry.resolve(args.harness.map(|id| id.as_str()))?;
     let harness_id = adapter.id();
     info!(
-        lane = args.to,
+        lane = lane_id,
         harness = harness_id.as_str(),
         model = args.model.as_deref().unwrap_or_default(),
-        cwd = args.cwd,
+        cwd = args.repo.display().to_string(),
         tmux_target = args.tmux.as_deref().unwrap_or_default(),
         "lane dispatch starting"
     );
     let branch = args
         .branch
         .clone()
-        .unwrap_or_else(|| args.tmux.clone().unwrap_or_else(|| args.to.clone()));
+        .unwrap_or_else(|| args.tmux.clone().unwrap_or_else(|| lane_id.clone()));
     let base_sha = match &args.base_sha {
         Some(sha) => sha.clone(),
-        None => git_head(&args.cwd)?.unwrap_or_else(|| "HEAD".into()),
+        None => git_head(&args.repo.display().to_string())?.unwrap_or_else(|| "HEAD".into()),
     };
-    let dir = mail_dir(args.mail_dir.as_deref())?;
-    let mut body = args.body.clone().unwrap_or_else(|| args.cmd.clone());
+    let dir = mail_dir(args.mail_dir_override.as_deref())?;
+    let mut body = args.body.clone().unwrap_or_else(|| args.prompt.clone());
     // A dispatch's goal rides the route's `goal` field; embed it in the mail
     // row body too so history states the goal without a registry lookup.
     if let Some(goal) = &args.goal {
@@ -111,7 +61,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
     let message = bus::Message {
         id: bus::mint_id(),
         from: args.from.clone().unwrap_or_else(|| "coordinator".into()),
-        to: args.to.clone(),
+        to: lane_id.clone(),
         from_timestamp: bus::now_iso(),
         to_timestamp: None,
         kind: "dispatch".into(),
@@ -122,38 +72,23 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         detail: None,
     };
 
-    let spec = boop::harness::SpawnSpec {
-        harness: harness_id,
-        branch,
-        base_sha,
-        main_tree: args.main_tree,
-        setup: Vec::new(),
-        prompt: args.cmd.clone(),
-        resume_session: args.session_id.clone(),
-        socket: args.socket.clone(),
-        worktree_dir: args.worktree_dir.clone(),
-        repo: std::path::PathBuf::from(&args.cwd),
-        env_stamp: Some(spawn_env_stamp(
-            &args.to,
-            harness_id.as_str(),
-            args.parent.as_deref(),
-            &args.env,
-            args.spawn_id,
-        )),
-        model: args.model.clone(),
-        effort: args.effort.clone(),
-        variant: args.variant.clone(),
-        bin: args.bin.clone(),
-        on_exit: args.on_exit.clone(),
-        tmux: args.tmux.clone(),
-        lane: args.to.clone(),
-        mail_dir: dir.clone(),
-        warm_start: args.warm_start,
-    };
+    args.kind = bus::RouteKind::Lane;
+    args.harness = Some(harness_id);
+    args.branch = Some(branch);
+    args.base_sha = Some(base_sha);
+    args.lane = Some(lane_id.clone());
+    args.mail_dir = dir.clone();
+    args.env_stamp = Some(spawn_env_stamp(
+        &lane_id,
+        harness_id.as_str(),
+        args.parent.as_deref(),
+        &args.env,
+        args.spawn_id,
+    ));
     if args.interactive {
-        return interactive::dispatch(&spec, &message, args.parent, args.goal);
+        return interactive::dispatch(&args, &message, args.parent.clone(), args.goal.clone());
     }
-    let session = adapter.spawn(&spec)?;
+    let session = adapter.spawn(&args)?;
     // The record a send to a retired lane replays to bring the pane back.
     // The route's cwd is where the harness actually runs (the worktree when
     // one was made): session-id resolution joins opencode.db on directory.
@@ -161,7 +96,10 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         kind: "lane".into(),
         harness: Some(harness_id),
         tmux: session.tmux.clone(),
-        cwd: session.cwd.clone().or_else(|| Some(args.cwd.clone())),
+        cwd: session
+            .cwd
+            .clone()
+            .or_else(|| Some(args.repo.display().to_string())),
         model: args.model.clone(),
         mode: args.mode.clone(),
         session_id: args.session_id.clone(),
@@ -169,12 +107,10 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
         parent: args.parent.clone(),
         goal: args.goal.clone(),
         registered_at: Some(bus::now_iso()),
-        base_sha: Some(spec.base_sha.clone()),
-        worktree_dir: args
-            .worktree_dir
-            .clone()
-            .map(|dir| dir.display().to_string()),
+        base_sha: args.base_sha.clone(),
+        worktree_dir: args.worktree_dir.clone(),
         app_server_socket: None,
+        ..Route::default()
     };
     // The record a send to a retired lane replays to bring the pane back.
     if let (Some(tmux), Some(cwd)) = (session.tmux.as_deref(), session.cwd.as_deref()) {
@@ -182,20 +118,20 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             tmux: tmux.to_owned(),
             socket: session.tmux_socket.clone(),
             cwd: cwd.to_owned(),
-            command: boop::harness::supervisor_command(&spec),
+            command: boop::harness::supervisor_command(&args),
             route: bus::route_to_value(&route),
             spawn_id: args.spawn_id,
             post_pr: args.post_pr,
             pr_base: args.pr_base.clone(),
         };
-        if let Err(error) = boop::trail::write_spawn(&args.to, &spawn) {
-            warn!(lane = args.to, error = %error, "spawn record not written");
+        if let Err(error) = boop::trail::write_spawn(&lane_id, &spawn) {
+            warn!(lane = lane_id, error = %error, "spawn record not written");
         }
     }
-    write_route(&dir, &args.to, route)?;
+    write_route(&dir, &lane_id, route)?;
     append_message(&dir, &message)?;
     info!(
-        lane = args.to,
+        lane = lane_id,
         harness = adapter.id().as_str(),
         tmux_target = session.tmux.as_deref().unwrap_or_default(),
         conversation_id = session.session_id,
@@ -205,7 +141,7 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
     println!(
         "dispatched {} -> {} (tmux {}{})",
         message.id,
-        args.to,
+        lane_id,
         session.tmux.as_deref().unwrap_or("-"),
         match args.spawn_id {
             Some(id) => format!(", spawn {id}"),
@@ -218,13 +154,13 @@ pub(crate) fn run_dispatch(registry: &Registry, args: DispatchArgs) -> Result<()
             tmux::mux().has_session(session.tmux_socket.as_deref(), target),
             Ok(false)
         ) && bus::read_routes(&dir)?
-            .get(&args.to)
+            .get(&lane_id)
             .is_some_and(|route| route.session_id.as_deref() == Some(&session.session_id))
         {
             // A dead-on-arrival pane can run its route-only epilogue before
             // registration. Drop only the route this dispatch registered.
-            if let Err(error) = run_lane_delete(Some(&dir), &args.to, true, false, None) {
-                warn!(lane = args.to, %error, "dead lane route cleanup failed");
+            if let Err(error) = run_lane_delete(Some(&dir), &lane_id, true, false, None) {
+                warn!(lane = lane_id, %error, "dead lane route cleanup failed");
             }
         }
     }
@@ -946,41 +882,7 @@ pub(crate) fn parse_iso_ms(text: &str) -> Option<u64> {
 // lane
 // ---------------------------------------------------------------------------
 
-pub(crate) struct LaneArgs {
-    pub(crate) interactive: bool,
-    pub(crate) name: Option<String>,
-    pub(crate) cwd: Option<String>,
-    pub(crate) harness: Option<String>,
-    pub(crate) brief: Option<PathBuf>,
-    pub(crate) model: Option<String>,
-    pub(crate) preset: Option<String>,
-    pub(crate) variant: Option<String>,
-    pub(crate) bin: Option<String>,
-    pub(crate) tmux: Option<String>,
-    pub(crate) parent: Option<String>,
-    pub(crate) branch: Option<String>,
-    pub(crate) base_sha: Option<String>,
-    pub(crate) socket: Option<String>,
-    pub(crate) goal: Option<String>,
-    pub(crate) mood: Option<String>,
-    pub(crate) trace: Option<String>,
-    pub(crate) no_start: bool,
-    pub(crate) mail_dir: Option<PathBuf>,
-    pub(crate) dry_run: bool,
-    pub(crate) wait: bool,
-    pub(crate) wait_timeout: u64,
-    pub(crate) expect_path: Vec<String>,
-    pub(crate) expect_commit_subject: Vec<String>,
-    pub(crate) expect_commits_at_least: Option<u32>,
-    pub(crate) env: Vec<(String, String)>,
-    pub(crate) commit_push: Option<String>,
-    /// `--post-pr`: close the brief with the push-and-PR line.
-    pub(crate) post_pr: bool,
-    /// `--no-post-pr`: override a preset or global `post_pr` back off.
-    pub(crate) no_post_pr: bool,
-    /// `--pr-base <branch>`: the `gh pr create --base` target.
-    pub(crate) pr_base: Option<String>,
-}
+pub(crate) type LaneArgs = boop::harness::SpawnSpec;
 
 /// Falls back to a `*coordinator*` name match only when no route declares
 /// `kind == "coordinator"`, so a pre-`kind` registry row still resolves.
@@ -1213,21 +1115,21 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     let harness_id = lane::harness_for_spawn(
         registry,
         args.harness
-            .as_deref()
+            .map(|id| id.as_str())
             .or(preset_harness.map(boop::harness::HarnessId::as_str)),
         requested_model.as_deref(),
     )?;
     let adapter = registry.get(harness_id);
     let interactive = args.interactive;
     let here = std::env::current_dir().context("read the current directory")?;
-    let (repo, repo_source) = spawn_repo(args.cwd.as_deref(), args.brief.as_deref(), &here)?;
+    let (repo, repo_source) = spawn_repo(args.cwd_arg.as_deref(), args.brief.as_deref(), &here)?;
     if let Some(drift) = repo_drift_line(&repo, repo_source, &here) {
         println!("{drift}");
     }
     let identity = lane::derive(
         &repo,
         args.branch.as_deref(),
-        args.name.as_deref(),
+        args.lane.as_deref(),
         args.tmux.as_deref(),
     )?;
     // The binary's own sha rides the first line of every spawn: a lane that
@@ -1286,11 +1188,11 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // Effort reaches the harness as its own config; the model string stays
     // bare (presets-only-model-spelling, luna open_failed 02:10:31).
     let effort = spawning.as_ref().and_then(|preset| preset.effort.clone());
-    let variant = match args.variant {
+    let variant = match args.variant.clone() {
         Some(variant) => Some(variant),
         None => spawning.as_ref().and_then(|preset| preset.variant.clone()),
     };
-    let bin = match args.bin {
+    let bin = match args.bin.clone() {
         Some(bin) => Some(bin),
         None => spawning.as_ref().and_then(|preset| preset.bin.clone()),
     };
@@ -1321,7 +1223,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             rev: "HEAD".to_owned(),
         },
     };
-    let hail_mail_dir = mail_dir(args.mail_dir.as_deref())?;
+    let hail_mail_dir = mail_dir(args.mail_dir_override.as_deref())?;
     let routes = bus::read_routes(&hail_mail_dir)?;
     let caller = identity::resolve_as(None);
     let caller_lane = caller.lane.clone().filter(|lane| *lane != identity.lane);
@@ -1355,34 +1257,36 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             harness = harness_id.as_str(),
             "lane create dry run"
         );
-        let spec = boop::harness::SpawnSpec {
-            effort: effort.clone(),
-            harness: harness_id,
-            branch: identity.branch.clone(),
-            base_sha: base.sha.clone(),
-            main_tree: !worktree_mode,
-            setup: Vec::new(),
-            prompt: prompt.clone(),
-            resume_session: None,
-            socket: args.socket.clone(),
-            worktree_dir: identity.worktree_dir.clone(),
-            repo: repo.clone(),
-            env_stamp: Some(spawn_env_stamp(
-                &identity.lane,
-                harness_id.as_str(),
-                parent.parent.as_deref(),
-                &spawn_env,
-                None,
-            )),
-            model: model.clone(),
-            variant: variant.clone(),
-            bin: bin.clone(),
-            on_exit: on_exit.clone(),
-            tmux: Some(identity.tmux.clone()),
-            lane: identity.lane.clone(),
-            mail_dir: hail_mail_dir.clone(),
-            warm_start: !args.no_start,
-        };
+        let mut spec = args.clone();
+        spec.kind = bus::RouteKind::Lane;
+        spec.effort = effort.clone();
+        spec.harness = Some(harness_id);
+        spec.branch = Some(identity.branch.clone());
+        spec.base_sha = Some(base.sha.clone());
+        spec.main_tree = !worktree_mode;
+        spec.setup.clear();
+        spec.prompt = prompt.clone();
+        spec.resume_session = None;
+        spec.worktree_dir = identity
+            .worktree_dir
+            .as_ref()
+            .map(|path| path.display().to_string());
+        spec.repo = repo.clone();
+        spec.env_stamp = Some(spawn_env_stamp(
+            &identity.lane,
+            harness_id.as_str(),
+            parent.parent.as_deref(),
+            &spawn_env,
+            None,
+        ));
+        spec.model = model.clone();
+        spec.variant = variant.clone();
+        spec.bin = bin.clone();
+        spec.on_exit = on_exit.clone();
+        spec.tmux = Some(identity.tmux.clone());
+        spec.lane = Some(identity.lane.clone());
+        spec.mail_dir = hail_mail_dir.clone();
+        spec.warm_start = !args.no_start;
         let command = if interactive {
             interactive::command(&spec)
         } else {
@@ -1490,11 +1394,11 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
         registry,
         DispatchArgs {
             interactive,
-            to: identity.lane,
-            cwd: repo.display().to_string(),
-            cmd: prompt,
+            lane: Some(identity.lane),
+            repo: repo.clone(),
+            prompt,
             from: None,
-            harness: Some(harness_id.as_str().to_owned()),
+            harness: Some(harness_id),
             session_id: None,
             model,
             effort,
@@ -1506,12 +1410,12 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
                 brief.display()
             )),
             r#ref: Some(brief.display().to_string()),
-            mail_dir: args.mail_dir,
+            mail_dir_override: args.mail_dir_override,
             resolve_wait: 3,
             main_tree: !worktree_mode,
             base_sha: Some(base.sha),
             branch: Some(identity.branch),
-            worktree_dir: identity.worktree_dir,
+            worktree_dir: identity.worktree_dir.map(|path| path.display().to_string()),
             parent: result_recipient,
             goal: args.goal.clone(),
             on_exit,
@@ -1522,6 +1426,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             spawn_id,
             post_pr,
             pr_base: Some(pr_base),
+            ..boop::harness::SpawnSpec::default()
         },
     )?;
     // The parent edge is registered; a `--commit-push` mode is the explicit
@@ -2383,9 +2288,9 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                 registry,
                 LaneArgs {
                     interactive,
-                    name: lane,
-                    cwd,
-                    harness,
+                    lane,
+                    cwd_arg: cwd,
+                    harness: harness.as_deref().map(str::parse).transpose()?,
                     brief,
                     model,
                     preset,
@@ -2400,7 +2305,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                     mood,
                     trace,
                     no_start,
-                    mail_dir,
+                    mail_dir_override: mail_dir,
                     dry_run,
                     wait,
                     wait_timeout,
@@ -2412,6 +2317,7 @@ fn run_beep_lane_with_tui(registry: &Registry, interactive: bool, cmd: LaneCmd) 
                     post_pr,
                     no_post_pr,
                     pr_base,
+                    ..boop::harness::SpawnSpec::default()
                 },
             )
         }
@@ -4787,6 +4693,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
 
         let child = native(Some("parent-live"));
@@ -4859,6 +4766,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                ..Default::default()
             },
         )
         .unwrap();
@@ -4950,6 +4858,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         }
     }
 
@@ -5317,6 +5226,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
         assert_eq!(
             dead_reason(&route, &snapshot).as_deref(),
@@ -5356,6 +5266,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         }
     }
 
@@ -5853,6 +5764,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                ..Default::default()
             },
         );
         let messages = vec![dispatch("coordinator", "child")];

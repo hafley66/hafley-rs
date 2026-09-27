@@ -71,6 +71,7 @@ pub(crate) fn register_route(
         base_sha: None,
         worktree_dir: worktree.map(|path| path.display().to_string()),
         app_server_socket: None,
+        ..Route::default()
     });
     // Merge only supplied fields under the store's transaction. Registration
     // and lane patch share this update path, so omitted metadata and a lane's

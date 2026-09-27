@@ -244,7 +244,7 @@ impl Harness for Omp {
         let tmux_name = spec
             .tmux
             .clone()
-            .unwrap_or_else(|| format!("boop-{}", spec.lane));
+            .unwrap_or_else(|| format!("boop-{}", spec.lane.as_deref().unwrap_or("lane")));
         let cwd = crate::worktree::prepare_spawn_dir(spec)?;
         let command = crate::harness::supervisor_command(spec);
         boop_store::tmux::mux().new_detached_session(
@@ -255,11 +255,11 @@ impl Harness for Omp {
         )?;
         Ok(SessionRef {
             harness: HarnessId::Omp,
-            session_id: spec.lane.clone(),
-            nickname: spec.lane.clone(),
+            session_id: spec.lane.clone().unwrap_or_default(),
+            nickname: spec.lane.clone().unwrap_or_default(),
             path: omp_sessions_dir().unwrap_or_else(|_| cwd.join(".omp-sessions")),
             cwd: Some(cwd.display().to_string()),
-            git_branch: Some(spec.branch.clone()),
+            git_branch: spec.branch.clone(),
             modified_ms: boop_acp::channel::now_ms(),
             size: 0,
             tmux: Some(tmux_name),

@@ -309,6 +309,7 @@ impl Scratch {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
         bus::write_route(&self.mail, "lane-session", &route).unwrap();
     }

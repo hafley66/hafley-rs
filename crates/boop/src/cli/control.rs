@@ -548,6 +548,7 @@ pub(crate) fn run_native_tui(
             .as_ref()
             .and_then(|route| route.worktree_dir.clone()),
         app_server_socket: plan.app_server_socket.clone(),
+        ..Route::default()
     };
     let mut trace = store.trace_of(name)?;
     let mut history = NativeSessionHistory::new(name);

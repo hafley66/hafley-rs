@@ -1179,6 +1179,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                ..Default::default()
             },
         );
         store_routes(&store, &routes);
@@ -1262,6 +1263,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
         let mut routes = BTreeMap::new();
         routes.insert("feature-lane".into(), lane_route);
@@ -1371,6 +1373,7 @@ mod tests {
                 base_sha: None,
                 worktree_dir: None,
                 app_server_socket: None,
+                ..Default::default()
             },
         );
         store_routes(&store, &routes);
@@ -1454,6 +1457,7 @@ mod tests {
                     base_sha: None,
                     worktree_dir: None,
                     app_server_socket: None,
+                    ..Default::default()
                 },
             );
         }
@@ -2037,6 +2041,7 @@ mod tests {
                     base_sha: None,
                     worktree_dir: None,
                     app_server_socket: None,
+                    ..Default::default()
                 },
             );
         }

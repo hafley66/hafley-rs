@@ -2,7 +2,7 @@
 created: 2026-08-17
 updated: 2026-09-27
 type: improvement
-status: needs-info
+status: fixed
 priority: normal
 epic: boop-lane-observability
 labels: [domain-boop, intent-implementation]
@@ -36,6 +36,11 @@ Sites:
 
 ## Tests Run
 
+- `cargo check -p boop -j 2` passed.
+- `cargo nextest run -p boop-store -j 2 -E 'test(/captured_legacy_registry_row_migrates_into_the_canonical_route_shape/)'` passed.
+- `cargo nextest run -p boop-harness -j 2 -E 'test(/supervisor_command|worktree/)'` passed (18 tests).
+- `cargo nextest run -p boop -j 2 -E 'test(/claude_fork_command_preserves|lane_create_dry_run_names/)'` passed (2 tests).
+
 ## Implementation Notes
 
 Source: crates/boop/docs/audit-2026-08-17.md sections 9 and 10 (audit branch `audit/boop-review`, origin/main 49aca76).
@@ -46,4 +51,6 @@ Style laws apply: comment budget (no change-log narrative), no `eprintln!` in `s
 
 ### 2026-09-27T04:09:22Z · @codex
 
-Current repro: DispatchArgs, LaneArgs, SpawnSpec, and Route remain separate. The decision boundary is whether Route JSON adopts the canonical spawn type with a compatibility migration, or stays persisted with an explicit conversion from a shared request type. No registry migration contract is in this card.
+Repro: current Boop still defines separate `DispatchArgs`, `LaneArgs`, `boop_store::session::SpawnSpec`, and `bus::Route` types, with copied spawn fields at `run_dispatch`, `run_lane`, and route persistence. The user decided Route JSON adopts the canonical spawn type, both CLI paths and harness spawning use the same type, and old registry rows are migrated by reading captured old JSON and writing the new row shape.
+
+Receipt: `DispatchArgs` and `LaneArgs` are aliases of the canonical `SpawnSpec`; `Route` aliases it too. Dispatch resolves the canonical value in place. The captured legacy registry row imports into SQLite and serializes back through the current camelCase Route JSON fields. Focused store, harness, and CLI tests passed.

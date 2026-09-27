@@ -35,33 +35,7 @@ pub struct Message {
     pub detail: Option<String>,
 }
 
-#[derive(Clone, Debug)]
-pub struct Route {
-    /// `lane` is the default for registry rows written before kinds existed.
-    pub kind: RouteKind,
-    pub harness: Option<HarnessId>,
-    pub tmux: Option<String>,
-    pub cwd: Option<String>,
-    pub model: Option<String>,
-    pub mode: Option<String>,
-    pub session_id: Option<String>,
-    pub source_path: Option<String>,
-    /// The lane that summoned this one; `None` when spawned without `--parent`.
-    pub parent: Option<String>,
-    /// What the lane is running toward; `None` when spawned without `--goal`.
-    pub goal: Option<String>,
-    /// When this lane last registered (`lane create`/dispatch), ISO-8601. The
-    /// wait since-boundary that skips a previous run's result rows.
-    pub registered_at: Option<String>,
-    /// The base sha the spawn branched from. The `lane wait`/`lane list`
-    /// worktree-escape rail compares the registered worktree HEAD against it.
-    pub base_sha: Option<String>,
-    /// The worktree the spawn should have worked in; `None` for a main-tree
-    /// spawn (no worktree was created).
-    pub worktree_dir: Option<String>,
-    /// The managed Codex app-server socket shared by a native TUI and Boop.
-    pub app_server_socket: Option<String>,
-}
+pub type Route = crate::session::SpawnSpec;
 
 /// The kind of a mailbox envelope, one per wire string a row can carry. A
 /// value this build does not name keeps the wire string in `Other` so an older
@@ -107,6 +81,12 @@ pub enum RouteKind {
     Native,
     Shell,
     Other(String),
+}
+
+impl Default for RouteKind {
+    fn default() -> Self {
+        Self::Lane
+    }
 }
 
 macro_rules! kind_impls {
@@ -397,12 +377,12 @@ pub fn route_from_value(entry: &Value) -> Route {
         // a bare string is a shorthand for a session id route
         None if entry.is_string() => {
             return Route {
-                kind: "lane".into(),
+                kind: RouteKind::Lane,
                 session_id: entry.as_str().map(str::to_owned),
-                ..Route::unset()
+                ..Route::default()
             };
         }
-        None => return Route::unset(),
+        None => return Route::default(),
     };
     Route {
         kind: string_field(object, "kind")
@@ -427,27 +407,7 @@ pub fn route_from_value(entry: &Value) -> Route {
         worktree_dir: string_field(object, "worktreeDir")
             .or_else(|| string_field(object, "worktree_dir")),
         app_server_socket: string_field(object, "appServerSocket"),
-    }
-}
-
-impl Route {
-    fn unset() -> Self {
-        Route {
-            kind: "lane".into(),
-            harness: None,
-            tmux: None,
-            cwd: None,
-            model: None,
-            mode: None,
-            session_id: None,
-            source_path: None,
-            parent: None,
-            goal: None,
-            registered_at: None,
-            base_sha: None,
-            worktree_dir: None,
-            app_server_socket: None,
-        }
+        ..Route::default()
     }
 }
 fn string_field(object: &Map<String, Value>, key: &str) -> Option<String> {
@@ -1256,6 +1216,7 @@ pub fn routes_in(store: &crate::ident::Store) -> Result<BTreeMap<String, Route>>
                 base_sha: row.get(12)?,
                 worktree_dir: row.get(13)?,
                 app_server_socket: row.get(14)?,
+                ..Route::default()
             },
         ))
     })?;
@@ -1504,6 +1465,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         }
     }
 
@@ -1726,6 +1688,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         };
         super::upsert_route(&store, "sub-lane", &route(Some("parent"))).unwrap();
         for (subscriber, lane) in [
@@ -2064,6 +2027,35 @@ mod tests {
         let routes = read_routes(&dir).unwrap();
         let child = routes.get("child").unwrap();
         assert_eq!(child.parent.as_deref(), Some("coordinator"));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn captured_legacy_registry_row_migrates_into_the_canonical_route_shape() {
+        let dir = temp_dir("captured-registry-migration");
+        std::fs::write(
+            dir.join("registry.json"),
+            r#"{"legacy-lane":{"harness":"codex","tmux":"boop-legacy","cwd":"/repo/worktrees/legacy","model":"gpt-5","mode":"high","sessionId":"session-123","sourcePath":"old-session=123","parent":"coordinator","goal":"migrate this route","registeredAt":"2026-06-14T10:11:12Z","baseSha":"deadbeef","worktreeDir":"/repo/worktrees/legacy","appServerSocket":"/tmp/app.sock"}}"#,
+        )
+        .unwrap();
+
+        let store = super::open_store(&dir).unwrap();
+        let migrated = super::routes_in(&store).unwrap();
+        let route = &migrated["legacy-lane"];
+        assert_eq!(route.kind, "lane");
+        assert_eq!(route.harness.map(|id| id.as_str()), Some("codex"));
+        assert_eq!(route.tmux.as_deref(), Some("boop-legacy"));
+        assert_eq!(route.cwd.as_deref(), Some("/repo/worktrees/legacy"));
+        assert_eq!(route.session_id.as_deref(), Some("session-123"));
+        assert_eq!(route.parent.as_deref(), Some("coordinator"));
+        assert_eq!(route.goal.as_deref(), Some("migrate this route"));
+        assert_eq!(route.base_sha.as_deref(), Some("deadbeef"));
+        assert_eq!(route.app_server_socket.as_deref(), Some("/tmp/app.sock"));
+        let current_json = super::route_to_value(route);
+        assert_eq!(current_json["sessionId"], "session-123");
+        assert_eq!(current_json["worktreeDir"], "/repo/worktrees/legacy");
+        assert!(current_json.get("session_id").is_none());
+
         let _ = std::fs::remove_dir_all(&dir);
     }
 

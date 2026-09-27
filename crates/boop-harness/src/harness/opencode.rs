@@ -336,7 +336,7 @@ impl Harness for Opencode {
             nickname: session_id,
             path: opencode_db_path().unwrap_or_else(|| cwd.join("opencode.db")),
             cwd: Some(cwd.display().to_string()),
-            git_branch: Some(spec.branch.clone()),
+            git_branch: spec.branch.clone(),
             modified_ms: now_ms(),
             size: 0,
             tmux: Some(tmux_name),
@@ -2297,9 +2297,9 @@ mod tests {
     fn spec(guard: &TmuxGuard) -> SpawnSpec {
         SpawnSpec {
             effort: None,
-            harness: HarnessId::Opencode,
-            branch: "lane-test".to_owned(),
-            base_sha: "0000000000000000000000000000000000000000".to_owned(),
+            harness: Some(HarnessId::Opencode),
+            branch: Some("lane-test".to_owned()),
+            base_sha: Some("0000000000000000000000000000000000000000".to_owned()),
             main_tree: true,
             setup: Vec::new(),
             prompt: "/tmp/brief.md".to_owned(),
@@ -2313,9 +2313,10 @@ mod tests {
             bin: None,
             on_exit: None,
             tmux: None,
-            lane: "lane-test".to_owned(),
+            lane: Some("lane-test".to_owned()),
             mail_dir: std::env::temp_dir(),
             warm_start: false,
+            ..crate::harness::SpawnSpec::default()
         }
     }
 
@@ -2350,9 +2351,9 @@ mod tests {
         let worktree = repo.worktree.clone();
         let mut req = spec(&guard);
         req.main_tree = false;
-        req.base_sha = repo.sha.clone();
+        req.base_sha = Some(repo.sha.clone());
         req.repo = repo.dir.clone();
-        req.worktree_dir = Some(worktree.clone());
+        req.worktree_dir = Some(worktree.display().to_string());
         let opencode = Opencode;
         let session = opencode.spawn(&req).unwrap();
         assert_eq!(

@@ -349,6 +349,7 @@ mod tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         }
     }
 

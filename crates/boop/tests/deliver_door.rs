@@ -192,6 +192,7 @@ fn route(harness: HarnessId, tmux: Option<&str>, session_id: Option<&str>) -> Ro
         base_sha: None,
         worktree_dir: None,
         app_server_socket: None,
+        ..Default::default()
     }
 }
 

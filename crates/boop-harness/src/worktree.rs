@@ -41,10 +41,10 @@ impl std::error::Error for SpawnChildTimedOut {}
 /// `worktree_dir` and its setup steps run there in order.
 pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
     if spec.main_tree {
-        merge_ff_only(&spec.repo, &spec.base_sha)?;
+        merge_ff_only(&spec.repo, spec.base_sha.as_deref().unwrap_or("HEAD"))?;
         return Ok(spec.repo.clone());
     }
-    let Some(worktree) = spec.worktree_dir.clone() else {
+    let Some(worktree) = spec.worktree_dir.as_ref().map(PathBuf::from) else {
         anyhow::bail!("worktree spawn requires a worktree_dir");
     };
     if worktree.exists() {
@@ -52,7 +52,7 @@ pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
             "worktree path already exists: {}\n\
              a dead lane left it behind; respawn with --reclaim, or `boop beep lane delete {}`",
             worktree.display(),
-            spec.lane
+            spec.lane.as_deref().unwrap_or("lane")
         );
     }
     if let Some(parent) = worktree.parent() {
@@ -64,16 +64,22 @@ pub fn prepare_spawn_dir(spec: &SpawnSpec) -> Result<PathBuf> {
             "worktree",
             "add",
             "-b",
-            &spec.branch,
+            spec.branch
+                .as_deref()
+                .context("worktree spawn requires a branch")?,
             &worktree.display().to_string(),
-            &spec.base_sha,
+            spec.base_sha.as_deref().unwrap_or("HEAD"),
         ],
     )?;
-    merge_ff_only(&worktree, &spec.base_sha)?;
+    merge_ff_only(&worktree, spec.base_sha.as_deref().unwrap_or("HEAD"))?;
     if spec.warm_start {
         let outcome = warm_start(&worktree)?;
         println!("{}", outcome.status);
-        record_start_status(&spec.mail_dir, &spec.lane, &outcome.status)?;
+        record_start_status(
+            &spec.mail_dir,
+            spec.lane.as_deref().unwrap_or("lane"),
+            &outcome.status,
+        )?;
     }
     for command in &spec.setup {
         run_shell(&worktree, command)?;
@@ -702,15 +708,15 @@ mod tests {
     ) -> SpawnSpec {
         SpawnSpec {
             effort: None,
-            harness: HarnessId::Claude,
-            branch: "lane-wt".to_owned(),
-            base_sha: base.to_owned(),
+            harness: Some(HarnessId::Claude),
+            branch: Some("lane-wt".to_owned()),
+            base_sha: Some(base.to_owned()),
             main_tree,
             setup: Vec::new(),
             prompt: "do the lane".to_owned(),
             resume_session: None,
             socket: None,
-            worktree_dir: Some(worktree.to_path_buf()),
+            worktree_dir: Some(worktree.display().to_string()),
             repo: repo.to_path_buf(),
             env_stamp: None,
             model: None,
@@ -718,9 +724,10 @@ mod tests {
             bin: None,
             on_exit: None,
             tmux: None,
-            lane: "lane-test".to_owned(),
+            lane: Some("lane-test".to_owned()),
             mail_dir: std::env::temp_dir(),
             warm_start: false,
+            ..SpawnSpec::default()
         }
     }
 

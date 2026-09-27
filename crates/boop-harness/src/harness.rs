@@ -811,6 +811,7 @@ mod topology_tests {
             base_sha: None,
             worktree_dir: None,
             app_server_socket: None,
+            ..Default::default()
         }
     }
 
@@ -876,8 +877,8 @@ pub fn supervisor_command(spec: &SpawnSpec) -> String {
     // pinning every core (load 20.8 on 12 cores measured 2026-08-22).
     let mut command = format!(
         "nice -n 10 boop beep lane run --lane {} --harness {} --brief {} --mail-dir {}",
-        shell_quote(&spec.lane),
-        shell_quote(spec.harness.as_str()),
+        shell_quote(spec.lane.as_deref().unwrap_or("lane")),
+        shell_quote(spec.harness.map(|id| id.as_str()).unwrap_or("unknown")),
         shell_quote(&spec.prompt),
         shell_quote(&spec.mail_dir.display().to_string()),
     );
@@ -1037,9 +1038,9 @@ mod supervisor_command_tests {
     fn spec() -> SpawnSpec {
         SpawnSpec {
             effort: None,
-            harness: HarnessId::Claude,
-            branch: "lane-test".to_owned(),
-            base_sha: "0".repeat(40),
+            harness: Some(HarnessId::Claude),
+            branch: Some("lane-test".to_owned()),
+            base_sha: Some("0".repeat(40)),
             main_tree: true,
             setup: Vec::new(),
             prompt: "/tmp/brief.md".to_owned(),
@@ -1053,9 +1054,10 @@ mod supervisor_command_tests {
             bin: None,
             on_exit: None,
             tmux: None,
-            lane: "bin-probe".to_owned(),
+            lane: Some("bin-probe".to_owned()),
             mail_dir: std::env::temp_dir(),
             warm_start: false,
+            ..SpawnSpec::default()
         }
     }
 

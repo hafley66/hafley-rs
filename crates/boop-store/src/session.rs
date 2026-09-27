@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
 
+use crate::bus::RouteKind;
 use crate::event::AgentEvent;
 use crate::harness_id::HarnessId;
 
@@ -195,9 +196,24 @@ pub enum SendOutcome {
 /// What a spawn should create.
 #[derive(Clone, Debug)]
 pub struct SpawnSpec {
-    pub harness: HarnessId,
-    pub branch: String,
-    pub base_sha: String,
+    /// Route kind and identity fields share this one persisted spawn shape.
+    pub kind: RouteKind,
+    pub harness: Option<HarnessId>,
+    pub tmux: Option<String>,
+    pub cwd: Option<String>,
+    pub model: Option<String>,
+    pub mode: Option<String>,
+    pub session_id: Option<String>,
+    pub source_path: Option<String>,
+    pub parent: Option<String>,
+    pub goal: Option<String>,
+    pub registered_at: Option<String>,
+    pub base_sha: Option<String>,
+    pub worktree_dir: Option<String>,
+    pub app_server_socket: Option<String>,
+
+    /// Resolved spawn inputs used by adapters and the supervisor.
+    pub branch: Option<String>,
     pub main_tree: bool,
     /// Worktree gap steps (install, build) run in order before the prompt.
     pub setup: Vec<String>,
@@ -207,7 +223,6 @@ pub struct SpawnSpec {
     /// The tmux socket to spawn on (`None` is the default server).
     pub socket: Option<String>,
     /// The directory to run the harness in (the worktree, once created).
-    pub worktree_dir: Option<std::path::PathBuf>,
     /// The git checkout a worktree branches from (or the main-tree working
     /// dir when `main_tree` is true).
     pub repo: std::path::PathBuf,
@@ -216,7 +231,6 @@ pub struct SpawnSpec {
     pub env_stamp: Option<String>,
     /// The model the lane runs, in the harness's own flag spelling. `None`
     /// lets the harness default; a harness with no default refuses.
-    pub model: Option<String>,
     /// Reasoning effort, carried beside the model rather than inside it:
     /// codex spells it `-c model_reasoning_effort=`, never `model@effort`.
     pub effort: Option<String>,
@@ -230,13 +244,100 @@ pub struct SpawnSpec {
     /// (the harness exit code), which the lane re-raises afterwards.
     pub on_exit: Option<String>,
     /// The tmux session name to spawn under; `None` mints `boop-agent-<hex>`.
-    pub tmux: Option<String>,
     /// The lane id the supervisor drains messages for.
-    pub lane: String,
+    pub lane: Option<String>,
     /// The mailbox directory the lane's inbox lives in.
     pub mail_dir: PathBuf,
+    /// An explicit CLI mailbox override, resolved into `mail_dir` at dispatch.
+    pub mail_dir_override: Option<PathBuf>,
+    /// The CLI cwd before it is resolved into `repo`.
+    pub cwd_arg: Option<String>,
     /// Run the repo's `boop-start` recipe in a new worktree before spawning.
     pub warm_start: bool,
+
+    /// CLI inputs carried to the same spawn value without a parallel struct.
+    pub interactive: bool,
+    pub brief: Option<PathBuf>,
+    pub preset: Option<String>,
+    pub no_start: bool,
+    pub dry_run: bool,
+    pub wait: bool,
+    pub wait_timeout: u64,
+    pub expect_path: Vec<String>,
+    pub expect_commit_subject: Vec<String>,
+    pub expect_commits_at_least: Option<u32>,
+    pub env: Vec<(String, String)>,
+    pub commit_push: Option<String>,
+    pub no_post_pr: bool,
+    pub from: Option<String>,
+    pub body: Option<String>,
+    pub r#ref: Option<String>,
+    pub resolve_wait: u64,
+    pub spawn_id: Option<i64>,
+    pub post_pr: bool,
+    pub pr_base: Option<String>,
+    pub mood: Option<String>,
+    pub trace: Option<String>,
+}
+
+impl Default for SpawnSpec {
+    fn default() -> Self {
+        Self {
+            kind: RouteKind::Lane,
+            harness: None,
+            tmux: None,
+            cwd: None,
+            model: None,
+            mode: None,
+            session_id: None,
+            source_path: None,
+            parent: None,
+            goal: None,
+            registered_at: None,
+            base_sha: None,
+            worktree_dir: None,
+            app_server_socket: None,
+            branch: None,
+            main_tree: false,
+            setup: Vec::new(),
+            prompt: String::new(),
+            resume_session: None,
+            socket: None,
+            repo: PathBuf::new(),
+            env_stamp: None,
+            effort: None,
+            variant: None,
+            bin: None,
+            on_exit: None,
+            lane: None,
+            mail_dir: PathBuf::new(),
+            mail_dir_override: None,
+            cwd_arg: None,
+            warm_start: false,
+            interactive: false,
+            brief: None,
+            preset: None,
+            no_start: false,
+            dry_run: false,
+            wait: false,
+            wait_timeout: 3600,
+            expect_path: Vec::new(),
+            expect_commit_subject: Vec::new(),
+            expect_commits_at_least: None,
+            env: Vec::new(),
+            commit_push: None,
+            no_post_pr: false,
+            from: None,
+            body: None,
+            r#ref: None,
+            resolve_wait: 3,
+            spawn_id: None,
+            post_pr: false,
+            pr_base: None,
+            mood: None,
+            trace: None,
+        }
+    }
 }
 
 impl SpawnSpec {
