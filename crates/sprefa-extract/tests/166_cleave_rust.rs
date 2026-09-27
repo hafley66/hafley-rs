@@ -259,6 +259,98 @@ fn batch_keeps_every_row_source_parseable_while_composing() {
 }
 
 #[test]
+fn thread_local_static_is_named_unsupported_and_fails_the_plan() {
+    let fixture = fixture("basic", "thread-local-drag");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod opts;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/opts.rs"),
+        "use std::cell::RefCell;\nthread_local! { pub(crate) static LIVE_PARAMS: RefCell<u32> = RefCell::new(0); }\npub(crate) fn param_f32() -> u32 { LIVE_PARAMS.with(|value| *value.borrow()) }\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+
+    for target in ["LIVE_PARAMS", "param_f32"] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["cleave", &format!("src/opts.rs#{target}"), "src/moved.rs"])
+            .args(if target == "param_f32" {
+                vec!["--drag"]
+            } else {
+                vec![]
+            })
+            .arg("--root")
+            .arg(&fixture.root)
+            .arg("--state")
+            .arg(&fixture.state)
+            .current_dir(&fixture.root)
+            .env("HAFLEY_TRACE", &fixture.trace)
+            .output()
+            .expect("cleave binary runs");
+        assert_eq!(output.status.code(), Some(2));
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if target == "param_f32" {
+            assert!(
+                stdout.contains("ungraded LIVE_PARAMS"),
+                "{stdout}\n{stderr}"
+            );
+            assert!(stderr.contains("cleave has ungraded names"), "{stderr}");
+        } else {
+            assert!(
+                stderr.contains("unsupported thread_local! macro"),
+                "{stderr}"
+            );
+        }
+    }
+}
+
+#[test]
+fn unsupported_macro_items_are_ungraded_and_fail_the_plan() {
+    let fixture = fixture("basic", "unsupported-macro-item");
+    std::fs::write(
+        fixture.root.join("src/lib.rs"),
+        "pub mod opts;\npub mod moved;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/opts.rs"),
+        "lazy_static! { static ref UNSUPPORTED: std::cell::RefCell<u32> = std::cell::RefCell::new(0); }\npub(crate) fn param_f32() -> u32 { *UNSUPPORTED.borrow() }\n",
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("src/moved.rs"), "").unwrap();
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/opts.rs#UNSUPPORTED", "src/moved.rs"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("unsupported lazy_static! macro"));
+
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/opts.rs#param_f32", "src/moved.rs", "--drag"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .env("HAFLEY_TRACE", &fixture.trace)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&output.stdout).contains("ungraded UNSUPPORTED"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cleave has ungraded names"));
+}
+
+#[test]
 fn numbered_module_alias_and_child_glob_survive_a_verified_move() {
     let fixture = fixture("numbered", "module-alias");
     cleave(
