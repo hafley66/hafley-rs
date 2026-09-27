@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 pub use super::CheckerAnswer;
+use super::CALL_FACETS;
 use crate::read::shape::FamilyTag;
 use crate::read::types::{ContentId, DefIndex, DefSite};
 use hafley_scm::span::Span;
@@ -282,9 +283,6 @@ fn stamp_digests(
         .collect()
 }
 
-/// A call answer prefers the call facet and settles for the type facet: a tuple
-/// struct or variant constructor is a call whose only def is a type entity.
-const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
 const TYPE_FACETS: &[FamilyTag] = &[FamilyTag::Type];
 
 /// The declaration identifier's offset picks between several defs of one name in
