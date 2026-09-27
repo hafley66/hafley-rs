@@ -5,7 +5,7 @@ use hafley_scm::lang::rust::{
 };
 
 #[test]
-fn type_candidates_keep_owner_and_reference_order() {
+fn type_candidates_drop_generic_parameters_and_keep_owner_reference_order() {
     let src = "struct S<T: Clone> { x: Option<T> }\nimpl<T: Send> Trait<u8> for S<T> {}\ntype Alias = Vec<S<i32>>;\n";
     let parsed = syn::parse_file(src).expect("Rust parses");
     let groups = type_candidate_rows(&parsed, &build_line_starts(src));
@@ -28,16 +28,8 @@ fn type_candidates_keep_owner_and_reference_order() {
     assert_eq!(
         receipt,
         [
-            vec![
-                ("Clone", Kind::Generic),
-                ("Option", Kind::Field),
-                ("T", Kind::Field)
-            ],
-            vec![
-                ("Send", Kind::Generic),
-                ("Trait", Kind::Impl),
-                ("T", Kind::Generic)
-            ],
+            vec![("Clone", Kind::Generic), ("Option", Kind::Field)],
+            vec![("Send", Kind::Generic), ("Trait", Kind::Impl)],
             vec![("S", Kind::Uses), ("Vec", Kind::Uses)],
         ]
     );

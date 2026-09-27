@@ -72,7 +72,7 @@ fn phases_of(path: &str) -> String {
     String::from_utf8_lossy(&output.stderr).into_owned()
 }
 
-// The default is sprefa_extract=info (src/trace.rs:580), so an ordinary run
+// The default is sprefa_extract=info,hafley_scm=info, so an ordinary run
 // narrates itself on stderr while the fact stream stays alone on stdout.
 #[test]
 fn the_info_default_narrates_an_ordinary_run_on_stderr() {
