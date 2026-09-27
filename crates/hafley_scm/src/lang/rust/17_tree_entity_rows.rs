@@ -6,6 +6,7 @@ use super::type_entity_rows::{
     DocRow, DocSectionRow, ImplSelfHeadRow, SignatureRef, SignatureSlot, TypeEntityKind,
     TypeEntityRow, TypeEntityRows,
 };
+use super::tree_nodes::named_children;
 
 pub fn type_entity_rows_from_tree(tree: &tree_sitter::Tree, source: &[u8]) -> TypeEntityRows {
     let mut rows = TypeEntityRows::default();
@@ -273,11 +274,6 @@ fn append_type_refs(
         (slot(a.slot), a.pos, &a.name).cmp(&(slot(b.slot), b.pos, &b.name))
     });
     out.dedup_by(|a, b| a.slot == b.slot && a.pos == b.pos && a.name == b.name);
-}
-
-fn named_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Node<'_>> {
-    let mut cursor = node.walk();
-    node.named_children(&mut cursor).collect()
 }
 
 fn span(node: tree_sitter::Node<'_>) -> Range<u32> {

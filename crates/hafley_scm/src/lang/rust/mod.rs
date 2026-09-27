@@ -48,6 +48,7 @@ mod type_candidate_rows;
 mod type_entity_rows;
 #[path = "6_type_refs.rs"]
 mod type_refs;
+#[path = "16a_tree_nodes.rs"] pub(crate) mod tree_nodes;
 
 pub use call_definition_rows::{
     call_definition_rows, call_definition_rows_from_arena, CallDefinitionKind, CallDefinitionRow,

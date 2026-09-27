@@ -83,6 +83,8 @@ pub mod ts_paths;
 pub mod ts_receivers;
 #[cfg(feature = "typescript")]
 pub mod ts_resolve;
+pub mod checker_common;
+pub mod checker_wire;
 
 #[cfg(feature = "commonlisp")]
 pub use commonlisp::CommonlispSource;

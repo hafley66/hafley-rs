@@ -16,6 +16,8 @@ use crate::read::types::{
     TypeF,
 };
 use hafley_scm::span::Span;
+use super::checker_common::stamp_digests;
+use super::checker_wire::WireLine;
 
 /// One resolved reference. Offsets are the UTF-8 byte offset `to_span` writes,
 /// which is also what `go/token.Position.Offset` counts.
@@ -395,30 +397,6 @@ fn site_callee<'a>(
         .map(|candidate| output.strings.lookup(candidate.callee))
 }
 
-/// The driver wrote each span's SUPPLIED path; a corpus path becomes the file's
-/// content digest and any other path stays as it is, naming a file off-corpus.
-fn stamp_digests(
-    rows: Vec<crate::read::tsi::FactOut>,
-    corpus: &[(String, ContentId)],
-) -> Vec<crate::read::tsi::FactOut> {
-    let digest_of: HashMap<&str, String> = corpus
-        .iter()
-        .map(|(path, blob)| (path.as_str(), blob.to_string()))
-        .collect();
-    rows.into_iter()
-        .map(|mut row| {
-            for arg in &mut row.args {
-                if let crate::read::tsi::Arg::Span(key, _, _) = arg {
-                    if let Some(digest) = digest_of.get(key.as_str()) {
-                        *key = digest.clone();
-                    }
-                }
-            }
-            row
-        })
-        .collect()
-}
-
 /// A call answer prefers the call facet and settles for the type facet: a
 /// conversion-shaped constructor's only def may be a type entity.
 const CALL_FACETS: &[FamilyTag] = &[FamilyTag::Call, FamilyTag::Type];
@@ -489,22 +467,11 @@ struct DriverRequest<'a> {
 
 /// One `[start, end, name, dst_path, dst_name, dst_offset]` wire row.
 #[cfg(feature = "go-checker")]
-type WireRow = (u32, u32, String, String, String, u32);
+pub type WireRow = (u32, u32, String, String, String, u32);
 
 #[cfg(feature = "go-checker")]
 #[derive(serde::Deserialize)]
-struct WireFile {
-    path: String,
-    calls: Vec<WireRow>,
-    types: Vec<WireRow>,
-    /// `[relation, arg, ...]` per row; the ordinal is the wire's, minted here.
-    #[serde(default)]
-    tsi: Vec<Vec<serde_json::Value>>,
-}
-
-#[cfg(feature = "go-checker")]
-#[derive(serde::Deserialize)]
-struct WireStats {
+pub struct WireStats {
     stats: WireCosts,
     #[serde(default)]
     coverage: Vec<(String, bool, Option<String>)>,
@@ -518,14 +485,6 @@ struct WireCosts {
     #[serde(rename = "walkMs")]
     walk_ms: u64,
     files: usize,
-}
-
-#[cfg(feature = "go-checker")]
-#[derive(serde::Deserialize)]
-#[serde(untagged)]
-enum WireLine {
-    File(WireFile),
-    Stats(WireStats),
 }
 
 #[cfg(feature = "go-checker")]
