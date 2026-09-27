@@ -99,3 +99,18 @@ relation belongs to before writing either.
 ## Repro receipt
 
 2026-09-26: commits `a7727d4a` (DL8 rules) and pending this worktree commit; `cargo test --manifest-path v8/Cargo.toml --test _10_receiver_type_inference -j 2` passes with resolved `str::contains` / `vec::contains`, an explicit untyped reason, and an asserted zero-new fixpoint round. `CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo nextest run --features cli -j 2 --test all -E 'test(/^t_184_fast_recursive_receiver::/)'` passes; the SQLite recursive CTE yields one String, one Vec, and one untyped receiver row. A fixture `ryii scip --raw --scip-build` run returned distinct String and Vec symbols at the same two call spans. The 101-file 2026-09-19 baseline still lacks a committed reproducer; keep this issue open until that measurement is reproducible.
+
+2026-09-27 current-tree check: `cargo nextest run --features cli --locked -j 2 --test all -E 'test(/^t_184_fast_recursive_receiver::/)'` passes the String/Vec/untyped fixpoint fixture (1/1). Applying current `ryii` build `7d418857` to the archived `9b25f783` source gives 25,368 `site` rows and 209 `contains` rows, so it does not reproduce the historical 24,873/195 counts. The archive has 102 `.rs` paths; excluding data-only `src/lang/0_call_kinds.rs` gives 101 input source files. The historical binary replay command is:
+
+```sh
+baseline=/Users/chrishafley/.cache/lanes/the-gang-graph/fast-recursive-old-crate
+mkdir -p "$baseline"
+git archive 9b25f783 Cargo.toml crates/sprefa-extract crates/soopy crates/hafley-observe | tar -x -C "$baseline"
+CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/cargo-target cargo build \
+  --manifest-path "$baseline/crates/sprefa-extract/Cargo.toml" \
+  --locked --offline --features cli --bin ryi -j 2
+(cd "$baseline/crates/sprefa-extract" && \
+  /Users/chrishafley/.cache/boop/cargo-target/debug/ryi --family call src)
+```
+
+The offline historical build resolved 489 targets; it was stopped at 186 while compiling to honor the current CPU limit. The baseline reproduction remains unchecked and the issue stays open.
