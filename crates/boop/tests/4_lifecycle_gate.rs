@@ -26,6 +26,7 @@ fn claude_reader_resolves_exact_session() -> Result<()> {
         let adapter = registry.get(HarnessId::Claude);
         let session = adapter
             .session_by_id("owned-reader", Some(cwd))
+            .context("session lookup failed")?
             .context("exact fixture session was not resolved")?;
         let messages = adapter.messages(&session, None);
         ensure!(
@@ -238,6 +239,7 @@ trait LifecycleHarness {
                 route.session_id.as_deref().context("unbound route")?,
                 route.cwd.as_deref(),
             )
+            .context("session lookup failed")?
             .context("native transcript not observed")?;
         Ok(adapter.messages(&session, None))
     }
@@ -454,6 +456,7 @@ impl LifecycleHarness for OpenCode {
                 route.session_id.as_deref().context("no OpenCode thread")?,
                 route.cwd.as_deref(),
             )
+            .context("session lookup failed")?
             .context("OpenCode native database absent")?;
         let db = rusqlite::Connection::open_with_flags(
             session.path,
@@ -486,6 +489,7 @@ fn native_records(adapter: &dyn Harness, route: &bus::Route) -> Result<Vec<Value
             route.session_id.as_deref().context("no bound session")?,
             route.cwd.as_deref(),
         )
+        .context("session lookup failed")?
         .context("no exact native session")?;
     Ok(std::fs::read_to_string(session.path)?
         .lines()
@@ -884,6 +888,7 @@ fn await_receipt(
                 let session = harness
                     .adapter(registry)
                     .session_by_id(route.session_id.as_deref().unwrap(), route.cwd.as_deref())
+                    .context("session lookup failed")?
                     .context("receipt session disappeared")?;
                 let adapter = harness.adapter(registry);
                 let current = fixture.route()?;

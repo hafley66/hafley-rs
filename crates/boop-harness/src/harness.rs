@@ -542,6 +542,17 @@ pub trait Harness: Send + Sync {
     /// Every session this harness has on disk, newest last. No cap.
     fn sessions(&self) -> anyhow::Result<Vec<SessionRef>>;
 
+    /// Sessions recorded for one working directory. Adapters with a local
+    /// index should query it directly instead of enumerating every session.
+    fn sessions_for_cwd(&self, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+        Ok(self
+            .sessions()?
+            .into_iter()
+            .filter(|session| session.cwd.as_deref() == Some(cwd))
+            .filter(|session| self.lists_session(session))
+            .collect())
+    }
+
     /// Directories or stores whose mtimes cover discovery for this harness.
     /// A pass stats these before walking the session tree.
     fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
@@ -744,8 +755,12 @@ pub trait Harness: Send + Sync {
     /// transcript file (direct or a `subagents/` child) under the cwd's project
     /// dir; codex and kimi walk their sessions dir for the id; opencode reads
     /// its db row.
-    fn session_by_id(&self, _session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
-        None
+    fn session_by_id(
+        &self,
+        _session_id: &str,
+        _cwd: Option<&str>,
+    ) -> anyhow::Result<Option<SessionRef>> {
+        Ok(None)
     }
 
     /// Whether a session is a row for the UI strip. The default lists every

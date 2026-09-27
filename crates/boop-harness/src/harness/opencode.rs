@@ -205,6 +205,13 @@ impl Harness for Opencode {
         sessions_from(&path)
     }
 
+    fn sessions_for_cwd(&self, cwd: &str) -> Result<Vec<SessionRef>> {
+        let Some(path) = store_path() else {
+            return Ok(Vec::new());
+        };
+        sessions_for_cwd_from(&path, cwd)
+    }
+
     fn sync_candidates(&self, known: &KnownSessions) -> Result<Vec<SessionRef>> {
         let Some(path) = store_path() else {
             return Ok(Vec::new());
@@ -505,9 +512,11 @@ impl Harness for Opencode {
         read_opencode(&session.path, &session.session_id, after_seq)
     }
 
-    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
-        let path = store_path()?;
-        session_from(&path, session_id).ok().flatten()
+    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Result<Option<SessionRef>> {
+        let Some(path) = store_path() else {
+            return Ok(None);
+        };
+        session_from(&path, session_id)
     }
 }
 
@@ -681,6 +690,45 @@ fn sessions_from(path: &std::path::Path) -> Result<Vec<SessionRef>> {
         });
     }
     Ok(sessions)
+}
+
+fn sessions_for_cwd_from(path: &std::path::Path, cwd: &str) -> Result<Vec<SessionRef>> {
+    let connection = open_read_only(path)?;
+    let mut statement = connection.prepare(
+        "SELECT id, directory, parent_id, slug, time_updated
+           FROM session WHERE directory = ?1 ORDER BY time_updated",
+    )?;
+    let rows = statement.query_map([cwd], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            row.get::<_, Option<String>>(1)?,
+            row.get::<_, Option<String>>(2)?,
+            row.get::<_, Option<String>>(3)?,
+            row.get::<_, i64>(4)?,
+        ))
+    })?;
+    let sessions: Vec<_> = rows.collect::<std::result::Result<_, _>>()?;
+    let ids: Vec<_> = sessions
+        .iter()
+        .map(|(id, _, _, _, _)| id.as_str())
+        .collect();
+    let last_rowid = last_message_rowids_for(&connection, &ids)?;
+    Ok(sessions
+        .into_iter()
+        .map(|(id, directory, parent, slug, updated)| SessionRef {
+            harness: HarnessId::Opencode,
+            session_id: id.clone(),
+            nickname: slug.unwrap_or(id.clone()),
+            path: path.to_owned(),
+            cwd: directory,
+            git_branch: None,
+            modified_ms: updated as u64,
+            size: last_rowid.get(&id).copied().unwrap_or(0),
+            tmux: None,
+            tmux_socket: None,
+            parent,
+        })
+        .collect())
 }
 
 /// OpenCode keeps every transcript in one SQLite file. Read its compact

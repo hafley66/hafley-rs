@@ -742,11 +742,12 @@ pub(crate) fn run_native_tui(
                         boop::bus::update_native_route(&store, name, &mut route)?;
                     }
                 }
-                if let Some(session) = route
-                    .session_id
-                    .as_deref()
-                    .and_then(|id| adapter.session_by_id(id, route.cwd.as_deref()))
-                {
+                if let Some(session) = route.session_id.as_deref().and_then(|id| {
+                    adapter
+                        .session_by_id(id, route.cwd.as_deref())
+                        .ok()
+                        .flatten()
+                }) {
                     if let Some(NativeTuiEvent::Settings {
                         session_id,
                         model,

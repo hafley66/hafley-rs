@@ -504,6 +504,7 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
 
         let session = adapter
             .session_by_id(expected, Some(&scratch.repo().display().to_string()))
+            .expect("OMP session lookup succeeds")
             .expect("real OMP transcript by UUID");
         let chunk = adapter
             .read_from(&session, 0)

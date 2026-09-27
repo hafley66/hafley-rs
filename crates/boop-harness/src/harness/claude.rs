@@ -281,6 +281,11 @@ impl Harness for Claude {
         sessions_in(&base)
     }
 
+    fn sessions_for_cwd(&self, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+        let home = super::reader_home()?;
+        sessions_in(&claude_project_dir(&home, cwd))
+    }
+
     fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
         Ok(vec![claude_projects_dir()?])
     }
@@ -438,15 +443,25 @@ impl Harness for Claude {
         &session.nickname
     }
 
-    fn session_by_id(&self, session_id: &str, cwd: Option<&str>) -> Option<SessionRef> {
-        let base = super::reader_home().ok()?;
-        let cwd = cwd?;
-        let path = claude_session_path(&base, cwd, session_id)?;
-        let nickname = path.file_stem()?.to_str()?.to_string();
-        Some(SessionRef {
+    fn session_by_id(
+        &self,
+        session_id: &str,
+        cwd: Option<&str>,
+    ) -> anyhow::Result<Option<SessionRef>> {
+        let base = super::reader_home()?;
+        let Some(cwd) = cwd else {
+            return Ok(None);
+        };
+        let Some(path) = claude_session_path(&base, cwd, session_id) else {
+            return Ok(None);
+        };
+        let Some(nickname) = path.file_stem().and_then(|stem| stem.to_str()) else {
+            return Ok(None);
+        };
+        Ok(Some(SessionRef {
             harness: HarnessId::Claude,
             session_id: session_id.to_string(),
-            nickname,
+            nickname: nickname.to_string(),
             path,
             cwd: Some(cwd.to_string()),
             git_branch: None,
@@ -455,7 +470,7 @@ impl Harness for Claude {
             tmux: None,
             tmux_socket: None,
             parent: None,
-        })
+        }))
     }
 }
 
@@ -495,21 +510,27 @@ pub(crate) fn claude_session_path(
     cwd: &str,
     session_id: &str,
 ) -> Option<std::path::PathBuf> {
+    claude_session_path_with(home, cwd, session_id, |path| std::fs::read_dir(path))
+}
+
+fn claude_session_path_with(
+    home: &std::path::Path,
+    cwd: &str,
+    session_id: &str,
+    read_dir: impl FnOnce(&std::path::Path) -> std::io::Result<std::fs::ReadDir>,
+) -> Option<std::path::PathBuf> {
     let project = claude_project_dir(home, cwd);
     let direct = project.join(format!("{session_id}.jsonl"));
     if direct.is_file() {
         return Some(direct);
     }
-    std::fs::read_dir(project)
-        .ok()?
-        .flatten()
-        .find_map(|entry| {
-            let path = entry
-                .path()
-                .join("subagents")
-                .join(format!("{session_id}.jsonl"));
-            path.is_file().then_some(path)
-        })
+    read_dir(&project).ok()?.flatten().find_map(|entry| {
+        let path = entry
+            .path()
+            .join("subagents")
+            .join(format!("{session_id}.jsonl"));
+        path.is_file().then_some(path)
+    })
 }
 
 // ---- claude transcript reader (moved from instant ledger.rs, verbatim).
@@ -1076,6 +1097,36 @@ pub use boop_store::session::parse_iso_ms;
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn session_by_id_checks_only_its_encoded_project() {
+        let home = std::env::temp_dir().join(format!("boop-claude-id-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let cwd = "/workspace/one";
+        let project = super::claude_project_dir(&home, cwd);
+        std::fs::create_dir_all(&project).unwrap();
+        std::fs::create_dir_all(home.join(".claude/projects/unrelated")).unwrap();
+        let parent = project.join("parent-session");
+        let subagents = parent.join("subagents");
+        std::fs::create_dir_all(&subagents).unwrap();
+        let transcript = subagents.join("session-1.jsonl");
+        std::fs::write(&transcript, "{}\n").unwrap();
+
+        let project_reads = std::cell::Cell::new(0);
+        assert_eq!(
+            super::claude_session_path_with(&home, cwd, "session-1", |path| {
+                project_reads.set(project_reads.get() + 1);
+                std::fs::read_dir(path)
+            }),
+            Some(transcript)
+        );
+        assert_eq!(project_reads.get(), 1);
+        assert_eq!(
+            super::claude_session_path(&home, "/workspace/missing", "session-1"),
+            None
+        );
+        let _ = std::fs::remove_dir_all(home);
+    }
+
     /// RECEIPT (native-visibility). A repo's linked `.claude/worktrees/agent-*`
     /// worktrees surface as native Claude subagents: a `locked` porcelain block
     /// reads `live`, an unlocked one reads `dead`.

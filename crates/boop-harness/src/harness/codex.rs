@@ -15,6 +15,7 @@ use anyhow::Context;
 use boop_store::event::AgentEvent;
 use boop_store::ident::{Store, SyncStat, UsageRow};
 use boop_store::tail;
+use rusqlite::{Connection, OpenFlags, OptionalExtension};
 use serde_json::Value;
 
 pub struct Codex;
@@ -273,6 +274,10 @@ impl Harness for Codex {
         sessions_in(&codex_sessions_dir()?)
     }
 
+    fn sessions_for_cwd(&self, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+        codex_threads_for_cwd(cwd)
+    }
+
     fn session_roots(&self) -> anyhow::Result<Vec<PathBuf>> {
         Ok(vec![codex_sessions_dir()?])
     }
@@ -469,48 +474,13 @@ impl Harness for Codex {
         read_codex(&session.path, &session.session_id, after_seq)
     }
 
-    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
-        let base = codex_sessions_dir().ok()?;
-        let path = codex_session_path(&base, session_id)?;
-        let nickname = path.file_stem()?.to_str()?.to_string();
-        Some(SessionRef {
-            harness: HarnessId::Codex,
-            session_id: session_id.to_string(),
-            nickname,
-            path,
-            cwd: None,
-            git_branch: None,
-            modified_ms: 0,
-            size: 0,
-            tmux: None,
-            tmux_socket: None,
-            parent: None,
-        })
+    fn session_by_id(
+        &self,
+        session_id: &str,
+        _cwd: Option<&str>,
+    ) -> anyhow::Result<Option<SessionRef>> {
+        codex_thread_by_id(session_id, _cwd)
     }
-}
-
-/// The exact rollout transcript for a codex session id, found by walking the
-/// sessions dir for a jsonl whose file name contains the id.
-fn codex_session_path(base: &Path, session_id: &str) -> Option<PathBuf> {
-    fn walk(dir: &Path, id: &str) -> Option<PathBuf> {
-        for entry in std::fs::read_dir(dir).ok()?.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                if let Some(found) = walk(&path, id) {
-                    return Some(found);
-                }
-            } else if path.extension().and_then(|e| e.to_str()) == Some("jsonl")
-                && path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.contains(id))
-            {
-                return Some(path);
-            }
-        }
-        None
-    }
-    walk(base, session_id)
 }
 
 // ---- codex transcript reader (moved from instant ledger.rs, verbatim).
@@ -678,6 +648,100 @@ fn read_codex(
 
 fn codex_sessions_dir() -> anyhow::Result<PathBuf> {
     Ok(codex_home()?.join("sessions"))
+}
+
+fn codex_thread_by_id(session_id: &str, cwd: Option<&str>) -> anyhow::Result<Option<SessionRef>> {
+    codex_thread_by_id_in(&codex_home()?, session_id, cwd)
+}
+
+fn codex_thread_by_id_in(
+    home: &Path,
+    session_id: &str,
+    cwd: Option<&str>,
+) -> anyhow::Result<Option<SessionRef>> {
+    let database = home.join("state_5.sqlite");
+    if !database.is_file() {
+        return Ok(None);
+    }
+    let connection = Connection::open_with_flags(
+        database,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    let mut statement = connection.prepare(
+        "SELECT id, rollout_path, cwd, COALESCE(updated_at_ms, 0)
+           FROM threads
+          WHERE id = ?1 AND (?2 IS NULL OR cwd = ?2)",
+    )?;
+    let row = statement
+        .query_row(rusqlite::params![session_id, cwd], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                PathBuf::from(row.get::<_, String>(1)?),
+                row.get::<_, String>(2)?,
+                row.get::<_, i64>(3)?,
+            ))
+        })
+        .optional()?;
+    Ok(row.and_then(|row| codex_thread_ref(home, row)))
+}
+
+fn codex_threads_for_cwd(cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+    codex_threads_for_cwd_in(&codex_home()?, cwd)
+}
+
+fn codex_threads_for_cwd_in(home: &Path, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+    let database = home.join("state_5.sqlite");
+    if !database.is_file() {
+        return Ok(Vec::new());
+    }
+    let connection = Connection::open_with_flags(
+        database,
+        OpenFlags::SQLITE_OPEN_READ_ONLY | OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )?;
+    let mut statement = connection.prepare(
+        "SELECT id, rollout_path, cwd, COALESCE(updated_at_ms, 0)
+           FROM threads WHERE cwd = ?1 ORDER BY updated_at_ms",
+    )?;
+    let rows = statement.query_map([cwd], |row| {
+        Ok((
+            row.get::<_, String>(0)?,
+            PathBuf::from(row.get::<_, String>(1)?),
+            row.get::<_, String>(2)?,
+            row.get::<_, i64>(3)?,
+        ))
+    })?;
+    let mut sessions = Vec::new();
+    for row in rows {
+        if let Some(session) = codex_thread_ref(home, row?) {
+            sessions.push(session);
+        }
+    }
+    Ok(sessions)
+}
+
+fn codex_thread_ref(
+    home: &Path,
+    (session_id, path, cwd, modified_ms): (String, PathBuf, String, i64),
+) -> Option<SessionRef> {
+    let path = if path.is_absolute() {
+        path
+    } else {
+        home.join(path)
+    };
+    let metadata = std::fs::metadata(&path).ok()?;
+    Some(SessionRef {
+        harness: HarnessId::Codex,
+        nickname: path.file_stem()?.to_str()?.to_string(),
+        session_id,
+        path,
+        cwd: Some(cwd),
+        git_branch: None,
+        modified_ms: modified_ms.max(0) as u64,
+        size: metadata.len(),
+        tmux: None,
+        tmux_socket: None,
+        parent: None,
+    })
 }
 
 pub(crate) fn codex_home() -> anyhow::Result<PathBuf> {
@@ -1765,6 +1829,59 @@ mod tests {
 
     fn temp_path(name: &str) -> PathBuf {
         std::env::temp_dir().join(format!("boop_codex_{}_{}", std::process::id(), name))
+    }
+
+    #[test]
+    fn session_lookup_uses_the_codex_thread_index() {
+        let home = temp_path("thread-index");
+        let _ = std::fs::remove_dir_all(&home);
+        let transcript = home.join("sessions/2026/09/27/rollout-session-1.jsonl");
+        std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        std::fs::write(&transcript, "{}\n").unwrap();
+        let connection = rusqlite::Connection::open(home.join("state_5.sqlite")).unwrap();
+        connection
+            .execute_batch(
+                "CREATE TABLE threads (
+                    id TEXT PRIMARY KEY,
+                    rollout_path TEXT NOT NULL,
+                    cwd TEXT NOT NULL,
+                    updated_at_ms INTEGER
+                );",
+            )
+            .unwrap();
+        connection
+            .execute(
+                "INSERT INTO threads VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![
+                    "session-1",
+                    transcript.display().to_string(),
+                    "/workspace/a",
+                    123_i64
+                ],
+            )
+            .unwrap();
+        drop(connection);
+
+        let found = super::codex_thread_by_id_in(&home, "session-1", Some("/workspace/a"))
+            .unwrap()
+            .unwrap();
+        assert_eq!(found.path, transcript);
+        assert_eq!(found.cwd.as_deref(), Some("/workspace/a"));
+        assert_eq!(found.modified_ms, 123);
+        assert!(
+            super::codex_thread_by_id_in(&home, "session-1", Some("/workspace/b"))
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(
+            super::codex_threads_for_cwd_in(&home, "/workspace/a")
+                .unwrap()
+                .iter()
+                .map(|session| session.session_id.as_str())
+                .collect::<Vec<_>>(),
+            ["session-1"]
+        );
+        let _ = std::fs::remove_dir_all(home);
     }
 
     fn write_lines(path: &PathBuf, lines: &[&str]) {

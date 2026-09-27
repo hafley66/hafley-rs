@@ -99,13 +99,15 @@ impl Registry {
     /// when one is given. Nothing here parses a transcript.
     pub fn sessions_in_cwd(&self, id: HarnessId, cwd: Option<&str>) -> Vec<SessionRef> {
         let harness = self.get(id);
-        harness
-            .sessions()
-            .unwrap_or_default()
-            .into_iter()
-            .filter(|session| cwd.is_none_or(|wanted| session.cwd.as_deref() == Some(wanted)))
-            .filter(|session| harness.lists_session(session))
-            .collect()
+        match cwd {
+            Some(cwd) => harness.sessions_for_cwd(cwd).unwrap_or_default(),
+            None => harness
+                .sessions()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|session| harness.lists_session(session))
+                .collect(),
+        }
     }
 
     /// Every session for one harness, shaped and sorted newest first (then id
@@ -150,7 +152,7 @@ impl Registry {
         cwd: &str,
         after_seq: Option<u64>,
     ) -> Vec<Message> {
-        let Some(session) = self.get(id).session_by_id(session_id, Some(cwd)) else {
+        let Ok(Some(session)) = self.get(id).session_by_id(session_id, Some(cwd)) else {
             return Vec::new();
         };
         self.get(id).messages(&session, after_seq)
@@ -277,7 +279,23 @@ mod tests {
         }
 
         fn sessions(&self) -> anyhow::Result<Vec<SessionRef>> {
-            Ok(Vec::new())
+            anyhow::bail!("cwd lookup must not enumerate the full harness root")
+        }
+
+        fn sessions_for_cwd(&self, cwd: &str) -> anyhow::Result<Vec<SessionRef>> {
+            Ok(vec![SessionRef {
+                harness: HarnessId::Kimi,
+                session_id: "target-session".into(),
+                nickname: "target-session".into(),
+                path: std::path::PathBuf::from("target.jsonl"),
+                cwd: Some(cwd.to_owned()),
+                git_branch: None,
+                modified_ms: 0,
+                size: 0,
+                tmux: None,
+                tmux_socket: None,
+                parent: None,
+            }])
         }
 
         fn read_from(&self, _session: &SessionRef, offset: u64) -> anyhow::Result<ReadChunk> {
@@ -322,6 +340,14 @@ mod tests {
         );
         assert!(registry.by_name("nothing-known").is_none());
         assert!(registry.by_name("codex").is_none());
+    }
+
+    #[test]
+    fn cwd_session_lookup_uses_the_adapter_index() {
+        let registry = Registry::with(vec![Box::new(Echo)]);
+        let sessions = registry.sessions_in_cwd(HarnessId::Kimi, Some("/workspace"));
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].session_id, "target-session");
     }
 
     /// RECEIPT. The built-in registry answers every variant, so `get` never

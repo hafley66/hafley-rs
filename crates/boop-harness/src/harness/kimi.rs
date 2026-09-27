@@ -408,10 +408,16 @@ impl Harness for Kimi {
         session.parent.is_none()
     }
 
-    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
-        let base = kimi_sessions_dir().ok()?;
-        let path = kimi_session_path(&base, session_id)?;
-        Some(SessionRef {
+    fn session_by_id(
+        &self,
+        session_id: &str,
+        _cwd: Option<&str>,
+    ) -> anyhow::Result<Option<SessionRef>> {
+        let base = kimi_sessions_dir()?;
+        let Some(path) = kimi_session_path(&base, session_id) else {
+            return Ok(None);
+        };
+        Ok(Some(SessionRef {
             harness: HarnessId::Kimi,
             session_id: session_id.to_string(),
             nickname: "main".to_string(),
@@ -423,7 +429,7 @@ impl Harness for Kimi {
             tmux: None,
             tmux_socket: None,
             parent: None,
-        })
+        }))
     }
 }
 

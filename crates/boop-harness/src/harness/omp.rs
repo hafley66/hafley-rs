@@ -184,6 +184,11 @@ impl Harness for Omp {
         sessions_in(&omp_sessions_dir()?)
     }
 
+    fn sessions_for_cwd(&self, cwd: &str) -> Result<Vec<SessionRef>> {
+        let base = omp_sessions_dir()?.join(encode_cwd(cwd));
+        sessions_in(&base)
+    }
+
     fn session_roots(&self) -> Result<Vec<PathBuf>> {
         Ok(vec![omp_sessions_dir()?])
     }
@@ -345,19 +350,22 @@ impl Harness for Omp {
         &session.session_id
     }
 
-    fn session_by_id(&self, session_id: &str, _cwd: Option<&str>) -> Option<SessionRef> {
-        let sessions = self.sessions().ok()?;
+    fn session_by_id(&self, session_id: &str, cwd: Option<&str>) -> Result<Option<SessionRef>> {
+        let sessions = match cwd {
+            Some(cwd) => self.sessions_for_cwd(cwd)?,
+            None => self.sessions()?,
+        };
         if let Some(exact) = sessions
             .iter()
             .find(|session| session.session_id == session_id)
         {
-            return Some(exact.clone());
+            return Ok(Some(exact.clone()));
         }
         let prefixes: Vec<&SessionRef> = sessions
             .iter()
             .filter(|session| session.session_id.starts_with(session_id))
             .collect();
-        (prefixes.len() == 1).then(|| prefixes[0].clone())
+        Ok((prefixes.len() == 1).then(|| prefixes[0].clone()))
     }
 }
 
@@ -365,6 +373,10 @@ impl Harness for Omp {
 /// under `sessions`.
 fn omp_sessions_dir() -> Result<PathBuf> {
     Ok(omp_agent_dir()?.join("sessions"))
+}
+
+fn encode_cwd(cwd: &str) -> String {
+    cwd.replace('/', "-")
 }
 
 /// omp's agent root, shared by transcript and terminal-session discovery.
