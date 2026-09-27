@@ -16,6 +16,8 @@ use crate::read::shape::FamilyTag;
 use crate::read::types::{ContentId, DefIndex, DefSite};
 use hafley_scm::span::Span;
 
+type Bound = super::CheckerBound;
+
 /// Why the tier could not run. Every one falls back to the syntax leg.
 #[derive(Debug)]
 pub enum TsCheckerError {
@@ -39,15 +41,6 @@ impl std::fmt::Display for TsCheckerError {
             Self::Budget(secs) => write!(f, "the driver exceeded {secs}s"),
         }
     }
-}
-
-/// One resolved reference, already joined to a corpus definition coordinate.
-#[derive(Clone, Debug)]
-struct Bound {
-    start: u32,
-    end: u32,
-    name: String,
-    answer: TsCheckerAnswer,
 }
 
 /// Every answer joined ONCE to a `(blob, def span)` at build time; per-file

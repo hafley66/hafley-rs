@@ -33,6 +33,13 @@ pub enum CheckerAnswer {
     External,
 }
 
+struct CheckerBound {
+    start: u32,
+    end: u32,
+    name: String,
+    answer: CheckerAnswer,
+}
+
 /// The driver output shared by checker tiers with the same answer shape.
 #[derive(Default)]
 pub struct CheckerAnswers {
