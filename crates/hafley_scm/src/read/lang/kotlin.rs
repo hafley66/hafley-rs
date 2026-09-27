@@ -34,7 +34,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::sync::OnceLock;
 
-use super::fallback::cst_bundle;
+use super::fallback::cst_bundle_from_tree;
 use crate::read::family::{
     CallEdgeKind, CallF, DfArg, DfEdgeKind, DfF, DfField, DfNodeKind, DfParam, DocFact, DocTag,
     ProjectEdge, ReceiverOutcome, ResolutionOrigin, SigSlot, Specifier, SpecifierKind,
@@ -1392,15 +1392,27 @@ impl Source for KotlinSource {
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
         let mut strings = Strings::new();
-
-        // cst via the linked tree-sitter grammar (masked, one hafley_scm walk).
-        // A refused parse leaves cst None (no panic).
+        // Parse once for every requested family, then project CST, type, call,
+        // df, and module facts from the same Kotlin tree.
+        let src = std::str::from_utf8(content).ok();
+        let needs_tree = mask.cst || mask.types || mask.call || mask.df;
+        let tree = if needs_tree {
+            src.and_then(|src| {
+                let span = trace::parse_span("kotlin", "tree-sitter");
+                let _entered = span.enter();
+                kt_parse(src)
+            })
+        } else {
+            None
+        };
+        // The shared named-node walk projects CST from the very same parse as
+        // the Kotlin query families. A refused parse leaves cst None.
         let cst = if mask.cst {
-            let parse_span = trace::parse_span("kotlin", "tree-sitter");
-            let _parse_guard = parse_span.enter();
             let span = trace::family_span("kotlin", "cst");
             let _entered = span.enter();
-            let bundle = cst_bundle(path, content, &mut strings);
+            let bundle = tree
+                .as_ref()
+                .and_then(|tree| cst_bundle_from_tree(path, content, tree, &mut strings));
             if let Some(bundle) = &bundle {
                 trace::record_bundle(&span, bundle, 0);
             }
@@ -1409,94 +1421,85 @@ impl Source for KotlinSource {
             None
         };
 
-        // type/call/df via ONE tree-sitter-kotlin parse (masked). Byte spans
-        // come straight off the tree-sitter nodes (no line/col bridge, unlike
-        // syn). A failed parse leaves all three None (partial output: cst
-        // above may be Some).
+        // Type/call/df use masked projections over the shared parse. Byte
+        // spans come straight off tree-sitter nodes.
         let mut types = None;
         let mut call = None;
         let mut df = None;
         let mut scm_captures = None;
         let mut kotlin_module = None;
         if mask.types || mask.call || mask.df {
-            if let Ok(src) = std::str::from_utf8(content) {
-                let tree = {
-                    let span = trace::parse_span("kotlin", "tree-sitter");
-                    let _entered = span.enter();
-                    kt_parse(src)
+            if let (Some(src), Some(tree)) = (src, tree.as_ref()) {
+                let root = tree.root_node();
+                let src_bytes = src.as_bytes();
+                let scm = if mask.types || mask.call {
+                    let language = root.language();
+                    let query = KOTLIN_FAMILY_QUERY.get_or_init(|| {
+                        hafley_scm::build(&language, KOTLIN_SCM)
+                            .expect("the bundled Kotlin family query compiles")
+                    });
+                    let mut arena = hafley_scm::MatchArena::default();
+                    hafley_scm::run(&query, path, src_bytes, &tree, u32::MAX, &mut arena)
+                        .expect("the Kotlin family query never exceeds the engine match limit");
+                    Some((query, arena))
+                } else {
+                    None
                 };
-                if let Some(tree) = tree {
-                    let root = tree.root_node();
-                    let src_bytes = src.as_bytes();
-                    let scm = if mask.types || mask.call {
-                        let language = root.language();
-                        let query = KOTLIN_FAMILY_QUERY.get_or_init(|| {
-                            hafley_scm::build(&language, KOTLIN_SCM)
-                                .expect("the bundled Kotlin family query compiles")
-                        });
-                        let mut arena = hafley_scm::MatchArena::default();
-                        hafley_scm::run(&query, path, src_bytes, &tree, u32::MAX, &mut arena)
-                            .expect("the Kotlin family query never exceeds the engine match limit");
-                        Some((query, arena))
-                    } else {
-                        None
-                    };
-                    if let Some((query, arena)) = &scm {
-                        scm_captures = Some(super::scm_rows::ScmCaptures::from_arena(
-                            query, arena, src_bytes,
-                        ));
-                        kotlin_module = Some(super::kotlin_modules::kt_module_facts_from_arena(
-                            root, src_bytes, query, arena,
-                        ));
-                    }
-                    if mask.types {
-                        let span = trace::family_span("kotlin", "type");
-                        let _entered = span.enter();
-                        let mut bundle = FamilyBundle::<TypeF>::default();
-                        let (query, arena) = scm.as_ref().expect("TypeF uses the Kotlin query");
-                        project_types(root, src_bytes, query, arena, &mut strings, &mut bundle);
-                        trace::record_bundle(&span, &bundle, 0);
-                        types = Some(bundle);
-                    }
-                    if mask.call {
-                        let span = trace::family_span("kotlin", "call");
-                        let _entered = span.enter();
-                        let mut bundle = FamilyBundle::<CallF>::default();
-                        let blob = crate::read::dispatch::extracting_blob(content)
-                            .unwrap_or_else(|| crate::read::types::content_id_of(content));
-                        let (query, arena) = scm.as_ref().expect("CallF uses the Kotlin query");
-                        super::scm_family::project_kotlin_call(
-                            src_bytes,
-                            query,
-                            arena,
-                            &mut strings,
-                            &mut bundle,
-                        );
-                        kt_import_specifiers_from_arena(
-                            src_bytes,
-                            query,
-                            arena,
-                            &mut strings,
-                            &mut bundle.aux.specifiers,
-                        );
-                        super::kotlin_receivers::collect_receivers(
-                            root,
-                            src_bytes,
-                            blob,
-                            &mut strings,
-                            &mut bundle,
-                        );
-                        trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
-                        call = Some(bundle);
-                    }
-                    if mask.df {
-                        let span = trace::family_span("kotlin", "df");
-                        let _entered = span.enter();
-                        let mut bundle = FamilyBundle::<DfF>::default();
-                        project_df(root, src_bytes, path, &mut strings, &mut bundle);
-                        trace::record_bundle(&span, &bundle, 0);
-                        df = Some(bundle);
-                    }
+                if let Some((query, arena)) = &scm {
+                    scm_captures = Some(super::scm_rows::ScmCaptures::from_arena(
+                        query, arena, src_bytes,
+                    ));
+                    kotlin_module = Some(super::kotlin_modules::kt_module_facts_from_arena(
+                        root, src_bytes, query, arena,
+                    ));
+                }
+                if mask.types {
+                    let span = trace::family_span("kotlin", "type");
+                    let _entered = span.enter();
+                    let mut bundle = FamilyBundle::<TypeF>::default();
+                    let (query, arena) = scm.as_ref().expect("TypeF uses the Kotlin query");
+                    project_types(root, src_bytes, query, arena, &mut strings, &mut bundle);
+                    trace::record_bundle(&span, &bundle, 0);
+                    types = Some(bundle);
+                }
+                if mask.call {
+                    let span = trace::family_span("kotlin", "call");
+                    let _entered = span.enter();
+                    let mut bundle = FamilyBundle::<CallF>::default();
+                    let blob = crate::read::dispatch::extracting_blob(content)
+                        .unwrap_or_else(|| crate::read::types::content_id_of(content));
+                    let (query, arena) = scm.as_ref().expect("CallF uses the Kotlin query");
+                    super::scm_family::project_kotlin_call(
+                        src_bytes,
+                        query,
+                        arena,
+                        &mut strings,
+                        &mut bundle,
+                    );
+                    kt_import_specifiers_from_arena(
+                        src_bytes,
+                        query,
+                        arena,
+                        &mut strings,
+                        &mut bundle.aux.specifiers,
+                    );
+                    super::kotlin_receivers::collect_receivers(
+                        root,
+                        src_bytes,
+                        blob,
+                        &mut strings,
+                        &mut bundle,
+                    );
+                    trace::record_bundle(&span, &bundle, bundle.aux.sites.len());
+                    call = Some(bundle);
+                }
+                if mask.df {
+                    let span = trace::family_span("kotlin", "df");
+                    let _entered = span.enter();
+                    let mut bundle = FamilyBundle::<DfF>::default();
+                    project_df(root, src_bytes, path, &mut strings, &mut bundle);
+                    trace::record_bundle(&span, &bundle, 0);
+                    df = Some(bundle);
                 }
             }
         }
