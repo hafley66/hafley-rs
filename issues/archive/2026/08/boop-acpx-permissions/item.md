@@ -4,9 +4,10 @@ updated: 2026-08-28
 type: bug
 reporter: codex
 assignee: opus
-status: resolved
+status: fixed
 priority: high
 labels: [boop, acpx]
+closed: 2026-08-28
 ---
 
 # Boop ACPX coordinators deny delegated file permissions

@@ -2,9 +2,11 @@
 created: 2026-09-19
 updated: 2026-09-27
 type: feature
-status: open
+status: done
 priority: normal
 labels: [observability]
+closed: 2026-09-27
+closed_by: claude-375
 ---
 
 # oh: the observe test kit and lab minter
@@ -111,3 +113,9 @@ EOF
 printf '%s\n' '#![oh::instrument_all]' 'pub fn target() {}' > "$probe/src/lib.rs"
 cargo check --manifest-path "$probe/Cargo.toml" -j 2 --offline
 ```
+
+## Resolution
+
+### 2026-09-27T17:50:54Z · @claude-375
+
+defunct remaining item: stable Rust 1.98.0 rejects #![oh::instrument_all] with E0658 before proc-macro expansion, so instrument_all can never emit its own error; every other AC item is checked (13 tests, receipt 2026-09-27)

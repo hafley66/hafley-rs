@@ -2,7 +2,7 @@
 created: 2026-09-05
 updated: 2026-09-05
 type: bug
-status: closed
+status: done
 priority: high
 epic: boop-process
 closed: 2026-09-05
