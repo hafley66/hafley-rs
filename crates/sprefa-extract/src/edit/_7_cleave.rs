@@ -70,10 +70,13 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
             plan.rows.unresolved[0],
             plan.root.display()
         );
+        if !cli.drag {
+            return Ok(());
+        }
         return Err(crate::RyiExit::new(
             2,
             format!(
-                "cleave has ungraded names: {}",
+                "cleave --drag left ungraded names: {}",
                 plan.rows.unresolved.join(", ")
             ),
         ));
@@ -153,8 +156,11 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
         let plan = Plan::build_with(cx, &imports, target, dest, cli.drag)?;
         print_plan(&plan);
         if !plan.rows.unresolved.is_empty() {
+            if !cli.drag {
+                return Ok(());
+            }
             return Err(format!(
-                "{}#{} has ungraded names; the batch stops before any write",
+                "cleave --drag left ungraded names in {}#{}; the batch stops before any write",
                 plan.rows.src, plan.rows.item
             )
             .into());
@@ -1961,7 +1967,10 @@ impl FileFacts {
             false => (Vec::new(), Vec::new(), Vec::new(), Vec::new()),
             true => {
                 let (decls, free, impls) = scope_rows(cx, rel, &text)?;
-                let unsupported_macros = macro_item_rows(&text)?;
+                let unsupported_macros = match rel.ends_with(".rs") {
+                    true => macro_item_rows(&text)?,
+                    false => Vec::new(),
+                };
                 (decls, free, impls, unsupported_macros)
             }
         };

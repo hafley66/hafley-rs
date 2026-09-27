@@ -299,13 +299,6 @@ impl CommitEngine {
                 actual,
             });
         }
-        let journal_path = self.journal_path(stage.id);
-        if journal_path.exists() {
-            return Err(CommitRefusal::RecoveryRequired {
-                stage_id: stage.id,
-                journal: journal_path,
-            });
-        }
         if let Some(receipt) = self.read_receipt(stage.id)? {
             let expected_operations = stage_operation_receipts(&stage.files);
             let expected_watch = watch_projection(stage.id, &expected_operations);
@@ -340,6 +333,13 @@ impl CommitEngine {
                 }
                 Err(refusal) => return Err(refusal),
             }
+        }
+        let journal_path = self.journal_path(stage.id);
+        if journal_path.exists() {
+            return Err(CommitRefusal::RecoveryRequired {
+                stage_id: stage.id,
+                journal: journal_path,
+            });
         }
         let preflight_started = Instant::now();
         let preflight_span = tracing::debug_span!(

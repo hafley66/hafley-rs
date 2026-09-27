@@ -297,7 +297,10 @@ fn thread_local_static_is_named_unsupported_and_fails_the_plan() {
                 stdout.contains("ungraded LIVE_PARAMS"),
                 "{stdout}\n{stderr}"
             );
-            assert!(stderr.contains("cleave has ungraded names"), "{stderr}");
+            assert!(
+                stderr.contains("cleave --drag left ungraded names"),
+                "{stderr}"
+            );
         } else {
             assert!(
                 stderr.contains("unsupported thread_local! macro"),
@@ -347,7 +350,7 @@ fn unsupported_macro_items_are_ungraded_and_fail_the_plan() {
         .expect("cleave binary runs");
     assert_eq!(output.status.code(), Some(2));
     assert!(String::from_utf8_lossy(&output.stdout).contains("ungraded UNSUPPORTED"));
-    assert!(String::from_utf8_lossy(&output.stderr).contains("cleave has ungraded names"));
+    assert!(String::from_utf8_lossy(&output.stderr).contains("cleave --drag left ungraded names"));
 }
 
 #[test]
