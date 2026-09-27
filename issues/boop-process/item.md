@@ -3,7 +3,7 @@ created: 2026-08-19
 updated: 2026-09-27
 type: epic
 owner: hafley66
-status: needs-decision
+status: open
 priority: high
 ---
 
@@ -51,8 +51,7 @@ and the remaining job-control changes are not exposed by the current CLI. The
 crate split listed in this epic is already complete; the remaining namespace,
 wait-all, kill/rm, signal, attach, and global-flag changes span several cards.
 
-## Decision needed
+## Implementation receipt
 
-Should implementation proceed from `boop-job-namespace` under the documented
-`job/mail/me` surface, or should this epic close around the current `beep` and
-`wait` surface?
+The documented `boop job`, `boop mail` and `boop me` acceptance is open and is
+being implemented from `docs/design/boop-process.md` and its section 4 cards.
