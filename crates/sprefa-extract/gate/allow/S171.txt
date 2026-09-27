@@ -1,0 +1,5 @@
+crates/hafley_scm/src/read/lang/go_checker.rs:387
+crates/hafley_scm/src/read/lang/go_checker.rs:389
+crates/hafley_scm/src/read/lang/go_checker.rs:391
+crates/hafley_scm/src/read/lang/kotlin.rs:56
+crates/hafley_scm/src/read/lang/ts.rs:59
