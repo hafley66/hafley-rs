@@ -3,7 +3,7 @@ created: 2026-09-07
 updated: 2026-09-26
 type: task
 reporter: chrishafley
-status: obsolete
+status: open
 priority: normal
 labels: [domain-soopy]
 provenance: codex
@@ -23,8 +23,8 @@ CommitEngine uses a root lock, preflight, journal and sequential file operations
 - [ ] Add subprocess interruption/recovery coverage where absent and record supported platforms/filesystems.
 - [ ] Keep whole-tree snapshot isolation an explicit separate requirement, not an implied guarantee.
 ## Tests Run
-Source and failpoint tests inspected; no execution or reproduced data-loss claim. Related: @soopy-mutation-commit.
+`crates/soopy/tests/14_commit_engine.rs` contains operation-boundary failpoint tests; the external-writer race and subprocess interruption acceptance items have not been run. Related: @soopy-mutation-commit.
 
 ## Repro receipt
 
-2026-09-26: current `ryii move` dry-run on a temporary file exits 0, preserves source bytes, and creates no destination; the card reports no reproduced data-loss defect.
+2026-09-26: `ryii move` dry-run checks preview bytes only and does not exercise commit interruption or concurrent external writers; transaction visibility and recovery evidence remains unchecked.
