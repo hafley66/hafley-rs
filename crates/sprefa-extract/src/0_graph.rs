@@ -26,6 +26,8 @@ const USES_SQL: &str = "SELECT \"user_path\", \"user_name\", \"type_path\", \"ty
                         \"grade\", \"kind\", \"user_start\", NULL FROM \"uses\" \
                         WHERE \"type_name\" IS ?1";
 
+const EXTERNAL_USES_SQL: &str = "SELECT \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\" FROM \"external_crate_decline\" WHERE \"type_name\" IS ?1";
+
 /// One resolve pass, landed in the store the views read. `--sqlite` publishes
 /// the store; without it the whole thing lives and dies in memory. `--slow`
 /// lands the SCIP oracle's projection of the same tables instead.
@@ -83,6 +85,7 @@ fn load_store(
                 | FlatFact::Coverage(_)
                 | FlatFact::Diagnostic(_)
                 | FlatFact::ResolvedImportRow { .. }
+                | FlatFact::ExternalCrateDecline { .. }
                 | FlatFact::FileUnresolvedRow { .. }
                 | FlatFact::Unresolved { .. }
                 | FlatFact::FlowEdgeOut { .. }
@@ -489,7 +492,32 @@ impl Arm<'_> {
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
         match self {
             Arm::Callers(name) => edges(connection, CALLERS_SQL, name, lines),
-            Arm::Uses(name) => edges(connection, USES_SQL, name, lines),
+            Arm::Uses(name) => {
+                let mut rows = edges(connection, USES_SQL, name, lines)?;
+                let table_exists: bool = connection.query_row(
+                    "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'external_crate_decline')",
+                    [],
+                    |row| row.get(0),
+                )?;
+                if table_exists {
+                    let mut statement = connection.prepare(EXTERNAL_USES_SQL)?;
+                    let declines = statement
+                        .query_map([name], |row| {
+                            Ok(FlatFact::GraphDecline {
+                                from_path: row.get(0)?,
+                                from_name: row.get(1)?,
+                                type_name: row.get(2)?,
+                                crate_name: row.get(3)?,
+                                reason: row.get(4)?,
+                                kind: row.get(5)?,
+                            })
+                        })?
+                        .collect::<rusqlite::Result<Vec<_>>>()?;
+                    rows.extend(declines);
+                }
+                rows.sort_by_key(|row| serde_json::to_string(row).expect("graph row serializes"));
+                Ok(rows)
+            }
             Arm::From(name) => nodes(connection, name, deadline, lines),
             Arm::CallPath(name) => paths(
                 connection,

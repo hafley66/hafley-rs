@@ -2719,6 +2719,63 @@ fn type_facts(
             })
         })
         .collect();
+    if let (Some(modules), Some(names)) = (
+        cx.indexes.rust_modules.get(),
+        targets.type_names.get(&input.blob),
+    ) {
+        if input.path.ends_with(".rs") {
+            for candidate in
+                crate::read::lang::rust::RustSource::type_edge_candidates(&input.output)
+            {
+                let referenced = input.output.strings.lookup(candidate.to);
+                let Some(crate_name) = modules.external_type_crate(&input.path, referenced) else {
+                    continue;
+                };
+                let src_ix = types
+                    .nodes
+                    .iter()
+                    .position(|node| node.span == candidate.owner)
+                    .or_else(|| {
+                        types
+                            .aux
+                            .impl_owners
+                            .iter()
+                            .position(|owner| owner.span == candidate.owner)
+                            .map(|ix| types.nodes.len() + ix)
+                    });
+                let Some(src_ix) = src_ix else { continue };
+                let unresolved = resolved.iter().any(|edge| {
+                    edge.src.0 as usize == src_ix
+                        && edge.kind == candidate.kind
+                        && edge.dst_blob == crate::read::shape::ZERO_CONTENT_ID
+                });
+                if !unresolved {
+                    continue;
+                }
+                let Some((_, owner_name)) = type_owner(
+                    plane,
+                    input,
+                    types,
+                    Some(names),
+                    crate::read::shape::NodeRef(src_ix as u32),
+                ) else {
+                    continue;
+                };
+                facts.push(FlatFact::ExternalCrateDecline {
+                    from_path: input.path.clone(),
+                    from_name: owner_name,
+                    type_name: referenced
+                        .rsplit("::")
+                        .next()
+                        .unwrap_or(referenced)
+                        .to_string(),
+                    crate_name,
+                    reason: "external_crate".to_string(),
+                    kind: candidate.kind.as_str().to_string(),
+                });
+            }
+        }
+    }
     if let (Some(modules), Some(defs)) = (cx.indexes.ts_modules.get(), cx.indexes.def_index.get()) {
         for use_site in modules.signature_uses(&input.path) {
             let local = defs.map.get(&use_site.name).and_then(|sites| {

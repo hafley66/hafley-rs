@@ -658,6 +658,30 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct ExternalCrateDecline {
+        pub from_path: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub from_name: Option<String>,
+        pub type_name: String,
+        pub crate_name: String,
+        pub reason: String,
+        pub kind: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct GraphDecline {
+        pub from_path: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub from_name: Option<String>,
+        pub type_name: String,
+        pub crate_name: String,
+        pub reason: String,
+        pub kind: String,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct GraphPath {
         pub plane: String,
         pub from_path: String,
@@ -1150,6 +1174,12 @@ pub enum Fact {
     #[serde(rename = "graph_edge")]
     GraphEdge(models::GraphEdge),
 
+    #[serde(rename = "external_crate_decline")]
+    ExternalCrateDecline(models::ExternalCrateDecline),
+
+    #[serde(rename = "graph_decline")]
+    GraphDecline(models::GraphDecline),
+
     #[serde(rename = "graph_path")]
     GraphPath(models::GraphPath),
 
@@ -1340,6 +1370,10 @@ impl Fact {
 
             Self::GraphEdge(row) => row.insert(conn, source),
 
+            Self::ExternalCrateDecline(row) => row.insert(conn, source),
+
+            Self::GraphDecline(row) => row.insert(conn, source),
+
             Self::GraphPath(row) => row.insert(conn, source),
 
             Self::GraphPathChange(row) => row.insert(conn, source),
@@ -1420,7 +1454,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 72;
+pub const TABLE_COUNT: usize = 74;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1537,6 +1571,10 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut graph_node: Vec<(usize, &models::GraphNode)> = Vec::new();
 
     let mut graph_edge: Vec<(usize, &models::GraphEdge)> = Vec::new();
+
+    let mut external_crate_decline: Vec<(usize, &models::ExternalCrateDecline)> = Vec::new();
+
+    let mut graph_decline: Vec<(usize, &models::GraphDecline)> = Vec::new();
 
     let mut graph_path: Vec<(usize, &models::GraphPath)> = Vec::new();
 
@@ -1686,6 +1724,10 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::GraphEdge(value) => graph_edge.push((index, value)),
 
+            Fact::ExternalCrateDecline(value) => external_crate_decline.push((index, value)),
+
+            Fact::GraphDecline(value) => graph_decline.push((index, value)),
+
             Fact::GraphPath(value) => graph_path.push((index, value)),
 
             Fact::GraphPathChange(value) => graph_path_change.push((index, value)),
@@ -1833,6 +1875,10 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let graph_node_capacity = if graph_node.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"graph_node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"name\", \"depth\", \"grade\", \"line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_edge_capacity = if graph_edge.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let external_crate_decline_capacity = if external_crate_decline.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"external_crate_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let graph_decline_capacity = if graph_decline.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let graph_path_capacity = if graph_path.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"graph_path\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"plane\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"depth\", \"witness\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2286,6 +2332,28 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in graph_edge.chunks(graph_edge_capacity) {
         let sql = multi_row_sql("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in external_crate_decline.chunks(external_crate_decline_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"external_crate_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in graph_decline.chunks(graph_decline_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3836,6 +3904,70 @@ impl models::GraphEdge {
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"graph_edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"to_path\", \"to_name\", \"kind\", \"grade\", \"from_line\", \"to_line\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::ExternalCrateDecline {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "external_crate_decline")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_name.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.type_name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.crate_name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.reason.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.kind.as_str())?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    #[cfg(test)]
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"external_crate_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::GraphDecline {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "graph_decline")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.from_name.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.type_name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.crate_name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.reason.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.kind.as_str())?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    #[cfg(test)]
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"graph_decline\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"from_path\", \"from_name\", \"type_name\", \"crate_name\", \"reason\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
