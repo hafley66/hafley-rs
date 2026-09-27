@@ -1,15 +1,13 @@
 ---
 created: 2026-09-25
-updated: 2026-09-26
+updated: 2026-09-27
 type: improvement
-status: needs-decision
+status: open
 priority: normal
 labels: [extract]
 ---
 
 # hafley_scm macro expansion: incremental passes, one file sets the makespan
-
-## Description
 
 ## Description
 
@@ -22,10 +20,14 @@ Directions: expand only the invocation subtrees a pass changed instead of repars
 
 ## Acceptance Criteria
 - [ ] no single registry file over 200ms in `family:"call"` (release)
-- [ ] output identical on the macro-heavy registry set (downcast-rs, crossterm stylize, bitflags 1.3.2, castaway, borsh schema, byteorder, clap_builder debug_asserts)
+- [x] output identical on the macro-heavy registry set (downcast-rs, crossterm stylize, bitflags 1.3.2, castaway, borsh schema, byteorder, clap_builder debug_asserts)
 
 ## Repro receipt
 
 2026-09-26: current `ryii fast` on crossterm 0.29 `style/stylize.rs` (6,933 bytes) takes 1.56s in `family:"call"` and reports 42 resolve calls.
 
-Decision: prioritize incremental expansion of changed invocations, or cap per-file expansion work with the existing budget flag?
+## Work receipt
+
+2026-09-27: incrementally scan only inserted macro subtrees after the first pass, reparse once per changed pass, and cache parsed macro definitions and exact successful expansions. Seven-file output matches `/tmp/fastmacro-baseline` byte for byte. Release `family:"call"` timings: downcast-rs 926.2ms, crossterm 79.8ms, bitflags 355.6ms, castaway 214.9ms, borsh 418.1ms, byteorder 167.6ms, clap_builder 100.7ms. Remaining performance gate is open; reproduce with `DL_TRACE_SUMMARY=1 ryii fast <registry-file>`.
+
+Verification: `cargo nextest run --features cli -j 2 --offline --locked --test all` passed 1,118, 18 skipped; `scripts/ryi-e2e.sh /Users/chrishafley/.cache/boop/cargo-target/release` passed 14/14; `cargo nextest run --workspace -j 2 -E "not (test(/e2e|live|tmux|tui_sigint|omp_live/))"` passed 1,366, 203 skipped.
