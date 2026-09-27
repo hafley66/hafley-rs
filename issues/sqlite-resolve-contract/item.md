@@ -2,12 +2,14 @@
 created: 2026-09-18
 updated: 2026-09-26
 type: bug
-status: obsolete
+status: fixed
 priority: normal
 epic: extract-parity-move-rename
 labels: [extract]
+commits:
+- hash: e0a6d16d
+  summary: document SQLite resolve row contract
 closed: 2026-09-26
-disposition_note: 'Current ryi unresolved path and help repros pass (t_141: 5 passed; t_178 help: 1 passed); issue body names the retired extract CLI.'
 ---
 
 # sqlite export: one filename column on unresolved, and a truthful --help
@@ -73,8 +75,8 @@ Reopened: Current ryi unresolved path and help contract tests pass; report recor
 
 Obsolete: Current ryi unresolved path and help repros pass (t_141: 5 passed; t_178 help: 1 passed); issue body names the retired extract CLI.
 
+## Resolution
 
+### 2026-09-27T02:25:50Z · @issuectl
 
-## Reopen Notes — 2026-09-26
-
-_Add rationale for reopening here._
+Fixed by e0a6d16d: ryi help states the SQLite phase 1 and phase 2 contract; t_141_unresolved_contract passed (5 tests).
