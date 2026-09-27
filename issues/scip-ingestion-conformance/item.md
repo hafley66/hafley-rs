@@ -126,6 +126,6 @@ the same way a golden does.
 
 ## Repro receipt
 
-2026-09-26: current `ryii scip --raw` on `ratchet_soopy/index.scip` emits 1,921 `std` and 4,400 `core` mentions; normal `ryii scip` emits 0 such relation mentions.
+2026-09-27: current release `ryii scip --raw --root crates/sprefa-extract/tests/fixtures/ratchet_soopy --scip-index crates/sprefa-extract/tests/fixtures/ratchet_soopy/index.scip` emits 1,921 `std`, 4,400 `core`, and 1,434 `alloc` mentions; the same command without `--raw` emits 0 external-crate mentions.
 
 Decision: ingest external-crate SCIP symbols, or record explicit waivers for external documents and narrow the conformance target?
