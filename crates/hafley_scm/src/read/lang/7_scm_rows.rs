@@ -44,10 +44,10 @@ impl std::fmt::Display for ScmError {
 
 impl std::error::Error for ScmError {}
 
-#[derive(Clone, Debug, Eq, Ord, PartialEq, PartialOrd)]
-struct Capture {
-    label: String,
-    text: String,
+#[derive(Clone, Copy, Debug, Eq, Ord, PartialEq, PartialOrd)]
+struct Capture<'a> {
+    label: &'a str,
+    text: &'a str,
     start: u32,
     end: u32,
 }
@@ -56,8 +56,11 @@ struct Capture {
 /// The path is supplied when fast emits rows, since dispatch caches by blob.
 #[derive(Default)]
 pub struct ScmCaptures {
-    end: u32,
-    captures: BTreeSet<Capture>,
+    source: Arc<[u8]>,
+    labels: Vec<String>,
+    label_ids: Vec<u16>,
+    starts: Vec<u32>,
+    ends: Vec<u32>,
 }
 
 impl ScmCaptures {
@@ -66,15 +69,64 @@ impl ScmCaptures {
         arena: &hafley_scm::MatchArena,
         source: &[u8],
     ) -> Self {
+        Self::from_arena_with_source(query, arena, Arc::from(source))
+    }
+
+    fn from_arena_with_source(
+        query: &hafley_scm::QueryExt,
+        arena: &hafley_scm::MatchArena,
+        source: Arc<[u8]>,
+    ) -> Self {
+        let mut captures = kept_captures(query, arena, &source);
+        captures.sort_by(|left, right| {
+            query.names[left.0 as usize]
+                .cmp(&query.names[right.0 as usize])
+                .then_with(|| {
+                    capture_text(&source, left.1, left.2)
+                        .cmp(capture_text(&source, right.1, right.2))
+                })
+                .then(left.1.cmp(&right.1))
+                .then(left.2.cmp(&right.2))
+        });
+        captures.dedup();
+        let mut label_ids = Vec::with_capacity(captures.len());
+        let mut starts = Vec::with_capacity(captures.len());
+        let mut ends = Vec::with_capacity(captures.len());
+        for (label_id, start, end) in captures {
+            label_ids.push(label_id);
+            starts.push(start);
+            ends.push(end);
+        }
         Self {
-            end: source.len() as u32,
-            captures: kept_captures(query, arena, source),
+            source,
+            labels: query.names.iter().map(|name| name.to_string()).collect(),
+            label_ids,
+            starts,
+            ends,
         }
     }
 
-    pub fn facts(&self, path: &str) -> Vec<FlatFact> {
-        rows(path, self.end, self.captures.clone())
+    fn views(&self) -> Vec<Capture<'_>> {
+        (0..self.label_ids.len())
+            .map(|index| Capture {
+                label: &self.labels[self.label_ids[index] as usize],
+                text: capture_text(&self.source, self.starts[index], self.ends[index]),
+                start: self.starts[index],
+                end: self.ends[index],
+            })
+            .collect()
     }
+
+    pub fn facts(&self, path: &str) -> Vec<FlatFact> {
+        rows(path, self.source.len() as u32, self.views())
+    }
+}
+
+fn capture_text(source: &[u8], start: u32, end: u32) -> &str {
+    source
+        .get(start as usize..end as usize)
+        .and_then(|bytes| std::str::from_utf8(bytes).ok())
+        .unwrap_or("")
 }
 
 struct Scope {
@@ -123,17 +175,19 @@ pub fn scm_edges(paths: &[PathBuf]) -> Result<Vec<ScmEdge>, ScmError> {
     let mut references = Vec::new();
     let mut imports = Vec::new();
     for path in expand(paths)? {
-        let Some((name, end, captured)) = file_captures(&path, None)? else {
+        let Some((name, captured)) = file_captures(&path, None)? else {
             continue;
         };
+        let end = captured.source.len() as u32;
         let root = store.node(NodeKind::Root, "", &name, 0, end)?;
         roots.push(root);
+        let captures = captured.views();
         ingest(
             &store,
             root,
             &name,
             end,
-            &captured.into_iter().collect::<Vec<_>>(),
+            &captures,
             &mut references,
             &mut imports,
         )?;
@@ -171,7 +225,7 @@ fn ingest(
     root: i64,
     path: &str,
     file_end: u32,
-    captures: &[Capture],
+    captures: &[Capture<'_>],
     references: &mut Vec<Reference>,
     imports: &mut Vec<(i64, i64)>,
 ) -> Result<(), ScmError> {
@@ -199,7 +253,7 @@ fn ingest(
     for definition in &definitions {
         definition_spans.insert((definition.start, definition.end));
         let direct = holder(&nodes, definition.start, definition.end, None);
-        let owner = match definition.label.as_str() {
+        let owner = match definition.label {
             "local.definition.function" | "local.definition.type" => {
                 holder(&nodes, nodes[direct].start, nodes[direct].end, Some(direct))
             }
@@ -207,14 +261,14 @@ fn ingest(
         };
         let pop = store.node(
             NodeKind::Pop,
-            &definition.text,
+            definition.text,
             path,
             definition.start,
             definition.end,
         )?;
         let def = store.node(
             NodeKind::Def,
-            &definition.text,
+            definition.text,
             path,
             definition.start,
             definition.end,
@@ -224,7 +278,7 @@ fn ingest(
         if nodes[owner].id == root {
             let export = store.node(
                 NodeKind::Export,
-                &definition.text,
+                definition.text,
                 path,
                 definition.start,
                 definition.end,
@@ -238,8 +292,8 @@ fn ingest(
             continue;
         }
         let owner = holder(&nodes, call.start, call.end, None);
-        let reference = store.node(NodeKind::Ref, &call.text, path, call.start, call.end)?;
-        let push = store.node(NodeKind::Push, &call.text, path, call.start, call.end)?;
+        let reference = store.node(NodeKind::Ref, call.text, path, call.start, call.end)?;
+        let push = store.node(NodeKind::Push, call.text, path, call.start, call.end)?;
         store.edge(reference, push)?;
         store.edge(push, nodes[owner].id)?;
         references.push(Reference {
@@ -254,7 +308,7 @@ fn ingest(
     for capture in labelled(captures, |label| label == "local.import") {
         let import = store.node(
             NodeKind::Import,
-            &capture.text,
+            capture.text,
             path,
             capture.start,
             capture.end,
@@ -265,7 +319,7 @@ fn ingest(
     for capture in labelled(captures, |label| label == "local.export.package") {
         let export = store.node(
             NodeKind::Export,
-            &capture.text,
+            capture.text,
             path,
             capture.start,
             capture.end,
@@ -285,14 +339,18 @@ fn holder(nodes: &[SpanNode], start: u32, end: u32, skip: Option<usize>) -> usiz
         .unwrap_or(ROOT)
 }
 
-fn containing_span<'a>(spans: &'a [Capture], start: u32, end: u32) -> Option<&'a Capture> {
+fn containing_span<'a, 'source>(
+    spans: &'a [Capture<'source>],
+    start: u32,
+    end: u32,
+) -> Option<&'a Capture<'source>> {
     spans
         .iter()
         .filter(|span| span.start <= start && end <= span.end)
         .min_by_key(|span| span.end - span.start)
 }
 
-fn span_names(spans: &[Capture], definitions: &[Capture]) -> BTreeMap<(u32, u32), String> {
+fn span_names(spans: &[Capture<'_>], definitions: &[Capture<'_>]) -> BTreeMap<(u32, u32), String> {
     spans
         .iter()
         .filter_map(|span| {
@@ -300,7 +358,7 @@ fn span_names(spans: &[Capture], definitions: &[Capture]) -> BTreeMap<(u32, u32)
                 .iter()
                 .filter(|def| span.start <= def.start && def.end <= span.end)
                 .min_by_key(|def| def.start)
-                .map(|def| ((span.start, span.end), def.text.clone()))
+                .map(|def| ((span.start, span.end), def.text.to_string()))
         })
         .collect()
 }
@@ -340,10 +398,10 @@ fn query_for(path: &str) -> Option<(RyiLang, &'static str)> {
 }
 
 fn file_facts(path: &Path, root: Option<&Path>) -> Result<Vec<FlatFact>, ScmError> {
-    let Some((name, end, captured)) = file_captures(path, root)? else {
+    let Some((name, captured)) = file_captures(path, root)? else {
         return Ok(Vec::new());
     };
-    Ok(rows(&name, end, captured))
+    Ok(captured.facts(&name))
 }
 
 /// One file's pass: the engine runs the cached bundled query; the arena's
@@ -351,7 +409,7 @@ fn file_facts(path: &Path, root: Option<&Path>) -> Result<Vec<FlatFact>, ScmErro
 fn file_captures(
     path: &Path,
     root: Option<&Path>,
-) -> Result<Option<(String, u32, BTreeSet<Capture>)>, ScmError> {
+) -> Result<Option<(String, ScmCaptures)>, ScmError> {
     let name = path.to_string_lossy().to_string();
     let Some((lang, query_text)) = query_for(&name) else {
         return Ok(None);
@@ -361,12 +419,14 @@ fn file_captures(
     } else {
         root.map_or_else(|| path.to_path_buf(), |root| root.join(path))
     };
-    let source = std::fs::read(crate::read::io_path(&io_path)).map_err(|error| ScmError::Io {
-        path: name.clone(),
-        detail: error.to_string(),
-    })?;
-    let captured = arena_captures(&name, lang, query_text, &source)?;
-    Ok(Some((name, source.len() as u32, captured)))
+    let source: Arc<[u8]> = Arc::from(std::fs::read(crate::read::io_path(&io_path)).map_err(
+        |error| ScmError::Io {
+            path: name.clone(),
+            detail: error.to_string(),
+        },
+    )?);
+    let captured = arena_captures(&name, lang, query_text, source)?;
+    Ok(Some((name, captured)))
 }
 
 /// One cached build per grammar/query and one native run per file. The engine
@@ -375,8 +435,8 @@ fn arena_captures(
     path: &str,
     lang: RyiLang,
     query_text: &'static str,
-    source: &[u8],
-) -> Result<BTreeSet<Capture>, ScmError> {
+    source: Arc<[u8]>,
+) -> Result<ScmCaptures, ScmError> {
     let language = lang.tree_sitter_language();
     let mut parser = Parser::new();
     parser
@@ -385,7 +445,7 @@ fn arena_captures(
             path: path.to_string(),
             detail: format!("set language: {error}"),
         })?;
-    let tree = parser.parse(source, None).ok_or_else(|| ScmError::Query {
+    let tree = parser.parse(&source, None).ok_or_else(|| ScmError::Query {
         path: path.to_string(),
         detail: "parse returned no tree".into(),
     })?;
@@ -406,32 +466,27 @@ fn arena_captures(
     let mut arena = hafley_scm::MatchArena::default();
     // The fresh-cursor default the direct run always had; the engine's limit
     // check cannot fire at u32::MAX.
-    hafley_scm::run(&query, path, source, &tree, u32::MAX, &mut arena)
+    hafley_scm::run(&query, path, &source, &tree, u32::MAX, &mut arena)
         .map_err(|error| scm_error(path, error))?;
-    Ok(kept_captures(&query, &arena, source))
+    Ok(ScmCaptures::from_arena_with_source(&query, &arena, source))
 }
 
-/// MatchArena rows -> the `Capture` set every later projection reads: one
-/// entry per kept capture, deduped and ordered by label, text, then span.
+/// MatchArena rows -> a columnar set of label ids and spans; source text stays
+/// in the per-file backing buffer until a row needs it.
 fn kept_captures(
     query: &hafley_scm::QueryExt,
     arena: &hafley_scm::MatchArena,
     source: &[u8],
-) -> BTreeSet<Capture> {
-    let mut kept = BTreeSet::new();
+) -> Vec<(u16, u32, u32)> {
+    let mut kept = Vec::new();
     for row in &arena.rows {
         for span in &arena.spans[row.spans.start as usize..row.spans.end as usize] {
-            let text = source
-                .get(span.bytes.start as usize..span.bytes.end as usize)
-                .and_then(|bytes| std::str::from_utf8(bytes).ok())
-                .unwrap_or("")
-                .to_string();
-            kept.insert(Capture {
-                label: query.names[span.name as usize].to_string(),
-                text,
-                start: span.bytes.start,
-                end: span.bytes.end,
-            });
+            let label_id = span.name;
+            let start = span.bytes.start;
+            let end = span.bytes.end;
+            let _ = query.names[label_id as usize];
+            let _ = capture_text(source, start, end);
+            kept.push((label_id, start, end));
         }
     }
     kept
@@ -563,8 +618,7 @@ fn owned(definitions: &[Definition]) -> Owned<'_> {
 
 /// The scope tree, the definitions it owns, and the references it resolves,
 /// projected onto the three pass-1 rows.
-fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact> {
-    let captures: Vec<Capture> = captured.into_iter().collect();
+fn rows(path: &str, file_end: u32, captures: Vec<Capture<'_>>) -> Vec<FlatFact> {
     let scope_spans = labelled(&captures, |label| label == "local.scope");
     let scopes = scope_tree(file_end, &scope_spans);
     let definitions = definitions(&captures, &scopes);
@@ -658,7 +712,7 @@ fn rows(path: &str, file_end: u32, captured: BTreeSet<Capture>) -> Vec<FlatFact>
 fn free_names(
     path: &str,
     file_end: u32,
-    captures: &[Capture],
+    captures: &[Capture<'_>],
     scopes: &Scopes,
     definitions: &[Definition],
     owned: &Owned<'_>,
@@ -707,7 +761,7 @@ fn free_names(
                 ROOT => file_end,
                 index => scopes.scopes[index].end,
             },
-            name: name.text.clone(),
+            name: name.text.to_string(),
             start: name.start,
             end: name.end,
         });
@@ -731,14 +785,14 @@ fn top_level(scopes: &[Scope], scope: usize) -> usize {
 /// The lexical answer: the innermost scope holding the reference, then its
 /// ancestors, and the first definition of the name any of them owns.
 fn resolve<'a>(
-    call: &Capture,
+    call: &Capture<'_>,
     scopes: &Scopes,
     definitions: &'a [Definition],
     owned: &Owned<'_>,
 ) -> Option<&'a Definition> {
     let mut scope = Some(scopes.containing(call.start, call.end, None));
     while let Some(index) = scope {
-        if let Some(&found) = owned.get(&(index, call.text.as_str())) {
+        if let Some(&found) = owned.get(&(index, call.text)) {
             return Some(&definitions[found]);
         }
         scope = scopes.scopes[index].parent;
@@ -750,16 +804,16 @@ fn symbol(path: &str, name: &str) -> String {
     format!("scm . . `{path}`/{name}().")
 }
 
-fn labelled(captures: &[Capture], accepts: impl Fn(&str) -> bool) -> Vec<Capture> {
+fn labelled<'a>(captures: &[Capture<'a>], accepts: impl Fn(&str) -> bool) -> Vec<Capture<'a>> {
     captures
         .iter()
-        .filter(|capture| accepts(&capture.label))
-        .cloned()
+        .filter(|capture| accepts(capture.label))
+        .copied()
         .collect()
 }
 
 /// Index 0 is the file itself, so every span has an owner.
-fn scope_tree(file_end: u32, spans: &[Capture]) -> Scopes {
+fn scope_tree(file_end: u32, spans: &[Capture<'_>]) -> Scopes {
     let mut scopes = vec![Scope {
         start: 0,
         end: file_end,
@@ -787,7 +841,7 @@ fn scope_tree(file_end: u32, spans: &[Capture]) -> Scopes {
 
 /// A function or type belongs to the scope AROUND the one it opens: its own
 /// body must not be where its name resolves.
-fn definitions(captures: &[Capture], scopes: &Scopes) -> Vec<Definition> {
+fn definitions(captures: &[Capture<'_>], scopes: &Scopes) -> Vec<Definition> {
     let spans = Nest::new(
         captures
             .iter()
@@ -808,7 +862,7 @@ fn definitions(captures: &[Capture], scopes: &Scopes) -> Vec<Definition> {
             direct
         };
         definitions.push(Definition {
-            name: capture.text.clone(),
+            name: capture.text.to_string(),
             kind: kind.to_string(),
             start: capture.start,
             end: capture.end,

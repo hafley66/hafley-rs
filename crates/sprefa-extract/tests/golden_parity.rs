@@ -2270,6 +2270,68 @@ impl RatchetCounts {
     }
 }
 
+fn wrong_target_followup_path(
+    issues_root: &std::path::Path,
+    lang: &str,
+    origin: &str,
+) -> std::path::PathBuf {
+    issues_root
+        .join(format!("real-repo-ratchet-wrong-target-{lang}-{origin}"))
+        .join("item.md")
+}
+
+fn is_wrong_target_followup(path: &std::path::Path, lang: &str, origin: &str) -> bool {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let Some((front_matter, body)) = text
+        .strip_prefix("---\n")
+        .and_then(|rest| rest.split_once("\n---\n"))
+    else {
+        return false;
+    };
+    let status = front_matter
+        .lines()
+        .find_map(|line| line.strip_prefix("status:"))
+        .map(str::trim);
+    let title = format!("# Ratchet wrong-target follow-up: {lang}/{origin}");
+    matches!(status, Some("open" | "in_progress" | "fixed"))
+        && body.lines().any(|line| line == title)
+        && body.contains("## Reproduction receipt")
+}
+
+fn wrong_target_followups_required(
+    lang: &str,
+    by_origin: &BTreeMap<String, (usize, usize, usize)>,
+    issues_root: &std::path::Path,
+) -> Vec<String> {
+    by_origin
+        .iter()
+        .filter(|(_, (_, wrong_target, _))| *wrong_target > 0)
+        .filter(|(origin, _)| {
+            !is_wrong_target_followup(
+                &wrong_target_followup_path(issues_root, lang, origin),
+                lang,
+                origin,
+            )
+        })
+        .map(|(origin, (_, count, _))| format!("{lang}/{origin} ({count})"))
+        .collect()
+}
+
+fn require_wrong_target_followups(
+    lang: &str,
+    by_origin: &BTreeMap<String, (usize, usize, usize)>,
+    issues_root: &std::path::Path,
+) {
+    let missing = wrong_target_followups_required(lang, by_origin, issues_root);
+    assert!(
+        missing.is_empty(),
+        "RATCHET_BUMP blocked: nonzero wrong-target classes need follow-up cards first: {}; create issues/real-repo-ratchet-wrong-target-<lang>-<origin>/item.md",
+        missing.join(", ")
+    );
+}
+
 /// Pin one ratchet's origin histogram in tests/RATCHET.tsv: `true` a floor,
 /// `wrong_target` and `unresolved` ceilings; `RATCHET_BUMP=1` moves each one way only.
 fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize)>) {
@@ -2299,6 +2361,12 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
             .collect::<Vec<_>>()
     };
     if matches!(std::env::var("RATCHET_BUMP").as_deref(), Ok("1")) {
+        let issues_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .and_then(std::path::Path::parent)
+            .expect("the crate manifest is under the repository root")
+            .join("issues");
+        require_wrong_target_followups(lang, by_origin, &issues_root);
         let mut rows = parse(&std::fs::read_to_string(&path).unwrap_or_default());
         for (origin, (t, w, u)) in by_origin {
             match rows.iter().position(|r| r.0 == lang && r.1 == *origin) {
@@ -2351,6 +2419,38 @@ fn pin_ratchet_tsv(lang: &str, by_origin: &BTreeMap<String, (usize, usize, usize
             );
         }
     }
+}
+
+#[test]
+fn ratchet_bump_requires_a_followup_card_for_each_wrong_target_class() {
+    let issues = tempfile::tempdir().expect("temporary issue root");
+    let mut by_origin = BTreeMap::new();
+    by_origin.insert("same_file".to_string(), (8, 2, 0));
+    by_origin.insert("receiver".to_string(), (4, 0, 0));
+    assert_eq!(
+        wrong_target_followups_required("rust", &by_origin, issues.path()),
+        ["rust/same_file (2)"]
+    );
+
+    let card = wrong_target_followup_path(issues.path(), "rust", "same_file");
+    std::fs::create_dir_all(card.parent().expect("follow-up card directory"))
+        .expect("create follow-up card directory");
+    std::fs::write(
+        &card,
+        "---\nstatus: open\n---\n# Ratchet wrong-target follow-up: rust/same_file\n\n## Reproduction receipt\n\nTwo rows target a different corpus definition.\n",
+    )
+    .expect("write follow-up card");
+    require_wrong_target_followups("rust", &by_origin, issues.path());
+
+    std::fs::write(
+        &card,
+        "---\nstatus: obsolete\n---\n# Ratchet wrong-target follow-up: rust/same_file\n\n## Reproduction receipt\n\nTwo rows target a different corpus definition.\n",
+    )
+    .expect("mark follow-up obsolete");
+    assert_eq!(
+        wrong_target_followups_required("rust", &by_origin, issues.path()),
+        ["rust/same_file (2)"]
+    );
 }
 
 /// A run that emits no `same_file` rows at all still owes the pinned floor:

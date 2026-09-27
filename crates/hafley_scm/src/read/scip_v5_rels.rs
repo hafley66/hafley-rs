@@ -70,11 +70,6 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
     // Pass two: references, file edges, call edges, locals.
     let display = display_names(index);
     let mut refs: BTreeSet<(&str, &str, &str, String)> = BTreeSet::new();
-    let external_symbols: BTreeSet<&str> = index
-        .external_symbols
-        .iter()
-        .map(|info| index.symbol(info.symbol))
-        .collect();
     let mut external_refs: BTreeSet<(&str, &str, String, String)> = BTreeSet::new();
     let mut edges: BTreeSet<(&str, &str, String)> = BTreeSet::new();
     let mut fn_edges: BTreeSet<(&str, &str)> = BTreeSet::new();
@@ -111,10 +106,12 @@ pub fn v5_rel_rows(index: &ScipIndex, root: &Path, slug: &str) -> Vec<FlatFact> 
                 continue;
             }
             let Some(defined_in) = def_file.get(symbol).copied() else {
-                if external_symbols.contains(symbol) {
-                    if let Some(origin) = scip_origin(symbol) {
-                        external_refs.insert((path, symbol, origin.to_string(), repos.of(path)));
-                    }
+                // A SCIP global symbol names its package in the symbol itself.
+                // Some indexers omit `Index.external_symbols` while retaining
+                // those canonical symbols on occurrences; the occurrence is
+                // still SCIP's authoritative external target.
+                if let Some(origin) = scip_origin(symbol) {
+                    external_refs.insert((path, symbol, origin.to_string(), repos.of(path)));
                 }
                 continue;
             };
