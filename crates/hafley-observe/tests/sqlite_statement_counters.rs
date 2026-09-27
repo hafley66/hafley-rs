@@ -1,6 +1,6 @@
 #![cfg(feature = "sqlite-sink")]
 
-use hafley_observe::sqlite::{query_plan, StatementFinding};
+use hafley_observe::sqlite::{query_plan, StatementFinding, MAX_OPEN_STATEMENTS};
 use rusqlite::Connection;
 use tracing_capture::{CaptureLayer, SharedStorage};
 use tracing_subscriber::prelude::*;
@@ -131,4 +131,43 @@ fn cached_statement_counters_describe_each_execution() {
         "cached executions accumulated VM steps"
     );
     assert!(profiles[0] > 0);
+}
+
+#[test]
+fn too_many_open_statements_refuse_instrumentation() {
+    let storage = SharedStorage::default();
+    let subscriber = tracing_subscriber::registry().with(CaptureLayer::new(&storage));
+    tracing::subscriber::with_default(subscriber, || {
+        let connection = Connection::open_in_memory().expect("in-memory database");
+        let statements = (0..=MAX_OPEN_STATEMENTS)
+            .map(|_| connection.prepare("SELECT 1").expect("prepare statement"))
+            .collect::<Vec<_>>();
+
+        hafley_observe::sqlite::instrument(&connection);
+        assert_eq!(
+            connection
+                .query_row("SELECT 1", [], |row| row.get::<_, i64>(0))
+                .expect("query after rejected instrumentation"),
+            1
+        );
+        drop(statements);
+    });
+
+    let storage = storage.lock();
+    let errors = storage
+        .all_events()
+        .filter(|event| event.metadata().target() == "sqlite")
+        .filter(|event| *event.metadata().level() == tracing::Level::ERROR)
+        .filter_map(|event| event.message().map(|message| message.to_string()))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        errors,
+        ["refusing sqlite instrumentation: open statement limit exceeded"]
+    );
+    let traced = storage
+        .all_events()
+        .filter(|event| event.metadata().target() == "sqlite")
+        .filter(|event| *event.metadata().level() != tracing::Level::ERROR)
+        .count();
+    assert_eq!(traced, 0, "overflow left sqlite tracing enabled");
 }

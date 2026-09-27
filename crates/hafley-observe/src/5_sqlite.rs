@@ -12,6 +12,7 @@ use tracing_subscriber::Layer;
 use crate::flush::{Flush, Row, Sink, Writer};
 
 pub const SQLITE_TARGET: &str = "sqlite";
+pub const MAX_OPEN_STATEMENTS: usize = 1024;
 
 /// The file the log sink writes when a host did not name one.
 pub const LOG_PATH_VARIABLE: &str = "HAFLEY_LOG_SQLITE";
@@ -174,9 +175,19 @@ pub fn instrument(connection: &Connection) {
         let handle = connection.handle();
         // Existing cached statements may have completed before tracing began.
         let mut statement = ffi::sqlite3_next_stmt(handle, std::ptr::null_mut());
-        // budget: dynamically bounded by sqlite3_next_stmt's null end sentinel
+        let mut statements_seen = 0;
+        // budget: MAX_OPEN_STATEMENTS statements; overflow logs and stops instrumentation
         while !statement.is_null() {
+            if statements_seen == MAX_OPEN_STATEMENTS {
+                tracing::error!(
+                    target: SQLITE_TARGET,
+                    max_open_statements = MAX_OPEN_STATEMENTS,
+                    "refusing sqlite instrumentation: open statement limit exceeded"
+                );
+                return;
+            }
             StatementCounters::take(statement);
+            statements_seen += 1;
             statement = ffi::sqlite3_next_stmt(handle, statement);
         }
         ffi::sqlite3_trace_v2(
