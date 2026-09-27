@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+pub use super::CheckerAnswer;
 use crate::read::shape::FamilyTag;
 use crate::read::types::{ContentId, DefIndex, DefSite};
 use hafley_scm::span::Span;
@@ -25,14 +26,6 @@ pub struct CheckerRef {
     pub dst_name: String,
     /// The declaration identifier's offset: several defs in one file share a name.
     pub dst_offset: u32,
-}
-
-/// What the checker knows about one reference. `External` is knowledge, not
-/// absence: no corpus edge exists, so no name-match leg may invent one.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum CheckerAnswer {
-    Corpus(ContentId, Span),
-    External,
 }
 
 /// The loader's return: resolved references per referring file, plus the two
