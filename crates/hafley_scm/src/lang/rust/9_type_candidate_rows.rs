@@ -311,11 +311,13 @@ struct BodyTypeWalk {
 
 impl<'ast> Visit<'ast> for BodyTypeWalk {
     fn visit_expr_struct(&mut self, expr: &'ast syn::ExprStruct) {
-        if let Some(to) = path_name(&expr.path) {
-            self.candidates.push(TypeCandidateRow {
-                to,
-                kind: TypeCandidateKind::Uses,
-            });
+        if expr.path.segments.len() == 1 {
+            if let Some(to) = path_name(&expr.path) {
+                self.candidates.push(TypeCandidateRow {
+                    to,
+                    kind: TypeCandidateKind::Uses,
+                });
+            }
         }
         syn::visit::visit_expr_struct(self, expr);
     }

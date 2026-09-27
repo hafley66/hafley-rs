@@ -120,6 +120,7 @@ fn type_ladder_fast_and_slow() {
         "\
 _1_none.rs  returns  clone         -> _1_none.rs:NoField fs
 _1_none.rs  uses     NoField       -> _1_none.rs:NoField f-
+_1_none.rs  uses     clone         -> _1_none.rs:NoField fs
 _2_one.rs   field    OneField      -> _0_types.rs:A  fs
 _2_one.rs   field    OneVariant    -> _0_types.rs:A  fs
 _2_one.rs   generic  OneBound      -> _0_types.rs:T  fs
@@ -132,6 +133,7 @@ _2_one.rs   returns  from          -> _2_one.rs:OneField fs
 _2_one.rs   returns  one_return    -> _0_types.rs:A  fs
 _2_one.rs   uses     OneAlias      -> _0_types.rs:A  fs
 _2_one.rs   uses     OneField      -> _2_one.rs:OneField f-
+_2_one.rs   uses     from          -> _2_one.rs:OneField fs
 _3_many.rs  field    ManyFields    -> _0_types.rs:A  fs
 _3_many.rs  field    ManyFields    -> _0_types.rs:B  fs
 _3_many.rs  field    ManyFields    -> _0_types.rs:C  fs

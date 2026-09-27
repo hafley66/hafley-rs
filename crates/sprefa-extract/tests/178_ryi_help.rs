@@ -75,6 +75,6 @@ fn generated_format_accepts_root_and_global_positions() {
     assert_eq!(
         rows.map(|(name, condition, last)| format!("{name} {condition} {}", last.unwrap_or("")))
             .join("\n"),
-        "before true {\"complete\":true,\"rows\":32}\nroot true {\"complete\":true,\"rows\":35}",
+        "before true {\"complete\":true,\"rows\":33}\nroot true {\"complete\":true,\"rows\":35}",
     );
 }
