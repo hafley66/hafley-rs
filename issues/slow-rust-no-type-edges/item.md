@@ -1,8 +1,8 @@
 ---
 created: 2026-09-25
-updated: 2026-09-25
+updated: 2026-09-26
 type: bug
-status: fixed
+status: obsolete
 priority: normal
 related: ['@ryi-cli-cleanup']
 labels: [extract]
@@ -31,3 +31,7 @@ A Rust oracle for type edges needs another source: `impl Trait for Type` headers
 ### 2026-09-25T15:31:59Z · @claude-m3-slow-oracle
 
 Fixed on ryi/slow-oracle: slow projects the parse's type-edge candidates through SCIP type references (owner name span to the next owner; impl candidates on the impl header line). soopy: 883 type edges agree, fast-only 3, slow-only 2 (impl 2/2). Pinned in tests/RATCHET_TYPES.tsv. rust-analyzer still emits 0 relationships; the TS is_implementation projection is unchanged.
+
+## Repro receipt
+
+2026-09-26: current `ryii slow` on `ratchet_soopy` exits 0 with 1,042 `resolved_type_edge` rows; the zero-row defect does not reproduce.
