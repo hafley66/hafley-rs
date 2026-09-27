@@ -2,13 +2,14 @@
 created: 2026-09-14
 updated: 2026-09-27
 type: feature
-status: in-progress
+status: done
 priority: normal
+closed: 2026-09-27
 ---
 
 ## Description
 
-Re-evaluating the committed durable expiring reminder slice against scheduler libraries before resuming the archive port.
+Committed durable expiring reminders use explicit existing routes, persist claims in the mailbox store, and require a turn-end or threaded reply before another occurrence can be claimed. No lane is created or revived by the runner. ACPX routes remain held because queue admission does not prove a recipient turn. The scheduler candidate review found no library that fits the existing single-mailbox transaction and turn-receipt contract.
 
 ## Scheduler candidates
 
@@ -29,12 +30,14 @@ Re-evaluating the committed durable expiring reminder slice against scheduler li
 - [x] Missing/dead lanes and ACPX routes do not spawn agents or append reminder mail.
 - [x] CLI help documents the reminder contract.
 - [x] Schema version 36 upgrades to schema version 37 with the reminder table available.
+- [x] Candidate table records persistence, mailbox fit, dependency weight and maintenance; plain due rows selected because the libraries require ephemeral schedules or separate scheduling state.
 
 ## Tests Run
 
 - [x] `cargo nextest run -p boop-store -j 2 -E 'test(/reminder/)'` (9 passed)
 - [x] `cargo nextest run -p boop-proc -j 2 -E 'test(/cancelled_reminder|reminder_buffer|reminder_turn_end/)'` (3 passed)
 - [x] `cargo nextest run -p boop -j 2 -E 'test(/t1_reminder::/)'` (3 passed)
+- [x] Candidate review committed as `b52dcee8` before closing this item.
 
 ## Implementation Notes
 
