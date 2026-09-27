@@ -379,12 +379,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     #[cfg(feature = "mimalloc")]
     cap_memory();
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
-        // Whole-project parsing leaves allocator high-water pages on each
-        // Rayon worker. Keep the daemon's extraction fanout small by default;
-        // callers can choose a different bound explicitly.
-        if std::env::var_os("SPREFA_EXTRACT_THREADS").is_none() {
-            std::env::set_var("SPREFA_EXTRACT_THREADS", "2");
-        }
         return server_auto::daemon(
             || {
                 let _ = sprefa_extract::trace::install();

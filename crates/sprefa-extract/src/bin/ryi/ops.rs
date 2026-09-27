@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::io::Write;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{mpsc, Arc, LazyLock, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
@@ -93,18 +93,6 @@ thread_local! {
 }
 
 pub(crate) type Diagnostics = Arc<Mutex<Vec<u8>>>;
-
-/// Request orchestration owns the retained project result and response rows;
-/// keep those allocations on a small reusable set of threads. The extraction
-/// pool remains responsible for parallel file parsing and resolution.
-const OPERATION_THREADS: usize = 2;
-static OPERATION_POOL: LazyLock<rayon::ThreadPool> = LazyLock::new(|| {
-    rayon::ThreadPoolBuilder::new()
-        .num_threads(OPERATION_THREADS)
-        .thread_name(|index| format!("ryi-operation-{index}"))
-        .build()
-        .expect("operation thread pool builds")
-});
 
 struct RequestContextGuard {
     root: Option<PathBuf>,
@@ -235,8 +223,7 @@ fn produce(ryi: Ryi) -> Rows {
     let request_input = request_input_file();
     let chunked = REQUEST_ROOT.with(|slot| slot.borrow().is_some())
         && !matches!(&ryi.cmd, Some(Cmd::Watch(_)));
-    let is_watch = matches!(&ryi.cmd, Some(Cmd::Watch(_)));
-    let operation = move || {
+    std::thread::spawn(move || {
         let result = with_request_input(request_input, || {
             with_request_context(request_root, diagnostics, || -> OpResult<()> {
                 let sink = SharedSink(Arc::new(Mutex::new(RowSink {
@@ -259,12 +246,7 @@ fn produce(ryi: Ryi) -> Rows {
         if let Err(error) = result {
             let _ = tx.send(Err(error));
         }
-    };
-    if is_watch {
-        std::thread::spawn(operation);
-    } else {
-        OPERATION_POOL.spawn(operation);
-    }
+    });
     Rows { rx, cancelled }
 }
 
