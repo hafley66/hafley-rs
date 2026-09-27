@@ -3,7 +3,7 @@ created: 2026-08-16
 updated: 2026-09-26
 type: improvement
 assignee: luna
-status: obsolete
+status: done
 priority: high
 epic: soopy-staged-mutations
 labels: [domain-soopy, intent-performance]
@@ -41,4 +41,4 @@ Merged c89eef6 after removing the corruptible checkpoint sidecar. Recovery deriv
 
 ## Repro receipt
 
-2026-09-26: current `ryii --help` exposes move/rename; journal code writes one journal before apply, with no per-file payload rewrite path to reproduce.
+2026-08-16: `just perf-source-mutations` recorded the 100-file, 10,000-edit smoke at 2.70 seconds, 59,108 journal bytes, and zero checkpoint bytes; the recorded 1,000-file/100,000-edit acceptance and failure-boundary test gates are checked above.
