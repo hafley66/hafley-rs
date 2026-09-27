@@ -1,8 +1,8 @@
 ---
 created: 2026-09-19
-updated: 2026-09-19
+updated: 2026-09-26
 type: improvement
-status: open
+status: needs-decision
 priority: low
 related: ['@oh-test-kit']
 labels: [observability]
@@ -59,3 +59,9 @@ Whether the scanner can distinguish `#[test]` resolved to `oh::test` from the bu
 without doing name resolution. A grep sees the same three characters either way, so it
 likely has to check for the `use oh::test;` import at file scope and treat its absence
 as the failure.
+
+## Reproduction receipt
+
+2026-09-26: current hafley-rs checkout has no `crates/oh` package or `oh::test` implementation; `rg --files crates` and manifest/source search return none. The observed tests use Rust's built-in `#[test]`, so the proposed stamping behavior has no OH test target to exercise in this repository.
+
+Question: Should the OH test kit and stamp scanner be created in hafley-rs, or do they belong in another repository?
