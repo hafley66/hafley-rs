@@ -1,8 +1,8 @@
 ---
 created: 2026-08-14
-updated: 2026-08-17
+updated: 2026-09-27
 type: task
-status: open
+status: obsolete
 priority: high
 epic: boop-lane-observability
 labels: [domain-instant, domain-boop, intent-migration, artifact-integration]
@@ -10,6 +10,8 @@ lane: instant-consumer
 lane_seq: 11
 collision: [instant-agent-panels]
 blocked_by: ['@agent-activity-projection', '@lane-status-command', '@agent-session-graph-audit', '@boop-session-graph']
+closed: 2026-09-27
+closed_by: codex
 ---
 
 # 011 Migrate Instant agent panels to Boop
@@ -65,3 +67,8 @@ Extend the Instant consumer contract with a Grid-backed agent dependency tree an
 
 Reconciliation: Instant execution now begins with instant/issues/boop-external-shells, covering %pane attachment, stable tab identity, viewer lifecycle, shortcut migration, Boop-only live-pane correlation, integration coverage, and removal of superseded Bus/CASS shell surfaces. instant/issues/boop-agent-explorer follows it for the Grid dependency tree and Marbler timeline. Boop pane liveness and install regression is tracked by @boop-pane-liveness.
 
+## Resolution
+
+### 2026-09-27T04:42:08Z · @codex
+
+Current source receipt: Instant’s Boop panel calls `boop_session_graph` and receives the typed Boop `AgentSessionGraph`; `boopPanel.tsx` consumes that JSON, and source search finds no `cass swarm status` command.
