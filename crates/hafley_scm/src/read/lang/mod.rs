@@ -144,6 +144,9 @@ pub mod rust_type_refs;
 mod scm_family;
 #[path = "7_scm_rows.rs"]
 pub mod scm_rows;
+#[cfg(any(feature = "rust", feature = "typescript"))]
+#[path = "9_scope_rows.rs"]
+pub mod scope_rows;
 #[path = "8_scm_store.rs"]
 pub mod scm_store;
 #[path = "3_source_facts.rs"]

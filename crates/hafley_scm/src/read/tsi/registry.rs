@@ -134,6 +134,12 @@ pub const REGISTRY: &[Relation] = &[
         name: "tsi.output",
         args: &[Id, Int, Id], // callable, position, type
     },
+    // An env field and what it captures: a version edge, a receiver product
+    // (`self`) or a frame's callable (`frame`); owned|shared|exclusive|cell|self|frame.
+    Relation {
+        name: "tsi.capture",
+        args: &[Id, Id, Atom], // env edge, captured, mode
+    },
     Relation {
         name: "tsi.subtype",
         args: &[Id, Id, Atom],

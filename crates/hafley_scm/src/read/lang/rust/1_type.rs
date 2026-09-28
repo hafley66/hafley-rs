@@ -75,6 +75,12 @@ pub(super) fn project_types(
     // impl-owned candidate finds its in-file self-type entity regardless of
     // item order (v5's text-keyed pass has no order sensitivity; spans do).
     edge_candidates_from_tree(tree, source, strings, sink);
+    crate::read::lang::scope_rows::append_from_tree(
+        crate::read::lang::scope_rows::ScopeLang::Rust,
+        tree,
+        source,
+        &mut sink.aux.tsi,
+    );
     impl_self_type_candidates(rows.impl_self_heads, strings, sink);
 }
 

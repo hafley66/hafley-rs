@@ -4242,6 +4242,9 @@ impl Source for TsSource {
                         collect_const_facts(&parsed, src, &mut strings, &mut bundle);
                         ts_doc_facts(&parsed, src, &mut strings, &mut bundle);
                         tsi_rows(&parsed, src, &mut strings, &mut bundle);
+                        if let Some(lang) = super::scope_rows::ScopeLang::of_path(path) {
+                            super::scope_rows::append(lang, content, &mut bundle.aux.tsi);
+                        }
                     }
                     trace::record_bundle(&span, &bundle, 0);
                     types = Some(bundle);
