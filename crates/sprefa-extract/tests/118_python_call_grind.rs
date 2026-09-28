@@ -208,3 +208,11 @@ fn forwarding_ring_resolves_under_the_wall() {
     // f0(f1): f0's callback is f1, so f0 -> f1; deeper rings stay unique too.
     assert!(has(&pairs, "f0", "f1"), "{pairs:?}");
 }
+
+/// FAIL-FIRST receipt: at 5abb9383 `returned_target` handed each hop a fresh
+/// `seen`, so a def returning its own call recursed until the stack overflowed.
+#[test]
+fn a_def_returning_its_own_call_resolves() {
+    let pairs = edges("tests/fixtures/py_call_grind/self_return.py");
+    assert!(has(&pairs, "", "f"), "{pairs:?}");
+}

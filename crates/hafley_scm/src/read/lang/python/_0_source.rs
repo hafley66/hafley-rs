@@ -3294,7 +3294,8 @@ impl<'a> PyResolver<'a> {
     /// What the same-file def at `dspan` hands back through its single
     /// return: a def-local binding of the returned name first, then the name
     /// itself, then the argument the call at `inner` passed for a returned
-    /// parameter.
+    /// parameter. Cycle-guarded on the def: each hop below starts a fresh
+    /// `seen`, so only the active path stops a def that returns its own call.
     fn returned_target(
         &self,
         blob: ContentId,
@@ -3305,6 +3306,24 @@ impl<'a> PyResolver<'a> {
         if Some(&blob) != self.own.as_ref() {
             return None;
         }
+        if self.active.borrow().contains(&dspan)
+            || self.active.borrow().len() >= PY_RESOLVE_DEPTH
+        {
+            self.cut();
+            return None;
+        }
+        self.active.borrow_mut().push(dspan);
+        let found = self.returned_target_on_path(dspan, inner, at);
+        self.active.borrow_mut().pop();
+        found
+    }
+
+    fn returned_target_on_path(
+        &self,
+        dspan: Span,
+        inner: Span,
+        at: Span,
+    ) -> Option<(ContentId, Span)> {
         let strings = &self.output.strings;
         let ret = self.call.aux.py_returns.iter().find(|r| r.def == dspan)?;
         let value = strings.lookup(ret.value);
