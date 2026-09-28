@@ -18,3 +18,11 @@
 - Writing is serial in ONE worktree checkout folder: codex `gpt-6-sol` medium (boop preset `sol6-med`).
   One writer at a time; merge to main before the next writer starts. Do not create per-task worktrees.
 - The coordinator reviews every writer's diff before merge.
+
+## One implementation per concern (user-set 2026-09-28)
+- Exactly one implementation of each concern (module resolution, name binding, rename sites,
+  type edges). Fast and slow tiers share it; they never fork a second copy.
+- Rust resolution is rust-analyzer as a library (`ra_ap_*`, feature `rust-checker`). It is part of
+  the default `cli` build. Hand-written resolvers that duplicate it are deleted, not maintained.
+- No workarounds or fallback heuristics. When the proper engine is unavailable, the command
+  abstains or errors with the reason; it does not guess with text scans or a parallel resolver.
