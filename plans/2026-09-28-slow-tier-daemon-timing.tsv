@@ -1,0 +1,9 @@
+tool	repo	operation	mode	runs	median_ms	p90_ms	peak_rss_mib
+ryi	hafley-rs	graph --slow	cold	3	9816.787	9820.262	1645.266
+ryi	hafley-rs	graph --slow	warm	3	506.012	532.355	1646.625
+ryi	hafley-rs	cleave private-field widen	cold	3	2907.628	2924.963	518.406
+ryi	hafley-rs	cleave private-field widen	warm	3	61.630	61.647	535.281
+ryi	codegraph-src	slow rename	cold	29	131.840	192.886	20.984
+ryi	codegraph-src	slow rename	warm	29	17.134	71.126	35.266
+ryi	vite	slow rename	cold	22	104.695	124.393	16.828
+ryi	vite	slow rename	warm	22	22.088	23.668	14.141
