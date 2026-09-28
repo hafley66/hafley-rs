@@ -1,89 +1,67 @@
-step	commit	metric	value	target
-pin_typescript	HEAD	api_exchanges_passing	0	3
-pin_typescript	HEAD	checker_queries_implemented	0	11
-pin_typescript	HEAD	case_fixtures_passing	0	22
-api_client	HEAD	api_exchanges_passing	3	3
-api_client	HEAD	checker_queries_implemented	1	11
-api_client	HEAD	case_fixtures_passing	0	22
-rename_seam	HEAD	api_exchanges_passing	3	3
-rename_seam	HEAD	checker_queries_implemented	1	11
-rename_seam	HEAD	case_fixtures_passing	0	22
-slow_cli	HEAD	api_exchanges_passing	3	3
-slow_cli	HEAD	checker_queries_implemented	1	11
-slow_cli	HEAD	case_fixtures_passing	0	22
-api_surface_resolve_cursor	HEAD	checker_query_exposed	1	1
-api_surface_alias_module	HEAD	checker_query_exposed	0	0
-api_surface_root_symbols	HEAD	checker_query_exposed	0	0
-api_surface_object_context	HEAD	checker_query_exposed	1	1
-api_surface_contextual_property_set	HEAD	checker_query_exposed	0	0
-api_surface_shorthand_binding	HEAD	checker_query_exposed	1	1
-api_surface_destructuring_property	HEAD	checker_query_exposed	0	0
-api_surface_parameter_property	HEAD	checker_query_exposed	0	0
-api_surface_inherited_member	HEAD	checker_query_exposed	0	0
-api_surface_rename_metadata	HEAD	checker_query_exposed	0	0
-api_surface_edit_rendering	HEAD	checker_query_exposed	1	1
-api_method_getSymbolAtLocation	HEAD	checker_query_exposed	1	1
-api_method_getAliasedSymbol	HEAD	checker_query_exposed	1	1
-api_method_getMergedSymbol	HEAD	checker_query_exposed	0	0
-api_method_getExportSpecifierLocalTargetSymbol	HEAD	checker_query_exposed	1	1
-api_method_getRootSymbols	HEAD	checker_query_exposed	0	0
-api_method_getContextualType	HEAD	checker_query_exposed	1	1
-api_method_getPropertySymbolsFromContextualType	HEAD	checker_query_exposed	0	0
-api_method_getShorthandAssignmentValueSymbol	HEAD	checker_query_exposed	1	1
-api_method_getPropertySymbolOfDestructuringAssignment	HEAD	checker_query_exposed	0	0
-api_method_getPropertySymbolFromBindingElement	HEAD	checker_query_exposed	0	0
-api_method_getSymbolsOfParameterPropertyDeclaration	HEAD	checker_query_exposed	0	0
-api_method_getTypeAtLocation	HEAD	checker_query_exposed	1	1
-api_method_getPropertyOfType	HEAD	checker_query_exposed	1	1
-api_method_getContextualTypeFromParentOrAncestorTypeNode	HEAD	checker_query_exposed	0	0
-api_method_isStringLiteralType	HEAD	checker_query_exposed	1	1
-api_method_isUnionType	HEAD	checker_query_exposed	1	1
-api_method_getTypesOfType	HEAD	checker_query_exposed	1	1
-query_routing	HEAD	api_exchanges_passing	3	3
-query_routing	HEAD	checker_queries_implemented	2	11
-query_routing	HEAD	case_fixtures_passing	2	22
-query_routing	HEAD	case_fixtures_passing_api	2	22
-case_batch_one	HEAD	api_exchanges_passing	3	3
-case_batch_one	HEAD	checker_queries_implemented	3	11
-case_batch_one	HEAD	case_fixtures_passing	7	22
-case_batch_one	HEAD	case_fixtures_passing_api	7	22
-case_matrix	HEAD	api_exchanges_passing	3	3
-case_matrix	HEAD	checker_queries_implemented	4	11
-case_matrix	HEAD	case_fixtures_passing	14	22
-case_matrix	HEAD	case_fixtures_passing_api	14	22
-case_matrix	HEAD	case_fixtures_passing_null_lsp	2	22
-benchmark	HEAD	api_exchanges_passing	3	3
-benchmark	HEAD	checker_queries_implemented	4	11
-benchmark	HEAD	case_fixtures_passing	14	22
-benchmark	HEAD	case_fixtures_passing_api	14	22
-benchmark	HEAD	case_fixtures_passing_null_lsp	2	22
-benchmark	HEAD	slow_rename_file_recall	0.781818	0.909091
-benchmark	HEAD	slow_rename_site_recall	0.781818	0.866624
-benchmark	HEAD	slow_rename_typecheck_pass	54/55	unavailable
-benchmark	HEAD	slow_rename_diff_isolated	42/55	55/55
-api_only	HEAD	api_exchanges_passing	3	3
-api_only	HEAD	checker_queries_implemented	4	11
-api_only	HEAD	case_fixtures_passing	14	22
-api_only	HEAD	case_fixtures_passing_api	14	22
-api_only	HEAD	case_fixtures_abstained	8	0
-api_only	HEAD	case_abstain_query_2_destructure	getPropertySymbolFromBindingElement	exposed
-api_only	HEAD	case_abstain_query_8_contextual_shorthand	getPropertySymbolsFromContextualType	exposed
-api_only	HEAD	case_abstain_query_10_destructure_alias	getPropertySymbolFromBindingElement	exposed
-api_only	HEAD	case_abstain_query_14_contextual_member	getPropertySymbolsFromContextualType	exposed
-api_only	HEAD	case_abstain_query_15_union_context	getPropertySymbolsFromContextualType	exposed
-api_only	HEAD	case_abstain_query_16_intersection	getRootSymbols	exposed
-api_only	HEAD	case_abstain_query_18_merge	getRootSymbols	exposed
-api_only	HEAD	case_abstain_query_21_string_type	getContextualTypeFromParentOrAncestorTypeNode	exposed
-api_only_benchmark	HEAD	api_exchanges_passing	3	3
-api_only_benchmark	HEAD	checker_queries_implemented	4	11
-api_only_benchmark	HEAD	case_fixtures_passing	14	22
-api_only_benchmark	HEAD	case_fixtures_passing_api	14	22
-api_only_benchmark	HEAD	case_fixtures_abstained	8	0
-api_only_benchmark	HEAD	slow_rename_file_recall	0.163636	0.909091
-api_only_benchmark	HEAD	slow_rename_site_recall	0.163636	0.866624
-api_only_benchmark	HEAD	slow_rename_typecheck_pass	55/55	unavailable
-api_only_benchmark	HEAD	slow_rename_diff_isolated	11/55	55/55
-api_only_diagnostic	HEAD	api_exchanges_passing	3	3
-api_only_diagnostic	HEAD	checker_queries_implemented	4	11
-api_only_diagnostic	HEAD	case_fixtures_passing_api	14	22
-api_only_diagnostic	HEAD	case_fixtures_abstained	8	0
+run	metric	value	unit	cause
+ts7_lsp_25413b03	compiler_version	7.0.2	version	-
+ts7_lsp_25413b03	oracle_version	5.9.3	version	-
+ts7_lsp_25413b03	fixture_cases	25	cases	-
+ts7_lsp_25413b03	fixture_oracle_matches	23	cases	-
+ts7_lsp_25413b03	fixture_expected_abstentions	2	cases	-
+ts7_lsp_25413b03	truth_targets	51	targets	-
+ts7_lsp_25413b03	targets_renamed	51	targets	-
+ts7_lsp_25413b03	targets_abstained	0	targets	-
+ts7_lsp_25413b03	typecheck_equal_baseline	50	targets	-
+ts7_lsp_25413b03	typecheck_mismatch_targets	1	targets	-
+ts7_lsp_25413b03	typecheck_mismatch_symbol	ambientDeclaration	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile at src/mcp/explore-diagnostics.ts:574.
+ts7_lsp_25413b03	diff_isolated	48	targets	-
+ts7_lsp_25413b03	diff_unisolated	3	targets	-
+ts7_lsp_25413b03	truth_files	200	files	-
+ts7_lsp_25413b03	found_truth_files	196	files	-
+ts7_lsp_25413b03	slow_rename_file_recall	0.980000	ratio	-
+ts7_lsp_25413b03	truth_sites	1415	sites	-
+ts7_lsp_25413b03	found_truth_sites	1407	sites	-
+ts7_lsp_25413b03	slow_rename_site_recall	0.994346	ratio	-
+ts7_lsp_25413b03	command_wall_total	7.987	seconds	-
+ts7_lsp_25413b03	missed_truth_file	svgVirtualModulePlugin playground/fs-serve/root/vite.config-base.js	file	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-base.js:4	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-base.js:39	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_file	svgVirtualModulePlugin playground/fs-serve/root/vite.config-deny.js	file	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-deny.js:3	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-deny.js:22	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_file	svgVirtualModulePlugin playground/fs-serve/root/vite.config.js	file	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config.js:4	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config.js:35	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_file	transformFooWithInlineSourceMap playground/js-sourcemap/vite.config.js	file	Compiler WorkspaceEdit omitted JavaScript config references to transformFooWithInlineSourceMap.
+ts7_lsp_25413b03	missed_truth_site	transformFooWithInlineSourceMap playground/js-sourcemap/vite.config.js:6	site	Compiler WorkspaceEdit omitted JavaScript config references to transformFooWithInlineSourceMap.
+ts7_lsp_25413b03	missed_truth_site	transformFooWithInlineSourceMap playground/js-sourcemap/vite.config.js:10	site	Compiler WorkspaceEdit omitted JavaScript config references to transformFooWithInlineSourceMap.
+ts7_lsp_shared_selector	fixture_cases	25	cases	-
+ts7_lsp_shared_selector	fixture_oracle_matches	16	cases	-
+ts7_lsp_shared_selector	fixture_selector_stops	9	cases	-
+ts7_lsp_shared_selector	truth_targets	51	targets	-
+ts7_lsp_shared_selector	targets_renamed	42	targets	-
+ts7_lsp_shared_selector	targets_stopped	9	targets	-
+ts7_lsp_shared_selector	typecheck_equal_baseline	50	targets	-
+ts7_lsp_shared_selector	typecheck_mismatch_targets	1	targets	-
+ts7_lsp_shared_selector	diff_isolated	38	targets	-
+ts7_lsp_shared_selector	truth_files	200	files	-
+ts7_lsp_shared_selector	found_truth_files	154	files	-
+ts7_lsp_shared_selector	slow_rename_file_recall	0.770000	ratio	-
+ts7_lsp_shared_selector	truth_sites	1415	sites	-
+ts7_lsp_shared_selector	found_truth_sites	994	sites	-
+ts7_lsp_shared_selector	slow_rename_site_recall	0.702473	ratio	-
+ts7_lsp_shared_selector	command_wall_total	7.439	seconds	-
+ts7_lsp_shared_selector	typecheck_mismatch_symbol	ambientDeclaration src/mcp/explore-diagnostics.ts:574	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile.
+ts7_lsp_tsc_seed	fixture_cases	25	cases	-
+ts7_lsp_tsc_seed	fixture_oracle_matches	23	cases	-
+ts7_lsp_tsc_seed	fixture_expected_abstentions	2	cases	-
+ts7_lsp_tsc_seed	truth_targets	51	targets	-
+ts7_lsp_tsc_seed	targets_renamed	51	targets	-
+ts7_lsp_tsc_seed	targets_stopped	0	targets	-
+ts7_lsp_tsc_seed	typecheck_equal_baseline	50	targets	-
+ts7_lsp_tsc_seed	typecheck_mismatch_targets	1	targets	-
+ts7_lsp_tsc_seed	diff_isolated	48	targets	-
+ts7_lsp_tsc_seed	truth_files	200	files	-
+ts7_lsp_tsc_seed	found_truth_files	196	files	-
+ts7_lsp_tsc_seed	slow_rename_file_recall	0.980000	ratio	-
+ts7_lsp_tsc_seed	truth_sites	1415	sites	-
+ts7_lsp_tsc_seed	found_truth_sites	1407	sites	-
+ts7_lsp_tsc_seed	slow_rename_site_recall	0.994346	ratio	-
+ts7_lsp_tsc_seed	command_wall_total	11.164	seconds	-
+ts7_lsp_tsc_seed	typecheck_mismatch_symbol	ambientDeclaration src/mcp/explore-diagnostics.ts:574	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile.

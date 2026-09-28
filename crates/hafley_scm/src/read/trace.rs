@@ -129,7 +129,8 @@ pub fn record_bundle<F: Family>(span: &Span, bundle: &FamilyBundle<F>, sites: us
 
 #[cfg(feature = "cli")]
 pub use sink::{
-    install, load_avg_1min, FamilyRow, PhaseRowOut, RunSnapshot, SummaryLayer, SummaryState,
+    install, install_with_default, load_avg_1min, FamilyRow, PhaseRowOut, RunSnapshot,
+    SummaryLayer, SummaryState,
 };
 
 #[cfg(feature = "cli")]
@@ -583,6 +584,10 @@ mod sink {
     /// human or JSON rendering. `DL_TRACE_SUMMARY` remains an independent summary
     /// layer over the same spans.
     pub fn install() -> Option<Arc<SummaryState>> {
+        install_with_default("sprefa_extract=info,hafley_scm=info")
+    }
+
+    pub fn install_with_default(default_filter: &'static str) -> Option<Arc<SummaryState>> {
         // `--bench` is read off argv because the subscriber must exist before
         // clap parses: a span opened earlier than the layer is a span lost.
         let want_summary = !matches!(std::env::var("DL_TRAIL").as_deref(), Ok("0"))
@@ -593,7 +598,7 @@ mod sink {
         let observability = hafley_observe::Config::from_env(
             "sprefa-extract",
             crate::read::RYI_VERSION,
-            "sprefa_extract=info,hafley_scm=info",
+            default_filter,
             std::io::IsTerminal::is_terminal(&std::io::stderr()),
         )
         .expect("observability configuration");

@@ -5,6 +5,16 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{field_reads, FieldProbe, FieldRead};
+
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_session::warm_workspace_available;
+
+#[cfg(not(feature = "rust-checker"))]
+pub fn warm_workspace_available(_root: &std::path::Path) -> bool {
+    false
+}
 pub use super::CheckerAnswer;
 use super::{answer_of, CALL_FACETS};
 use crate::read::shape::FamilyTag;

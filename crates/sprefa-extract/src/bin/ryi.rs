@@ -111,6 +111,8 @@ mod source_rename;
 
 #[path = "../edit/_7_cleave.rs"]
 mod cleave;
+#[path = "../edit/_7a_cleave_fields.rs"]
+mod cleave_fields;
 
 fn file_args_from_fast(fast: FastArgs) -> FileArgs {
     FileArgs {
@@ -393,11 +395,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             hafley_observe::finish_trace,
         );
     }
-    let summary = sprefa_extract::trace::install();
+    let ryi = parse_cli();
+    let default_filter = match &ryi.cmd {
+        Some(Cmd::Cleave(_)) => "sprefa_extract=warn,hafley_scm=warn",
+        _ => "sprefa_extract=info,hafley_scm=info",
+    };
+    let summary = hafley_scm::read::trace::install_with_default(default_filter);
     if let Some(state) = &summary {
         let _ = TRAIL_STATE.set(Arc::clone(state));
     }
-    let outcome = match run() {
+    let outcome = match run(ryi) {
         Ok(()) => Ok(()),
         Err(error) if is_broken_pipe(error.as_ref()) => Ok(()),
         Err(error) => {
@@ -520,7 +527,7 @@ fn or_exit_2<E: std::fmt::Display + 'static>(
     })
 }
 
-fn run() -> Result<(), Box<dyn std::error::Error>> {
+fn parse_cli() -> Ryi {
     let mut argv: Vec<std::ffi::OsString> = std::env::args_os().collect();
     let format_first = argv.get(1).is_some_and(|arg| arg == "--format")
         && argv.get(2).is_some_and(|arg| arg == "jsonl")
@@ -538,7 +545,7 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
         argv.insert(2, flag);
         argv.insert(3, value);
     }
-    let ryi = match cli_command()
+    match cli_command()
         .name(daemon_auto::SERVER_BIN)
         .try_get_matches_from(argv)
         .and_then(|matches| Ryi::from_arg_matches(&matches))
@@ -548,7 +555,10 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
             let _ = error.print();
             exit(error.exit_code());
         }
-    };
+    }
+}
+
+fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
     if let Some(format) = ryi.file.format.as_deref() {
         if format != "jsonl" {
             eprintln!("ryi: --format {format}: use jsonl");

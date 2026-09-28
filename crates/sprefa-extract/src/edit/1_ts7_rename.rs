@@ -1,13 +1,17 @@
-//! Compiler-backed TypeScript rename. Syntax selects candidate seats; checker
-//! identity filters them. Missing checker queries yield named abstentions.
+//! The slow TypeScript rename is the compiler's LSP WorkspaceEdit.
 
-#[cfg(test)]
-use std::path::PathBuf;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
-use serde_json::{json, Value};
-use tree_sitter::{Node, Parser, Tree};
+use lsp_types::request::Request as RequestMethod;
+use lsp_types::{
+    request::{PrepareRenameRequest, Rename},
+    Position, RenameParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri, WorkspaceEdit,
+};
+use serde_json::Value;
 
-use super::ts7_api::{utf16_offset, Ts7Api};
+use super::ts7_lsp_session::{file_uri, TsSession, TS_SESSIONS};
+use super::ts7_symbol_seed::{byte_at_lsp_position, declaration_spans};
 use crate::edit_seams::{RefRole, RenameAbstain, RenameStop, SymbolRef};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::Span;
@@ -16,451 +20,521 @@ pub fn symbol_refs_and_abstains(
     cx: &RenameCx,
     request: &RenameRequest,
 ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
-    let text = cx.text(&request.anchor).ok_or_else(|| ts7_not_found(request))?;
-    let seed = seed_offset(&text, request).ok_or_else(|| ts7_not_found(request))?;
-    let span = Span { start: seed as u32, len: request.old.len() as u32 };
-    let file = cx.abs(&request.anchor);
-    let mut api = Ts7Api::open(cx.root(), &file).map_err(|_| inexact(request, span))?;
-    let position = utf16_offset(&text, seed + request.old.len() / 2);
-    let symbol = api.symbol_at(&file, position).map_err(|_| inexact(request, span))?;
-    let anchor_tree = parse_tree(&request.anchor, &text).ok_or_else(|| inexact(request, span))?;
-    let anchor_node = anchor_tree.root_node().descendant_for_byte_range(seed, seed + request.old.len())
-        .ok_or_else(|| inexact(request, span))?;
-    let seed_kind = anchor_node.kind();
-    let intersection_context = has_node_kind(anchor_tree.root_node(), "intersection_type");
-    if let Some(query) = missing_for_node(anchor_node, seed_kind, intersection_context) {
-        return abstain(request, span, query);
+    let text = cx.text(&request.anchor).ok_or_else(|| not_found(request))?;
+    let mut span = Span {
+        start: request.at.unwrap_or(0),
+        len: request.old.len() as u32,
+    };
+    let anchor_uri = file_uri(&cx.abs(&request.anchor)).map_err(|_| inexact(request, span))?;
+    let pool = TS_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut sessions = pool.lock().map_err(|_| inexact(request, span))?;
+    if !sessions.contains_key(cx.root()) {
+        sessions.insert(
+            cx.root().to_path_buf(),
+            TsSession::open(cx.root()).map_err(|_| inexact(request, span))?,
+        );
     }
-    if symbol["id"].as_u64().is_none() { return Err(ts7_not_found(request)); }
+    let session = sessions.get_mut(cx.root()).unwrap();
+    for changed in std::mem::take(&mut session.pending) {
+        let content = cx.text(&changed).ok_or_else(|| inexact(request, span))?;
+        let uri = file_uri(&cx.abs(&changed)).map_err(|_| inexact(request, span))?;
+        session
+            .sync_document(&uri, &changed, &content)
+            .map_err(|_| inexact(request, span))?;
+    }
+    session
+        .sync_document(&anchor_uri, &request.anchor, &text)
+        .map_err(|_| inexact(request, span))?;
+    let lsp = &mut session.lsp;
+    let position = if let Some(at) = request.at {
+        position_at_byte(&text, at as usize).map_err(|_| inexact(request, span))?
+    } else {
+        let sites = declaration_spans(lsp, &anchor_uri, &text, &request.old)
+            .map_err(|_| inexact(request, span))?;
+        span = match sites.as_slice() {
+            [] => return Err(not_found(request)),
+            [site] => *site,
+            _ => {
+                return Err(RenameStop::Ambiguous {
+                    anchor: request.anchor.clone(),
+                    old: request.old.clone(),
+                    sites,
+                })
+            }
+        };
+        position_at_byte(&text, span.start as usize).map_err(|_| inexact(request, span))?
+    };
 
-    let seed_alias = symbol["flags"].as_u64().unwrap_or(0) & 2_097_152 != 0;
-    let seed_export_target = if seed_alias && anchor_node.parent().is_some_and(|node| node.kind() == "export_specifier") {
-        export_local_target(&mut api, &symbol).map_err(|_| inexact(request, span))?
-    } else {
-        None
+    let location = TextDocumentPositionParams {
+        text_document: TextDocumentIdentifier { uri: anchor_uri },
+        position,
     };
-    let seed_id = if seed_alias {
-        symbol["id"].as_u64().ok_or_else(|| inexact(request, span))?
-    } else {
-        canonical_symbol(&mut api, &symbol).map_err(|_| inexact(request, span))?
-    };
-    let mut refs = Vec::new();
-    for rel in cx.files_of(&crate::lang::ts::TsSource) {
-        let Some(content) = cx.text(rel) else { continue };
-        let path = cx.abs(rel);
-        let tree = parse_tree(rel, &content).ok_or_else(|| inexact(request, span))?;
-        let candidates: Vec<usize> = content.match_indices(&request.old)
-            .map(|(at, _)| at)
-            .filter(|at| identifier_edges(&content, *at, request.old.len()))
-            .collect();
-        for at in candidates {
-            let position = utf16_offset(&content, at + request.old.len() / 2);
-            let found = api.symbol_at(&path, position).map_err(|_| inexact(request, span))?;
-            if found["id"].as_u64().is_none() { continue }
-            let found_id = if seed_alias {
-                found["id"].as_u64().ok_or_else(|| inexact(request, span))?
-            } else {
-                canonical_symbol(&mut api, &found).map_err(|_| inexact(request, span))?
-            };
-            let node = tree.root_node().descendant_for_byte_range(at, at + request.old.len())
-                .ok_or_else(|| inexact(request, span))?;
-            let shorthand = node.kind() == "shorthand_property_identifier";
-            let binding_shorthand = node.kind() == "shorthand_property_identifier_pattern";
-            if rel == request.anchor {
-                if let Some(query) = missing_for_node(node, seed_kind, intersection_context) {
-                    return abstain(request, span, query);
-                }
-            }
-            let related_export = if found_id != seed_id && seed_export_target.is_some()
-                && node.parent().is_some_and(|node| node.kind() == "export_specifier")
-            {
-                export_local_target(&mut api, &found).map_err(|_| inexact(request, span))?
-                    == seed_export_target
-            } else {
-                false
-            };
-            if found_id != seed_id && !shorthand && !related_export { continue; }
-            if let Some(query) = missing_for_node(node, seed_kind, intersection_context) {
-                return abstain(request, span, query);
-            }
-            let mut replacement = None;
-            if binding_shorthand && found_id == seed_id {
-                replacement = Some(format!("{}: {}", request.old, request.new));
-            }
-            if shorthand {
-                let parent = found["declarations"].as_array()
-                    .and_then(|rows| rows.iter().find_map(Value::as_str))
-                    .ok_or_else(|| inexact(request, span))?;
-                let value = api.checker("getShorthandAssignmentValueSymbol", json!({"location": parent}))
-                    .map_err(|_| inexact(request, span))?;
-                if value["id"].as_u64() == Some(seed_id) {
-                    replacement = Some(format!("{}: {}", request.old, request.new));
-                } else if found_id == seed_id {
-                    replacement = Some(format!("{}: {}", request.new, request.old));
-                }
-            }
-            if found_id != seed_id && replacement.is_none() && !related_export { continue; }
-            let site_span = Span { start: at as u32, len: request.old.len() as u32 };
-            if seed_alias && node.parent().is_some_and(|parent|
-                parent.kind() == "import_specifier" && parent.child_by_field_name("alias").is_none())
-            {
-                replacement = Some(format!("{} as {}", request.old, request.new));
-            }
-            if node.kind() == "number" && node.parent().is_some_and(|parent| parent.kind() == "subscript_expression") {
-                replacement = Some(format!("\"{}\"", request.new));
-            }
-            if let Some(replacement) = replacement { cx.put_ts_slow_edit(rel, site_span, replacement); }
-            refs.push(SymbolRef {
-                file: rel.to_owned(),
-                span: site_span,
-                role: RefRole::Read,
-                text: request.old.clone(),
-            });
-        }
+    let prepare = lsp
+        .request(PrepareRenameRequest::METHOD, &location)
+        .map_err(|_| inexact(request, span))?;
+    if prepare.error.is_some() || prepare.result.as_ref().is_none_or(Value::is_null) {
+        return Ok(abstain(request, span, "ts7_lsp_rename_rejected"));
     }
-    if refs.is_empty() { return Err(ts7_not_found(request)); }
+    let rename = lsp
+        .request(
+            Rename::METHOD,
+            &RenameParams {
+                text_document_position: location,
+                new_name: request.new.clone(),
+                work_done_progress_params: Default::default(),
+            },
+        )
+        .map_err(|_| inexact(request, span))?;
+    if rename.error.is_some() {
+        return Ok(abstain(request, span, "ts7_lsp_rename_rejected"));
+    }
+    let Some(edit) = rename
+        .result
+        .filter(|value| !value.is_null())
+        .map(serde_json::from_value::<WorkspaceEdit>)
+        .transpose()
+        .map_err(|_| inexact(request, span))?
+    else {
+        return Ok(abstain(request, span, "ts7_lsp_rename_empty"));
+    };
+    let edits = workspace_edits(edit).map_err(|_| inexact(request, span))?;
+    if edits.is_empty() {
+        return Ok(abstain(request, span, "ts7_lsp_rename_empty"));
+    }
+
+    let mut refs = Vec::with_capacity(edits.len());
+    let mut replacements = Vec::with_capacity(edits.len());
+    for (uri, edit) in edits {
+        let path = url::Url::parse(uri.as_str())
+            .ok()
+            .and_then(|url| url.to_file_path().ok())
+            .ok_or_else(|| inexact(request, span))?;
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
+        let rel = path
+            .strip_prefix(cx.root())
+            .map_err(|_| inexact(request, span))?
+            .to_string_lossy()
+            .replace('\\', "/");
+        if !cx.files().contains(&rel) {
+            return Err(inexact(request, span));
+        }
+        let content = cx.text(&rel).ok_or_else(|| inexact(request, span))?;
+        let start =
+            byte_at_lsp_position(&content, edit.range.start).map_err(|_| inexact(request, span))?;
+        let end =
+            byte_at_lsp_position(&content, edit.range.end).map_err(|_| inexact(request, span))?;
+        let original = content
+            .get(start..end)
+            .ok_or_else(|| inexact(request, span))?;
+        let site = Span {
+            start: start as u32,
+            len: (end - start) as u32,
+        };
+        refs.push(SymbolRef {
+            file: rel.clone(),
+            span: site,
+            role: RefRole::Read,
+            text: original.into(),
+        });
+        replacements.push((rel, site, edit.new_text));
+    }
+    for (rel, site, replacement) in replacements {
+        session.pending.insert(rel.clone());
+        cx.put_ts_slow_edit(&rel, site, replacement);
+    }
     Ok((refs, Vec::new()))
 }
 
-fn export_local_target(api: &mut Ts7Api, symbol: &Value) -> Result<Option<u64>, String> {
-    let Some(handle) = symbol["declarations"].as_array()
-        .and_then(|rows| rows.iter().filter_map(Value::as_str).find(|handle|
-            handle.split('.').nth(1) == Some("282"))) else { return Ok(None) };
-    let target = api.checker("getExportSpecifierLocalTargetSymbol", json!({"location": handle}))?;
-    Ok(target["id"].as_u64())
-}
-
-fn abstain(request: &RenameRequest, span: Span, query: &'static str)
-    -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop>
-{
-    let abstain = RenameAbstain {
-        file: request.anchor.clone(),
-        span,
-        symbol: request.old.clone(),
-        reason: "ts7_api_missing_checker_query",
-        receiver: query.to_owned(),
-    };
-    Ok((Vec::new(), vec![abstain]))
-}
-
-fn canonical_symbol(api: &mut Ts7Api, symbol: &Value) -> Result<u64, String> {
-    let id = symbol["id"].as_u64().ok_or("symbol without id")?;
-    // SymbolFlags.Alias. The compiler owns alias resolution; Rust chooses which
-    // candidate seats to ask about and which spelling belongs to the edit.
-    if symbol["flags"].as_u64().unwrap_or(0) & 2_097_152 != 0 {
-        let target = api.checker("getAliasedSymbol", json!({"symbol": id}))?;
-        return target["id"].as_u64().ok_or("alias target without id".into());
-    }
-    Ok(id)
-}
-
-fn seed_offset(text: &str, request: &RenameRequest) -> Option<usize> {
-    match request.at {
-        Some(at) => text.match_indices(&request.old)
-            .map(|(start, _)| start)
-            .find(|start| *start <= at as usize && (at as usize) < *start + request.old.len()),
-        None => text.match_indices(&request.old)
-            .map(|(start, _)| start)
-            .find(|start| identifier_edges(text, *start, request.old.len())),
-    }
-}
-
-fn identifier_edges(text: &str, at: usize, len: usize) -> bool {
-    fn ident(byte: u8) -> bool { byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'$' }
-    let bytes = text.as_bytes();
-    (at == 0 || !ident(bytes[at - 1])) &&
-        (at + len == bytes.len() || !ident(bytes[at + len]))
-}
-
-fn parse_tree(rel: &str, content: &str) -> Option<Tree> {
-    let mut parser = Parser::new();
-    let language = if rel.ends_with(".tsx") {
-        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX)
-    } else {
-        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
-    };
-    parser.set_language(&language).ok()?;
-    parser.parse(content, None)
-}
-
-fn has_node_kind(node: Node<'_>, wanted: &str) -> bool {
-    if node.kind() == wanted { return true; }
-    let mut cursor = node.walk();
-    let found = node.named_children(&mut cursor).any(|child| has_node_kind(child, wanted));
-    found
-}
-
-fn missing_for_node(node: Node<'_>, seed_kind: &str, intersection_context: bool) -> Option<&'static str> {
-    let leaf_kind = node.kind();
-    if leaf_kind == "string_fragment" {
-        let mut current = node.parent();
-        while let Some(ancestor) = current {
-            if matches!(ancestor.kind(), "property_signature" | "subscript_expression") { return None; }
-            current = ancestor.parent();
+fn workspace_edits(edit: WorkspaceEdit) -> Result<Vec<(Uri, lsp_types::TextEdit)>, String> {
+    let mut out = Vec::new();
+    if let Some(changes) = edit.document_changes {
+        match changes {
+            lsp_types::DocumentChanges::Edits(documents) => {
+                for document in documents {
+                    for edit in document.edits {
+                        let edit = match edit {
+                            lsp_types::OneOf::Left(edit) => edit,
+                            lsp_types::OneOf::Right(edit) => edit.text_edit,
+                        };
+                        out.push((document.text_document.uri.clone(), edit));
+                    }
+                }
+            }
+            lsp_types::DocumentChanges::Operations(_) => {
+                return Err("rename returned file operations".into());
+            }
+        }
+    } else if let Some(changes) = edit.changes {
+        for (uri, edits) in changes {
+            out.extend(edits.into_iter().map(|edit| (uri.clone(), edit)));
         }
     }
-    let mut current = Some(node);
-    while let Some(node) = current {
-        match node.kind() {
-            "object_pattern" if leaf_kind == "property_identifier"
-                || (leaf_kind == "shorthand_property_identifier_pattern"
-                    && seed_kind != "shorthand_property_identifier_pattern") => {
-                return Some("getPropertySymbolFromBindingElement")
-            }
-            "interface_declaration" | "class_declaration" | "class_body" => return Some("getRootSymbols"),
-            "type_alias_declaration" if matches!(leaf_kind, "property_identifier" | "string_fragment") => {
-                return Some(if intersection_context { "getRootSymbols" } else { "getPropertySymbolsFromContextualType" })
-            }
-            "string" | "string_fragment" => return Some("getContextualTypeFromParentOrAncestorTypeNode"),
-            _ => {}
-        }
-        current = node.parent();
-    }
-    None
+    Ok(out)
 }
 
-fn ts7_not_found(request: &RenameRequest) -> RenameStop {
-    RenameStop::NotFound { anchor: request.anchor.clone(), old: request.old.clone() }
+fn position_at_byte(text: &str, offset: usize) -> Result<Position, String> {
+    let before = text.get(..offset).ok_or("position splits a character")?;
+    let line = before.bytes().filter(|byte| *byte == b'\n').count() as u32;
+    let column = before
+        .rsplit('\n')
+        .next()
+        .unwrap_or(before)
+        .encode_utf16()
+        .count() as u32;
+    Ok(Position {
+        line,
+        character: column,
+    })
+}
+
+fn abstain(
+    request: &RenameRequest,
+    span: Span,
+    reason: &'static str,
+) -> (Vec<SymbolRef>, Vec<RenameAbstain>) {
+    (
+        Vec::new(),
+        vec![RenameAbstain {
+            file: request.anchor.clone(),
+            span,
+            symbol: request.old.clone(),
+            reason,
+            receiver: String::new(),
+        }],
+    )
+}
+
+fn not_found(request: &RenameRequest) -> RenameStop {
+    RenameStop::NotFound {
+        anchor: request.anchor.clone(),
+        old: request.old.clone(),
+    }
 }
 
 fn inexact(request: &RenameRequest, span: Span) -> RenameStop {
-    RenameStop::Inexact { file: request.anchor.clone(), span, why: "ts7_api" }
-}
-
-#[cfg(test)]
-fn byte_at_lsp_position(text: &str, position: &Value) -> Result<usize, String> {
-    let line = position["line"].as_u64().ok_or("position without line")? as usize;
-    let character = position["character"].as_u64().ok_or("position without character")? as usize;
-    let mut start = 0;
-    for _ in 0..line {
-        let next = text[start..].find('\n').ok_or("line out of range")?;
-        start += next + 1;
+    RenameStop::Inexact {
+        file: request.anchor.clone(),
+        span,
+        why: "ts7_lsp",
     }
-    let mut utf16 = 0;
-    for (relative, ch) in text[start..].char_indices() {
-        if utf16 == character { return Ok(start + relative); }
-        if ch == '\n' { break; }
-        utf16 += ch.len_utf16();
-    }
-    if utf16 == character { return Ok(start + text[start..].find('\n').unwrap_or(text.len() - start)); }
-    Err("UTF-16 position splits a character or exceeds the line".into())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
-    fn assert_oracle(source: &str, old: &str, at: u32) {
-        assert_oracle_or_abstain(source, old, at, None);
-    }
+    use std::path::PathBuf;
 
-    fn assert_oracle_or_abstain(source: &str, old: &str, at: u32, missing_query: Option<&str>) {
-        let cx = RenameCx::open(&ts7_rename_fixture()).unwrap().with_slow(true);
-        let new = if old.starts_with(char::is_uppercase) { "Next" } else { "next" };
-        let request = RenameRequest { anchor: source.into(), old: old.into(), new: new.into(), at: Some(at) };
-        let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
-        if let Some(query) = missing_query {
-            assert!(refs.is_empty());
-            assert_eq!(abstains.len(), 1);
-            assert_eq!(abstains[0].reason, "ts7_api_missing_checker_query");
-            assert_eq!(abstains[0].receiver, query);
-        } else {
-            assert!(abstains.is_empty());
-        }
-        let mut actual: Vec<_> = refs.iter().map(|reference| (
-            reference.file.clone(), reference.span.start as usize, reference.span.end() as usize,
-            cx.ts_slow_edit(&reference.file, reference.span).unwrap_or_else(|| request.new.clone()),
-        )).collect();
-        actual.sort();
-        let stem = source.strip_suffix(".tsx").or_else(|| source.strip_suffix(".ts")).unwrap();
-        let named_oracle = ts7_rename_fixture().join(format!("{stem}.{old}.rename.json"));
-        let oracle_file = if named_oracle.is_file() { named_oracle } else {
-            ts7_rename_fixture().join(format!("{stem}.rename.json"))
-        };
-        let oracle: Value = serde_json::from_str(&std::fs::read_to_string(crate::io_path(&oracle_file)).unwrap()).unwrap();
-        if missing_query.is_some() {
-            assert!(oracle["changes"].is_object());
-            return;
-        }
-        if oracle.is_null() {
-            assert!(actual.is_empty());
-            return;
-        }
-        let mut expected = Vec::new();
-        for (file, edits) in oracle["changes"].as_object().unwrap() {
-            let text = cx.text(file).unwrap();
-            for edit in edits.as_array().unwrap() {
-                let start = byte_at_lsp_position(&text, &edit["range"]["start"]).unwrap();
-                let end = byte_at_lsp_position(&text, &edit["range"]["end"]).unwrap();
-                expected.push((file.clone(), start, end, edit["newText"].as_str().unwrap().to_owned()));
+    #[test]
+    fn lsp_fixture_edits_match_classic_tsserver() {
+        let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let cases = [
+            ("0_fixture.ts", "old", 6, "0_fixture.rename.json", None),
+            ("1_shorthand.ts", "old", 6, "1_shorthand.rename.json", None),
+            (
+                "2_destructure.ts",
+                "old",
+                17,
+                "2_destructure.rename.json",
+                None,
+            ),
+            (
+                "3_intrinsic.tsx",
+                "div",
+                17,
+                "3_intrinsic.rename.json",
+                Some("ts7_lsp_rename_rejected"),
+            ),
+            ("4_export.ts", "old", 6, "4_export.rename.json", None),
+            (
+                "4_export.ts",
+                "publicName",
+                31,
+                "4_export.publicName.rename.json",
+                None,
+            ),
+            ("5_module.ts", "old", 13, "5_module.rename.json", None),
+            ("6_import.ts", "local", 16, "6_import.rename.json", None),
+            (
+                "7_import_unaliased.ts",
+                "old",
+                9,
+                "7_import_unaliased.rename.json",
+                None,
+            ),
+            (
+                "8_contextual_shorthand.ts",
+                "old",
+                15,
+                "8_contextual_shorthand.rename.json",
+                None,
+            ),
+            (
+                "9_destructure_local.ts",
+                "old",
+                35,
+                "9_destructure_local.rename.json",
+                None,
+            ),
+            (
+                "10_destructure_alias.ts",
+                "old",
+                17,
+                "10_destructure_alias.old.rename.json",
+                None,
+            ),
+            (
+                "10_destructure_alias.ts",
+                "local",
+                40,
+                "10_destructure_alias.local.rename.json",
+                None,
+            ),
+            (
+                "11_reexport_mid.ts",
+                "mid",
+                16,
+                "11_reexport_mid.rename.json",
+                None,
+            ),
+            (
+                "13_reexport_consumer.ts",
+                "api",
+                9,
+                "13_reexport_consumer.rename.json",
+                None,
+            ),
+            (
+                "14_contextual_member.ts",
+                "old",
+                15,
+                "14_contextual_member.rename.json",
+                None,
+            ),
+            (
+                "15_union_context.ts",
+                "old",
+                22,
+                "15_union_context.rename.json",
+                None,
+            ),
+            (
+                "16_intersection.ts",
+                "old",
+                11,
+                "16_intersection.rename.json",
+                None,
+            ),
+            (
+                "17_overloads.ts",
+                "old",
+                9,
+                "17_overloads.rename.json",
+                None,
+            ),
+            ("18_merge.ts", "Old", 10, "18_merge.rename.json", None),
+            (
+                "19_jsx_component.tsx",
+                "Old",
+                9,
+                "19_jsx_component.rename.json",
+                None,
+            ),
+            (
+                "20_string_property.ts",
+                "old",
+                20,
+                "20_string_property.rename.json",
+                None,
+            ),
+            (
+                "21_string_type.ts",
+                "old",
+                16,
+                "21_string_type.rename.json",
+                None,
+            ),
+            ("22_numeric.ts", "0", 15, "22_numeric.rename.json", None),
+            (
+                "24_module_path.ts",
+                "23_path_source",
+                26,
+                "24_module_path.rename.json",
+                Some("ts7_lsp_rename_rejected"),
+            ),
+        ];
+        for (source, old, at, oracle, expected_reason) in cases {
+            let cx = RenameCx::open(&root).unwrap().with_slow(true);
+            let request = RenameRequest {
+                anchor: source.into(),
+                old: old.into(),
+                new: if old.starts_with(char::is_uppercase) {
+                    "Next"
+                } else {
+                    "next"
+                }
+                .into(),
+                at: Some(at),
+            };
+            let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
+            if let Some(reason) = expected_reason {
+                assert!(refs.is_empty(), "{source}: {} refs", refs.len());
+                assert_eq!(abstains.len(), 1, "{source}");
+                assert_eq!(abstains[0].reason, reason, "{source}");
+                continue;
             }
+            assert!(abstains.is_empty(), "{source}: {abstains:?}");
+            let mut actual: Vec<_> = refs
+                .iter()
+                .map(|reference| {
+                    (
+                        reference.file.clone(),
+                        reference.span.start as usize,
+                        reference.span.end() as usize,
+                        cx.ts_slow_edit(&reference.file, reference.span).unwrap(),
+                    )
+                })
+                .collect();
+            actual.sort();
+            let oracle: Value =
+                serde_json::from_str(&std::fs::read_to_string(root.join(oracle)).unwrap()).unwrap();
+            let mut expected = Vec::new();
+            for (file, edits) in oracle["changes"].as_object().unwrap() {
+                let content = cx.text(file).unwrap();
+                let edits: Vec<lsp_types::TextEdit> =
+                    serde_json::from_value(edits.clone()).unwrap();
+                for edit in edits {
+                    expected.push((
+                        file.clone(),
+                        byte_at_lsp_position(&content, edit.range.start).unwrap(),
+                        byte_at_lsp_position(&content, edit.range.end).unwrap(),
+                        edit.new_text,
+                    ));
+                }
+            }
+            expected.sort();
+            assert_eq!(actual, expected, "{source} {old}");
         }
-        expected.sort();
-        assert_eq!(actual, expected);
-    }
-
-    fn ts7_rename_fixture() -> PathBuf {
-        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api")
     }
 
     #[test]
-    fn slow_rename_plain_identifier_uses_checker_identity() {
-        let cx = RenameCx::open(&ts7_rename_fixture()).unwrap().with_slow(true);
-        let request = RenameRequest { anchor: "0_fixture.ts".into(), old: "old".into(), new: "next".into(), at: Some(6) };
+    fn lsp_renames_plain_identifier() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: Some(6),
+        };
         let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
+        assert!(abstains.is_empty(), "{abstains:?}");
         assert_eq!(refs.len(), 2);
-        assert!(abstains.is_empty());
     }
 
     #[test]
-    fn slow_rename_shorthand_uses_value_symbol_query() {
-        let cx = RenameCx::open(&ts7_rename_fixture()).unwrap().with_slow(true);
-        let request = RenameRequest { anchor: "1_shorthand.ts".into(), old: "old".into(), new: "next".into(), at: Some(6) };
+    fn warm_lsp_returns_the_cold_edits() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let pool = TS_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()));
+        pool.lock().unwrap().remove(&root);
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: Some(6),
+        };
+        let cold = symbol_refs_and_abstains(&cx, &request).unwrap().0;
+        let warm = symbol_refs_and_abstains(&cx, &request).unwrap().0;
+        let sites = |refs: Vec<SymbolRef>| {
+            refs.into_iter()
+                .map(|reference| (reference.file, reference.span.start, reference.text))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(sites(cold), sites(warm));
+    }
+
+    #[test]
+    fn lsp_selects_an_unpositioned_declaration_from_document_symbols() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: None,
+        };
         let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
         assert!(abstains.is_empty());
-        assert!(refs.iter().any(|reference| cx.ts_slow_edit(&reference.file, reference.span).as_deref() == Some("old: next")));
+        assert_eq!(refs.len(), 2);
     }
 
     #[test]
-    fn slow_rename_destructuring_names_missing_checker_query() {
-        let cx = RenameCx::open(&ts7_rename_fixture()).unwrap().with_slow(true);
-        let request = RenameRequest { anchor: "2_destructure.ts".into(), old: "old".into(), new: "next".into(), at: Some(17) };
-        let (_refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
-        assert_eq!(abstains.len(), 1);
-        assert_eq!(abstains[0].reason, "ts7_api_missing_checker_query");
-        assert_eq!(abstains[0].receiver, "getPropertySymbolFromBindingElement");
+    fn lsp_stops_on_ambiguous_document_symbols() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "17_overloads.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: None,
+        };
+        assert!(matches!(
+            symbol_refs_and_abstains(&cx, &request),
+            Err(RenameStop::Ambiguous { sites, .. }) if sites.len() > 1
+        ));
+        let missing = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "absent".into(),
+            new: "next".into(),
+            at: None,
+        };
+        assert!(matches!(
+            symbol_refs_and_abstains(&cx, &missing),
+            Err(RenameStop::NotFound { .. })
+        ));
     }
 
     #[test]
-    fn slow_rename_case_plain_api() {
-        assert_oracle("0_fixture.ts", "old", 6);
-    }
-
-    #[test]
-    fn slow_rename_case_shorthand_api() {
-        assert_oracle("1_shorthand.ts", "old", 6);
-    }
-
-    #[test]
-    fn slow_rename_case_export_alias_api() {
-        assert_oracle("4_export.ts", "old", 6);
-    }
-
-    #[test]
-    fn slow_rename_case_imported_name_api() {
-        assert_oracle("5_module.ts", "old", 13);
-    }
-
-    #[test]
-    fn slow_rename_case_local_import_alias_api() {
-        assert_oracle("6_import.ts", "local", 16);
-    }
-
-    #[test]
-    fn slow_rename_case_unaliased_import_binding_api() {
-        assert_oracle("7_import_unaliased.ts", "old", 9);
-    }
-
-    #[test]
-    fn slow_rename_case_exported_alias_api() {
-        assert_oracle("4_export.ts", "publicName", 31);
-    }
-
-    #[test]
-    fn slow_rename_case_destructuring_abstained() {
-        assert_oracle_or_abstain("2_destructure.ts", "old", 17, Some("getPropertySymbolFromBindingElement"));
-    }
-
-    #[test]
-    fn slow_rename_case_contextual_shorthand_abstained() {
-        assert_oracle_or_abstain("8_contextual_shorthand.ts", "old", 15, Some("getPropertySymbolsFromContextualType"));
-    }
-
-    #[test]
-    fn slow_rename_case_reexport_chain_api() {
-        assert_oracle("11_reexport_mid.ts", "mid", 16);
-    }
-
-    #[test]
-    fn slow_rename_case_overloads_api() {
-        assert_oracle("17_overloads.ts", "old", 9);
-    }
-
-    #[test]
-    fn slow_rename_case_declaration_merge_abstained() {
-        assert_oracle_or_abstain("18_merge.ts", "Old", 10, Some("getRootSymbols"));
-    }
-
-    #[test]
-    fn slow_rename_case_jsx_component_api() {
-        assert_oracle("19_jsx_component.tsx", "Old", 9);
-    }
-
-    #[test]
-    fn slow_rename_case_destructuring_local_api() {
-        assert_oracle("9_destructure_local.ts", "old", 35);
-    }
-
-    #[test]
-    fn slow_rename_case_destructuring_alias_local_api() {
-        assert_oracle("10_destructure_alias.ts", "local", 40);
-    }
-
-    #[test]
-    fn slow_rename_case_destructuring_alias_property_abstained() {
-        assert_oracle_or_abstain("10_destructure_alias.ts", "old", 17, Some("getPropertySymbolFromBindingElement"));
-    }
-
-    #[test]
-    fn slow_rename_case_contextual_member_abstained() {
-        assert_oracle_or_abstain("14_contextual_member.ts", "old", 15, Some("getPropertySymbolsFromContextualType"));
-    }
-
-    #[test]
-    fn slow_rename_case_union_context_abstained() {
-        assert_oracle_or_abstain("15_union_context.ts", "old", 22, Some("getPropertySymbolsFromContextualType"));
-    }
-
-    #[test]
-    fn slow_rename_case_intersection_property_abstained() {
-        assert_oracle_or_abstain("16_intersection.ts", "old", 11, Some("getRootSymbols"));
-    }
-
-    #[test]
-    fn slow_rename_case_string_property_api() {
-        assert_oracle("20_string_property.ts", "old", 20);
-    }
-
-    #[test]
-    fn slow_rename_case_string_type_abstained() {
-        assert_oracle_or_abstain("21_string_type.ts", "old", 16, Some("getContextualTypeFromParentOrAncestorTypeNode"));
-    }
-
-    #[test]
-    fn slow_rename_case_numeric_property_api() {
-        assert_oracle("22_numeric.ts", "0", 15);
-    }
-
-    fn assert_null_oracle(source: &str, old: &str, at: u32) {
-        let cx = RenameCx::open(&ts7_rename_fixture()).unwrap().with_slow(true);
-        let request = RenameRequest { anchor: source.into(), old: old.into(), new: "next".into(), at: Some(at) };
-        let stem = source.strip_suffix(".tsx").or_else(|| source.strip_suffix(".ts")).unwrap();
-        let oracle: Value = serde_json::from_str(&std::fs::read_to_string(crate::io_path(&ts7_rename_fixture().join(format!("{stem}.rename.json")))).unwrap()).unwrap();
-        assert!(oracle.is_null());
-        match symbol_refs_and_abstains(&cx, &request) {
-            Ok((refs, _)) => assert!(refs.is_empty()),
-            Err(RenameStop::NotFound { .. }) => {},
-            Err(other) => panic!("unexpected rename result: {other:?}"),
-        }
-    }
-
-    #[test]
-    fn slow_rename_case_intrinsic_jsx_null_lsp() {
-        assert_null_oracle("3_intrinsic.tsx", "div", 17);
-    }
-
-    #[test]
-    fn slow_rename_case_module_path_null_lsp() {
-        assert_null_oracle("24_module_path.ts", "23_path_source", 26);
+    fn utf16_positions_round_trip() {
+        let text = "a😀é\nold";
+        assert_eq!(
+            position_at_byte(text, 7).unwrap(),
+            Position {
+                line: 0,
+                character: 4
+            }
+        );
+        assert_eq!(
+            byte_at_lsp_position(
+                text,
+                Position {
+                    line: 0,
+                    character: 4
+                }
+            )
+            .unwrap(),
+            7
+        );
+        assert_eq!(
+            byte_at_lsp_position(
+                text,
+                Position {
+                    line: 1,
+                    character: 0
+                }
+            )
+            .unwrap(),
+            8
+        );
+        assert!(byte_at_lsp_position(
+            text,
+            Position {
+                line: 0,
+                character: 2
+            }
+        )
+        .is_err());
     }
 }

@@ -15,7 +15,7 @@
         "newText": "next"
       }
     ],
-    "6_import.ts": [
+    "11_reexport_mid.ts": [
       {
         "range": {
           "start": {
@@ -30,7 +30,7 @@
         "newText": "next"
       }
     ],
-    "11_reexport_mid.ts": [
+    "6_import.ts": [
       {
         "range": {
           "start": {
