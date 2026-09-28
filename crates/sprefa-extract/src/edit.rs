@@ -8,6 +8,8 @@ pub mod rust_rename;
 pub mod ts_mutate;
 pub mod ts_rehome;
 pub mod ts_rename;
+#[path = "edit/0_ts7_api.rs"]
+pub mod ts7_api;
 use crate::edit_seams::Cleave;
 use crate::edit_seams::RehomeArm;
 use crate::edit_seams::Rename;
