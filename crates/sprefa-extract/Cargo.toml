@@ -173,7 +173,8 @@ hafley_scm = { path = "../hafley_scm", default-features = false }
 # seam + the parity-golden normalize + the stdout JSONL all read this one shape.
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", optional = true }
-rmpv = { version = "1", optional = true }
+lsp-server = { version = "0.8", optional = true }
+lsp-types = { version = "0.97", optional = true }
 url = { version = "2", optional = true }
 # basic-toml reads Cargo.toml for the package_edge arm. Candidates measured into
 # THIS lock: basic-toml +1 crate (serde only, already here), toml 1.1 +4
@@ -314,7 +315,8 @@ gdscript = ["shared", "hafley_scm/gdscript", "dep:tree-sitter-gdscript"]
 commonlisp = ["shared", "hafley_scm/commonlisp", "dep:tree-sitter-commonlisp"]
 read = [
     "hafley_scm/read",
-    "dep:rmpv",
+    "dep:lsp-server",
+    "dep:lsp-types",
     "dep:url",
     "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "markdown",
     "data", "fallback", "gdscript", "commonlisp",

@@ -5,13 +5,11 @@ pub mod prolog_rename;
 pub mod rust_mutate;
 pub mod rust_rehome;
 pub mod rust_rename;
+#[path = "edit/1_ts7_rename.rs"]
+pub mod ts7_rename;
 pub mod ts_mutate;
 pub mod ts_rehome;
 pub mod ts_rename;
-#[path = "edit/0_ts7_api.rs"]
-pub mod ts7_api;
-#[path = "edit/1_ts7_rename.rs"]
-pub mod ts7_rename;
 use crate::edit_seams::Cleave;
 use crate::edit_seams::RehomeArm;
 use crate::edit_seams::Rename;

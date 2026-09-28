@@ -1,1 +1,19 @@
-null
+{
+  "changes": {
+    "24_module_path.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 23
+          },
+          "end": {
+            "line": 0,
+            "character": 39
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}
