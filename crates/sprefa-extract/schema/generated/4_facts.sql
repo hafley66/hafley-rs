@@ -309,7 +309,8 @@ CREATE TABLE IF NOT EXISTS "specifier" (
     "name" TEXT NOT NULL,
     "kind" TEXT NOT NULL,
     "module" TEXT,
-    "imported" TEXT
+    "imported" TEXT,
+    "type_only" INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS "method_owner" (

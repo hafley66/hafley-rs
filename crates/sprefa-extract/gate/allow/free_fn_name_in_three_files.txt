@@ -170,6 +170,7 @@ crates/sprefa-extract/src/bin/ryi.rs	fn::run	1
 crates/sprefa-extract/src/bin/ryi/1_inputs.rs	fn::walk	1
 crates/sprefa-extract/src/bin/ryi/gen/server_auto.rs	fn::ingest	1
 crates/sprefa-extract/src/bin/ryi/ops.rs	fn::ingest	1
+crates/sprefa-extract/src/edit/1_ts7_rename.rs	fn::not_found	1
 crates/sprefa-extract/src/edit/_6_move.rs	fn::plan_root	1
 crates/sprefa-extract/src/edit/_6_move.rs	fn::run	1
 crates/sprefa-extract/src/edit/_6_move.rs	fn::under	1

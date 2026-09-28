@@ -787,6 +787,7 @@ pub fn go_walk_import_specs(
             kind,
             module: module.map(|text| strings.intern(&text)),
             imported: None,
+            type_only: false,
         });
     }
     let mut cursor = node.walk();

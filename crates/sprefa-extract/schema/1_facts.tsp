@@ -52,7 +52,7 @@ model DocNode {
 }
 model DataDoc { ...ExportRow; record: "data_doc"; ...LocatedFact; ordinal: uint32; span: Extract.SpanOut; format: string; doc: Json; }
 model DataValue { ...ExportRow; record: "data_value"; ...LocatedFact; ordinal: uint32; path: string; kind: string; text: string | null; span: Extract.SpanOut; }
-model Specifier { ...ExportRow; record: "specifier"; ...LocatedFact; span: Extract.SpanOut; name: string; kind: string; module: string | null; imported: string | null; }
+model Specifier { ...ExportRow; record: "specifier"; ...LocatedFact; span: Extract.SpanOut; name: string; kind: string; module: string | null; imported: string | null; type_only?: boolean; }
 model MethodOwner { ...ExportRow; record: "method_owner"; ...LocatedFact; owner: Extract.SpanOut; self_type: string | null; trait: string | null; }
 model CfgScope { ...ExportRow; record: "cfg_scope"; ...LocatedFact; span: Extract.SpanOut; cfg: string; }
 model TestOnlyCall { ...ExportRow; record: "test_only_call"; ...LocatedFact; callee: string; cfg: string; }

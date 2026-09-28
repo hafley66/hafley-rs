@@ -25,10 +25,10 @@ fn the_ts_fixtures_emit_the_pinned_row_counts() {
     assert_eq!(
         histogram(&rows),
         BTreeMap::from([
-            ("symbol".to_string(), 85),
-            ("occurrence/def".to_string(), 85),
+            ("symbol".to_string(), 92),
+            ("occurrence/def".to_string(), 92),
             ("occurrence/ref".to_string(), 7),
-            ("local".to_string(), 57),
+            ("local".to_string(), 60),
         ]),
         "row counts over {ROOT}"
     );

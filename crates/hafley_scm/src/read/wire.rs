@@ -418,6 +418,7 @@ fn flatten_call<E>(
             kind: spec.kind.as_str().to_string(),
             module: spec.module.map(|id| strings.lookup(id).to_string()),
             imported: spec.imported.map(|id| strings.lookup(id).to_string()),
+            type_only: spec.type_only,
         })?;
     }
     for owner in &bundle.aux.method_owners {

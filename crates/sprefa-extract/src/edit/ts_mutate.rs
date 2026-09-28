@@ -13,6 +13,9 @@ use crate::lang::ts::TsSource;
 use hafley_scm::atoms::FamilyTag;
 use hafley_scm::span::Span;
 
+#[path = "1c_ts_import_kind.rs"]
+mod import_kind;
+
 /// The extensions a module spelling drops.
 const EXTENSIONS: [&str; 6] = ["ts", "tsx", "mts", "cts", "js", "mjs"];
 
@@ -20,6 +23,20 @@ const EXTENSIONS: [&str; 6] = ["ts", "tsx", "mts", "cts", "js", "mjs"];
 const PARSE_AS: &str = "cleave.ts";
 
 impl Cleave for TsSource {
+    fn edit_import_item(
+        &self,
+        text: &str,
+        names: &[String],
+        module: &str,
+        item: &str,
+        type_only: bool,
+    ) -> Option<Edit> {
+        if type_only {
+            return import_kind::type_import(self, text, module, item);
+        }
+        self.edit_import(text, names, module)
+    }
+
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
         let at = crate::edit::rust_mutate::past_trivia(text, decl.start as usize);
         if let Some(rest) = text.get(at..).and_then(|tail| tail.strip_prefix("export")) {

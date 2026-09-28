@@ -505,6 +505,7 @@ fn import_directive(
             kind: SpecifierKind::SideEffect,
             module: None,
             imported: None,
+            type_only: false,
         });
         return;
     };
@@ -518,6 +519,7 @@ fn import_directive(
             kind: SpecifierKind::Named,
             module: Some(module),
             imported: None,
+            type_only: false,
         });
     }
     // `use_module(Path, [])` loads the file and imports nothing; without a
@@ -529,6 +531,7 @@ fn import_directive(
             kind: SpecifierKind::SideEffect,
             module: None,
             imported: None,
+            type_only: false,
         });
     }
 }
@@ -553,6 +556,7 @@ fn include_directive(
         kind: SpecifierKind::Include,
         module: None,
         imported: None,
+        type_only: false,
     });
 }
 
@@ -579,6 +583,7 @@ fn reexport_directive(
             kind: SpecifierKind::ReexportModule,
             module: None,
             imported: None,
+            type_only: false,
         });
         return;
     };
@@ -590,6 +595,7 @@ fn reexport_directive(
             kind: SpecifierKind::ReexportModule,
             module: Some(module),
             imported: None,
+            type_only: false,
         });
     }
 }
@@ -618,6 +624,7 @@ fn module_declaration(
             kind: SpecifierKind::Reexport,
             module: Some(module),
             imported: None,
+            type_only: false,
         });
     }
 }

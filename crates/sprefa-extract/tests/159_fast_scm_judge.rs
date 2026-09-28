@@ -17,9 +17,9 @@ type Key = (String, String, u64, u64);
 
 /// The counted split, pinned. `both` is agreement at the exact span; the two
 /// one-sided sets are listed by cause below.
-const BOTH: usize = 85;
+const BOTH: usize = 92;
 const SCM_ONLY: usize = 0;
-const SCIP_ONLY: usize = 50;
+const SCIP_ONLY: usize = 43;
 
 /// Why a scip definition has no fast twin. Each bucket is a node kind
 /// the vendored helix locals query does not capture, or a symbol that is not

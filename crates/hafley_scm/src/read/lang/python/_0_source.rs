@@ -1660,6 +1660,7 @@ fn py_module_specifiers(
             kind: SpecifierKind::Named,
             module: aliased.then(|| strings.intern(&module)),
             imported: None,
+            type_only: false,
         },
         PyImport::Named {
             span,
@@ -1672,6 +1673,7 @@ fn py_module_specifiers(
             kind: SpecifierKind::Named,
             module: Some(strings.intern(&module)),
             imported: (name != local).then(|| strings.intern(&name)),
+            type_only: false,
         },
         PyImport::Star { span, module } => Specifier {
             span,
@@ -1679,6 +1681,7 @@ fn py_module_specifiers(
             kind: SpecifierKind::Namespace,
             module: None,
             imported: None,
+            type_only: false,
         },
     });
     sink.aux.specifiers.extend(rows);
@@ -3306,9 +3309,7 @@ impl<'a> PyResolver<'a> {
         if Some(&blob) != self.own.as_ref() {
             return None;
         }
-        if self.active.borrow().contains(&dspan)
-            || self.active.borrow().len() >= PY_RESOLVE_DEPTH
-        {
+        if self.active.borrow().contains(&dspan) || self.active.borrow().len() >= PY_RESOLVE_DEPTH {
             self.cut();
             return None;
         }

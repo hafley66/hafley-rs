@@ -119,6 +119,8 @@ mod t_14_df_identity_go_kotlin;
 mod t_150_fast_scm_kotlin;
 #[path = "155_cleave_ts.rs"]
 mod t_155_cleave_ts;
+#[path = "155a_cleave_ts_oracle.rs"]
+mod t_155a_cleave_ts_oracle;
 #[path = "156_cleave_play.rs"]
 mod t_156_cleave_play;
 #[path = "156_stratify.rs"]

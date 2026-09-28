@@ -2671,6 +2671,15 @@
         "kind": "string",
         "optional": false,
         "nullable": true
+      },
+      {
+        "name": "type_only",
+        "path": [
+          "type_only"
+        ],
+        "kind": "boolean",
+        "optional": true,
+        "nullable": false
       }
     ]
   },

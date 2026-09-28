@@ -1177,6 +1177,7 @@ fn module_specifiers(
                 },
                 module: Some(strings.intern(&row.module)),
                 imported: None,
+                type_only: false,
             }),
     );
 }

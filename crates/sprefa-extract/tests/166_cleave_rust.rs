@@ -72,6 +72,10 @@ fn git(root: &Path, args: &[&str]) {
 }
 
 fn cleave(fixture: &Fixture, args: &[&str]) -> String {
+    static SLOW_CLEAVE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _slow_guard = args
+        .contains(&"--slow")
+        .then(|| SLOW_CLEAVE.lock().unwrap_or_else(|poisoned| poisoned.into_inner()));
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("cleave")
         .args(args)

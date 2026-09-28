@@ -694,6 +694,7 @@ fn kt_import_specifiers_from_arena(
             },
             module: Some(strings.intern(path)),
             imported: None,
+            type_only: false,
         });
     }
 }

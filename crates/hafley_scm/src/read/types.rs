@@ -631,6 +631,11 @@ pub struct Specifier {
     /// spells it (the path-shaped languages: rust, go, kotlin, prolog).
     // @comment-ok: v5's module_binding carried (local, imported, kind); this is the imported seat
     pub imported: Option<NameId>,
+    pub type_only: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !value
 }
 
 /// An edge whose target is computed at runtime. `span` is the computed
@@ -2983,6 +2988,8 @@ pub enum FlatFact {
         /// The source module's own name for the binding when it differs from
         /// `name`; null when they agree. v5's `module_binding` imported seat.
         imported: Option<String>,
+        #[serde(default, skip_serializing_if = "is_false")]
+        type_only: bool,
     },
     /// CallF method owner: the declaration a `method` def node belongs to,
     /// joined to it by `owner`. v6-ONLY, no v5 oracle facet.

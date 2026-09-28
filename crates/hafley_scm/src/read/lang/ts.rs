@@ -2115,6 +2115,7 @@ fn module_specifiers(program: &Program<'_>, strings: &mut Strings, sink: &mut Fa
             kind: row.kind,
             module: Some(strings.intern(row.module)),
             imported: row.imported.map(|text| strings.intern(text)),
+            type_only: row.type_only,
         });
     }
 }
@@ -2128,6 +2129,7 @@ struct ScannedSpecifier<'a> {
     module: &'a str,
     module_span: oxc_span::Span,
     imported: Option<&'a str>,
+    type_only: bool,
 }
 
 /// Every module specifier one program writes, in source order. The sort is
@@ -2148,10 +2150,11 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                         module,
                         module_span,
                         imported: None,
+                        type_only: false,
                     }),
                     Some(specs) => {
                         for spec in specs {
-                            let (span, name, kind, imported) = match spec {
+                            let (span, name, kind, imported, type_only) = match spec {
                                 ts::ImportDeclarationSpecifier::ImportSpecifier(named) => {
                                     let local = named.local.name.as_str();
                                     (
@@ -2159,6 +2162,7 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                                         local,
                                         SpecifierKind::Named,
                                         renamed(module_export_name(&named.imported), local),
+                                        named.import_kind == ts::ImportOrExportKind::Type,
                                     )
                                 }
                                 ts::ImportDeclarationSpecifier::ImportDefaultSpecifier(default) => {
@@ -2167,6 +2171,7 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                                         default.local.name.as_str(),
                                         SpecifierKind::Default,
                                         Some("default"),
+                                        false,
                                     )
                                 }
                                 ts::ImportDeclarationSpecifier::ImportNamespaceSpecifier(ns) => (
@@ -2174,6 +2179,7 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                                     ns.local.name.as_str(),
                                     SpecifierKind::Namespace,
                                     None,
+                                    false,
                                 ),
                             };
                             rows.push(ScannedSpecifier {
@@ -2183,6 +2189,8 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                                 module,
                                 module_span,
                                 imported,
+                                type_only: type_only
+                                    || import.import_kind == ts::ImportOrExportKind::Type,
                             });
                         }
                     }
@@ -2199,6 +2207,7 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                         module: source.value.as_str(),
                         module_span: source.span,
                         imported: renamed(module_export_name(&spec.local), name),
+                        type_only: false,
                     });
                 }
             }
@@ -2218,6 +2227,7 @@ fn scan_module_specifiers<'a>(program: &Program<'a>) -> Vec<ScannedSpecifier<'a>
                     module,
                     module_span,
                     imported: None,
+                    type_only: false,
                 });
             }
             _ => {}
@@ -2247,6 +2257,7 @@ impl<'a> OxcVisit<'a> for RuntimeModuleWalker<'a> {
                 module,
                 module_span: lit.span,
                 imported: None,
+                type_only: false,
             });
         }
         oxc_ast_visit::walk::walk_import_expression(self, it);
@@ -2266,6 +2277,7 @@ impl<'a> OxcVisit<'a> for RuntimeModuleWalker<'a> {
                         module,
                         module_span: lit.span,
                         imported: None,
+                        type_only: false,
                     });
                 }
             }
@@ -2283,6 +2295,7 @@ impl<'a> OxcVisit<'a> for RuntimeModuleWalker<'a> {
                 module,
                 module_span: reference.expression.span,
                 imported: None,
+                type_only: false,
             });
         }
         oxc_ast_visit::walk::walk_ts_import_equals_declaration(self, it);

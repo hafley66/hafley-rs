@@ -6,9 +6,7 @@
 {"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1022,"owner_end":1322,"name":"Vec2","start":1285,"end":1289}
 {"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1501,"owner_end":1542,"name":"Point","start":1505,"end":1510}
 {"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":1501,"owner_end":1542,"name":"Point","start":1513,"end":1518}
-{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":820,"owner_end":865,"name":"Point","start":830,"end":835}
 {"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":899,"owner_end":918,"name":"Point","start":910,"end":915}
-{"record":"free_name","path":"tests/fixtures/ts/docs.ts","owner_start":899,"owner_end":918,"name":"Vec","start":904,"end":907}
 {"record":"free_name","path":"tests/fixtures/ts/lambdas.ts","owner_start":1422,"owner_end":1501,"name":"double","start":1491,"end":1497}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":0,"owner_end":989,"name":"Dir","start":481,"end":484}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":0,"owner_end":989,"name":"Point","start":819,"end":824}
@@ -16,9 +14,7 @@
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Point","start":262,"end":267}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Vec2","start":278,"end":282}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":244,"owner_end":385,"name":"Vec2","start":354,"end":358}
-{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":394,"owner_end":439,"name":"Point","start":404,"end":409}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":448,"owner_end":467,"name":"Point","start":459,"end":464}
-{"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":448,"owner_end":467,"name":"Vec","start":453,"end":456}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Math","start":632,"end":636}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Vec","start":741,"end":744}
 {"record":"free_name","path":"tests/fixtures/ts/sample.ts","owner_start":531,"owner_end":796,"name":"Vec2","start":747,"end":751}
@@ -74,6 +70,8 @@
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/pinned().","path":"tests/fixtures/ts/consts.ts","start":972,"end":978,"role":"def","exported":true,"decl_start":972,"decl_end":996}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/routes().","path":"tests/fixtures/ts/consts.ts","start":391,"end":397,"role":"def","exported":true,"decl_start":391,"decl_end":460}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/consts.ts`/x().","path":"tests/fixtures/ts/consts.ts","start":1093,"end":1094,"role":"def","exported":false,"decl_start":1093,"decl_end":1102}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Point().","path":"tests/fixtures/ts/docs.ts","start":830,"end":835,"role":"def","exported":true,"decl_start":820,"decl_end":865}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec().","path":"tests/fixtures/ts/docs.ts","start":904,"end":907,"role":"def","exported":true,"decl_start":899,"decl_end":918}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","start":1028,"end":1032,"role":"def","exported":true,"decl_start":1022,"decl_end":1322}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","start":1285,"end":1289,"role":"ref","exported":false,"decl_start":1285,"decl_end":1289}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/docs.ts`/add().","path":"tests/fixtures/ts/docs.ts","start":725,"end":728,"role":"def","exported":true,"decl_start":716,"decl_end":792}
@@ -105,6 +103,8 @@
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":1222,"end":1228,"role":"def","exported":false,"decl_start":1222,"decl_end":1238}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":1441,"end":1447,"role":"def","exported":false,"decl_start":1441,"decl_end":1457}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","start":601,"end":607,"role":"def","exported":false,"decl_start":601,"decl_end":617}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Point().","path":"tests/fixtures/ts/sample.ts","start":404,"end":409,"role":"def","exported":true,"decl_start":394,"decl_end":439}
+{"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec().","path":"tests/fixtures/ts/sample.ts","start":453,"end":456,"role":"def","exported":true,"decl_start":448,"decl_end":467}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":354,"end":358,"role":"ref","exported":false,"decl_start":354,"decl_end":358}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":537,"end":541,"role":"def","exported":true,"decl_start":531,"decl_end":796}
 {"record":"occurrence","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","start":769,"end":773,"role":"ref","exported":false,"decl_start":769,"decl_end":773}
@@ -158,6 +158,8 @@
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/consts.ts`/pinned().","path":"tests/fixtures/ts/consts.ts","kind":"variable"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/consts.ts`/routes().","path":"tests/fixtures/ts/consts.ts","kind":"variable"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/consts.ts`/x().","path":"tests/fixtures/ts/consts.ts","kind":"variable.parameter"}
+{"record":"symbol","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Point().","path":"tests/fixtures/ts/docs.ts","kind":"type"}
+{"record":"symbol","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec().","path":"tests/fixtures/ts/docs.ts","kind":"type"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/docs.ts`/Vec2().","path":"tests/fixtures/ts/docs.ts","kind":"type"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/docs.ts`/add().","path":"tests/fixtures/ts/docs.ts","kind":"function"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/docs.ts`/by().","path":"tests/fixtures/ts/docs.ts","kind":"variable.parameter"}
@@ -188,6 +190,8 @@
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","kind":"variable.parameter"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","kind":"variable.parameter"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/lambdas.ts`/values().","path":"tests/fixtures/ts/lambdas.ts","kind":"variable.parameter"}
+{"record":"symbol","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Point().","path":"tests/fixtures/ts/sample.ts","kind":"type"}
+{"record":"symbol","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec().","path":"tests/fixtures/ts/sample.ts","kind":"type"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/sample.ts`/Vec2().","path":"tests/fixtures/ts/sample.ts","kind":"type"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/sample.ts`/a().","path":"tests/fixtures/ts/sample.ts","kind":"variable.parameter"}
 {"record":"symbol","symbol":"scm . . `tests/fixtures/ts/sample.ts`/add().","path":"tests/fixtures/ts/sample.ts","kind":"function"}

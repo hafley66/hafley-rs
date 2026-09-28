@@ -4,7 +4,15 @@
 //! @comment-ok: module header, the seam list every bin arm opens with
 
 use super::cleave_fields::widen_private_fields;
+#[path = "7c_cleave_root_items.rs"]
+mod root_items;
+#[path = "7b_cleave_ts_imports.rs"]
+mod ts_imports;
+use root_items::root_item_spans;
+#[path = "7d_cleave_scope_rows.rs"]
+mod scope;
 use crate::cli::CleaveArgs;
+use scope::scope_rows;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
@@ -533,6 +541,7 @@ fn inline_mod(text: &str, name: &str) -> Option<Decl> {
                         name: name.to_string(),
                         span: span_of(start as u32, end as u32),
                         exported,
+                        type_only: false,
                     });
                 }
             }
@@ -1070,7 +1079,7 @@ impl Plan {
             &mut moving_text,
             checker,
         )?;
-        if !item_decl.exported && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty()) {
+        if source.refs_outside(&item, &moving) > 0 || !callers.is_empty() {
             if let Some(first) = moving_text.first_mut() {
                 if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
                     *first = apply(first, &edit);
@@ -1312,10 +1321,24 @@ impl Plan {
             let module = self
                 .arm
                 .spell_module(&self.cx, &self.rows.src, &self.rows.dest);
-            if let Some(edit) = self.arm.edit_import(
+            let mut names = self
+                .source
+                .modules()
+                .into_iter()
+                .find(|(written, _)| written == &module)
+                .map_or_else(Vec::new, |(_, names)| names);
+            if !names.contains(&self.rows.item) {
+                names.push(self.rows.item.clone());
+            }
+            if let Some(edit) = self.arm.edit_import_item(
                 &self.source.text,
-                std::slice::from_ref(&self.rows.item),
+                &names,
                 &module,
+                &self.rows.item,
+                self.source
+                    .decls
+                    .iter()
+                    .any(|decl| decl.name == self.rows.item && decl.type_only),
             ) {
                 edits.push(Respell {
                     file: self.rows.src.clone(),
@@ -1406,7 +1429,15 @@ impl Plan {
             .map_or(0, |facts| facts.import_region(text));
         let mut block = text[..at as usize].to_string();
         for (module, names) in &self.dest_imports {
-            if let Some(edit) = self.arm.edit_import(&block, names, module) {
+            if self.arm.name() == "ts" {
+                block = ts_imports::add(
+                    &self.source,
+                    self.dest_facts.as_ref(),
+                    &block,
+                    module,
+                    names,
+                );
+            } else if let Some(edit) = self.arm.edit_import(&block, names, module) {
                 block = apply(&block, &edit);
             }
         }
@@ -1435,6 +1466,26 @@ impl Plan {
             if *rel == self.rows.dest {
                 continue;
             }
+            if self.arm.name() == "ts" {
+                let spelling = as_written(
+                    &self.cx,
+                    &self.rows.dest,
+                    module,
+                    self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                );
+                out.extend(ts_imports::caller(
+                    facts,
+                    rel,
+                    &self.rows.item,
+                    module,
+                    &spelling,
+                    self.source
+                        .decls
+                        .iter()
+                        .any(|decl| decl.name == self.rows.item && decl.type_only),
+                ));
+                continue;
+            }
             let top_level = !rel.ends_with(".rs")
                 || facts.specifiers.iter().any(|row| {
                     row.name == self.rows.item
@@ -1449,7 +1500,11 @@ impl Plan {
             let kept: Vec<String> = facts
                 .specifiers
                 .iter()
-                .filter(|row| row.module == *module && row.name != self.rows.item)
+                .filter(|row| {
+                    row.module == *module
+                        && row.name != self.rows.item
+                        && (rel.ends_with(".rs") || row.kind == "named")
+                })
                 .map(|row| row.name.clone())
                 .collect();
             if let Some(edit) = self.arm.edit_import(&facts.text, &kept, module) {
@@ -1469,14 +1524,27 @@ impl Plan {
             let mut landing: Vec<String> = facts
                 .specifiers
                 .iter()
-                .filter(|row| self.cfg_prefix.is_empty() && row.module == spelling)
+                .filter(|row| {
+                    self.cfg_prefix.is_empty()
+                        && row.module == spelling
+                        && (rel.ends_with(".rs") || (row.kind == "named" && !row.type_only))
+                })
                 .map(|row| row.name.clone())
                 .collect();
             landing.push(self.rows.item.clone());
-            if let Some(edit) =
+            let edit = if self
+                .source
+                .decls
+                .iter()
+                .any(|decl| decl.name == self.rows.item && decl.type_only)
+            {
+                self.arm
+                    .edit_import_item(&facts.text, &landing, &spelling, &self.rows.item, true)
+            } else {
                 self.arm
                     .edit_import_like(&facts.text, &landing, &spelling, &self.rows.item, module)
-            {
+            };
+            if let Some(edit) = edit {
                 out.push(Respell {
                     file: rel.clone(),
                     span: edit.span,
@@ -2140,11 +2208,15 @@ fn glob_parent(cx: &MoveCx, src: &str, module: &str) -> Option<String> {
 // ── the file read ───────────────────────────────────────────────────────────
 
 /// One import specifier the file writes, as a fact row carries it.
+#[derive(Clone)]
 struct SpecifierRow {
     name: String,
     module: String,
     span: Span,
     glob: bool,
+    kind: String,
+    imported: Option<String>,
+    type_only: bool,
 }
 
 /// One top-level declaration, line aligned so a cut takes whole lines.
@@ -2153,6 +2225,7 @@ struct Decl {
     name: String,
     span: Span,
     exported: bool,
+    type_only: bool,
 }
 
 #[derive(Clone)]
@@ -2165,7 +2238,10 @@ struct UnsupportedMacroItem {
 /// arithmetic over fact rows; none of it reads syntax.
 struct FileFacts {
     text: String,
+    is_ts: bool,
     specifiers: Vec<SpecifierRow>,
+    import_statements: Vec<Span>,
+    import_end: u32,
     /// The callee, its span, and whether it was reached through a receiver.
     sites: Vec<(String, Span, bool)>,
     decls: Vec<Decl>,
@@ -2185,20 +2261,34 @@ impl FileFacts {
             .text(rel)
             .ok_or_else(|| format!("read {rel}, or it is not UTF-8"))?;
         let mask = FamilyMask {
+            cst: true,
             call: true,
             ..FamilyMask::NONE
         };
         let out = dispatch(rel, text.as_bytes(), mask)
             .ok_or_else(|| format!("no fact arm owns {rel}"))?;
         let mut specifiers = Vec::new();
+        let mut import_statements = Vec::new();
+        let mut import_end = 0;
         let mut sites = Vec::new();
         flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
             match fact {
+                FlatFact::Node {
+                    family: sprefa_extract::FamilyTag::Cst,
+                    kind,
+                    span,
+                    ..
+                } if kind == "import_statement" => {
+                    import_end = import_end.max(line_end(&text, span.end));
+                    import_statements.push(span_of(span.start, span.end));
+                }
                 FlatFact::Specifier {
                     span,
                     name,
                     module: Some(module),
                     kind,
+                    imported,
+                    type_only,
                     ..
                 } => specifiers.push(SpecifierRow {
                     name,
@@ -2206,6 +2296,9 @@ impl FileFacts {
                     span: span_of(span.start, span.end),
                     glob: kind == "namespace"
                         && text.get(span.start as usize..span.end as usize) == Some("*"),
+                    kind,
+                    imported,
+                    type_only,
                 }),
                 FlatFact::Site {
                     span,
@@ -2244,7 +2337,13 @@ impl FileFacts {
         free.extend(serde_paths);
         Ok(Self {
             text,
+            is_ts: matches!(
+                rel.rsplit('.').next(),
+                Some("ts" | "tsx" | "mts" | "cts" | "js" | "mjs")
+            ),
             specifiers,
+            import_statements,
+            import_end,
             sites,
             decls,
             free,
@@ -2256,7 +2355,13 @@ impl FileFacts {
     /// The names the file binds per module, in byte order.
     fn modules(&self) -> Vec<(String, Vec<String>)> {
         let mut out: Vec<(String, Vec<String>)> = Vec::new();
-        for row in self.specifiers.iter().filter(|row| !row.glob) {
+        for row in self.specifiers.iter().filter(|row| {
+            !row.glob
+                && !matches!(
+                    row.kind.as_str(),
+                    "reexport" | "side_effect" | "dynamic_import" | "require"
+                )
+        }) {
             match out.iter_mut().find(|(held, _)| *held == row.module) {
                 Some((_, names)) => names.push(row.name.clone()),
                 None => out.push((row.module.clone(), vec![row.name.clone()])),
@@ -2267,11 +2372,15 @@ impl FileFacts {
 
     /// The end of the file's import region: one past the last import it writes.
     fn import_region(&self, text: &str) -> u32 {
+        if self.is_ts {
+            return self.import_end;
+        }
         self.specifiers
             .iter()
             .map(|row| line_end(text, row.span.end()))
             .max()
             .unwrap_or(0)
+            .max(self.import_end)
     }
 
     /// Whether the import holding `span` hands its names out (`pub use`,
@@ -2410,70 +2519,6 @@ impl FileFacts {
             .cloned()
             .collect()
     }
-}
-
-/// The scope rows one file contributes: its top-level declarations, line
-/// aligned, every free name each carries, and each Rust `impl` by self type.
-#[allow(clippy::type_complexity)]
-fn scope_rows(
-    cx: &MoveCx,
-    rel: &str,
-    text: &str,
-) -> Result<(Vec<Decl>, Vec<(String, Span)>, Vec<(String, Span)>), String> {
-    let path = cx.materialize(rel, &overlay_scratch())?;
-    let facts = scm_facts(&[path]).map_err(|error| format!("scope rows for {rel}: {error}"))?;
-    let (top_level, root_children) = root_item_spans(rel, text)?;
-    let mut decls: Vec<Decl> = Vec::new();
-    let mut free = Vec::new();
-    for fact in &facts {
-        match fact {
-            FlatFact::OccurrenceRow {
-                role,
-                exported,
-                decl_start,
-                decl_end,
-                symbol,
-                ..
-            } if role == "def" => {
-                let start = leading_trivia_start(text, &root_children, *decl_start, *decl_end);
-                let span = line_span(text, span_of(start, *decl_end));
-                if !top_level.contains(&(*decl_start, *decl_end)) {
-                    continue;
-                }
-                let name = declared(symbol);
-                if decls.iter().any(|held| held.name == name) {
-                    continue;
-                }
-                decls.push(Decl {
-                    name,
-                    span,
-                    exported: *exported,
-                });
-            }
-            // `std::collections::HashMap` names HashMap through its path, not
-            // through a `use HashMap`: only a path's first segment is free.
-            FlatFact::FreeNameRow {
-                name, start, end, ..
-            } if !text
-                .get(..*start as usize)
-                .is_some_and(|before| before.trim_end().ends_with("::")) =>
-            {
-                free.push((name.clone(), span_of(*start, *end)))
-            }
-            _ => {}
-        }
-    }
-    decls.sort_by_key(|decl| decl.span.start);
-    let impls = root_children
-        .iter()
-        .filter(|(_, _, kind)| kind == "impl_item")
-        .filter_map(|(start, end, _)| {
-            let self_ty = impl_self(text.get(*start as usize..*end as usize)?)?;
-            let from = leading_trivia_start(text, &root_children, *start, *end);
-            Some((self_ty, line_span(text, span_of(from, *end))))
-        })
-        .collect();
-    Ok((decls, free, impls))
 }
 
 /// Names generated by item macros that cleave cannot move as ordinary items.
@@ -2624,100 +2669,6 @@ fn leading_trivia_start(text: &str, children: &[(u32, u32, String)], start: u32,
         first = *from;
     }
     first.min(start)
-}
-
-/// Declaration spans at the CST root, including declarations wrapped by a TS
-/// `export_statement`, beside every root child and its kind in byte order.
-#[allow(clippy::type_complexity)]
-fn root_item_spans(
-    rel: &str,
-    text: &str,
-) -> Result<(BTreeSet<(u32, u32)>, Vec<(u32, u32, String)>), String> {
-    let mask = FamilyMask {
-        cst: true,
-        ..FamilyMask::NONE
-    };
-    let out = dispatch(rel, text.as_bytes(), mask)
-        .ok_or_else(|| format!("no CST fact arm owns {rel}"))?;
-    let mut exports = BTreeSet::new();
-    let mut variable_lists = BTreeSet::new();
-    let mut children = Vec::new();
-    let mut kinds: BTreeMap<(u32, u32), String> = BTreeMap::new();
-    flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
-        if let FlatFact::Node {
-            family: sprefa_extract::FamilyTag::Cst,
-            kind,
-            span,
-            ..
-        } = &fact
-        {
-            kinds
-                .entry((span.start, span.end))
-                .or_insert_with(|| kind.clone());
-        }
-        match fact {
-            FlatFact::Node {
-                family: sprefa_extract::FamilyTag::Cst,
-                kind,
-                span,
-                ..
-            } if kind == "export_statement" => {
-                exports.insert((span.start, span.end));
-            }
-            FlatFact::Node {
-                family: sprefa_extract::FamilyTag::Cst,
-                kind,
-                span,
-                ..
-            } if matches!(
-                kind.as_str(),
-                "lexical_declaration" | "variable_declaration"
-            ) =>
-            {
-                variable_lists.insert((span.start, span.end));
-            }
-            FlatFact::Edge {
-                family: sprefa_extract::FamilyTag::Cst,
-                kind,
-                from,
-                to,
-                ..
-            } if kind == "child" => children.push(((from.start, from.end), (to.start, to.end))),
-            _ => {}
-        }
-        Ok(())
-    })
-    .map_err(|_| format!("flatten CST {rel}"))?;
-    let root = (0, text.len() as u32);
-    let mut root_children: Vec<(u32, u32, String)> = children
-        .iter()
-        .filter(|(from, _)| *from == root)
-        .map(|(_, to)| (to.0, to.1, kinds.get(to).cloned().unwrap_or_default()))
-        .collect();
-    root_children.sort();
-    root_children.dedup();
-    let direct: BTreeSet<(u32, u32)> = children
-        .iter()
-        .filter(|(from, _)| *from == root)
-        .map(|(_, to)| *to)
-        .collect();
-    let mut items = direct.clone();
-    items.extend(
-        children.iter().filter_map(|(from, to)| {
-            (direct.contains(from) && exports.contains(from)).then_some(*to)
-        }),
-    );
-    let visible_lists: BTreeSet<(u32, u32)> = items
-        .iter()
-        .filter(|span| variable_lists.contains(span))
-        .copied()
-        .collect();
-    items.extend(
-        children
-            .into_iter()
-            .filter_map(|(from, to)| visible_lists.contains(&from).then_some(to)),
-    );
-    Ok((items, root_children))
 }
 
 /// The declared name inside a `scm` symbol spelling.

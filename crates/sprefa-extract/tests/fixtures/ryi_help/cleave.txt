@@ -11,6 +11,7 @@ Options:
       --root <ROOT>      Corpus root (default: git root of SRC)
       --state <STATE>    Soopy state root, outside the corpus
       --drag             Also move private helpers only this item uses
+      --slow             Resolve private field uses with rust-analyzer
       --commit           Apply instead of dry run
       --verify <VERIFY>  Command to run after --commit; failure rolls back
       --text-refs        Report leftover SRC spellings in plain text

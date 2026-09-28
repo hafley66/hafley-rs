@@ -41,6 +41,10 @@
     name: (property_identifier) @local.definition.function)
   (class_declaration
     name: (type_identifier) @local.definition.type)
+  (type_alias_declaration
+    name: (type_identifier) @local.definition.type)
+  (interface_declaration
+    name: (type_identifier) @local.definition.type)
   (variable_declarator
     name: (identifier) @local.definition.variable)
 ] @local.def.span

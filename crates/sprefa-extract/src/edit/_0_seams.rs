@@ -130,6 +130,17 @@ pub trait Cleave: Source + Sync + Send {
     /// when there is none, removed whole when `names` is empty. None: no change.
     fn edit_import(&self, text: &str, names: &[String], module: &str) -> Option<Edit>;
 
+    fn edit_import_item(
+        &self,
+        text: &str,
+        names: &[String],
+        module: &str,
+        _item: &str,
+        _type_only: bool,
+    ) -> Option<Edit> {
+        self.edit_import(text, names, module)
+    }
+
     /// `edit_import`, with an added import declared as visibly as the one
     /// that bound `like` from `like_module` (a re-export stays a re-export).
     fn edit_import_like(
