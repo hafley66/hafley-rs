@@ -2072,11 +2072,8 @@ fn use_branches(
 /// A non-`#[path]` `mod x;`'s directory: the declaring file's own dir when it
 /// owns its directory (crate root or `mod.rs`), else `<dir>/<stem>`.
 fn module_dir(rel: &str, roots: &BTreeSet<String>) -> String {
-    let stem = match rel.rsplit_once('/') {
-        Some((_, stem)) => stem,
-        None => rel,
-    };
-    let owned_directly = stem == "mod" || roots.contains(rel);
+    let file = rel.rsplit('/').next().unwrap_or(rel);
+    let owned_directly = file == "mod.rs" || roots.contains(rel);
     match owned_directly {
         true => rel
             .rsplit_once('/')

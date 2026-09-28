@@ -530,6 +530,32 @@ fn path_attr_places_the_file_and_renames_its_seats() {
     );
 }
 
+/// A re-export from a file declared through `#[path]` carries the renamed
+/// item into a sibling module's qualified call paths.
+#[test]
+fn path_attr_module_reexport_renames_qualified_callers() {
+    let fixture = fixture("path_attr_reexport", "commit");
+    let plan = rename_verb(
+        &fixture,
+        "src/read/0_root.rs#io_path",
+        "io_x",
+        &["--commit"],
+    );
+    for line in [
+        "src/read/0_root.rs  1 uses",
+        "src/read/mod.rs  1 uses",
+        "src/user.rs  2 uses",
+    ] {
+        assert!(plan.contains(line), "missing {line}:\n{plan}");
+    }
+    let entries = diff_rq(&fixture.root, &tree("path_attr_reexport", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
 // ── E.2 field and variant seats ─────────────────────────────────────────────
 
 /// A field anchor renames through the receiver plane: the decl, `self.size` in
