@@ -315,11 +315,11 @@ read = [
     "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "markdown",
     "data", "fallback", "gdscript", "commonlisp",
 ]
-cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc"]
+cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "mimalloc", "rust-checker"]
 # Optional global allocator; measured in plans/extract-bench-2026-08-29/SPEED.REPORT.md.
 mimalloc = ["dep:mimalloc", "dep:cap", "dep:libmimalloc-sys"]
-# The rust checker tier, `--features cli,rust-checker`. Off by default and out
-# of `cli`: it pulls the whole rust-analyzer crate graph (380s cold build).
+# The rust checker tier: rust-analyzer as a library. Part of `cli` (user-set
+# 2026-09-28); it pulls the whole rust-analyzer crate graph (380s cold build).
 rust-checker = [
     "rust", "hafley_scm/rust-checker",
     "dep:ra_ap_hir",

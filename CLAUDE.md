@@ -23,6 +23,7 @@
 - Exactly one implementation of each concern (module resolution, name binding, rename sites,
   type edges). Fast and slow tiers share it; they never fork a second copy.
 - Rust resolution is rust-analyzer as a library (`ra_ap_*`, feature `rust-checker`). It is part of
-  the default `cli` build. Hand-written resolvers that duplicate it are deleted, not maintained.
+  the default `cli` build. `rust_modules.rs` stays for now (user-set 2026-09-28); new code asks
+  rust-analyzer instead of extending the hand resolvers.
 - No workarounds or fallback heuristics. When the proper engine is unavailable, the command
   abstains or errors with the reason; it does not guess with text scans or a parallel resolver.
