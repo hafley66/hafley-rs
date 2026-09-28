@@ -83,3 +83,7 @@ api_only_benchmark	HEAD	slow_rename_file_recall	0.163636	0.909091
 api_only_benchmark	HEAD	slow_rename_site_recall	0.163636	0.866624
 api_only_benchmark	HEAD	slow_rename_typecheck_pass	55/55	unavailable
 api_only_benchmark	HEAD	slow_rename_diff_isolated	11/55	55/55
+api_only_diagnostic	HEAD	api_exchanges_passing	3	3
+api_only_diagnostic	HEAD	checker_queries_implemented	4	11
+api_only_diagnostic	HEAD	case_fixtures_passing_api	14	22
+api_only_diagnostic	HEAD	case_fixtures_abstained	8	0

@@ -1,6 +1,5 @@
 //! Compiler-backed TypeScript rename. Syntax selects candidate seats; checker
-//! identity filters them. Unsupported checker relations take the recorded LSP
-//! fallback so the edit set remains exact.
+//! identity filters them. Missing checker queries yield named abstentions.
 
 #[cfg(test)]
 use std::path::PathBuf;
@@ -225,7 +224,7 @@ fn ts7_not_found(request: &RenameRequest) -> RenameStop {
 }
 
 fn inexact(request: &RenameRequest, span: Span) -> RenameStop {
-    RenameStop::Inexact { file: request.anchor.clone(), span, why: "ts7_api_or_lsp" }
+    RenameStop::Inexact { file: request.anchor.clone(), span, why: "ts7_api" }
 }
 
 #[cfg(test)]
