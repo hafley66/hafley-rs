@@ -8,3 +8,6 @@ api_client	HEAD	case_fixtures_passing	0	22
 rename_seam	HEAD	api_exchanges_passing	3	3
 rename_seam	HEAD	checker_queries_implemented	1	11
 rename_seam	HEAD	case_fixtures_passing	0	22
+slow_cli	HEAD	api_exchanges_passing	3	3
+slow_cli	HEAD	checker_queries_implemented	1	11
+slow_cli	HEAD	case_fixtures_passing	0	22

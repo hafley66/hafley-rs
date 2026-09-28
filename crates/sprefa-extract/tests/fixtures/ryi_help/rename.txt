@@ -11,6 +11,7 @@ Options:
       --root <ROOT>          Corpus root (default: git root of the first anchor)
       --state <STATE>        Soopy state root, outside the corpus
       --at <AT>              Byte offset of the declaration when OLD is declared twice
+      --slow                 Use the TypeScript 7 checker for TypeScript rename
       --commit               Apply instead of dry run
       --text-refs            Report leftover old-name spellings in plain text
       --verify-scip <INDEX>  SCIP index (default ROOT/index.scip): its seats join the plan
