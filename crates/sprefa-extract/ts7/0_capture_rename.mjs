@@ -3,11 +3,14 @@ import { readFileSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
-const [rootArg, fileArg, old, next] = process.argv.slice(2);
+const [rootArg, fileArg, old, next, occurrenceArg = '0'] = process.argv.slice(2);
 const root = resolve(rootArg);
 const file = resolve(fileArg);
 const source = readFileSync(file, 'utf8');
-const offset = source.indexOf(old);
+let offset = -1;
+for (let index = 0; index <= Number(occurrenceArg); index++) {
+  offset = source.indexOf(old, offset + 1);
+}
 if (offset < 0) throw new Error(`missing ${old} in ${file}`);
 const prefix = source.slice(0, offset + Math.floor(old.length / 2));
 const line = prefix.split('\n').length - 1;

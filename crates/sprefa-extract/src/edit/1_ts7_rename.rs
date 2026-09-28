@@ -29,12 +29,19 @@ pub fn symbol_refs_and_abstains(
     let anchor_tree = parse_tree(&request.anchor, &text).ok_or_else(|| inexact(request, span))?;
     let anchor_node = anchor_tree.root_node().descendant_for_byte_range(seed, seed + request.old.len())
         .ok_or_else(|| inexact(request, span))?;
-    if let Some(query) = missing_for_node(anchor_node) {
+    let seed_kind = anchor_node.kind();
+    let intersection_context = has_node_kind(anchor_tree.root_node(), "intersection_type");
+    if let Some(query) = missing_for_node(anchor_node, seed_kind, intersection_context) {
         return fallback(cx, request, seed, span, query);
     }
     if symbol["id"].as_u64().is_none() { return Err(not_found(request)); }
 
     let seed_alias = symbol["flags"].as_u64().unwrap_or(0) & 2_097_152 != 0;
+    let seed_export_target = if seed_alias && anchor_node.parent().is_some_and(|node| node.kind() == "export_specifier") {
+        export_local_target(&mut api, &symbol).map_err(|_| inexact(request, span))?
+    } else {
+        None
+    };
     let seed_id = if seed_alias {
         symbol["id"].as_u64().ok_or_else(|| inexact(request, span))?
     } else {
@@ -61,16 +68,28 @@ pub fn symbol_refs_and_abstains(
             let node = tree.root_node().descendant_for_byte_range(at, at + request.old.len())
                 .ok_or_else(|| inexact(request, span))?;
             let shorthand = node.kind() == "shorthand_property_identifier";
+            let binding_shorthand = node.kind() == "shorthand_property_identifier_pattern";
             if rel == request.anchor {
-                if let Some(query) = missing_for_node(node) {
+                if let Some(query) = missing_for_node(node, seed_kind, intersection_context) {
                     return fallback(cx, request, seed, span, query);
                 }
             }
-            if found_id != seed_id && !shorthand { continue; }
-            if let Some(query) = missing_for_node(node) {
+            let related_export = if found_id != seed_id && seed_export_target.is_some()
+                && node.parent().is_some_and(|node| node.kind() == "export_specifier")
+            {
+                export_local_target(&mut api, &found).map_err(|_| inexact(request, span))?
+                    == seed_export_target
+            } else {
+                false
+            };
+            if found_id != seed_id && !shorthand && !related_export { continue; }
+            if let Some(query) = missing_for_node(node, seed_kind, intersection_context) {
                 return fallback(cx, request, seed, span, query);
             }
             let mut replacement = None;
+            if binding_shorthand && found_id == seed_id {
+                replacement = Some(format!("{}: {}", request.old, request.new));
+            }
             if shorthand {
                 let parent = found["declarations"].as_array()
                     .and_then(|rows| rows.iter().find_map(Value::as_str))
@@ -83,12 +102,15 @@ pub fn symbol_refs_and_abstains(
                     replacement = Some(format!("{}: {}", request.new, request.old));
                 }
             }
-            if found_id != seed_id && replacement.is_none() { continue; }
+            if found_id != seed_id && replacement.is_none() && !related_export { continue; }
             let site_span = Span { start: at as u32, len: request.old.len() as u32 };
             if seed_alias && node.parent().is_some_and(|parent|
                 parent.kind() == "import_specifier" && parent.child_by_field_name("alias").is_none())
             {
                 replacement = Some(format!("{} as {}", request.old, request.new));
+            }
+            if node.kind() == "number" && node.parent().is_some_and(|parent| parent.kind() == "subscript_expression") {
+                replacement = Some(format!("\"{}\"", request.new));
             }
             if let Some(replacement) = replacement { cx.put_ts_slow_edit(rel, site_span, replacement); }
             refs.push(SymbolRef {
@@ -101,6 +123,14 @@ pub fn symbol_refs_and_abstains(
     }
     if refs.is_empty() { return Err(not_found(request)); }
     Ok((refs, Vec::new()))
+}
+
+fn export_local_target(api: &mut Ts7Api, symbol: &Value) -> Result<Option<u64>, String> {
+    let Some(handle) = symbol["declarations"].as_array()
+        .and_then(|rows| rows.iter().filter_map(Value::as_str).find(|handle|
+            handle.split('.').nth(1) == Some("282"))) else { return Ok(None) };
+    let target = api.checker("getExportSpecifierLocalTargetSymbol", json!({"location": handle}))?;
+    Ok(target["id"].as_u64())
 }
 
 fn fallback(cx: &RenameCx, request: &RenameRequest, seed: usize, span: Span, query: &'static str)
@@ -157,15 +187,33 @@ fn parse_tree(rel: &str, content: &str) -> Option<Tree> {
     parser.parse(content, None)
 }
 
-fn missing_for_node(node: Node<'_>) -> Option<&'static str> {
+fn has_node_kind(node: Node<'_>, wanted: &str) -> bool {
+    if node.kind() == wanted { return true; }
+    let mut cursor = node.walk();
+    let found = node.named_children(&mut cursor).any(|child| has_node_kind(child, wanted));
+    found
+}
+
+fn missing_for_node(node: Node<'_>, seed_kind: &str, intersection_context: bool) -> Option<&'static str> {
     let leaf_kind = node.kind();
+    if leaf_kind == "string_fragment" {
+        let mut current = node.parent();
+        while let Some(ancestor) = current {
+            if matches!(ancestor.kind(), "property_signature" | "subscript_expression") { return None; }
+            current = ancestor.parent();
+        }
+    }
     let mut current = Some(node);
     while let Some(node) = current {
         match node.kind() {
-            "object_pattern" => return Some("getPropertySymbolFromBindingElement"),
+            "object_pattern" if leaf_kind == "property_identifier"
+                || (leaf_kind == "shorthand_property_identifier_pattern"
+                    && seed_kind != "shorthand_property_identifier_pattern") => {
+                return Some("getPropertySymbolFromBindingElement")
+            }
             "interface_declaration" | "class_declaration" | "class_body" => return Some("getRootSymbols"),
             "type_alias_declaration" if matches!(leaf_kind, "property_identifier" | "string_fragment") => {
-                return Some("getPropertySymbolsFromContextualType")
+                return Some(if intersection_context { "getRootSymbols" } else { "getPropertySymbolsFromContextualType" })
             }
             "string" | "string_fragment" => return Some("getContextualTypeFromParentOrAncestorTypeNode"),
             _ => {}
@@ -342,7 +390,8 @@ mod tests {
 
     fn assert_oracle_with_fallback(source: &str, old: &str, at: u32, missing_query: Option<&str>) {
         let cx = RenameCx::open(&fixture()).unwrap().with_slow(true);
-        let request = RenameRequest { anchor: source.into(), old: old.into(), new: "next".into(), at: Some(at) };
+        let new = if old.starts_with(char::is_uppercase) { "Next" } else { "next" };
+        let request = RenameRequest { anchor: source.into(), old: old.into(), new: new.into(), at: Some(at) };
         let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
         match missing_query {
             Some(query) => {
@@ -356,11 +405,16 @@ mod tests {
             cx.ts_slow_edit(&reference.file, reference.span).unwrap_or_else(|| request.new.clone()),
         )).collect();
         actual.sort();
-        let named_oracle = fixture().join(source.replace(".ts", &format!(".{old}.rename.json")));
+        let stem = source.strip_suffix(".tsx").or_else(|| source.strip_suffix(".ts")).unwrap();
+        let named_oracle = fixture().join(format!("{stem}.{old}.rename.json"));
         let oracle_file = if named_oracle.is_file() { named_oracle } else {
-            fixture().join(source.replace(".ts", ".rename.json"))
+            fixture().join(format!("{stem}.rename.json"))
         };
         let oracle: Value = serde_json::from_slice(&std::fs::read(oracle_file).unwrap()).unwrap();
+        if oracle.is_null() {
+            assert!(actual.is_empty());
+            return;
+        }
         let mut expected = Vec::new();
         for (file, edits) in oracle["changes"].as_object().unwrap() {
             let text = cx.text(file).unwrap();
@@ -449,5 +503,93 @@ mod tests {
     #[test]
     fn slow_rename_case_contextual_shorthand_lsp_fallback() {
         assert_oracle_with_fallback("8_contextual_shorthand.ts", "old", 15, Some("getPropertySymbolsFromContextualType"));
+    }
+
+    #[test]
+    fn slow_rename_case_reexport_chain_api() {
+        assert_oracle("11_reexport_mid.ts", "mid", 16);
+    }
+
+    #[test]
+    fn slow_rename_case_overloads_api() {
+        assert_oracle("17_overloads.ts", "old", 9);
+    }
+
+    #[test]
+    fn slow_rename_case_declaration_merge_lsp_fallback() {
+        assert_oracle_with_fallback("18_merge.ts", "Old", 10, Some("getRootSymbols"));
+    }
+
+    #[test]
+    fn slow_rename_case_jsx_component_api() {
+        assert_oracle("19_jsx_component.tsx", "Old", 9);
+    }
+
+    #[test]
+    fn slow_rename_case_destructuring_local_api() {
+        assert_oracle("9_destructure_local.ts", "old", 35);
+    }
+
+    #[test]
+    fn slow_rename_case_destructuring_alias_local_api() {
+        assert_oracle("10_destructure_alias.ts", "local", 40);
+    }
+
+    #[test]
+    fn slow_rename_case_destructuring_alias_property_lsp_fallback() {
+        assert_oracle_with_fallback("10_destructure_alias.ts", "old", 17, Some("getPropertySymbolFromBindingElement"));
+    }
+
+    #[test]
+    fn slow_rename_case_contextual_member_lsp_fallback() {
+        assert_oracle_with_fallback("14_contextual_member.ts", "old", 15, Some("getPropertySymbolsFromContextualType"));
+    }
+
+    #[test]
+    fn slow_rename_case_union_context_lsp_fallback() {
+        assert_oracle_with_fallback("15_union_context.ts", "old", 22, Some("getPropertySymbolsFromContextualType"));
+    }
+
+    #[test]
+    fn slow_rename_case_intersection_property_lsp_fallback() {
+        assert_oracle_with_fallback("16_intersection.ts", "old", 11, Some("getRootSymbols"));
+    }
+
+    #[test]
+    fn slow_rename_case_string_property_api() {
+        assert_oracle("20_string_property.ts", "old", 20);
+    }
+
+    #[test]
+    fn slow_rename_case_string_type_lsp_fallback() {
+        assert_oracle_with_fallback("21_string_type.ts", "old", 16, Some("getContextualTypeFromParentOrAncestorTypeNode"));
+    }
+
+    #[test]
+    fn slow_rename_case_numeric_property_api() {
+        assert_oracle("22_numeric.ts", "0", 15);
+    }
+
+    fn assert_null_oracle(source: &str, old: &str, at: u32) {
+        let cx = RenameCx::open(&fixture()).unwrap().with_slow(true);
+        let request = RenameRequest { anchor: source.into(), old: old.into(), new: "next".into(), at: Some(at) };
+        let stem = source.strip_suffix(".tsx").or_else(|| source.strip_suffix(".ts")).unwrap();
+        let oracle: Value = serde_json::from_slice(&std::fs::read(fixture().join(format!("{stem}.rename.json"))).unwrap()).unwrap();
+        assert!(oracle.is_null());
+        match symbol_refs_and_abstains(&cx, &request) {
+            Ok((refs, _)) => assert!(refs.is_empty()),
+            Err(RenameStop::NotFound { .. }) => {},
+            Err(other) => panic!("unexpected rename result: {other:?}"),
+        }
+    }
+
+    #[test]
+    fn slow_rename_case_intrinsic_jsx_null_lsp() {
+        assert_null_oracle("3_intrinsic.tsx", "div", 17);
+    }
+
+    #[test]
+    fn slow_rename_case_module_path_null_lsp() {
+        assert_null_oracle("24_module_path.ts", "23_path_source", 26);
     }
 }

@@ -1,0 +1,45 @@
+{
+  "changes": {
+    "18_merge.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 10
+          },
+          "end": {
+            "line": 0,
+            "character": 13
+          }
+        },
+        "newText": "Next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 6
+          },
+          "end": {
+            "line": 1,
+            "character": 9
+          }
+        },
+        "newText": "Next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 4
+          },
+          "end": {
+            "line": 2,
+            "character": 7
+          }
+        },
+        "newText": "Next"
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "16_intersection.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 11
+          },
+          "end": {
+            "line": 0,
+            "character": 14
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 18
+          },
+          "end": {
+            "line": 3,
+            "character": 21
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

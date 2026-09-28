@@ -49,3 +49,9 @@ case_batch_one	HEAD	checker_queries_implemented	3	11
 case_batch_one	HEAD	case_fixtures_passing	9	22
 case_batch_one	HEAD	case_fixtures_passing_api	7	22
 case_batch_one	HEAD	case_fixtures_passing_lsp_fallback	2	22
+case_matrix	HEAD	api_exchanges_passing	3	3
+case_matrix	HEAD	checker_queries_implemented	4	11
+case_matrix	HEAD	case_fixtures_passing	24	22
+case_matrix	HEAD	case_fixtures_passing_api	14	22
+case_matrix	HEAD	case_fixtures_passing_lsp_fallback	8	22
+case_matrix	HEAD	case_fixtures_passing_null_lsp	2	22

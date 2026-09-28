@@ -1,51 +1,6 @@
 {
   "changes": {
-    "5_module.ts": [
-      {
-        "range": {
-          "start": {
-            "line": 0,
-            "character": 13
-          },
-          "end": {
-            "line": 0,
-            "character": 16
-          }
-        },
-        "newText": "next"
-      }
-    ],
-    "6_import.ts": [
-      {
-        "range": {
-          "start": {
-            "line": 0,
-            "character": 9
-          },
-          "end": {
-            "line": 0,
-            "character": 12
-          }
-        },
-        "newText": "next"
-      }
-    ],
-    "11_reexport_mid.ts": [
-      {
-        "range": {
-          "start": {
-            "line": 0,
-            "character": 9
-          },
-          "end": {
-            "line": 0,
-            "character": 12
-          }
-        },
-        "newText": "next"
-      }
-    ],
-    "7_import_unaliased.ts": [
+    "17_overloads.ts": [
       {
         "range": {
           "start": {
@@ -63,11 +18,37 @@
         "range": {
           "start": {
             "line": 1,
-            "character": 12
+            "character": 9
           },
           "end": {
             "line": 1,
-            "character": 15
+            "character": 12
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 9
+          },
+          "end": {
+            "line": 2,
+            "character": 12
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 0
+          },
+          "end": {
+            "line": 3,
+            "character": 3
           }
         },
         "newText": "next"
