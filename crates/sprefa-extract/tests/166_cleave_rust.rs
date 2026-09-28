@@ -774,7 +774,7 @@ fn moved_struct_fields_are_visible_to_remaining_sibling_code() {
     git(&fixture.root, &["add", "-A"]);
     cleave(
         &fixture,
-        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+        &["src/source.rs#Packet", "src/dest.rs", "--slow", "--commit"],
     );
     cargo_check(&fixture);
 }
@@ -785,7 +785,7 @@ fn moved_struct_fields_used_in_a_child_literal_remain_visible() {
     git(&fixture.root, &["add", "-A"]);
     cleave(
         &fixture,
-        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+        &["src/source.rs#Packet", "src/dest.rs", "--slow", "--commit"],
     );
     cargo_check(&fixture);
 }
@@ -796,9 +796,50 @@ fn moved_struct_fields_used_in_a_child_pattern_remain_visible() {
     git(&fixture.root, &["add", "-A"]);
     cleave(
         &fixture,
-        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+        &["src/source.rs#Packet", "src/dest.rs", "--slow", "--commit"],
     );
     cargo_check(&fixture);
+}
+
+#[test]
+fn fast_cleave_stops_on_private_fields_before_checker_load() {
+    let fixture = fixture_tree("cleave_ratchet", "private_fields", "private-fast-stop");
+    git(&fixture.root, &["add", "-A"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/source.rs#Packet", "src/dest.rs"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(2));
+    let reason = String::from_utf8(output.stderr).unwrap();
+    assert!(
+        reason.contains("private_field_use_needs_checker"),
+        "{reason}"
+    );
+    assert!(reason.contains("Packet.value"), "{reason}");
+    assert!(reason.contains("--slow"), "{reason}");
+}
+
+#[test]
+fn fast_cleave_public_fields_never_loads_checker() {
+    let fixture = fixture_tree("cleave_ratchet", "private_fields", "public-fast");
+    let source = read(&fixture, "src/source.rs");
+    std::fs::write(
+        fixture.root.join("src/source.rs"),
+        source.replace("{ value: u8 }", "{ pub(crate) value: u8 }"),
+    )
+    .unwrap();
+    std::fs::write(fixture.root.join("Cargo.toml"), "invalid manifest").unwrap();
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+    );
+    assert!(read(&fixture, "src/dest.rs").contains("pub(crate) value"));
 }
 
 #[test]

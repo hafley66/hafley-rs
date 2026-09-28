@@ -169,6 +169,9 @@ op cleave(
   /** Also move private helpers only this item uses */
   drag?: boolean,
 
+  /** Resolve private field uses with rust-analyzer */
+  slow?: boolean,
+
   /** Apply instead of dry run */
   commit?: boolean,
 

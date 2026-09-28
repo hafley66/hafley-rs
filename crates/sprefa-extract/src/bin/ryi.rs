@@ -111,6 +111,8 @@ mod source_rename;
 
 #[path = "../edit/_7_cleave.rs"]
 mod cleave;
+#[path = "../edit/_7a_cleave_fields.rs"]
+mod cleave_fields;
 
 fn file_args_from_fast(fast: FastArgs) -> FileArgs {
     FileArgs {

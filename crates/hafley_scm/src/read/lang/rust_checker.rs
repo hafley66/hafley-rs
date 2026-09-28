@@ -7,6 +7,11 @@ use std::time::Duration;
 
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{field_reads, FieldProbe, FieldRead};
+
+/// True only when this process already holds a loaded rust-analyzer workspace.
+pub fn warm_workspace_available(_root: &std::path::Path) -> bool {
+    false
+}
 pub use super::CheckerAnswer;
 use super::{answer_of, CALL_FACETS};
 use crate::read::shape::FamilyTag;

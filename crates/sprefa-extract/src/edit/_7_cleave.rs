@@ -3,6 +3,7 @@
 //! fact rows only; the `Cleave` roster spells the three edits they cannot.
 //! @comment-ok: module header, the seam list every bin arm opens with
 
+use super::cleave_fields::widen_private_fields;
 use crate::cli::CleaveArgs;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -153,7 +154,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
     crate::outln!("root {}", root.display());
     for (target, dest) in &rows {
-        let plan = Plan::build_with(cx, &imports, target, dest, cli.drag)?;
+        let plan = Plan::build_with(cx, &imports, target, dest, cli.drag, cli.slow)?;
         print_plan(&plan);
         if !plan.rows.unresolved.is_empty() {
             if !cli.drag {
@@ -729,7 +730,7 @@ impl Plan {
         let root = plan_root(cli.root.as_ref(), &src)?;
         let cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
         let imports = Imports::read(&cx, &root)?;
-        Self::build_with(cx, &imports, target, dest, cli.drag)
+        Self::build_with(cx, &imports, target, dest, cli.drag, cli.slow)
     }
 
     /// One row planned over a corpus walk and a resolve another row may share.
@@ -739,6 +740,7 @@ impl Plan {
         target: &str,
         dest: &Path,
         drag: bool,
+        slow: bool,
     ) -> Result<Self, String> {
         let root = cx.root().to_path_buf();
         let (src, item) = split_target(target)?;
@@ -1057,7 +1059,17 @@ impl Plan {
             .iter()
             .map(|span| source.slice(*span).to_string())
             .collect();
-        widen_private_fields(&cx, &src, &dest, &source.text, &moving, &mut moving_text)?;
+        let checker =
+            slow || hafley_scm::read::lang::rust_checker::warm_workspace_available(cx.root());
+        widen_private_fields(
+            &cx,
+            &src,
+            &dest,
+            &source.text,
+            &moving,
+            &mut moving_text,
+            checker,
+        )?;
         if !item_decl.exported && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty()) {
             if let Some(first) = moving_text.first_mut() {
                 if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
@@ -1777,7 +1789,7 @@ fn item_cfg_prefix(rel: &str, text: &str, decl: &Decl) -> Result<String, String>
     Ok(prefix)
 }
 
-fn rust_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Node<'_>> {
+pub(super) fn rust_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Node<'_>> {
     let mut cursor = node.walk();
     node.named_children(&mut cursor).collect()
 }
@@ -1823,106 +1835,6 @@ fn rust_route_index(
         .collect();
     let defs = hafley_scm::read::types::build_def_index(&pairs);
     Ok(RustModuleIndex::build(modules, &corpus, &defs))
-}
-
-fn widen_private_fields(
-    cx: &MoveCx,
-    src: &str,
-    dest: &str,
-    source: &str,
-    moving: &[Span],
-    moving_text: &mut [String],
-) -> Result<(), String> {
-    if !src.ends_with(".rs") {
-        return Ok(());
-    }
-    let parsed = hafley_scm::lang::rust::RustFastFile::extract(src, source.as_bytes())
-        .ok_or_else(|| format!("parse Rust fields in {src}"))?;
-    let mut private = Vec::new();
-    for item in rust_children(parsed.tree().root_node()) {
-        if item.kind() != "struct_item" {
-            continue;
-        }
-        let Some(name_node) = item.child_by_field_name("name") else {
-            continue;
-        };
-        let Some((index, span)) = moving.iter().enumerate().find(|(_, span)| {
-            span.start as usize <= item.start_byte() && item.end_byte() <= span.end() as usize
-        }) else {
-            continue;
-        };
-        let Some(body) = item.child_by_field_name("body") else {
-            continue;
-        };
-        for field in rust_children(body) {
-            if field.kind() != "field_declaration"
-                || rust_children(field)
-                    .iter()
-                    .any(|child| child.kind() == "visibility_modifier")
-            {
-                continue;
-            }
-            let Some(name) = field.child_by_field_name("name") else {
-                continue;
-            };
-            private.push((
-                name_node.start_byte() as u32,
-                name.start_byte() as u32,
-                source[name.byte_range()].to_string(),
-                index,
-                name.start_byte() - span.start as usize,
-            ));
-        }
-    }
-    if private.is_empty() {
-        return Ok(());
-    }
-    let probes: Vec<_> = private
-        .iter()
-        .map(|(struct_name_start, field_start, field_name, _, _)| {
-            hafley_scm::read::lang::rust_checker::FieldProbe {
-                struct_name_start: *struct_name_start,
-                field_start: *field_start,
-                field_name: field_name.clone(),
-            }
-        })
-        .collect();
-    let files: Vec<_> = cx
-        .files()
-        .iter()
-        .filter(|rel| rel.ends_with(".rs"))
-        .map(|rel| (rel.clone(), cx.abs(rel)))
-        .collect();
-    let reads = hafley_scm::read::lang::rust_checker::field_reads(
-        cx.root(),
-        &cx.abs(src),
-        &files,
-        &probes,
-        std::time::Duration::from_secs(60),
-    )
-    .map_err(|error| format!("cleave cannot resolve moved Rust fields: {error}"))?;
-    let needed: BTreeSet<u32> = reads
-        .into_iter()
-        .filter(|read| read.path != dest)
-        .filter(|read| {
-            read.path != src
-                || !moving
-                    .iter()
-                    .any(|span| span.start <= read.access_start && read.access_start < span.end())
-        })
-        .map(|read| read.field_start)
-        .collect();
-    let mut inserts = Vec::new();
-    for (_, field_start, _, index, offset) in private {
-        if needed.contains(&field_start) {
-            inserts.push((index, offset));
-        }
-    }
-    inserts.sort_by(|a, b| b.cmp(a));
-    for (index, offset) in inserts {
-        moving_text[index].insert_str(offset, "pub(crate) ");
-    }
-    Ok(())
 }
 
 /// `edit` applied to `text`, which is how a block built from nothing grows.

@@ -191,6 +191,10 @@ pub struct CleaveArgs {
   #[arg(long)]
   #[serde(default)]
   pub drag: bool,
+  #[doc = "Resolve private field uses with rust-analyzer"]
+  #[arg(long)]
+  #[serde(default)]
+  pub slow: bool,
   #[doc = "Apply instead of dry run"]
   #[arg(long)]
   #[serde(default)]
