@@ -1,7 +1,8 @@
 {
   "compilerOptions": {
     "strict": true,
-    "noEmit": true
+    "noEmit": true,
+    "jsx": "preserve"
   },
-  "files": ["0_fixture.ts", "1_shorthand.ts", "2_destructure.ts"]
+  "files": ["0_fixture.ts", "1_shorthand.ts", "2_destructure.ts", "3_intrinsic.tsx", "4_export.ts", "5_module.ts", "6_import.ts", "7_import_unaliased.ts", "8_contextual_shorthand.ts"]
 }

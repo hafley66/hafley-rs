@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{json, Value};
-use tree_sitter::{Node, Parser};
+use tree_sitter::{Node, Parser, Tree};
 use url::Url;
 
 use super::ts7_api::{utf16_offset, Ts7Api};
@@ -26,45 +26,55 @@ pub fn symbol_refs_and_abstains(
     let mut api = Ts7Api::open(cx.root(), &file).map_err(|_| inexact(request, span))?;
     let position = utf16_offset(&text, seed + request.old.len() / 2);
     let symbol = api.symbol_at(&file, position).map_err(|_| inexact(request, span))?;
-    if let Some(query) = required_missing_query(&request.anchor, &text, seed, request.old.len()) {
+    let anchor_tree = parse_tree(&request.anchor, &text).ok_or_else(|| inexact(request, span))?;
+    let anchor_node = anchor_tree.root_node().descendant_for_byte_range(seed, seed + request.old.len())
+        .ok_or_else(|| inexact(request, span))?;
+    if let Some(query) = missing_for_node(anchor_node) {
         return fallback(cx, request, seed, span, query);
     }
     if symbol["id"].as_u64().is_none() { return Err(not_found(request)); }
 
-    let seed_id = canonical_symbol(&mut api, &symbol).map_err(|_| inexact(request, span))?;
+    let seed_alias = symbol["flags"].as_u64().unwrap_or(0) & 2_097_152 != 0;
+    let seed_id = if seed_alias {
+        symbol["id"].as_u64().ok_or_else(|| inexact(request, span))?
+    } else {
+        canonical_symbol(&mut api, &symbol).map_err(|_| inexact(request, span))?
+    };
     let mut refs = Vec::new();
     for rel in cx.files_of(&crate::lang::ts::TsSource) {
         let Some(content) = cx.text(rel) else { continue };
         let path = cx.abs(rel);
+        let tree = parse_tree(rel, &content).ok_or_else(|| inexact(request, span))?;
         let candidates: Vec<usize> = content.match_indices(&request.old)
             .map(|(at, _)| at)
             .filter(|at| identifier_edges(&content, *at, request.old.len()))
             .collect();
-        let mut handles = None;
-        for (ordinal, at) in candidates.iter().copied().enumerate() {
+        for at in candidates {
             let position = utf16_offset(&content, at + request.old.len() / 2);
             let found = api.symbol_at(&path, position).map_err(|_| inexact(request, span))?;
             if found["id"].as_u64().is_none() { continue }
-            let found_id = canonical_symbol(&mut api, &found).map_err(|_| inexact(request, span))?;
-            let shorthand = syntax_kind(rel, &content, at, request.old.len())
-                .is_some_and(|kind| kind == "shorthand_property_identifier");
+            let found_id = if seed_alias {
+                found["id"].as_u64().ok_or_else(|| inexact(request, span))?
+            } else {
+                canonical_symbol(&mut api, &found).map_err(|_| inexact(request, span))?
+            };
+            let node = tree.root_node().descendant_for_byte_range(at, at + request.old.len())
+                .ok_or_else(|| inexact(request, span))?;
+            let shorthand = node.kind() == "shorthand_property_identifier";
             if rel == request.anchor {
-                if let Some(query) = required_missing_query(rel, &content, at, request.old.len()) {
+                if let Some(query) = missing_for_node(node) {
                     return fallback(cx, request, seed, span, query);
                 }
             }
             if found_id != seed_id && !shorthand { continue; }
-            if let Some(query) = required_missing_query(rel, &content, at, request.old.len()) {
+            if let Some(query) = missing_for_node(node) {
                 return fallback(cx, request, seed, span, query);
             }
             let mut replacement = None;
             if shorthand {
-                let refs = handles.get_or_insert_with(|| api.references_in_file(&path, seed_id).unwrap_or(Value::Null));
-                let Some(rows) = refs.as_array() else { return Err(inexact(request, span)); };
-                if rows.is_empty() { continue; }
-                if rows.len() != candidates.len() { return Err(inexact(request, span)); }
-                let handle = rows[ordinal].as_str().ok_or_else(|| inexact(request, span))?;
-                let parent = shorthand_parent_handle(handle).ok_or_else(|| inexact(request, span))?;
+                let parent = found["declarations"].as_array()
+                    .and_then(|rows| rows.iter().find_map(Value::as_str))
+                    .ok_or_else(|| inexact(request, span))?;
                 let value = api.checker("getShorthandAssignmentValueSymbol", json!({"location": parent}))
                     .map_err(|_| inexact(request, span))?;
                 if value["id"].as_u64() == Some(seed_id) {
@@ -75,6 +85,11 @@ pub fn symbol_refs_and_abstains(
             }
             if found_id != seed_id && replacement.is_none() { continue; }
             let site_span = Span { start: at as u32, len: request.old.len() as u32 };
+            if seed_alias && node.parent().is_some_and(|parent|
+                parent.kind() == "import_specifier" && parent.child_by_field_name("alias").is_none())
+            {
+                replacement = Some(format!("{} as {}", request.old, request.new));
+            }
             if let Some(replacement) = replacement { cx.put_ts_slow_edit(rel, site_span, replacement); }
             refs.push(SymbolRef {
                 file: rel.to_owned(),
@@ -131,7 +146,7 @@ fn identifier_edges(text: &str, at: usize, len: usize) -> bool {
         (at + len == bytes.len() || !ident(bytes[at + len]))
 }
 
-fn syntax_kind(rel: &str, content: &str, at: usize, len: usize) -> Option<String> {
+fn parse_tree(rel: &str, content: &str) -> Option<Tree> {
     let mut parser = Parser::new();
     let language = if rel.ends_with(".tsx") {
         tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX)
@@ -139,22 +154,7 @@ fn syntax_kind(rel: &str, content: &str, at: usize, len: usize) -> Option<String
         tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
     };
     parser.set_language(&language).ok()?;
-    let tree = parser.parse(content, None)?;
-    let node = tree.root_node().descendant_for_byte_range(at, at + len)?;
-    Some(node.kind().to_owned())
-}
-
-fn required_missing_query(rel: &str, content: &str, at: usize, len: usize) -> Option<&'static str> {
-    let mut parser = Parser::new();
-    let language = if rel.ends_with(".tsx") {
-        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX)
-    } else {
-        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
-    };
-    parser.set_language(&language).ok()?;
-    let tree = parser.parse(content, None)?;
-    let node = tree.root_node().descendant_for_byte_range(at, at + len)?;
-    missing_for_node(node)
+    parser.parse(content, None)
 }
 
 fn missing_for_node(node: Node<'_>) -> Option<&'static str> {
@@ -173,12 +173,6 @@ fn missing_for_node(node: Node<'_>) -> Option<&'static str> {
         current = node.parent();
     }
     None
-}
-
-fn shorthand_parent_handle(handle: &str) -> Option<String> {
-    let (index, rest) = handle.split_once('.')?;
-    let (_, path) = rest.split_once('.')?;
-    Some(format!("{}.304.{path}", index.parse::<u32>().ok()?.checked_sub(1)?))
 }
 
 fn not_found(request: &RenameRequest) -> RenameStop {
@@ -342,17 +336,30 @@ impl Drop for Lsp {
 mod tests {
     use super::*;
 
-    fn assert_oracle(source: &str) {
+    fn assert_oracle(source: &str, old: &str, at: u32) {
+        assert_oracle_with_fallback(source, old, at, None);
+    }
+
+    fn assert_oracle_with_fallback(source: &str, old: &str, at: u32, missing_query: Option<&str>) {
         let cx = RenameCx::open(&fixture()).unwrap().with_slow(true);
-        let request = RenameRequest { anchor: source.into(), old: "old".into(), new: "next".into(), at: Some(6) };
+        let request = RenameRequest { anchor: source.into(), old: old.into(), new: "next".into(), at: Some(at) };
         let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
-        assert!(abstains.is_empty());
+        match missing_query {
+            Some(query) => {
+                assert_eq!(abstains.len(), 1);
+                assert_eq!(abstains[0].receiver, query);
+            }
+            None => assert!(abstains.is_empty()),
+        }
         let mut actual: Vec<_> = refs.iter().map(|reference| (
             reference.file.clone(), reference.span.start as usize, reference.span.end() as usize,
             cx.ts_slow_edit(&reference.file, reference.span).unwrap_or_else(|| request.new.clone()),
         )).collect();
         actual.sort();
-        let oracle_file = fixture().join(source.replace(".ts", ".rename.json"));
+        let named_oracle = fixture().join(source.replace(".ts", &format!(".{old}.rename.json")));
+        let oracle_file = if named_oracle.is_file() { named_oracle } else {
+            fixture().join(source.replace(".ts", ".rename.json"))
+        };
         let oracle: Value = serde_json::from_slice(&std::fs::read(oracle_file).unwrap()).unwrap();
         let mut expected = Vec::new();
         for (file, edits) in oracle["changes"].as_object().unwrap() {
@@ -401,11 +408,46 @@ mod tests {
 
     #[test]
     fn slow_rename_case_plain_api() {
-        assert_oracle("0_fixture.ts");
+        assert_oracle("0_fixture.ts", "old", 6);
     }
 
     #[test]
     fn slow_rename_case_shorthand_api() {
-        assert_oracle("1_shorthand.ts");
+        assert_oracle("1_shorthand.ts", "old", 6);
+    }
+
+    #[test]
+    fn slow_rename_case_export_alias_api() {
+        assert_oracle("4_export.ts", "old", 6);
+    }
+
+    #[test]
+    fn slow_rename_case_imported_name_api() {
+        assert_oracle("5_module.ts", "old", 13);
+    }
+
+    #[test]
+    fn slow_rename_case_local_import_alias_api() {
+        assert_oracle("6_import.ts", "local", 16);
+    }
+
+    #[test]
+    fn slow_rename_case_unaliased_import_binding_api() {
+        assert_oracle("7_import_unaliased.ts", "old", 9);
+    }
+
+    #[test]
+    fn slow_rename_case_exported_alias_api() {
+        assert_oracle("4_export.ts", "publicName", 31);
+    }
+
+    #[test]
+    fn slow_rename_case_destructuring_lsp_fallback() {
+        assert_oracle_with_fallback("2_destructure.ts", "old", 17, Some("getPropertySymbolFromBindingElement"));
+    }
+
+    #[test]
+    fn slow_rename_case_contextual_shorthand_lsp_fallback() {
+        assert_oracle_with_fallback("8_contextual_shorthand.ts", "old", 15, Some("getPropertySymbolsFromContextualType"));
     }
 }

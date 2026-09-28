@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "6_import.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 16
+          },
+          "end": {
+            "line": 0,
+            "character": 21
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 12
+          },
+          "end": {
+            "line": 1,
+            "character": 17
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

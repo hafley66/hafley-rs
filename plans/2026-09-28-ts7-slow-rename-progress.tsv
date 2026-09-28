@@ -44,3 +44,8 @@ query_routing	HEAD	checker_queries_implemented	2	11
 query_routing	HEAD	case_fixtures_passing	2	22
 query_routing	HEAD	case_fixtures_passing_api	2	22
 query_routing	HEAD	case_fixtures_passing_lsp_fallback	0	22
+case_batch_one	HEAD	api_exchanges_passing	3	3
+case_batch_one	HEAD	checker_queries_implemented	3	11
+case_batch_one	HEAD	case_fixtures_passing	9	22
+case_batch_one	HEAD	case_fixtures_passing_api	7	22
+case_batch_one	HEAD	case_fixtures_passing_lsp_fallback	2	22
