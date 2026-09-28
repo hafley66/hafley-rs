@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "20_string_property.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 19
+          },
+          "end": {
+            "line": 0,
+            "character": 22
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 19
+          },
+          "end": {
+            "line": 2,
+            "character": 22
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

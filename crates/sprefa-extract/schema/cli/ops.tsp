@@ -95,7 +95,7 @@ op scip(
 ): JsonlStream<jsonValue>;
 
 /** Ask one question of the resolved call/type graph */
-@requiredOneOf(#["callers", "uses", "from", "call_path", "type_path", "flow_path"], "arm")
+@requiredOneOf(#["callers", "uses", "from", "call_path", "type_path", "flow_path", "slice"], "arm")
 op graph(
   ...Inputs,
   @bodyRoot input: RawByteStream,
@@ -117,6 +117,9 @@ op graph(
 
   @doc("Flow paths from BLOB@START:END")
   @valueName("BLOB@START:END") flow_path?: string,
+
+  /** Control-dependence slice at PATH:BYTE */
+  @valueName("PATH:BYTE") slice?: string,
 
   /** Keep the fact store in a new SQLite database at PATH */
   @valueName("PATH") sqlite?: path,
@@ -235,6 +238,9 @@ op rename(
 
   /** Byte offset of the declaration when OLD is declared twice */
   at?: uint32,
+
+  /** Use the TypeScript 7 checker for TypeScript rename */
+  slow?: boolean,
 
   /** Apply instead of dry run */
   commit?: boolean,

@@ -1,0 +1,58 @@
+{
+  "changes": {
+    "17_overloads.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 9
+          },
+          "end": {
+            "line": 0,
+            "character": 12
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 9
+          },
+          "end": {
+            "line": 1,
+            "character": 12
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 9
+          },
+          "end": {
+            "line": 2,
+            "character": 12
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 0
+          },
+          "end": {
+            "line": 3,
+            "character": 3
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

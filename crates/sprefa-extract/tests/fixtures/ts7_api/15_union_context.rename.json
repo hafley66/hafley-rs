@@ -1,0 +1,45 @@
+{
+  "changes": {
+    "15_union_context.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 22
+          },
+          "end": {
+            "line": 0,
+            "character": 25
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 34
+          },
+          "end": {
+            "line": 2,
+            "character": 37
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 18
+          },
+          "end": {
+            "line": 3,
+            "character": 21
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

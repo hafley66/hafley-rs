@@ -1,0 +1,19 @@
+{
+  "changes": {
+    "4_export.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 16
+          },
+          "end": {
+            "line": 1,
+            "character": 26
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "22_numeric.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 15
+          },
+          "end": {
+            "line": 0,
+            "character": 16
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 18
+          },
+          "end": {
+            "line": 2,
+            "character": 19
+          }
+        },
+        "newText": "\"next\""
+      }
+    ]
+  }
+}

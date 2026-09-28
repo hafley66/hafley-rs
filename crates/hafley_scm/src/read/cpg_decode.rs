@@ -84,7 +84,7 @@ mod tests {
 
     /// Builds one METHOD node, one CALL node, one AST edge between them, each
     /// carrying a property, plus one node with an unmapped NodeType protoId.
-    fn fixture(bad_node_type: i32) -> proto::CpgStruct {
+    fn cpg_fixture(bad_node_type: i32) -> proto::CpgStruct {
         proto::CpgStruct {
             node: vec![
                 proto::cpg_struct::Node {
@@ -126,7 +126,7 @@ mod tests {
 
     #[test]
     fn maps_known_node_and_edge_kinds_and_carries_properties() {
-        let mut built = fixture(1 /* METHOD, so no third-node stop fires */);
+        let mut built = cpg_fixture(1 /* METHOD, so no third-node stop fires */);
         built.node.truncate(2);
         let bytes = built.encode_to_vec();
 
@@ -154,7 +154,7 @@ mod tests {
 
     #[test]
     fn unknown_node_type_is_a_named_stop_not_a_silent_skip() {
-        let built = fixture(999_999);
+        let built = cpg_fixture(999_999);
         let bytes = built.encode_to_vec();
 
         let err = decode_cpg_struct(&bytes).expect_err("unmapped protoId must stop the decode");
@@ -170,7 +170,7 @@ mod tests {
 
     #[test]
     fn unknown_edge_type_is_a_named_stop() {
-        let mut built = fixture(1);
+        let mut built = cpg_fixture(1);
         built.node.truncate(2);
         built.edge[0].r#type = 424_242;
         let bytes = built.encode_to_vec();

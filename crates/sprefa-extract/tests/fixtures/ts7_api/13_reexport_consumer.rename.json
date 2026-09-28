@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "13_reexport_consumer.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 9
+          },
+          "end": {
+            "line": 0,
+            "character": 12
+          }
+        },
+        "newText": "api as next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 12
+          },
+          "end": {
+            "line": 1,
+            "character": 15
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

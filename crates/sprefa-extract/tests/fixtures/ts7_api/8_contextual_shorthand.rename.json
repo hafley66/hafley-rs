@@ -1,0 +1,45 @@
+{
+  "changes": {
+    "8_contextual_shorthand.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 15
+          },
+          "end": {
+            "line": 0,
+            "character": 18
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 23
+          },
+          "end": {
+            "line": 2,
+            "character": 26
+          }
+        },
+        "newText": "next: old"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 3,
+            "character": 18
+          },
+          "end": {
+            "line": 3,
+            "character": 21
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

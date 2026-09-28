@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "7_import_unaliased.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 9
+          },
+          "end": {
+            "line": 0,
+            "character": 12
+          }
+        },
+        "newText": "old as next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 1,
+            "character": 12
+          },
+          "end": {
+            "line": 1,
+            "character": 15
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

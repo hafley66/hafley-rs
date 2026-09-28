@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "noEmit": true,
+    "jsx": "preserve"
+  },
+  "files": [
+    "0_fixture.ts", "1_shorthand.ts", "2_destructure.ts", "3_intrinsic.tsx",
+    "4_export.ts", "5_module.ts", "6_import.ts", "7_import_unaliased.ts",
+    "8_contextual_shorthand.ts", "9_destructure_local.ts", "10_destructure_alias.ts",
+    "11_reexport_mid.ts", "12_reexport_api.ts", "13_reexport_consumer.ts",
+    "14_contextual_member.ts", "15_union_context.ts", "16_intersection.ts",
+    "17_overloads.ts", "18_merge.ts", "19_jsx_component.tsx",
+    "20_string_property.ts", "21_string_type.ts", "22_numeric.ts",
+    "23_path_source.ts", "24_module_path.ts"
+  ]
+}
