@@ -1,0 +1,52 @@
+direction: right
+
+classes: {src: {style: {fill: "#e3f2fd"; stroke: "#1565c0"; border-radius: 8}}; rust: {style: {fill: "#fff3e0"; stroke: "#e65100"; border-radius: 8}}; tsc: {style: {fill: "#e8f5e9"; stroke: "#2e7d32"; border-radius: 8}}; check: {style: {fill: "#fce4ec"; stroke: "#ad1457"; border-radius: 8}}; state: {shape: cylinder; style: {fill: "#ede7f6"; stroke: "#4527a0"}}}
+
+input: "1 · input" {style: {fill: "#f5faff"; stroke: "#1565c0"; stroke-dash: 3}
+  req: "ryi rename --slow\nfile#name → new" {class: src}
+  files: "TS project files" {class: src}
+}
+
+ts7: "2 · typescript 7.0.2 (one process per request)" {style: {fill: "#f4fbf4"; stroke: "#2e7d32"; stroke-dash: 3}
+  api: "tsc --api --cwd\nmsgpack [1,m,json]" {class: tsc}
+  snap: "snapshot · project\nsymbol · type handles" {class: state}
+  lsp: "tsc --lsp rename\n(oracle + fallback)" {class: tsc}
+}
+
+port: "3 · rust port of tsserver rename" {style: {fill: "#fffaf3"; stroke: "#e65100"; stroke-dash: 3}
+  client: "TsApi client\nUTF-16 positions" {class: rust}
+  seed: "seed symbol\ngetSymbolAtPosition" {class: rust}
+  expand: "expand related\nroot · alias · contextual" {class: rust}
+  search: "search scope\nreferences per file" {class: rust}
+  edits: "edits + prefix/suffix\nshorthand · as-alias" {class: rust}
+}
+
+seam: "4 · existing ryi rename seam" {style: {fill: "#fffaf3"; stroke: "#e65100"; stroke-dash: 3}
+  ts: "TsSource::\nsymbol_refs_and_abstains" {class: rust}
+  plan: "rename dispatcher\nverify spans · stage" {class: rust}
+  abstain: "RenameAbstain\n(api gap → lsp)" {class: state}
+}
+
+verify: "5 · proof" {style: {fill: "#fff5f8"; stroke: "#ad1457"; stroke-dash: 3}
+  fixtures: "case fixtures\nexpected = lsp edits" {class: check}
+  typecheck: "tsc --noEmit\nbaseline = after" {class: check}
+  bench: "bench.db slow_rename\nvs serena · SCIP" {class: check}
+}
+
+input.req -> port.client: "position" {style.stroke: "#1565c0"}
+input.files -> ts7.api: "cwd" {style.stroke: "#1565c0"}
+port.client <-> ts7.api: "frames" {style: {stroke: "#2e7d32"; stroke-width: 3}}
+ts7.api -> ts7.snap: "registers" {style: {stroke: "#4527a0"; stroke-dash: 4}}
+port.client -> port.seed {style.stroke: "#e65100"}
+port.seed -> port.expand {style.stroke: "#e65100"}
+port.expand -> port.search {style.stroke: "#e65100"}
+port.search -> port.edits {style.stroke: "#e65100"}
+port.expand -> ts7.lsp: "query missing" {style: {stroke: "#ad1457"; stroke-dash: 4}}
+ts7.lsp -> seam.abstain: "recorded" {style: {stroke: "#ad1457"; stroke-dash: 4}}
+port.edits -> seam.ts: "SymbolRef[]" {style: {stroke: "#e65100"; stroke-width: 3}}
+seam.ts -> seam.plan {style.stroke: "#e65100"}
+seam.abstain -> seam.plan {style: {stroke: "#4527a0"; stroke-dash: 4}}
+ts7.lsp -> verify.fixtures: "expected" {style: {stroke: "#2e7d32"; stroke-dash: 4}}
+seam.plan -> verify.fixtures: "actual" {style.stroke: "#ad1457"}
+seam.plan -> verify.typecheck: "applied copy" {style.stroke: "#ad1457"}
+verify.typecheck -> verify.bench {style.stroke: "#ad1457"}
