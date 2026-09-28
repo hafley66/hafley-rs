@@ -7,26 +7,14 @@ use crate::read::rows::FamilyBundle;
 use crate::read::shape::{Span, Strings};
 use crate::read::tsi::{Arg, FactOut};
 use hafley_scm::lang::rust::{
-    tsi_syntax_rows, tsi_syntax_rows_from_tree, type_candidate_rows, type_candidate_rows_from_tree,
-    TsiSyntaxArg, TypeCandidateGroup, TypeCandidateKind, TypeCandidateOwner,
+    tsi_syntax_rows_from_tree, type_candidate_rows_from_tree, TsiSyntaxArg, TypeCandidateGroup,
+    TypeCandidateKind, TypeCandidateOwner,
 };
 
 // ── type-edge candidates (the Resolve<TypeF> input) ───────────────
 //
 // A candidate carries an owner SPAN. An impl whose self type is declared
 // outside this file points at an `ImplOwner` instead of a node.
-
-/// Collect one file's unresolved type-edge candidates. Port of v5 `edges_from`
-/// + `item_edges`.
-pub fn edge_candidates(
-    parsed: &syn::File,
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    emit_edge_candidates(type_candidate_rows(parsed, line_starts), strings, sink);
-    emit_tsi_syntax(parsed, line_starts, strings, sink);
-}
 
 pub fn edge_candidates_from_tree(
     tree: &tree_sitter::Tree,
@@ -96,15 +84,6 @@ fn emit_edge_candidates(
             });
         }
     }
-}
-
-fn emit_tsi_syntax(
-    parsed: &syn::File,
-    line_starts: &[u32],
-    strings: &mut Strings,
-    sink: &mut FamilyBundle<TypeF>,
-) {
-    emit_tsi_syntax_rows(tsi_syntax_rows(parsed, line_starts), strings, sink);
 }
 
 fn emit_tsi_syntax_rows(

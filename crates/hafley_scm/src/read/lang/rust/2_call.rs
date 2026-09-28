@@ -1023,19 +1023,6 @@ fn enclosing_named_def(sorted: &[(Span, NodeRef)], site: Span) -> Option<NodeRef
 // Lambda defs (closures) keep kind=Lambda, name=None (v5's empty name).
 // ════════════════════════════════════════════════════════════════════════════
 
-/// A proc_macro2 span pair -> v6 byte Span covering `[start.start, end.end)`.
-/// The def span covers the whole callable body for span-containment resolution.
-pub fn def_span(line_starts: &[u32], start: proc_macro2::Span, end: proc_macro2::Span) -> Span {
-    let start_lc = start.start();
-    let end_lc = end.end();
-    let start_byte = line_col_to_byte(line_starts, start_lc.line as u32, start_lc.column as u32);
-    let end_byte = line_col_to_byte(line_starts, end_lc.line as u32, end_lc.column as u32);
-    Span {
-        start: start_byte,
-        len: end_byte.saturating_sub(start_byte),
-    }
-}
-
 /// Descends inline `mod name { .. }`: the SITE half walks the whole file, so a
 /// callable declared in one needs a def or the file reports uses without them.
 pub(super) fn scm_call_defs(
