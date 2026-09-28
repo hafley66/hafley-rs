@@ -2,27 +2,27 @@
 
 ## API matrix (installed Serena 1.7.0; binary and MCP)
 
-The first table lists all 29 MCP tool schemas returned by stdio `tools/list` under `--context desktop-app`; these schemas were serialized from the server and preserve parameter types, required fields, and defaults. Optional integrations discovered by `serena tools list --all` but not activated in the LSP context are listed separately. Serena CLI help and dashboard routes follow. Runtime scenarios are complete only for `find_referencing_symbols`; other MCP endpoints and HTTP routes remain pending.
+The first table lists all 29 MCP tool schemas returned by stdio `tools/list` under `--context desktop-app`; these schemas were serialized from the server and preserve parameter types, required fields, and defaults. Optional integrations discovered by `serena tools list --all` but not activated in the LSP context are listed separately. Serena CLI help and dashboard routes follow. This report’s measured repo scope is Rust and TypeScript. Detailed reference scenarios were completed for `find_referencing_symbols`; rename and symbol-validation calls are also counted below. Per-endpoint runtime scenarios for the remaining MCP tools and HTTP routes remain pending.
 
-| Surface | Endpoint | Parameters / flags | Runtime scenarios |
+| surface | endpoint | parameters_and_flags | runtime_scenarios |
 |---|---|---|---|
 | MCP | `create_text_file` | `relative_path` string required; `content` string required | pending |
 | MCP | `replace_content` | `relative_path` string required; `needle` string required; `repl` string required; `mode` string enum(literal,regex) required; `allow_multiple_occurrences` boolean optional default=False | pending |
-| MCP | `replace_in_files` | `needle` string required; `repl` string required; `mode` string enum(literal,regex) required; `relative_path` string optional default=''; `paths_include_glob` string optional default=''; `paths_exclude_glob` string optional default=''; `dry_run` boolean optional default=False; `occurrence_ids` array<string>|null optional default=None; `expected_count` integer optional default=-1; `max_answer_chars` integer optional default=-1 | pending |
+| MCP | `replace_in_files` | `needle` string required; `repl` string required; `mode` string enum(literal,regex) required; `relative_path` string optional default=''; `paths_include_glob` string optional default=''; `paths_exclude_glob` string optional default=''; `dry_run` boolean optional default=False; `occurrence_ids` array<string>\|null optional default=None; `expected_count` integer optional default=-1; `max_answer_chars` integer optional default=-1 | pending |
 | MCP | `replace_symbol_body` | `name_path` string required; `relative_path` string required; `body` string required | pending |
 | MCP | `insert_after_symbol` | `name_path` string required; `relative_path` string required; `body` string required | pending |
 | MCP | `insert_before_symbol` | `name_path` string required; `relative_path` string required; `body` string required | pending |
-| MCP | `read_file` | `relative_path` string required; `start_line` integer optional default=0; `end_line` integer|null optional default=None; `max_answer_chars` integer optional default=-1 | pending |
+| MCP | `read_file` | `relative_path` string required; `start_line` integer optional default=0; `end_line` integer\|null optional default=None; `max_answer_chars` integer optional default=-1 | pending |
 | MCP | `list_dir` | `relative_path` string required; `recursive` boolean required; `skip_ignored_files` boolean optional default=False; `max_answer_chars` integer optional default=-1 | pending |
 | MCP | `find_file` | `file_mask` string required; `relative_path` string required | pending |
 | MCP | `search_for_pattern` | `substring_pattern` string required; `context_lines_before` integer optional default=0; `context_lines_after` integer optional default=0; `paths_include_glob` string optional default=''; `paths_exclude_glob` string optional default=''; `relative_path` string optional default=''; `restrict_search_to_code_files` boolean optional default=False; `skip_ignored_files` boolean optional default=True; `multiline` boolean optional default=True; `max_answer_chars` integer optional default=-1 | pending |
 | MCP | `get_symbols_overview` | `relative_path` string required; `depth` integer optional default=-1; `max_answer_chars` integer optional default=-1 | pending |
-| MCP | `find_symbol` | `name_path_pattern` string required; `depth` integer optional default=0; `relative_path` string optional default=''; `include_body` boolean optional default=False; `include_info` boolean optional default=False; `include_kinds` array<integer> optional default=[]; `exclude_kinds` array<integer> optional default=[]; `substring_matching` boolean optional default=False; `max_matches` integer optional default=-1; `max_answer_chars` integer optional default=-1 | pending |
-| MCP | `find_referencing_symbols` | `name_path` string required; `relative_path` string required; `include_kinds` array<integer> optional default=[]; `exclude_kinds` array<integer> optional default=[]; `max_answer_chars` integer optional default=-1 | 9 calls below |
+| MCP | `find_symbol` | `name_path_pattern` string required; `depth` integer optional default=0; `relative_path` string optional default=''; `include_body` boolean optional default=False; `include_info` boolean optional default=False; `include_kinds` array<integer> optional default=[]; `exclude_kinds` array<integer> optional default=[]; `substring_matching` boolean optional default=False; `max_matches` integer optional default=-1; `max_answer_chars` integer optional default=-1 | 31 rename mismatch verification calls |
+| MCP | `find_referencing_symbols` | `name_path` string required; `relative_path` string required; `include_kinds` array<integer> optional default=[]; `exclude_kinds` array<integer> optional default=[]; `max_answer_chars` integer optional default=-1 | 152 target calls; 9 detailed runtime rows below |
 | MCP | `find_implementations` | `name_path` string required; `relative_path` string required; `include_info` boolean optional default=False; `include_kinds` array<integer> optional default=[]; `exclude_kinds` array<integer> optional default=[]; `max_answer_chars` integer optional default=-1 | pending |
-| MCP | `find_declaration` | `relative_path` string required; `regex` string required; `containing_symbol_name_path` string|null optional default=None; `include_body` boolean optional default=False; `include_info` boolean optional default=False | pending |
+| MCP | `find_declaration` | `relative_path` string required; `regex` string required; `containing_symbol_name_path` string\|null optional default=None; `include_body` boolean optional default=False; `include_info` boolean optional default=False | pending |
 | MCP | `get_diagnostics_for_file` | `relative_path` string required; `start_line` integer optional default=0; `end_line` integer optional default=-1; `min_severity` integer optional default=4; `max_answer_chars` integer optional default=-1 | pending |
-| MCP | `rename_symbol` | `name_path` string required; `relative_path` string required; `new_name` string required | pending |
+| MCP | `rename_symbol` | `name_path` string required; `relative_path` string required; `new_name` string required | 152 target renames; 6 corrected-name retries |
 | MCP | `safe_delete_symbol` | `name_path_pattern` string required; `relative_path` string required | pending |
 | MCP | `write_memory` | `memory_name` string required; `content` string required; `max_chars` integer optional default=-1 | pending |
 | MCP | `read_memory` | `memory_name` string required | pending |
@@ -30,7 +30,7 @@ The first table lists all 29 MCP tool schemas returned by stdio `tools/list` und
 | MCP | `delete_memory` | `memory_name` string required | pending |
 | MCP | `rename_memory` | `old_name` string required; `new_name` string required | pending |
 | MCP | `edit_memory` | `memory_name` string required; `needle` string required; `repl` string required; `mode` string enum(literal,regex) required; `allow_multiple_occurrences` boolean optional default=False | pending |
-| MCP | `execute_shell_command` | `command` string required; `cwd` string|null optional default=None; `capture_stderr` boolean optional default=True; `max_answer_chars` integer optional default=-1 | pending |
+| MCP | `execute_shell_command` | `command` string required; `cwd` string\|null optional default=None; `capture_stderr` boolean optional default=True; `max_answer_chars` integer optional default=-1 | pending |
 | MCP | `activate_project` | `project` string required | pending |
 | MCP | `get_current_config` | none | pending |
 | MCP | `onboarding` | none | pending |
@@ -40,21 +40,21 @@ Optional MCP integrations listed by `serena tools list --all` but not activated 
 
 ### Runtime matrix rows: `find_referencing_symbols`
 
-MCP server command: `serena start-mcp-server --project <project> --context claude-code --language-backend LSP --enable-web-dashboard False --open-web-dashboard False`. Calls below used `tools/call` with the listed tool and argument object. Samples are trimmed to one output line. Serena reports `content_around_reference` line numbers at 0-based values in Rust; site scoring adds 1 before comparing with SCIP lines.
+MCP server command: `serena start-mcp-server --project <project> --context claude-code --language-backend LSP --enable-web-dashboard False --open-web-dashboard False`. Each call used `tools/call` with the listed JSON arguments. Serena’s Rust reference lines are zero-based; comparison normalizes to SCIP one-based lines. “Correct” below refers to measured file/site precision and recall against SCIP.
 
-| Project / scenario | MCP call args | rc / wall s | Trimmed Serena output sample | Serena vs SCIP sites | Closest ryi call and result |
-|---|---|---:|---|---|---|
-| `runs/serena/hafley-rs`; fn `push_claude_agent` | `{"name_path":"push_claude_agent","relative_path":"crates/boop-harness/src/harness/claude.rs"}` | 0 / 122.361 | `claude.rs:Function/parse_claude_agent_worktrees @ 888, 898` | exact, 2/2 sites; 1/1 files | `ryi graph --callers push_claude_agent --root <hafley-rs> <hafley-rs>`; rc=0, 2 edges at 889,899, exact |
-| `runs/serena/hafley-rs`; type `Subscribe` | `{"name_path":"Subscribe","relative_path":"crates/boop/src/main.rs"}` | 0 / 0.326 | `cli/job.rs:Function/run_agent @ 1918; main.rs tests @ 2742, 2774` | exact, 3/3 sites; 2/2 files | `ryi graph --uses Subscribe --root <hafley-rs> <hafley-rs>`; rc=0, `0 edges: 0 +, 0 ~, 0 -` vs 3 SCIP sites. Dry-run `ryi rename crates/boop/src/main.rs#Subscribe Subscribe_zz --root <hafley-rs> --json`; rc=0, 1 site vs 3 SCIP sites. |
-| `runs/serena/hafley-rs`; term `top` | `{"name_path":"top","relative_path":"crates/boop-mux/src/_0_snapshot.rs"}` | 0 / 0.542 | `turnstrip/src/_2_place.rs:Function/place_window @ 99; harness/src/pane.rs @ 237,565` | exact, 61/61 sites; 10/10 files | `ryi graph --uses top --root <hafley-rs> <hafley-rs>`; rc=0, `0 edges: 0 +, 0 ~, 0 -` vs 61 SCIP sites. Dry-run `ryi rename crates/boop-mux/src/_0_snapshot.rs#top top_zz --root <hafley-rs> --json`; rc=6, `glob import reaches the symbol at runtime`. |
-| `crates/hafley_scm`; fn `type_refs` | `{"name_path":"type_refs","relative_path":"crates/hafley_scm/src/lang/rust/6_type_refs.rs"}` | 0 / 26.622 | `lang/rust/7_type_entity_rows.rs:Function/callable @ 261,272` | exact, 15/15 sites; 4/4 files | `ryi graph --callers type_refs --root <hafley-rs> <hafley-rs>`; rc=0, 11 edges vs 15 sites |
-| `crates/hafley_scm`; type `Synthetic` | `{"name_path":"Synthetic","relative_path":"crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs"}` | 0 / 0.273 | `lang/rust/9_type_candidate_rows.rs:Function/collect @ 98; @ 153; @ 244` | exact, 7/7 sites; 3/3 files | `ryi graph --uses Synthetic --root <hafley-rs> <hafley-rs>`; rc=0, `0 edges: 0 +, 0 ~, 0 -` vs 7 SCIP sites. Dry-run `ryi rename crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs#Synthetic Synthetic_zz --root <hafley-rs> --json`; rc=0, 4 sites vs 7 SCIP sites. |
-| `crates/hafley_scm`; term `region` | `{"name_path":"region","relative_path":"crates/hafley_scm/src/read/lang/4_owned_region.rs"}` | 0 / 0.253 | `read/lang/4_owned_region.rs:Function/propose_owned_region @ 116; Method/changed @ 132` | exact, 5/5 sites; 1/1 file | `ryi graph --uses region --root <hafley-rs> <hafley-rs>`; rc=0, `0 edges: 0 +, 0 ~, 0 -` vs 5 SCIP sites. Dry-run `ryi rename crates/hafley_scm/src/read/lang/4_owned_region.rs#region region_zz --root <hafley-rs> --json`; rc=7, empty output (abstain exit). |
-| Bench `tokio`; fn `insert_at` | `{"name_path":"insert_at","relative_path":"tokio-util/src/time/delay_queue.rs"}` | 0 / 27.706 | `tokio-util/tests/panic.rs:Function/delay_queue_insert_at_panic_caller @ 114` | exact, 65/65 sites; 3/3 files | `ryi graph --callers insert_at --root <tokio> <tokio>`; rc=0, 1 edge vs 65 sites |
-| Bench `tokio`; type `UnixStream` | `{"name_path":"UnixStream","relative_path":"tokio/src/net/unix/stream.rs"}` | 1 / 0.154 | `Error executing tool find_referencing_symbols: ValueError: No symbol matching 'UnixStream' found` | fail; 0/75 sites, 0/15 files | `ryi graph --uses UnixStream --root <tokio> <tokio>`; rc=0, 9 `graph_decline` records (`external_crate`) vs 75 SCIP sites. Dry-run `ryi rename tokio/src/net/unix/stream.rs#UnixStream UnixStream_zz --root <tokio> --json`; rc=4, `tokio/src/net/unix/stream.rs declares no UnixStream`. |
-| Bench `tokio`; term `children` | `{"name_path":"children","relative_path":"tokio-util/src/sync/cancellation_token/tree_node.rs"}` | 0 / 0.165 | `tokio-util/src/sync/cancellation_token/tree_node.rs:Function @ 76; 25 site lines` | exact, 25/25 sites; 1/1 file | `ryi graph --uses children --root <tokio> <tokio>`; rc=0, `0 edges: 0 +, 0 ~, 0 -` vs 25 SCIP sites. Dry-run `ryi rename tokio-util/src/sync/cancellation_token/tree_node.rs#children children_zz --root <tokio> --json`; rc=7, empty output (abstain exit). |
+| Project | Scenario | Exact MCP call | return_code | wall_seconds | Serena output sample | file_precision | file_recall | site_precision | site_recall | Closest ryi call | ryi_return_code | ryi output sample | ryi correctness |
+|---|---|---|---:|---:|---|---:|---:|---:|---:|---|---:|---|---|
+| `runs/serena/hafley-rs` | fn `push_claude_agent` | `find_referencing_symbols({"name_path":"push_claude_agent","relative_path":"crates/boop-harness/src/harness/claude.rs"})` | 0 | 122.361 | `claude.rs:parse_claude_agent_worktrees @ 888, 898` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --callers push_claude_agent --root <hafley-rs> <hafley-rs>` | 0 | `2 edges at 889,899` | exact sites |
+| `runs/serena/hafley-rs` | type `Subscribe` | `find_referencing_symbols({"name_path":"Subscribe","relative_path":"crates/boop/src/main.rs"})` | 0 | 0.326 | `cli/job.rs:run_agent @ 1918; main.rs tests @ 2742, 2774` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --uses Subscribe --root <hafley-rs> <hafley-rs>`; dry-run rename also run | 0 | `graph: 0 edges; rename: 1 site vs 3 SCIP sites` | partial |
+| `runs/serena/hafley-rs` | term `top` | `find_referencing_symbols({"name_path":"top","relative_path":"crates/boop-mux/src/_0_snapshot.rs"})` | 0 | 0.542 | `place_window @ 99; pane.rs @ 237,565` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --uses top --root <hafley-rs> <hafley-rs>`; dry-run rename also run | 0 | `graph: 0 edges; rename return code 6, glob import reaches symbol at runtime` | graph: no sites; rename: fail |
+| `runs/serena/hafley-rs` (`crates/hafley_scm`) | fn `type_refs` | `find_referencing_symbols({"name_path":"type_refs","relative_path":"crates/hafley_scm/src/lang/rust/6_type_refs.rs"})` | 0 | 26.622 | `7_type_entity_rows.rs:callable @ 261,272` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --callers type_refs --root <hafley-rs> <hafley-rs>` | 0 | `11 edges vs 15 SCIP sites` | partial recall |
+| `runs/serena/hafley-rs` (`crates/hafley_scm`) | type `Synthetic` | `find_referencing_symbols({"name_path":"Synthetic","relative_path":"crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs"})` | 0 | 0.273 | `collect @ 98, 153, 244` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --uses Synthetic --root <hafley-rs> <hafley-rs>`; dry-run rename also run | 0 | `graph: 0 edges; rename: 4 sites vs 7 SCIP sites` | partial |
+| `runs/serena/hafley-rs` (`crates/hafley_scm`) | term `region` | `find_referencing_symbols({"name_path":"region","relative_path":"crates/hafley_scm/src/read/lang/4_owned_region.rs"})` | 0 | 0.253 | `propose_owned_region @ 116; changed @ 132` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --uses region --root <hafley-rs> <hafley-rs>`; dry-run rename also run | 0 | `graph: 0 edges; rename return_code 7, empty output` | graph: no sites; rename: abstain |
+| `runs/serena/tokio` | fn `insert_at` | `find_referencing_symbols({"name_path":"insert_at","relative_path":"tokio-util/src/time/delay_queue.rs"})` | 0 | 27.706 | `tokio-util/tests/panic.rs:delay_queue_insert_at_panic_caller @ 114` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --callers insert_at --root <tokio> <tokio>` | 0 | `1 edge vs 65 SCIP sites` | partial recall |
+| `runs/serena/tokio` | type `UnixStream` | `find_referencing_symbols({"name_path":"UnixStream","relative_path":"tokio/src/net/unix/stream.rs"})` | 1 | 0.154 | `ValueError: No symbol matching 'UnixStream' found` | 0.000 | 0.000 | 0.000 | 0.000 | `ryi graph --uses UnixStream --root <tokio> <tokio>`; dry-run rename also run | 0 | `9 graph_decline records; rename return_code 4, declares no UnixStream` | fail |
+| `runs/serena/tokio` | term `children` | `find_referencing_symbols({"name_path":"children","relative_path":"tokio-util/src/sync/cancellation_token/tree_node.rs"})` | 0 | 0.165 | `tree_node.rs:Function @ 76; 25 site lines` | 1.000 | 1.000 | 1.000 | 1.000 | `ryi graph --uses children --root <tokio> <tokio>`; dry-run rename also run | 0 | `graph: 0 edges; rename return_code 7, empty output` | graph: no sites; rename: abstain |
 
-`<hafley-rs>` expands to `/Users/chrishafley/.cache/lanes/claude-375/eval/bench/runs/serena/hafley-rs`; `<tokio>` expands to `/Users/chrishafley/.cache/lanes/claude-375/eval/bench/runs/serena/tokio`. API tests executed: nine calls across the workspace copy, `crates/hafley_scm`, and Tokio. Other endpoint runtime rows remain pending. The HTTP dashboard endpoints remain uncalled under the dashboard-off configuration.
+Nine Serena reference calls cover three scenarios on the `hafley-rs` workspace, three in its `crates/hafley_scm` subtree, and three in Tokio. Runtime execution of the other Serena MCP endpoints and dashboard HTTP routes remains pending. The API inventory above lists endpoint schemas and binary flags; a complete per-endpoint, three-scenario runtime matrix was not completed.
 
 ### RYii CLI API inventory
 
@@ -646,442 +646,310 @@ Options:
 ```
 </details>
 
-## Rename scenarios
+## Scope and corpus
 
-| Case | Language | Serena result | RYii result | Serena wall | RYii wall |
-|---|---|---|---|---:|---:|
-| hafley-rs `flatten_type` references (reference API cross-check) | Rust | one reference in `flatten_each` at `crates/hafley_scm/src/read/wire.rs:109`; exact response in server log `mcp_20260928-013734_14230.txt` | pending | 63.0 s total, 36.65 s startup + 27.29 s call | pending |
-| hafley_scm detached fixture first pass | Rust | fail: rust-analyzer `cargo metadata` failed because path dependency `hafley-observe` was missing; exact error in log `mcp_20260928-013615_9017.txt`; retried using the full workspace copy | n/a | 9.0 s | n/a |
+Only Rust and TypeScript results are included below. Rust target truth is SCIP from rust-analyzer and Serena also drives rust-analyzer; Rust rows are labeled `same engine as truth`. TypeScript is the independent comparison of tsserver against scip-typescript. Corpora are the five Rust/TypeScript repos with targets in `truth.db`: `hafley-rs`, `hafley_scm`, `tokio`, `codegraph-src`, and `vite`. Target sets contain 16 original targets plus additional targets selected from SCIP occurrences using `truth.py`, for 152 targets total.
 
-The reference result is checked against the source call at `crates/hafley_scm/src/read/wire.rs:109` and the SCIP truth target `flatten_type` (`src/read/wire.rs`, line 298, `refs=2` in `truth.db`). `ryi graph --callers flatten_type --root <hafley-rs-copy> <hafley-rs-copy>` remains to be recorded.
+## Serena reference score
 
-## Reference score
+Rows are micro-aggregated from per-target `bench.db` records. File and site measurements use SCIP path/line occurrences. Each metric occupies a separate cell.
 
-File and site precision/recall are micro-aggregated from per-target score rows. Rust rows compare two clients of rust-analyzer against SCIP generated from rust-analyzer and are labeled `same engine as truth`. Python and TypeScript rows are independent comparisons: Pyright vs scip-python, and tsserver vs scip-typescript. Serena’s displayed Rust reference lines are zero-based; scoring converts to SCIP’s one-based line numbers.
-
-| Repo | Kind | Targets | File precision | File recall | Site precision | Site recall | Status |
+| repo | kind | targets | file_precision | file_recall | site_precision | site_recall | comparison |
 |---|---|---:|---:|---:|---:|---:|---|
-| codegraph-src | fn | 13 | 1.000 | 1.000 | 1.000 | 1.000 | independent; queried |
-| codegraph-src | type | 8 | 1.000 | 1.000 | 0.908 | 1.000 | independent; queried |
-| codegraph-src | term | 8 | 1.000 | 0.878 | 1.000 | 0.494 | independent; queried |
-| codegraph-src | other | 3 | nan | 0.000 | nan | 0.000 | independent; queried |
-| django | fn | 13 | 0.974 | 1.000 | 0.997 | 1.000 | independent; queried |
-| django | type | 8 | 0.989 | 1.000 | 0.983 | 1.000 | independent; queried |
-| django | term | 11 | 1.000 | 1.000 | 0.995 | 1.000 | independent; queried |
-| django | other | pending | pending | pending | pending | pending | pending |
-| gin | fn | 11 | 1.000 | 1.000 | 1.000 | 1.000 | independent; queried |
-| gin | type | 9 | 1.000 | 1.000 | 1.000 | 1.000 | independent; queried |
-| gin | term | 9 | 1.000 | 1.000 | 1.000 | 1.000 | independent; queried |
-| gin | other | pending | pending | pending | pending | pending | pending |
-| graphify-src | fn | 14 | 1.000 | 0.239 | 1.000 | 0.394 | independent; queried |
-| graphify-src | type | 9 | 1.000 | 1.000 | 1.000 | 1.000 | independent; queried |
-| graphify-src | term | 9 | 1.000 | 0.969 | 1.000 | 0.851 | independent; queried |
-| graphify-src | other | pending | pending | pending | pending | pending | pending |
+| codegraph-src | fn | 13 | 1.000 | 1.000 | 1.000 | 1.000 | independent (tsserver vs scip-typescript) |
+| codegraph-src | type | 8 | 1.000 | 1.000 | 0.908 | 1.000 | independent (tsserver vs scip-typescript) |
+| codegraph-src | term | 8 | 1.000 | 0.878 | 1.000 | 0.494 | independent (tsserver vs scip-typescript) |
+| codegraph-src | other | 3 | n/a | 0.000 | n/a | 0.000 | independent (tsserver vs scip-typescript) |
 | hafley-rs | fn | 13 | 1.000 | 1.000 | 1.000 | 1.000 | same engine as truth (rust-analyzer) |
 | hafley-rs | type | 8 | 1.000 | 1.000 | 0.959 | 0.984 | same engine as truth (rust-analyzer) |
 | hafley-rs | term | 8 | 1.000 | 0.973 | 1.000 | 0.929 | same engine as truth (rust-analyzer) |
-| hafley-rs | other | 3 | nan | 0.000 | nan | 0.000 | same engine as truth (rust-analyzer) |
+| hafley-rs | other | 3 | n/a | 0.000 | n/a | 0.000 | same engine as truth (rust-analyzer) |
 | hafley_scm | fn | 14 | 1.000 | 0.964 | 1.000 | 0.890 | same engine as truth (rust-analyzer) |
 | hafley_scm | type | 11 | 1.000 | 1.000 | 0.872 | 0.982 | same engine as truth (rust-analyzer) |
 | hafley_scm | term | 7 | 1.000 | 1.000 | 1.000 | 1.000 | same engine as truth (rust-analyzer) |
-| hafley_scm | other | pending | pending | pending | pending | pending | same engine as truth (rust-analyzer) |
-| requests | fn | 12 | 1.000 | 1.000 | 0.982 | 0.831 | independent; queried |
-| requests | type | 9 | 1.000 | 1.000 | 0.989 | 1.000 | independent; queried |
-| requests | term | 8 | 1.000 | 1.000 | 0.967 | 1.000 | independent; queried |
-| requests | other | pending | pending | pending | pending | pending | pending |
 | tokio | fn | 12 | 0.918 | 0.987 | 0.971 | 0.997 | same engine as truth (rust-analyzer) |
 | tokio | type | 9 | 1.000 | 0.568 | 0.991 | 0.544 | same engine as truth (rust-analyzer) |
 | tokio | term | 6 | 1.000 | 0.714 | 0.978 | 0.918 | same engine as truth (rust-analyzer) |
-| tokio | other | 4 | nan | 0.000 | nan | 0.000 | same engine as truth (rust-analyzer) |
-| vite | fn | 11 | 1.000 | 1.000 | 1.000 | 1.000 | independent; queried |
-| vite | type | 4 | 1.000 | 0.750 | 1.000 | 0.800 | independent; queried |
-| vite | term | 9 | 1.000 | 0.333 | 1.000 | 0.088 | independent; queried |
-| vite | other | 1 | nan | 0.000 | nan | 0.000 | independent; queried |
-| ktor | fn | pending | pending | pending | pending | pending | pending |
-| ktor | type | pending | pending | pending | pending | pending | pending |
-| ktor | term | pending | pending | pending | pending | pending | pending |
-| ktor | other | pending | pending | pending | pending | pending | pending |
+| tokio | other | 4 | n/a | 0.000 | n/a | 0.000 | same engine as truth (rust-analyzer) |
+| vite | fn | 11 | 1.000 | 1.000 | 1.000 | 1.000 | independent (tsserver vs scip-typescript) |
+| vite | type | 4 | 1.000 | 0.750 | 1.000 | 0.800 | independent (tsserver vs scip-typescript) |
+| vite | term | 9 | 1.000 | 0.333 | 1.000 | 0.088 | independent (tsserver vs scip-typescript) |
+| vite | other | 1 | n/a | 0.000 | n/a | 0.000 | independent (tsserver vs scip-typescript) |
 
 ## RYii reference score
 
-The query endpoint follows `ryi graph --help`: `--callers` returns resolved call edges to a function; `--uses` returns declarations that reference a type. Type and term rename previews are recorded separately as SCIP site-level outputs. For type targets, the table records both `uses` and `rename` where rename is supported by `ryi capabilities`; for term targets, rename previews are used. `other` contains SCIP categories for which the graph commands have no equivalent.
+Function rows use documented `ryi graph --callers`. Type rows include both documented `ryi graph --uses` and `ryi rename <file>#<name> <name>_zz --root <repo> --json` without `--commit`; term rows use dry-run rename. `graph --uses` is type-reference semantics. Metrics are micro-aggregated; one endpoint per row.
 
-| Repo | Kind | Endpoint | Targets | rc=0 / targets | Mean wall s | File P/R | Site P/R |
-|---|---|---|---:|---:|---:|---:|---:|
-| codegraph-src | fn | `callers` | 13 | 13/13 | 0.993 | 1.000/0.514 | 1.000/0.524 |
-| codegraph-src | type | `uses` | 8 | 8/8 | 0.891 | 1.000/0.455 | 0.455/0.149 |
-| codegraph-src | term | `rename` | 8 | 1/8 | 0.120 | 1.000/0.020 | 0.994/0.481 |
-| codegraph-src | other | `rename` | 3 | 0/3 | 0.061 | 0.000/0.000 | 0.000/0.000 |
-| django | fn | `callers` | 13 | 0/13 | 4.754 | 0.000/0.000 | 0.000/0.000 |
-| django | type | `uses` | 8 | 8/8 | 2.879 | 1.000/0.033 | 1.000/0.014 |
-| gin | fn | `callers` | 11 | 11/11 | 0.315 | 1.000/1.000 | 1.000/1.000 |
-| gin | type | `uses` | 9 | 9/9 | 0.255 | 1.000/0.400 | 0.231/0.011 |
-| graphify-src | fn | `callers` | 14 | 0/14 | 1.520 | 0.000/0.000 | 0.000/0.000 |
-| graphify-src | type | `uses` | 9 | 9/9 | 1.313 | 1.000/0.348 | 0.684/0.073 |
-| hafley-rs | fn | `callers` | 13 | 13/13 | 3.391 | 1.000/0.720 | 1.000/0.533 |
-| hafley-rs | type | `uses` | 8 | 8/8 | 3.423 | 1.000/0.660 | 0.661/0.214 |
-| hafley-rs | term | `rename` | 8 | 4/8 | 1.172 | 0.800/0.108 | 0.600/0.038 |
-| hafley-rs | other | `rename` | 3 | 0/3 | 1.174 | 0.000/0.000 | 0.000/0.000 |
-| hafley_scm | fn | `callers` | 14 | 14/14 | 0.632 | 1.000/0.873 | 1.000/0.851 |
-| hafley_scm | type | `uses` | 11 | 11/11 | 0.707 | 1.000/0.651 | 0.487/0.147 |
-| hafley_scm | term | `rename` | 7 | 1/7 | 1.398 | 0.000/0.000 | 0.000/0.000 |
-| requests | fn | `callers` | 12 | 12/12 | 3.519 | 1.000/0.800 | 1.000/0.523 |
-| requests | type | `uses` | 9 | 9/9 | 0.186 | 1.000/0.667 | 0.420/0.236 |
-| tokio | fn | `callers` | 12 | 12/12 | 1.846 | 0.842/0.203 | 0.875/0.070 |
-| tokio | type | `uses` | 9 | 9/9 | 3.306 | 0.850/0.459 | 0.525/0.102 |
-| tokio | term | `rename` | 6 | 1/6 | 0.355 | 1.000/0.143 | 0.500/0.020 |
-| tokio | other | `rename` | 4 | 0/4 | 0.355 | 0.000/0.000 | 0.000/0.000 |
-| vite | fn | `callers` | 11 | 11/11 | 0.656 | 1.000/1.000 | 1.000/0.826 |
-| vite | type | `uses` | 4 | 4/4 | 0.679 | 1.000/1.000 | 0.625/0.500 |
-| vite | term | `rename` | 9 | 4/9 | 0.075 | 0.800/0.444 | 0.667/0.140 |
-| vite | other | `rename` | 1 | 0/1 | 0.063 | 0.000/0.000 | 0.000/0.000 |
+| repo | tool | endpoint | kind | targets | file_precision | file_recall | site_precision | site_recall | successful_calls | mean_wall_seconds |
+|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|
+| codegraph-src | ryi | callers | fn | 13 | 1.000 | 0.514 | 1.000 | 0.524 | 13 | 0.993 |
+| codegraph-src | ryi | uses | type | 8 | 1.000 | 0.455 | 0.455 | 0.149 | 8 | 0.891 |
+| codegraph-src | ryi | rename | type | 8 | 0.948 | 1.000 | 0.870 | 1.000 | 8 | 0.085 |
+| codegraph-src | ryi | rename | term | 8 | 1.000 | 0.020 | 0.994 | 0.481 | 1 | 0.120 |
+| codegraph-src | ryi | rename | other | 3 | n/a | 0.000 | n/a | 0.000 | 0 | 0.061 |
+| hafley-rs | ryi | callers | fn | 13 | 1.000 | 0.720 | 1.000 | 0.533 | 13 | 3.622 |
+| hafley-rs | ryi | uses | type | 8 | 1.000 | 0.660 | 0.661 | 0.214 | 8 | 3.423 |
+| hafley-rs | ryi | rename | type | 8 | 0.960 | 0.960 | 0.959 | 0.979 | 8 | 1.384 |
+| hafley-rs | ryi | rename | term | 8 | 0.800 | 0.108 | 0.600 | 0.038 | 4 | 1.172 |
+| hafley-rs | ryi | rename | other | 3 | n/a | 0.000 | n/a | 0.000 | 0 | 1.174 |
+| hafley_scm | ryi | callers | fn | 14 | 1.000 | 0.873 | 1.000 | 0.851 | 14 | 0.632 |
+| hafley_scm | ryi | uses | type | 11 | 1.000 | 0.651 | 0.487 | 0.147 | 11 | 0.707 |
+| hafley_scm | ryi | rename | type | 11 | n/a | 0.000 | n/a | 0.000 | 11 | 1.387 |
+| hafley_scm | ryi | rename | term | 7 | n/a | 0.000 | n/a | 0.000 | 1 | 1.398 |
+| tokio | ryi | callers | fn | 12 | 0.842 | 0.203 | 0.875 | 0.070 | 12 | 1.846 |
+| tokio | ryi | uses | type | 9 | 0.850 | 0.459 | 0.525 | 0.102 | 9 | 3.306 |
+| tokio | ryi | rename | type | 9 | 1.000 | 0.514 | 0.945 | 0.583 | 7 | 0.388 |
+| tokio | ryi | rename | term | 6 | 1.000 | 0.143 | 0.500 | 0.020 | 1 | 0.355 |
+| tokio | ryi | rename | other | 4 | n/a | 0.000 | n/a | 0.000 | 0 | 0.355 |
+| vite | ryi | callers | fn | 11 | 1.000 | 1.000 | 1.000 | 0.826 | 11 | 0.656 |
+| vite | ryi | uses | type | 4 | 1.000 | 1.000 | 0.625 | 0.500 | 4 | 0.679 |
+| vite | ryi | rename | type | 4 | 0.800 | 1.000 | 0.714 | 1.000 | 4 | 0.060 |
+| vite | ryi | rename | term | 9 | 0.800 | 0.444 | 0.667 | 0.140 | 4 | 0.075 |
+| vite | ryi | rename | other | 1 | n/a | 0.000 | n/a | 0.000 | 0 | 0.063 |
 
-## Per-target real-repo reference results
+## Serena rename correctness
 
-Serena and RYii reference rows use the same target identity and SCIP ground-truth occurrences. Each result cell is `rc / wall seconds / file P/R / site P/R`. RYii `rename` rows are dry-runs without `--commit`; the output edit sites are scored against SCIP. Type targets show both graph `--uses` and dry-run rename. Python/Go RYii type/term rename is unsupported per `ryi capabilities`.
+For each target the runner reset a fresh tracked copy, invoked Serena `rename_symbol` to append `_zz`, compared deleted diff lines with SCIP occurrences, verified changed files, and ran the language check. Site precision/recall are exactly 1 only where deleted lines equal all SCIP file/line occurrences and there are no extra deleted lines. `diff_only_sites` also requires touched paths to equal SCIP occurrence paths. `check_rc` is the per-target check exit code.
 
-| Repo | Target | Kind | Serena find_referencing_symbols | RYii query | RYii type rename |
-|---|---|---|---|---|---|
-| codegraph-src | `broadcast` | fn | 0 / 0.183s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.007s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `childForFieldName` | fn | 0 / 0.815s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.944s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `extractFunction` | fn | 0 / 0.402s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.009s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `findIndexedFile` | fn | 0 / 0.254s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.990s / 1.000/1.000 / 1.000/0.636 | rename: n/a |
-| codegraph-src | `getChildByField` | fn | 0 / 4.673s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.957s / 1.000/1.000 / 1.000/0.946 | rename: n/a |
-| codegraph-src | `getModuleAggregation` | fn | 0 / 0.251s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.998s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `guardsBefore` | fn | 0 / 0.230s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.004s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `handleLine` | fn | 0 / 0.182s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.994s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `isCppConstructorDeclaration` | fn | 0 / 0.885s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.011s / 1.000/1.000 / 1.000/0.667 | rename: n/a |
-| codegraph-src | `namedChild` | fn | 0 / 3.415s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.943s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `removeMcpEntryAt` | fn | 0 / 0.180s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.991s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `setDefaultProjectHint` | fn | 0 / 0.294s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.069s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `truncateOutput` | fn | 0 / 0.402s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.991s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| codegraph-src | `CLIFF_MAX0:` | other | 1 / 0.150s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.060s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `bold2:` | other | 1 / 0.194s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.063s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `nodesMs0:` | other | 1 / 0.172s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.061s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `ambientDeclaration` | term | 1 / 0.154s / 0.000/0.000 / 0.000/0.000 | rename: 6 / 0.119s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `extractor` | term | 1 / 0.154s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 0.296s / 1.000/1.000 / 0.994/1.000 | rename: n/a |
-| codegraph-src | `isNamespace` | term | 0 / 0.378s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 0.123s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `paramsField` | term | 0 / 0.289s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 0.120s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `row` | term | 0 / 1.326s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 0.122s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `typeLiteral22:deferTools` | term | 1 / 0.156s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.062s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `typeLiteral35:intraFileCalls` | term | 1 / 0.149s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.059s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `typeLiteral7:files` | term | 1 / 0.147s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.059s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| codegraph-src | `ElidedSymbolRef` | type | 0 / 0.299s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.886s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 0.067s / 1.000/1.000 / 0.900/1.000 |
-| codegraph-src | `ExtractionResult` | type | 0 / 0.587s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.896s / 1.000/0.938 / 0.500/0.241 | rename: 0 / 0.176s / 0.941/1.000 / 0.983/1.000 |
-| codegraph-src | `LRUCache` | type | 0 / 0.332s / 1.000/1.000 / 0.393/1.000 | uses: 0 / 0.892s / 1.000/0.500 / 0.000/0.000 | rename: 0 / 0.063s / 0.667/1.000 / 0.379/1.000 |
-| codegraph-src | `LanguageExtractor` | type | 0 / 0.357s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.899s / 1.000/0.097 / 0.333/0.043 | rename: 0 / 0.061s / 0.969/1.000 / 0.986/1.000 |
-| codegraph-src | `ModuleLinkTotal` | type | 0 / 0.253s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.895s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 0.063s / 1.000/1.000 / 0.667/1.000 |
-| codegraph-src | `StdioTransportOptions` | type | 0 / 0.153s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.889s / 1.000/1.000 / 0.500/0.500 | rename: 0 / 0.063s / 1.000/1.000 / 0.667/1.000 |
-| codegraph-src | `SyntaxTokenClass` | type | 0 / 0.214s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.885s / 1.000/1.000 / 0.750/0.462 | rename: 0 / 0.124s / 1.000/1.000 / 0.929/1.000 |
-| codegraph-src | `WireArm` | type | 0 / 0.211s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.889s / 1.000/1.000 / 0.500/0.333 | rename: 0 / 0.061s / 1.000/1.000 / 0.750/1.000 |
-| django | `_get_col` | fn | 0 / 0.723s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.746s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `add_node` | fn | 0 / 0.749s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.678s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `base36_to_int` | fn | 0 / 0.576s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.746s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `cache_page` | fn | 0 / 0.776s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 5.071s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `ct_field_attname` | fn | 0 / 4.706s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.733s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `fromstr` | fn | 0 / 0.941s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.787s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `inlineformset_factory` | fn | 0 / 0.839s / 0.833/1.000 / 0.987/1.000 | callers: 1 / 4.717s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `make_model_tuple` | fn | 0 / 0.609s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.730s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `popen_wrapper` | fn | 0 / 0.615s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.809s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `remove_model` | fn | 0 / 0.652s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.676s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `remove_non_capturing_groups` | fn | 0 / 0.564s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.618s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `set_name_with_model` | fn | 0 / 0.607s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.744s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `to_asgi_names` | fn | 0 / 0.610s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 4.747s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| django | `CHANGE_FORM` | term | 0 / 1.142s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `E026` | term | 0 / 0.603s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `LOOKUP_SEP` | term | 0 / 1.078s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `MISSING_DESCRIPTION` | term | 0 / 0.607s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `_url_module_exception` | term | 0 / 0.618s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `cs_getsize` | term | 0 / 0.568s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `get_dataset_driver` | term | 0 / 0.564s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `mailers` | term | 0 / 0.750s / 1.000/1.000 / 0.981/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `sql_pk_constraint` | term | 0 / 0.616s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `user_logged_out` | term | 0 / 0.638s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `validate_slug` | term | 0 / 0.728s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| django | `ActionLocation` | type | 0 / 0.790s / 1.000/1.000 / 0.970/1.000 | uses: 0 / 2.866s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| django | `AutocompleteMixin` | type | 0 / 0.619s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 2.871s / 1.000/1.000 / 1.000/0.667 | rename: unsupported |
-| django | `BaseMonthArchiveView` | type | 0 / 0.643s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 2.926s / 1.000/1.000 / 1.000/1.000 | rename: unsupported |
-| django | `Lead` | type | 0 / 0.654s / 0.750/1.000 / 0.818/1.000 | uses: 0 / 2.934s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| django | `LogEntry` | type | 0 / 1.019s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 2.872s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| django | `ObjectDoesNotExist` | type | 0 / 0.763s / 1.000/1.000 / 0.976/1.000 | uses: 0 / 2.887s / 1.000/0.067 / 1.000/0.025 | rename: unsupported |
-| django | `OneToOneField` | type | 0 / 1.582s / 1.000/1.000 / 0.992/1.000 | uses: 0 / 2.854s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| django | `PathSerializer` | type | 0 / 0.618s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 2.822s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| gin | `StringToBytes` | fn | 0 / 0.191s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.327s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `debugPrintWARNINGNew` | fn | 0 / 0.135s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.263s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `filterFlags` | fn | 0 / 0.142s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.315s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `getReadHeaderTimeout` | fn | 0 / 0.146s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.324s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `getTyped` | fn | 0 / 0.282s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.312s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `getValue` | fn | 0 / 0.148s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.330s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `nameOfFunction` | fn | 0 / 0.132s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.310s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `requestHeader` | fn | 0 / 0.151s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.325s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `setArrayOfMultipartFormFiles` | fn | 0 / 0.123s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.319s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `trySetCustom` | fn | 0 / 3.631s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.367s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `trySetUsingParser` | fn | 0 / 0.118s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.276s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| gin | `EnableDecoderUseNumber` | term | 0 / 0.159s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `anyMethods` | term | 0 / 0.127s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `children` | term | 0 / 0.195s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `defaultMemory` | term | 0 / 0.122s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `defaultPlatform` | term | 0 / 0.117s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `ginMode` | term | 0 / 0.122s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `priority` | term | 0 / 0.185s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `trustedProxies` | term | 0 / 0.120s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `writermem` | term | 0 / 0.216s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| gin | `BindingUri` | type | 0 / 0.129s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.249s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| gin | `Context` | type | 0 / 2.325s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.247s / 1.000/0.333 / 1.000/0.017 | rename: unsupported |
-| gin | `HandlersChain` | type | 0 / 0.191s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.249s / 1.000/0.800 / 0.000/0.000 | rename: unsupported |
-| gin | `IRoutes` | type | 0 / 0.192s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.248s / 1.000/0.333 / 0.000/0.000 | rename: unsupported |
-| gin | `LoggerConfig` | type | 0 / 0.128s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.248s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| gin | `jsonApi` | type | 0 / 0.126s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.252s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| gin | `msgpackBinding` | type | 0 / 0.144s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.243s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| gin | `nodeType` | type | 0 / 0.174s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.307s / 1.000/1.000 / 0.000/0.000 | rename: unsupported |
-| gin | `responseWriter` | type | 0 / 0.230s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.253s / 1.000/0.500 / 0.000/0.000 | rename: unsupported |
-| graphify-src | `_extract_parallel` | fn | 0 / 0.318s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.468s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_handle_def_form` | fn | 0 / 0.222s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.615s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_max_server_contexts` | fn | 0 / 0.369s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.513s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_nid` | fn | 0 / 1.018s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.520s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_pascal_strip_comments` | fn | 0 / 0.269s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.576s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_probe_node_link_round_trip` | fn | 0 / 0.232s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.502s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_rebuild_code` | fn | 0 / 5.590s / 1.000/1.000 / 1.000/0.994 | callers: 1 / 1.514s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `_stat_key_to_relative` | fn | 0 / 0.196s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.462s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `extract` | fn | 0 / 4.068s / 0.000/0.000 / 0.000/0.000 | callers: 1 / 1.559s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `extract_csharp` | fn | 0 / 0.470s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.550s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `extract_verilog` | fn | 0 / 0.559s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.541s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `file_hash` | fn | 0 / 0.743s / 1.000/1.000 / 1.000/0.988 | callers: 1 / 1.446s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `resolve_seed` | fn | 0 / 2.276s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.590s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `safe_fetch` | fn | 0 / 0.273s / 1.000/1.000 / 1.000/1.000 | callers: 1 / 1.418s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| graphify-src | `GRAPHIFY_OUT` | term | 0 / 0.502s / 1.000/0.929 / 1.000/0.400 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `PAPER` | term | 0 / 0.330s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `VALID_CONFIDENCES` | term | 0 / 0.231s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `_CONFIG_JSON_KEYS` | term | 0 / 0.226s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `_GEMINI_NUDGE_TEXT` | term | 0 / 0.485s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `_NAT64_WKP` | term | 0 / 0.200s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `_stat_index_dirty` | term | 0 / 0.204s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `call_function_field` | term | 0 / 0.716s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `ts_module` | term | 0 / 2.969s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| graphify-src | `FileSlice` | type | 0 / 0.611s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.229s / 1.000/0.143 / 1.000/0.038 | rename: unsupported |
-| graphify-src | `FileType` | type | 0 / 0.794s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.262s / 1.000/0.333 / 0.667/0.029 | rename: unsupported |
-| graphify-src | `ImportedSymbol` | type | 0 / 0.259s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.323s / 1.000/1.000 / 0.667/0.333 | rename: unsupported |
-| graphify-src | `LanguageConfig` | type | 0 / 0.698s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.339s / 1.000/0.500 / 0.667/0.087 | rename: unsupported |
-| graphify-src | `MinHashLSH` | type | 0 / 0.275s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.387s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| graphify-src | `PRInfo` | type | 0 / 0.273s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.294s / 1.000/1.000 / 0.625/0.357 | rename: unsupported |
-| graphify-src | `ToolError` | type | 0 / 0.380s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.342s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| graphify-src | `_NoFileRedirectHandler` | type | 0 / 0.163s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.335s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| graphify-src | `_SSRFGuardedHTTPSHandler` | type | 0 / 0.154s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 1.310s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| hafley-rs | `append_row` | fn | 0 / 0.617s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.404s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley-rs | `blob_matches` | fn | 0 / 0.344s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.556s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley-rs | `corpus_defs` | fn | 0 / 0.760s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.351s / 1.000/0.769 / 1.000/0.807 | rename: n/a |
-| hafley-rs | `diagnostic_line` | fn | 0 / 3.302s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.391s / 1.000/0.500 / 1.000/0.500 | rename: n/a |
-| hafley-rs | `family_span` | fn | 0 / 0.364s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.394s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley-rs | `intern_public` | fn | 0 / 0.480s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.343s / 1.000/0.600 / 1.000/0.164 | rename: n/a |
-| hafley-rs | `key_sorted` | fn | 0 / 0.238s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.503s / 1.000/1.000 / 1.000/0.667 | rename: n/a |
-| hafley-rs | `kotlin_type_refs` | fn | 0 / 0.263s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.356s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley-rs | `persisted_delta` | fn | 0 / 0.251s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.378s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley-rs | `push_claude_agent` | fn | 0 / 14.289s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.334s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley-rs | `record_status` | fn | 0 / 0.730s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.354s / 1.000/0.300 / 1.000/0.113 | rename: n/a |
-| hafley-rs | `reminder_detail` | fn | 0 / 1.937s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.329s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `stage_span` | fn | 0 / 0.492s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.396s / 1.000/1.000 / 1.000/0.917 | rename: n/a |
-| hafley-rs | `kind_impls!` | other | 1 / 0.231s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 1.180s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `skip:` | other | 1 / 0.230s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 1.158s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `test:` | other | 1 / 0.206s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 1.185s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `BUILD` | term | 0 / 1.481s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 1.141s / 0.500/0.250 / 0.500/0.167 | rename: n/a |
-| hafley-rs | `CONTEXT_VIEW_SCHEMA` | term | 0 / 0.400s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 1.228s / 1.000/1.000 / 0.750/1.000 | rename: n/a |
-| hafley-rs | `PR_NOTICE_SCHEMA` | term | 0 / 0.256s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 1.167s / 1.000/1.000 / 0.500/1.000 | rename: n/a |
-| hafley-rs | `SESSION_GRAPH` | term | 0 / 0.453s / 1.000/0.500 / 1.000/0.154 | rename: 6 / 1.147s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `bottom` | term | 0 / 0.491s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 1.150s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `main_tree` | term | 0 / 0.389s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 1.191s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `output_bytes` | term | 0 / 0.296s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 1.165s / 1.000/1.000 / 0.500/1.000 | rename: n/a |
-| hafley-rs | `top` | term | 0 / 0.385s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 1.186s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley-rs | `AgentEvent` | type | 0 / 0.567s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.431s / 1.000/1.000 / 0.571/0.235 | rename: 0 / 1.552s / 0.857/1.000 / 0.944/1.000 |
-| hafley-rs | `CfgNodeKind` | type | 0 / 0.422s / 1.000/1.000 / 1.000/0.969 | uses: 0 / 3.406s / 1.000/0.667 / 0.667/0.062 | rename: 0 / 1.367s / 1.000/1.000 / 0.970/1.000 |
-| hafley-rs | `CpgProperty` | type | 0 / 0.505s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.381s / 1.000/0.667 / 0.500/0.250 | rename: 0 / 1.242s / 1.000/1.000 / 0.889/1.000 |
-| hafley-rs | `DeferredAdapter` | type | 0 / 0.281s / 1.000/1.000 / 0.167/0.500 | uses: 0 / 3.432s / 1.000/1.000 / 0.500/0.500 | rename: 0 / 1.246s / 1.000/1.000 / 0.667/1.000 |
-| hafley-rs | `FamilyMask` | type | 0 / 0.506s / 1.000/1.000 / 0.957/0.985 | uses: 0 / 3.497s / 1.000/0.833 / 0.933/0.412 | rename: 0 / 1.766s / 1.000/1.000 / 0.986/1.000 |
-| hafley-rs | `RevisionId` | type | 0 / 0.492s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.388s / 1.000/0.467 / 0.250/0.067 | rename: 0 / 1.309s / 1.000/1.000 / 0.984/1.000 |
-| hafley-rs | `Subscribe` | type | 0 / 0.258s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.463s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.299s / 1.000/0.500 / 0.000/0.000 |
-| hafley-rs | `SymbolRow` | type | 0 / 0.233s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.386s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.293s / 0.500/0.500 / 0.500/0.500 |
-| hafley_scm | `corpus_defs` | fn | 0 / 0.688s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.634s / 1.000/0.769 / 1.000/0.807 | rename: n/a |
-| hafley_scm | `df_push_node` | fn | 0 / 0.361s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.562s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `flatten_scip_records` | fn | 0 / 0.228s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.595s / 1.000/0.667 / 1.000/0.667 | rename: n/a |
-| hafley_scm | `flatten_type` | fn | 0 / 0.226s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.623s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `generic_where_candidates` | fn | 0 / 12.866s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.682s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `io_path` | fn | 0 / 0.663s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.611s / 1.000/0.938 / 1.000/0.967 | rename: n/a |
-| hafley_scm | `latest_bind` | fn | 0 / 0.249s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.630s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `load_type_params` | fn | 0 / 0.221s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.638s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `match_limit_check` | fn | 0 / 0.261s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.643s / 1.000/1.000 / 1.000/0.500 | rename: n/a |
-| hafley_scm | `node_span` | fn | 0 / 0.495s / 1.000/0.800 / 1.000/0.674 | callers: 0 / 0.637s / 1.000/1.000 / 1.000/0.779 | rename: n/a |
-| hafley_scm | `py_first_identifier` | fn | 0 / 0.224s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.663s / 1.000/1.000 / 1.000/0.333 | rename: n/a |
-| hafley_scm | `syntax_tsi_rows` | fn | 0 / 0.342s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.644s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `type_refs` | fn | 0 / 0.283s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.647s / 1.000/0.500 / 1.000/0.733 | rename: n/a |
-| hafley_scm | `walk_data_refs` | fn | 0 / 0.237s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.634s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| hafley_scm | `DEFINITION` | term | 0 / 0.268s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 1.266s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `arms` | term | 0 / 0.296s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 1.319s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `decorated` | term | 0 / 0.253s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 1.235s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `direct` | term | 0 / 0.260s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 1.252s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `indexes` | term | 0 / 1.070s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 1.965s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `region` | term | 0 / 0.214s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 1.501s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `stop` | term | 0 / 0.288s / 1.000/1.000 / 1.000/1.000 | rename: 6 / 1.251s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| hafley_scm | `Always` | type | 0 / 0.225s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.665s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.248s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `CSharp` | type | 0 / 0.278s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.667s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.241s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `EvalType` | type | 0 / 0.211s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.734s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.212s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `ExpandedCallDefRow` | type | 0 / 0.359s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.736s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 1.199s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `FlatFact` | type | 0 / 1.239s / 1.000/1.000 / 1.000/0.996 | uses: 0 / 0.668s / 1.000/0.867 / 0.541/0.170 | rename: 0 / 2.644s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `Frame` | type | 0 / 0.221s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.749s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 1.204s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `GoModuleIndex` | type | 0 / 0.280s / 1.000/1.000 / 1.000/0.909 | uses: 0 / 0.699s / 1.000/0.750 / 0.143/0.091 | rename: 0 / 1.308s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `GoRun` | type | 0 / 0.208s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.727s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.242s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `Policy` | type | 0 / 0.275s / 1.000/1.000 / 0.791/0.971 | uses: 0 / 0.737s / 1.000/0.500 / 0.286/0.057 | rename: 0 / 1.297s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `RyiLang` | type | 0 / 0.442s / 1.000/1.000 / 0.525/0.930 | uses: 0 / 0.666s / 1.000/0.692 / 0.529/0.158 | rename: 0 / 1.417s / 0.000/0.000 / 0.000/0.000 |
-| hafley_scm | `Synthetic` | type | 0 / 0.229s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.730s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 1.242s / 0.000/0.000 / 0.000/0.000 |
-| requests | `_basic_auth_str` | fn | 0 / 0.216s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.527s / 1.000/1.000 / 1.000/0.667 | rename: n/a |
-| requests | `cert_verify` | fn | 0 / 0.124s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.488s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| requests | `cookiejar_from_dict` | fn | 0 / 0.212s / 1.000/1.000 / 0.909/0.909 | callers: 0 / 3.514s / 1.000/1.000 / 1.000/0.545 | rename: n/a |
-| requests | `extract_cookies_to_jar` | fn | 0 / 0.131s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.542s / 1.000/1.000 / 1.000/0.667 | rename: n/a |
-| requests | `guess_json_utf` | fn | 0 / 0.227s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.509s / 1.000/1.000 / 1.000/0.500 | rename: n/a |
-| requests | `is_prepared` | fn | 0 / 0.143s / 1.000/1.000 / 1.000/0.231 | callers: 0 / 3.544s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| requests | `prepare_content_length` | fn | 0 / 0.246s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.541s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| requests | `prepare_method` | fn | 0 / 0.121s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.543s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| requests | `select_proxy` | fn | 0 / 0.125s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.501s / 1.000/1.000 / 1.000/0.750 | rename: n/a |
-| requests | `sha256_utf8` | fn | 0 / 0.119s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.527s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| requests | `to_native_string` | fn | 0 / 2.272s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.505s / 1.000/0.800 / 1.000/0.615 | rename: n/a |
-| requests | `unquote_header_value` | fn | 0 / 0.123s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 3.492s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| requests | `CertType` | term | 0 / 0.135s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `RawDataType` | term | 0 / 0.117s / 1.000/1.000 / 0.667/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `UriType` | term | 0 / 0.162s / 1.000/1.000 / 0.957/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `_null2` | term | 0 / 0.122s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `is_urllib3_1` | term | 0 / 0.128s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `preferred_clock` | term | 0 / 0.123s / 1.000/1.000 / 0.667/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `status_code` | term | 0 / 0.155s / 1.000/1.000 / 1.000/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `str` | term | 0 / 0.372s / 1.000/1.000 / 0.978/1.000 | rename: unsupported / no run | rename: n/a |
-| requests | `BaseAdapter` | type | 0 / 0.121s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.183s / 1.000/1.000 / 0.750/0.600 | rename: unsupported |
-| requests | `CaseInsensitiveDict` | type | 0 / 0.158s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.191s / 1.000/0.667 / 0.429/0.158 | rename: unsupported |
-| requests | `DataKwargs` | type | 0 / 0.125s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.190s / 1.000/1.000 / 0.000/0.000 | rename: unsupported |
-| requests | `FileModeWarning` | type | 0 / 0.130s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.184s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| requests | `InvalidJSONError` | type | 0 / 0.125s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.180s / 1.000/0.500 / 1.000/0.250 | rename: unsupported |
-| requests | `InvalidProxyURL` | type | 0 / 0.122s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.190s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| requests | `LookupDict` | type | 0 / 0.122s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.182s / 0.000/0.000 / 0.000/0.000 | rename: unsupported |
-| requests | `Response` | type | 0 / 0.184s / 1.000/1.000 / 0.979/1.000 | uses: 0 / 0.195s / 1.000/0.800 / 0.394/0.277 | rename: unsupported |
-| requests | `_ValidatedRequest` | type | 0 / 0.119s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.181s / 1.000/1.000 / 1.000/1.000 | rename: unsupported |
-| tokio | `as_u64` | fn | 0 / 0.286s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.824s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `call` | fn | 0 / 14.062s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.850s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| tokio | `can_auto_advance` | fn | 1 / 0.150s / 0.000/0.000 / 0.000/0.000 | callers: 0 / 1.857s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `changed` | fn | 0 / 0.717s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.878s / 1.000/0.222 / 1.000/0.049 | rename: n/a |
-| tokio | `clear_wakers` | fn | 0 / 0.140s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.841s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `enable_all` | fn | 0 / 1.179s / 0.811/1.000 / 0.857/1.000 | callers: 0 / 1.866s / 1.000/0.267 / 1.000/0.167 | rename: n/a |
-| tokio | `insert_at` | fn | 0 / 0.611s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.826s / 1.000/0.333 / 1.000/0.015 | rename: n/a |
-| tokio | `notified_owned` | fn | 0 / 0.321s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.798s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `set_prev` | fn | 0 / 0.180s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.857s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `simplex` | fn | 0 / 2.300s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.806s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `submit_metrics` | fn | 0 / 0.153s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.863s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| tokio | `unbounded_channel` | fn | 0 / 1.371s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 1.882s / 1.000/0.120 / 1.000/0.037 | rename: n/a |
-| tokio | `cfg_net_unix!` | other | 1 / 0.152s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.353s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `cfg_signal_internal!` | other | 1 / 0.150s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.353s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `select!` | other | 1 / 0.146s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.356s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `try_join!` | other | 1 / 0.144s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.358s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `children` | term | 0 / 0.169s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 0.354s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `events` | term | 0 / 0.225s / 1.000/1.000 / 0.667/1.000 | rename: 6 / 0.353s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `node` | term | 0 / 0.164s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 0.352s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `run_queue` | term | 0 / 0.243s / 1.000/1.000 / 1.000/1.000 | rename: 7 / 0.360s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `thread_cap` | term | 0 / 0.165s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 0.356s / 1.000/1.000 / 0.500/0.500 | rename: n/a |
-| tokio | `written` | term | 1 / 0.142s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.353s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| tokio | `CancellationToken` | type | 0 / 0.610s / 1.000/1.000 / 0.987/0.915 | uses: 0 / 3.334s / 1.000/0.667 / 0.667/0.171 | rename: 0 / 0.425s / 1.000/1.000 / 0.988/1.000 |
-| tokio | `Database` | type | 0 / 0.165s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.273s / 1.000/1.000 / 0.500/0.500 | rename: 0 / 0.470s / 1.000/1.000 / 0.667/1.000 |
-| tokio | `GlobalOrphanQueue` | type | 0 / 0.254s / 1.000/1.000 / 1.000/0.700 | uses: 0 / 3.334s / 1.000/0.500 / 0.000/0.000 | rename: 0 / 0.359s / 1.000/1.000 / 0.909/1.000 |
-| tokio | `PointersInner` | type | 0 / 0.143s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 3.394s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 0.348s / 1.000/1.000 / 0.667/1.000 |
-| tokio | `Signal` | type | 0 / 0.230s / 1.000/1.000 / 1.000/0.778 | uses: 0 / 3.344s / 1.000/0.667 / 0.500/0.222 | rename: 0 / 0.357s / 1.000/1.000 / 0.900/1.000 |
-| tokio | `TimeHandle` | type | 1 / 0.149s / 0.000/0.000 / 0.000/0.000 | uses: 0 / 3.277s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.358s / 0.000/0.000 / 0.000/0.000 |
-| tokio | `TimerHandle` | type | 0 / 0.196s / 1.000/1.000 / 1.000/0.917 | uses: 0 / 3.279s / 1.000/0.750 / 0.571/0.333 | rename: 0 / 0.420s / 1.000/0.500 / 0.857/0.500 |
-| tokio | `TryCurrentErrorKind` | type | 0 / 0.167s / 1.000/1.000 / 1.000/0.727 | uses: 0 / 3.345s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 0.354s / 1.000/1.000 / 0.900/0.818 |
-| tokio | `UnixStream` | type | 1 / 0.152s / 0.000/0.000 / 0.000/0.000 | uses: 0 / 3.171s / 0.400/0.133 / 0.000/0.000 | rename: 4 / 0.402s / 0.000/0.000 / 0.000/0.000 |
-| vite | `copyDir` | fn | 0 / 0.288s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.646s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `crash` | fn | 0 / 0.234s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.657s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `esmifyPostcssLoadConfigDts` | fn | 0 / 0.261s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.651s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `formatTargetDir` | fn | 0 / 0.259s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.655s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `parseBundledDependenciesFromLicense` | fn | 0 / 0.496s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.712s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `readPackageInfo` | fn | 0 / 0.243s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.653s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `start` | fn | 0 / 0.243s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.651s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `svgVirtualModulePlugin` | fn | 0 / 0.259s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.638s / 1.000/1.000 / 1.000/0.500 | rename: n/a |
-| vite | `testLightningcssVisitorDuringMinify` | fn | 0 / 0.818s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.658s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `transformFooWithInlineSourceMap` | fn | 0 / 0.247s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.647s / 1.000/1.000 / 1.000/0.500 | rename: n/a |
-| vite | `wrapIIFEBabelPlugin` | fn | 0 / 0.294s / 1.000/1.000 / 1.000/1.000 | callers: 0 / 0.648s / 1.000/1.000 / 1.000/1.000 | rename: n/a |
-| vite | `decrement0:` | other | 1 / 0.236s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.063s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| vite | `absoluteDepPath` | term | 0 / 0.648s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 0.059s / 1.000/1.000 / 0.500/1.000 | rename: n/a |
-| vite | `createModernChunkLegacyGuard` | term | 0 / 0.234s / 0.000/0.000 / 0.000/0.000 | rename: 0 / 0.180s / 0.500/1.000 / 0.750/1.000 | rename: n/a |
-| vite | `root` | term | 0 / 0.242s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 0.063s / 1.000/1.000 / 0.667/1.000 | rename: n/a |
-| vite | `src` | term | 1 / 0.247s / 0.000/0.000 / 0.000/0.000 | rename: 6 / 0.063s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| vite | `svgVirtualModuleId` | term | 0 / 0.236s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 0.063s / 1.000/1.000 / 0.667/1.000 | rename: n/a |
-| vite | `typeLiteral17:id` | term | 1 / 0.226s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.060s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| vite | `typeLiteral22:color` | term | 1 / 0.226s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.063s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| vite | `typeLiteral22:display` | term | 1 / 0.231s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.062s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| vite | `typeLiteral23:link` | term | 1 / 0.226s / 0.000/0.000 / 0.000/0.000 | rename: 4 / 0.063s / 0.000/0.000 / 0.000/0.000 | rename: n/a |
-| vite | `MainTypeOnlyClass` | type | 0 / 0.235s / 0.000/0.000 / 0.000/0.000 | uses: 0 / 0.704s / 1.000/1.000 / 0.000/0.000 | rename: 0 / 0.058s / 0.500/1.000 / 0.667/1.000 |
-| vite | `PackageJson` | type | 0 / 0.408s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.655s / 1.000/1.000 / 0.500/0.500 | rename: 0 / 0.061s / 1.000/1.000 / 0.800/1.000 |
-| vite | `Post` | type | 0 / 0.236s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.649s / 1.000/1.000 / 1.000/0.667 | rename: 0 / 0.061s / 1.000/1.000 / 0.750/1.000 |
-| vite | `ShimOptions` | type | 0 / 0.396s / 1.000/1.000 / 1.000/1.000 | uses: 0 / 0.710s / 1.000/1.000 / 1.000/1.000 | rename: 0 / 0.060s / 1.000/1.000 / 0.500/1.000 |
+| repo | kind | targets | exact_site_targets | diff_only_site_targets | check_pass_targets | check_fail_targets | mean_rename_seconds |
+|---|---|---:|---:|---:|---:|---:|---:|
+| codegraph-src | fn | 13 | 13 | 13 | 0 | 13 | 5.246 |
+| codegraph-src | type | 8 | 7 | 7 | 0 | 8 | 2.176 |
+| codegraph-src | term | 8 | 5 | 5 | 0 | 8 | 3.471 |
+| codegraph-src | other | 3 | 0 | 0 | 0 | 3 | 3.282 |
+| hafley-rs | fn | 13 | 13 | 13 | 13 | 0 | 17.513 |
+| hafley-rs | type | 8 | 8 | 8 | 8 | 0 | 27.956 |
+| hafley-rs | term | 8 | 7 | 7 | 8 | 0 | 12.741 |
+| hafley-rs | other | 3 | 0 | 0 | 3 | 0 | 1.752 |
+| hafley_scm | fn | 14 | 13 | 13 | 14 | 0 | 14.682 |
+| hafley_scm | type | 11 | 11 | 11 | 11 | 0 | 11.363 |
+| hafley_scm | term | 7 | 7 | 7 | 7 | 0 | 12.171 |
+| tokio | fn | 12 | 10 | 10 | 12 | 0 | 7.322 |
+| tokio | type | 9 | 6 | 6 | 9 | 0 | 5.599 |
+| tokio | term | 6 | 4 | 4 | 6 | 0 | 6.079 |
+| tokio | other | 4 | 0 | 0 | 4 | 0 | 0.695 |
+| vite | fn | 11 | 11 | 11 | 0 | 11 | 12.252 |
+| vite | type | 4 | 4 | 4 | 0 | 4 | 11.737 |
+| vite | term | 9 | 5 | 5 | 0 | 9 | 7.381 |
+| vite | other | 1 | 0 | 0 | 0 | 1 | 3.541 |
 
-### Rename correctness status
+## Rename results per target
 
-Per-target rename correctness across fresh copies, build/type checks, full diff-site verification, and Serena rename rows remain pending. The RYii rename columns above are dry-run site queries on the indexed copy and do not constitute full rename correctness.
+| repo | kind | symbol | definition_path | truth_sites | edited_sites | serena_result | result_detail | exact_sites | diff_only_sites | check_command | check_return_code | check_seconds |
+|---|---|---|---|---:|---:|---|---|---|---|---|---:|---:|
+| codegraph-src | fn | `isCppConstructorDeclaration` | `src/extraction/languages/c-cpp.ts` | 4 | 4 | exact | `Successfully renamed 'isCppConstructorDeclaration' to 'isCppConstructorDeclaration_zz' (2 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.312 |
+| codegraph-src | fn | `getChildByField` | `src/extraction/tree-sitter-helpers.ts` | 411 | 411 | exact | `Successfully renamed 'getChildByField' to 'getChildByField_zz' (23 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.295 |
+| codegraph-src | fn | `extractFunction` | `src/extraction/tree-sitter.ts` | 14 | 14 | exact | `Successfully renamed 'extractFunction' to 'extractFunction_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.264 |
+| codegraph-src | fn | `guardsBefore` | `src/graph/branch-guards.ts` | 7 | 7 | exact | `Successfully renamed 'guardsBefore' to 'guardsBefore_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.248 |
+| codegraph-src | fn | `getModuleAggregation` | `src/index.ts` | 2 | 2 | exact | `Successfully renamed 'getModuleAggregation' to 'getModuleAggregation_zz' (2 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.257 |
+| codegraph-src | fn | `removeMcpEntryAt` | `src/installer/targets/opencode.ts` | 3 | 3 | exact | `Successfully renamed 'removeMcpEntryAt' to 'removeMcpEntryAt_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.303 |
+| codegraph-src | fn | `setDefaultProjectHint` | `src/mcp/tools.ts` | 4 | 4 | exact | `Successfully renamed 'setDefaultProjectHint' to 'setDefaultProjectHint_zz' (2 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.199 |
+| codegraph-src | fn | `truncateOutput` | `src/mcp/tools.ts` | 15 | 15 | exact | `Successfully renamed 'truncateOutput' to 'truncateOutput_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.259 |
+| codegraph-src | fn | `handleLine` | `src/mcp/transport.ts` | 3 | 3 | exact | `Successfully renamed 'handleLine' to 'handleLine_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.859 |
+| codegraph-src | fn | `broadcast` | `src/ui-server/api/events.ts` | 4 | 4 | exact | `Successfully renamed 'broadcast' to 'broadcast_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.379 |
+| codegraph-src | fn | `findIndexedFile` | `src/ui-server/api/source.ts` | 12 | 12 | exact | `Successfully renamed 'findIndexedFile' to 'findIndexedFile_zz' (5 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.748 |
+| codegraph-src | fn | `childForFieldName` | `src/web-tree-sitter.d.ts` | 129 | 129 | exact | `Successfully renamed 'childForFieldName' to 'childForFieldName_zz' (16 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.387 |
+| codegraph-src | fn | `namedChild` | `src/web-tree-sitter.d.ts` | 247 | 247 | exact | `Successfully renamed 'namedChild' to 'namedChild_zz' (21 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.508 |
+| codegraph-src | other | `bold2:` | `src/bin/codegraph.ts` | 21 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'bold2:' found` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.752 |
+| codegraph-src | other | `CLIFF_MAX0:` | `src/mcp/tools.ts` | 2 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'CLIFF_MAX0:' found` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.527 |
+| codegraph-src | other | `nodesMs0:` | `src/resolution/c-fnptr-synthesizer.ts` | 6 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'nodesMs0:' found` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.452 |
+| codegraph-src | term | `paramsField` | `src/extraction/tree-sitter-types.ts` | 29 | 29 | exact | `Successfully renamed 'paramsField' to 'paramsField_zz' (28 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.378 |
+| codegraph-src | term | `extractor` | `src/extraction/tree-sitter.ts` | 154 | 154 | exact | `Successfully renamed 'TreeSitterExtractor/extractor' to 'extractor_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.203 |
+| codegraph-src | term | `typeLiteral22:deferTools` | `src/installer/targets/copilot-cli.ts` | 2 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral22:deferTools' found` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.298 |
+| codegraph-src | term | `ambientDeclaration` | `src/mcp/explore-diagnostics.ts` | 4 | 4 | exact | `Successfully renamed 'ExploreCandidateMeta/ambientDeclaration' to 'ambientDeclaration_zz' (2 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.199 |
+| codegraph-src | term | `isNamespace` | `src/resolution/types.ts` | 22 | 22 | exact | `Successfully renamed 'isNamespace' to 'isNamespace_zz' (3 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.355 |
+| codegraph-src | term | `typeLiteral35:intraFileCalls` | `src/ui-server/api/filecode.ts` | 4 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral35:intraFileCalls' found` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.288 |
+| codegraph-src | term | `typeLiteral7:files` | `src/ui-server/api/map.ts` | 2 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral7:files' found` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.210 |
+| codegraph-src | term | `row` | `src/web-tree-sitter.d.ts` | 109 | 109 | exact | `Successfully renamed 'row' to 'row_zz' (15 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.225 |
+| codegraph-src | type | `ModuleLinkTotal` | `src/db/queries.ts` | 3 | 3 | exact | `Successfully renamed 'ModuleLinkTotal' to 'ModuleLinkTotal_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.211 |
+| codegraph-src | type | `SyntaxTokenClass` | `src/extraction/syntax-tokens.ts` | 14 | 14 | exact | `Successfully renamed 'SyntaxTokenClass' to 'SyntaxTokenClass_zz' (2 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.210 |
+| codegraph-src | type | `LanguageExtractor` | `src/extraction/tree-sitter-types.ts` | 71 | 71 | exact | `Successfully renamed 'LanguageExtractor' to 'LanguageExtractor_zz' (32 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.198 |
+| codegraph-src | type | `ElidedSymbolRef` | `src/mcp/tools.ts` | 10 | 10 | exact | `Successfully renamed 'ElidedSymbolRef' to 'ElidedSymbolRef_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.205 |
+| codegraph-src | type | `StdioTransportOptions` | `src/mcp/transport.ts` | 3 | 3 | exact | `Successfully renamed 'StdioTransportOptions' to 'StdioTransportOptions_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.219 |
+| codegraph-src | type | `LRUCache` | `src/resolution/lru-cache.ts` | 12 | 29 | partial | `Successfully renamed 'LRUCache' to 'LRUCache_zz' (3 changes applied)` | false | false | `pnpm exec tsc --noEmit` | 254 | 0.185 |
+| codegraph-src | type | `ExtractionResult` | `src/types.ts` | 59 | 59 | exact | `Successfully renamed 'ExtractionResult' to 'ExtractionResult_zz' (17 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.199 |
+| codegraph-src | type | `WireArm` | `src/ui-server/api/program.ts` | 4 | 4 | exact | `Successfully renamed 'WireArm' to 'WireArm_zz' (1 changes applied)` | true | true | `pnpm exec tsc --noEmit` | 254 | 0.190 |
+| hafley-rs | fn | `push_claude_agent` | `crates/boop-harness/src/harness/claude.rs` | 3 | 3 | exact | `Successfully renamed 'push_claude_agent' to 'push_claude_agent_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 3.140 |
+| hafley-rs | fn | `append_row` | `crates/boop-proc/src/supervise.rs` | 12 | 12 | exact | `Successfully renamed 'append_row' to 'append_row_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 4.395 |
+| hafley-rs | fn | `reminder_detail` | `crates/boop-store/src/1_reminder.rs` | 6 | 6 | exact | `Successfully renamed 'reminder_detail' to 'reminder_detail_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.781 |
+| hafley-rs | fn | `intern_public` | `crates/boop-store/src/ident.rs` | 56 | 56 | exact | `Successfully renamed 'intern_public' to 'intern_public_zz' (6 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.849 |
+| hafley-rs | fn | `record_status` | `crates/boop-store/src/ident.rs` | 54 | 54 | exact | `Successfully renamed 'record_status' to 'record_status_zz' (10 changes applied)` | true | true | `cargo check -j 2` | 0 | 6.173 |
+| hafley-rs | fn | `diagnostic_line` | `crates/hafley_scm/src/read/0_request_root.rs` | 3 | 3 | exact | `Successfully renamed 'diagnostic_line' to 'diagnostic_line_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.126 |
+| hafley-rs | fn | `kotlin_type_refs` | `crates/hafley_scm/src/read/lang/kotlin.rs` | 7 | 7 | exact | `Successfully renamed 'kotlin_type_refs' to 'kotlin_type_refs_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.118 |
+| hafley-rs | fn | `family_span` | `crates/hafley_scm/src/read/trace.rs` | 32 | 32 | exact | `Successfully renamed 'family_span' to 'family_span_zz' (12 changes applied)` | true | true | `cargo check -j 2` | 0 | 6.512 |
+| hafley-rs | fn | `stage_span` | `crates/hafley_scm/src/read/trace.rs` | 13 | 13 | exact | `Successfully renamed 'stage_span' to 'stage_span_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 7.666 |
+| hafley-rs | fn | `corpus_defs` | `crates/hafley_scm/src/read/types.rs` | 58 | 58 | exact | `Successfully renamed 'corpus_defs' to 'corpus_defs_zz' (14 changes applied)` | true | true | `cargo check -j 2` | 0 | 8.606 |
+| hafley-rs | fn | `key_sorted` | `crates/hafley_scm/src/read/wire.rs` | 4 | 4 | exact | `Successfully renamed 'key_sorted' to 'key_sorted_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.604 |
+| hafley-rs | fn | `blob_matches` | `crates/soopy/src/_7e_stage_store.rs` | 2 | 2 | exact | `Successfully renamed 'blob_matches' to 'blob_matches_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 7.352 |
+| hafley-rs | fn | `persisted_delta` | `crates/sqlite-ext/src/schema.rs` | 3 | 3 | exact | `Successfully renamed 'persisted_delta' to 'persisted_delta_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.495 |
+| hafley-rs | other | `kind_impls!` | `crates/boop-store/src/bus.rs` | 3 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'kind_impls!' found` | false | false | `cargo check -j 2` | 0 | 2.479 |
+| hafley-rs | other | `skip:` | `crates/hafley-observe-macros/src/lib.rs` | 4 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'skip:' found` | false | false | `cargo check -j 2` | 0 | 2.419 |
+| hafley-rs | other | `test:` | `crates/hafley-observe-macros/src/lib.rs` | 50 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'test:' found` | false | false | `cargo check -j 2` | 0 | 2.477 |
+| hafley-rs | term | `bottom` | `crates/boop-mux/src/_0_snapshot.rs` | 58 | 58 | exact | `Successfully renamed 'bottom' to 'bottom_zz' (9 changes applied)` | true | true | `cargo check -j 2` | 0 | 6.500 |
+| hafley-rs | term | `top` | `crates/boop-mux/src/_0_snapshot.rs` | 62 | 62 | exact | `Successfully renamed 'top' to 'top_zz' (10 changes applied)` | true | true | `cargo check -j 2` | 0 | 6.215 |
+| hafley-rs | term | `CONTEXT_VIEW_SCHEMA` | `crates/boop-store/src/ident.rs` | 4 | 4 | exact | `Successfully renamed 'CONTEXT_VIEW_SCHEMA' to 'CONTEXT_VIEW_SCHEMA_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.718 |
+| hafley-rs | term | `PR_NOTICE_SCHEMA` | `crates/boop-store/src/ident.rs` | 2 | 2 | exact | `Successfully renamed 'PR_NOTICE_SCHEMA' to 'PR_NOTICE_SCHEMA_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.753 |
+| hafley-rs | term | `main_tree` | `crates/boop-store/src/session.rs` | 15 | 15 | exact | `Successfully renamed 'main_tree' to 'main_tree_zz' (9 changes applied)` | true | true | `cargo check -j 2` | 0 | 8.473 |
+| hafley-rs | term | `BUILD` | `crates/boop/src/lib.rs` | 7 | 7 | exact | `Successfully renamed 'BUILD' to 'BUILD_zz' (5 changes applied)` | true | true | `cargo check -j 2` | 0 | 3.724 |
+| hafley-rs | term | `SESSION_GRAPH` | `crates/redux/examples/5_machine_enum/model.rs` | 14 | 3 | partial | `Successfully renamed 'SESSION_GRAPH' to 'SESSION_GRAPH_zz' (2 changes applied)` | false | false | `cargo check -j 2` | 0 | 3.931 |
+| hafley-rs | term | `output_bytes` | `crates/soopy/examples/2_mutation_plan_scale.rs` | 2 | 2 | exact | `Successfully renamed 'output_bytes' to 'output_bytes_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 3.518 |
+| hafley-rs | type | `AgentEvent` | `crates/boop-store/src/event.rs` | 18 | 18 | exact | `Successfully renamed 'AgentEvent' to 'AgentEvent_zz' (7 changes applied)` | true | true | `cargo check -j 2` | 0 | 10.954 |
+| hafley-rs | type | `Subscribe` | `crates/boop/src/main.rs` | 4 | 4 | exact | `Successfully renamed 'Subscribe' to 'Subscribe_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 4.742 |
+| hafley-rs | type | `CpgProperty` | `crates/hafley_scm/src/read/cpg_types.rs` | 9 | 9 | exact | `Successfully renamed 'CpgProperty' to 'CpgProperty_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 6.329 |
+| hafley-rs | type | `CfgNodeKind` | `crates/hafley_scm/src/read/types.rs` | 33 | 33 | exact | `Successfully renamed 'CfgNodeKind' to 'CfgNodeKind_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 9.128 |
+| hafley-rs | type | `FamilyMask` | `crates/hafley_scm/src/read/types.rs` | 69 | 69 | exact | `Successfully renamed 'FamilyMask' to 'FamilyMask_zz' (18 changes applied)` | true | true | `cargo check -j 2` | 0 | 7.066 |
+| hafley-rs | type | `SymbolRow` | `crates/hafley_scm/src/read/types.rs` | 3 | 3 | exact | `Successfully renamed 'SymbolRow' to 'SymbolRow_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 7.224 |
+| hafley-rs | type | `DeferredAdapter` | `crates/redux/examples/_4_machine_macro.rs` | 3 | 3 | exact | `Successfully renamed 'DeferredAdapter' to 'DeferredAdapter_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.190 |
+| hafley-rs | type | `RevisionId` | `crates/soopy/src/_0_types.rs` | 61 | 61 | exact | `Successfully renamed 'RevisionId' to 'RevisionId_zz' (15 changes applied)` | true | true | `cargo check -j 2` | 0 | 8.266 |
+| hafley_scm | fn | `generic_where_candidates` | `src/lang/rust/18_tree_type_candidate_rows.rs` | 2 | 2 | exact | `Successfully renamed 'generic_where_candidates' to 'generic_where_candidates_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.859 |
+| hafley_scm | fn | `type_refs` | `src/lang/rust/6_type_refs.rs` | 16 | 16 | exact | `Successfully renamed 'type_refs' to 'type_refs_zz' (5 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.013 |
+| hafley_scm | fn | `match_limit_check` | `src/pipeline/run_over_file_tree/ts_match_limit_check.rs` | 3 | 3 | exact | `Successfully renamed 'match_limit_check' to 'match_limit_check_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.069 |
+| hafley_scm | fn | `io_path` | `src/read/0_request_root.rs` | 62 | 62 | exact | `Successfully renamed 'io_path' to 'io_path_zz' (17 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.187 |
+| hafley_scm | fn | `walk_data_refs` | `src/read/lang/prolog/_0_source.rs` | 12 | 12 | exact | `Successfully renamed 'walk_data_refs' to 'walk_data_refs_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.212 |
+| hafley_scm | fn | `df_push_node` | `src/read/lang/python/_0_source.rs` | 25 | 25 | exact | `Successfully renamed 'df_push_node' to 'df_push_node_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.219 |
+| hafley_scm | fn | `latest_bind` | `src/read/lang/python/_0_source.rs` | 7 | 7 | exact | `Successfully renamed 'latest_bind' to 'latest_bind_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.205 |
+| hafley_scm | fn | `py_first_identifier` | `src/read/lang/python/_0_source.rs` | 4 | 4 | exact | `Successfully renamed 'py_first_identifier' to 'py_first_identifier_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.426 |
+| hafley_scm | fn | `load_type_params` | `src/read/lang/ts_receivers.rs` | 3 | 3 | exact | `Successfully renamed 'load_type_params' to 'load_type_params_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.470 |
+| hafley_scm | fn | `syntax_tsi_rows` | `src/read/project.rs` | 2 | 2 | exact | `Successfully renamed 'syntax_tsi_rows' to 'syntax_tsi_rows_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.353 |
+| hafley_scm | fn | `flatten_scip_records` | `src/read/scip_rows.rs` | 4 | 4 | exact | `Successfully renamed 'flatten_scip_records' to 'flatten_scip_records_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.275 |
+| hafley_scm | fn | `corpus_defs` | `src/read/types.rs` | 58 | 58 | exact | `Successfully renamed 'corpus_defs' to 'corpus_defs_zz' (14 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.527 |
+| hafley_scm | fn | `flatten_type` | `src/read/wire.rs` | 2 | 2 | exact | `Successfully renamed 'flatten_type' to 'flatten_type_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.614 |
+| hafley_scm | fn | `node_span` | `src/span.rs` | 96 | 65 | partial | `Successfully renamed 'node_span' to 'node_span_zz' (9 changes applied)` | false | false | `cargo check -j 2` | 0 | 4.620 |
+| hafley_scm | term | `region` | `src/read/lang/4_owned_region.rs` | 6 | 6 | exact | `Successfully renamed 'region' to 'region_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.459 |
+| hafley_scm | term | `direct` | `src/read/lang/6_scm_family.rs` | 3 | 3 | exact | `Successfully renamed 'direct' to 'direct_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.378 |
+| hafley_scm | term | `arms` | `src/read/project.rs` | 13 | 13 | exact | `Successfully renamed 'arms' to 'arms_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.464 |
+| hafley_scm | term | `DEFINITION` | `src/read/types.rs` | 13 | 13 | exact | `Successfully renamed 'DEFINITION' to 'DEFINITION_zz' (6 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.463 |
+| hafley_scm | term | `decorated` | `src/read/types.rs` | 5 | 5 | exact | `Successfully renamed 'decorated' to 'decorated_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 6.004 |
+| hafley_scm | term | `indexes` | `src/read/types.rs` | 104 | 104 | exact | `Successfully renamed 'indexes' to 'indexes_zz' (14 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.406 |
+| hafley_scm | term | `stop` | `src/types/predicate.rs` | 3 | 3 | exact | `Successfully renamed 'stop' to 'stop_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.379 |
+| hafley_scm | type | `ExpandedCallDefRow` | `src/lang/rust/14_expanded_call_rows.rs` | 4 | 4 | exact | `Successfully renamed 'ExpandedCallDefRow' to 'ExpandedCallDefRow_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.025 |
+| hafley_scm | type | `Synthetic` | `src/lang/rust/9_type_candidate_rows.rs` | 8 | 8 | exact | `Successfully renamed 'Synthetic' to 'Synthetic_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.057 |
+| hafley_scm | type | `EvalType` | `src/read/cpg_types.rs` | 2 | 2 | exact | `Successfully renamed 'EvalType' to 'EvalType_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.183 |
+| hafley_scm | type | `Policy` | `src/read/deps.rs` | 36 | 36 | exact | `Successfully renamed 'Policy' to 'Policy_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.187 |
+| hafley_scm | type | `RyiLang` | `src/read/lang/extract_lang.rs` | 58 | 58 | exact | `Successfully renamed 'RyiLang' to 'RyiLang_zz' (13 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.354 |
+| hafley_scm | type | `GoModuleIndex` | `src/read/lang/go_modules.rs` | 12 | 12 | exact | `Successfully renamed 'GoModuleIndex' to 'GoModuleIndex_zz' (4 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.840 |
+| hafley_scm | type | `Frame` | `src/read/lang/kotlin_receivers.rs` | 6 | 6 | exact | `Successfully renamed 'Frame' to 'Frame_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.458 |
+| hafley_scm | type | `Always` | `src/read/scip.rs` | 3 | 3 | exact | `Successfully renamed 'Always' to 'Always_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.171 |
+| hafley_scm | type | `GoRun` | `src/read/scip.rs` | 3 | 3 | exact | `Successfully renamed 'GoRun' to 'GoRun_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.047 |
+| hafley_scm | type | `CSharp` | `src/read/scip/scip_proto.rs` | 3 | 3 | exact | `Successfully renamed 'CSharp' to 'CSharp_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.039 |
+| hafley_scm | type | `FlatFact` | `src/read/types.rs` | 271 | 271 | exact | `Successfully renamed 'FlatFact' to 'FlatFact_zz' (15 changes applied)` | true | true | `cargo check -j 2` | 0 | 5.170 |
+| tokio | fn | `call` | `tokio-util/src/sync/reusable_box.rs` | 2 | 2 | exact | `Successfully renamed 'call' to 'call_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 3.837 |
+| tokio | fn | `insert_at` | `tokio-util/src/time/delay_queue.rs` | 66 | 66 | exact | `Successfully renamed 'insert_at' to 'insert_at_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 0.309 |
+| tokio | fn | `simplex` | `tokio/src/io/util/mem.rs` | 5 | 5 | exact | `Successfully renamed 'simplex' to 'simplex_zz' (4 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.885 |
+| tokio | fn | `enable_all` | `tokio/src/runtime/builder.rs` | 55 | 64 | partial | `Successfully renamed 'enable_all' to 'enable_all_zz' (38 changes applied)` | false | false | `cargo check -j 2` | 0 | 2.677 |
+| tokio | fn | `clear_wakers` | `tokio/src/runtime/io/scheduled_io.rs` | 2 | 2 | exact | `Successfully renamed 'clear_wakers' to 'clear_wakers_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.662 |
+| tokio | fn | `submit_metrics` | `tokio/src/runtime/scheduler/current_thread/mod.rs` | 6 | 6 | exact | `Successfully renamed 'submit_metrics' to 'submit_metrics_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.700 |
+| tokio | fn | `as_u64` | `tokio/src/runtime/task/id.rs` | 5 | 5 | exact | `Successfully renamed 'as_u64' to 'as_u64_zz' (4 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.739 |
+| tokio | fn | `unbounded_channel` | `tokio/src/sync/mpsc/unbounded.rs` | 83 | 83 | exact | `Successfully renamed 'unbounded_channel' to 'unbounded_channel_zz' (26 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.697 |
+| tokio | fn | `notified_owned` | `tokio/src/sync/notify.rs` | 31 | 31 | exact | `Successfully renamed 'notified_owned' to 'notified_owned_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.743 |
+| tokio | fn | `changed` | `tokio/src/sync/watch.rs` | 42 | 42 | exact | `Successfully renamed 'changed' to 'changed_zz' (10 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.710 |
+| tokio | fn | `can_auto_advance` | `tokio/src/time/clock.rs` | 2 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'can_auto_advance' found` | false | false | `cargo check -j 2` | 0 | 0.467 |
+| tokio | fn | `set_prev` | `tokio/src/util/linked_list.rs` | 13 | 13 | exact | `Successfully renamed 'set_prev' to 'set_prev_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.690 |
+| tokio | other | `cfg_net_unix!` | `tokio/src/macros/cfg.rs` | 8 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'cfg_net_unix!' found` | false | false | `cargo check -j 2` | 0 | 0.464 |
+| tokio | other | `cfg_signal_internal!` | `tokio/src/macros/cfg.rs` | 2 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'cfg_signal_internal!' found` | false | false | `cargo check -j 2` | 0 | 0.125 |
+| tokio | other | `select!` | `tokio/src/macros/select.rs` | 79 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'select!' found` | false | false | `cargo check -j 2` | 0 | 0.122 |
+| tokio | other | `try_join!` | `tokio/src/macros/try_join.rs` | 37 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'try_join!' found` | false | false | `cargo check -j 2` | 0 | 0.146 |
+| tokio | term | `children` | `tokio-util/src/sync/cancellation_token/tree_node.rs` | 26 | 26 | exact | `Successfully renamed 'children' to 'children_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 0.322 |
+| tokio | term | `written` | `tokio/src/io/util/buf_writer.rs` | 5 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'written' found` | false | false | `cargo check -j 2` | 0 | 0.135 |
+| tokio | term | `thread_cap` | `tokio/src/runtime/blocking/pool.rs` | 3 | 3 | exact | `Successfully renamed 'thread_cap' to 'thread_cap_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.767 |
+| tokio | term | `events` | `tokio/src/runtime/io/driver.rs` | 3 | 4 | partial | `Successfully renamed 'events' to 'events_zz' (1 changes applied)` | false | false | `cargo check -j 2` | 0 | 2.610 |
+| tokio | term | `run_queue` | `tokio/src/runtime/scheduler/multi_thread/worker.rs` | 13 | 13 | exact | `Successfully renamed 'run_queue' to 'run_queue_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.674 |
+| tokio | term | `node` | `tokio/src/sync/batch_semaphore.rs` | 5 | 5 | exact | `Successfully renamed 'node' to 'node_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.702 |
+| tokio | type | `Database` | `examples/tinydb.rs` | 3 | 3 | exact | `Successfully renamed 'Database' to 'Database_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 0.462 |
+| tokio | type | `CancellationToken` | `tokio-util/src/sync/cancellation_token.rs` | 83 | 83 | exact | `Successfully renamed 'CancellationToken' to 'CancellationToken_zz' (9 changes applied)` | true | true | `cargo check -j 2` | 0 | 0.293 |
+| tokio | type | `UnixStream` | `tokio/src/net/unix/stream.rs` | 76 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'UnixStream' found` | false | false | `cargo check -j 2` | 0 | 0.139 |
+| tokio | type | `GlobalOrphanQueue` | `tokio/src/process/unix/mod.rs` | 11 | 11 | exact | `Successfully renamed 'GlobalOrphanQueue' to 'GlobalOrphanQueue_zz' (2 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.636 |
+| tokio | type | `TimeHandle` | `tokio/src/runtime/driver.rs` | 4 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'TimeHandle' found` | false | false | `cargo check -j 2` | 0 | 0.460 |
+| tokio | type | `TryCurrentErrorKind` | `tokio/src/runtime/handle.rs` | 12 | 10 | partial | `Successfully renamed 'TryCurrentErrorKind' to 'TryCurrentErrorKind_zz' (1 changes applied)` | false | false | `cargo check -j 2` | 0 | 2.511 |
+| tokio | type | `TimerHandle` | `tokio/src/runtime/time/entry.rs` | 13 | 13 | exact | `Successfully renamed 'TimerHandle' to 'TimerHandle_zz' (4 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.701 |
+| tokio | type | `Signal` | `tokio/src/signal/unix.rs` | 10 | 10 | exact | `Successfully renamed 'Signal' to 'Signal_zz' (3 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.643 |
+| tokio | type | `PointersInner` | `tokio/src/util/linked_list.rs` | 3 | 3 | exact | `Successfully renamed 'PointersInner' to 'PointersInner_zz' (1 changes applied)` | true | true | `cargo check -j 2` | 0 | 2.710 |
+| vite | fn | `parseBundledDependenciesFromLicense` | `docs/_data/acknowledgements.data.ts` | 2 | 2 | exact | `Successfully renamed 'parseBundledDependenciesFromLicense' to 'parseBundledDependenciesFromLicense_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.426 |
+| vite | fn | `readPackageInfo` | `docs/_data/acknowledgements.data.ts` | 6 | 6 | exact | `Successfully renamed 'readPackageInfo' to 'readPackageInfo_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.472 |
+| vite | fn | `copyDir` | `packages/create-vite/src/index.ts` | 2 | 2 | exact | `Successfully renamed 'copyDir' to 'copyDir_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.702 |
+| vite | fn | `formatTargetDir` | `packages/create-vite/src/index.ts` | 4 | 4 | exact | `Successfully renamed 'formatTargetDir' to 'formatTargetDir_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.429 |
+| vite | fn | `start` | `packages/create-vite/src/index.ts` | 2 | 2 | exact | `Successfully renamed 'start' to 'start_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.860 |
+| vite | fn | `wrapIIFEBabelPlugin` | `packages/plugin-legacy/src/index.ts` | 2 | 2 | exact | `Successfully renamed 'wrapIIFEBabelPlugin' to 'wrapIIFEBabelPlugin_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.625 |
+| vite | fn | `esmifyPostcssLoadConfigDts` | `packages/vite/rolldown.dts.config.ts` | 2 | 2 | exact | `Successfully renamed 'esmifyPostcssLoadConfigDts' to 'esmifyPostcssLoadConfigDts_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.880 |
+| vite | fn | `testLightningcssVisitorDuringMinify` | `playground/css-lightningcss/vite.config.js` | 2 | 2 | exact | `Successfully renamed 'testLightningcssVisitorDuringMinify' to 'testLightningcssVisitorDuringMinify_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.951 |
+| vite | fn | `svgVirtualModulePlugin` | `playground/fs-serve/root/svgVirtualModulePlugin.ts` | 7 | 7 | exact | `Successfully renamed 'svgVirtualModulePlugin' to 'svgVirtualModulePlugin_zz' (4 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.953 |
+| vite | fn | `transformFooWithInlineSourceMap` | `playground/js-sourcemap/foo-with-sourcemap-plugin.ts` | 3 | 3 | exact | `Successfully renamed 'transformFooWithInlineSourceMap' to 'transformFooWithInlineSourceMap_zz' (2 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.484 |
+| vite | fn | `crash` | `playground/ssr-html/src/has-error-deep.ts` | 2 | 2 | exact | `Successfully renamed 'crash' to 'crash_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.626 |
+| vite | other | `decrement0:` | `playground/devtools/src/counter.ts` | 2 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'decrement0:' found` | false | false | `pnpm typecheck` | 1 | 1.518 |
+| vite | term | `typeLiteral22:color` | `packages/create-vite/src/index.ts` | 14 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral22:color' found` | false | false | `pnpm typecheck` | 1 | 1.599 |
+| vite | term | `typeLiteral22:display` | `packages/create-vite/src/index.ts` | 14 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral22:display' found` | false | false | `pnpm typecheck` | 1 | 1.848 |
+| vite | term | `typeLiteral23:link` | `packages/create-vite/src/index.ts` | 12 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral23:link' found` | false | false | `pnpm typecheck` | 1 | 1.450 |
+| vite | term | `createModernChunkLegacyGuard` | `packages/plugin-legacy/src/snippets.ts` | 4 | 4 | exact | `Successfully renamed 'createModernChunkLegacyGuard' to 'createModernChunkLegacyGuard_zz' (2 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.658 |
+| vite | term | `src` | `packages/vite/rolldown.config.ts` | 7 | 7 | exact | `Successfully renamed 'ShimOptions/src' to 'src_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.497 |
+| vite | term | `typeLiteral17:id` | `packages/vite/rolldown.dts.config.ts` | 7 | 0 | fail | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral17:id' found` | false | false | `pnpm typecheck` | 1 | 1.618 |
+| vite | term | `absoluteDepPath` | `playground/base-conflict/vite.config.ts` | 2 | 2 | exact | `Successfully renamed 'absoluteDepPath' to 'absoluteDepPath_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.411 |
+| vite | term | `svgVirtualModuleId` | `playground/fs-serve/root/svgVirtualModulePlugin.ts` | 3 | 3 | exact | `Successfully renamed 'svgVirtualModuleId' to 'svgVirtualModuleId_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.659 |
+| vite | term | `root` | `playground/lib/vite.multiple-output.config.js` | 3 | 3 | exact | `Successfully renamed 'root' to 'root_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.566 |
+| vite | type | `PackageJson` | `docs/_data/acknowledgements.data.ts` | 5 | 5 | exact | `Successfully renamed 'PackageJson' to 'PackageJson_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.460 |
+| vite | type | `Post` | `docs/_data/blog.data.ts` | 4 | 4 | exact | `Successfully renamed 'Post' to 'Post_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.596 |
+| vite | type | `ShimOptions` | `packages/vite/rolldown.config.ts` | 2 | 2 | exact | `Successfully renamed 'ShimOptions' to 'ShimOptions_zz' (1 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.564 |
+| vite | type | `MainTypeOnlyClass` | `playground/tsconfig-json/src/not-used-type.ts` | 3 | 3 | exact | `Successfully renamed 'MainTypeOnlyClass' to 'MainTypeOnlyClass_zz' (2 changes applied)` | true | true | `pnpm typecheck` | 1 | 1.514 |
 
-| Repo | Target count | Serena rename | ryi rename | Edited sites vs SCIP | Diff-only-sites | Language check |
-|---|---:|---|---|---|---|---|
-| codegraph-src | 32 | pending | target preview rows recorded | pending | pending | pending |
-| django | 32 | pending | unsupported | pending | pending | pending |
-| gin | 29 | pending | unsupported | pending | pending | pending |
-| graphify-src | 32 | pending | unsupported | pending | pending | pending |
-| hafley-rs | 32 | pending | target preview rows recorded | pending | pending | pending |
-| hafley_scm | 32 | pending | target preview rows recorded | pending | pending | pending |
-| requests | 29 | pending | unsupported | pending | pending | pending |
-| tokio | 31 | pending | target preview rows recorded | pending | pending | pending |
-| vite | 25 | pending | target preview rows recorded | pending | pending | pending |
-| ktor | pending | pending | pending | pending | pending | pending |
+## Typecheck failures
 
+| repo | targets | check_command | return_code | check_output_sample |
+|---|---:|---|---:|---|
+| codegraph-src | 32 | `pnpm exec tsc --noEmit` | 254 | `undefined<br> ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command "tsc" not found<br> WARN  The "workspaces" field in package.json is not supported by pnpm. Create a "pnpm-workspace.yaml" file instead.<br>` |
+| vite | 25 | `pnpm typecheck` | 1 | `'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(567,43): error TS7031: Binding element 'chunks' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(719,24): error TS7006: Parameter 'html' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(719,32): error TS7031: Binding element 'chunk' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(719,39): error TS7031: Binding element 'bundle' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(877,20): error TS7006: Parameter '_opts' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(877,27): error TS7006: Parameter 'bundle' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(1010,6): error TS7006: Parameter 'chunk' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(1037,8): error TS7006: Parameter 'chunk' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(1059,15): error TS7006: Parameter 'id' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(1064,10): error TS7006: Parameter 'id' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(1079,20): error TS7006: Parameter 'config' implicitly has an 'any' type.<br>packages/plugin-legacy typecheck: src/index.ts(1082,17): error TS7006: Parameter 'code' implicitly has an 'any' type.<br>packages/plugin` |
+
+`codegraph-src` was initially checked with `pnpm exec tsc --noEmit`; it returned 254 with `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "tsc" not found`. `vite` was rerun using `pnpm typecheck`; it returned 1 for all 25 targets, with TypeScript errors in `packages/plugin-legacy/src/index.ts` and child exit 137. One earlier `pnpm exec tsc --noEmit` invocation triggered pnpm workspace dependency setup in the evaluation scratch clone. No further install command was run.
 
 ## Tool cost
 
-Cold start is elapsed time from launching the stdio server through MCP `initialize`; warm per-call is the mean `find_referencing_symbols` tool-call wall time across the per-target batch. Peak RSS is the maximum process-tree sum sampled every 50 ms by `bench/run.py` for the persistent batch process. Values are grouped by server language across the listed repos.
+Cold start is elapsed time through MCP initialize. Warm per-call is the mean reference tool-call wall time from the per-target batch. Peak RSS is maximum process-tree RSS sampled by `bench/run.py`.
 
-| Language server | Cold start s (n repos) | Warm per-call ms (n calls) | Peak process-tree RSS MiB | Observation |
-|---|---:|---:|---:|---|
-| Rust / rust-analyzer | 1.214 (3) | 856 (95) | 2,988.0 | `hafley-rs`, `hafley_scm`, `tokio` |
-| TypeScript / tsserver | 1.375 (2) | 448 (57) | 1,842.6 | `codegraph-src`, `vite` |
-| Python / Pyright | 1.408 (3) | 648 (93) | 1,500.0 | `django`, `graphify-src`, `requests` |
-| Go / gopls | 1.566 (1) | 352 (29) | 1,133.5 | `gin` |
-| Kotlin / Kotlin LS | pending | pending | pending | JDK 21.0.12.1 set from `eval/kotlin-jdk`; server process reports its `intellij-server` build expired. |
+| language_server | repos | targets | cold_start_seconds | warm_call_milliseconds | peak_process_tree_rss_mib |
+|---|---:|---:|---:|---:|---:|
+| Rust rust-analyzer | 3 | 95 | 1.214 | 856 | 2988.0 |
+| TypeScript tsserver | 2 | 57 | 1.375 | 448 | 1842.6 |
 
+## Exact commands and MCP calls
 
-## Reproduction commands and MCP calls
+Serena MCP command: `serena start-mcp-server --project <copy> --context claude-code --language-backend LSP --enable-web-dashboard False --open-web-dashboard False`. Reference call: `tools/call` name `find_referencing_symbols`, arguments `"name_path":"<symbol>","relative_path":"<definition path>"`. Rename call: `tools/call` name `rename_symbol`, arguments `"name_path":"<symbol>","relative_path":"<definition path>","new_name":"<symbol>_zz"`.
 
-Serena installation: `uv venv --python 3.13 ~/.cache/lanes/claude-375/eval/serena/.venv`; `uv pip install --python ~/.cache/lanes/claude-375/eval/serena/.venv/bin/python serena-agent mcp psutil`. Serena version: `1.7.0`. `SERENA_HOME`, UV/Coursier/Go/Gradle caches are redirected under `~/.cache/lanes/claude-375/eval/serena/`. Global telemetry opt-out is absent from the installed Serena config schema; `DO_NOT_TRACK=1` was set. Dashboard disabled with `--enable-web-dashboard False --open-web-dashboard False`.
+RYii function reference: `ryi graph --callers <symbol> --root <repo> <repo>`. Type reference: `ryi graph --uses <symbol> --root <repo> <repo>`. Dry-run type/term sites: `ryi rename <file>#<symbol> <symbol>_zz --root <repo> --json` with no `--commit`. Rust build/type check: `CARGO_TARGET_DIR=~/.cache/lanes/claude-375/target cargo check -j 2`. TypeScript check: `pnpm typecheck`. `ryi graph --help` was read before interpreting `--uses`; all graph type rows are labeled with that documented meaning. Full RYii help: `~/.cache/lanes/claude-375/eval/serena/ryi-help.txt`.
 
-MCP server command: `serena start-mcp-server --project <copy> --context claude-code --language-backend LSP --enable-web-dashboard False --open-web-dashboard False` over stdio.
+Runtime endpoint tests beyond `find_referencing_symbols` are pending.
 
-Reference call: `tools/call` name `find_referencing_symbols`, arguments `{"name_path":"flatten_type","relative_path":"crates/hafley_scm/src/read/wire.rs"}`. Rename call shape from MCP schema: `tools/call` name `rename_symbol`, arguments `{"name_path":"<symbol>","relative_path":"<definition path>","new_name":"<new name>"}`.
+## Exact lookup and rename errors
 
-Source/manual pages read: Serena README, Serena usage/configuration docs, Tools and APIs, Running Serena, Dashboard, language support and Rust/TypeScript/Python/Go/Kotlin setup notes; `serena tools list --all`; recursively queried binary CLI `--help`; `ryi`/`ryii --help` and all 16 subcommand help pages, `ryi capabilities`.
+`find_symbol` was run for each target whose initial rename diff did not exactly match SCIP sites. Empty responses are recorded as no symbol found. Five targets with unique definition candidates were retried using the full LSP `name_path`.
 
-## Errors and setup records
-
-| Stage | Exact result | Retry |
+| repo | target | exact_error_text |
 |---|---|---|
-| Serena `UnixStream` symbol lookup | `ValueError: No symbol matching 'UnixStream' found` | Retried `find_symbol` with `substring_matching:true`, `include_kinds:[23]` (returned `[]`), then reference calls with `UnixStream`, `UnixStream[0]`, `net::unix::stream::UnixStream`, and `tokio::net::unix::stream::UnixStream`; no symbol found. `include_kinds:["Struct"]` failed validation: `Input should be a valid integer, unable to parse string`. Serena docs/source say `include_kinds` is integer LSP kinds. |
-| Truth target expansion at `hafley_scm` | Missing `/Users/chrishafley/.cache/lanes/claude-375/eval/repos/hafley_scm/index.scip`; `ryii scip` command returned exit status 1. | Applied `truth.py` selection to existing ingested `occ` rows; added 16 targets, total 32. |
-| `bench/run.py` using system Python | `ModuleNotFoundError: No module named 'psutil'` | Retried with eval venv Python. |
-| Rust refs on detached `hafley_scm` copy | `cargo metadata` failed: dependency `hafley-observe` path did not exist in copied crate root. | Reran from the full `hafley-rs` workspace at `crates/hafley_scm/src/read/wire.rs`; returned one reference. |
-| scip-java initial launch | `Cannot find default main class. Specify one with -M or --main-class.` | Direct cached launcher `.../eval/kotlin-jdk/scip-java index --help` works with JDK 21; ran index attempts against Ktor, Okio, and Coil. |
-| scip-java Ktor index | `Could not determine the dependencies of task ':build-settings-logic:jar'.` followed by `Failed to query the value of property 'freeCompilerArgs'.` / `Querying the mapped value ... before task ':build-settings-logic:generatePrecompiledScriptPluginAccessors' has completed is not supported` | Command: `scip-java index --output=<eval>/repos/ktor/index.scip`; Gradle wrapper 9.7.1. No index created. |
-| scip-java Okio index | `Could not determine the dependencies of task ':okio-nodefilesystem:scipCompileAll'.` / `Task with path 'compileKotlinJvm' not found in project ':okio-nodefilesystem'.` | Command: `scip-java index --output=<eval>/repos/okio/index.scip`; Gradle wrapper 8.14.3. No index created. |
-| scip-java Coil index | `Plugin org.scip_code.scip_java.kotlinc.AnalyzerRegistrar is incompatible with the current version of the compiler.` | Command: `scip-java index --output=<eval>/repos/coil/index.scip`; Gradle wrapper 9.8.0. No index created. |
-| Serena Kotlin LSP startup | `This build of intellij-server has expired.`; `LanguageServerTerminatedException: Language server stdout read process terminated unexpectedly` | Set `JAVA_HOME=<eval>/kotlin-jdk/jdk-21.0.12.1+1/Contents/Home` and prepended `$JAVA_HOME/bin` to `PATH`; Ktor `find_referencing_symbols` call could not initialize. Startup failed after 8.905 seconds. Log: `eval/serena/home/logs/2026-09-28/mcp_20260928-094155_52215.txt`. |
-| Go SCIP first attempt | `no scip indexer: one index means one indexer, but the paths span ["data", "go", "markdown"]` | Retried with `--indexer go`; local `scip-go` install succeeded; gin `index.scip` created with `scip-go index --skip-tests --output <eval>/repos/gin/index.scip ./...`. SCIP rows and targets not ingested. |
+| codegraph-src | `bold2:` | `Error executing tool rename_symbol: ValueError: No symbol matching 'bold2:' found` |
+| codegraph-src | `CLIFF_MAX0:` | `Error executing tool rename_symbol: ValueError: No symbol matching 'CLIFF_MAX0:' found` |
+| codegraph-src | `nodesMs0:` | `Error executing tool rename_symbol: ValueError: No symbol matching 'nodesMs0:' found` |
+| codegraph-src | `typeLiteral22:deferTools` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral22:deferTools' found` |
+| codegraph-src | `typeLiteral35:intraFileCalls` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral35:intraFileCalls' found` |
+| codegraph-src | `typeLiteral7:files` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral7:files' found` |
+| hafley-rs | `kind_impls!` | `Error executing tool rename_symbol: ValueError: No symbol matching 'kind_impls!' found` |
+| hafley-rs | `skip:` | `Error executing tool rename_symbol: ValueError: No symbol matching 'skip:' found` |
+| hafley-rs | `test:` | `Error executing tool rename_symbol: ValueError: No symbol matching 'test:' found` |
+| tokio | `can_auto_advance` | `Error executing tool rename_symbol: ValueError: No symbol matching 'can_auto_advance' found` |
+| tokio | `cfg_net_unix!` | `Error executing tool rename_symbol: ValueError: No symbol matching 'cfg_net_unix!' found` |
+| tokio | `cfg_signal_internal!` | `Error executing tool rename_symbol: ValueError: No symbol matching 'cfg_signal_internal!' found` |
+| tokio | `select!` | `Error executing tool rename_symbol: ValueError: No symbol matching 'select!' found` |
+| tokio | `try_join!` | `Error executing tool rename_symbol: ValueError: No symbol matching 'try_join!' found` |
+| tokio | `written` | `Error executing tool rename_symbol: ValueError: No symbol matching 'written' found` |
+| tokio | `UnixStream` | `Error executing tool rename_symbol: ValueError: No symbol matching 'UnixStream' found` |
+| tokio | `TimeHandle` | `Error executing tool rename_symbol: ValueError: No symbol matching 'TimeHandle' found` |
+| vite | `decrement0:` | `Error executing tool rename_symbol: ValueError: No symbol matching 'decrement0:' found` |
+| vite | `typeLiteral22:color` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral22:color' found` |
+| vite | `typeLiteral22:display` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral22:display' found` |
+| vite | `typeLiteral23:link` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral23:link' found` |
+| vite | `typeLiteral17:id` | `Error executing tool rename_symbol: ValueError: No symbol matching 'typeLiteral17:id' found` |
 
-
-### RYii retry records
-
-| Initial observation | Exact output | Manual/capability check and retry |
-|---|---|---|
-| `ryi graph --callers` on Django Python targets | `ryi: connection closed before message completed` | Retried per target through the documented CLI shape with a 120-second timeout; all 13 function targets returned exit 1 with that exact stderr. `ryi capabilities` lists Python call resolution; the same targets were queried with Serena/Pyright. |
-| `ryi graph --uses` returned empty edge sets | `0 edges: 0 +, 0 ~, 0 -` | Read `ryi graph --help`: `--uses <NAME>` means declarations referencing type NAME. These were type targets, not caller/term queries. Compared each target against SCIP; added dry-run `ryi rename FILE#NAME NAME_zz --root ROOT --json` for all Rust/TypeScript types and terms. Python/Go rename is marked unsupported by `ryi capabilities`. |
-| `ryi rename` for `hafley_scm` targets | Initial calls used the detached crate directory as corpus root and returned exit 2. | Reran with workspace root `runs/serena/hafley-rs` and path `crates/hafley_scm/<SCIP def_path>`; all 18 type/term dry-runs now have result rows. The first-attempt stderr was replaced by the corrected run in `bench.db`. |
+| tokio | `UnixStream` reference query | `ValueError: No symbol matching 'UnixStream' found` |
+| tokio | `UnixStream` argument validation | `Input should be a valid integer, unable to parse string` for `include_kinds:["Struct"]`; integer kind `[23]` returned no match |
+| codegraph-src | `tsc` type check | `ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL Command "tsc" not found` |
+| vite | `pnpm typecheck` | TypeScript diagnostics include `TS7006`, `TS7031`, `TS18046`, `TS2339`; child commands returned exit 137 |
 
 ## Status
 
-WIP checkpoint. Serena references and scoring cover all target rows in codegraph-src (32), django (32), gin (29), graphify-src (32), hafley-rs (32), hafley_scm (32), requests (29), tokio (31), and vite (25). Rust scores share rust-analyzer with SCIP; Python and TypeScript rows compare Pyright/tsserver against SCIP-Python/TypeScript. Kotlin references and SCIP truth remain pending after three scip-java index attempts and a Serena Kotlin LSP initialization failure; JDK 21 was present and supplied. Nine Serena find_referencing_symbols runtime scenarios cover three symbols each on the workspace copy, crates/hafley_scm, and Tokio. These provide RYii graph and rename comparisons for the same scenarios. RYii target queries cover all 113 function, 75 type, and 65 supported term targets; type rename dry-runs cover Rust/TypeScript targets. Rename correctness and remaining endpoint/cost rows remain pending.
+Rust and TypeScript reference queries, dry-run RYii queries, Serena rename runs, SCIP site comparisons, and language checks are recorded for all 152 targets. Rust build checks passed for all 95 Rust targets. TypeScript checks failed for all 57 TypeScript targets with the repo-specific errors above. The API schema/CLI inventory is complete; runtime scenarios for every API endpoint remain pending. No Kotlin, Go, or Python work is included after the scope cut.
