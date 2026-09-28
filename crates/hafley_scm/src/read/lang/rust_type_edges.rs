@@ -23,7 +23,7 @@ pub fn edge_candidates_from_tree(
     sink: &mut FamilyBundle<TypeF>,
 ) {
     emit_edge_candidates(type_candidate_rows_from_tree(tree, source), strings, sink);
-    emit_tsi_syntax_rows(tsi_syntax_rows_from_tree(tree, source), strings, sink);
+    emit_tsi_syntax_rows(tsi_syntax_rows_from_tree(tree, source), source, strings, sink);
 }
 
 fn emit_edge_candidates(
@@ -88,6 +88,7 @@ fn emit_edge_candidates(
 
 fn emit_tsi_syntax_rows(
     rows: hafley_scm::lang::rust::TsiSyntaxRows,
+    source: &[u8],
     strings: &mut Strings,
     sink: &mut FamilyBundle<TypeF>,
 ) {
@@ -115,6 +116,7 @@ fn emit_tsi_syntax_rows(
                 .collect(),
         })
         .collect();
+    super::scope_products::append(super::extract_lang::RyiLang::Rust, source, &mut sink.aux.tsi);
     crate::read::trace::record_phase(&span, 0, sink.aux.tsi.len() as u64, 1);
 }
 

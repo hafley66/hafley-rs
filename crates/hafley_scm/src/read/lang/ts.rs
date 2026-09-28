@@ -1259,6 +1259,7 @@ fn tsi_rows(
         }
     }
     sink.aux.tsi = names.into_facts();
+    super::scope_products::append(RyiLang::TypeScript, src.as_bytes(), &mut sink.aux.tsi);
     trace::record_phase(&span, 0, sink.aux.tsi.len() as u64, 1);
 }
 

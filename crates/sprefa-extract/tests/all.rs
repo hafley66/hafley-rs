@@ -207,6 +207,8 @@ mod t_186_quality_gate;
 mod t_187_python_module_resolution;
 #[path = "188_rust_cargo_metadata.rs"]
 mod t_188_rust_cargo_metadata;
+#[path = "189_lift_scope_rows.rs"]
+mod t_189_lift_scope_rows;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]
