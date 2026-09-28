@@ -85,7 +85,9 @@ pub use tree_call_rows::{call_metadata_rows_from_tree, call_site_rows_from_tree}
 pub use tree_entity_rows::type_entity_rows_from_tree;
 pub use tree_module_resolution_rows::module_resolution_rows_from_tree;
 pub use tree_module_specifier_rows::module_specifier_rows_from_tree;
-pub use tree_receiver_rows::receiver_rows_from_tree;
+pub use tree_receiver_rows::{
+    field_access_rows_from_tree, receiver_rows_from_tree, FieldAccessRow,
+};
 pub use tree_type_candidate_rows::type_candidate_rows_from_tree;
 pub use tsi_syntax_rows::{tsi_syntax_rows_from_tree, Arg as TsiSyntaxArg, TsiSyntaxRows};
 pub use type_candidate_rows::{
