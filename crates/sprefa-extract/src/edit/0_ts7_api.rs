@@ -113,7 +113,7 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
-    fn fixture() -> (Ts7Api, PathBuf, u32) {
+    fn ts7_api_fixture() -> (Ts7Api, PathBuf, u32) {
         let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
         let file = root.join("0_fixture.ts");
         let text = std::fs::read_to_string(&file).unwrap();
@@ -125,21 +125,21 @@ mod tests {
 
     #[test]
     fn stable_api_get_type_at_position_exchange() {
-        let (mut api, file, position) = fixture();
+        let (mut api, file, position) = ts7_api_fixture();
         let ty = api.type_at(&file, position).unwrap();
         assert!(ty["id"].as_u64().is_some(), "{ty}");
     }
 
     #[test]
     fn stable_api_get_symbol_at_position_exchange() {
-        let (mut api, file, position) = fixture();
+        let (mut api, file, position) = ts7_api_fixture();
         let symbol = api.symbol_at(&file, position).unwrap();
         assert_eq!(symbol["name"], "old");
     }
 
     #[test]
     fn stable_api_get_references_to_symbol_in_file_exchange() {
-        let (mut api, file, position) = fixture();
+        let (mut api, file, position) = ts7_api_fixture();
         let symbol = api.symbol_at(&file, position).unwrap();
         let symbol_id = symbol["id"].as_u64().unwrap();
         let refs = api.references_in_file(&file, symbol_id).unwrap();
