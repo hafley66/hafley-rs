@@ -78,7 +78,7 @@ pub fn run_query_with_limit(
     let mut predicate_error = None;
     while let Some(found_match) = matches.next() {
         let captures = found_match
-            .captures
+            .captures()
             .iter()
             .map(|capture| {
                 own_capture(

@@ -51,8 +51,8 @@ pub const MODULE: TypeEntityKind = TypeEntityKind::Ext(LangKind {
 
 // ── the tree-sitter-python parse (one parse feeds type/call) ─────────────────
 
-/// Parse Python via tree-sitter-python (v5 `py_parse`). tree-sitter 0.25's
-/// `Language::new` wraps tree-sitter-python 0.23's `LANGUAGE`.
+/// Parse Python via tree-sitter-python (v5 `py_parse`). tree-sitter 0.27's
+/// `Language::new` wraps tree-sitter-python 0.25's `LANGUAGE`.
 pub(super) fn py_parse(content: &str) -> Option<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();
     let lang = tree_sitter::Language::new(tree_sitter_python::LANGUAGE);

@@ -112,7 +112,7 @@ pub const RUST_ROLES: &[(&str, RoleRule)] = &[
     ("yield_expression", Fixed(Exit)),
 ];
 
-/// tree-sitter-go 0.23.4 node kinds.
+/// tree-sitter-go 0.25.0 node kinds.
 pub const GO_ROLES: &[(&str, RoleRule)] = &[
     ("function_declaration", Fixed(Callable)),
     ("method_declaration", Fixed(Callable)),
@@ -166,7 +166,7 @@ pub const KOTLIN_ROLES: &[(&str, RoleRule)] = &[
     ("jump_expression", LeadingKeyword),
 ];
 
-/// tree-sitter-python 0.23 node kinds. `elif_clause` is a
+/// tree-sitter-python 0.25.0 node kinds. `elif_clause` is a
 /// Branch of its own: it carries its own condition, unlike `else_clause`.
 pub const PYTHON_ROLES: &[(&str, RoleRule)] = &[
     ("function_definition", Fixed(Callable)),

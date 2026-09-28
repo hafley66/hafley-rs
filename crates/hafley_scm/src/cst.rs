@@ -30,7 +30,7 @@ pub fn parse(language: &tree_sitter::Language, src: &[u8]) -> Option<Tree> {
 
 /// The grammar's spelling of a kind id (`"identifier"`, `"call_expression"`,
 /// ...), for callers that intern kind text.
-pub fn kind_name(language: &tree_sitter::Language, kind_id: u16) -> &'static str {
+pub fn kind_name(language: &tree_sitter::Language, kind_id: u16) -> &str {
     language.node_kind_for_id(kind_id).unwrap_or("")
 }
 

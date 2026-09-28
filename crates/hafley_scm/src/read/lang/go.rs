@@ -51,8 +51,8 @@ use quick_cache::sync::Cache;
 // ── the tree-sitter-go parse (one parse feeds type/call/df) ──────────────────
 
 /// Parse Go source via tree-sitter-go. Port of v5 `go_parse`
-/// (src/graph/typegraph/go.rs:41). tree-sitter 0.25's `Language::new` wraps the
-/// `LanguageFn` tree-sitter-go 0.23 exports as `LANGUAGE`; the versions unify
+/// (src/graph/typegraph/go.rs:41). tree-sitter 0.27's `Language::new` wraps the
+/// `LanguageFn` tree-sitter-go 0.25 exports as `LANGUAGE`; the versions unify
 /// with what the lock already carried.
 pub fn go_parse(content: &str) -> Option<tree_sitter::Tree> {
     let mut parser = tree_sitter::Parser::new();

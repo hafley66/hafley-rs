@@ -16,7 +16,7 @@ pub fn holds_for_candidate(
         .filter(|p| p.pattern as usize == found.pattern_index)
         .all(|p| {
             found
-                .captures
+                .captures()
                 .iter()
                 .filter(|capture| capture.index as u16 == p.capture)
                 .all(|capture| {

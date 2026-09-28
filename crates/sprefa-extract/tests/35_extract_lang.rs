@@ -119,9 +119,9 @@ fn every_variant_carries_a_linked_grammar() {
             tree_sitter::LANGUAGE_VERSION,
         );
         assert!(
-            (lo..=hi).contains(&ts.version()),
+            (lo..=hi).contains(&ts.abi_version()),
             "{lang}: ABI {} outside {lo}..={hi}",
-            ts.version()
+            ts.abi_version()
         );
     }
     // A kind the grammar declares resolves; one it does not resolves to 0,

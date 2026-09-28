@@ -8,7 +8,7 @@ use crate::types::{
 /// One kept match: its spans in capture order, then the row that ranges over them.
 pub fn append_match(q: &QueryExt, found: &QueryMatch, file: u16, arena: &mut MatchArena) {
     let start = arena.spans.len() as u32;
-    for capture in found.captures {
+    for capture in found.captures() {
         arena.spans.push(CapturedSpan {
             name: capture.index as u16,
             bytes: capture.node.start_byte() as u32..capture.node.end_byte() as u32,
@@ -28,7 +28,7 @@ pub fn append_match(q: &QueryExt, found: &QueryMatch, file: u16, arena: &mut Mat
     {
         let capture = |name| {
             found
-                .captures
+                .captures()
                 .iter()
                 .find(|capture| capture.index as u16 == name)
                 .map(|capture| capture.node.start_byte() as u32..capture.node.end_byte() as u32)

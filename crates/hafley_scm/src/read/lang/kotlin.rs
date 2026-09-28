@@ -8,8 +8,8 @@
 //! (root Cargo.toml: `tree-sitter-kotlin-sg = "0.4"`, so the v6 parse is
 //! byte-identical to the oracle's), it is already in this workspace's lock as
 //! already in the lock (0.4.1, one copy), and it exports
-//! `LANGUAGE: LanguageFn` the way tree-sitter-go 0.23 does, which tree-sitter
-//! 0.25's `Language::new` wraps. Zero new dup risk (it deps only
+//! `LANGUAGE: LanguageFn` the way tree-sitter-go 0.25 does, which tree-sitter
+//! 0.27's `Language::new` wraps. Zero new dup risk (it deps only
 //! `tree-sitter-language` + `cc`, no tree-sitter core).
 //!
 //! Span bridge: NONE needed (same as go.rs; unlike rust.rs's syn line/col ->
@@ -60,7 +60,7 @@ static KOTLIN_FAMILY_QUERY: OnceLock<hafley_scm::QueryExt> = OnceLock::new();
 
 /// Parse Kotlin source via tree-sitter-kotlin-sg. Port of v5's inline parse in
 /// `KotlinTypes::extract` (src/graph/typegraph/kotlin.rs:13). tree-sitter
-/// 0.25's `Language::new` wraps the `LanguageFn` tree-sitter-kotlin-sg 0.4
+/// 0.27's `Language::new` wraps the `LanguageFn` tree-sitter-kotlin-sg 0.4
 /// exports as `LANGUAGE`; the versions unify with what the lock
 /// already transitively pulls (one copy, 0.4.1).
 pub fn kt_parse(content: &str) -> Option<tree_sitter::Tree> {
