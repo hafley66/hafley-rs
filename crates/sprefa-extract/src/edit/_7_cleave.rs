@@ -1057,15 +1057,7 @@ impl Plan {
             .iter()
             .map(|span| source.slice(*span).to_string())
             .collect();
-        widen_private_fields(
-            &cx,
-            imports,
-            &src,
-            &dest,
-            &source.text,
-            &moving,
-            &mut moving_text,
-        )?;
+        widen_private_fields(&cx, &src, &dest, &source.text, &moving, &mut moving_text)?;
         if !item_decl.exported && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty()) {
             if let Some(first) = moving_text.first_mut() {
                 if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
@@ -1835,7 +1827,6 @@ fn rust_route_index(
 
 fn widen_private_fields(
     cx: &MoveCx,
-    imports: &Imports,
     src: &str,
     dest: &str,
     source: &str,
@@ -1855,7 +1846,6 @@ fn widen_private_fields(
         let Some(name_node) = item.child_by_field_name("name") else {
             continue;
         };
-        let owner = &source[name_node.byte_range()];
         let Some((index, span)) = moving.iter().enumerate().find(|(_, span)| {
             span.start as usize <= item.start_byte() && item.end_byte() <= span.end() as usize
         }) else {
@@ -1876,53 +1866,55 @@ fn widen_private_fields(
                 continue;
             };
             private.push((
-                owner.to_string(),
+                name_node.start_byte() as u32,
+                name.start_byte() as u32,
                 source[name.byte_range()].to_string(),
                 index,
-                field.start_byte() - span.start as usize,
+                name.start_byte() - span.start as usize,
             ));
         }
     }
     if private.is_empty() {
         return Ok(());
     }
-    let mut needed = BTreeSet::new();
-    for rel in cx
+    let probes: Vec<_> = private
+        .iter()
+        .map(|(struct_name_start, field_start, field_name, _, _)| {
+            hafley_scm::read::lang::rust_checker::FieldProbe {
+                struct_name_start: *struct_name_start,
+                field_start: *field_start,
+                field_name: field_name.clone(),
+            }
+        })
+        .collect();
+    let files: Vec<_> = cx
         .files()
         .iter()
-        .filter(|rel| rel.ends_with(".rs") && *rel != dest)
-    {
-        let Some(text) = cx.text(rel) else { continue };
-        let Some(parsed) = hafley_scm::lang::rust::RustFastFile::extract(rel, text.as_bytes())
-        else {
-            continue;
-        };
-        for access in
-            hafley_scm::lang::rust::field_access_rows_from_tree(parsed.tree(), text.as_bytes())
-        {
-            let access_span = span_of(access.span.start, access.span.end());
-            if rel == src && moving.iter().any(|span| inside(access_span, *span)) {
-                continue;
-            }
-            let target = imports.types.iter().any(|(from, target, name)| {
-                from == rel && target == src && name == &access.receiver
-            }) || imports
-                .names
-                .iter()
-                .any(|(from, bound, target, declared, _)| {
-                    from == rel
-                        && bound == &access.receiver
-                        && target == src
-                        && declared == &access.receiver
-                });
-            if target {
-                needed.insert((access.receiver, access.field));
-            }
-        }
-    }
+        .filter(|rel| rel.ends_with(".rs"))
+        .map(|rel| (rel.clone(), cx.abs(rel)))
+        .collect();
+    let reads = hafley_scm::read::lang::rust_checker::field_reads(
+        cx.root(),
+        &cx.abs(src),
+        &files,
+        &probes,
+        std::time::Duration::from_secs(60),
+    )
+    .map_err(|error| format!("cleave cannot resolve moved Rust fields: {error}"))?;
+    let needed: BTreeSet<u32> = reads
+        .into_iter()
+        .filter(|read| read.path != dest)
+        .filter(|read| {
+            read.path != src
+                || !moving
+                    .iter()
+                    .any(|span| span.start <= read.access_start && read.access_start < span.end())
+        })
+        .map(|read| read.field_start)
+        .collect();
     let mut inserts = Vec::new();
-    for (owner, field, index, offset) in private {
-        if needed.contains(&(owner, field)) {
+    for (_, field_start, _, index, offset) in private {
+        if needed.contains(&field_start) {
             inserts.push((index, offset));
         }
     }
@@ -2009,7 +2001,6 @@ struct Imports {
     names: Vec<(String, String, String, String, bool)>,
     /// Resolved call sites `(caller file, site span, callee file, callee name)`.
     calls: Vec<(String, Span, String, String)>,
-    types: Vec<(String, String, String)>,
     rust_routes: hafley_scm::read::lang::rust_modules::RustModuleIndex,
 }
 
@@ -2036,7 +2027,6 @@ impl Imports {
             paths: &paths,
             arms: ResolveArms {
                 call: true,
-                types: true,
                 ..ResolveArms::default()
             },
             scip: ScipMode::Off,
@@ -2052,22 +2042,7 @@ impl Imports {
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
         let mut names = Vec::new();
         let mut calls = Vec::new();
-        let mut types = Vec::new();
         for fact in &facts {
-            if let FlatFact::ResolvedTypeEdge {
-                owner_path,
-                target_path,
-                target_name: Some(name),
-                ..
-            } = fact
-            {
-                if let (Some(owner), Some(target)) =
-                    (rel_of(root, owner_path), rel_of(root, target_path))
-                {
-                    types.push((owner, target, name.clone()));
-                }
-                continue;
-            }
             if let FlatFact::ResolvedEdge {
                 caller_path,
                 callee_path,
@@ -2112,7 +2087,6 @@ impl Imports {
         Ok(Self {
             names,
             calls,
-            types,
             rust_routes,
         })
     }

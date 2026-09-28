@@ -11,14 +11,157 @@ use ra_ap_hir::{
     PathResolution, Semantics, Trait, Type,
 };
 use ra_ap_ide::{AnalysisHost, NavigationTarget, RootDatabase, TryToNav};
+use ra_ap_ide_db::defs::Definition;
 use ra_ap_load_cargo::{load_workspace_at, LoadCargoConfig, ProcMacroServerChoice};
 use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
-use ra_ap_syntax::{ast, AstNode};
+use ra_ap_syntax::ast::HasName;
+use ra_ap_syntax::{ast, AstNode, SyntaxKind};
 use tracing::Span;
 
 use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef, OffsetMap};
 use crate::read::trace::{phase_span, record_phase, Phase};
 use crate::read::tsi::{Arg, CoverageClaim, FactOut};
+
+pub struct FieldProbe {
+    pub struct_name_start: u32,
+    pub field_start: u32,
+    pub field_name: String,
+}
+
+pub struct FieldRead {
+    pub field_start: u32,
+    pub path: String,
+    pub access_start: u32,
+}
+
+pub fn field_reads(
+    root: &Path,
+    source: &Path,
+    files: &[(String, PathBuf)],
+    probes: &[FieldProbe],
+    budget: Duration,
+) -> Result<Vec<FieldRead>, CheckerError> {
+    let load_config = LoadCargoConfig {
+        load_out_dirs_from_check: false,
+        with_proc_macro_server: ProcMacroServerChoice::None,
+        prefill_caches: false,
+        num_worker_threads: 4,
+        proc_macro_processes: 0,
+    };
+    let cargo_config = CargoConfig {
+        sysroot: Some(RustLibSource::Discover),
+        set_test: true,
+        features: CargoFeatures::All,
+        ..CargoConfig::default()
+    };
+    let started = Instant::now();
+    let (db, vfs, _proc_macro) = load_workspace_at(root, &cargo_config, &load_config, &|_| {})
+        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    if started.elapsed() > budget {
+        return Err(CheckerError::Budget(budget));
+    }
+    let wanted: HashMap<PathBuf, &str> = files
+        .iter()
+        .map(|(rel, absolute)| {
+            (
+                std::fs::canonicalize(absolute).unwrap_or_else(|_| absolute.clone()),
+                rel.as_str(),
+            )
+        })
+        .collect();
+    let source = std::fs::canonicalize(source).unwrap_or_else(|_| source.to_path_buf());
+    let mut by_file_id = HashMap::new();
+    let mut source_id = None;
+    for (vfs_id, vfs_path) in vfs.iter() {
+        let Some(absolute) = vfs_path.as_path() else {
+            continue;
+        };
+        let text = absolute.to_string();
+        let key = std::fs::canonicalize(&text).unwrap_or_else(|_| PathBuf::from(&text));
+        let file_id = ra_ap_ide::FileId::from_raw(vfs_id.index());
+        if key == source {
+            source_id = Some(file_id);
+        }
+        if let Some(rel) = wanted.get(&key) {
+            by_file_id.insert(file_id, (*rel).to_string());
+        }
+    }
+    let source_id = source_id.ok_or_else(|| {
+        CheckerError::NoWorkspace(format!(
+            "{} is outside the loaded crate graph",
+            source.display()
+        ))
+    })?;
+    let host = AnalysisHost::with_database(db);
+    let db = host.raw_database();
+    attach_db(db, || {
+        let sema = Semantics::new(db);
+        let syntax = sema.parse_guess_edition(source_id);
+        let structs: HashMap<u32, ast::Struct> = syntax
+            .syntax()
+            .descendants()
+            .filter_map(ast::Struct::cast)
+            .filter_map(|item| {
+                let start = u32::from(item.name()?.syntax().text_range().start());
+                Some((start, item))
+            })
+            .collect();
+        let mut reads = Vec::new();
+        for probe in probes {
+            let item = structs.get(&probe.struct_name_start).ok_or_else(|| {
+                CheckerError::NoWorkspace(format!(
+                    "moved struct at byte {} is unavailable in the loaded crate graph",
+                    probe.struct_name_start
+                ))
+            })?;
+            let strukt = sema.to_def(item).ok_or_else(|| {
+                CheckerError::NoWorkspace(format!(
+                    "moved struct at byte {} has no rust-analyzer definition",
+                    probe.struct_name_start
+                ))
+            })?;
+            let field = strukt
+                .fields(db)
+                .into_iter()
+                .find(|field| field.name(db).as_str() == probe.field_name)
+                .ok_or_else(|| {
+                    CheckerError::NoWorkspace(format!(
+                        "field {} at byte {} has no rust-analyzer definition",
+                        probe.field_name, probe.field_start
+                    ))
+                })?;
+            for (file, references) in Definition::Field(field).usages(&sema).all().references {
+                let file_id = file.file_id(db);
+                let Some(path) = by_file_id.get(&file_id) else {
+                    continue;
+                };
+                let syntax = sema.parse_guess_edition(file_id);
+                let access_fields: HashSet<_> = syntax
+                    .syntax()
+                    .descendants()
+                    .filter_map(ast::FieldExpr::cast)
+                    .flat_map(|expr| {
+                        expr.syntax()
+                            .children()
+                            .filter(|child| child.kind() == SyntaxKind::NAME_REF)
+                            .map(|child| child.text_range())
+                            .collect::<Vec<_>>()
+                    })
+                    .collect();
+                for reference in references {
+                    if access_fields.contains(&reference.range) {
+                        reads.push(FieldRead {
+                            field_start: probe.field_start,
+                            path: path.clone(),
+                            access_start: u32::from(reference.range.start()),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(reads)
+    })
+}
 
 /// One corpus file the walk visits: its supplied path, its ra file id, its
 /// text and the byte -> parse-plane offset map over that text.

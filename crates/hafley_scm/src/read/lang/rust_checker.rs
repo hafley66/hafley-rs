@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{field_reads, FieldProbe, FieldRead};
 pub use super::CheckerAnswer;
 use super::{answer_of, CALL_FACETS};
 use crate::read::shape::FamilyTag;

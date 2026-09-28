@@ -12,23 +12,6 @@ enum TypeBinding {
 }
 
 pub fn receiver_rows_from_tree(tree: &tree_sitter::Tree, source: &[u8]) -> Vec<ReceiverBinding> {
-    receiver_and_field_rows(tree, source).0
-}
-
-pub fn field_access_rows_from_tree(tree: &tree_sitter::Tree, source: &[u8]) -> Vec<FieldAccessRow> {
-    receiver_and_field_rows(tree, source).1
-}
-
-pub struct FieldAccessRow {
-    pub span: Span,
-    pub receiver: String,
-    pub field: String,
-}
-
-fn receiver_and_field_rows(
-    tree: &tree_sitter::Tree,
-    source: &[u8],
-) -> (Vec<ReceiverBinding>, Vec<FieldAccessRow>) {
     let mut tables = Tables::default();
     tables.collect(tree.root_node(), source);
     let mut walk = ReceiverWalk {
@@ -37,10 +20,9 @@ fn receiver_and_field_rows(
         impl_stack: Vec::new(),
         scopes: Vec::new(),
         out: Vec::new(),
-        fields: Vec::new(),
     };
     walk.visit(tree.root_node());
-    (walk.out, walk.fields)
+    walk.out
 }
 
 #[derive(Default)]
@@ -130,7 +112,6 @@ struct ReceiverWalk<'a> {
     impl_stack: Vec<String>,
     scopes: Vec<HashMap<String, TypeBinding>>,
     out: Vec<ReceiverBinding>,
-    fields: Vec<FieldAccessRow>,
 }
 
 impl ReceiverWalk<'_> {
@@ -204,26 +185,6 @@ impl ReceiverWalk<'_> {
                             self.out.push(ReceiverBinding {
                                 call_site: span(function, self.source),
                                 outcome: ReceiverOutcome::Shadowed,
-                            });
-                        }
-                    }
-                }
-            }
-            "field_expression" => {
-                let method_call = node.parent().is_some_and(|parent| {
-                    parent.kind() == "call_expression"
-                        && parent.child_by_field_name("function") == Some(node)
-                });
-                if !method_call {
-                    if let (Some(value), Some(field)) = (
-                        node.child_by_field_name("value"),
-                        node.child_by_field_name("field"),
-                    ) {
-                        if let ReceiverOutcome::Named(receiver) = self.receiver_outcome(value) {
-                            self.fields.push(FieldAccessRow {
-                                span: span(field, self.source),
-                                receiver,
-                                field: text(field, self.source).to_owned(),
                             });
                         }
                     }
@@ -316,10 +277,6 @@ impl ReceiverWalk<'_> {
 
     fn expr_type(&self, expr: tree_sitter::Node<'_>) -> Option<String> {
         match expr.kind() {
-            "struct_expression" => expr
-                .child_by_field_name("name")
-                .and_then(|name| self.simple_path(name))
-                .and_then(|path| path.last().cloned()),
             "identifier" | "scoped_identifier" | "self" => {
                 let path = self.simple_path(expr)?;
                 if path == ["self"] {
