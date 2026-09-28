@@ -780,6 +780,28 @@ fn moved_struct_fields_are_visible_to_remaining_sibling_code() {
 }
 
 #[test]
+fn moved_struct_fields_used_in_a_child_literal_remain_visible() {
+    let fixture = fixture_tree("cleave_ratchet", "private_literal", "private-literal");
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+    );
+    cargo_check(&fixture);
+}
+
+#[test]
+fn moved_struct_fields_used_in_a_child_pattern_remain_visible() {
+    let fixture = fixture_tree("cleave_ratchet", "private_pattern", "private-pattern");
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+    );
+    cargo_check(&fixture);
+}
+
+#[test]
 fn moved_dependencies_keep_accessible_public_reexport_paths() {
     let fixture = fixture_tree("cleave_ratchet", "reexport", "reexport");
     git(&fixture.root, &["add", "-A"]);

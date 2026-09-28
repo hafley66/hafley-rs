@@ -15,7 +15,7 @@ use ra_ap_ide_db::defs::Definition;
 use ra_ap_load_cargo::{load_workspace_at, LoadCargoConfig, ProcMacroServerChoice};
 use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
 use ra_ap_syntax::ast::HasName;
-use ra_ap_syntax::{ast, AstNode, SyntaxKind};
+use ra_ap_syntax::{ast, AstNode};
 use tracing::Span;
 
 use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef, OffsetMap};
@@ -41,25 +41,7 @@ pub fn field_reads(
     probes: &[FieldProbe],
     budget: Duration,
 ) -> Result<Vec<FieldRead>, CheckerError> {
-    let load_config = LoadCargoConfig {
-        load_out_dirs_from_check: false,
-        with_proc_macro_server: ProcMacroServerChoice::None,
-        prefill_caches: false,
-        num_worker_threads: 4,
-        proc_macro_processes: 0,
-    };
-    let cargo_config = CargoConfig {
-        sysroot: Some(RustLibSource::Discover),
-        set_test: true,
-        features: CargoFeatures::All,
-        ..CargoConfig::default()
-    };
-    let started = Instant::now();
-    let (db, vfs, _proc_macro) = load_workspace_at(root, &cargo_config, &load_config, &|_| {})
-        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
-    if started.elapsed() > budget {
-        return Err(CheckerError::Budget(budget));
-    }
+    let (db, vfs, _) = load_checker_workspace(root, budget)?;
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
         .map(|(rel, absolute)| {
@@ -135,27 +117,12 @@ pub fn field_reads(
                 let Some(path) = by_file_id.get(&file_id) else {
                     continue;
                 };
-                let syntax = sema.parse_guess_edition(file_id);
-                let access_fields: HashSet<_> = syntax
-                    .syntax()
-                    .descendants()
-                    .filter_map(ast::FieldExpr::cast)
-                    .flat_map(|expr| {
-                        expr.syntax()
-                            .children()
-                            .filter(|child| child.kind() == SyntaxKind::NAME_REF)
-                            .map(|child| child.text_range())
-                            .collect::<Vec<_>>()
-                    })
-                    .collect();
                 for reference in references {
-                    if access_fields.contains(&reference.range) {
-                        reads.push(FieldRead {
-                            field_start: probe.field_start,
-                            path: path.clone(),
-                            access_start: u32::from(reference.range.start()),
-                        });
-                    }
+                    reads.push(FieldRead {
+                        field_start: probe.field_start,
+                        path: path.clone(),
+                        access_start: u32::from(reference.range.start()),
+                    });
                 }
             }
         }
@@ -163,21 +130,10 @@ pub fn field_reads(
     })
 }
 
-/// One corpus file the walk visits: its supplied path, its ra file id, its
-/// text and the byte -> parse-plane offset map over that text.
-struct WalkFile {
-    path: String,
-    file_id: ra_ap_ide::FileId,
-    text: String,
-    offsets: OffsetMap,
-}
-
-pub fn answer(
+fn load_checker_workspace(
     root: &Path,
-    files: &[(String, PathBuf)],
     budget: Duration,
-    tsi: bool,
-) -> Result<CheckerAnswers, CheckerError> {
+) -> Result<(RootDatabase, ra_ap_vfs::Vfs, Duration), CheckerError> {
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
         with_proc_macro_server: ProcMacroServerChoice::None,
@@ -197,11 +153,30 @@ pub fn answer(
     };
     let started = Instant::now();
     let (db, vfs, _proc_macro) = load_workspace_at(root, &cargo_config, &load_config, &|_| {})
-        .map_err(|err| CheckerError::NoWorkspace(err.to_string()))?;
+        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
     let load = started.elapsed();
     if load > budget {
         return Err(CheckerError::Budget(budget));
     }
+    Ok((db, vfs, load))
+}
+
+/// One corpus file the walk visits: its supplied path, its ra file id, its
+/// text and the byte -> parse-plane offset map over that text.
+struct WalkFile {
+    path: String,
+    file_id: ra_ap_ide::FileId,
+    text: String,
+    offsets: OffsetMap,
+}
+
+pub fn answer(
+    root: &Path,
+    files: &[(String, PathBuf)],
+    budget: Duration,
+    tsi: bool,
+) -> Result<CheckerAnswers, CheckerError> {
+    let (db, vfs, load) = load_checker_workspace(root, budget)?;
 
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
