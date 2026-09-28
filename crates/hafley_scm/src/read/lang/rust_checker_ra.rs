@@ -10,10 +10,8 @@ use ra_ap_hir::{
     attach_db, Adt, AssocItem, Crate, Field, Function, GenericDef, HirDisplay, Impl, ModuleDef,
     PathResolution, Semantics, Trait, Type,
 };
-use ra_ap_ide::{AnalysisHost, NavigationTarget, RootDatabase, TryToNav};
+use ra_ap_ide::{NavigationTarget, RootDatabase, TryToNav};
 use ra_ap_ide_db::defs::Definition;
-use ra_ap_load_cargo::{load_workspace_at, LoadCargoConfig, ProcMacroServerChoice};
-use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
 use ra_ap_syntax::ast::HasName;
 use ra_ap_syntax::{ast, AstNode};
 use tracing::Span;
@@ -41,7 +39,10 @@ pub fn field_reads(
     probes: &[FieldProbe],
     budget: Duration,
 ) -> Result<Vec<FieldRead>, CheckerError> {
-    let (db, vfs, _) = load_checker_workspace(root, budget)?;
+    let (workspace, _) = super::rust_checker_session::checker_workspace(root, files, budget)?;
+    let workspace = workspace.lock().unwrap();
+    let host = &workspace.host;
+    let vfs = &workspace.vfs;
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
         .map(|(rel, absolute)| {
@@ -74,7 +75,6 @@ pub fn field_reads(
             source.display()
         ))
     })?;
-    let host = AnalysisHost::with_database(db);
     let db = host.raw_database();
     attach_db(db, || {
         let sema = Semantics::new(db);
@@ -130,37 +130,6 @@ pub fn field_reads(
     })
 }
 
-fn load_checker_workspace(
-    root: &Path,
-    budget: Duration,
-) -> Result<(RootDatabase, ra_ap_vfs::Vfs, Duration), CheckerError> {
-    let load_config = LoadCargoConfig {
-        load_out_dirs_from_check: false,
-        with_proc_macro_server: ProcMacroServerChoice::None,
-        prefill_caches: false,
-        num_worker_threads: 4,
-        proc_macro_processes: 0,
-    };
-    // A crate graph with no sysroot declines every method whose receiver type
-    // flows through std; `set_test` puts `#[cfg(test)]` bodies in the tree.
-    let cargo_config = CargoConfig {
-        sysroot: Some(RustLibSource::Discover),
-        set_test: true,
-        // The default selects no feature, so a `cfg`-gated module stays out of
-        // the crate graph and every file it declares owns no module there.
-        features: CargoFeatures::All,
-        ..CargoConfig::default()
-    };
-    let started = Instant::now();
-    let (db, vfs, _proc_macro) = load_workspace_at(root, &cargo_config, &load_config, &|_| {})
-        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
-    let load = started.elapsed();
-    if load > budget {
-        return Err(CheckerError::Budget(budget));
-    }
-    Ok((db, vfs, load))
-}
-
 /// One corpus file the walk visits: its supplied path, its ra file id, its
 /// text and the byte -> parse-plane offset map over that text.
 struct WalkFile {
@@ -176,8 +145,10 @@ pub fn answer(
     budget: Duration,
     tsi: bool,
 ) -> Result<CheckerAnswers, CheckerError> {
-    let (db, vfs, load) = load_checker_workspace(root, budget)?;
-
+    let (workspace, load) = super::rust_checker_session::checker_workspace(root, files, budget)?;
+    let workspace = workspace.lock().unwrap();
+    let host = &workspace.host;
+    let vfs = &workspace.vfs;
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
         .map(|(supplied, absolute)| {
@@ -204,7 +175,6 @@ pub fn answer(
         }
     }
 
-    let host = AnalysisHost::with_database(db);
     let db = host.raw_database();
     let walk_started = Instant::now();
     let mut answers = CheckerAnswers {
@@ -252,6 +222,7 @@ pub fn answer(
         .collect();
     let per_file: Vec<FileAnswers> = pool.install(|| {
         use rayon::prelude::*;
+
         chunks
             .into_par_iter()
             .flat_map_iter(|(db, chunk)| {

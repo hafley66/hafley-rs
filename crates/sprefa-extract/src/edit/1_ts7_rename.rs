@@ -1,30 +1,19 @@
 //! The slow TypeScript rename is the compiler's LSP WorkspaceEdit.
 
-use std::io::{BufReader, Write};
-use std::path::Path;
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::str::FromStr;
-use std::sync::mpsc::{self, Receiver};
-use std::time::Duration;
+use std::collections::HashMap;
+use std::sync::Mutex;
 
-use lsp_server::{Message, Notification, Request, RequestId, Response};
-use lsp_types::notification::Notification as NotificationMethod;
 use lsp_types::request::Request as RequestMethod;
 use lsp_types::{
-    notification::{DidOpenTextDocument, Initialized},
     request::{PrepareRenameRequest, Rename},
-    DidOpenTextDocumentParams, InitializeParams, InitializedParams, Position, RenameParams,
-    TextDocumentIdentifier, TextDocumentItem, TextDocumentPositionParams, Uri, WorkspaceEdit,
-    WorkspaceFolder,
+    Position, RenameParams, TextDocumentIdentifier, TextDocumentPositionParams, Uri, WorkspaceEdit,
 };
-use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::Value;
 
+use super::ts7_lsp_session::{file_uri, TsSession, TS_SESSIONS};
 use crate::edit_seams::{RefRole, RenameAbstain, RenameStop, SymbolRef};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::Span;
-
-const RESPONSE_TIMEOUT: Duration = Duration::from_secs(60);
 
 pub fn symbol_refs_and_abstains(
     cx: &RenameCx,
@@ -35,42 +24,26 @@ pub fn symbol_refs_and_abstains(
     let seed = span.start as usize;
     let position = position_at_byte(&text, seed).map_err(|_| inexact(request, span))?;
     let anchor_uri = file_uri(&cx.abs(&request.anchor)).map_err(|_| inexact(request, span))?;
-    let root_uri = file_uri(cx.root()).map_err(|_| inexact(request, span))?;
-    let mut lsp = Ts7Lsp::open(cx.root()).map_err(|_| inexact(request, span))?;
-
-    let mut initialize = InitializeParams::default();
-    initialize.process_id = Some(std::process::id());
-    initialize.workspace_folders = Some(vec![WorkspaceFolder {
-        uri: root_uri,
-        name: cx
-            .root()
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy()
-            .into(),
-    }]);
-    initialize.initialization_options = Some(json!({}));
-    let response = lsp
-        .request("initialize", &initialize)
-        .map_err(|_| inexact(request, span))?;
-    if response.error.is_some() {
-        return Err(inexact(request, span));
+    let pool = TS_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()));
+    let mut sessions = pool.lock().map_err(|_| inexact(request, span))?;
+    if !sessions.contains_key(cx.root()) {
+        sessions.insert(
+            cx.root().to_path_buf(),
+            TsSession::open(cx.root()).map_err(|_| inexact(request, span))?,
+        );
     }
-    lsp.notify::<Initialized>(&InitializedParams {})
+    let session = sessions.get_mut(cx.root()).unwrap();
+    for changed in std::mem::take(&mut session.pending) {
+        let content = cx.text(&changed).ok_or_else(|| inexact(request, span))?;
+        let uri = file_uri(&cx.abs(&changed)).map_err(|_| inexact(request, span))?;
+        session
+            .sync_document(&uri, &changed, &content)
+            .map_err(|_| inexact(request, span))?;
+    }
+    session
+        .sync_document(&anchor_uri, &request.anchor, &text)
         .map_err(|_| inexact(request, span))?;
-    lsp.notify::<DidOpenTextDocument>(&DidOpenTextDocumentParams {
-        text_document: TextDocumentItem {
-            uri: anchor_uri.clone(),
-            language_id: if request.anchor.ends_with(".tsx") {
-                "typescriptreact".into()
-            } else {
-                "typescript".into()
-            },
-            version: 1,
-            text,
-        },
-    })
-    .map_err(|_| inexact(request, span))?;
+    let lsp = &mut session.lsp;
 
     let location = TextDocumentPositionParams {
         text_document: TextDocumentIdentifier { uri: anchor_uri },
@@ -146,6 +119,7 @@ pub fn symbol_refs_and_abstains(
         replacements.push((rel, site, edit.new_text));
     }
     for (rel, site, replacement) in replacements {
+        session.pending.insert(rel.clone());
         cx.put_ts_slow_edit(&rel, site, replacement);
     }
     Ok((refs, Vec::new()))
@@ -176,114 +150,6 @@ fn workspace_edits(edit: WorkspaceEdit) -> Result<Vec<(Uri, lsp_types::TextEdit)
         }
     }
     Ok(out)
-}
-
-struct Ts7Lsp {
-    child: Child,
-    stdin: ChildStdin,
-    receiver: Receiver<Result<Option<Message>, String>>,
-    next_id: i32,
-}
-
-impl Ts7Lsp {
-    fn open(root: &Path) -> Result<Self, String> {
-        let tsc = Path::new(env!("CARGO_MANIFEST_DIR")).join("ts7/node_modules/typescript/bin/tsc");
-        if !tsc.is_file() {
-            return Err(format!(
-                "TypeScript LSP executable missing: {}",
-                tsc.display()
-            ));
-        }
-        let mut child = Command::new(&tsc)
-            .args(["--lsp", "--stdio"])
-            .current_dir(root)
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
-            .spawn()
-            .map_err(|error| format!("start {}: {error}", tsc.display()))?;
-        let stdin = child.stdin.take().ok_or("tsc stdin unavailable")?;
-        let stdout = child.stdout.take().ok_or("tsc stdout unavailable")?;
-        let (sender, receiver) = mpsc::channel();
-        std::thread::spawn(move || {
-            let mut stdout = BufReader::new(stdout);
-            loop {
-                let message = Message::read(&mut stdout).map_err(|error| error.to_string());
-                let done = !matches!(message, Ok(Some(_)));
-                if sender.send(message).is_err() || done {
-                    break;
-                }
-            }
-        });
-        Ok(Self {
-            child,
-            stdin,
-            receiver,
-            next_id: 1,
-        })
-    }
-
-    fn send(&mut self, message: Message) -> Result<(), String> {
-        message
-            .write(&mut self.stdin)
-            .map_err(|error| error.to_string())?;
-        self.stdin.flush().map_err(|error| error.to_string())
-    }
-
-    fn notify<N: NotificationMethod>(&mut self, params: &N::Params) -> Result<(), String> {
-        self.send(Message::Notification(Notification {
-            method: N::METHOD.into(),
-            params: serde_json::to_value(params).map_err(|error| error.to_string())?,
-        }))
-    }
-
-    fn request(&mut self, method: &str, params: &impl Serialize) -> Result<Response, String> {
-        let id = RequestId::from(self.next_id);
-        self.next_id += 1;
-        self.send(Message::Request(Request {
-            id: id.clone(),
-            method: method.into(),
-            params: serde_json::to_value(params).map_err(|error| error.to_string())?,
-        }))?;
-        loop {
-            let message = self
-                .receiver
-                .recv_timeout(RESPONSE_TIMEOUT)
-                .map_err(|error| format!("{method}: {error}"))??;
-            match message.ok_or_else(|| format!("{method}: server closed stdout"))? {
-                Message::Response(response) if response.id == id => return Ok(response),
-                Message::Request(request) => {
-                    let result = match request.method.as_str() {
-                        "workspace/configuration" => json!(request.params["items"]
-                            .as_array()
-                            .map(|items| vec![Value::Null; items.len()])
-                            .unwrap_or_default()),
-                        "workspace/workspaceFolders" => json!([]),
-                        _ => Value::Null,
-                    };
-                    self.send(Message::Response(Response {
-                        id: request.id,
-                        result: Some(result),
-                        error: None,
-                    }))?;
-                }
-                _ => {}
-            }
-        }
-    }
-}
-
-impl Drop for Ts7Lsp {
-    fn drop(&mut self) {
-        let _ = self.child.kill();
-        let _ = self.child.wait();
-    }
-}
-
-fn file_uri(path: &Path) -> Result<Uri, String> {
-    let url =
-        url::Url::from_file_path(path).map_err(|_| format!("file URI for {}", path.display()))?;
-    Uri::from_str(url.as_str()).map_err(|error| error.to_string())
 }
 
 fn position_at_byte(text: &str, offset: usize) -> Result<Position, String> {
@@ -358,6 +224,7 @@ fn inexact(request: &RenameRequest, span: Span) -> RenameStop {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::Path;
 
     use std::path::PathBuf;
 
@@ -593,6 +460,28 @@ mod tests {
         let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
         assert!(abstains.is_empty(), "{abstains:?}");
         assert_eq!(refs.len(), 2);
+    }
+
+    #[test]
+    fn warm_lsp_returns_the_cold_edits() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let pool = TS_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()));
+        pool.lock().unwrap().remove(&root);
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: Some(6),
+        };
+        let cold = symbol_refs_and_abstains(&cx, &request).unwrap().0;
+        let warm = symbol_refs_and_abstains(&cx, &request).unwrap().0;
+        let sites = |refs: Vec<SymbolRef>| {
+            refs.into_iter()
+                .map(|reference| (reference.file, reference.span.start, reference.text))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(sites(cold), sites(warm));
     }
 
     #[test]

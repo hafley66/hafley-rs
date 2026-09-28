@@ -5,6 +5,8 @@ pub mod prolog_rename;
 pub mod rust_mutate;
 pub mod rust_rehome;
 pub mod rust_rename;
+#[path = "edit/1a_ts7_lsp_session.rs"]
+mod ts7_lsp_session;
 #[path = "edit/1_ts7_rename.rs"]
 pub mod ts7_rename;
 pub mod ts_mutate;
