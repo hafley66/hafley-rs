@@ -64,12 +64,69 @@ impl Rename for TsSource {
             .semantic;
         let scoping = semantic.scoping();
 
-        let symbol = match select_declaration(&program, scoping, request)? {
-            SelectedDecl::Property(declaration) => {
-                return property_refs(cx, request, &declaration);
+        let property_declarations = property_declarations(&program, &request.old);
+        if !property_declarations.is_empty() {
+            let declaration = match (request.at, property_declarations.as_slice()) {
+                (None, [one]) => one,
+                (Some(at), declarations) => declarations
+                    .iter()
+                    .filter(|decl| decl.span.start <= at && at < decl.span.end)
+                    .max_by_key(|decl| decl.span.start)
+                    .ok_or_else(|| not_found(request))?,
+                (None, many) => {
+                    return Err(ambiguous(
+                        request,
+                        many.iter().map(|decl| to_span(decl.span)).collect(),
+                    ))
+                }
+            };
+            return property_refs(cx, request, declaration);
+        }
+
+        let mut every: Vec<SymbolId> = scoping
+            .scope_descendants_from_root()
+            .flat_map(|scope| scoping.iter_bindings_in(scope))
+            .filter(|symbol| scoping.symbol_name(*symbol) == request.old)
+            .collect();
+        every.sort_by_key(|symbol| scoping.symbol_span(*symbol).start);
+        // A binding in the anchor's root scope is the one an importer can reach;
+        // a same-named binding nested in a function body shadows nothing outside
+        // its block. Root wins without `--at`; `--at` still selects among all.
+        let root = scoping.root_scope_id();
+        let at_root: Vec<SymbolId> = every
+            .iter()
+            .copied()
+            .filter(|symbol| scoping.symbol_scope_id(*symbol) == root)
+            .collect();
+        let symbol = match (request.at, at_root.as_slice(), every.as_slice()) {
+            (_, _, []) => return Err(not_found(request)),
+            (None, [one], _) | (None, [], [one]) => *one,
+            (None, [], many) | (None, many, _) => {
+                return Err(ambiguous(
+                    request,
+                    many.iter()
+                        .map(|s| to_span(scoping.symbol_span(*s)))
+                        .collect(),
+                ))
             }
-            SelectedDecl::Binding(symbol) => symbol,
+            (Some(_), _, many) => select_by_at(scoping, many, request.at).ok_or_else(|| {
+                ambiguous(
+                    request,
+                    many.iter()
+                        .map(|s| to_span(scoping.symbol_span(*s)))
+                        .collect(),
+                )
+            })?,
         };
+        // A TS merged declaration (`interface Foo` + `const Foo`) is ONE symbol
+        // wearing several binding identifiers, so it is ambiguous too.
+        let redeclarations = scoping.symbol_redeclarations(symbol);
+        if !redeclarations.is_empty() {
+            let mut sites = vec![to_span(scoping.symbol_span(symbol))];
+            sites.extend(redeclarations.iter().map(|other| to_span(other.span)));
+            return Err(ambiguous(request, sites));
+        }
+
         let line_starts = build_line_starts(&text);
         let scanned = scan_member_seats(&program, &request.old);
         // A computed key is a runtime-only form no plan can carry, so it stops
@@ -122,102 +179,6 @@ impl Rename for TsSource {
     fn text_spellings(&self, _cx: &RenameCx, request: &RenameRequest) -> Vec<(String, String)> {
         vec![(request.old.clone(), request.new.clone())]
     }
-}
-
-enum SelectedDecl {
-    Property(PropertyDecl),
-    Binding(SymbolId),
-}
-
-pub(crate) fn selected_declaration_span(
-    cx: &RenameCx,
-    request: &RenameRequest,
-) -> Result<Span, RenameStop> {
-    let text = cx.text(&request.anchor).ok_or_else(|| not_found(request))?;
-    let parser = OxcParser;
-    let arena = parser.make_arena();
-    let program = parser
-        .parse(&arena, &request.anchor, text.as_bytes())
-        .map_err(|_| not_found(request))?;
-    let semantic = SemanticBuilder::new()
-        .with_build_nodes(true)
-        .build(&program)
-        .semantic;
-    let scoping = semantic.scoping();
-    match select_declaration(&program, scoping, request)? {
-        SelectedDecl::Property(declaration) => Ok(to_span(declaration.span)),
-        SelectedDecl::Binding(symbol) => Ok(to_span(scoping.symbol_span(symbol))),
-    }
-}
-
-fn select_declaration(
-    program: &Program<'_>,
-    scoping: &Scoping,
-    request: &RenameRequest,
-) -> Result<SelectedDecl, RenameStop> {
-    let mut declarations = property_declarations(program, &request.old);
-    if !declarations.is_empty() {
-        let declaration = match request.at {
-            Some(at) => declarations
-                .into_iter()
-                .filter(|decl| decl.span.start <= at && at < decl.span.end)
-                .max_by_key(|decl| decl.span.start),
-            None if declarations.len() == 1 => declarations.pop(),
-            None => {
-                return Err(ambiguous(
-                    request,
-                    declarations.iter().map(|decl| to_span(decl.span)).collect(),
-                ));
-            }
-        };
-        if let Some(declaration) = declaration {
-            return Ok(SelectedDecl::Property(declaration));
-        }
-    }
-
-    let mut every: Vec<SymbolId> = scoping
-        .scope_descendants_from_root()
-        .flat_map(|scope| scoping.iter_bindings_in(scope))
-        .filter(|symbol| scoping.symbol_name(*symbol) == request.old)
-        .collect();
-    every.sort_by_key(|symbol| scoping.symbol_span(*symbol).start);
-    // A binding in the anchor's root scope is the one an importer can reach;
-    // a same-named binding nested in a function body shadows nothing outside
-    // its block. Root wins without `--at`; `--at` still selects among all.
-    let root = scoping.root_scope_id();
-    let at_root: Vec<SymbolId> = every
-        .iter()
-        .copied()
-        .filter(|symbol| scoping.symbol_scope_id(*symbol) == root)
-        .collect();
-    let symbol = match (request.at, at_root.as_slice(), every.as_slice()) {
-        (_, _, []) => return Err(not_found(request)),
-        (None, [one], _) | (None, [], [one]) => *one,
-        (None, [], many) | (None, many, _) => {
-            return Err(ambiguous(
-                request,
-                many.iter()
-                    .map(|symbol| to_span(scoping.symbol_span(*symbol)))
-                    .collect(),
-            ));
-        }
-        (Some(_), _, many) => select_by_at(scoping, many, request.at).ok_or_else(|| {
-            ambiguous(
-                request,
-                many.iter()
-                    .map(|symbol| to_span(scoping.symbol_span(*symbol)))
-                    .collect(),
-            )
-        })?,
-    };
-    // A merged declaration has one symbol with several binding identifiers.
-    let redeclarations = scoping.symbol_redeclarations(symbol);
-    if !redeclarations.is_empty() {
-        let mut sites = vec![to_span(scoping.symbol_span(symbol))];
-        sites.extend(redeclarations.iter().map(|other| to_span(other.span)));
-        return Err(ambiguous(request, sites));
-    }
-    Ok(SelectedDecl::Binding(symbol))
 }
 
 fn not_found(request: &RenameRequest) -> RenameStop {

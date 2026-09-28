@@ -11,6 +11,7 @@ use lsp_types::{
 use serde_json::Value;
 
 use super::ts7_lsp_session::{file_uri, TsSession, TS_SESSIONS};
+use super::ts7_symbol_seed::{byte_at_lsp_position, declaration_spans};
 use crate::edit_seams::{RefRole, RenameAbstain, RenameStop, SymbolRef};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::Span;
@@ -20,9 +21,10 @@ pub fn symbol_refs_and_abstains(
     request: &RenameRequest,
 ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
     let text = cx.text(&request.anchor).ok_or_else(|| not_found(request))?;
-    let span = crate::edit::ts_rename::selected_declaration_span(cx, request)?;
-    let seed = span.start as usize;
-    let position = position_at_byte(&text, seed).map_err(|_| inexact(request, span))?;
+    let mut span = Span {
+        start: request.at.unwrap_or(0),
+        len: request.old.len() as u32,
+    };
     let anchor_uri = file_uri(&cx.abs(&request.anchor)).map_err(|_| inexact(request, span))?;
     let pool = TS_SESSIONS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut sessions = pool.lock().map_err(|_| inexact(request, span))?;
@@ -44,6 +46,24 @@ pub fn symbol_refs_and_abstains(
         .sync_document(&anchor_uri, &request.anchor, &text)
         .map_err(|_| inexact(request, span))?;
     let lsp = &mut session.lsp;
+    let position = if let Some(at) = request.at {
+        position_at_byte(&text, at as usize).map_err(|_| inexact(request, span))?
+    } else {
+        let sites = declaration_spans(lsp, &anchor_uri, &text, &request.old)
+            .map_err(|_| inexact(request, span))?;
+        span = match sites.as_slice() {
+            [] => return Err(not_found(request)),
+            [site] => *site,
+            _ => {
+                return Err(RenameStop::Ambiguous {
+                    anchor: request.anchor.clone(),
+                    old: request.old.clone(),
+                    sites,
+                })
+            }
+        };
+        position_at_byte(&text, span.start as usize).map_err(|_| inexact(request, span))?
+    };
 
     let location = TextDocumentPositionParams {
         text_document: TextDocumentIdentifier { uri: anchor_uri },
@@ -167,28 +187,6 @@ fn position_at_byte(text: &str, offset: usize) -> Result<Position, String> {
     })
 }
 
-fn byte_at_lsp_position(text: &str, position: Position) -> Result<usize, String> {
-    let mut start = 0;
-    for _ in 0..position.line {
-        let next = text[start..].find('\n').ok_or("line out of range")?;
-        start += next + 1;
-    }
-    let mut utf16 = 0;
-    for (relative, ch) in text[start..].char_indices() {
-        if utf16 == position.character {
-            return Ok(start + relative);
-        }
-        if ch == '\n' {
-            break;
-        }
-        utf16 += ch.len_utf16() as u32;
-    }
-    if utf16 == position.character {
-        return Ok(start + text[start..].find('\n').unwrap_or(text.len() - start));
-    }
-    Err("UTF-16 position splits a character or exceeds the line".into())
-}
-
 fn abstain(
     request: &RenameRequest,
     span: Span,
@@ -246,7 +244,7 @@ mod tests {
                 "div",
                 17,
                 "3_intrinsic.rename.json",
-                Some("not_found"),
+                Some("ts7_lsp_rename_rejected"),
             ),
             ("4_export.ts", "old", 6, "4_export.rename.json", None),
             (
@@ -254,7 +252,7 @@ mod tests {
                 "publicName",
                 31,
                 "4_export.publicName.rename.json",
-                Some("not_found"),
+                None,
             ),
             ("5_module.ts", "old", 13, "5_module.rename.json", None),
             ("6_import.ts", "local", 16, "6_import.rename.json", None),
@@ -298,7 +296,7 @@ mod tests {
                 "mid",
                 16,
                 "11_reexport_mid.rename.json",
-                Some("not_found"),
+                None,
             ),
             (
                 "13_reexport_consumer.ts",
@@ -333,15 +331,9 @@ mod tests {
                 "old",
                 9,
                 "17_overloads.rename.json",
-                Some("ambiguous"),
+                None,
             ),
-            (
-                "18_merge.ts",
-                "Old",
-                10,
-                "18_merge.rename.json",
-                Some("ambiguous"),
-            ),
+            ("18_merge.ts", "Old", 10, "18_merge.rename.json", None),
             (
                 "19_jsx_component.tsx",
                 "Old",
@@ -354,28 +346,22 @@ mod tests {
                 "old",
                 20,
                 "20_string_property.rename.json",
-                Some("not_found"),
+                None,
             ),
             (
                 "21_string_type.ts",
                 "old",
                 16,
                 "21_string_type.rename.json",
-                Some("not_found"),
+                None,
             ),
-            (
-                "22_numeric.ts",
-                "0",
-                15,
-                "22_numeric.rename.json",
-                Some("not_found"),
-            ),
+            ("22_numeric.ts", "0", 15, "22_numeric.rename.json", None),
             (
                 "24_module_path.ts",
                 "23_path_source",
                 26,
                 "24_module_path.rename.json",
-                Some("not_found"),
+                Some("ts7_lsp_rename_rejected"),
             ),
         ];
         for (source, old, at, oracle, expected_reason) in cases {
@@ -391,22 +377,7 @@ mod tests {
                 .into(),
                 at: Some(at),
             };
-            let result = symbol_refs_and_abstains(&cx, &request);
-            if expected_reason == Some("not_found") {
-                assert!(
-                    matches!(result, Err(RenameStop::NotFound { .. })),
-                    "{source}"
-                );
-                continue;
-            }
-            if expected_reason == Some("ambiguous") {
-                assert!(
-                    matches!(result, Err(RenameStop::Ambiguous { .. })),
-                    "{source}"
-                );
-                continue;
-            }
-            let (refs, abstains) = result.unwrap();
+            let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
             if let Some(reason) = expected_reason {
                 assert!(refs.is_empty(), "{source}: {} refs", refs.len());
                 assert_eq!(abstains.len(), 1, "{source}");
@@ -482,6 +453,47 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         assert_eq!(sites(cold), sites(warm));
+    }
+
+    #[test]
+    fn lsp_selects_an_unpositioned_declaration_from_document_symbols() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: None,
+        };
+        let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
+        assert!(abstains.is_empty());
+        assert_eq!(refs.len(), 2);
+    }
+
+    #[test]
+    fn lsp_stops_on_ambiguous_document_symbols() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api");
+        let cx = RenameCx::open(&root).unwrap().with_slow(true);
+        let request = RenameRequest {
+            anchor: "17_overloads.ts".into(),
+            old: "old".into(),
+            new: "next".into(),
+            at: None,
+        };
+        assert!(matches!(
+            symbol_refs_and_abstains(&cx, &request),
+            Err(RenameStop::Ambiguous { sites, .. }) if sites.len() > 1
+        ));
+        let missing = RenameRequest {
+            anchor: "0_fixture.ts".into(),
+            old: "absent".into(),
+            new: "next".into(),
+            at: None,
+        };
+        assert!(matches!(
+            symbol_refs_and_abstains(&cx, &missing),
+            Err(RenameStop::NotFound { .. })
+        ));
     }
 
     #[test]

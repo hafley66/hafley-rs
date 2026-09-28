@@ -48,3 +48,20 @@ ts7_lsp_shared_selector	found_truth_sites	994	sites	-
 ts7_lsp_shared_selector	slow_rename_site_recall	0.702473	ratio	-
 ts7_lsp_shared_selector	command_wall_total	7.439	seconds	-
 ts7_lsp_shared_selector	typecheck_mismatch_symbol	ambientDeclaration src/mcp/explore-diagnostics.ts:574	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile.
+ts7_lsp_tsc_seed	fixture_cases	25	cases	-
+ts7_lsp_tsc_seed	fixture_oracle_matches	23	cases	-
+ts7_lsp_tsc_seed	fixture_expected_abstentions	2	cases	-
+ts7_lsp_tsc_seed	truth_targets	51	targets	-
+ts7_lsp_tsc_seed	targets_renamed	51	targets	-
+ts7_lsp_tsc_seed	targets_stopped	0	targets	-
+ts7_lsp_tsc_seed	typecheck_equal_baseline	50	targets	-
+ts7_lsp_tsc_seed	typecheck_mismatch_targets	1	targets	-
+ts7_lsp_tsc_seed	diff_isolated	48	targets	-
+ts7_lsp_tsc_seed	truth_files	200	files	-
+ts7_lsp_tsc_seed	found_truth_files	196	files	-
+ts7_lsp_tsc_seed	slow_rename_file_recall	0.980000	ratio	-
+ts7_lsp_tsc_seed	truth_sites	1415	sites	-
+ts7_lsp_tsc_seed	found_truth_sites	1407	sites	-
+ts7_lsp_tsc_seed	slow_rename_site_recall	0.994346	ratio	-
+ts7_lsp_tsc_seed	command_wall_total	11.164	seconds	-
+ts7_lsp_tsc_seed	typecheck_mismatch_symbol	ambientDeclaration src/mcp/explore-diagnostics.ts:574	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile.

@@ -9,6 +9,8 @@ pub mod rust_rename;
 mod ts7_lsp_session;
 #[path = "edit/1_ts7_rename.rs"]
 pub mod ts7_rename;
+#[path = "edit/1b_ts7_symbol_seed.rs"]
+mod ts7_symbol_seed;
 pub mod ts_mutate;
 pub mod ts_rehome;
 pub mod ts_rename;
