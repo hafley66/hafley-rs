@@ -43,7 +43,6 @@ fn ryi(args: &[&str]) {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(args)
         .env("RUST_LOG", "off")
-        .env("RYI_MAX_MEM_MB", "2048")
         .output()
         .unwrap();
     assert!(

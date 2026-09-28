@@ -71,8 +71,6 @@ same "schema"                        "$soopy" - schema
 same "missing path exit code"        "$soopy" - fast does/not/exist.rs
 same "fast . again (warm)"           "$soopy" - fast .
 
-# Purged mimalloc pages can remain RSS-resident until reclaimed by the OS; gate
-# the committed physical footprint that vmmap reports.
 footprint_mb() { vmmap --summary "$(cat "$XDG_CACHE_HOME/ryi/ryi.pid")" | awk '/^Physical footprint:/ {gsub(/M/, "", $3); printf "%d", $3; exit}'; }
 for _ in 1 2; do (cd "$soopy" && "$ryi" fast . >/dev/null 2>&1); done
 base=$(footprint_mb)

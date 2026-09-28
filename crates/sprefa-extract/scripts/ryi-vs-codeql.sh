@@ -119,7 +119,7 @@ fi
 if [ "${RYI_CODEQL_REUSE:-0}" != 1 ] || [ ! -f "$out/ryi.db" ]; then
   rm -f "$out/ryi.db"
   start=$(date +%s)
-  RYI_MAX_MEM_MB=2048 RUST_LOG=off "$ryi" fast "$root" --sqlite "$out/ryi.db" >"$out/ryi.log" 2>&1
+  RUST_LOG=off "$ryi" fast "$root" --sqlite "$out/ryi.db" >"$out/ryi.log" 2>&1
   echo "$(( $(date +%s) - start ))" >"$out/ryi-build-seconds"
 fi
 

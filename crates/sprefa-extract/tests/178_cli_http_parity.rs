@@ -652,7 +652,6 @@ fn fast_jsonl_uses_bounded_sorted_path_over_large_roster() {
         .arg(scratch.path())
         .env("DL_TRACE_SUMMARY", "1")
         .env("DL_TRAIL", "0")
-        .env("RYI_MAX_MEM_MB", "1024")
         .output()
         .expect("bounded fast run");
     assert!(

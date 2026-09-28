@@ -40,7 +40,6 @@ fn fast_skips_large_json_under_small_heap_cap() {
             "--sqlite",
             db_path.to_str().unwrap(),
         ])
-        .env("RYI_MAX_MEM_MB", "256")
         .env("SPREFA_EXTRACT_THREADS", "2")
         .env("RUST_LOG", "error")
         .output()

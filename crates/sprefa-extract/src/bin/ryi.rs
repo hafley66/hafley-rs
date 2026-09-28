@@ -19,23 +19,6 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, OnceLock};
 use std::time::Instant;
 
-#[cfg(feature = "mimalloc")]
-#[global_allocator]
-static GLOBAL_ALLOCATOR: cap::Cap<mimalloc::MiMalloc> =
-    cap::Cap::new(mimalloc::MiMalloc, usize::MAX);
-
-/// Heap ceiling: RYI_MAX_MEM_MB (default and maximum 2048). Past it an
-/// allocation fails and the process aborts instead of eating the machine.
-#[cfg(feature = "mimalloc")]
-fn cap_memory() {
-    let mb: usize = std::env::var("RYI_MAX_MEM_MB")
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(2048)
-        .clamp(1, 2048);
-    let _ = GLOBAL_ALLOCATOR.set_limit(mb << 20);
-}
-
 use clap::{CommandFactory as _, FromArgMatches as _};
 
 use sprefa_extract::schema::schema_text;
@@ -378,14 +361,6 @@ impl From<String> for RyiExit {
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    #[cfg(feature = "mimalloc")]
-    unsafe {
-        // mimalloc v3 option 15 is purge_delay (milliseconds); set it before
-        // any allocator use so freed pages become purgeable immediately.
-        libmimalloc_sys::mi_option_set(15, 0);
-    }
-    #[cfg(feature = "mimalloc")]
-    cap_memory();
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
         return server_auto::daemon(
             || {
