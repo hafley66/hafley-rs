@@ -367,7 +367,7 @@ fn the_walk_is_one_run_and_every_row_witnesses_it() {
     assert_eq!(
         runs,
         vec![
-            (0, "syntax".to_string(), "extract".to_string()),
+            (0, "syntax".to_string(), "ryi".to_string()),
             (1, "semantic".to_string(), "rust-analyzer".to_string()),
         ]
     );

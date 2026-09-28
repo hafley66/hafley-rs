@@ -84,18 +84,16 @@ fn type_edges(facts: &[Value]) -> Vec<(String, String, String, String)> {
 }
 
 /// `PathBuf` is std, and `decoys.rs` holds the only corpus declaration of the
-/// name, so the corpus-unique leg hands the field the decoy.
+/// name. The syntax leg no longer guesses by corpus-unique name, so without
+/// the checker the field binds nothing rather than the decoy.
 #[test]
-fn the_syntax_leg_alone_binds_a_std_name_to_its_decoy() {
+fn the_syntax_leg_alone_does_not_bind_a_std_name_to_its_decoy() {
     let edges = type_edges(&run(false));
     assert!(
-        edges
+        !edges
             .iter()
-            .any(|(owner, file, name, origin)| owner == "Located"
-                && file == "decoys.rs"
-                && name == "PathBuf"
-                && origin == "corpus_unique"),
-        "the syntax leg binds the decoy PathBuf, got {edges:?}"
+            .any(|(owner, _, name, _)| owner == "Located" && name == "PathBuf"),
+        "the syntax leg binds no decoy PathBuf, got {edges:?}"
     );
 }
 
