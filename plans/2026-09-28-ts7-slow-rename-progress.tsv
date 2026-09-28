@@ -1,21 +1,50 @@
-run	metric	value	unit
-ts7_lsp	compiler_version	7.0.2	version
-ts7_lsp	oracle_version	5.9.3	version
-ts7_lsp	fixture_cases	25	cases
-ts7_lsp	fixture_oracle_matches	23	cases
-ts7_lsp	fixture_expected_abstentions	2	cases
-ts7_lsp	truth_targets	51	targets
-ts7_lsp	targets_renamed	51	targets
-ts7_lsp	targets_abstained	0	targets
-ts7_lsp	typecheck_equal_baseline	50	targets
-ts7_lsp	typecheck_mismatch_targets	1	targets
-ts7_lsp	typecheck_mismatch_symbol	ambientDeclaration	symbol
-ts7_lsp	diff_isolated	48	targets
-ts7_lsp	diff_unisolated	3	targets
-ts7_lsp	truth_files	200	files
-ts7_lsp	found_truth_files	196	files
-ts7_lsp	slow_rename_file_recall	0.980000	ratio
-ts7_lsp	truth_sites	1415	sites
-ts7_lsp	found_truth_sites	1407	sites
-ts7_lsp	slow_rename_site_recall	0.994346	ratio
-ts7_lsp	command_wall_total	7.987	seconds
+run	metric	value	unit	cause
+ts7_lsp_25413b03	compiler_version	7.0.2	version	-
+ts7_lsp_25413b03	oracle_version	5.9.3	version	-
+ts7_lsp_25413b03	fixture_cases	25	cases	-
+ts7_lsp_25413b03	fixture_oracle_matches	23	cases	-
+ts7_lsp_25413b03	fixture_expected_abstentions	2	cases	-
+ts7_lsp_25413b03	truth_targets	51	targets	-
+ts7_lsp_25413b03	targets_renamed	51	targets	-
+ts7_lsp_25413b03	targets_abstained	0	targets	-
+ts7_lsp_25413b03	typecheck_equal_baseline	50	targets	-
+ts7_lsp_25413b03	typecheck_mismatch_targets	1	targets	-
+ts7_lsp_25413b03	typecheck_mismatch_symbol	ambientDeclaration	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile at src/mcp/explore-diagnostics.ts:574.
+ts7_lsp_25413b03	diff_isolated	48	targets	-
+ts7_lsp_25413b03	diff_unisolated	3	targets	-
+ts7_lsp_25413b03	truth_files	200	files	-
+ts7_lsp_25413b03	found_truth_files	196	files	-
+ts7_lsp_25413b03	slow_rename_file_recall	0.980000	ratio	-
+ts7_lsp_25413b03	truth_sites	1415	sites	-
+ts7_lsp_25413b03	found_truth_sites	1407	sites	-
+ts7_lsp_25413b03	slow_rename_site_recall	0.994346	ratio	-
+ts7_lsp_25413b03	command_wall_total	7.987	seconds	-
+ts7_lsp_25413b03	missed_truth_file	svgVirtualModulePlugin playground/fs-serve/root/vite.config-base.js	file	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-base.js:4	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-base.js:39	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_file	svgVirtualModulePlugin playground/fs-serve/root/vite.config-deny.js	file	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-deny.js:3	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config-deny.js:22	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_file	svgVirtualModulePlugin playground/fs-serve/root/vite.config.js	file	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config.js:4	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_site	svgVirtualModulePlugin playground/fs-serve/root/vite.config.js:35	site	Compiler WorkspaceEdit omitted JavaScript config references to svgVirtualModulePlugin.
+ts7_lsp_25413b03	missed_truth_file	transformFooWithInlineSourceMap playground/js-sourcemap/vite.config.js	file	Compiler WorkspaceEdit omitted JavaScript config references to transformFooWithInlineSourceMap.
+ts7_lsp_25413b03	missed_truth_site	transformFooWithInlineSourceMap playground/js-sourcemap/vite.config.js:6	site	Compiler WorkspaceEdit omitted JavaScript config references to transformFooWithInlineSourceMap.
+ts7_lsp_25413b03	missed_truth_site	transformFooWithInlineSourceMap playground/js-sourcemap/vite.config.js:10	site	Compiler WorkspaceEdit omitted JavaScript config references to transformFooWithInlineSourceMap.
+ts7_lsp_shared_selector	fixture_cases	25	cases	-
+ts7_lsp_shared_selector	fixture_oracle_matches	16	cases	-
+ts7_lsp_shared_selector	fixture_selector_stops	9	cases	-
+ts7_lsp_shared_selector	truth_targets	51	targets	-
+ts7_lsp_shared_selector	targets_renamed	42	targets	-
+ts7_lsp_shared_selector	targets_stopped	9	targets	-
+ts7_lsp_shared_selector	typecheck_equal_baseline	50	targets	-
+ts7_lsp_shared_selector	typecheck_mismatch_targets	1	targets	-
+ts7_lsp_shared_selector	diff_isolated	38	targets	-
+ts7_lsp_shared_selector	truth_files	200	files	-
+ts7_lsp_shared_selector	found_truth_files	154	files	-
+ts7_lsp_shared_selector	slow_rename_file_recall	0.770000	ratio	-
+ts7_lsp_shared_selector	truth_sites	1415	sites	-
+ts7_lsp_shared_selector	found_truth_sites	994	sites	-
+ts7_lsp_shared_selector	slow_rename_site_recall	0.702473	ratio	-
+ts7_lsp_shared_selector	command_wall_total	7.439	seconds	-
+ts7_lsp_shared_selector	typecheck_mismatch_symbol	ambientDeclaration src/mcp/explore-diagnostics.ts:574	symbol	Compiler WorkspaceEdit omitted the object literal key required by ExploreDiagnosticFile.

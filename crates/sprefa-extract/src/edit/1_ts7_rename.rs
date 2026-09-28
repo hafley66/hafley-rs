@@ -19,7 +19,6 @@ use lsp_types::{
 };
 use serde::Serialize;
 use serde_json::{json, Value};
-use tree_sitter::{Node, Parser};
 
 use crate::edit_seams::{RefRole, RenameAbstain, RenameStop, SymbolRef};
 use crate::rename_cx::{RenameCx, RenameRequest};
@@ -32,11 +31,8 @@ pub fn symbol_refs_and_abstains(
     request: &RenameRequest,
 ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
     let text = cx.text(&request.anchor).ok_or_else(|| not_found(request))?;
-    let seed = seed_offset(&text, request).ok_or_else(|| not_found(request))?;
-    let span = Span {
-        start: seed as u32,
-        len: request.old.len() as u32,
-    };
+    let span = crate::edit::ts_rename::selected_declaration_span(cx, request)?;
+    let seed = span.start as usize;
     let position = position_at_byte(&text, seed).map_err(|_| inexact(request, span))?;
     let anchor_uri = file_uri(&cx.abs(&request.anchor)).map_err(|_| inexact(request, span))?;
     let root_uri = file_uri(cx.root()).map_err(|_| inexact(request, span))?;
@@ -327,43 +323,6 @@ fn byte_at_lsp_position(text: &str, position: Position) -> Result<usize, String>
     Err("UTF-16 position splits a character or exceeds the line".into())
 }
 
-fn seed_offset(text: &str, request: &RenameRequest) -> Option<usize> {
-    let mut parser = Parser::new();
-    let language = if request.anchor.ends_with(".tsx") {
-        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX)
-    } else {
-        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
-    };
-    parser.set_language(&language).ok()?;
-    let tree = parser.parse(text, None)?;
-    if let Some(at) = request.at {
-        let at = at as usize;
-        let mut node = Some(tree.root_node().descendant_for_byte_range(at, at + 1)?);
-        while let Some(current) = node {
-            if current.end_byte() - current.start_byte() == request.old.len()
-                && text.get(current.byte_range()) == Some(request.old.as_str())
-            {
-                return Some(current.start_byte());
-            }
-            node = current.parent();
-        }
-        return (at < text.len()).then_some(at);
-    }
-    fn first_name(node: Node<'_>, text: &str, old: &str) -> Option<usize> {
-        if node.named_child_count() == 0 && text.get(node.byte_range()) == Some(old) {
-            return Some(node.start_byte());
-        }
-        let mut cursor = node.walk();
-        for child in node.named_children(&mut cursor) {
-            if let Some(start) = first_name(child, text, old) {
-                return Some(start);
-            }
-        }
-        None
-    }
-    first_name(tree.root_node(), text, &request.old)
-}
-
 fn abstain(
     request: &RenameRequest,
     span: Span,
@@ -420,7 +379,7 @@ mod tests {
                 "div",
                 17,
                 "3_intrinsic.rename.json",
-                Some("ts7_lsp_rename_rejected"),
+                Some("not_found"),
             ),
             ("4_export.ts", "old", 6, "4_export.rename.json", None),
             (
@@ -428,7 +387,7 @@ mod tests {
                 "publicName",
                 31,
                 "4_export.publicName.rename.json",
-                None,
+                Some("not_found"),
             ),
             ("5_module.ts", "old", 13, "5_module.rename.json", None),
             ("6_import.ts", "local", 16, "6_import.rename.json", None),
@@ -472,7 +431,7 @@ mod tests {
                 "mid",
                 16,
                 "11_reexport_mid.rename.json",
-                None,
+                Some("not_found"),
             ),
             (
                 "13_reexport_consumer.ts",
@@ -507,9 +466,15 @@ mod tests {
                 "old",
                 9,
                 "17_overloads.rename.json",
-                None,
+                Some("ambiguous"),
             ),
-            ("18_merge.ts", "Old", 10, "18_merge.rename.json", None),
+            (
+                "18_merge.ts",
+                "Old",
+                10,
+                "18_merge.rename.json",
+                Some("ambiguous"),
+            ),
             (
                 "19_jsx_component.tsx",
                 "Old",
@@ -522,22 +487,28 @@ mod tests {
                 "old",
                 20,
                 "20_string_property.rename.json",
-                None,
+                Some("not_found"),
             ),
             (
                 "21_string_type.ts",
                 "old",
                 16,
                 "21_string_type.rename.json",
-                None,
+                Some("not_found"),
             ),
-            ("22_numeric.ts", "0", 15, "22_numeric.rename.json", None),
+            (
+                "22_numeric.ts",
+                "0",
+                15,
+                "22_numeric.rename.json",
+                Some("not_found"),
+            ),
             (
                 "24_module_path.ts",
                 "23_path_source",
                 26,
                 "24_module_path.rename.json",
-                Some("ts7_lsp_rename_rejected"),
+                Some("not_found"),
             ),
         ];
         for (source, old, at, oracle, expected_reason) in cases {
@@ -553,7 +524,22 @@ mod tests {
                 .into(),
                 at: Some(at),
             };
-            let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
+            let result = symbol_refs_and_abstains(&cx, &request);
+            if expected_reason == Some("not_found") {
+                assert!(
+                    matches!(result, Err(RenameStop::NotFound { .. })),
+                    "{source}"
+                );
+                continue;
+            }
+            if expected_reason == Some("ambiguous") {
+                assert!(
+                    matches!(result, Err(RenameStop::Ambiguous { .. })),
+                    "{source}"
+                );
+                continue;
+            }
+            let (refs, abstains) = result.unwrap();
             if let Some(reason) = expected_reason {
                 assert!(refs.is_empty(), "{source}: {} refs", refs.len());
                 assert_eq!(abstains.len(), 1, "{source}");
