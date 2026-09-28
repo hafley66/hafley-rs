@@ -1,0 +1,4 @@
+step	commit	metric	value	target
+pin_typescript	HEAD	api_exchanges_passing	0	3
+pin_typescript	HEAD	checker_queries_implemented	0	11
+pin_typescript	HEAD	case_fixtures_passing	0	22
