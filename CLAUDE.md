@@ -25,5 +25,7 @@
 - Rust resolution is rust-analyzer as a library (`ra_ap_*`, feature `rust-checker`). It is part of
   the default `cli` build. `rust_modules.rs` stays for now (user-set 2026-09-28); new code asks
   rust-analyzer instead of extending the hand resolvers.
+- Code stays tight and legible (user-set 2026-09-28). New work goes in a new small numbered file.
+  Never grow a large file (over ~1000 lines) with new work; split it when you touch it.
 - No workarounds or fallback heuristics. When the proper engine is unavailable, the command
   abstains or errors with the reason; it does not guess with text scans or a parallel resolver.
