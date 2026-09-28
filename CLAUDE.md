@@ -11,3 +11,10 @@
 ## Tool evaluation scope
 - Rust and TypeScript only until ryi and its rivals are proven on those two. No Kotlin, Go or
   Python runs, fixtures, or truth indexes until the user lifts this.
+
+## Delegation
+- Reading and recon fan out in parallel: codex `gpt-6-luna` high, read-only, reports under
+  `~/.cache/lanes/claude-375/recon/`, no worktree.
+- Writing is serial in ONE worktree checkout folder: codex `gpt-6-sol` medium (boop preset `sol6-med`).
+  One writer at a time; merge to main before the next writer starts. Do not create per-task worktrees.
+- The coordinator reviews every writer's diff before merge.
