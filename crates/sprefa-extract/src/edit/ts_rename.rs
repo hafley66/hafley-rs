@@ -49,6 +49,9 @@ impl Rename for TsSource {
         cx: &RenameCx,
         request: &RenameRequest,
     ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
+        if cx.slow() {
+            return crate::edit::ts7_rename::symbol_refs_and_abstains(cx, request);
+        }
         let text = cx.text(&request.anchor).ok_or_else(|| not_found(request))?;
         let parser = OxcParser;
         let arena = parser.make_arena();
@@ -151,6 +154,16 @@ impl Rename for TsSource {
         request: &RenameRequest,
         reference: &SymbolRef,
     ) -> Option<Respell> {
+        if cx.slow() {
+            if let Some(text) = cx.ts_slow_edit(&reference.file, reference.span) {
+                return Some(Respell {
+                    file: reference.file.clone(),
+                    span: reference.span,
+                    text,
+                    receipt: None,
+                });
+            }
+        }
         let shorthand = property_pattern_shorthand(cx, reference);
         Some(Respell {
             file: reference.file.clone(),

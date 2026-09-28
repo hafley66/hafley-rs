@@ -5,3 +5,6 @@ pin_typescript	HEAD	case_fixtures_passing	0	22
 api_client	HEAD	api_exchanges_passing	3	3
 api_client	HEAD	checker_queries_implemented	1	11
 api_client	HEAD	case_fixtures_passing	0	22
+rename_seam	HEAD	api_exchanges_passing	3	3
+rename_seam	HEAD	checker_queries_implemented	1	11
+rename_seam	HEAD	case_fixtures_passing	0	22
