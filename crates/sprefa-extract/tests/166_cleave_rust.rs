@@ -15,6 +15,10 @@ struct Fixture {
 }
 
 fn fixture(variant: &str, label: &str) -> Fixture {
+    fixture_tree("cleave_rust", variant, label)
+}
+
+fn fixture_tree(group: &str, variant: &str, label: &str) -> Fixture {
     let base = std::env::temp_dir().join(format!(
         "ryi_cleave_rust_{variant}_{label}_{}_{}",
         std::process::id(),
@@ -27,7 +31,8 @@ fn fixture(variant: &str, label: &str) -> Fixture {
     let state = base.join("state");
     std::fs::create_dir_all(&state).unwrap();
     let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/cleave_rust")
+        .join("tests/fixtures")
+        .join(group)
         .join(variant);
     copy_tree(&source, &root);
     git(&root, &["init", "-q", "."]);
@@ -93,8 +98,13 @@ fn cleave(fixture: &Fixture, args: &[&str]) -> String {
 /// The tree the run left behind, compiled. A cleave that type checks is the
 /// only receipt that says the imports it wrote are the imports it needed.
 fn cargo_check(fixture: &Fixture) -> String {
+    cargo_check_with(fixture, &[])
+}
+
+fn cargo_check_with(fixture: &Fixture, extra: &[&str]) -> String {
     let output = Command::new(env!("CARGO"))
-        .args(["check", "--quiet"])
+        .args(["check", "--quiet", "--offline"])
+        .args(extra)
         .current_dir(&fixture.root)
         .env("CARGO_TARGET_DIR", &fixture.target)
         .output()
@@ -710,4 +720,94 @@ pub fn describe(stop: &Stop) -> String {
     assert!(lib.contains("pub use util::describe;"), "{lib}");
     assert!(lib.contains("pub use crate::stops::Stop;"), "{lib}");
     cargo_check(&fixture);
+}
+
+#[test]
+fn text_refs_skip_plan_docs_and_cleave_defaults_to_quiet_logging() {
+    let fixture = fixture_tree("cleave_ratchet", "text_refs", "text-refs");
+    git(&fixture.root, &["add", "-A"]);
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/source.rs#target", "src/dest.rs", "--root"])
+        .arg(&fixture.root)
+        .args(["--state"])
+        .arg(&fixture.state)
+        .args(["--text-refs"])
+        .current_dir(&fixture.root)
+        .output()
+        .expect("cleave binary runs");
+    assert_eq!(output.status.code(), Some(0));
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!stdout.contains("text-ref plans/"), "{stdout}");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!stderr.contains("INFO sprefa_extract"), "{stderr}");
+
+    cleave(
+        &fixture,
+        &["src/source.rs#target", "src/dest.rs", "--commit"],
+    );
+    cargo_check(&fixture);
+}
+
+#[test]
+fn cfg_attributes_gate_imports_when_the_feature_is_off() {
+    let fixture = fixture_tree("cleave_ratchet", "cfg_new_module", "cfg-use");
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/source.rs#target", "src/dest.rs", "--commit"],
+    );
+    let source = read(&fixture, "src/source.rs");
+    assert!(
+        source.contains("#[cfg_attr(\n    feature = \"checker\",\n    cfg(feature = \"checker\")\n)]\n#[cfg(feature = \"checker\")]\nuse crate::dest::target;"),
+        "{source}"
+    );
+    cargo_check_with(&fixture, &["--no-default-features"]);
+    cargo_check_with(
+        &fixture,
+        &["--no-default-features", "--features", "checker"],
+    );
+}
+
+#[test]
+fn moved_struct_fields_are_visible_to_remaining_sibling_code() {
+    let fixture = fixture_tree("cleave_ratchet", "private_fields", "private-fields");
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/source.rs#Packet", "src/dest.rs", "--commit"],
+    );
+    cargo_check(&fixture);
+}
+
+#[test]
+fn moved_dependencies_keep_accessible_public_reexport_paths() {
+    let fixture = fixture_tree("cleave_ratchet", "reexport", "reexport");
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/branch/source.rs#target", "src/dest.rs", "--commit"],
+    );
+    let dest = read(&fixture, "src/dest.rs");
+    assert!(dest.contains("use crate::types::PublicItem;"), "{dest}");
+    cargo_check(&fixture);
+}
+
+#[test]
+fn cfg_attributes_gate_new_module_declarations() {
+    let fixture = fixture_tree("cleave_ratchet", "cfg_new_module", "cfg-new-module");
+    git(&fixture.root, &["add", "-A"]);
+    cleave(
+        &fixture,
+        &["src/source.rs#target", "src/dest.rs", "--commit"],
+    );
+    let lib = read(&fixture, "src/lib.rs");
+    assert!(
+        lib.contains("#[cfg_attr(\n    feature = \"checker\",\n    cfg(feature = \"checker\")\n)]\n#[cfg(feature = \"checker\")]\npub mod dest;"),
+        "{lib}"
+    );
+    cargo_check_with(&fixture, &["--no-default-features"]);
+    cargo_check_with(
+        &fixture,
+        &["--no-default-features", "--features", "checker"],
+    );
 }

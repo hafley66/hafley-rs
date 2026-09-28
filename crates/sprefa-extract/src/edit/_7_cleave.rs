@@ -612,8 +612,18 @@ fn verify_after_commit(
 /// Rewriting text carriers is out of scope for `move` and for this verb.
 fn report_text_refs(plan: &Plan) {
     let edited: BTreeSet<String> = plan.touched().into_iter().collect();
+    let mut ignore = ignore::gitignore::GitignoreBuilder::new(&plan.root);
+    let _ = ignore.add(plan.root.join(".ryiignore"));
+    let ignore = ignore.build().ok();
     for rel in plan.cx.files() {
-        if cleave_for(rel).is_some() || edited.contains(rel) {
+        if cleave_for(rel).is_some()
+            || edited.contains(rel)
+            || ignore.as_ref().is_some_and(|rules| {
+                rules
+                    .matched_path_or_any_parents(plan.cx.abs(rel), false)
+                    .is_ignore()
+            })
+        {
             continue;
         }
         let Some(text) = plan.cx.text(rel) else {
@@ -670,6 +680,7 @@ struct Plan {
     arm: &'static dyn Cleave,
     rows: CleavePlan,
     source: FileFacts,
+    cfg_prefix: String,
     /// None when DEST does not exist yet and this run creates it.
     dest_facts: Option<FileFacts>,
     /// The item's text and each moved helper's, in SRC byte order.
@@ -775,6 +786,7 @@ impl Plan {
             .find(|decl| decl.name == item)
             .ok_or_else(|| format!("{src} declares no {item}"))?
             .clone();
+        let cfg_prefix = item_cfg_prefix(&src, &source.text, &item_decl)?;
 
         let (mut dragged, drag_iterations) = source.drag_fixpoint(&item_decl, drag);
         let travelling_types: BTreeSet<String> = std::iter::once(item.clone())
@@ -823,9 +835,20 @@ impl Plan {
         let mut glob_unresolved = BTreeSet::new();
         for row in source.specifiers.iter().filter(|row| !row.glob) {
             let dest_module = match imports.target(&src, &row.name) {
-                Some(target) => arm
-                    .respell_relative(&cx, &src, &dest, &row.module)
-                    .unwrap_or_else(|| arm.spell_module(&cx, &dest, target)),
+                Some(target) => {
+                    let asked = row.module.rsplit("::").next().unwrap_or(&row.name);
+                    let written = arm
+                        .respell_relative(&cx, &src, &dest, &row.module)
+                        .unwrap_or_else(|| row.module.clone());
+                    if arm.name() != "rust"
+                        || (cx.contains(&dest)
+                            && imports.route_reaches(&dest, &written, &row.name, target))
+                    {
+                        module_key(asked, &written)
+                    } else {
+                        arm.spell_module(&cx, &dest, target)
+                    }
+                }
                 None => arm
                     .respell_relative(&cx, &src, &dest, &row.module)
                     .unwrap_or_else(|| row.module.clone()),
@@ -955,6 +978,7 @@ impl Plan {
                     ..CleavePlan::default()
                 },
                 source,
+                cfg_prefix,
                 dest_facts: None,
                 moving_text: Vec::new(),
                 dest_imports: Vec::new(),
@@ -1033,6 +1057,15 @@ impl Plan {
             .iter()
             .map(|span| source.slice(*span).to_string())
             .collect();
+        widen_private_fields(
+            &cx,
+            imports,
+            &src,
+            &dest,
+            &source.text,
+            &moving,
+            &mut moving_text,
+        )?;
         if !item_decl.exported && (source.refs_outside(&item, &moving) > 0 || !callers.is_empty()) {
             if let Some(first) = moving_text.first_mut() {
                 if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
@@ -1070,6 +1103,7 @@ impl Plan {
                 unresolved,
             },
             source,
+            cfg_prefix,
             dest_facts,
             moving_text,
             dest_imports,
@@ -1156,7 +1190,7 @@ impl Plan {
                 receipt: Some(format!("re-export {file}: {}", text.trim())),
                 file: file.clone(),
                 span: *span,
-                text: text.clone(),
+                text: format!("{}{text}", self.cfg_prefix),
             });
         }
         if let Some((file, edit)) = self.new_file_decl() {
@@ -1282,7 +1316,7 @@ impl Plan {
                 edits.push(Respell {
                     file: self.rows.src.clone(),
                     span: edit.span,
-                    text: edit.text,
+                    text: format!("{}{text}", self.cfg_prefix, text = edit.text),
                     receipt: Some(format!(
                         "source {} keeps {} via {module}",
                         self.rows.src, self.rows.item
@@ -1431,7 +1465,7 @@ impl Plan {
             let mut landing: Vec<String> = facts
                 .specifiers
                 .iter()
-                .filter(|row| row.module == spelling)
+                .filter(|row| self.cfg_prefix.is_empty() && row.module == spelling)
                 .map(|row| row.name.clone())
                 .collect();
             landing.push(self.rows.item.clone());
@@ -1442,7 +1476,7 @@ impl Plan {
                 out.push(Respell {
                     file: rel.clone(),
                     span: edit.span,
-                    text: edit.text,
+                    text: format!("{}{text}", self.cfg_prefix, text = edit.text),
                     receipt: Some(format!("caller {rel}: {} -> {spelling}", self.rows.item)),
                 });
             }
@@ -1496,11 +1530,19 @@ impl Plan {
                     &row.module,
                 ),
             ];
-            for edit in edits.into_iter().flatten() {
+            for (index, edit) in edits
+                .into_iter()
+                .enumerate()
+                .filter_map(|(index, edit)| edit.map(|edit| (index, edit)))
+            {
+                let replacement = if index == 1 {
+                    format!("{}{text}", self.cfg_prefix, text = edit.text)
+                } else {
+                    edit.text
+                };
                 let at_line_start = statement[..edit.span.start as usize].ends_with('\n');
                 let text = match edit.span.len {
-                    0 => edit
-                        .text
+                    0 => replacement
                         .lines()
                         .enumerate()
                         .map(|(index, line)| match index == 0 && !at_line_start {
@@ -1508,7 +1550,7 @@ impl Plan {
                             false => format!("{indent}{line}\n"),
                         })
                         .collect(),
-                    _ => edit.text,
+                    _ => replacement,
                 };
                 // A whole-statement drop takes its indentation along.
                 let (start, len) = match edit.span.start == 0 && text.is_empty() {
@@ -1587,7 +1629,11 @@ impl Plan {
             Some(_) => None,
             None => self
                 .arm
-                .declare_new_file(&self.cx, &self.rows.src, &self.rows.dest),
+                .declare_new_file(&self.cx, &self.rows.src, &self.rows.dest)
+                .map(|(file, mut edit)| {
+                    edit.text = format!("{}{text}", self.cfg_prefix, text = edit.text);
+                    (file, edit)
+                }),
         }
     }
 
@@ -1663,6 +1709,228 @@ fn as_written(cx: &MoveCx, dest: &str, module: &str, spelling: String) -> String
         (true, Some(rest)) if rest.is_empty() || rest.starts_with("::") => format!("{head}{rest}"),
         _ => spelling,
     }
+}
+
+fn item_cfg_prefix(rel: &str, text: &str, decl: &Decl) -> Result<String, String> {
+    if !rel.ends_with(".rs") {
+        return Ok(String::new());
+    }
+    let out = dispatch(
+        rel,
+        text.as_bytes(),
+        FamilyMask {
+            cst: true,
+            ..FamilyMask::NONE
+        },
+    )
+    .ok_or_else(|| format!("no CST fact arm owns {rel}"))?;
+    let mut items = Vec::new();
+    let mut attrs = Vec::new();
+    let mut identifiers = Vec::new();
+    flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
+        if let FlatFact::Node {
+            family: sprefa_extract::FamilyTag::Cst,
+            kind,
+            name,
+            span,
+            ..
+        } = fact
+        {
+            match kind.as_str() {
+                "attribute_item" => attrs.push(span),
+                "identifier" => identifiers.push((span, name)),
+                _ if kind.ends_with("_item") && name.as_deref() == Some(decl.name.as_str()) => {
+                    items.push(span)
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    })
+    .map_err(|_| format!("flatten cfg attributes in {rel}"))?;
+    let Some(item_start) = items
+        .iter()
+        .filter(|span| decl.span.start <= span.start && span.end <= decl.span.end())
+        .map(|span| span.start)
+        .min()
+    else {
+        return Ok(String::new());
+    };
+    attrs.sort_by_key(|span| span.start);
+    let mut prefix = String::new();
+    for attr in attrs {
+        if attr.start < decl.span.start || attr.end > item_start {
+            continue;
+        }
+        let mut names = identifiers
+            .iter()
+            .filter(|(span, _)| attr.start <= span.start && span.end <= attr.end)
+            .collect::<Vec<_>>();
+        names.sort_by_key(|(span, _)| span.start);
+        let gated = match names.first().and_then(|(_, name)| name.as_deref()) {
+            Some("cfg") => true,
+            Some("cfg_attr") => names
+                .iter()
+                .skip(1)
+                .any(|(_, name)| name.as_deref() == Some("cfg")),
+            _ => false,
+        };
+        if gated {
+            if let Some(source) = text.get(attr.start as usize..attr.end as usize) {
+                prefix.push_str(source);
+                prefix.push('\n');
+            }
+        }
+    }
+    Ok(prefix)
+}
+
+fn rust_children(node: tree_sitter::Node<'_>) -> Vec<tree_sitter::Node<'_>> {
+    let mut cursor = node.walk();
+    node.named_children(&mut cursor).collect()
+}
+
+fn rust_route_index(
+    cx: &MoveCx,
+) -> Result<hafley_scm::read::lang::rust_modules::RustModuleIndex, String> {
+    use hafley_scm::read::lang::rust_modules::{rust_module_facts_from_tree, RustModuleIndex};
+    let mut corpus = Vec::new();
+    let mut outputs = Vec::new();
+    let mut modules = Vec::new();
+    for rel in cx.files() {
+        if !rel.ends_with(".rs") && !rel.ends_with("Cargo.toml") {
+            continue;
+        }
+        let Some(text) = cx.text(rel) else { continue };
+        let blob = soopy::ContentId::blake3(text.as_bytes());
+        corpus.push((rel.clone(), blob.clone()));
+        if !rel.ends_with(".rs") {
+            continue;
+        }
+        let parsed = hafley_scm::lang::rust::RustFastFile::extract(rel, text.as_bytes())
+            .ok_or_else(|| format!("parse Rust module route in {rel}"))?;
+        modules.push((
+            rel.clone(),
+            rust_module_facts_from_tree(parsed.tree(), text.as_bytes()),
+        ));
+        if let Some(output) = dispatch(
+            rel,
+            text.as_bytes(),
+            FamilyMask {
+                cst: true,
+                call: true,
+                ..FamilyMask::NONE
+            },
+        ) {
+            outputs.push((blob, output));
+        }
+    }
+    let pairs: Vec<_> = outputs
+        .iter()
+        .map(|(blob, output)| (blob.clone(), output.as_ref()))
+        .collect();
+    let defs = hafley_scm::read::types::build_def_index(&pairs);
+    Ok(RustModuleIndex::build(modules, &corpus, &defs))
+}
+
+fn widen_private_fields(
+    cx: &MoveCx,
+    imports: &Imports,
+    src: &str,
+    dest: &str,
+    source: &str,
+    moving: &[Span],
+    moving_text: &mut [String],
+) -> Result<(), String> {
+    if !src.ends_with(".rs") {
+        return Ok(());
+    }
+    let parsed = hafley_scm::lang::rust::RustFastFile::extract(src, source.as_bytes())
+        .ok_or_else(|| format!("parse Rust fields in {src}"))?;
+    let mut private = Vec::new();
+    for item in rust_children(parsed.tree().root_node()) {
+        if item.kind() != "struct_item" {
+            continue;
+        }
+        let Some(name_node) = item.child_by_field_name("name") else {
+            continue;
+        };
+        let owner = &source[name_node.byte_range()];
+        let Some((index, span)) = moving.iter().enumerate().find(|(_, span)| {
+            span.start as usize <= item.start_byte() && item.end_byte() <= span.end() as usize
+        }) else {
+            continue;
+        };
+        let Some(body) = item.child_by_field_name("body") else {
+            continue;
+        };
+        for field in rust_children(body) {
+            if field.kind() != "field_declaration"
+                || rust_children(field)
+                    .iter()
+                    .any(|child| child.kind() == "visibility_modifier")
+            {
+                continue;
+            }
+            let Some(name) = field.child_by_field_name("name") else {
+                continue;
+            };
+            private.push((
+                owner.to_string(),
+                source[name.byte_range()].to_string(),
+                index,
+                field.start_byte() - span.start as usize,
+            ));
+        }
+    }
+    if private.is_empty() {
+        return Ok(());
+    }
+    let mut needed = BTreeSet::new();
+    for rel in cx
+        .files()
+        .iter()
+        .filter(|rel| rel.ends_with(".rs") && *rel != dest)
+    {
+        let Some(text) = cx.text(rel) else { continue };
+        let Some(parsed) = hafley_scm::lang::rust::RustFastFile::extract(rel, text.as_bytes())
+        else {
+            continue;
+        };
+        for access in
+            hafley_scm::lang::rust::field_access_rows_from_tree(parsed.tree(), text.as_bytes())
+        {
+            let access_span = span_of(access.span.start, access.span.end());
+            if rel == src && moving.iter().any(|span| inside(access_span, *span)) {
+                continue;
+            }
+            let target = imports.types.iter().any(|(from, target, name)| {
+                from == rel && target == src && name == &access.receiver
+            }) || imports
+                .names
+                .iter()
+                .any(|(from, bound, target, declared, _)| {
+                    from == rel
+                        && bound == &access.receiver
+                        && target == src
+                        && declared == &access.receiver
+                });
+            if target {
+                needed.insert((access.receiver, access.field));
+            }
+        }
+    }
+    let mut inserts = Vec::new();
+    for (owner, field, index, offset) in private {
+        if needed.contains(&(owner, field)) {
+            inserts.push((index, offset));
+        }
+    }
+    inserts.sort_by(|a, b| b.cmp(a));
+    for (index, offset) in inserts {
+        moving_text[index].insert_str(offset, "pub(crate) ");
+    }
+    Ok(())
 }
 
 /// `edit` applied to `text`, which is how a block built from nothing grows.
@@ -1741,9 +2009,22 @@ struct Imports {
     names: Vec<(String, String, String, String, bool)>,
     /// Resolved call sites `(caller file, site span, callee file, callee name)`.
     calls: Vec<(String, Span, String, String)>,
+    types: Vec<(String, String, String)>,
+    rust_routes: hafley_scm::read::lang::rust_modules::RustModuleIndex,
 }
 
 impl Imports {
+    fn route_reaches(&self, from: &str, module: &str, bound: &str, target: &str) -> bool {
+        use hafley_scm::read::lang::rust_modules::ModuleCallTarget;
+        let asked = module.rsplit("::").next().unwrap_or(bound);
+        let qualifier = module_key(asked, module);
+        let segments: Vec<String> = qualifier.split("::").map(str::to_string).collect();
+        match self.rust_routes.module_call(from, &segments, asked) {
+            ModuleCallTarget::Target(blob, _) => self.rust_routes.blob_of(target) == Some(&blob),
+            _ => false,
+        }
+    }
+
     fn read(cx: &MoveCx, root: &Path) -> Result<Self, String> {
         let paths: Vec<PathBuf> = cx
             .files()
@@ -1755,6 +2036,7 @@ impl Imports {
             paths: &paths,
             arms: ResolveArms {
                 call: true,
+                types: true,
                 ..ResolveArms::default()
             },
             scip: ScipMode::Off,
@@ -1770,7 +2052,22 @@ impl Imports {
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
         let mut names = Vec::new();
         let mut calls = Vec::new();
+        let mut types = Vec::new();
         for fact in &facts {
+            if let FlatFact::ResolvedTypeEdge {
+                owner_path,
+                target_path,
+                target_name: Some(name),
+                ..
+            } = fact
+            {
+                if let (Some(owner), Some(target)) =
+                    (rel_of(root, owner_path), rel_of(root, target_path))
+                {
+                    types.push((owner, target, name.clone()));
+                }
+                continue;
+            }
             if let FlatFact::ResolvedEdge {
                 caller_path,
                 callee_path,
@@ -1811,7 +2108,13 @@ impl Imports {
             let relayed = kind == "indirect" || kind == "star";
             names.push((importer, name.clone(), target, declared.clone(), relayed));
         }
-        Ok(Self { names, calls })
+        let rust_routes = rust_route_index(cx)?;
+        Ok(Self {
+            names,
+            calls,
+            types,
+            rust_routes,
+        })
     }
 
     /// One landed row folded in: the item's importers now reach DEST, DEST

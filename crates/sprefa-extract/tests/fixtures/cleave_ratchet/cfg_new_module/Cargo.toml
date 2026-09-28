@@ -1,0 +1,10 @@
+[package]
+name = "cleave-ratchet-cfg-new-module"
+version = "0.0.0"
+edition = "2021"
+
+[features]
+checker = []
+
+[lib]
+path = "src/lib.rs"
