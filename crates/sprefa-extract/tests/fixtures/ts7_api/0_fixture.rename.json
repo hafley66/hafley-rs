@@ -1,0 +1,32 @@
+{
+  "changes": {
+    "0_fixture.ts": [
+      {
+        "range": {
+          "start": {
+            "line": 0,
+            "character": 6
+          },
+          "end": {
+            "line": 0,
+            "character": 9
+          }
+        },
+        "newText": "next"
+      },
+      {
+        "range": {
+          "start": {
+            "line": 2,
+            "character": 18
+          },
+          "end": {
+            "line": 2,
+            "character": 21
+          }
+        },
+        "newText": "next"
+      }
+    ]
+  }
+}

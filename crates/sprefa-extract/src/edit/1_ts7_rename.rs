@@ -7,24 +7,13 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, ChildStdin, ChildStdout, Command, Stdio};
 
 use serde_json::{json, Value};
+use tree_sitter::{Node, Parser};
 use url::Url;
 
 use super::ts7_api::{utf16_offset, Ts7Api};
 use crate::edit_seams::{RefRole, RenameAbstain, RenameStop, SymbolRef};
 use crate::rename_cx::{RenameCx, RenameRequest};
 use crate::Span;
-
-// These TypeScript checker operations are absent from 7.0.2's synchronous API.
-// Cases requiring them are passed to textDocument/rename with an abstain row.
-pub const MISSING_CHECKER_QUERIES: &[&str] = &[
-    "getMergedSymbol",
-    "getRootSymbols",
-    "getPropertySymbolsFromContextualType",
-    "getPropertySymbolOfDestructuringAssignment",
-    "getPropertySymbolFromBindingElement",
-    "getSymbolsOfParameterPropertyDeclaration",
-    "getContextualTypeFromParentOrAncestorTypeNode",
-];
 
 pub fn symbol_refs_and_abstains(
     cx: &RenameCx,
@@ -37,33 +26,59 @@ pub fn symbol_refs_and_abstains(
     let mut api = Ts7Api::open(cx.root(), &file).map_err(|_| inexact(request, span))?;
     let position = utf16_offset(&text, seed + request.old.len() / 2);
     let symbol = api.symbol_at(&file, position).map_err(|_| inexact(request, span))?;
-
-    if symbol["id"].as_u64().is_none()
-        || text.match_indices(&request.old).any(|(at, _)|
-            identifier_edges(&text, at, request.old.len()) && complex_at(&text, at, request.old.len()))
-    {
-        return fallback(cx, request, seed, span);
+    if let Some(query) = required_missing_query(&request.anchor, &text, seed, request.old.len()) {
+        return fallback(cx, request, seed, span, query);
     }
+    if symbol["id"].as_u64().is_none() { return Err(not_found(request)); }
 
     let seed_id = canonical_symbol(&mut api, &symbol).map_err(|_| inexact(request, span))?;
     let mut refs = Vec::new();
     for rel in cx.files_of(&crate::lang::ts::TsSource) {
         let Some(content) = cx.text(rel) else { continue };
         let path = cx.abs(rel);
-        for (at, _) in content.match_indices(&request.old) {
-            if !identifier_edges(&content, at, request.old.len()) { continue }
+        let candidates: Vec<usize> = content.match_indices(&request.old)
+            .map(|(at, _)| at)
+            .filter(|at| identifier_edges(&content, *at, request.old.len()))
+            .collect();
+        let mut handles = None;
+        for (ordinal, at) in candidates.iter().copied().enumerate() {
             let position = utf16_offset(&content, at + request.old.len() / 2);
             let found = api.symbol_at(&path, position).map_err(|_| inexact(request, span))?;
             if found["id"].as_u64().is_none() { continue }
-            if canonical_symbol(&mut api, &found).map_err(|_| inexact(request, span))? != seed_id {
-                continue;
+            let found_id = canonical_symbol(&mut api, &found).map_err(|_| inexact(request, span))?;
+            let shorthand = syntax_kind(rel, &content, at, request.old.len())
+                .is_some_and(|kind| kind == "shorthand_property_identifier");
+            if rel == request.anchor {
+                if let Some(query) = required_missing_query(rel, &content, at, request.old.len()) {
+                    return fallback(cx, request, seed, span, query);
+                }
             }
-            if complex_at(&content, at, request.old.len()) {
-                return fallback(cx, request, seed, span);
+            if found_id != seed_id && !shorthand { continue; }
+            if let Some(query) = required_missing_query(rel, &content, at, request.old.len()) {
+                return fallback(cx, request, seed, span, query);
             }
+            let mut replacement = None;
+            if shorthand {
+                let refs = handles.get_or_insert_with(|| api.references_in_file(&path, seed_id).unwrap_or(Value::Null));
+                let Some(rows) = refs.as_array() else { return Err(inexact(request, span)); };
+                if rows.is_empty() { continue; }
+                if rows.len() != candidates.len() { return Err(inexact(request, span)); }
+                let handle = rows[ordinal].as_str().ok_or_else(|| inexact(request, span))?;
+                let parent = shorthand_parent_handle(handle).ok_or_else(|| inexact(request, span))?;
+                let value = api.checker("getShorthandAssignmentValueSymbol", json!({"location": parent}))
+                    .map_err(|_| inexact(request, span))?;
+                if value["id"].as_u64() == Some(seed_id) {
+                    replacement = Some(format!("{}: {}", request.old, request.new));
+                } else if found_id == seed_id {
+                    replacement = Some(format!("{}: {}", request.new, request.old));
+                }
+            }
+            if found_id != seed_id && replacement.is_none() { continue; }
+            let site_span = Span { start: at as u32, len: request.old.len() as u32 };
+            if let Some(replacement) = replacement { cx.put_ts_slow_edit(rel, site_span, replacement); }
             refs.push(SymbolRef {
                 file: rel.to_owned(),
-                span: Span { start: at as u32, len: request.old.len() as u32 },
+                span: site_span,
                 role: RefRole::Read,
                 text: request.old.clone(),
             });
@@ -73,7 +88,7 @@ pub fn symbol_refs_and_abstains(
     Ok((refs, Vec::new()))
 }
 
-fn fallback(cx: &RenameCx, request: &RenameRequest, seed: usize, span: Span)
+fn fallback(cx: &RenameCx, request: &RenameRequest, seed: usize, span: Span, query: &'static str)
     -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop>
 {
     let refs = lsp_rename(cx, request, seed).map_err(|_| inexact(request, span))?;
@@ -82,7 +97,7 @@ fn fallback(cx: &RenameCx, request: &RenameRequest, seed: usize, span: Span)
         span,
         symbol: request.old.clone(),
         reason: "ts7_api_missing_checker_query",
-        receiver: MISSING_CHECKER_QUERIES.join(","),
+        receiver: query.to_owned(),
     };
     Ok((refs, vec![abstain]))
 }
@@ -116,19 +131,54 @@ fn identifier_edges(text: &str, at: usize, len: usize) -> bool {
         (at + len == bytes.len() || !ident(bytes[at + len]))
 }
 
-fn complex_at(content: &str, at: usize, len: usize) -> bool {
-    let before = &content[..at];
-    let after = &content[at + len..];
-    let line = before.rsplit('\n').next().unwrap_or("");
-    let tail = after.split('\n').next().unwrap_or("");
-    let trim = line.trim_end();
-    let next = tail.trim_start();
-    (trim.ends_with('"') || trim.ends_with('\''))
-        || (next.starts_with('"') || next.starts_with('\''))
-        || (trim.ends_with('{') && (next.starts_with('}') || next.starts_with(',')))
-        || (trim.contains("import {") || trim.contains("export {"))
-        || (next.starts_with(':') && (trim.ends_with('{') || trim.ends_with(';')))
-        || (trim.ends_with('<') || trim.ends_with("</"))
+fn syntax_kind(rel: &str, content: &str, at: usize, len: usize) -> Option<String> {
+    let mut parser = Parser::new();
+    let language = if rel.ends_with(".tsx") {
+        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX)
+    } else {
+        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
+    };
+    parser.set_language(&language).ok()?;
+    let tree = parser.parse(content, None)?;
+    let node = tree.root_node().descendant_for_byte_range(at, at + len)?;
+    Some(node.kind().to_owned())
+}
+
+fn required_missing_query(rel: &str, content: &str, at: usize, len: usize) -> Option<&'static str> {
+    let mut parser = Parser::new();
+    let language = if rel.ends_with(".tsx") {
+        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TSX)
+    } else {
+        tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT)
+    };
+    parser.set_language(&language).ok()?;
+    let tree = parser.parse(content, None)?;
+    let node = tree.root_node().descendant_for_byte_range(at, at + len)?;
+    missing_for_node(node)
+}
+
+fn missing_for_node(node: Node<'_>) -> Option<&'static str> {
+    let leaf_kind = node.kind();
+    let mut current = Some(node);
+    while let Some(node) = current {
+        match node.kind() {
+            "object_pattern" => return Some("getPropertySymbolFromBindingElement"),
+            "interface_declaration" | "class_declaration" | "class_body" => return Some("getRootSymbols"),
+            "type_alias_declaration" if matches!(leaf_kind, "property_identifier" | "string_fragment") => {
+                return Some("getPropertySymbolsFromContextualType")
+            }
+            "string" | "string_fragment" => return Some("getContextualTypeFromParentOrAncestorTypeNode"),
+            _ => {}
+        }
+        current = node.parent();
+    }
+    None
+}
+
+fn shorthand_parent_handle(handle: &str) -> Option<String> {
+    let (index, rest) = handle.split_once('.')?;
+    let (_, path) = rest.split_once('.')?;
+    Some(format!("{}.304.{path}", index.parse::<u32>().ok()?.checked_sub(1)?))
 }
 
 fn not_found(request: &RenameRequest) -> RenameStop {
@@ -292,6 +342,31 @@ impl Drop for Lsp {
 mod tests {
     use super::*;
 
+    fn assert_oracle(source: &str) {
+        let cx = RenameCx::open(&fixture()).unwrap().with_slow(true);
+        let request = RenameRequest { anchor: source.into(), old: "old".into(), new: "next".into(), at: Some(6) };
+        let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
+        assert!(abstains.is_empty());
+        let mut actual: Vec<_> = refs.iter().map(|reference| (
+            reference.file.clone(), reference.span.start as usize, reference.span.end() as usize,
+            cx.ts_slow_edit(&reference.file, reference.span).unwrap_or_else(|| request.new.clone()),
+        )).collect();
+        actual.sort();
+        let oracle_file = fixture().join(source.replace(".ts", ".rename.json"));
+        let oracle: Value = serde_json::from_slice(&std::fs::read(oracle_file).unwrap()).unwrap();
+        let mut expected = Vec::new();
+        for (file, edits) in oracle["changes"].as_object().unwrap() {
+            let text = cx.text(file).unwrap();
+            for edit in edits.as_array().unwrap() {
+                let start = byte_at_lsp_position(&text, &edit["range"]["start"]).unwrap();
+                let end = byte_at_lsp_position(&text, &edit["range"]["end"]).unwrap();
+                expected.push((file.clone(), start, end, edit["newText"].as_str().unwrap().to_owned()));
+            }
+        }
+        expected.sort();
+        assert_eq!(actual, expected);
+    }
+
     fn fixture() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts7_api")
     }
@@ -306,12 +381,31 @@ mod tests {
     }
 
     #[test]
-    fn slow_rename_shorthand_records_lsp_fallback() {
+    fn slow_rename_shorthand_uses_value_symbol_query() {
         let cx = RenameCx::open(&fixture()).unwrap().with_slow(true);
         let request = RenameRequest { anchor: "1_shorthand.ts".into(), old: "old".into(), new: "next".into(), at: Some(6) };
         let (refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
+        assert!(abstains.is_empty());
+        assert!(refs.iter().any(|reference| cx.ts_slow_edit(&reference.file, reference.span).as_deref() == Some("old: next")));
+    }
+
+    #[test]
+    fn slow_rename_destructuring_names_missing_checker_query() {
+        let cx = RenameCx::open(&fixture()).unwrap().with_slow(true);
+        let request = RenameRequest { anchor: "2_destructure.ts".into(), old: "old".into(), new: "next".into(), at: Some(17) };
+        let (_refs, abstains) = symbol_refs_and_abstains(&cx, &request).unwrap();
         assert_eq!(abstains.len(), 1);
         assert_eq!(abstains[0].reason, "ts7_api_missing_checker_query");
-        assert!(refs.iter().any(|reference| cx.ts_slow_edit(&reference.file, reference.span).is_some()));
+        assert_eq!(abstains[0].receiver, "getPropertySymbolFromBindingElement");
+    }
+
+    #[test]
+    fn slow_rename_case_plain_api() {
+        assert_oracle("0_fixture.ts");
+    }
+
+    #[test]
+    fn slow_rename_case_shorthand_api() {
+        assert_oracle("1_shorthand.ts");
     }
 }

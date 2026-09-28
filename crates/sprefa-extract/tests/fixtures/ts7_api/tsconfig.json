@@ -3,5 +3,5 @@
     "strict": true,
     "noEmit": true
   },
-  "files": ["0_fixture.ts", "1_shorthand.ts"]
+  "files": ["0_fixture.ts", "1_shorthand.ts", "2_destructure.ts"]
 }
