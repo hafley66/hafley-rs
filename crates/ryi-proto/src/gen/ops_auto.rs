@@ -191,7 +191,7 @@ pub struct CleaveArgs {
   #[arg(long)]
   #[serde(default)]
   pub drag: bool,
-  #[doc = "Resolve private field uses with rust-analyzer"]
+  #[doc = "Use rust-analyzer for Rust and the TypeScript LSP for TS"]
   #[arg(long)]
   #[serde(default)]
   pub slow: bool,

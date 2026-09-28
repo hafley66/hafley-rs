@@ -47,9 +47,17 @@ fn fixture(kind: &str) -> (PathBuf, PathBuf) {
 }
 
 fn cleave(kind: &str, item: &str, dest: &str) -> (PathBuf, String) {
+    cleave_with(kind, item, dest, false)
+}
+
+fn cleave_with(kind: &str, item: &str, dest: &str, slow: bool) -> (PathBuf, String) {
     let (root, state) = fixture(kind);
-    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args(["cleave", &format!("source.ts#{item}"), dest, "--commit"])
+    let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
+    command.args(["cleave", &format!("source.ts#{item}"), dest, "--commit"]);
+    if slow {
+        command.arg("--slow");
+    }
+    let output = command
         .arg("--root")
         .arg(&root)
         .arg("--state")
@@ -65,6 +73,44 @@ fn cleave(kind: &str, item: &str, dest: &str) -> (PathBuf, String) {
     );
     assert!(output.status.success(), "{kind}: {log}");
     (root, log)
+}
+
+#[test]
+fn slow_type_alias_uses_lsp_items_and_diagnostics() {
+    let (root, _) = cleave_with("declaration", "Alias", "alias.ts", true);
+    assert!(read(&root, "alias.ts").contains("export type Alias"));
+}
+
+#[test]
+fn slow_preserves_default_namespace_and_type_imports() {
+    let (root, _) = cleave_with("import_kind", "inspect", "dest.ts", true);
+    let dest = read(&root, "dest.ts");
+    assert!(dest.contains("import fs from \"node:fs\""));
+    assert!(dest.contains("import * as path from \"node:path\""));
+    assert!(dest.contains("import type { Node as TreeNode } from \"tree\""));
+}
+
+#[test]
+fn slow_diagnostic_stops_before_writing() {
+    let (root, state) = fixture("diagnostic");
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "source.ts#value", "dest.ts", "--slow", "--commit"])
+        .arg("--root")
+        .arg(&root)
+        .arg("--state")
+        .arg(&state)
+        .current_dir(&root)
+        .env("RUST_LOG", "error")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("cleave --slow diagnostic"), "{stderr}");
+    assert_eq!(
+        read(&root, "source.ts"),
+        "export function value(): number { return 1; }\n"
+    );
+    assert_eq!(read(&root, "dest.ts"), "export const value = 2;\n");
 }
 
 fn read(root: &Path, file: &str) -> String {

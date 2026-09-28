@@ -169,7 +169,7 @@ op cleave(
   /** Also move private helpers only this item uses */
   drag?: boolean,
 
-  /** Resolve private field uses with rust-analyzer */
+  /** Use rust-analyzer for Rust and the TypeScript LSP for TS */
   slow?: boolean,
 
   /** Apply instead of dry run */

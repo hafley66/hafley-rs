@@ -9,9 +9,15 @@ mod root_items;
 #[path = "7b_cleave_ts_imports.rs"]
 mod ts_imports;
 use root_items::root_item_spans;
+#[path = "7e_cleave_fact_source.rs"]
+mod fact_source;
+#[path = "7f_cleave_package_callers.rs"]
+mod package;
 #[path = "7d_cleave_scope_rows.rs"]
 mod scope;
 use crate::cli::CleaveArgs;
+use fact_source::{CleaveFactSource, FastFacts, SlowTsFacts};
+use package::package_callers;
 use scope::scope_rows;
 use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
@@ -122,6 +128,10 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
         )?);
     }
     plan.validate_preview(mirror.root())?;
+    if cli.slow && plan.arm.name() == "ts" {
+        let paths = plan.touched().into_iter().chain(plan.created()).collect();
+        sprefa_extract::edit::ts7_cleave_diagnostics::check_preview(&plan.root, mirror.root(), &paths)?;
+    }
     match cli.commit {
         true => {
             let journal =
@@ -162,7 +172,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
     crate::outln!("root {}", root.display());
     for (target, dest) in &rows {
-        let plan = Plan::build_with(cx, &imports, target, dest, cli.drag, cli.slow)?;
+        let plan = Plan::build_with(cx, &mut imports, target, dest, cli.drag, cli.slow)?;
         print_plan(&plan);
         if !plan.rows.unresolved.is_empty() {
             if !cli.drag {
@@ -355,41 +365,6 @@ fn read_cleave_list(path: &Path) -> Result<Vec<(String, PathBuf)>, String> {
 
 /// Files whose own specifier rows import `item` by SRC's module path, which a
 /// resolve can miss: a test crate's package spelling, or a nested `use` beside a re-export.
-fn package_callers(
-    cx: &MoveCx,
-    arm: &dyn Cleave,
-    src: &str,
-    item: &str,
-    known: &[String],
-) -> Result<Vec<String>, String> {
-    let mut out = Vec::new();
-    for rel in cx.files() {
-        if rel == src
-            || known.contains(rel)
-            || cleave_for(rel).map(|other| other.name()) != Some(arm.name())
-        {
-            continue;
-        }
-        let spelled = arm.spell_module(cx, rel, src);
-        let Some(text) = cx.text(rel) else {
-            continue;
-        };
-        if !text.contains(&format!("{spelled}::{item}"))
-            && !text.contains(&format!("{spelled}::{{"))
-        {
-            continue;
-        }
-        let facts = FileFacts::open(cx, rel, false)?;
-        if facts
-            .specifiers
-            .iter()
-            .any(|row| row.name == item && module_key(item, &row.module) == spelled)
-        {
-            out.push(rel.clone());
-        }
-    }
-    Ok(out)
-}
 
 /// The `use` statement holding `offset`: where it starts (its visibility
 /// included) and how deep its line is indented; nested iff indented.
@@ -738,14 +713,14 @@ impl Plan {
         let (src, _) = split_target(target)?;
         let root = plan_root(cli.root.as_ref(), &src)?;
         let cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
-        let imports = Imports::read(&cx, &root)?;
-        Self::build_with(cx, &imports, target, dest, cli.drag, cli.slow)
+        let mut imports = Imports::read(&cx, &root)?;
+        Self::build_with(cx, &mut imports, target, dest, cli.drag, cli.slow)
     }
 
     /// One row planned over a corpus walk and a resolve another row may share.
     fn build_with(
         cx: MoveCx,
-        imports: &Imports,
+        imports: &mut Imports,
         target: &str,
         dest: &Path,
         drag: bool,
@@ -780,7 +755,13 @@ impl Plan {
             ));
         }
 
-        let source = FileFacts::open(&cx, &src, true)?;
+        let mut source = FileFacts::open(&cx, &src, true)?;
+        let facts: &dyn CleaveFactSource = if slow && arm.name() == "ts" {
+            &SlowTsFacts
+        } else {
+            &FastFacts
+        };
+        facts.load(&cx, &src, &item, &mut source, imports)?;
         if let Some(row) = source
             .unsupported_macros
             .iter()

@@ -40,6 +40,10 @@ def prepare() -> None:
     source = runner.read_text().replace("['ryii', 'cleave'", "[os.environ['RYII_BIN'], 'cleave'")
     if source == runner.read_text():
         raise RuntimeError("oracle runner no longer has the expected ryii command")
+    source = source.replace("('tsserver', 'ryi')", "('tsserver', 'ryi', 'ryi_slow')")
+    source = source.replace("state = HERE / 'scratch/state' / t['id']", "state = HERE / 'scratch/state' / t['id'] / tool")
+    source = source.replace("'--commit', '--json'], root)", "'--commit', '--json', *(['--slow'] if tool == 'ryi_slow' else [])], root)")
+    source = source.replace("/ 'ryi.log'", "/ f'{tool}.log'")
     runner.write_text(source)
 
 
@@ -53,7 +57,7 @@ def publish() -> None:
         destination.execute(schema)
         rows = source.execute("SELECT * FROM cleave_check").fetchall()
         destination.executemany("INSERT INTO cleave_check VALUES (?,?,?,?,?,?,?,?,?)", rows)
-    lines = ["defect\ttarget\ttsserver_pass\tryi_before_pass\tryi_after_pass"]
+    lines = ["defect\ttarget\ttsserver_pass\tryi_before_pass\tryi_after_pass\tryi_slow_pass"]
     for defect, ids in CLASSES.items():
         for target in ids.split():
             old = before[target]["outcomes"]
@@ -61,7 +65,7 @@ def publish() -> None:
             passed = lambda row: int(row["tool_exit"] == 0 and row["typecheck_equal"])
             lines.append(
                 f"{defect}\t{target}\t{passed(new['tsserver'])}\t"
-                f"{passed(old['ryi'])}\t{passed(new['ryi'])}"
+                f"{passed(old['ryi'])}\t{passed(new['ryi'])}\t{passed(new['ryi_slow'])}"
             )
     TSV.write_text("\n".join(lines) + "\n")
     print(f"{len(rows)} cleave_check rows in {DB}")
@@ -78,6 +82,18 @@ def publish() -> None:
     ]
     if missed:
         raise AssertionError(f"ryi missed oracle-passing targets: {missed}")
+    slow_passes = sum(
+        result["outcomes"]["ryi_slow"]["tool_exit"] == 0
+        and result["outcomes"]["ryi_slow"]["typecheck_equal"]
+        for result in after.values()
+    )
+    oracle_passes = sum(
+        result["outcomes"]["tsserver"]["tool_exit"] == 0
+        and result["outcomes"]["tsserver"]["typecheck_equal"]
+        for result in after.values()
+    )
+    if slow_passes < oracle_passes:
+        raise AssertionError(f"ryi_slow {slow_passes}/20 < tsserver {oracle_passes}/20")
 
 
 def main() -> None:
