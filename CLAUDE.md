@@ -13,7 +13,7 @@
   Python runs, fixtures, or truth indexes until the user lifts this.
 
 ## Comparative tests (user-set 2026-09-29)
-- Every comparison of ryi against oracles or rivals runs through `ryi-bench` in `crates/sprefa-extract/bench/`.
+- Every comparison of ryi against oracles or rivals runs through `ryid` (dev-tool bin; bench data in `crates/sprefa-extract/bench/`).
   Labs add repos, targets or adapters there; they do not write their own harnesses, runners or scoring scripts.
 
 ## Delegation
