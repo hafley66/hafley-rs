@@ -12,6 +12,10 @@
 - Rust and TypeScript only until ryi and its rivals are proven on those two. No Kotlin, Go or
   Python runs, fixtures, or truth indexes until the user lifts this.
 
+## Comparative tests (user-set 2026-09-29)
+- Every comparison of ryi against oracles or rivals runs through `ryi-bench` in `crates/sprefa-extract/bench/`.
+  Labs add repos, targets or adapters there; they do not write their own harnesses, runners or scoring scripts.
+
 ## Delegation
 - Reading and recon fan out in parallel: codex `gpt-6-luna` high, read-only, reports under
   `~/.cache/lanes/claude-375/recon/`, no worktree.
