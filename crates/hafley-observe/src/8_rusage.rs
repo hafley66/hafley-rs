@@ -136,19 +136,21 @@ pub fn sample() -> Usage {
 /// Publishes one usage sample as a record each time a span closes.
 pub struct RusageLayer {
     #[cfg(feature = "rusage")]
-    selected: Option<std::collections::HashSet<String>>,
+    selected: std::collections::HashSet<String>,
 }
 
-/// The usage layer, or `None` when the feature is off. The sampler itself is
-/// always compiled: the harness measures with it on every build.
+/// The usage layer when the feature is on and `HAFLEY_RUSAGE_SPANS` lists span
+/// names to sample. The sampler itself is compiled on every build.
 #[cfg(feature = "rusage")]
 pub fn layer<S>() -> Option<Box<dyn Layer<S> + Send + Sync>>
 where
     S: Subscriber + for<'a> LookupSpan<'a> + Send + Sync,
 {
     let selected = std::env::var("HAFLEY_RUSAGE_SPANS")
-        .ok()
-        .map(|names| names.split(',').map(str::to_string).collect());
+        .ok()?
+        .split(',')
+        .map(str::to_string)
+        .collect();
     Some(Layer::boxed(RusageLayer { selected }))
 }
 
@@ -172,11 +174,7 @@ where
         if *span.metadata().level() > tracing::Level::INFO {
             return;
         }
-        if self
-            .selected
-            .as_ref()
-            .is_some_and(|names| !names.contains(span.name()))
-        {
+        if !self.selected.contains(span.name()) {
             return;
         }
         let usage = sample();

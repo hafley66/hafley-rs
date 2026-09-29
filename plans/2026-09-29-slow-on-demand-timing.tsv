@@ -1,55 +1,73 @@
-state	repo	query	stage	runs	wall_ms	peak_rss_mib	rss_end_mib	live_alloc_end_mib
-before	hafley-rs	graph --slow --callers family_span	total	5	34850	4069.547	NA	NA
-wip	hafley-rs	graph --slow --callers family_span	total	5	17440	2649.141	NA	NA
-before	tokio	graph --slow --callers spawn	total	5	17600	2206.469	NA	NA
-wip	tokio	graph --slow --callers spawn	total	5	21490	1894.203	NA	NA
-final	hafley-rs	graph --slow --callers family_span	total	5	16830	2456.734	NA	NA
-final	tokio	graph --slow --callers spawn	total	5	12860	1772.859	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	fast.extract_resolve	1	4720.2	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	scip.load_build	1	0	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	scip.project_index	1	0	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	rust_analyzer.load	1	1848.316	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	1	13744.144	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	typescript.checker	1	0.267	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	store.write	1	540.244	NA	NA	NA
-profile	hafley-rs	graph --slow --callers family_span	total	1	23640	3409.238	NA	NA
-profile	tokio	graph --slow --callers spawn	fast.extract_resolve	1	1631.63	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	scip.load_build	1	104.153	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	scip.project_index	1	516.374	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	rust_analyzer.load	1	1413.511	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	rust_analyzer.queries	1	13486.999	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	typescript.checker	1	0	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	store.write	1	126.364	NA	NA	NA
-profile	tokio	graph --slow --callers spawn	total	1	18910	1853.398	NA	NA
-profile_parallel	hafley-rs	graph --slow --callers family_span	fast.extract_resolve	1	4663.838	NA	828.656	0.000
-profile_parallel	hafley-rs	graph --slow --callers family_span	slow.scip.load_build	1	0.000	NA	NA	NA
-profile_parallel	hafley-rs	graph --slow --callers family_span	slow.project_index	1	0.000	NA	NA	NA
-profile_parallel	hafley-rs	graph --slow --callers family_span	rust_analyzer.load	1	2039.336	NA	1237.719	0.000
-profile_parallel	hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	1	11438.558	NA	2433.688	0.000
-profile_parallel	hafley-rs	graph --slow --callers family_span	typescript.checker	1	0.000	NA	851.500	0.000
-profile_parallel	hafley-rs	graph --slow --callers family_span	store.write	1	524.892	NA	2511.953	0.000
-profile_parallel	hafley-rs	graph --slow --callers family_span	total	1	19250.000	2513.062	NA	NA
-profile_parallel	tokio	graph --slow --callers spawn	fast.extract_resolve	1	1479.172	NA	213.172	0.000
-profile_parallel	tokio	graph --slow --callers spawn	slow.scip.load_build	1	111.812	NA	1650.641	0.000
-profile_parallel	tokio	graph --slow --callers spawn	slow.project_index	1	453.480	NA	1760.438	0.000
-profile_parallel	tokio	graph --slow --callers spawn	rust_analyzer.load	1	745.439	NA	508.969	0.000
-profile_parallel	tokio	graph --slow --callers spawn	rust_analyzer.queries	1	11784.537	NA	1500.891	0.000
-profile_parallel	tokio	graph --slow --callers spawn	typescript.checker	1	0.000	NA	219.109	0.000
-profile_parallel	tokio	graph --slow --callers spawn	store.write	1	124.892	NA	1773.219	0.000
-profile_parallel	tokio	graph --slow --callers spawn	total	1	16220.000	1805.219	NA	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	fast.extract_resolve	1	4399.120	NA	665.844	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	slow.scip.load_build	1	0.000	NA	NA	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	slow.project_index	1	0.000	NA	NA	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	rust_analyzer.load	1	931.889	NA	949.453	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	1	11161.459	NA	2301.109	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	typescript.checker	1	0.000	NA	688.562	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	store.write	1	498.535	NA	2388.984	NA
-profile_exact	hafley-rs	graph --slow --callers family_span	total	1	17470.000	2390.609	NA	NA
-profile_exact	tokio	graph --slow --callers spawn	fast.extract_resolve	1	1136.386	NA	141.641	NA
-profile_exact	tokio	graph --slow --callers spawn	slow.scip.load_build	1	121.270	NA	1591.109	NA
-profile_exact	tokio	graph --slow --callers spawn	slow.project_index	1	568.466	NA	1361.359	NA
-profile_exact	tokio	graph --slow --callers spawn	rust_analyzer.load	1	688.648	NA	314.375	NA
-profile_exact	tokio	graph --slow --callers spawn	rust_analyzer.queries	1	10558.342	NA	1432.203	NA
-profile_exact	tokio	graph --slow --callers spawn	typescript.checker	1	0.000	NA	147.531	NA
-profile_exact	tokio	graph --slow --callers spawn	store.write	1	126.950	NA	1373.250	NA
-profile_exact	tokio	graph --slow --callers spawn	total	1	14680.000	1669.734	NA	NA
+state	repo	query	stage	runs	wall_ms	peak_rss_mib	rss_end_mib
+before	hafley-rs	graph --slow --callers family_span	total	5	34850	4069.547	NA
+wip	hafley-rs	graph --slow --callers family_span	total	5	17440	2649.141	NA
+before	tokio	graph --slow --callers spawn	total	5	17600	2206.469	NA
+wip	tokio	graph --slow --callers spawn	total	5	21490	1894.203	NA
+final	hafley-rs	graph --slow --callers family_span	total	5	16830	2456.734	NA
+final	tokio	graph --slow --callers spawn	total	5	12860	1772.859	NA
+profile	hafley-rs	graph --slow --callers family_span	fast.extract_resolve	1	4720.2	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	scip.load_build	1	0	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	scip.project_index	1	0	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	rust_analyzer.load	1	1848.316	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	1	13744.144	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	typescript.checker	1	0.267	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	store.write	1	540.244	NA	NA
+profile	hafley-rs	graph --slow --callers family_span	total	1	23640	3409.238	NA
+profile	tokio	graph --slow --callers spawn	fast.extract_resolve	1	1631.63	NA	NA
+profile	tokio	graph --slow --callers spawn	scip.load_build	1	104.153	NA	NA
+profile	tokio	graph --slow --callers spawn	scip.project_index	1	516.374	NA	NA
+profile	tokio	graph --slow --callers spawn	rust_analyzer.load	1	1413.511	NA	NA
+profile	tokio	graph --slow --callers spawn	rust_analyzer.queries	1	13486.999	NA	NA
+profile	tokio	graph --slow --callers spawn	typescript.checker	1	0	NA	NA
+profile	tokio	graph --slow --callers spawn	store.write	1	126.364	NA	NA
+profile	tokio	graph --slow --callers spawn	total	1	18910	1853.398	NA
+profile_parallel	hafley-rs	graph --slow --callers family_span	fast.extract_resolve	1	4663.838	NA	828.656
+profile_parallel	hafley-rs	graph --slow --callers family_span	slow.scip.load_build	1	0.000	NA	NA
+profile_parallel	hafley-rs	graph --slow --callers family_span	slow.project_index	1	0.000	NA	NA
+profile_parallel	hafley-rs	graph --slow --callers family_span	rust_analyzer.load	1	2039.336	NA	1237.719
+profile_parallel	hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	1	11438.558	NA	2433.688
+profile_parallel	hafley-rs	graph --slow --callers family_span	typescript.checker	1	0.000	NA	851.500
+profile_parallel	hafley-rs	graph --slow --callers family_span	store.write	1	524.892	NA	2511.953
+profile_parallel	hafley-rs	graph --slow --callers family_span	total	1	19250.000	2513.062	NA
+profile_parallel	tokio	graph --slow --callers spawn	fast.extract_resolve	1	1479.172	NA	213.172
+profile_parallel	tokio	graph --slow --callers spawn	slow.scip.load_build	1	111.812	NA	1650.641
+profile_parallel	tokio	graph --slow --callers spawn	slow.project_index	1	453.480	NA	1760.438
+profile_parallel	tokio	graph --slow --callers spawn	rust_analyzer.load	1	745.439	NA	508.969
+profile_parallel	tokio	graph --slow --callers spawn	rust_analyzer.queries	1	11784.537	NA	1500.891
+profile_parallel	tokio	graph --slow --callers spawn	typescript.checker	1	0.000	NA	219.109
+profile_parallel	tokio	graph --slow --callers spawn	store.write	1	124.892	NA	1773.219
+profile_parallel	tokio	graph --slow --callers spawn	total	1	16220.000	1805.219	NA
+profile_exact	hafley-rs	graph --slow --callers family_span	fast.extract_resolve	1	4399.120	NA	665.844
+profile_exact	hafley-rs	graph --slow --callers family_span	slow.scip.load_build	1	0.000	NA	NA
+profile_exact	hafley-rs	graph --slow --callers family_span	slow.project_index	1	0.000	NA	NA
+profile_exact	hafley-rs	graph --slow --callers family_span	rust_analyzer.load	1	931.889	NA	949.453
+profile_exact	hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	1	11161.459	NA	2301.109
+profile_exact	hafley-rs	graph --slow --callers family_span	typescript.checker	1	0.000	NA	688.562
+profile_exact	hafley-rs	graph --slow --callers family_span	store.write	1	498.535	NA	2388.984
+profile_exact	hafley-rs	graph --slow --callers family_span	total	1	17470.000	2390.609	NA
+profile_exact	tokio	graph --slow --callers spawn	fast.extract_resolve	1	1136.386	NA	141.641
+profile_exact	tokio	graph --slow --callers spawn	slow.scip.load_build	1	121.270	NA	1591.109
+profile_exact	tokio	graph --slow --callers spawn	slow.project_index	1	568.466	NA	1361.359
+profile_exact	tokio	graph --slow --callers spawn	rust_analyzer.load	1	688.648	NA	314.375
+profile_exact	tokio	graph --slow --callers spawn	rust_analyzer.queries	1	10558.342	NA	1432.203
+profile_exact	tokio	graph --slow --callers spawn	typescript.checker	1	0.000	NA	147.531
+profile_exact	tokio	graph --slow --callers spawn	store.write	1	126.950	NA	1373.250
+profile_exact	tokio	graph --slow --callers spawn	total	1	14680.000	1669.734	NA
+profile_split	hafley-rs	graph --slow --callers family_span	rust_analyzer.source_parse.median	11	9016.330	NA	NA
+profile_split	hafley-rs	graph --slow --callers family_span	rust_analyzer.source_parse.max	11	9020.084	NA	NA
+profile_split	hafley-rs	graph --slow --callers family_span	rust_analyzer.definition_lookup.median	31	0.015	NA	NA
+profile_split	hafley-rs	graph --slow --callers family_span	rust_analyzer.definition_lookup.max	31	2310.180	NA	NA
+profile_split	hafley-rs	graph --slow --callers family_span	rust_analyzer.navigation.median	31	0.006	NA	NA
+profile_split	hafley-rs	graph --slow --callers family_span	rust_analyzer.navigation.max	31	4.849	NA	NA
+profile_split	tokio	graph --slow --callers spawn	rust_analyzer.source_parse.median	207	0.212	NA	NA
+profile_split	tokio	graph --slow --callers spawn	rust_analyzer.source_parse.max	207	5640.750	NA	NA
+profile_split	tokio	graph --slow --callers spawn	rust_analyzer.definition_lookup.median	1207	1.836	NA	NA
+profile_split	tokio	graph --slow --callers spawn	rust_analyzer.definition_lookup.max	1207	1629.702	NA	NA
+profile_split	tokio	graph --slow --callers spawn	rust_analyzer.navigation.median	908	0.009	NA	NA
+profile_split	tokio	graph --slow --callers spawn	rust_analyzer.navigation.max	908	177.460	NA	NA
+allocator_ab	hafley-rs	graph --slow --callers family_span	plain_median	5	15978.882	NA	NA
+allocator_ab	hafley-rs	graph --slow --callers family_span	alloc_median	5	16918.418	NA	NA
+allocator_ab	hafley-rs	graph --slow --callers family_span	paired_overhead_pct	5	4.653	NA	NA
+allocator_ab	tokio	graph --slow --callers spawn	plain_median	5	13576.390	NA	NA
+allocator_ab	tokio	graph --slow --callers spawn	alloc_median	5	17194.323	NA	NA
+allocator_ab	tokio	graph --slow --callers spawn	paired_overhead_pct	5	31.876	NA	NA

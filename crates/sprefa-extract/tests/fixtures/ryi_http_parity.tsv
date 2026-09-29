@@ -16,8 +16,8 @@ query   cli       3 8f14e404ec42
 query   router    3 8f14e404ec42
 region  cli       1 6e64be8bc173
 region  router    1 6e64be8bc173
-watch   cli     403 ce50371ecc4e
-watch   router  403 ce50371ecc4e
+watch   cli     459 c4f909b069cc
+watch   router  459 c4f909b069cc
 diff    cli       1 750777a29f8d
 diff    router    1 750777a29f8d
 ingest  cli      24 0239bab7fd61

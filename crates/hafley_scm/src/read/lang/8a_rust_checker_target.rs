@@ -55,6 +55,7 @@ pub fn target_calls(
     let (workspace, _) =
         super::super::rust_checker_session::checker_workspace(root, files, budget)?;
     let workspace = workspace.lock().unwrap();
+    let _file_index_span = tracing::info_span!("rust_analyzer.file_index").entered();
     let wanted: HashMap<PathBuf, &str> = files
         .iter()
         .map(|(name, path)| {
@@ -85,6 +86,7 @@ pub fn target_calls(
             .or_default()
             .insert((*start, *end, name));
     }
+    drop(_file_index_span);
     let db = workspace.host.raw_database();
     let _query_span = tracing::info_span!("rust_analyzer.queries").entered();
     let pool = crate::read::project::extract_pool();
@@ -95,21 +97,34 @@ pub fn target_calls(
         .chunks(chunk_size)
         .map(|chunk| (db.clone(), chunk))
         .collect();
+    let query_span = tracing::Span::current();
     let per_chunk: Vec<Vec<TargetCall>> = pool.install(|| {
         use rayon::prelude::*;
         chunks
             .into_par_iter()
             .map(|(db, chunk)| {
+                let _query_entered = query_span.enter();
                 attach_db(&db, || {
+                    let _sema_span = tracing::info_span!("rust_analyzer.sema_init").entered();
                     let sema = Semantics::new(&db);
+                    drop(_sema_span);
                     let mut found = BTreeSet::new();
                     let mut destination_offsets = HashMap::new();
+                    let _source_files_span = tracing::info_span!("rust_analyzer.source_files").entered();
                     for (source_path, wanted_sites) in chunk {
                         let Some(&file_id) = ids.get(*source_path) else {
                             continue;
                         };
-                        let syntax = sema.parse_guess_edition(file_id);
+                        let _edition_span = tracing::info_span!("rust_analyzer.source_edition").entered();
+                        let editioned = sema.attach_first_edition(file_id);
+                        drop(_edition_span);
+                        let _parse_span = tracing::info_span!("rust_analyzer.source_parse").entered();
+                        let syntax = sema.parse(editioned);
+                        drop(_parse_span);
+                        let _offset_span = tracing::info_span!("rust_analyzer.source_offsets").entered();
                         let source_offsets = OffsetMap::new(&syntax.syntax().text().to_string());
+                        drop(_offset_span);
+                        let _scan_span = tracing::info_span!("rust_analyzer.syntax_scan").entered();
                         for node in syntax.syntax().descendants() {
                             let candidate =
                                 if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
@@ -138,6 +153,7 @@ pub fn target_calls(
                             }) {
                                 continue;
                             }
+                            let _definition_span = tracing::info_span!("rust_analyzer.definition_lookup").entered();
                             let definition = match candidate {
                                 Candidate::Method(call) => {
                                     sema.resolve_method_call(&call).map(ModuleDef::Function)
@@ -147,9 +163,11 @@ pub fn target_calls(
                                     _ => None,
                                 },
                             };
+                            drop(_definition_span);
                             let Some(definition) = definition else {
                                 continue;
                             };
+                            let _navigation_span = tracing::info_span!("rust_analyzer.navigation").entered();
                             let Some(nav) = definition.try_to_nav(&sema).map(|nav| nav.call_site)
                             else {
                                 continue;
@@ -181,7 +199,9 @@ pub fn target_calls(
                                 target_name: nav.name.as_str().to_string(),
                             });
                         }
+                        drop(_scan_span);
                     }
+                    drop(_source_files_span);
                     found.into_iter().collect()
                 })
             })
