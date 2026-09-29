@@ -27,5 +27,8 @@
   rust-analyzer instead of extending the hand resolvers.
 - Code stays tight and legible (user-set 2026-09-28). New work goes in a new small numbered file.
   Never grow a large file (over ~1000 lines) with new work; split it when you touch it.
+- hafley-observe is the single home for tracing, profiling and memory instrumentation (user-set 2026-09-29).
+  Any lab or writer that adds instrumentation lands it in `crates/hafley-observe` in the same cycle. A patch left in a lab folder is not done.
+  Build vs buy applies: use existing crates (e.g. `tracking-allocator`) before a custom implementation.
 - No workarounds or fallback heuristics. When the proper engine is unavailable, the command
   abstains or errors with the reason; it does not guess with text scans or a parallel resolver.
