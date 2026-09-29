@@ -312,6 +312,31 @@ pub fn answer(
     super::rust_checker_ra::answer(root, files, budget, tsi)
 }
 
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::TargetCall;
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::TargetTypeReference;
+
+#[cfg(feature = "rust-checker")]
+pub fn target_calls(
+    root: &Path,
+    files: &[(String, PathBuf)],
+    sites: &[(String, u32, u32, String)],
+    budget: Duration,
+) -> Result<Vec<TargetCall>, CheckerError> {
+    super::rust_checker_ra::target_calls(root, files, sites, budget)
+}
+
+#[cfg(feature = "rust-checker")]
+pub fn target_types(
+    root: &Path,
+    files: &[(String, PathBuf)],
+    seeds: &[(String, String)],
+    budget: Duration,
+) -> Result<Vec<TargetTypeReference>, CheckerError> {
+    super::rust_checker_ra::target_types(root, files, seeds, budget)
+}
+
 /// A file's byte offset -> the parse plane's offset for the same position: a
 /// line's start byte plus its CHARACTER column, the unit `syn_span` writes.
 pub struct OffsetMap {

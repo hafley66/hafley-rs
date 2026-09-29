@@ -19,6 +19,8 @@ use sprefa_extract::{
 };
 
 use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
+#[path = "0a_graph_target.rs"]
+mod target;
 
 const CALLERS_SQL: &str = "SELECT \"caller_path\", \"caller_name\", \"callee_path\", \
                            \"callee_name\", \"grade\", \"kind\", \"caller_site_start\", \
@@ -32,10 +34,10 @@ const EXTERNAL_USES_SQL: &str = "SELECT \"from_path\", \"from_name\", \"type_nam
 
 /// One resolve pass, landed in the store the views read. `--sqlite` publishes
 /// the store; without it the whole thing lives and dies in memory. `--slow`
-/// lands the SCIP oracle's projection of the same tables instead.
+/// verifies target sites with the language checker.
 fn load_store(
     paths: &[PathBuf],
-    arms: ResolveArms,
+    arm: &Arm<'_>,
     cli: &GraphArgs,
     revision_root: Option<&Path>,
     sqlite: Option<&Path>,
@@ -43,36 +45,34 @@ fn load_store(
     let root = revision_root
         .map(Path::to_path_buf)
         .unwrap_or_else(|| crate::inputs::root(&cli.inputs));
+    let request = ResolveRequest {
+        paths,
+        arms: arm.arms(),
+        scip: ScipMode::from_flags(cli.scip_index.as_deref(), false),
+        project_root: revision_root.or(cli.inputs.root.as_deref()),
+        scip_records: ScipRecords::default(),
+        occurrence_text: false,
+        rust_checker: (!cli.slow && cli.rust_checker).then_some(root.as_path()),
+        ts_checker: (!cli.slow && cli.ts_checker).then_some(root.as_path()),
+        go_checker: (!cli.slow && cli.go_checker).then_some(root.as_path()),
+        witness: true,
+    };
     let facts = if cli.slow {
-        slow_project(paths, &root, cli.scip_index.as_deref(), true)?
+        if let Some(index) = cli.scip_index.as_deref() {
+            slow_project(paths, &root, Some(index), false)?
+        } else if matches!(arm, Arm::Callers(_) | Arm::Uses(_)) {
+            target::facts(&request, &root, arm.name())?
+        } else {
+            slow_project(paths, &root, None, true)?
+        }
     } else {
-        let request = ResolveRequest {
-            paths,
-            arms,
-            scip: ScipMode::from_flags(cli.scip_index.as_deref(), false),
-            project_root: revision_root.or(cli.inputs.root.as_deref()),
-            scip_records: ScipRecords::default(),
-            occurrence_text: false,
-            rust_checker: cli
-                .rust_checker
-                .then_some(cli.inputs.root.as_deref())
-                .flatten(),
-            ts_checker: cli
-                .ts_checker
-                .then_some(cli.inputs.root.as_deref())
-                .flatten(),
-            go_checker: cli
-                .go_checker
-                .then_some(cli.inputs.root.as_deref())
-                .flatten(),
-            witness: true,
-        };
         resolve_project_with_tsi_tiers(&request)?
     };
     let mut database = match sqlite {
         Some(path) => Database::create(path)?,
         None => Database::memory()?,
     };
+    let _store_span = tracing::info_span!("store.write").entered();
     for fact in &facts {
         // The graph views read the resolved edges. The TSI envelope makes the
         // syntax and checker type evidence queryable from the same store.
@@ -468,6 +468,17 @@ enum Arm<'a> {
 }
 
 impl Arm<'_> {
+    fn name(&self) -> &str {
+        match self {
+            Arm::Callers(name)
+            | Arm::Uses(name)
+            | Arm::From(name)
+            | Arm::CallPath(name)
+            | Arm::TypePath(name)
+            | Arm::FlowPath(name) => name,
+        }
+    }
+
     fn arms(&self) -> ResolveArms {
         match self {
             Arm::Uses(_) | Arm::TypePath(_) => ResolveArms {
@@ -586,7 +597,7 @@ fn ask_at(
         &crate::watch::default_patterns(),
         Some(selected),
         |paths, scratch| {
-            let database = load_store(paths, arm.arms(), cli, Some(scratch), sqlite)?;
+            let database = load_store(paths, arm, cli, Some(scratch), sqlite)?;
             let rows = arm.ask_within(
                 database.connection(),
                 cli.timeout,
@@ -724,7 +735,7 @@ pub fn run_to(
         }
     } else {
         let paths = crate::inputs::expand(&cli.inputs)?;
-        let database = load_store(&paths, arm.arms(), &cli, None, cli.sqlite.as_deref())?;
+        let database = load_store(&paths, &arm, &cli, None, cli.sqlite.as_deref())?;
         let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone())?;
         database.close()?;
         rows

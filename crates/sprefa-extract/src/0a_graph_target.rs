@@ -1,0 +1,337 @@
+//! Targeted slow graph evidence over the same resolved-edge rows as fast.
+
+use std::collections::{BTreeMap, BTreeSet};
+use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+use sprefa_extract::{resolve_project_with_raw_tsi, FamilyTag, FlatFact, ResolveRequest};
+#[path = "0b_graph_scip_fill.rs"]
+mod scip_fill;
+
+pub(super) fn facts(
+    request: &ResolveRequest<'_>,
+    root: &Path,
+    name: &str,
+) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+    let mut call_sites = BTreeSet::new();
+    let mut definitions: BTreeMap<(String, String, bool), Vec<(u32, u32)>> = BTreeMap::new();
+    let mut facts = resolve_project_with_raw_tsi(request, &mut |raw| {
+        if let FlatFact::Node {
+            family: family @ (FamilyTag::Call | FamilyTag::Type),
+            span,
+            name: Some(name),
+            ..
+        } = &raw.fact
+        {
+            definitions
+                .entry((
+                    raw.path.to_string(),
+                    name.clone(),
+                    *family == FamilyTag::Call,
+                ))
+                .or_default()
+                .push((span.start, span.end));
+        }
+        if let FlatFact::Site {
+            family: FamilyTag::Call,
+            span,
+            callee,
+            ..
+        } = raw.fact
+        {
+            if callee == name && raw.path.ends_with(".rs") {
+                call_sites.insert((raw.path.to_string(), span.start, span.end, callee));
+            }
+        }
+        Ok::<(), std::convert::Infallible>(())
+    })?;
+    let files: Vec<(String, PathBuf)> = request
+        .paths
+        .iter()
+        .map(|path| {
+            let supplied = path.to_string_lossy().into_owned();
+            (supplied, sprefa_extract::io_path(path))
+        })
+        .collect();
+    let ts_seeds: Vec<(String, String)> = facts
+        .iter()
+        .filter_map(|fact| {
+            let (path, target, origin) = match fact {
+                FlatFact::ResolvedEdge {
+                    callee_path,
+                    callee_name,
+                    resolution_origin,
+                    ..
+                } => (callee_path, callee_name, resolution_origin),
+                FlatFact::ResolvedTypeEdge {
+                    target_path,
+                    target_name,
+                    resolution_origin,
+                    ..
+                } => (target_path, target_name, resolution_origin),
+                _ => return None,
+            };
+            (target.as_deref() == Some(name)
+                && origin != "scip"
+                && (path.ends_with(".ts") || path.ends_with(".tsx")))
+            .then(|| (path.clone(), name.to_string()))
+        })
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect();
+    let ts_sources: BTreeSet<String> = facts
+        .iter()
+        .filter_map(|fact| match fact {
+            FlatFact::ResolvedEdge {
+                caller_path,
+                callee_name,
+                ..
+            } if callee_name.as_deref() == Some(name) => Some(caller_path.clone()),
+            FlatFact::ResolvedTypeEdge {
+                owner_path,
+                target_name,
+                ..
+            } if target_name.as_deref() == Some(name) => Some(owner_path.clone()),
+            _ => None,
+        })
+        .collect();
+    let ts_references = sprefa_extract::edit::ts7_graph_target::references(
+        &std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
+        &files,
+        &ts_seeds,
+        &ts_sources,
+    )
+    .map_err(|error| format!("TypeScript LSP target {name}: {error}"))?;
+    #[cfg(feature = "rust-checker")]
+    {
+        let sites: Vec<_> = call_sites.into_iter().collect();
+        let calls = sprefa_extract::lang::rust_checker::target_calls(
+            root,
+            &files,
+            &sites,
+            Duration::from_secs(30),
+        )
+        .map_err(|error| format!("rust-analyzer target {name}: {error}"))?;
+        let type_seeds: Vec<(String, String)> = facts
+            .iter()
+            .filter_map(|fact| {
+                let FlatFact::ResolvedTypeEdge {
+                    target_path,
+                    target_name,
+                    resolution_origin,
+                    ..
+                } = fact
+                else {
+                    return None;
+                };
+                (target_name.as_deref() == Some(name)
+                    && target_path.ends_with(".rs")
+                    && resolution_origin != "scip")
+                    .then(|| (target_path.clone(), name.to_string()))
+            })
+            .collect::<BTreeSet<_>>()
+            .into_iter()
+            .collect();
+        let types = sprefa_extract::lang::rust_checker::target_types(
+            root,
+            &files,
+            &type_seeds,
+            Duration::from_secs(30),
+        )
+        .map_err(|error| format!("rust-analyzer type target {name}: {error}"))?;
+        let verified: BTreeSet<_> = calls
+            .into_iter()
+            .filter_map(|mut call| {
+                let definition =
+                    [FamilyTag::Call, FamilyTag::Type]
+                        .into_iter()
+                        .find_map(|family| {
+                            let spans = definitions.get(&(
+                                call.target_path.clone(),
+                                call.target_name.clone(),
+                                family == FamilyTag::Call,
+                            ))?;
+                            spans
+                                .iter()
+                                .find(|(start, end)| {
+                                    *start <= call.target_start && call.target_start < *end
+                                })
+                                .copied()
+                                .or_else(|| (spans.len() == 1).then_some(spans[0]))
+                        })?;
+                call.target_start = definition.0;
+                call.target_end = definition.1;
+                Some(call)
+            })
+            .collect();
+        for fact in &mut facts {
+            let FlatFact::ResolvedEdge {
+                caller_path,
+                caller_name,
+                callee_path,
+                callee_name,
+                caller_site_start,
+                caller_site_end,
+                callee_start,
+                callee_end,
+                kind,
+                resolution_origin,
+                ..
+            } = fact
+            else {
+                continue;
+            };
+            if callee_name.as_deref() != Some(name) {
+                continue;
+            }
+            if let Some(call) = verified.iter().find(|call| {
+                call.source_path == *caller_path
+                    && *caller_site_start <= call.site_start
+                    && call.site_end <= *caller_site_end
+            }) {
+                if *callee_path != call.target_path {
+                    *callee_path = call.target_path.clone();
+                    *callee_start = call.target_start;
+                    *callee_end = call.target_end;
+                }
+                *kind = if *caller_name == call.caller_name {
+                    "checker_resolve"
+                } else {
+                    "name_resolve"
+                }
+                .to_string();
+                *resolution_origin = "checker".to_string();
+            }
+        }
+        for call in verified {
+            let present = facts.iter().any(|fact| {
+                matches!(fact, FlatFact::ResolvedEdge {
+                    caller_path, caller_name, caller_site_start, caller_site_end, ..
+                } if *caller_path == call.source_path
+                    && *caller_name == call.caller_name
+                    && *caller_site_start <= call.site_start
+                    && call.site_end <= *caller_site_end)
+            });
+            if present {
+                // A closure's named enclosing function owns a mirror edge.
+            } else {
+                facts.push(FlatFact::ResolvedEdge {
+                    fact: None,
+                    caller_path: call.source_path.clone(),
+                    caller_name: call.caller_name.clone(),
+                    callee_path: call.target_path.clone(),
+                    callee_name: Some(call.target_name.clone()),
+                    caller_site_start: call.site_start,
+                    caller_site_end: call.site_end,
+                    callee_start: call.target_start,
+                    callee_end: call.target_end,
+                    kind: "checker_resolve".to_string(),
+                    resolution_origin: "checker".to_string(),
+                });
+            }
+            if call
+                .caller_name
+                .as_deref()
+                .is_some_and(|name| name.starts_with("closure@"))
+            {
+                if let Some(enclosing) = call.enclosing_name {
+                    if !facts.iter().any(|fact| matches!(fact, FlatFact::ResolvedEdge {
+                        caller_path, caller_name, caller_site_start, caller_site_end,
+                        callee_path, kind, resolution_origin, ..
+                    } if *caller_path == call.source_path && caller_name.as_deref() == Some(enclosing.as_str())
+                        && *caller_site_start <= call.site_start && call.site_end <= *caller_site_end
+                        && *callee_path == call.target_path && kind == "name_resolve"
+                        && resolution_origin == "checker")) {
+                        facts.push(FlatFact::ResolvedEdge {
+                            fact: None,
+                            caller_path: call.source_path,
+                            caller_name: Some(enclosing),
+                            callee_path: call.target_path,
+                            callee_name: Some(call.target_name),
+                            caller_site_start: call.site_start,
+                            caller_site_end: call.site_end,
+                            callee_start: call.target_start,
+                            callee_end: call.target_end,
+                            kind: "name_resolve".to_string(),
+                            resolution_origin: "checker".to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        for fact in &mut facts {
+            let FlatFact::ResolvedTypeEdge {
+                owner_path,
+                owner_name,
+                target_path,
+                target_name,
+                resolution_origin,
+                ..
+            } = fact
+            else {
+                continue;
+            };
+            if target_name.as_deref() != Some(name) {
+                continue;
+            }
+            if types.iter().any(|reference| {
+                reference.source_path == *owner_path
+                    && reference.target_path == *target_path
+                    && reference.owner_name == *owner_name
+            }) {
+                *resolution_origin = "checker".to_string();
+            }
+        }
+        scip_fill::fill_callers(&mut facts, request.paths, root, name, &sites)?;
+    }
+    #[cfg(not(feature = "rust-checker"))]
+    let _ = (root, name, files, Duration::from_secs(30));
+    for fact in &mut facts {
+        let FlatFact::ResolvedEdge {
+            caller_path,
+            callee_path,
+            callee_name,
+            caller_site_start,
+            caller_site_end,
+            kind,
+            resolution_origin,
+            ..
+        } = fact
+        else {
+            continue;
+        };
+        if callee_name.as_deref() != Some(name) {
+            continue;
+        }
+        if ts_references.iter().any(|reference| {
+            reference.source_path == *caller_path
+                && reference.target_path == *callee_path
+                && *caller_site_start <= reference.site_start
+                && reference.site_end <= *caller_site_end
+        }) {
+            *kind = "checker_resolve".to_string();
+            *resolution_origin = "checker".to_string();
+        }
+    }
+    for fact in &mut facts {
+        let FlatFact::ResolvedTypeEdge {
+            owner_path,
+            target_path,
+            target_name,
+            resolution_origin,
+            ..
+        } = fact
+        else {
+            continue;
+        };
+        if target_name.as_deref() != Some(name) {
+            continue;
+        }
+        if ts_references.iter().any(|reference| {
+            reference.source_path == *owner_path && reference.target_path == *target_path
+        }) {
+            *resolution_origin = "checker".to_string();
+        }
+    }
+    Ok(facts)
+}

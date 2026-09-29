@@ -1,0 +1,5 @@
+phase	repo	query	runs	median_wall_ms	peak_rss_mib
+before	hafley-rs	graph --slow --callers family_span	5	34850	4069.547
+after	hafley-rs	graph --slow --callers family_span	5	17440	2649.141
+before	tokio	graph --slow --callers spawn	5	17600	2206.469
+after	tokio	graph --slow --callers spawn	5	21490	1894.203

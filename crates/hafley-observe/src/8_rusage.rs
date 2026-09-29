@@ -17,6 +17,8 @@ pub struct Usage {
     pub cpu_user_secs: f64,
     pub cpu_system_secs: f64,
     pub peak_rss_bytes: Option<u64>,
+    pub resident_rss_bytes: Option<u64>,
+    pub live_alloc_bytes: Option<u64>,
     pub disk_read_bytes: Option<u64>,
     pub disk_write_bytes: Option<u64>,
 }
@@ -36,6 +38,47 @@ pub fn cpu_and_peak_rss() -> (f64, f64, Option<u64>) {
     #[cfg(not(target_os = "macos"))]
     let peak = usage.ru_maxrss * 1024;
     (user, system, Some(peak as u64))
+}
+
+/// Current resident memory, distinct from the process high-water mark.
+#[allow(deprecated)]
+pub fn resident_rss_bytes() -> Option<u64> {
+    #[cfg(target_os = "macos")]
+    {
+        let mut info: libc::mach_task_basic_info_data_t = unsafe { std::mem::zeroed() };
+        let mut count = libc::MACH_TASK_BASIC_INFO_COUNT as libc::mach_msg_type_number_t;
+        let rc = unsafe {
+            libc::task_info(
+                libc::mach_task_self(),
+                libc::MACH_TASK_BASIC_INFO,
+                &mut info as *mut _ as *mut libc::integer_t,
+                &mut count,
+            )
+        };
+        (rc == libc::KERN_SUCCESS).then_some(info.resident_size as u64)
+    }
+    #[cfg(target_os = "linux")]
+    {
+        let text = std::fs::read_to_string("/proc/self/statm").ok()?;
+        let pages = text.split_whitespace().nth(1)?.parse::<u64>().ok()?;
+        let size = unsafe { libc::sysconf(libc::_SC_PAGESIZE) };
+        (size > 0).then_some(pages.saturating_mul(size as u64))
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+    {
+        None
+    }
+}
+
+fn live_alloc_bytes() -> Option<u64> {
+    #[cfg(feature = "oh")]
+    {
+        Some(crate::testkit::CountingAllocator::live_bytes() as u64)
+    }
+    #[cfg(not(feature = "oh"))]
+    {
+        None
+    }
 }
 
 /// Cumulative disk I/O of this process as `(bytes read, bytes written)`.
@@ -73,6 +116,8 @@ pub fn disk_io_bytes() -> Option<(u64, u64)> {
 
 pub fn sample() -> Usage {
     let (cpu_user_secs, cpu_system_secs, peak_rss_bytes) = cpu_and_peak_rss();
+    let resident_rss_bytes = resident_rss_bytes();
+    let live_alloc_bytes = live_alloc_bytes();
     let (disk_read_bytes, disk_write_bytes) = match disk_io_bytes() {
         Some((read, write)) => (Some(read), Some(write)),
         None => (None, None),
@@ -81,6 +126,8 @@ pub fn sample() -> Usage {
         cpu_user_secs,
         cpu_system_secs,
         peak_rss_bytes,
+        resident_rss_bytes,
+        live_alloc_bytes,
         disk_read_bytes,
         disk_write_bytes,
     }
@@ -123,9 +170,25 @@ where
             "cpu.user_secs" = usage.cpu_user_secs,
             "cpu.system_secs" = usage.cpu_system_secs,
             "mem.rss_bytes" = usage.peak_rss_bytes.unwrap_or_default(),
+            "mem.rss_end_bytes" = usage.resident_rss_bytes.unwrap_or_default(),
+            "mem.alloc_end_bytes" = usage.live_alloc_bytes.unwrap_or_default(),
             "io.read_bytes" = usage.disk_read_bytes.unwrap_or_default(),
             "io.write_bytes" = usage.disk_write_bytes.unwrap_or_default(),
             "process usage sampled"
         );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use oh::test;
+
+    #[test]
+    fn current_rss_is_a_resident_sample() {
+        let usage = super::sample();
+        let resident = usage.resident_rss_bytes.expect("current RSS is available");
+        let peak = usage.peak_rss_bytes.expect("peak RSS is available");
+        assert!(resident > 0);
+        assert!(peak >= resident);
     }
 }

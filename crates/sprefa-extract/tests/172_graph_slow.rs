@@ -1,5 +1,5 @@
-//! `ryi graph --slow` walks the SCIP oracle's projection of the same tables,
-//! and an oracle-answered edge grades `+`.
+//! `ryi graph --slow` verifies target sites with the language checker,
+//! and a checker-answered edge grades `+`.
 #![cfg(feature = "cli")]
 
 use std::process::Command;
@@ -58,4 +58,132 @@ fn a_zero_second_timeout_is_refused() {
         .output()
         .expect("graph binary runs");
     assert_eq!(output.status.code(), Some(2));
+}
+
+#[cfg(feature = "rust-checker")]
+#[test]
+fn targeted_checker_rows_match_the_whole_checker_at_unresolved_sites() {
+    let root = "tests/fixtures/rust_checker_wiring";
+    let binary = env!("CARGO_BIN_EXE_ryii");
+    let whole = Command::new(binary)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("RUST_LOG", "off")
+        .args([
+            "--resolve",
+            "--arms",
+            "call",
+            "--root",
+            root,
+            "--rust-checker",
+            "tests/fixtures/rust_checker_wiring/src",
+        ])
+        .output()
+        .expect("whole checker runs");
+    assert!(
+        whole.status.success(),
+        "{}",
+        String::from_utf8_lossy(&whole.stderr)
+    );
+    let mut expected: Vec<Value> = String::from_utf8(whole.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str::<Value>(line).unwrap())
+        .filter(|row| row["record"] == "resolved_edge" && row["callee_name"] == "render")
+        .collect();
+    expected.sort_by_key(Value::to_string);
+
+    let directory = tempfile::tempdir().unwrap();
+    let database = directory.path().join("graph.db");
+    let targeted = Command::new(binary)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("RUST_LOG", "off")
+        .args([
+            "graph",
+            "--slow",
+            "--callers",
+            "render",
+            "--root",
+            root,
+            "--sqlite",
+        ])
+        .arg(&database)
+        .arg("tests/fixtures/rust_checker_wiring/src")
+        .output()
+        .expect("targeted graph runs");
+    assert!(
+        targeted.status.success(),
+        "{}",
+        String::from_utf8_lossy(&targeted.stderr)
+    );
+    let connection = rusqlite::Connection::open(database).unwrap();
+    let mut statement = connection
+        .prepare(
+            "SELECT caller_path, caller_name, callee_path, callee_name,
+         caller_site_start, caller_site_end, callee_start, callee_end,
+         kind, resolution_origin FROM resolved_edge WHERE callee_name = 'render'",
+        )
+        .unwrap();
+    let mut actual: Vec<Value> = statement
+        .query_map([], |row| {
+            Ok(serde_json::json!({
+                "record": "resolved_edge",
+                "caller_path": row.get::<_, String>(0)?,
+                "caller_name": row.get::<_, Option<String>>(1)?,
+                "callee_path": row.get::<_, String>(2)?,
+                "callee_name": row.get::<_, Option<String>>(3)?,
+                "caller_site_start": row.get::<_, u32>(4)?,
+                "caller_site_end": row.get::<_, u32>(5)?,
+                "callee_start": row.get::<_, u32>(6)?,
+                "callee_end": row.get::<_, u32>(7)?,
+                "kind": row.get::<_, String>(8)?,
+                "resolution_origin": row.get::<_, String>(9)?,
+            }))
+        })
+        .unwrap()
+        .collect::<rusqlite::Result<_>>()
+        .unwrap();
+    actual.sort_by_key(Value::to_string);
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn typescript_target_references_include_importing_files() {
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("RUST_LOG", "off")
+        .args([
+            "graph",
+            "--slow",
+            "--callers",
+            "chainD",
+            "--root",
+            "tests/fixtures/graph_ts",
+            "tests/fixtures/graph_ts",
+        ])
+        .output()
+        .expect("TypeScript graph runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let rows: Vec<Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(
+        rows,
+        [serde_json::json!({
+            "record": "graph_edge",
+            "from_path": "tests/fixtures/graph_ts/chain_c.ts",
+            "from_name": "chainC",
+            "to_path": "tests/fixtures/graph_ts/chain_d.ts",
+            "to_name": "chainD",
+            "kind": "checker_resolve",
+            "grade": "+",
+            "from_line": 4,
+            "to_line": 2
+        })]
+    );
 }

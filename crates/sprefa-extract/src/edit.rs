@@ -5,10 +5,12 @@ pub mod prolog_rename;
 pub mod rust_mutate;
 pub mod rust_rehome;
 pub mod rust_rename;
-#[path = "edit/1c_ts7_cleave_facts.rs"]
-pub mod ts7_cleave_facts;
 #[path = "edit/1d_ts7_cleave_diagnostics.rs"]
 pub mod ts7_cleave_diagnostics;
+#[path = "edit/1c_ts7_cleave_facts.rs"]
+pub mod ts7_cleave_facts;
+#[path = "edit/1e_ts7_graph_target.rs"]
+pub mod ts7_graph_target;
 #[path = "edit/1a_ts7_lsp_session.rs"]
 mod ts7_lsp_session;
 #[path = "edit/1_ts7_rename.rs"]

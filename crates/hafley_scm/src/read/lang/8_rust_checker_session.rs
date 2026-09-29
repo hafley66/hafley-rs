@@ -189,12 +189,13 @@ fn load_checker_workspace(
         ..CargoConfig::default()
     };
     let started = Instant::now();
+    let _load_span = tracing::info_span!("rust_analyzer.load").entered();
     let (db, vfs, _proc_macro) = load_workspace_at(root, &cargo_config, &load_config, &|_| {})
         .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    drop(_load_span);
     let load = started.elapsed();
     if load > budget {
         return Err(CheckerError::Budget(budget));
     }
     Ok((db, vfs, load))
 }
-

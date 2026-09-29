@@ -17,8 +17,14 @@ use ra_ap_syntax::{ast, AstNode};
 use tracing::Span;
 
 use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef, OffsetMap};
+#[path = "8a_rust_checker_target.rs"]
+mod target;
+pub use target::{target_calls, TargetCall};
+#[path = "8b_rust_checker_target_types.rs"]
+mod target_types;
 use crate::read::trace::{phase_span, record_phase, Phase};
 use crate::read::tsi::{Arg, CoverageClaim, FactOut};
+pub use target_types::{target_types, TargetTypeReference};
 
 pub struct FieldProbe {
     pub struct_name_start: u32,
@@ -177,6 +183,7 @@ pub fn answer(
 
     let db = host.raw_database();
     let walk_started = Instant::now();
+    let _query_span = tracing::info_span!("rust_analyzer.queries").entered();
     let mut answers = CheckerAnswers {
         load,
         ..CheckerAnswers::default()

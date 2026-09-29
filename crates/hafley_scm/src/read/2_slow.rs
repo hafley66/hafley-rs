@@ -47,6 +47,7 @@ pub fn slow_project_with_raw<E>(
         &mut |input, content| push_phase_one(input, content, push_raw),
     )?;
     let mut facts = Vec::new();
+    let _scip_span = tracing::info_span!("slow.scip.load_build").entered();
     let index = match index {
         Some(path) => crate::read::scip_decode::load_index(&crate::read::io_path(path))
             .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?,
@@ -70,7 +71,10 @@ pub fn slow_project_with_raw<E>(
                 .map_err(|error| ResolveWithRawError::Project(ProjectError::Scip(error)))?
         }
     };
+    drop(_scip_span);
+    let _project_span = tracing::info_span!("slow.project_index").entered();
     facts.extend(project_index(&inputs, &io_root, index));
+    drop(_project_span);
     if checkers {
         facts.extend(checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?);
     }

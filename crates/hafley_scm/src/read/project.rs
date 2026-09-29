@@ -311,6 +311,17 @@ pub fn resolve_project_with_raw<E>(
     resolve_pushed(request, inputs, None)
 }
 
+/// Stream phase-one facts while retaining syntax TSI rows in the resolve run.
+pub fn resolve_project_with_raw_tsi<E>(
+    request: &ResolveRequest,
+    push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
+) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
+    let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input, content| {
+        push_input_raw(input, content, push_raw)
+    })?;
+    resolve_project_inputs(request, inputs, true).map_err(ResolveWithRawError::Project)
+}
+
 /// One input's file row and phase-1 rows into `push_raw`.
 fn push_input_raw<E>(
     input: &mut ProjectInput,

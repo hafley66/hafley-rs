@@ -148,6 +148,7 @@ fn run_slow(
                 .map_err(|error| std::io::Error::other(error.to_string()))
         };
         let facts = slow_project_with_raw(&files, &root, index, checkers, &mut push_raw)?;
+        let _store_span = tracing::info_span!("store.write").entered();
         output.clear_source()?;
         for fact in facts {
             output.fact(&fact)?;
@@ -161,7 +162,9 @@ fn run_slow(
             }
         }
     }
-    for line in sorted_lines(slow_project(&files, &root, index, checkers)?) {
+    let lines = sorted_lines(slow_project(&files, &root, index, checkers)?);
+    let _store_span = tracing::info_span!("store.write").entered();
+    for line in lines {
         output.line(&line)?;
     }
     output.finish()
