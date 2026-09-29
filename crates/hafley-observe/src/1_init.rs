@@ -40,6 +40,8 @@ pub fn init_with_sinks(
     layers.extend(crate::instruments::proc_layer());
     layers.extend(crate::tracy_layer());
     layers.extend(crate::rusage_layer());
+    #[cfg(feature = "span-alloc")]
+    layers.extend(crate::allocation::layers());
     layers.extend(log_sink_layer(flush));
     layers.extend(sinks.into_iter().map(|sink| {
         Box::new(SinkLayer::new(Arc::new(Writer::new(sink, flush))))

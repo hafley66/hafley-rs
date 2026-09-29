@@ -71,14 +71,7 @@ pub fn resident_rss_bytes() -> Option<u64> {
 }
 
 fn live_alloc_bytes() -> Option<u64> {
-    #[cfg(feature = "oh")]
-    {
-        Some(crate::testkit::CountingAllocator::live_bytes() as u64)
-    }
-    #[cfg(not(feature = "oh"))]
-    {
-        None
-    }
+    crate::allocation::active().then(|| crate::allocation::live_bytes() as u64)
 }
 
 /// Cumulative disk I/O of this process as `(bytes read, bytes written)`.
@@ -139,6 +132,27 @@ pub struct RusageLayer {
     selected: std::collections::HashSet<String>,
 }
 
+#[cfg(feature = "rusage")]
+#[derive(Default)]
+struct ThreadCpu {
+    entered_ns: Option<u64>,
+    elapsed_ns: u64,
+}
+
+#[cfg(feature = "rusage")]
+fn thread_cpu_ns() -> Option<u64> {
+    #[cfg(unix)]
+    {
+        let mut time: libc::timespec = unsafe { std::mem::zeroed() };
+        let rc = unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut time) };
+        (rc == 0).then(|| (time.tv_sec as u64) * 1_000_000_000 + time.tv_nsec as u64)
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
 /// The usage layer when the feature is on and `HAFLEY_RUSAGE_SPANS` lists span
 /// names to sample. The sampler itself is compiled on every build.
 #[cfg(feature = "rusage")]
@@ -167,6 +181,33 @@ impl<S> Layer<S> for RusageLayer
 where
     S: Subscriber + for<'a> LookupSpan<'a>,
 {
+    fn on_enter(&self, id: &tracing::Id, ctx: Context<'_, S>) {
+        let Some(span) = ctx.span(id) else { return };
+        if !self.selected.contains(span.name()) {
+            return;
+        }
+        let Some(now) = thread_cpu_ns() else { return };
+        let mut extensions = span.extensions_mut();
+        if extensions.get_mut::<ThreadCpu>().is_none() {
+            extensions.insert(ThreadCpu::default());
+        }
+        extensions.get_mut::<ThreadCpu>().unwrap().entered_ns = Some(now);
+    }
+
+    fn on_exit(&self, id: &tracing::Id, ctx: Context<'_, S>) {
+        let Some(span) = ctx.span(id) else { return };
+        if !self.selected.contains(span.name()) {
+            return;
+        }
+        let Some(now) = thread_cpu_ns() else { return };
+        let mut extensions = span.extensions_mut();
+        if let Some(cpu) = extensions.get_mut::<ThreadCpu>() {
+            if let Some(start) = cpu.entered_ns.take() {
+                cpu.elapsed_ns = cpu.elapsed_ns.saturating_add(now.saturating_sub(start));
+            }
+        }
+    }
+
     fn on_close(&self, id: tracing::Id, ctx: Context<'_, S>) {
         let Some(span) = ctx.span(&id) else {
             return;
@@ -177,15 +218,22 @@ where
         if !self.selected.contains(span.name()) {
             return;
         }
+        let thread_cpu_ns = span
+            .extensions()
+            .get::<ThreadCpu>()
+            .map(|cpu| cpu.elapsed_ns);
+        let span_alloc_bytes = crate::allocation::allocated_bytes_by_id(id.into_u64());
         let usage = sample();
         tracing::debug!(
             target: crate::RUSAGE_TARGET,
             span = span.name(),
             "cpu.user_secs" = usage.cpu_user_secs,
             "cpu.system_secs" = usage.cpu_system_secs,
+            "cpu.thread_ns" = thread_cpu_ns.unwrap_or_default(),
             "mem.rss_bytes" = usage.peak_rss_bytes.unwrap_or_default(),
             "mem.rss_end_bytes" = usage.resident_rss_bytes.unwrap_or_default(),
             "mem.alloc_end_bytes" = usage.live_alloc_bytes.unwrap_or_default(),
+            "mem.span_alloc_bytes" = span_alloc_bytes.unwrap_or_default(),
             "io.read_bytes" = usage.disk_read_bytes.unwrap_or_default(),
             "io.write_bytes" = usage.disk_write_bytes.unwrap_or_default(),
             "process usage sampled"

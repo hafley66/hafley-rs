@@ -12,6 +12,9 @@
 //! and `tests/4_capability_parity.rs` asserts the binary reaches every library
 //! capability, so that drift cannot recur silently.
 
+#[cfg(feature = "profile-alloc")]
+hafley_observe::counting_allocator!();
+
 use std::io::Write;
 use std::os::fd::FromRawFd;
 use std::path::PathBuf;
@@ -148,7 +151,7 @@ fn run_slow(
                 .map_err(|error| std::io::Error::other(error.to_string()))
         };
         let facts = slow_project_with_raw(&files, &root, index, checkers, &mut push_raw)?;
-        let _store_span = tracing::info_span!("store.write").entered();
+        let _store_span = hafley_observe::allocation::tracked(tracing::info_span!("store.write")).entered();
         output.clear_source()?;
         for fact in facts {
             output.fact(&fact)?;
@@ -163,7 +166,7 @@ fn run_slow(
         }
     }
     let lines = sorted_lines(slow_project(&files, &root, index, checkers)?);
-    let _store_span = tracing::info_span!("store.write").entered();
+    let _store_span = hafley_observe::allocation::tracked(tracing::info_span!("store.write")).entered();
     for line in lines {
         output.line(&line)?;
     }

@@ -70,7 +70,7 @@ pub fn target_types(
         }
     }
     let db = workspace.host.raw_database();
-    let _query_span = tracing::info_span!("rust_analyzer.queries").entered();
+    let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
     attach_db(db, || {
         let sema = Semantics::new(db);
         let mut found = BTreeSet::new();

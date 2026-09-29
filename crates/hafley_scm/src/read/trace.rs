@@ -8,6 +8,16 @@ use tracing::Span;
 use crate::read::rows::FamilyBundle;
 use crate::read::types::Family;
 
+#[cfg(feature = "cli")]
+pub fn tracked(span: Span) -> Span {
+    hafley_observe::allocation::tracked(span)
+}
+
+#[cfg(not(feature = "cli"))]
+pub fn tracked(span: Span) -> Span {
+    span
+}
+
 /// One leg of the extraction. CLOSED: a phase off this list is a compile error
 /// rather than a string a caller invents, so the table's axis cannot drift.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,14 +88,14 @@ impl Phase {
 /// One phase over one file, or one leg over one project. `bytes`, `rows` and
 /// `calls` land through [`record_phase`]; unset reads 0 in the table.
 pub fn phase_span(lang: &'static str, phase: Phase) -> Span {
-    tracing::debug_span!(
+    tracked(tracing::debug_span!(
         "phase",
         lang,
         phase = phase.as_str(),
         bytes = Empty,
         rows = Empty,
         calls = Empty
-    )
+    ))
 }
 
 /// The counts a phase produced. Integers only: no formatting on a hot path.
@@ -98,25 +108,25 @@ pub fn record_phase(span: &Span, bytes: u64, rows: u64, calls: u64) {
 /// One whole-project stage (expand, read, index build, resolve, emit), for the
 /// timeline; it carries no counts, so the summary tables never fold it.
 pub fn stage_span(stage: &'static str) -> Span {
-    tracing::debug_span!("stage", stage)
+    tracked(tracing::debug_span!("stage", stage))
 }
 
 /// One backing engine's parse over one file.
 pub fn parse_span(lang: &'static str, engine: &'static str) -> Span {
-    tracing::debug_span!("parse", lang, engine)
+    tracked(tracing::debug_span!("parse", lang, engine))
 }
 
 /// One family's projection off an already-parsed tree. `nodes`, `edges` and
 /// `sites` land through `record_bundle` when the projection returns.
 pub fn family_span(lang: &'static str, family: &'static str) -> Span {
-    tracing::debug_span!(
+    tracked(tracing::debug_span!(
         "family",
         lang,
         family,
         nodes = Empty,
         edges = Empty,
         sites = Empty
-    )
+    ))
 }
 
 /// The counts a projection produced. `sites` is the family's side-channel row
@@ -629,6 +639,7 @@ mod sink {
             .with(summary)
             .with(hafley_observe::chrome_layer())
             .with(hafley_observe::rusage::layer())
+            .with(hafley_observe::allocation::layers())
             .init();
         hafley_observe::startup(&observability);
         state

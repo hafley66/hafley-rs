@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::collections::{BTreeMap, VecDeque};
 use std::io::Write;
 use std::panic::{catch_unwind, resume_unwind, AssertUnwindSafe};
-use std::sync::atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -130,7 +130,10 @@ pub fn run<T>(name: &'static str, budget: Budget, body: impl FnOnce() -> T) -> T
     } else {
         None
     };
-    let memory_start = CountingAllocator::reset_peak();
+    if budget.memory_bytes.is_some() {
+        crate::allocation::enable();
+    }
+    let memory_start = crate::allocation::reset_peak();
     let start = Instant::now();
     let result = if replay {
         let subscriber = tracing_subscriber::registry()
@@ -181,10 +184,10 @@ pub fn run<T>(name: &'static str, budget: Budget, body: impl FnOnce() -> T) -> T
     }
     if let Some(limit) = budget.memory_bytes {
         assert!(
-            ALLOCATOR_ACTIVE.load(Ordering::Relaxed),
+            crate::allocation::active(),
             "oh::test {name} has a memory budget but the test binary did not install oh::counting_allocator!()"
         );
-        let growth = CountingAllocator::peak_bytes().saturating_sub(memory_start);
+        let growth = crate::allocation::peak_bytes().saturating_sub(memory_start);
         assert!(
             growth <= limit,
             "oh::test {name} exceeded memory budget: {growth} bytes > {limit} bytes"
@@ -249,80 +252,4 @@ fn replay_test(name: &str, seed: u64) {
         Ok(status) => panic!("oh::test {name} replay exited with {status}"),
         Err(error) => panic!("oh::test {name} replay failed to start: {error}"),
     }
-}
-
-/// A process-wide live and peak allocation counter for consumers that install
-/// it as their `#[global_allocator]`. Tests decorated with `oh::test` run
-/// serially inside each process, so the live/peak delta belongs to one test.
-pub struct CountingAllocator;
-
-static LIVE_BYTES: AtomicUsize = AtomicUsize::new(0);
-static PEAK_BYTES: AtomicUsize = AtomicUsize::new(0);
-static ALLOCATOR_ACTIVE: AtomicBool = AtomicBool::new(false);
-
-impl CountingAllocator {
-    pub fn live_bytes() -> usize {
-        LIVE_BYTES.load(Ordering::Relaxed)
-    }
-
-    pub fn reset_peak() -> usize {
-        let live = Self::live_bytes();
-        PEAK_BYTES.store(live, Ordering::Relaxed);
-        live
-    }
-
-    pub fn peak_bytes() -> usize {
-        PEAK_BYTES.load(Ordering::Relaxed)
-    }
-}
-
-unsafe impl std::alloc::GlobalAlloc for CountingAllocator {
-    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
-        let ptr = unsafe { std::alloc::System.alloc(layout) };
-        if !ptr.is_null() {
-            record_alloc(layout.size());
-        }
-        ptr
-    }
-
-    unsafe fn alloc_zeroed(&self, layout: std::alloc::Layout) -> *mut u8 {
-        let ptr = unsafe { std::alloc::System.alloc_zeroed(layout) };
-        if !ptr.is_null() {
-            record_alloc(layout.size());
-        }
-        ptr
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: std::alloc::Layout) {
-        unsafe { std::alloc::System.dealloc(ptr, layout) };
-        LIVE_BYTES.fetch_sub(layout.size(), Ordering::Relaxed);
-    }
-
-    unsafe fn realloc(&self, ptr: *mut u8, layout: std::alloc::Layout, new_size: usize) -> *mut u8 {
-        let next = unsafe { std::alloc::System.realloc(ptr, layout, new_size) };
-        if !next.is_null() {
-            if new_size >= layout.size() {
-                record_alloc(new_size - layout.size());
-            } else {
-                LIVE_BYTES.fetch_sub(layout.size() - new_size, Ordering::Relaxed);
-            }
-        }
-        next
-    }
-}
-
-fn record_alloc(size: usize) {
-    ALLOCATOR_ACTIVE.store(true, Ordering::Relaxed);
-    let live = LIVE_BYTES.fetch_add(size, Ordering::Relaxed) + size;
-    PEAK_BYTES.fetch_max(live, Ordering::Relaxed);
-}
-
-/// Installs the allocation counter in the downstream test binary.
-#[macro_export]
-macro_rules! counting_allocator {
-    () => {
-        #[global_allocator]
-        static OH_COUNTING_ALLOCATOR: $crate::testkit::CountingAllocator =
-            $crate::testkit::CountingAllocator;
-    };
 }

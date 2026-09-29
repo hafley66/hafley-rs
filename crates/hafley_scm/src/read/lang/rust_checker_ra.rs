@@ -183,7 +183,7 @@ pub fn answer(
 
     let db = host.raw_database();
     let walk_started = Instant::now();
-    let _query_span = tracing::info_span!("rust_analyzer.queries").entered();
+    let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
     let mut answers = CheckerAnswers {
         load,
         ..CheckerAnswers::default()

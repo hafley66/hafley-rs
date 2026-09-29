@@ -1,5 +1,26 @@
 # hafley-observe
 
+## Allocation and span-close resource records
+
+The `counting_allocator!()` macro installs one system-backed global allocator
+from [`tracking-allocator` 0.4](https://docs.rs/tracking-allocator/0.4.0/tracking_allocator/).
+`oh::test` uses its live and peak counters for memory budgets. The `span-alloc`
+feature adds [`AllocationLayer`](https://docs.rs/tracking-allocator/0.4.0/tracking_allocator/struct.AllocationLayer.html)
+and allocation groups. Call `allocation::tracked(span)` before entering a span
+to count requested allocation bytes in that span. The innermost active group
+owns each allocation.
+
+With `rusage` enabled, set `HAFLEY_RUSAGE_SPANS` to a comma-separated list of
+span names. Each selected span closes with `cpu.thread_ns`,
+`mem.rss_end_bytes`, `mem.alloc_end_bytes`, and `mem.span_alloc_bytes` in its
+resource record. `mem.alloc_end_bytes` is available when the allocator is
+installed and tracking is enabled.
+
+For the CLI, build `ryii` with `--features cli,read,profile-alloc` to enable
+the allocator and per-span groups. The feature stays off in the default build
+because the paired slow-graph measurement found 4.65% overhead on hafley-rs
+and 31.88% on tokio; the fast-tier measurement is recorded separately.
+
 Shared tracing configuration for hafley-rs binaries. `HAFLEY_OTLP_ENDPOINT`
 turns on OTLP/HTTP span export alongside the formatter; unset, the process
 keeps the formatter only. End every `init` caller's `main` with

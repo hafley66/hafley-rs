@@ -35,7 +35,7 @@ pub fn references(
     seeds: &[(String, String)],
     source_paths: &BTreeSet<String>,
 ) -> Result<Vec<TargetReference>, String> {
-    let _checker_span = tracing::info_span!("typescript.checker").entered();
+    let _checker_span = hafley_observe::allocation::tracked(tracing::info_span!("typescript.checker")).entered();
     if seeds.is_empty() {
         return Ok(Vec::new());
     }

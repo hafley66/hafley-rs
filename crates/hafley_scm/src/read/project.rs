@@ -345,6 +345,9 @@ fn push_input_raw<E>(
     content: &[u8],
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<(), ResolveWithRawError<E>> {
+    let _sqlite_write = crate::read::trace::tracked(
+        tracing::debug_span!("stage", stage = "sqlite_write", path = %input.path)
+    ).entered();
     push_raw(RawProjectFact {
         path: &input.path,
         content_id: &input.blob,
@@ -2063,7 +2066,11 @@ fn read_chunk(
                             } else {
                                 io_root.map_or_else(|| path.clone(), |root| root.join(path))
                             };
-                            let content = std::fs::read(file)
+                            let read_span = crate::read::trace::tracked(
+                                tracing::debug_span!("read_file", path = %path.display())
+                            );
+                            let content = stage_span("read")
+                                .in_scope(|| read_span.in_scope(|| std::fs::read(file)))
                                 .map_err(|err| ProjectError::Read(path.clone(), err))?;
                             let path = path.to_string_lossy().to_string();
                             let size_skip = if matches!(planes, Planes::Fast)

@@ -340,7 +340,7 @@ pub fn answer(
     tsi: bool,
 ) -> Result<TsCheckerAnswers, TsCheckerError> {
     use crate::read::scip_ensure::{run_capped, Capped};
-    let _checker_span = tracing::info_span!("typescript.checker").entered();
+    let _checker_span = crate::read::trace::tracked(tracing::info_span!("typescript.checker")).entered();
 
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

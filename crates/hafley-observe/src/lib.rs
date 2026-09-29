@@ -29,6 +29,8 @@ pub mod sqlite_memory;
 pub mod testkit;
 #[path = "10_tracy.rs"]
 pub mod tracy;
+#[path = "12_span_alloc.rs"]
+pub mod allocation;
 
 extern crate self as oh;
 
