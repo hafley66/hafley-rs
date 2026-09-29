@@ -43,6 +43,30 @@ fn enclosing_name(node: &ra_ap_syntax::SyntaxNode) -> Option<String> {
         .map(|name| name.text().to_string())
 }
 
+/// Resolve one file's crate and edition on this thread before the parallel pass.
+///
+/// `Semantics::attach_first_edition` walks `file_to_module_defs` to
+/// `Module::krate`, which forces `crate_def_map` for the whole dependency
+/// closure (the hundred-plus crates in `Cargo.lock`), multi-second on a large
+/// workspace. Salsa shares one memo table across `RootDatabase` clones but
+/// transfers a claimed query to the waiter, which then refetches it, so a
+/// concurrent first touch re-runs that one resolution per waiting chunk. Doing
+/// it once here leaves the parallel chunks to read the memo.
+pub(super) fn warm_crate_map(
+    db: &RootDatabase,
+    ids: &HashMap<String, ra_ap_ide::FileId>,
+    first_source: Option<&str>,
+) {
+    let Some(&file_id) = first_source.and_then(|source| ids.get(source)) else {
+        return;
+    };
+    let _warm = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.warm_crate_map")).entered();
+    attach_db(db, || {
+        let sema = Semantics::new(db);
+        let _ = sema.attach_first_edition(file_id);
+    });
+}
+
 pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
@@ -92,6 +116,7 @@ pub fn target_calls(
     let pool = crate::read::project::extract_pool();
     let mut sources: Vec<_> = by_source.into_iter().collect();
     sources.sort_by_key(|(path, _)| *path);
+    warm_crate_map(&db, &ids, sources.first().map(|(path, _)| *path));
     let chunk_size = sources.len().div_ceil(pool.current_num_threads()).max(1);
     let chunks: Vec<_> = sources
         .chunks(chunk_size)

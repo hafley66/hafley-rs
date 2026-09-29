@@ -529,19 +529,15 @@ fn router(state: DaemonState) -> axum::Router {
 }
 
 pub fn daemon(install_observe: impl FnOnce(), flush_observe: fn(), finish_observe: fn()) -> Result<(), Box<dyn std::error::Error>> {
-    daemonize::Daemonize::new().start()?;
-    install_observe();
+    // Prepare the state directory and socket parent before daemonizing.
+    // `daemonize` redirects stderr to /dev/null, so a failure after the fork
+    // reaches the client as silence; here it still reaches the pipe the client
+    // reads when readiness times out.
     let cache = crate::daemon_auto::cache_dir()?;
     std::fs::create_dir_all(&cache)?;
     #[cfg(unix)] {
         use std::os::unix::fs::PermissionsExt as _;
         std::fs::set_permissions(&cache, std::fs::Permissions::from_mode(0o700))?;
-    }
-    let lock = std::fs::OpenOptions::new().create(true).read(true).write(true).open(cache.join("ryi.lock"))?;
-    match lock.try_lock_exclusive() {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(()),
-        Err(error) => return Err(error.into()),
     }
     let socket = crate::daemon_auto::socket_path()?;
     if let Some(parent) = socket.parent() {
@@ -550,6 +546,14 @@ pub fn daemon(install_observe: impl FnOnce(), flush_observe: fn(), finish_observ
             use std::os::unix::fs::PermissionsExt as _;
             std::fs::set_permissions(parent, std::fs::Permissions::from_mode(0o700))?;
         }
+    }
+    daemonize::Daemonize::new().start()?;
+    install_observe();
+    let lock = std::fs::OpenOptions::new().create(true).read(true).write(true).open(cache.join("ryi.lock"))?;
+    match lock.try_lock_exclusive() {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => return Ok(()),
+        Err(error) => return Err(error.into()),
     }
     if socket.exists() { std::fs::remove_file(&socket)?; }
     let pid_file = cache.join("ryi.pid");

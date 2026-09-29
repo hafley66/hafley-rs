@@ -31,10 +31,31 @@ fn server_binary() -> Result<PathBuf, ClientError> {
     Err(std::io::Error::new(std::io::ErrorKind::NotFound, format!("{} was not found", daemon_auto::SERVER_BIN)).into())
 }
 
-fn start_daemon(server: &Path) -> Result<(), ClientError> {
-    Command::new(server).arg("--daemon")
-        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn()?;
-    Ok(())
+fn start_daemon(server: &Path) -> Result<std::process::Child, ClientError> {
+    // Keep the daemon's stderr: daemonize redirects it to /dev/null once it
+    // forks, but a startup failure before that point lands here, and the
+    // readiness timeout reports it instead of a bare "did not become ready".
+    Ok(Command::new(server).arg("--daemon")
+        .stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::piped()).spawn()?)
+}
+
+/// The daemon's own words for a failed start, read after readiness times out.
+async fn daemon_failure_detail(child: Option<std::process::Child>) -> String {
+    let Some(mut child) = child else { return String::new() };
+    let mut detail = String::new();
+    if let Some(stderr) = child.stderr.take() {
+        let reader = tokio::task::spawn_blocking(move || {
+            use std::io::Read as _;
+            let mut text = String::new();
+            let _ = std::io::BufReader::new(stderr).read_to_string(&mut text);
+            text
+        });
+        if let Ok(Ok(text)) = tokio::time::timeout(Duration::from_secs(2), reader).await {
+            detail = text.trim().to_string();
+        }
+    }
+    let _ = child.wait();
+    detail
 }
 
 async fn send(request: Request<ClientBody>, socket: &Path) -> Result<hyper::Response<hyper::body::Incoming>, ClientError> {
@@ -68,6 +89,7 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
     let socket = daemon_auto::socket_path()?;
     let stamp = if daemon_auto::handshake_enabled() { Some(daemon_auto::executable_stamp(server)?) } else { None };
     let mut started = false;
+    let mut started_child: Option<std::process::Child> = None;
     for _ in 0..100 {
         match tokio::net::UnixStream::connect(&socket).await {
             Ok(stream) => {
@@ -89,7 +111,7 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
             }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound || error.kind() == std::io::ErrorKind::ConnectionRefused => {
                 if !started {
-                    start_daemon(server)?;
+                    started_child = Some(start_daemon(server)?);
                     started = true;
                 }
             }
@@ -97,7 +119,12 @@ async fn ready_socket(server: &Path) -> Result<PathBuf, ClientError> {
         }
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
-    Err(format!("{} did not become ready", daemon_auto::SERVER_BIN).into())
+    let detail = daemon_failure_detail(started_child).await;
+    if detail.is_empty() {
+        Err(format!("{} did not become ready", daemon_auto::SERVER_BIN).into())
+    } else {
+        Err(format!("{} did not become ready: {detail}", daemon_auto::SERVER_BIN).into())
+    }
 }
 
 fn command(cli: &Ryi) -> Result<(&'static str, serde_json::Value), ClientError> {

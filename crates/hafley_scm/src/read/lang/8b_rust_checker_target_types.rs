@@ -73,6 +73,15 @@ pub fn target_types(
     let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
     attach_db(db, || {
         let sema = Semantics::new(db);
+        // See `target::warm_crate_map`: resolve one crate map on this thread
+        // before the reference search forces it through `parse_guess_edition`.
+        if let Some(&file_id) = seeds.iter().find_map(|(path, _)| ids.get(path)) {
+            let _warm = crate::read::trace::tracked(
+                tracing::info_span!("rust_analyzer.warm_crate_map"),
+            )
+            .entered();
+            let _ = sema.attach_first_edition(file_id);
+        }
         let mut found = BTreeSet::new();
         for (target_path, name) in seeds {
             let Some(&file_id) = ids.get(target_path) else {

@@ -104,6 +104,18 @@ else
   row FAIL "idle exit (RYI_IDLE_SECS=2)" "pid=${pid:-none} still running"
 fi
 
+bad=$(mktemp -d /tmp/ryi-e2e-bad.XXXXXX)
+chmod 500 "$bad"
+msg=$(cd "$soopy" && XDG_CACHE_HOME="$bad/cache" "$ryi" fast src/lib.rs 2>&1 >/dev/null)
+chmod 700 "$bad"
+rm -rf "$bad"
+first=$(printf '%s' "$msg" | tail -1 | cut -c1-120)
+if printf '%s' "$msg" | grep -q "did not become ready" && printf '%s' "$msg" | grep -qiE "permission denied|not a directory"; then
+  row ok "unstartable daemon names its cause" "$first"
+else
+  row FAIL "unstartable daemon names its cause" "$first"
+fi
+
 trace=$XDG_CACHE_HOME/trace.json
 (cd "$soopy" && HAFLEY_TRACE=$trace "$ryi" fast src/lib.rs >/dev/null 2>&1 \
   && HAFLEY_TRACE=$trace "$ryi" fast src/_1a_path.rs >/dev/null 2>&1)

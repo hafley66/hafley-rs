@@ -1,0 +1,6 @@
+repo	query	span	metric	before_ms	after_ms
+hafley-rs	graph --slow --callers family_span	rust_analyzer.queries	total_ms	230327.1	60720.4
+hafley-rs	graph --slow --callers family_span	rust_analyzer.source_edition	total_ms	161345.9	0.3
+hafley-rs	graph --slow --callers family_span	rust_analyzer.source_parse	total_ms	0.0	6.0
+hafley-rs	graph --slow --callers family_span	rust_analyzer.syntax_scan	total_ms	49525.7	43395.3
+hafley-rs	graph --slow --callers family_span	rust_analyzer.warm_crate_map	total_ms	NA	13146.0

@@ -368,13 +368,19 @@ impl From<String> for RyiExit {
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     if std::env::args_os().nth(1).as_deref() == Some(std::ffi::OsStr::new("--daemon")) {
-        return server_auto::daemon(
+        // A startup failure must reach the client, which holds this stderr:
+        // print the display form, not the `Result` debug form.
+        if let Err(error) = server_auto::daemon(
             || {
                 let _ = sprefa_extract::trace::install();
             },
             hafley_observe::flush_trace,
             hafley_observe::finish_trace,
-        );
+        ) {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+        return Ok(());
     }
     let ryi = parse_cli();
     let default_filter = match &ryi.cmd {

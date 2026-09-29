@@ -1,0 +1,5 @@
+repo	query	variant	runs	median_wall_ms	median_peak_rss_bytes	paired_delta_pct_median
+hafley-rs	graph --slow --callers family_span	before	6	17463.7	2376695808	NA
+hafley-rs	graph --slow --callers family_span	after	6	19176.9	2391015424	0.860
+tokio	graph --slow --callers spawn	before	6	15979.7	1850908672	NA
+tokio	graph --slow --callers spawn	after	6	18911.3	1855913984	-0.886
