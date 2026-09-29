@@ -1,4 +1,5 @@
-use hafley_observe as oh;
+extern crate hafley_observe as oh;
+use oh::test;
 use tracing_subscriber::prelude::*;
 
 oh::counting_allocator!();

@@ -18,8 +18,10 @@ installed and tracking is enabled.
 
 For the CLI, build `ryii` with `--features cli,read,profile-alloc` to enable
 the allocator and per-span groups. The feature stays off in the default build
-because the paired slow-graph measurement found 4.65% overhead on hafley-rs
-and 31.88% on tokio; the fast-tier measurement is recorded separately.
+because the paired measurements put the wall cost well over 2%: the slow graph
+on hafley-rs +4.65% and on tokio +31.88%
+(`plans/2026-09-29-slow-on-demand-timing.tsv`), and `ryii fast` on hafley-rs
++49.73% (`plans/2026-09-29-fast-alloc-overhead.tsv`).
 
 Shared tracing configuration for hafley-rs binaries. `HAFLEY_OTLP_ENDPOINT`
 turns on OTLP/HTTP span export alongside the formatter; unset, the process

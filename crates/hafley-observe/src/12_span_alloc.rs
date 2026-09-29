@@ -32,8 +32,15 @@ impl AllocationTracker for ProcessTracker {
         let live = LIVE.fetch_add(object_size, Ordering::Relaxed) + object_size;
         PEAK.fetch_max(live, Ordering::Relaxed);
         if group != AllocationGroupId::ROOT {
-            if let Some(counter) = groups().lock().unwrap().get(&group.as_usize().get()) {
-                counter.fetch_add(object_size, Ordering::Relaxed);
+            // This runs inside the global allocator, including for allocations
+            // made while `attach`/`SpanTotals` hold this mutex (a `HashMap`
+            // insert). Blocking here is a self-deadlock; a contended lock just
+            // skips the per-span byte for that one allocation. Never block in an
+            // allocator.
+            if let Ok(groups) = groups().try_lock() {
+                if let Some(counter) = groups.get(&group.as_usize().get()) {
+                    counter.fetch_add(object_size, Ordering::Relaxed);
+                }
             }
         }
     }
@@ -158,12 +165,16 @@ mod spans {
 #[cfg(feature = "span-alloc")]
 pub use spans::{allocated_bytes, attach, layers};
 
+/// The allocation layers, one per element. The `span-alloc` build returns the
+/// tracking-allocator layer and the span-total reporter; the default build
+/// returns one inert identity layer. It must never be an empty `Vec`: handing
+/// `Registry::with` an empty layer vector leaves the whole subscriber silent.
 #[cfg(not(feature = "span-alloc"))]
 pub fn layers<S>() -> Vec<Box<dyn tracing_subscriber::Layer<S> + Send + Sync>>
 where
     S: tracing::Subscriber + for<'a> tracing_subscriber::registry::LookupSpan<'a> + Send + Sync,
 {
-    Vec::new()
+    vec![Box::new(tracing_subscriber::layer::Identity::new())]
 }
 
 #[cfg(feature = "span-alloc")]

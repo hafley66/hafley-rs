@@ -212,9 +212,8 @@ where
         let Some(span) = ctx.span(&id) else {
             return;
         };
-        if *span.metadata().level() > tracing::Level::INFO {
-            return;
-        }
+        // `HAFLEY_RUSAGE_SPANS` is the opt-in; a listed `debug_span!` (the fast
+        // tier's phase/read spans) must still record, so the level is not a gate.
         if !self.selected.contains(span.name()) {
             return;
         }
@@ -249,8 +248,12 @@ mod tests {
     fn current_rss_is_a_resident_sample() {
         let usage = super::sample();
         let resident = usage.resident_rss_bytes.expect("current RSS is available");
-        let peak = usage.peak_rss_bytes.expect("peak RSS is available");
         assert!(resident > 0);
-        assert!(peak >= resident);
+        assert!(usage.peak_rss_bytes.is_some());
+        // `sample` reads the peak high-water mark before the current resident
+        // size; a parallel test thread can allocate between the two reads, so
+        // sample the (monotonic) peak again to compare against `resident`.
+        let (_, _, peak) = super::cpu_and_peak_rss();
+        assert!(peak.expect("peak RSS is available") >= resident);
     }
 }

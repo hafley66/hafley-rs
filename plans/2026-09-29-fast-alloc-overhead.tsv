@@ -1,0 +1,14 @@
+repo	query	variant	run	wall_ms	peak_rss_bytes	exit_code
+hafley-rs	ryii fast	plain	1	4266.8	1080360960	0
+hafley-rs	ryii fast	plain	2	3832.3	1088864256	0
+hafley-rs	ryii fast	plain	3	3872.3	1110507520	0
+hafley-rs	ryii fast	plain	4	3913.4	1157283840	0
+hafley-rs	ryii fast	plain	5	4104.3	1157283840	0
+hafley-rs	ryii fast	alloc	1	5934.6	1343012864	0
+hafley-rs	ryii fast	alloc	2	5578.1	1346387968	0
+hafley-rs	ryii fast	alloc	3	5804.6	1355202560	0
+hafley-rs	ryii fast	alloc	4	5859.4	1355202560	0
+hafley-rs	ryii fast	alloc	5	6314.4	1355202560	0
+hafley-rs	ryii fast	plain	median	3913.4	1110507520	0
+hafley-rs	ryii fast	alloc	median	5859.4	1346387968	0
+hafley-rs	ryii fast	paired_overhead_pct	-	49.727	0	0
