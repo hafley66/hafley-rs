@@ -4,7 +4,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use sprefa_extract::{resolve_project_with_raw_tsi, FamilyTag, FlatFact, ResolveRequest};
+use sprefa_extract::{resolve_project_target_with_raw, FamilyTag, FlatFact, ResolveRequest};
 #[path = "0b_graph_scip_fill.rs"]
 mod scip_fill;
 
@@ -15,7 +15,8 @@ pub(super) fn facts(
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
     let mut call_sites = BTreeSet::new();
     let mut definitions: BTreeMap<(String, String, bool), Vec<(u32, u32)>> = BTreeMap::new();
-    let mut facts = resolve_project_with_raw_tsi(request, &mut |raw| {
+    let _extract_span = tracing::info_span!("fast.extract_resolve").entered();
+    let mut facts = resolve_project_target_with_raw(request, &mut |raw| {
         if let FlatFact::Node {
             family: family @ (FamilyTag::Call | FamilyTag::Type),
             span,
@@ -45,6 +46,7 @@ pub(super) fn facts(
         }
         Ok::<(), std::convert::Infallible>(())
     })?;
+    drop(_extract_span);
     let files: Vec<(String, PathBuf)> = request
         .paths
         .iter()
@@ -124,7 +126,8 @@ pub(super) fn facts(
                 else {
                     return None;
                 };
-                (target_name.as_deref() == Some(name)
+                (request.arms.types
+                    && target_name.as_deref() == Some(name)
                     && target_path.ends_with(".rs")
                     && resolution_origin != "scip")
                     .then(|| (target_path.clone(), name.to_string()))

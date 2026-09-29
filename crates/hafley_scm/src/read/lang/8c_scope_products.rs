@@ -24,7 +24,7 @@ struct Binding {
     name: String,
 }
 
-fn span(value: &hafley_scm::EmittedValue) -> Option<Span> {
+fn scope_span(value: &hafley_scm::EmittedValue) -> Option<Span> {
     let bytes = value.bytes()?;
     Some(Span { start: bytes.start, len: bytes.end - bytes.start })
 }
@@ -50,6 +50,9 @@ fn owner(scopes: &[Scope], position: u32) -> Option<usize> {
 /// Append scope products to type facts. IDs and fact ordinals are shifted past
 /// the existing syntax rows before the wire sees them.
 pub fn append(lang: RyiLang, source: &[u8], existing: &mut Vec<FactOut>) {
+    // The scope query retains a second syntax tree and all matched identifiers.
+    // Keep that projection off large-file extraction's bounded-memory path.
+    if source.len() > 512 * 1024 { return }
     let (query_slot, text, origin) = match lang {
         RyiLang::Rust => (&RUST_QUERY, include_str!("8a_rust_scope.scm"), "rust"),
         RyiLang::TypeScript => (&TS_QUERY, include_str!("8b_ts_scope.scm"), "ts"),
@@ -69,7 +72,7 @@ pub fn append(lang: RyiLang, source: &[u8], existing: &mut Vec<FactOut>) {
     for fact in &arena.emitted {
         let relation = &query.relations[fact.relation as usize];
         let Some(value) = field(fact, &arena, query, "span") else { continue };
-        let Some(site) = span(value) else { continue };
+        let Some(site) = scope_span(value) else { continue };
         match relation.as_ref() {
             "scope" => {
                 let kind = field(fact, &arena, query, "kind")
@@ -97,6 +100,10 @@ pub fn append(lang: RyiLang, source: &[u8], existing: &mut Vec<FactOut>) {
     let mut names = TsiNames::new(origin);
     for scope in &mut scopes {
         scope.id = names.anonymous(scope.span);
+        if let Some(text) = source.get(scope.span.start as usize..scope.span.end() as usize)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok()) {
+            names.name(scope.id, text);
+        }
         names.fact("tsi.product", vec![Arg::Id(scope.id)]);
     }
     for index in 0..scopes.len() {
@@ -112,6 +119,10 @@ pub fn append(lang: RyiLang, source: &[u8], existing: &mut Vec<FactOut>) {
     for scope in &scopes {
         if scope.kind != "closure" && scope.kind != "arrow" { continue }
         let callable = names.anonymous(scope.span);
+        if let Some(text) = source.get(scope.span.start as usize..scope.span.end() as usize)
+            .and_then(|bytes| std::str::from_utf8(bytes).ok()) {
+            names.name(callable, text);
+        }
         names.fact("tsi.callable", vec![Arg::Id(callable)]);
         names.fact("tsi.input", vec![Arg::Id(callable), Arg::Int(-1), Arg::Id(scope.id)]);
     }
@@ -122,6 +133,7 @@ pub fn append(lang: RyiLang, source: &[u8], existing: &mut Vec<FactOut>) {
             continue;
         };
         let target = names.anonymous(binding.span);
+        names.name(target, &binding.name);
         names.edge(scopes[index].id, &binding.name, target, binding.span.start as i64);
         targets.push(Some((index, target)));
     }
@@ -132,6 +144,7 @@ pub fn append(lang: RyiLang, source: &[u8], existing: &mut Vec<FactOut>) {
                 && owner(&scopes, binding.span.start) == Some(index)
         }) else { continue };
         let target = names.anonymous(write.span);
+        names.name(target, &write.name);
         names.edge(scopes[index].id, &binding.name, target, write.span.start as i64);
     }
     let mut captured = BTreeSet::new();

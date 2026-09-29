@@ -311,6 +311,23 @@ pub fn resolve_project_with_raw<E>(
     resolve_pushed(request, inputs, None)
 }
 
+/// Stream the call and type rows used by a targeted resolve, leaving out the
+/// CST, data, and flow planes that a call or type graph question never reads.
+pub fn resolve_project_target_with_raw<E>(
+    request: &ResolveRequest,
+    push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
+) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
+    let planes = if request.arms.types {
+        request.planes()
+    } else {
+        Planes::TargetCall
+    };
+    let inputs = read_inputs_streamed(request.paths, true, planes, &mut |input, content| {
+        push_input_raw(input, content, push_raw)
+    })?;
+    resolve_pushed(request, inputs, None)
+}
+
 /// Stream phase-one facts while retaining syntax TSI rows in the resolve run.
 pub fn resolve_project_with_raw_tsi<E>(
     request: &ResolveRequest,
@@ -1798,6 +1815,7 @@ pub fn sorted_lines(facts: Vec<FlatFact>) -> Vec<String> {
 pub enum Planes {
     All,
     Resolve { flow: bool },
+    TargetCall,
     Fast,
 }
 
@@ -2347,6 +2365,13 @@ fn resolve_mask(path: &str, planes: Planes) -> FamilyMask {
             types: true,
             call: true,
             df: flow,
+            data: false,
+        },
+        (Some(arm), Planes::TargetCall) if matches!(arm.name, "rust" | "ts") => FamilyMask {
+            cst: false,
+            types: false,
+            call: true,
+            df: false,
             data: false,
         },
         (Some(arm), _) => arm.type_plane.mask(),

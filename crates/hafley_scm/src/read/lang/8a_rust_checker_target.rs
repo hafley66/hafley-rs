@@ -21,7 +21,10 @@ enum Candidate {
     Path(ast::Path),
 }
 
-fn target_owner_name(node: &ra_ap_syntax::SyntaxNode, offsets: &OffsetMap) -> Option<String> {
+fn target_owner_name(
+    node: &ra_ap_syntax::SyntaxNode,
+    offsets: &OffsetMap,
+) -> Option<String> {
     for ancestor in node.ancestors() {
         if let Some(closure) = ast::ClosureExpr::cast(ancestor.clone()) {
             let start = offsets.to_span_offset(u32::from(closure.syntax().text_range().start()));
@@ -84,84 +87,110 @@ pub fn target_calls(
     }
     let db = workspace.host.raw_database();
     let _query_span = tracing::info_span!("rust_analyzer.queries").entered();
-    attach_db(db, || {
-        let sema = Semantics::new(db);
-        let mut found = BTreeSet::new();
-        let mut destination_offsets = HashMap::new();
-        for (source_path, wanted_sites) in by_source {
-            let Some(&file_id) = ids.get(source_path) else {
-                continue;
-            };
-            let syntax = sema.parse_guess_edition(file_id);
-            let source_offsets = OffsetMap::new(&syntax.syntax().text().to_string());
-            for node in syntax.syntax().descendants() {
-                let candidate = if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
-                    call.name_ref()
-                        .map(|name_ref| (name_ref, Candidate::Method(call)))
-                } else if let Some(call) = ast::CallExpr::cast(node) {
-                    call.expr()
-                        .and_then(|expr| ast::PathExpr::cast(expr.syntax().clone()))
-                        .and_then(|expr| expr.path())
-                        .and_then(|path| {
-                            let name_ref = path.segment()?.name_ref()?;
-                            Some((name_ref, Candidate::Path(path)))
-                        })
-                } else {
-                    None
-                };
-                let Some((name_ref, candidate)) = candidate else {
-                    continue;
-                };
-                let range = name_ref.syntax().text_range();
-                let start = source_offsets.to_span_offset(u32::from(range.start()));
-                let end = source_offsets.to_span_offset(u32::from(range.end()));
-                let name = name_ref.text();
-                if !wanted_sites.iter().any(|(site_start, site_end, callee)| {
-                    *callee == name && *site_start <= start && end <= *site_end
-                }) {
-                    continue;
-                }
-                let definition = match candidate {
-                    Candidate::Method(call) => {
-                        sema.resolve_method_call(&call).map(ModuleDef::Function)
+    let pool = crate::read::project::extract_pool();
+    let mut sources: Vec<_> = by_source.into_iter().collect();
+    sources.sort_by_key(|(path, _)| *path);
+    let chunk_size = sources.len().div_ceil(pool.current_num_threads()).max(1);
+    let chunks: Vec<_> = sources
+        .chunks(chunk_size)
+        .map(|chunk| (db.clone(), chunk))
+        .collect();
+    let per_chunk: Vec<Vec<TargetCall>> = pool.install(|| {
+        use rayon::prelude::*;
+        chunks
+            .into_par_iter()
+            .map(|(db, chunk)| {
+                attach_db(&db, || {
+                    let sema = Semantics::new(&db);
+                    let mut found = BTreeSet::new();
+                    let mut destination_offsets = HashMap::new();
+                    for (source_path, wanted_sites) in chunk {
+                        let Some(&file_id) = ids.get(*source_path) else {
+                            continue;
+                        };
+                        let syntax = sema.parse_guess_edition(file_id);
+                        let source_offsets = OffsetMap::new(&syntax.syntax().text().to_string());
+                        for node in syntax.syntax().descendants() {
+                            let candidate =
+                                if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
+                                    call.name_ref()
+                                        .map(|name_ref| (name_ref, Candidate::Method(call)))
+                                } else if let Some(call) = ast::CallExpr::cast(node) {
+                                    call.expr()
+                                        .and_then(|expr| ast::PathExpr::cast(expr.syntax().clone()))
+                                        .and_then(|expr| expr.path())
+                                        .and_then(|path| {
+                                            let name_ref = path.segment()?.name_ref()?;
+                                            Some((name_ref, Candidate::Path(path)))
+                                        })
+                                } else {
+                                    None
+                                };
+                            let Some((name_ref, candidate)) = candidate else {
+                                continue;
+                            };
+                            let range = name_ref.syntax().text_range();
+                            let start = source_offsets.to_span_offset(u32::from(range.start()));
+                            let end = source_offsets.to_span_offset(u32::from(range.end()));
+                            let name = name_ref.text();
+                            if !wanted_sites.iter().any(|(site_start, site_end, callee)| {
+                                *callee == name && *site_start <= start && end <= *site_end
+                            }) {
+                                continue;
+                            }
+                            let definition = match candidate {
+                                Candidate::Method(call) => {
+                                    sema.resolve_method_call(&call).map(ModuleDef::Function)
+                                }
+                                Candidate::Path(path) => match sema.resolve_path(&path) {
+                                    Some(PathResolution::Def(definition)) => Some(definition),
+                                    _ => None,
+                                },
+                            };
+                            let Some(definition) = definition else {
+                                continue;
+                            };
+                            let Some(nav) = definition.try_to_nav(&sema).map(|nav| nav.call_site)
+                            else {
+                                continue;
+                            };
+                            let Some(target_path) = paths.get(&nav.file_id) else {
+                                continue;
+                            };
+                            let target_offsets =
+                                destination_offsets.entry(nav.file_id).or_insert_with(|| {
+                                    let text = sema
+                                        .parse_guess_edition(nav.file_id)
+                                        .syntax()
+                                        .text()
+                                        .to_string();
+                                    OffsetMap::new(&text)
+                                });
+                            found.insert(TargetCall {
+                                source_path: source_path.to_string(),
+                                caller_name: target_owner_name(name_ref.syntax(), &source_offsets),
+                                enclosing_name: enclosing_name(name_ref.syntax()),
+                                site_start: start,
+                                site_end: end,
+                                target_path: target_path.clone(),
+                                target_start: target_offsets.to_span_offset(u32::from(
+                                    nav.focus_range.unwrap_or(nav.full_range).start(),
+                                )),
+                                target_end: target_offsets
+                                    .to_span_offset(u32::from(nav.full_range.end())),
+                                target_name: nav.name.as_str().to_string(),
+                            });
+                        }
                     }
-                    Candidate::Path(path) => match sema.resolve_path(&path) {
-                        Some(PathResolution::Def(definition)) => Some(definition),
-                        _ => None,
-                    },
-                };
-                let Some(definition) = definition else {
-                    continue;
-                };
-                let Some(nav) = definition.try_to_nav(&sema).map(|nav| nav.call_site) else {
-                    continue;
-                };
-                let Some(target_path) = paths.get(&nav.file_id) else {
-                    continue;
-                };
-                let target_offsets = destination_offsets.entry(nav.file_id).or_insert_with(|| {
-                    let text = sema
-                        .parse_guess_edition(nav.file_id)
-                        .syntax()
-                        .text()
-                        .to_string();
-                    OffsetMap::new(&text)
-                });
-                found.insert(TargetCall {
-                    source_path: source_path.to_string(),
-                    caller_name: target_owner_name(name_ref.syntax(), &source_offsets),
-                    enclosing_name: enclosing_name(name_ref.syntax()),
-                    site_start: start,
-                    site_end: end,
-                    target_path: target_path.clone(),
-                    target_start: target_offsets.to_span_offset(u32::from(
-                        nav.focus_range.unwrap_or(nav.full_range).start(),
-                    )),
-                    target_end: target_offsets.to_span_offset(u32::from(nav.full_range.end())),
-                    target_name: nav.name.as_str().to_string(),
-                });
-            }
-        }
-        Ok(found.into_iter().collect())
-    })
+                    found.into_iter().collect()
+                })
+            })
+            .collect()
+    });
+    Ok(per_chunk
+        .into_iter()
+        .flatten()
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect())
 }

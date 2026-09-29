@@ -628,6 +628,7 @@ mod sink {
             .with(printer)
             .with(summary)
             .with(hafley_observe::chrome_layer())
+            .with(hafley_observe::rusage::layer())
             .init();
         hafley_observe::startup(&observability);
         state

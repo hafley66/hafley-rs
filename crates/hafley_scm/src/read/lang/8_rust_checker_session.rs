@@ -35,7 +35,8 @@ pub(super) fn checker_workspace(
     let workspaces = CHECKER_WORKSPACES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut all = workspaces.lock().unwrap();
     let mut load = Duration::ZERO;
-    if !all.contains_key(&root) {
+    let fresh = !all.contains_key(&root);
+    if fresh {
         let (db, vfs, elapsed) = load_checker_workspace(&root, budget)?;
         load = elapsed;
         all.insert(
@@ -49,7 +50,7 @@ pub(super) fn checker_workspace(
     let handle = all.get(&root).unwrap().clone();
     drop(all);
     let mut workspace = handle.lock().unwrap();
-    if files.iter().any(|(_, file)| {
+    if !fresh && files.iter().any(|(_, file)| {
         let file = std::fs::canonicalize(file).unwrap_or_else(|_| file.clone());
         workspace
             .vfs
