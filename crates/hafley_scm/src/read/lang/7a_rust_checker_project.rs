@@ -1,8 +1,8 @@
-//! Fast tier crate graph: workspace targets and the edges cargo resolves between
-//! them (`[patch]` included), as a rust-project.json. Nothing else loads.
+//! Fast tier crate graph: workspace targets, the edges cargo resolves between
+//! them (`[patch]` included), and rust-src's `core`, as a rust-project.json.
 
 use std::collections::{HashMap, HashSet};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use cargo_metadata::{DependencyKind, MetadataCommand, PackageId, TargetKind};
 use ra_ap_project_model::{ProjectJson, ProjectJsonData};
@@ -20,6 +20,25 @@ fn is_library(kind: &TargetKind) -> bool {
             | TargetKind::StaticLib
             | TargetKind::ProcMacro
     )
+}
+
+/// rust-analyzer's own minimal `core` (its test fixture), written once to the user cache.
+fn minicore() -> Result<PathBuf, CheckerError> {
+    let failed = |error: std::io::Error| CheckerError::NoWorkspace(error.to_string());
+    let path = dirs::cache_dir()
+        .ok_or_else(|| CheckerError::NoWorkspace("no user cache directory".to_owned()))?
+        .join("hafley/ra-minicore-0.0.352/core/src/lib.rs");
+    let source = ra_ap_test_utils::MiniCore::from_flags([
+        "iterator", "iterators", "try", "future", "async_fn", "range", "option", "result", "fn",
+        "deref", "index", "from", "sized", "copy", "clone", "eq", "ord", "default", "drop",
+        "panic", "fmt", "derive", "slice", "str",
+    ])
+    .source_code(ra_ap_test_utils::MiniCore::RAW_SOURCE);
+    if std::fs::read_to_string(&path).ok().as_deref() != Some(source.as_str()) {
+        std::fs::create_dir_all(path.parent().unwrap()).map_err(failed)?;
+        std::fs::write(&path, source).map_err(failed)?;
+    }
+    Ok(path)
 }
 
 pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
@@ -105,7 +124,21 @@ pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
         crates[*index]["deps"] = serde_json::Value::Array(deps);
     }
 
-    let data: ProjectJsonData = serde_json::from_value(serde_json::json!({ "crates": crates }))
+    // `for`, `?`, `.await` and ranges lower through core's lang items; without
+    // them rust-analyzer drops the whole expression, calls inside included.
+    let core = minicore()?;
+    let library = core.ancestors().nth(3).map(Path::to_path_buf).unwrap_or_default();
+    let data: ProjectJsonData = serde_json::from_value(serde_json::json!({
+        "sysroot_src": library,
+        "sysroot_project": { "crates": [{
+            "display_name": "core",
+            "root_module": core,
+            "edition": "2024",
+            "deps": [],
+            "is_workspace_member": false,
+        }] },
+        "crates": crates,
+    }))
         .map_err(|error| failed(error.to_string()))?;
     let base = std::fs::canonicalize(root).map_err(|error| failed(error.to_string()))?;
     Ok(ProjectJson::new(None, &AbsPathBuf::assert_utf8(base), data))

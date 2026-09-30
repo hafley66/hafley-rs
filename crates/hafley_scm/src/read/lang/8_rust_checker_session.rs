@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -14,6 +14,17 @@ use super::rust_checker::{CheckerError, Tier};
 pub(super) struct CheckerWorkspace {
     pub(super) host: AnalysisHost,
     pub(super) vfs: Vfs,
+    /// Supplied files the load left out (another Cargo workspace, no crate):
+    /// their absence is known, so it does not force a reload.
+    outside: HashSet<PathBuf>,
+}
+
+fn unloaded(vfs: &Vfs, files: &[(String, PathBuf)]) -> HashSet<PathBuf> {
+    files
+        .iter()
+        .map(|(_, file)| std::fs::canonicalize(file).unwrap_or_else(|_| file.clone()))
+        .filter(|file| vfs.file_id(&VfsPath::new_real_path(file.to_string_lossy().into_owned())).is_none())
+        .collect()
 }
 
 type SessionKey = (PathBuf, Tier);
@@ -47,6 +58,7 @@ pub(super) fn checker_workspace(
             key.clone(),
             Arc::new(Mutex::new(CheckerWorkspace {
                 host: AnalysisHost::with_database(db),
+                outside: unloaded(&vfs, files),
                 vfs,
             })),
         );
@@ -54,15 +66,10 @@ pub(super) fn checker_workspace(
     let handle = all.get(&key).unwrap().clone();
     drop(all);
     let mut workspace = handle.lock().unwrap();
-    if !fresh && files.iter().any(|(_, file)| {
-        let file = std::fs::canonicalize(file).unwrap_or_else(|_| file.clone());
-        workspace
-            .vfs
-            .file_id(&VfsPath::new_real_path(file.to_string_lossy().into_owned()))
-            .is_none()
-    }) {
+    if !fresh && !unloaded(&workspace.vfs, files).is_subset(&workspace.outside) {
         let (db, vfs, elapsed) = load_checker_workspace(&root, tier, budget)?;
         workspace.host = AnalysisHost::with_database(db);
+        workspace.outside = unloaded(&vfs, files);
         workspace.vfs = vfs;
         load = elapsed;
     }
@@ -217,7 +224,7 @@ mod fast_tier_tests {
     use ra_ap_ide_db::base_db;
 
     #[test]
-    fn fast_loads_workspace_crates_with_features_and_no_sysroot() {
+    fn fast_loads_workspace_crates_with_features_and_minicore() {
         let root = std::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
         let (db, vfs, _) = load_checker_workspace(&root, Tier::Fast, Duration::from_secs(120)).unwrap();
         let names: Vec<String> = base_db::all_crates(&db)
@@ -225,7 +232,8 @@ mod fast_tier_tests {
             .filter_map(|krate| krate.extra_data(&db).display_name.as_ref().map(|name| name.to_string()))
             .collect();
         assert!(names.iter().any(|name| name == "hafley_scm"));
-        assert!(!names.iter().any(|name| ["core", "std", "alloc"].contains(&name.as_str())));
+        assert!(names.iter().any(|name| name == "core"));
+        assert!(!names.iter().any(|name| ["std", "alloc"].contains(&name.as_str())));
         assert!(!names.iter().any(|name| name == "serde_json"));
         let trace = VfsPath::new_real_path(root.join("crates/hafley_scm/src/read/trace.rs").to_string_lossy().into_owned());
         let trace = ra_ap_ide::FileId::from_raw(vfs.file_id(&trace).unwrap().0.index());
