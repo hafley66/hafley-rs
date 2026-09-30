@@ -1,0 +1,167 @@
+{
+  "enums": {
+    "LabKind": [
+      "recon",
+      "bench"
+    ],
+    "Operation": [
+      "rename",
+      "cleave"
+    ],
+    "Status": [
+      "pass",
+      "correct_refusal",
+      "tool_failed",
+      "typecheck_failed",
+      "unexpected_files",
+      "timeout",
+      "unavailable"
+    ],
+    "Expect": [
+      "normal",
+      "collision_expected",
+      "cross_package_refusal"
+    ],
+    "Topology": [
+      "single_package",
+      "monorepo_many_packages",
+      "rust_workspace"
+    ],
+    "Runtime": [
+      "rust",
+      "node",
+      "mcp",
+      "python"
+    ]
+  },
+  "columns": {
+    "repo": [
+      {
+        "name": "name"
+      },
+      {
+        "name": "purl"
+      },
+      {
+        "name": "url"
+      },
+      {
+        "name": "commit_sha"
+      },
+      {
+        "name": "topology",
+        "enum": "Topology"
+      },
+      {
+        "name": "baseline_command"
+      },
+      {
+        "name": "baseline_errors"
+      },
+      {
+        "name": "baseline_seconds"
+      }
+    ],
+    "target": [
+      {
+        "name": "repo"
+      },
+      {
+        "name": "operation",
+        "enum": "Operation"
+      },
+      {
+        "name": "file"
+      },
+      {
+        "name": "name"
+      },
+      {
+        "name": "at_byte"
+      },
+      {
+        "name": "dest"
+      },
+      {
+        "name": "dest_new"
+      },
+      {
+        "name": "cross_package"
+      },
+      {
+        "name": "expect",
+        "enum": "Expect"
+      },
+      {
+        "name": "allowed_files"
+      }
+    ],
+    "adapter": [
+      {
+        "name": "name"
+      },
+      {
+        "name": "runtime",
+        "enum": "Runtime"
+      }
+    ],
+    "lab": [
+      {
+        "name": "name"
+      },
+      {
+        "name": "kind",
+        "enum": "LabKind"
+      },
+      {
+        "name": "brief"
+      },
+      {
+        "name": "model"
+      }
+    ],
+    "row": [
+      {
+        "name": "lab"
+      },
+      {
+        "name": "repo"
+      },
+      {
+        "name": "operation",
+        "enum": "Operation"
+      },
+      {
+        "name": "tool"
+      },
+      {
+        "name": "target"
+      },
+      {
+        "name": "bin_sha"
+      },
+      {
+        "name": "status",
+        "enum": "Status"
+      },
+      {
+        "name": "cause"
+      },
+      {
+        "name": "files_touched"
+      },
+      {
+        "name": "allowed_files"
+      },
+      {
+        "name": "seconds"
+      },
+      {
+        "name": "timeout_seconds"
+      },
+      {
+        "name": "after_errors"
+      }
+    ]
+  }
+}
