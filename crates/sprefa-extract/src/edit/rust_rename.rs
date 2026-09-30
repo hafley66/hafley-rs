@@ -57,6 +57,10 @@ impl Rename for RustSource {
         cx: &RenameCx,
         request: &RenameRequest,
     ) -> Result<(Vec<SymbolRef>, Vec<RenameAbstain>), RenameStop> {
+        #[cfg(feature = "rust-checker")]
+        if cx.slow() {
+            return crate::edit::ra_rename::symbol_refs_and_abstains(cx, request);
+        }
         let corpus = Corpus::open(cx, &request.old);
         let anchor = corpus
             .scans
@@ -185,6 +189,14 @@ impl Rename for RustSource {
         request: &RenameRequest,
         reference: &SymbolRef,
     ) -> Option<Respell> {
+        if let Some(text) = cx.slow().then(|| cx.slow_edit(&reference.file, reference.span)).flatten() {
+            return Some(Respell {
+                file: reference.file.clone(),
+                span: reference.span,
+                text,
+                receipt: None,
+            });
+        }
         // `Owner { old }` respells to `new: old`, keeping the local name; the
         // typing walk proves the shape so a same-spelled use leaf never matches.
         let shorthand = match cx.text(&reference.file) {

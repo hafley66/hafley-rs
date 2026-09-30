@@ -11,6 +11,9 @@ pub mod ts7_cleave_diagnostics;
 pub mod ts7_cleave_facts;
 #[path = "edit/1e_ts7_graph_target.rs"]
 pub mod ts7_graph_target;
+#[cfg(feature = "rust-checker")]
+#[path = "edit/1f_ra_rename.rs"]
+pub mod ra_rename;
 #[path = "edit/1a_ts7_lsp_session.rs"]
 mod ts7_lsp_session;
 #[path = "edit/1_ts7_rename.rs"]

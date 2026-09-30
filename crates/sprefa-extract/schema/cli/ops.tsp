@@ -222,7 +222,7 @@ op `move`(
 ): jsonValue;
 
 /** Rename a symbol and every occurrence bound to it */
-@afterHelp("Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains")
+@afterHelp("Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains, 8 the --slow engine refused")
 op rename(
   /** FILE#OLD (omit with --list) */
   @positional target?: string,
@@ -242,7 +242,7 @@ op rename(
   /** Byte offset of the declaration when OLD is declared twice */
   at?: uint32,
 
-  /** Use the TypeScript 7 checker for TypeScript rename */
+  /** Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust */
   slow?: boolean,
 
   /** Apply instead of dry run */

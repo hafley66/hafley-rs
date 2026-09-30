@@ -328,6 +328,9 @@ pub fn target_calls(
 }
 
 #[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{rename, RenameEdit, RenameFailure, RenameSeed};
+
+#[cfg(feature = "rust-checker")]
 pub fn target_types(
     root: &Path,
     files: &[(String, PathBuf)],

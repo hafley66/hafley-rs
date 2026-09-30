@@ -155,7 +155,7 @@ impl Rename for TsSource {
         reference: &SymbolRef,
     ) -> Option<Respell> {
         if cx.slow() {
-            if let Some(text) = cx.ts_slow_edit(&reference.file, reference.span) {
+            if let Some(text) = cx.slow_edit(&reference.file, reference.span) {
                 return Some(Respell {
                     file: reference.file.clone(),
                     span: reference.span,

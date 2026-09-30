@@ -42,7 +42,7 @@ pub struct RenameCx {
     files: Vec<String>,
     batch: Vec<RenameRequest>,
     slow: bool,
-    ts_slow_edits: RefCell<BTreeMap<(String, u32, u32), String>>,
+    slow_edits: RefCell<BTreeMap<(String, u32, u32), String>>,
     overlay: BTreeMap<String, String>,
     rust_parse: RefCell<BTreeMap<String, syn::File>>,
     pub(crate) ts_import_graph: OnceCell<crate::edit::ts_rename::ImportGraph>,
@@ -61,7 +61,7 @@ impl RenameCx {
             files,
             batch: Vec::new(),
             slow: false,
-            ts_slow_edits: RefCell::new(BTreeMap::new()),
+            slow_edits: RefCell::new(BTreeMap::new()),
             overlay: BTreeMap::new(),
             rust_parse: RefCell::new(BTreeMap::new()),
             ts_import_graph: OnceCell::new(),
@@ -84,12 +84,12 @@ impl RenameCx {
         self.slow
     }
 
-    pub fn put_ts_slow_edit(&self, file: &str, span: crate::Span, text: String) {
-        self.ts_slow_edits.borrow_mut().insert((file.to_owned(), span.start, span.len), text);
+    pub fn put_slow_edit(&self, file: &str, span: crate::Span, text: String) {
+        self.slow_edits.borrow_mut().insert((file.to_owned(), span.start, span.len), text);
     }
 
-    pub fn ts_slow_edit(&self, file: &str, span: crate::Span) -> Option<String> {
-        self.ts_slow_edits.borrow().get(&(file.to_owned(), span.start, span.len)).cloned()
+    pub fn slow_edit(&self, file: &str, span: crate::Span) -> Option<String> {
+        self.slow_edits.borrow().get(&(file.to_owned(), span.start, span.len)).cloned()
     }
 
     pub fn root(&self) -> &Path {

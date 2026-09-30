@@ -39,7 +39,7 @@ pub enum Cmd {
   #[doc = "Move a file and repair every specifier that names it"]
   Move(MoveArgs),
   #[doc = "Rename a symbol and every occurrence bound to it"]
-  #[command(after_help = "Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains")]
+  #[command(after_help = "Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains, 8 the --slow engine refused")]
   Rename(RenameArgs),
   #[doc = "Run a tree-sitter query over files"]
   Query(QueryArgs),

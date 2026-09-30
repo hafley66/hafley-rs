@@ -1,0 +1,7 @@
+repo	tool	targets	pass	tool_failed	typecheck_failed	unexpected_files	timeout
+anyhow	ryi_slow	30	23	6	1	0	0
+tokio	ryi_slow	31	24	4	3	0	0
+anyhow	fast	30	19	0	10	1	0
+anyhow	oracle	30	21	7	2	0	0
+tokio	fast	31	4	1	23	3	0
+tokio	oracle	31	24	4	3	0	0

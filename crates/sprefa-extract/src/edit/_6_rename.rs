@@ -53,6 +53,7 @@ fn stop_error(stop: RenameStop) -> RenameError {
         RenameStop::NotFound { .. } => 4,
         RenameStop::Inexact { .. } => 5,
         RenameStop::Dynamic(..) => 6,
+        RenameStop::Refused { .. } => 8,
     };
     RenameError {
         message: stop.to_string(),

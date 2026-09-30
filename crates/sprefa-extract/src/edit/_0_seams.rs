@@ -365,6 +365,12 @@ pub enum RenameStop {
     /// Every reference reachable only through a runtime form (computed member,
     /// dynamic import, string key). One seat at a time hides the next repair.
     Dynamic(Vec<SymbolSeat>),
+    /// The slow tier's engine declined the rename; `reason` is its own text.
+    Refused {
+        anchor: String,
+        engine: &'static str,
+        reason: String,
+    },
 }
 
 impl fmt::Display for RenameStop {
@@ -400,6 +406,9 @@ impl fmt::Display for RenameStop {
                     })
                     .collect();
                 formatter.write_str(&lines.join("\n"))
+            }
+            RenameStop::Refused { anchor, engine, reason } => {
+                write!(formatter, "{anchor}: {engine} refused the rename: {reason}")
             }
         }
     }

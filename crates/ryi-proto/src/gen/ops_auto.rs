@@ -274,7 +274,7 @@ pub struct RenameArgs {
   #[doc = "Byte offset of the declaration when OLD is declared twice"]
   #[arg(long)]
   pub at: Option<u32>,
-  #[doc = "Use the TypeScript 7 checker for TypeScript rename"]
+  #[doc = "Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust"]
   #[arg(long)]
   #[serde(default)]
   pub slow: bool,

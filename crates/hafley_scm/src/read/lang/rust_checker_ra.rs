@@ -22,6 +22,9 @@ mod target;
 pub use target::{target_calls, TargetCall, TargetCalls};
 #[path = "8b_rust_checker_target_types.rs"]
 mod target_types;
+#[path = "8d_rust_checker_rename.rs"]
+mod rename;
+pub use rename::{rename, RenameEdit, RenameFailure, RenameSeed};
 use crate::read::trace::{phase_span, record_phase, Phase};
 use crate::read::tsi::{Arg, CoverageClaim, FactOut};
 pub use target_types::{target_types, TargetTypeReference};

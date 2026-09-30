@@ -140,7 +140,7 @@ pub fn symbol_refs_and_abstains(
     }
     for (rel, site, replacement) in replacements {
         session.pending.insert(rel.clone());
-        cx.put_ts_slow_edit(&rel, site, replacement);
+        cx.put_slow_edit(&rel, site, replacement);
     }
     Ok((refs, Vec::new()))
 }
@@ -392,7 +392,7 @@ mod tests {
                         reference.file.clone(),
                         reference.span.start as usize,
                         reference.span.end() as usize,
-                        cx.ts_slow_edit(&reference.file, reference.span).unwrap(),
+                        cx.slow_edit(&reference.file, reference.span).unwrap(),
                     )
                 })
                 .collect();
