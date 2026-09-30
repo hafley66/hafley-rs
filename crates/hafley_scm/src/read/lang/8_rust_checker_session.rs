@@ -107,10 +107,9 @@ mod warm_workspace_tests {
     fn warm_field_reads_match_cold_after_file_change() {
         let fixture = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../sprefa-extract/tests/fixtures/cleave_ratchet/private_fields");
-        let target = std::env::var_os("CARGO_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| Path::new(env!("CARGO_MANIFEST_DIR")).join("target"));
-        let root = target.join(format!("warm-checker-{}", std::process::id()));
+        // Outside every Cargo workspace, or the fixture's manifest joins the enclosing one.
+        let scratch = tempfile::TempDir::new().unwrap();
+        let root = scratch.path().to_path_buf();
         std::fs::create_dir_all(root.join("src")).unwrap();
         for path in ["Cargo.toml", "src/lib.rs", "src/source.rs", "src/dest.rs"] {
             let destination = root.join(path);
@@ -168,7 +167,6 @@ mod warm_workspace_tests {
             .lock()
             .unwrap()
             .remove(&(root.clone(), Tier::Slow));
-        std::fs::remove_dir_all(root).unwrap();
     }
 }
 

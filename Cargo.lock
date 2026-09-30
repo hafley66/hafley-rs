@@ -1619,6 +1619,7 @@ dependencies = [
  "serde_json",
  "soopy",
  "syn 3.0.3",
+ "tempfile",
  "tracing",
  "tracing-subscriber",
  "tree-sitter",
