@@ -877,3 +877,15 @@ fn cfg_attributes_gate_new_module_declarations() {
         &["--no-default-features", "--features", "checker"],
     );
 }
+
+#[test]
+fn a_new_file_is_declared_beside_the_path_include_that_owns_src() {
+    let fixture = fixture("path_bin", "path-bin");
+    cleave(&fixture, &["src/shared.rs#count", "src/counting.rs", "--commit"]);
+    cargo_check_with(&fixture, &["--all-targets"]);
+    assert_eq!(
+        read(&fixture, "src/bin/tool.rs"),
+        "#[path = \"../shared.rs\"]\nmod shared;\n#[path = \"../counting.rs\"] pub(crate) mod counting;\n\nfn main() {\n    println!(\"{}\", shared::total());\n}\n"
+    );
+    assert_eq!(read(&fixture, "src/lib.rs"), "pub fn library() -> u32 {\n    0\n}\n");
+}

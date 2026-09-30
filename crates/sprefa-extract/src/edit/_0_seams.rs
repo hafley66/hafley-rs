@@ -166,7 +166,14 @@ pub trait Cleave: Source + Sync + Send {
 
     /// The edit that declares a DEST this cleave creates, in the file that must
     /// name it (Rust's parent `mod`), as (file, edit). None: nothing declares files.
-    fn declare_new_file(&self, _cx: &MoveCx, _src: &str, _dest: &str) -> Option<(String, Edit)> {
+    /// `declarer`: the file whose `#[path]` decl includes SRC, from the module index.
+    fn declare_new_file(
+        &self,
+        _cx: &MoveCx,
+        _src: &str,
+        _dest: &str,
+        _declarer: Option<&str>,
+    ) -> Option<(String, Edit)> {
         None
     }
 

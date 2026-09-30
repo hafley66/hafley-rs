@@ -1257,6 +1257,11 @@ pub struct ImplMethodTarget {
 type ExportTable = HashMap<String, Resolution>;
 
 impl RustModuleIndex {
+    /// The files whose `#[path]` decl names `path`; empty when layout places it.
+    pub fn declaring_files(&self, path: &str) -> &[String] {
+        self.path_parents.get(path).map_or(&[], Vec::as_slice)
+    }
+
     pub fn crate_root_of(&self, path: &str) -> Option<String> {
         crate_root_of(path, &self.crate_module_roots)
     }

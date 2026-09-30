@@ -666,6 +666,8 @@ struct Plan {
     rows: CleavePlan,
     source: FileFacts,
     cfg_prefix: String,
+    /// The file whose `#[path]` decl includes SRC; a new DEST is declared beside it.
+    declarer: Option<String>,
     /// None when DEST does not exist yet and this run creates it.
     dest_facts: Option<FileFacts>,
     /// The item's text and each moved helper's, in SRC byte order.
@@ -748,7 +750,7 @@ impl Plan {
         }
         if arm.name() == "rust"
             && !rust_module_declared(&cx, &dest)
-            && (cx.contains(&dest) || arm.declare_new_file(&cx, &src, &dest).is_none())
+            && (cx.contains(&dest) || arm.declare_new_file(&cx, &src, &dest, None).is_none())
         {
             return Err(format!(
                 "cleave destination {dest} is not declared by a Rust module; declare it or choose a declared module path"
@@ -971,6 +973,7 @@ impl Plan {
                 },
                 source,
                 cfg_prefix,
+                declarer: None,
                 dest_facts: None,
                 moving_text: Vec::new(),
                 dest_imports: Vec::new(),
@@ -1080,6 +1083,17 @@ impl Plan {
         )?;
         let qualified = imports.qualified(&cx, &src, &item);
         let reexports = glob_reexports(&cx, arm, &src, &dest, &item);
+        let declarer = match imports.rust_routes.declaring_files(&src) {
+            [] => None,
+            [one] => Some(one.clone()),
+            many => {
+                return Err(format!(
+                    "{src} is included by #[path] from {} files ({}); a new file beside it needs one declaring module",
+                    many.len(),
+                    many.join(", ")
+                ))
+            }
+        };
         Ok(Plan {
             root,
             cx,
@@ -1098,6 +1112,7 @@ impl Plan {
             },
             source,
             cfg_prefix,
+            declarer,
             dest_facts,
             moving_text,
             dest_imports,
@@ -1682,7 +1697,7 @@ impl Plan {
             Some(_) => None,
             None => self
                 .arm
-                .declare_new_file(&self.cx, &self.rows.src, &self.rows.dest)
+                .declare_new_file(&self.cx, &self.rows.src, &self.rows.dest, self.declarer.as_deref())
                 .map(|(file, mut edit)| {
                     edit.text = format!("{}{text}", self.cfg_prefix, text = edit.text);
                     (file, edit)

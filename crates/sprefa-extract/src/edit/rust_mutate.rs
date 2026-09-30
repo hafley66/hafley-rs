@@ -149,12 +149,21 @@ impl Cleave for RustSource {
         }
     }
 
-    fn declare_new_file(&self, cx: &MoveCx, src: &str, dest: &str) -> Option<(String, Edit)> {
+    fn declare_new_file(
+        &self,
+        cx: &MoveCx,
+        src: &str,
+        dest: &str,
+        declarer: Option<&str>,
+    ) -> Option<(String, Edit)> {
         let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
         let file = dest.rsplit('/').next().unwrap_or(dest);
-        let parent = parent_candidates(dir)
-            .into_iter()
-            .find(|candidate| cx.contains(candidate))?;
+        let parent = match declarer {
+            Some(declarer) => declarer.to_string(),
+            None => parent_candidates(dir)
+                .into_iter()
+                .find(|candidate| cx.contains(candidate))?,
+        };
         let text = cx.text(&parent)?;
         let parsed = syn::parse_file(&text).ok()?;
         let (name, numbered) = module_name(file);
@@ -165,7 +174,7 @@ impl Cleave for RustSource {
         {
             return None;
         }
-        let aim = match numbered {
+        let aim = match numbered || declarer.is_some() {
             true => format!(
                 "#[path = \"{}\"] ",
                 crate::move_cx::relative_between(
