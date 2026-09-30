@@ -22,23 +22,35 @@ fn is_library(kind: &TargetKind) -> bool {
     )
 }
 
-/// rust-analyzer's own minimal `core` (its test fixture), written once to the user cache.
-fn minicore() -> Result<PathBuf, CheckerError> {
+/// rust-analyzer's own minimal `core` (its test fixture) and ryi's `std` shim over it,
+/// written to the user cache; returns the library directory holding `core/` and `std/`.
+fn sysroot_library() -> Result<PathBuf, CheckerError> {
     let failed = |error: std::io::Error| CheckerError::NoWorkspace(error.to_string());
-    let path = dirs::cache_dir()
+    let library = dirs::cache_dir()
         .ok_or_else(|| CheckerError::NoWorkspace("no user cache directory".to_owned()))?
-        .join("hafley/ra-minicore-0.0.352/core/src/lib.rs");
-    let source = ra_ap_test_utils::MiniCore::from_flags([
+        .join("hafley/ra-minicore-0.0.352");
+    let core = ra_ap_test_utils::MiniCore::from_flags([
         "iterator", "iterators", "try", "future", "async_fn", "range", "option", "result", "fn",
-        "deref", "index", "from", "sized", "copy", "clone", "eq", "ord", "default", "drop",
-        "panic", "fmt", "derive", "slice", "str",
+        "deref", "deref_mut", "index", "from", "sized", "copy", "clone", "eq", "ord", "default",
+        "drop", "panic", "fmt", "derive", "slice", "str", "pin", "cell", "hash", "borrow",
+        "assert", "write", "todo", "unimplemented", "matches", "concat", "env", "include",
     ])
-    .source_code(ra_ap_test_utils::MiniCore::RAW_SOURCE);
-    if std::fs::read_to_string(&path).ok().as_deref() != Some(source.as_str()) {
-        std::fs::create_dir_all(path.parent().unwrap()).map_err(failed)?;
-        std::fs::write(&path, source).map_err(failed)?;
+    .source_code(ra_ap_test_utils::MiniCore::RAW_SOURCE)
+    .replacen(
+        "fn next(&mut self) -> Option<Self::Item>;\n",
+        concat!("fn next(&mut self) -> Option<Self::Item>;\n", include_str!("7c_rust_core_iterator_methods.rs")),
+        1,
+    ) + include_str!("7c_rust_core_shim.rs");
+    for (path, source) in [
+        (library.join("core/src/lib.rs"), core.as_str()),
+        (library.join("std/src/lib.rs"), include_str!("7b_rust_std_shim.rs")),
+    ] {
+        if std::fs::read_to_string(&path).ok().as_deref() != Some(source) {
+            std::fs::create_dir_all(path.parent().unwrap()).map_err(failed)?;
+            std::fs::write(&path, source).map_err(failed)?;
+        }
     }
-    Ok(path)
+    Ok(library)
 }
 
 pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
@@ -126,17 +138,25 @@ pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
 
     // `for`, `?`, `.await` and ranges lower through core's lang items; without
     // them rust-analyzer drops the whole expression, calls inside included.
-    let core = minicore()?;
-    let library = core.ancestors().nth(3).map(Path::to_path_buf).unwrap_or_default();
+    let library = sysroot_library()?;
     let data: ProjectJsonData = serde_json::from_value(serde_json::json!({
         "sysroot_src": library,
-        "sysroot_project": { "crates": [{
-            "display_name": "core",
-            "root_module": core,
-            "edition": "2024",
-            "deps": [],
-            "is_workspace_member": false,
-        }] },
+        "sysroot_project": { "crates": [
+            {
+                "display_name": "core",
+                "root_module": library.join("core/src/lib.rs"),
+                "edition": "2024",
+                "deps": [],
+                "is_workspace_member": false,
+            },
+            {
+                "display_name": "std",
+                "root_module": library.join("std/src/lib.rs"),
+                "edition": "2024",
+                "deps": [{ "crate": 0, "name": "core" }],
+                "is_workspace_member": false,
+            },
+        ] },
         "crates": crates,
     }))
         .map_err(|error| failed(error.to_string()))?;

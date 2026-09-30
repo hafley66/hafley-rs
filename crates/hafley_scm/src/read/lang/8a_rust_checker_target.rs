@@ -279,12 +279,14 @@ mod fast_tier_tests {
             "pub fn target() -> Option<u8> { None }\n\
              pub fn in_loop() { for _ in 0..3 { target(); } }\n\
              pub fn after_try() -> Option<u8> { target()?; target() }\n\
-             pub async fn awaited() { async { target() }.await; }\n",
+             pub async fn awaited() { async { target() }.await; }\n\
+             pub struct Shared; impl Shared { pub fn method(&self) {} }\n\
+             pub fn through_std(shared: std::sync::Arc<std::sync::Mutex<Shared>>) { shared.lock().unwrap().method(); }\n",
         )
         .unwrap();
         let files = vec![("src/lib.rs".to_string(), root.join("src/lib.rs"))];
-        let seeds = [("src/lib.rs".to_string(), "target".to_string())];
-        let callers = |tier| {
+        let callers = |tier, name: &str| {
+            let seeds = [("src/lib.rs".to_string(), name.to_string())];
             target_calls(&root, &files, &seeds, tier, Duration::from_secs(120))
                 .unwrap()
                 .calls
@@ -292,7 +294,9 @@ mod fast_tier_tests {
                 .map(|call| call.enclosing_name.unwrap_or_default())
                 .collect::<Vec<_>>()
         };
-        assert_eq!(callers(Tier::Fast), ["after_try", "after_try", "awaited", "in_loop"]);
-        assert_eq!(callers(Tier::Fast), callers(Tier::Slow));
+        assert_eq!(callers(Tier::Fast, "target"), ["after_try", "after_try", "awaited", "in_loop"]);
+        assert_eq!(callers(Tier::Fast, "target"), callers(Tier::Slow, "target"));
+        assert_eq!(callers(Tier::Fast, "method"), ["through_std"]);
+        assert_eq!(callers(Tier::Fast, "method"), callers(Tier::Slow, "method"));
     }
 }
