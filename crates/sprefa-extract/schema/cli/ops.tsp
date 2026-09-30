@@ -261,6 +261,39 @@ op rename(
   json?: boolean,
 ): jsonValue;
 
+/** TODO: help. Delete a type and everything that depends on it */
+op dismantle(
+  /** FILE#ITEM (omit with --list) */
+  @positional target?: string,
+
+  /** TSV of FILE#ITEM rows */
+  list?: path,
+
+  /** Corpus root (default: git root of the first target) */
+  root?: path,
+
+  /** Soopy state root, outside the corpus */
+  state?: path,
+
+  /** Byte offset of the declaration when ITEM is declared twice */
+  at?: uint32,
+
+  /** TODO: help. Unsafe: delete every dependent item too, cascading; without it, refuse while references remain */
+  cascade?: boolean,
+
+  /** Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust */
+  slow?: boolean,
+
+  /** Apply instead of dry run */
+  commit?: boolean,
+
+  /** Command to run after --commit; failure rolls back */
+  verify?: string,
+
+  /** End with one JSON line holding the plan */
+  json?: boolean,
+): jsonValue;
+
 /** Run a tree-sitter query over files */
 op query(
   ...Inputs,
