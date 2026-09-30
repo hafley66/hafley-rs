@@ -1,0 +1,3 @@
+repo	query	variant	runs	median_wall_ms	peak_rss_mib
+hafley-rs	graph --slow --callers family_span	parallel_prime	3	9040	2330
+tokio	graph --slow --callers spawn	parallel_prime	3	6640	1363
