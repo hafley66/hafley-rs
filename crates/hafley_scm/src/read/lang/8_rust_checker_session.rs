@@ -6,7 +6,7 @@ use std::time::{Duration, Instant};
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_load_cargo::{load_workspace_at, LoadCargoConfig, ProcMacroServerChoice};
-use ra_ap_project_model::{CargoConfig, CargoFeatures, CfgOverrides, RustLibSource};
+use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
 use super::rust_checker::{CheckerError, Tier};
@@ -170,24 +170,6 @@ mod warm_workspace_tests {
     }
 }
 
-/// Every feature of every workspace package, as `feature="…"` cfgs.
-fn workspace_features(root: &Path) -> Result<Vec<ra_ap_cfg::CfgAtom>, CheckerError> {
-    let metadata = crate::read::cargo_metadata::load(root)
-        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
-    let mut features: Vec<ra_ap_cfg::CfgAtom> = metadata
-        .workspace_packages()
-        .into_iter()
-        .flat_map(|package| package.features.keys())
-        .map(|feature| ra_ap_cfg::CfgAtom::KeyValue {
-            key: ra_ap_intern::Symbol::intern("feature"),
-            value: ra_ap_intern::Symbol::intern(feature),
-        })
-        .collect();
-    features.sort();
-    features.dedup();
-    Ok(features)
-}
-
 fn load_checker_workspace(
     root: &Path,
     tier: Tier,
@@ -200,31 +182,27 @@ fn load_checker_workspace(
         num_worker_threads: 4,
         proc_macro_processes: 0,
     };
-    // `set_test` puts `#[cfg(test)]` bodies in the tree. `--no-deps` metadata
-    // has no resolve section, so Fast turns the features on as cfg overrides.
-    let cargo_config = match tier {
-        Tier::Fast => CargoConfig {
-            sysroot: None,
-            set_test: true,
-            features: CargoFeatures::All,
-            no_deps: true,
-            cfg_overrides: CfgOverrides {
-                global: ra_ap_cfg::CfgDiff::new(workspace_features(root)?, Vec::new()),
-                selective: Default::default(),
-            },
-            ..CargoConfig::default()
-        },
-        Tier::Slow => CargoConfig {
-            sysroot: Some(RustLibSource::Discover),
-            set_test: true,
-            features: CargoFeatures::All,
-            ..CargoConfig::default()
-        },
-    };
     let started = Instant::now();
     let _load_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.load")).entered();
-    let (db, vfs, _proc_macro) = load_workspace_at(root, &cargo_config, &load_config, &|_| {})
-        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    let (db, vfs, _proc_macro) = match tier {
+        Tier::Fast => {
+            let project = super::rust_checker_project::fast_project(root)?;
+            let workspace = ra_ap_project_model::ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {});
+            ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config)
+        }
+        // `set_test` puts `#[cfg(test)]` bodies in the tree; every feature keeps
+        // `cfg`-gated modules in the crate graph.
+        Tier::Slow => {
+            let cargo_config = CargoConfig {
+                sysroot: Some(RustLibSource::Discover),
+                set_test: true,
+                features: CargoFeatures::All,
+                ..CargoConfig::default()
+            };
+            load_workspace_at(root, &cargo_config, &load_config, &|_| {})
+        }
+    }
+    .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
     drop(_load_span);
     let load = started.elapsed();
     if load > budget {

@@ -131,6 +131,9 @@ pub mod rust_checker;
 #[cfg(feature = "rust-checker")]
 mod rust_checker_ra;
 #[cfg(feature = "rust-checker")]
+#[path = "7a_rust_checker_project.rs"]
+mod rust_checker_project;
+#[cfg(feature = "rust-checker")]
 #[path = "8_rust_checker_session.rs"]
 mod rust_checker_session;
 #[cfg(feature = "rust")]

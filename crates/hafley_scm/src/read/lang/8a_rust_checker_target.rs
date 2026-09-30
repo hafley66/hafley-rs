@@ -107,13 +107,14 @@ pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
     seeds: &[(String, String)],
+    tier: super::super::rust_checker::Tier,
     budget: Duration,
 ) -> Result<TargetCalls, CheckerError> {
     if seeds.is_empty() {
         return Ok(TargetCalls::default());
     }
     let (workspace, _) =
-        super::super::rust_checker_session::checker_workspace(root, super::super::rust_checker::Tier::Slow, files, budget)?;
+        super::super::rust_checker_session::checker_workspace(root, tier, files, budget)?;
     let workspace = workspace.lock().unwrap();
     let _file_index_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.file_index")).entered();
     let wanted: HashMap<PathBuf, &str> = files
@@ -160,13 +161,24 @@ pub fn target_calls(
                 continue;
             };
             let syntax = sema.parse_guess_edition(definition_file);
-            let functions: Vec<_> = syntax
+            let mut functions: Vec<_> = syntax
                 .syntax()
                 .descendants()
                 .filter_map(ast::Fn::cast)
                 .filter(|item| item.name().is_some_and(|item_name| item_name.text() == name.as_str()))
                 .filter_map(|item| sema.to_def(&item))
                 .collect();
+            // A function a macro call declares (`cfg_rt! { pub fn spawn .. }`) has no
+            // `ast::Fn` in the parsed file; its module's declarations list it.
+            for module in sema.file_to_module_defs(definition_file) {
+                for declaration in module.declarations(db) {
+                    if let ra_ap_hir::ModuleDef::Function(function) = declaration {
+                        if function.name(db).as_str() == name.as_str() && !functions.contains(&function) {
+                            functions.push(function);
+                        }
+                    }
+                }
+            }
             for function in functions {
                 let definition = Definition::Function(function);
                 let Some(nav) = definition.try_to_nav(&sema).map(|nav| nav.call_site) else {

@@ -330,9 +330,10 @@ pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
     seeds: &[(String, String)],
+    tier: Tier,
     budget: Duration,
 ) -> Result<TargetCalls, CheckerError> {
-    super::rust_checker_ra::target_calls(root, files, seeds, budget)
+    super::rust_checker_ra::target_calls(root, files, seeds, tier, budget)
 }
 
 #[cfg(feature = "rust-checker")]
