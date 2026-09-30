@@ -128,6 +128,8 @@ impl Rename for RustSource {
                     &reexports,
                     anchored,
                     &declaration.kind,
+                    declaration.namespace,
+                    declaration.owner.as_deref(),
                     &anchor_modules,
                     request,
                     &mut refs,
@@ -337,6 +339,7 @@ impl Corpus {
                     names: &mut interned,
                     chain: Vec::new(),
                     blocks: Vec::new(),
+                    impls: Vec::new(),
                     role: RefRole::TypeRef,
                     out: FileScan::default(),
                 };
@@ -510,6 +513,8 @@ impl Corpus {
         reexports: &BTreeMap<String, BTreeSet<Vec<String>>>,
         anchored: Option<&Decl>,
         anchor_kind: &DeclKind,
+        anchor_namespace: Namespace,
+        anchor_owner: Option<&str>,
         anchor_modules: &[ModuleId],
         request: &RenameRequest,
         refs: &mut Vec<SymbolRef>,
@@ -533,6 +538,7 @@ impl Corpus {
                 (Some(picked), _) if picked.span == decl.span => {
                     ours.insert(&picked.chain);
                 }
+                _ if !decl.namespace.overlaps(anchor_namespace) => {}
                 (_, Some(block)) => shadow_blocks.push(block),
                 (_, None) => {
                     shadowed.insert(&decl.chain);
@@ -618,6 +624,9 @@ impl Corpus {
         }
 
         for path in &scan.paths {
+            if !path.leaf && anchor_namespace == Namespace::Value {
+                continue;
+            }
             if !path.prefix.is_empty() {
                 let variant = match anchor_kind {
                     DeclKind::Variant { owner } => self.owner_reach(
@@ -829,9 +838,21 @@ impl Corpus {
                 });
             }
         }
-        if anchored.is_some_and(|decl| matches!(decl.kind, DeclKind::Method)) {
-            for span in &scan.methods {
-                refs.push(seat(rel, *span, RefRole::Read, &request.old));
+        // A method call names our method only through `self` in an impl of its
+        // own type; any other receiver's type is unknown here, so it is a seat.
+        if matches!(anchor_kind, DeclKind::Method) {
+            for (span, on_self, owner) in &scan.methods {
+                if anchored.is_some() && *on_self && owner.is_some() && owner.as_deref() == anchor_owner {
+                    refs.push(seat(rel, *span, RefRole::Read, &request.old));
+                } else {
+                    seats.push(SymbolSeat {
+                        file: rel.to_string(),
+                        span: *span,
+                        line: line_starts.partition_point(|start| *start <= span.start) as u32,
+                        reaches: String::new(),
+                        form: "method call on a receiver of unknown type",
+                    });
+                }
             }
         }
     }
@@ -930,7 +951,8 @@ struct FileScan {
     uses: Vec<UseLeaf>,
     paths: Vec<PathSeat>,
     /// `x.old()` receivers, kept for a request whose anchor IS a method.
-    methods: Vec<Span>,
+    /// Method calls spelled OLD: (span, receiver is `self`, enclosing impl's self type).
+    methods: Vec<(Span, bool, Option<String>)>,
     /// The name written as an identifier token inside a macro or attribute body.
     opaque: Vec<OpaqueToken>,
     /// Blocks that bind the name as a local (`let`, `for`).
@@ -973,6 +995,10 @@ struct Decl {
     span: Span,
     /// What the ident declares, which decides the seat laws it reads.
     kind: DeclKind,
+    /// The namespace the name lives in: a `mod copy` never shadows a `fn copy`.
+    namespace: Namespace,
+    /// The enclosing `impl`'s self type, for a method.
+    owner: Option<String>,
     /// The innermost block a function-body item is declared in: it shadows the
     /// name inside that block only. None = declared at module scope.
     block: Option<Span>,
@@ -990,6 +1016,38 @@ enum DeclKind {
     Variant {
         owner: String,
     },
+}
+
+/// Rust's namespaces. A tuple or unit struct names a type and a constructor.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Namespace {
+    Type,
+    Value,
+    Both,
+    Macro,
+}
+
+impl Namespace {
+    fn overlaps(self, other: Namespace) -> bool {
+        match (self, other) {
+            (Namespace::Macro, Namespace::Macro) => true,
+            (Namespace::Macro, _) | (_, Namespace::Macro) => false,
+            (Namespace::Both, _) | (_, Namespace::Both) => true,
+            (left, right) => left == right,
+        }
+    }
+
+    fn of_item(item: &syn::Item) -> Namespace {
+        match item {
+            syn::Item::Fn(_) | syn::Item::Const(_) | syn::Item::Static(_) => Namespace::Value,
+            syn::Item::Struct(item) => match item.fields {
+                syn::Fields::Named(_) => Namespace::Type,
+                _ => Namespace::Both,
+            },
+            syn::Item::Macro(_) => Namespace::Macro,
+            _ => Namespace::Type,
+        }
+    }
 }
 
 impl DeclKind {
@@ -1037,6 +1095,8 @@ struct PathSeat {
     role: RefRole,
     /// The whole path is this one segment, so a block-local binding shadows it.
     bare: bool,
+    /// The last segment. Earlier segments are in the type namespace.
+    leaf: bool,
 }
 
 struct Scan<'a> {
@@ -1046,6 +1106,8 @@ struct Scan<'a> {
     names: &'a mut Strings,
     chain: Vec<String>,
     blocks: Vec<Span>,
+    /// The self type of each enclosing `impl`, innermost last.
+    impls: Vec<Option<String>>,
     role: RefRole,
     out: FileScan,
 }
@@ -1064,7 +1126,7 @@ impl Scan<'_> {
         }
     }
 
-    fn declare(&mut self, ident: &proc_macro2::Ident, kind: DeclKind) {
+    fn declare(&mut self, ident: &proc_macro2::Ident, kind: DeclKind, namespace: Namespace) {
         if ident != self.old {
             return;
         }
@@ -1075,6 +1137,8 @@ impl Scan<'_> {
             chain: self.chain.clone(),
             span,
             kind,
+            namespace,
+            owner: self.impls.last().cloned().flatten(),
             block: self.blocks.last().copied(),
         });
     }
@@ -1089,6 +1153,7 @@ impl Scan<'_> {
                     DeclKind::Field {
                         owner: owner.to_string(),
                     },
+                    Namespace::Both,
                 );
             }
         }
@@ -1740,7 +1805,7 @@ fn single_bound_trait(bound: &syn::TypeParamBound) -> Option<String> {
 impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     fn visit_item(&mut self, node: &'ast syn::Item) {
         if let Some(ident) = item_ident(node) {
-            self.declare(ident, DeclKind::Item);
+            self.declare(ident, DeclKind::Item, Namespace::of_item(node));
         }
         syn::visit::visit_item(self, node);
     }
@@ -1753,7 +1818,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     }
 
     fn visit_item_mod(&mut self, node: &'ast syn::ItemMod) {
-        self.declare(&node.ident, DeclKind::Item);
+        self.declare(&node.ident, DeclKind::Item, Namespace::Type);
         match node.content.is_some() {
             true => {
                 self.chain.push(node.ident.to_string());
@@ -1766,9 +1831,9 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
 
     fn visit_impl_item(&mut self, node: &'ast syn::ImplItem) {
         match node {
-            syn::ImplItem::Fn(item) => self.declare(&item.sig.ident, DeclKind::Method),
-            syn::ImplItem::Const(item) => self.declare(&item.ident, DeclKind::Item),
-            syn::ImplItem::Type(item) => self.declare(&item.ident, DeclKind::Item),
+            syn::ImplItem::Fn(item) => self.declare(&item.sig.ident, DeclKind::Method, Namespace::Value),
+            syn::ImplItem::Const(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Value),
+            syn::ImplItem::Type(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Type),
             _ => {}
         }
         syn::visit::visit_impl_item(self, node);
@@ -1776,9 +1841,9 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
 
     fn visit_trait_item(&mut self, node: &'ast syn::TraitItem) {
         match node {
-            syn::TraitItem::Fn(item) => self.declare(&item.sig.ident, DeclKind::Method),
-            syn::TraitItem::Const(item) => self.declare(&item.ident, DeclKind::Item),
-            syn::TraitItem::Type(item) => self.declare(&item.ident, DeclKind::Item),
+            syn::TraitItem::Fn(item) => self.declare(&item.sig.ident, DeclKind::Method, Namespace::Value),
+            syn::TraitItem::Const(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Value),
+            syn::TraitItem::Type(item) => self.declare(&item.ident, DeclKind::Item, Namespace::Type),
             _ => {}
         }
         syn::visit::visit_trait_item(self, node);
@@ -1833,6 +1898,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
                     span,
                     role: RefRole::Import,
                     bare: false,
+                    leaf: false,
                 });
             }
             let names_it = branch.idents.get(named).map(String::as_str) == Some(self.old);
@@ -1911,6 +1977,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
                     span,
                     role: self.role,
                     bare: idents.len() == 1,
+                    leaf: index + 1 == idents.len(),
                 });
             }
         }
@@ -1950,10 +2017,18 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     fn visit_expr_method_call(&mut self, node: &'ast syn::ExprMethodCall) {
         if node.method == self.old {
             if let Some(span) = self.exact(node.method.span()) {
-                self.out.methods.push(span);
+                let on_self = matches!(&*node.receiver, syn::Expr::Path(path) if path.path.is_ident("self"));
+                let owner = self.impls.last().cloned().flatten();
+                self.out.methods.push((span, on_self, owner));
             }
         }
         syn::visit::visit_expr_method_call(self, node);
+    }
+
+    fn visit_item_impl(&mut self, node: &'ast syn::ItemImpl) {
+        self.impls.push(principal_ty(&node.self_ty));
+        syn::visit::visit_item_impl(self, node);
+        self.impls.pop();
     }
 
     /// A macro body is tokens, not a scope the plane binds: the walk classifies
@@ -1992,6 +2067,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
                 DeclKind::Variant {
                     owner: owner.clone(),
                 },
+                Namespace::Both,
             );
             let variant_owner = variant.ident.to_string();
             if let syn::Fields::Named(named) = &variant.fields {

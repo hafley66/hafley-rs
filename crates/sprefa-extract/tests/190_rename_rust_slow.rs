@@ -45,11 +45,17 @@ fn copy_tree(source: &Path, target: &Path) {
 
 /// Rename the declaration of `old` whose text starts at `declaration` in `file`.
 fn rename(fixture: &Fixture, file: &str, declaration: &str, old: &str, new: &str) {
+    rename_in(fixture, file, declaration, old, new, true)
+}
+
+fn rename_in(fixture: &Fixture, file: &str, declaration: &str, old: &str, new: &str, slow: bool) {
     let text = std::fs::read_to_string(fixture.root.join(file)).unwrap();
     let at = text.find(declaration).unwrap() + declaration.find(old).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .env("RUST_LOG", "off")
-        .args(["rename", "--slow", "--commit", "--at", &at.to_string(), "--root"])
+        .args(["rename", "--commit", "--at", &at.to_string()])
+        .args(slow.then_some("--slow"))
+        .arg("--root")
         .arg(&fixture.root)
         .arg("--state")
         .arg(&fixture.state)
@@ -110,4 +116,43 @@ fn a_method_renames_apart_from_the_free_function_it_calls() {
     assert!(queue.contains("pub fn count(&self)"), "{queue}");
     assert!(queue.contains("len(&self.items)"), "{queue}");
     assert!(queue.contains("self.count() == 0"), "{queue}");
+}
+
+#[test]
+fn fast_tier_keeps_the_module_segment_and_renames_the_bare_call() {
+    let fixture = fixture();
+    rename_in(&fixture, "src/fs/copy.rs", "pub fn copy", "copy", "duplicate", false);
+    assert_eq!(
+        read(&fixture, "src/fs/mod.rs"),
+        "mod copy;\npub use self::copy::duplicate;\n\npub fn copy_twice() -> u32 {\n    duplicate() + self::copy::duplicate()\n}\n"
+    );
+}
+
+#[test]
+fn fast_tier_renames_one_of_two_sibling_types() {
+    let fixture = fixture();
+    rename_in(&fixture, "src/runtime/scheduler.rs", "pub struct Context", "Context", "Scheduler", false);
+    assert!(read(&fixture, "src/runtime/trace.rs").contains("pub struct Context"));
+    assert!(read(&fixture, "src/runtime/mod.rs").contains("&scheduler::Scheduler, trace: &trace::Context"));
+}
+
+#[test]
+fn fast_tier_stops_on_a_method_call_whose_receiver_type_it_cannot_see() {
+    let fixture = fixture();
+    let text = read(&fixture, "src/queue.rs");
+    let at = text.find("pub fn len").unwrap() + "pub fn ".len();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .env("RUST_LOG", "off")
+        .args(["rename", "--commit", "--at", &at.to_string(), "--root"])
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .arg("src/queue.rs#len")
+        .arg("count")
+        .output()
+        .unwrap();
+    assert_eq!(output.status.code(), Some(6));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("src/queue.rs:6: method call on a receiver of unknown type"), "{stderr}");
+    assert_eq!(read(&fixture, "src/queue.rs"), text);
 }
