@@ -811,3 +811,42 @@ fn scip_verify_without_merge_never_changes_the_plan() {
         entries.join("\n")
     );
 }
+
+/// A class method is a member declaration; its typed calls rename, and a
+/// gitignored build output stays out of the corpus when no --root is given.
+#[test]
+fn class_method_renames_and_ignored_output_stays_out() {
+    let fixture = fixture("method", "tracked");
+    for args in [
+        &["init", "-q", "."][..],
+        &["add", "src", ".gitignore"],
+        &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "fixture"],
+    ] {
+        let status = Command::new("git").args(args).current_dir(&fixture.root).status().unwrap();
+        assert!(status.success(), "git {args:?}");
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["rename", "src/box.ts#run", "execute", "--commit", "--state"])
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "rename exited {:?}: {}",
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/box.ts")).unwrap(),
+        "export class Box {\n  execute(): number {\n    return 1;\n  }\n\n  total(): number {\n    return this.execute() + 1;\n  }\n}\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("src/use.ts")).unwrap(),
+        "import { Box } from \"./box\";\n\nexport function start(box: Box): number {\n  return box.execute();\n}\n"
+    );
+    assert_eq!(
+        std::fs::read_to_string(fixture.root.join("dist/box.js")).unwrap(),
+        "export function start(box) {\n  return box.run();\n}\n"
+    );
+}

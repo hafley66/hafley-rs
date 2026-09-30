@@ -526,6 +526,30 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
         oxc_ast_visit::walk::walk_property_definition(self, property);
     }
 
+    fn visit_method_definition(&mut self, method: &ts::MethodDefinition<'a>) {
+        if property_key_name(&method.key) == Some(self.old) {
+            if let Some(owner) = self.owners.last().filter(|owner| !owner.is_empty()) {
+                self.declarations.push(PropertyDecl {
+                    owner: owner.clone(),
+                    span: method.key.span(),
+                });
+            }
+        }
+        oxc_ast_visit::walk::walk_method_definition(self, method);
+    }
+
+    fn visit_ts_method_signature(&mut self, method: &ts::TSMethodSignature<'a>) {
+        if property_key_name(&method.key) == Some(self.old) {
+            if let Some(owner) = self.owners.last() {
+                self.declarations.push(PropertyDecl {
+                    owner: owner.clone(),
+                    span: method.key.span(),
+                });
+            }
+        }
+        oxc_ast_visit::walk::walk_ts_method_signature(self, method);
+    }
+
     fn visit_ts_interface_declaration(&mut self, interface: &ts::TSInterfaceDeclaration<'a>) {
         self.owners.push(interface.id.name.to_string());
         oxc_ast_visit::walk::walk_ts_interface_declaration(self, interface);

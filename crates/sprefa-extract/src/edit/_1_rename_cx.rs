@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use crate::edit_seams::Rename;
-use crate::move_cx::walk_files;
+use crate::move_cx::walk_files_with_untracked;
 
 /// Whether the roster hands `rel` to `rename`.
 pub fn owned_by<R: Rename + ?Sized>(rel: &str, rename: &R) -> bool {
@@ -53,9 +53,15 @@ impl RenameCx {
     /// One walk of `root`. `root` is taken canonicalized; every path this type
     /// hands out is root-relative and forward-slashed.
     pub fn open(root: &Path) -> Result<Self, String> {
+        Self::open_with_untracked(root, true)
+    }
+
+    /// Tracked files only unless the caller supplied the root explicitly, the rule
+    /// cleave uses (`MoveCx::open_with_untracked`).
+    pub fn open_with_untracked(root: &Path, include_untracked: bool) -> Result<Self, String> {
         let io_root = hafley_scm::read::io_path(root);
         let root = io_root.as_path();
-        let files = walk_files(root)?;
+        let files = walk_files_with_untracked(root, include_untracked)?;
         Ok(Self {
             root: root.to_path_buf(),
             files,

@@ -180,7 +180,10 @@ impl Plan {
         let requested = requested_renames(cli)?;
         let root = plan_root(cli.root.as_ref(), &requested[0].0)?;
         let batch = validated_batch(&root, requested, cli.at)?;
-        let cx = RenameCx::open(&root).map_err(plan_error)?.with_batch(batch).with_slow(cli.slow);
+        let cx = RenameCx::open_with_untracked(&root, cli.root.is_some())
+            .map_err(plan_error)?
+            .with_batch(batch)
+            .with_slow(cli.slow);
         let has_index = cli.verify_scip.is_some() || root.join("index.scip").is_file();
         if cx.batch().len() > 1 {
             // An index describes the original tree. Once row one changes its
