@@ -12,6 +12,7 @@ struct Fixture {
     state: PathBuf,
     target: PathBuf,
     trace: PathBuf,
+    _scratch: tempfile::TempDir,
 }
 
 fn fixture(variant: &str, label: &str) -> Fixture {
@@ -19,14 +20,11 @@ fn fixture(variant: &str, label: &str) -> Fixture {
 }
 
 fn fixture_tree(group: &str, variant: &str, label: &str) -> Fixture {
-    let base = std::env::temp_dir().join(format!(
-        "ryi_cleave_rust_{variant}_{label}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let scratch = tempfile::Builder::new()
+        .prefix(&format!("ryi_cleave_rust_{variant}_{label}_"))
+        .tempdir()
+        .unwrap();
+    let base = scratch.path().to_path_buf();
     let root = base.join("repo");
     let state = base.join("state");
     std::fs::create_dir_all(&state).unwrap();
@@ -41,6 +39,7 @@ fn fixture_tree(group: &str, variant: &str, label: &str) -> Fixture {
         state,
         target: base.join("target"),
         trace: base.join("cleave.json"),
+        _scratch: scratch,
     }
 }
 

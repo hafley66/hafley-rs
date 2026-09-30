@@ -8,17 +8,15 @@ use std::process::{Command, Output};
 struct Fixture {
     root: PathBuf,
     state: PathBuf,
+    _scratch: tempfile::TempDir,
 }
 
 fn fixture(name: &str, label: &str) -> Fixture {
-    let base = std::env::temp_dir().join(format!(
-        "ryi_cross_{label}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos()
-    ));
+    let scratch = tempfile::Builder::new()
+        .prefix(&format!("ryi_cross_{label}_"))
+        .tempdir()
+        .unwrap();
+    let base = scratch.path().to_path_buf();
     let root = base.join("repo");
     let state = base.join("state");
     std::fs::create_dir_all(&state).unwrap();
@@ -29,6 +27,7 @@ fn fixture(name: &str, label: &str) -> Fixture {
     Fixture {
         root: root.canonicalize().unwrap(),
         state,
+        _scratch: scratch,
     }
 }
 

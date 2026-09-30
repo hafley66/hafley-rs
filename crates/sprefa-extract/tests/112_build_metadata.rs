@@ -59,12 +59,11 @@ fn metadata(dir: &Path) -> (String, String) {
 
 #[test]
 fn build_metadata_tracks_source_and_checked_out_branch() {
-    let root = std::env::temp_dir().join(format!(
-        "sprefa-build-metadata-{}-{:?}",
-        std::process::id(),
-        std::thread::current().id()
-    ));
-    let _ = std::fs::remove_dir_all(&root);
+    let scratch = tempfile::Builder::new()
+        .prefix("sprefa-build-metadata-")
+        .tempdir()
+        .expect("scratch dir");
+    let root = scratch.path().to_path_buf();
     std::fs::create_dir_all(root.join("src")).expect("miniature crate");
     std::fs::write(
         root.join("Cargo.toml"),
@@ -147,8 +146,11 @@ fn excluded_crates_resolve_from_a_nested_worktree() {
         "exclude list parsed: {excludes:?}"
     );
 
-    let tmp = std::env::temp_dir().join(format!("sprefa-nested-worktree-{}", std::process::id()));
-    let _ = std::fs::remove_dir_all(&tmp);
+    let scratch = tempfile::Builder::new()
+        .prefix("sprefa-nested-worktree-")
+        .tempdir()
+        .expect("scratch dir");
+    let tmp = scratch.path().to_path_buf();
     let worktree = tmp.join(".claude/worktrees/probe");
     for dir in [&tmp, &worktree] {
         std::fs::create_dir_all(dir).expect("workspace dir");
@@ -211,5 +213,4 @@ fn excluded_crates_resolve_from_a_nested_worktree() {
             "{excluded}: workspace_root is not the crate itself"
         );
     }
-    let _ = std::fs::remove_dir_all(&tmp);
 }

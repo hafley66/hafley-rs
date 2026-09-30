@@ -25,21 +25,19 @@ const ANCHOR: &str = "src/util.rs";
 struct Fixture {
     root: PathBuf,
     state: PathBuf,
+    _scratch: tempfile::TempDir,
 }
 
-fn scratch(label: &str) -> PathBuf {
-    std::env::temp_dir().join(format!(
-        "extract_rename_rust_{label}_{}_{}",
-        std::process::id(),
-        std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .map(|since| since.as_nanos())
-            .unwrap_or_default()
-    ))
+fn scratch(label: &str) -> tempfile::TempDir {
+    tempfile::Builder::new()
+        .prefix(&format!("extract_rename_rust_{label}_"))
+        .tempdir()
+        .expect("create scratch dir")
 }
 
 fn fixture(case: &str, label: &str) -> Fixture {
-    let base = scratch(&format!("{case}_{label}"));
+    let scratch = scratch(&format!("{case}_{label}"));
+    let base = scratch.path().to_path_buf();
     let root = base.join("repo");
     let state = base.join("state");
     std::fs::create_dir_all(&state).expect("create state dir");
@@ -47,6 +45,7 @@ fn fixture(case: &str, label: &str) -> Fixture {
     Fixture {
         root: root.canonicalize().expect("canonicalize fixture root"),
         state,
+        _scratch: scratch,
     }
 }
 
@@ -434,7 +433,8 @@ fn list_rows_read_earlier_edits() {
 #[test]
 #[ignore]
 fn self_rename_is_judged_by_rustc() {
-    let base = scratch("self");
+    let scratch = scratch("self");
+    let base = scratch.path().to_path_buf();
     let root = base.join("sprefa-extract");
     let state = base.join("state");
     std::fs::create_dir_all(&state).expect("create state dir");
@@ -472,7 +472,6 @@ fn self_rename_is_judged_by_rustc() {
         "cargo check on the renamed tree: {}",
         String::from_utf8_lossy(&check.stderr)
     );
-    let _ = std::fs::remove_dir_all(&base);
 }
 
 /// The crate's sources, minus the build output and the git store.
