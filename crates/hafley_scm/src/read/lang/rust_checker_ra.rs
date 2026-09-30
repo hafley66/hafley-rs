@@ -19,7 +19,7 @@ use tracing::Span;
 use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef, OffsetMap};
 #[path = "8a_rust_checker_target.rs"]
 mod target;
-pub use target::{target_calls, TargetCall};
+pub use target::{target_calls, TargetCall, TargetCalls};
 #[path = "8b_rust_checker_target_types.rs"]
 mod target_types;
 use crate::read::trace::{phase_span, record_phase, Phase};

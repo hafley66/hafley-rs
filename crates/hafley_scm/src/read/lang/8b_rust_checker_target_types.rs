@@ -76,6 +76,7 @@ pub fn target_types(
         db,
         &ids,
         &seed_paths,
+        &[],
         crate::read::project::extract_pool().current_num_threads(),
     );
     attach_db(db, || {

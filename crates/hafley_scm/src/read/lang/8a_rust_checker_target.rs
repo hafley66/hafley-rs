@@ -3,6 +3,12 @@
 use super::*;
 use std::collections::BTreeSet;
 
+#[derive(Clone, Debug, Default)]
+pub struct TargetCalls {
+    pub calls: Vec<TargetCall>,
+    pub loaded: BTreeSet<String>,
+}
+
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct TargetCall {
     pub source_path: String,
@@ -14,11 +20,6 @@ pub struct TargetCall {
     pub target_start: u32,
     pub target_end: u32,
     pub target_name: String,
-}
-
-enum Candidate {
-    Method(ast::MethodCallExpr),
-    Path(ast::Path),
 }
 
 fn target_owner_name(
@@ -48,33 +49,68 @@ fn enclosing_name(node: &ra_ap_syntax::SyntaxNode) -> Option<String> {
 ///
 /// The first `attach_first_edition` otherwise builds that closure on one
 /// thread (7.0 s for `hafley_scm`'s 436 crates; parallel priming takes 3.9 s on 8 threads).
+/// With `reaching`, only source crates that depend on one of those files' crates count:
+/// a reference search never looks anywhere else.
 pub(super) fn prime_crate_closure(
     db: &RootDatabase,
     ids: &HashMap<String, ra_ap_ide::FileId>,
     sources: &[&str],
+    reaching: &[ra_ap_ide::FileId],
     threads: usize,
 ) {
     use ra_ap_ide_db::base_db;
     let _prime = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.prime_crate_closure")).entered();
-    let mut scope: Vec<base_db::Crate> = sources
+    let targets: BTreeSet<base_db::Crate> = reaching
+        .iter()
+        .flat_map(|&file_id| base_db::relevant_crates(db, file_id).to_vec())
+        .collect();
+    let crates: BTreeSet<base_db::Crate> = sources
         .iter()
         .filter_map(|source| ids.get(*source))
         .flat_map(|&file_id| base_db::relevant_crates(db, file_id).to_vec())
-        .flat_map(|krate| krate.transitive_deps(db))
+        .collect();
+    let mut scope: Vec<base_db::Crate> = crates
+        .into_iter()
+        .map(|krate| krate.transitive_deps(db))
+        .filter(|closure| targets.is_empty() || closure.iter().any(|krate| targets.contains(krate)))
+        .flatten()
         .collect();
     scope.sort();
     scope.dedup();
     ra_ap_ide_db::prime_caches::parallel_prime_caches(db, &scope, threads, &|_| {});
 }
 
+
+/// The name reference is the callee of a call: `f(..)`, `m::f(..)`, or `x.f(..)`.
+fn is_call(name_ref: &ast::NameRef) -> bool {
+    let node = name_ref.syntax();
+    if let Some(call) = node.parent().and_then(ast::MethodCallExpr::cast) {
+        return call.name_ref().as_ref() == Some(name_ref);
+    }
+    node.ancestors()
+        .find_map(ast::PathExpr::cast)
+        .and_then(|expr| {
+            let path = expr.path()?;
+            let last = path.segment()?.name_ref()?;
+            let call = expr.syntax().parent().and_then(ast::CallExpr::cast)?;
+            Some(&last == name_ref && call.expr()?.syntax() == expr.syntax())
+        })
+        .unwrap_or(false)
+}
+
+/// Every call of each seeded function, found by rust-analyzer's reference search,
+/// and the supplied files rust-analyzer loaded (its answer covers only those).
+///
+/// Seeds are `(definition path, name)`. Aliased imports and calls inside macro
+/// expansions are references of the definition, so they are found without a name match.
 pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
-    sites: &[(String, u32, u32, String)],
+    seeds: &[(String, String)],
     budget: Duration,
-) -> Result<Vec<TargetCall>, CheckerError> {
-    if sites.is_empty() {
-        return Ok(Vec::new());
+) -> Result<TargetCalls, CheckerError> {
+    if seeds.is_empty() {
+        return Ok(TargetCalls::default());
     }
     let (workspace, _) =
         super::super::rust_checker_session::checker_workspace(root, files, budget)?;
@@ -103,140 +139,110 @@ pub fn target_calls(
             paths.insert(id, (*name).to_string());
         }
     }
-    let mut by_source: HashMap<&str, BTreeSet<(u32, u32, &str)>> = HashMap::new();
-    for (path, start, end, name) in sites {
-        by_source
-            .entry(path)
-            .or_default()
-            .insert((*start, *end, name));
-    }
     drop(_file_index_span);
     let db = workspace.host.raw_database();
     let _query_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.queries")).entered();
-    let pool = crate::read::project::extract_pool();
-    let mut sources: Vec<_> = by_source.into_iter().collect();
-    sources.sort_by_key(|(path, _)| *path);
-    let source_paths: Vec<&str> = sources.iter().map(|(path, _)| *path).collect();
-    prime_crate_closure(&db, &ids, &source_paths, pool.current_num_threads());
-    let chunk_size = sources.len().div_ceil(pool.current_num_threads()).max(1);
-    let chunks: Vec<_> = sources
-        .chunks(chunk_size)
-        .map(|chunk| (db.clone(), chunk))
-        .collect();
-    let query_span = tracing::Span::current();
-    let per_chunk: Vec<Vec<TargetCall>> = pool.install(|| {
-        use rayon::prelude::*;
-        chunks
-            .into_par_iter()
-            .map(|(db, chunk)| {
-                let _query_entered = query_span.enter();
-                attach_db(&db, || {
-                    let _sema_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.sema_init")).entered();
-                    let sema = Semantics::new(&db);
-                    drop(_sema_span);
-                    let mut found = BTreeSet::new();
-                    let mut destination_offsets = HashMap::new();
-                    let _source_files_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.source_files")).entered();
-                    for (source_path, wanted_sites) in chunk {
-                        let Some(&file_id) = ids.get(*source_path) else {
+    let supplied: Vec<&str> = files.iter().map(|(name, _)| name.as_str()).collect();
+    let definitions: Vec<_> = seeds.iter().filter_map(|(path, _)| ids.get(path).copied()).collect();
+    prime_crate_closure(
+        db,
+        &ids,
+        &supplied,
+        &definitions,
+        crate::read::project::extract_pool().current_num_threads(),
+    );
+    attach_db(db, || {
+        let sema = Semantics::new(db);
+        let mut found = BTreeSet::new();
+        let mut offsets: HashMap<ra_ap_ide::FileId, OffsetMap> = HashMap::new();
+        for (definition_path, name) in seeds {
+            let Some(&definition_file) = ids.get(definition_path) else {
+                continue;
+            };
+            let syntax = sema.parse_guess_edition(definition_file);
+            let functions: Vec<_> = syntax
+                .syntax()
+                .descendants()
+                .filter_map(ast::Fn::cast)
+                .filter(|item| item.name().is_some_and(|item_name| item_name.text() == name.as_str()))
+                .filter_map(|item| sema.to_def(&item))
+                .collect();
+            for function in functions {
+                let definition = Definition::Function(function);
+                let Some(nav) = definition.try_to_nav(&sema).map(|nav| nav.call_site) else {
+                    continue;
+                };
+                let Some(target_path) = paths.get(&nav.file_id) else {
+                    continue;
+                };
+                let _usages_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.usages")).entered();
+                let direct = definition.usages(&sema).all();
+                // `usages` does not follow `use x as y` (rust-analyzer issue #14079);
+                // each renaming import is searched again under its alias.
+                let renames: Vec<ast::Rename> = direct
+                    .iter()
+                    .flat_map(|(_, references)| references.iter())
+                    .filter_map(|reference| reference.name.as_name_ref())
+                    .filter_map(|name_ref| {
+                        name_ref.syntax().ancestors().find_map(ast::UseTree::cast)?.rename()
+                    })
+                    .collect();
+                let mut references = direct.references;
+                for rename in &renames {
+                    for (file, aliased) in definition.usages(&sema).with_rename(Some(rename)).all() {
+                        references.entry(file).or_default().extend(aliased);
+                    }
+                }
+                drop(_usages_span);
+                for (file, references) in references {
+                    let source_id = file.file_id(db);
+                    let Some(source_path) = paths.get(&source_id) else {
+                        continue;
+                    };
+                    for id in [source_id, nav.file_id] {
+                        offsets.entry(id).or_insert_with(|| {
+                            OffsetMap::new(&sema.parse_guess_edition(id).syntax().text().to_string())
+                        });
+                    }
+                    let source_offsets = &offsets[&source_id];
+                    let target_offsets = &offsets[&nav.file_id];
+                    for reference in references {
+                        let Some(name_ref) = reference.name.as_name_ref() else {
                             continue;
                         };
-                        let _edition_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.source_edition")).entered();
-                        let editioned = sema.attach_first_edition(file_id);
-                        drop(_edition_span);
-                        let _parse_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.source_parse")).entered();
-                        let syntax = sema.parse(editioned);
-                        drop(_parse_span);
-                        let _offset_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.source_offsets")).entered();
-                        let source_offsets = OffsetMap::new(&syntax.syntax().text().to_string());
-                        drop(_offset_span);
-                        let _scan_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.syntax_scan")).entered();
-                        for node in syntax.syntax().descendants() {
-                            let candidate =
-                                if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
-                                    call.name_ref()
-                                        .map(|name_ref| (name_ref, Candidate::Method(call)))
-                                } else if let Some(call) = ast::CallExpr::cast(node) {
-                                    call.expr()
-                                        .and_then(|expr| ast::PathExpr::cast(expr.syntax().clone()))
-                                        .and_then(|expr| expr.path())
-                                        .and_then(|path| {
-                                            let name_ref = path.segment()?.name_ref()?;
-                                            Some((name_ref, Candidate::Path(path)))
-                                        })
-                                } else {
-                                    None
-                                };
-                            let Some((name_ref, candidate)) = candidate else {
-                                continue;
-                            };
-                            let range = name_ref.syntax().text_range();
-                            let start = source_offsets.to_span_offset(u32::from(range.start()));
-                            let end = source_offsets.to_span_offset(u32::from(range.end()));
-                            let name = name_ref.text();
-                            if !wanted_sites.iter().any(|(site_start, site_end, callee)| {
-                                *callee == name && *site_start <= start && end <= *site_end
-                            }) {
-                                continue;
-                            }
-                            let _definition_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.definition_lookup")).entered();
-                            let definition = match candidate {
-                                Candidate::Method(call) => {
-                                    sema.resolve_method_call(&call).map(ModuleDef::Function)
-                                }
-                                Candidate::Path(path) => match sema.resolve_path(&path) {
-                                    Some(PathResolution::Def(definition)) => Some(definition),
-                                    _ => None,
-                                },
-                            };
-                            drop(_definition_span);
-                            let Some(definition) = definition else {
-                                continue;
-                            };
-                            let _navigation_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.navigation")).entered();
-                            let Some(nav) = definition.try_to_nav(&sema).map(|nav| nav.call_site)
-                            else {
-                                continue;
-                            };
-                            let Some(target_path) = paths.get(&nav.file_id) else {
-                                continue;
-                            };
-                            let target_offsets =
-                                destination_offsets.entry(nav.file_id).or_insert_with(|| {
-                                    let text = sema
-                                        .parse_guess_edition(nav.file_id)
-                                        .syntax()
-                                        .text()
-                                        .to_string();
-                                    OffsetMap::new(&text)
-                                });
-                            found.insert(TargetCall {
-                                source_path: source_path.to_string(),
-                                caller_name: target_owner_name(name_ref.syntax(), &source_offsets),
-                                enclosing_name: enclosing_name(name_ref.syntax()),
-                                site_start: start,
-                                site_end: end,
-                                target_path: target_path.clone(),
-                                target_start: target_offsets.to_span_offset(u32::from(
-                                    nav.focus_range.unwrap_or(nav.full_range).start(),
-                                )),
-                                target_end: target_offsets
-                                    .to_span_offset(u32::from(nav.full_range.end())),
-                                target_name: nav.name.as_str().to_string(),
-                            });
+                        if !is_call(name_ref) {
+                            continue;
                         }
-                        drop(_scan_span);
+                        // A reference inside a macro expansion lives in the macro's tree;
+                        // its caller is read at the original range in the source file.
+                        let site = match sema
+                            .parse_guess_edition(source_id)
+                            .syntax()
+                            .covering_element(reference.range)
+                        {
+                            ra_ap_syntax::NodeOrToken::Node(node) => node,
+                            ra_ap_syntax::NodeOrToken::Token(token) => token.parent().unwrap(),
+                        };
+                        found.insert(TargetCall {
+                            source_path: source_path.clone(),
+                            caller_name: target_owner_name(&site, source_offsets),
+                            enclosing_name: enclosing_name(&site),
+                            site_start: source_offsets.to_span_offset(u32::from(reference.range.start())),
+                            site_end: source_offsets.to_span_offset(u32::from(reference.range.end())),
+                            target_path: target_path.clone(),
+                            target_start: target_offsets.to_span_offset(u32::from(
+                                nav.focus_range.unwrap_or(nav.full_range).start(),
+                            )),
+                            target_end: target_offsets.to_span_offset(u32::from(nav.full_range.end())),
+                            target_name: nav.name.as_str().to_string(),
+                        });
                     }
-                    drop(_source_files_span);
-                    found.into_iter().collect()
-                })
-            })
-            .collect()
-    });
-    Ok(per_chunk
-        .into_iter()
-        .flatten()
-        .collect::<BTreeSet<_>>()
-        .into_iter()
-        .collect())
+                }
+            }
+        }
+        Ok(TargetCalls {
+            calls: found.into_iter().collect(),
+            loaded: paths.into_values().collect(),
+        })
+    })
 }

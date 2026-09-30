@@ -313,7 +313,7 @@ pub fn answer(
 }
 
 #[cfg(feature = "rust-checker")]
-pub use super::rust_checker_ra::TargetCall;
+pub use super::rust_checker_ra::{TargetCall, TargetCalls};
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::TargetTypeReference;
 
@@ -321,10 +321,10 @@ pub use super::rust_checker_ra::TargetTypeReference;
 pub fn target_calls(
     root: &Path,
     files: &[(String, PathBuf)],
-    sites: &[(String, u32, u32, String)],
+    seeds: &[(String, String)],
     budget: Duration,
-) -> Result<Vec<TargetCall>, CheckerError> {
-    super::rust_checker_ra::target_calls(root, files, sites, budget)
+) -> Result<TargetCalls, CheckerError> {
+    super::rust_checker_ra::target_calls(root, files, seeds, budget)
 }
 
 #[cfg(feature = "rust-checker")]

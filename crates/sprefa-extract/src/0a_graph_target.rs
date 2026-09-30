@@ -5,15 +5,12 @@ use std::path::{Path, PathBuf};
 use std::time::Duration;
 
 use sprefa_extract::{resolve_project_target_with_raw, FamilyTag, FlatFact, ResolveRequest};
-#[path = "0b_graph_scip_fill.rs"]
-mod scip_fill;
 
 pub(super) fn facts(
     request: &ResolveRequest<'_>,
     root: &Path,
     name: &str,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-    let mut call_sites = BTreeSet::new();
     let mut definitions: BTreeMap<(String, String, bool), Vec<(u32, u32)>> = BTreeMap::new();
     let _extract_span = tracing::info_span!("fast.extract_resolve").entered();
     let mut facts = resolve_project_target_with_raw(request, &mut |raw| {
@@ -32,17 +29,6 @@ pub(super) fn facts(
                 ))
                 .or_default()
                 .push((span.start, span.end));
-        }
-        if let FlatFact::Site {
-            family: FamilyTag::Call,
-            span,
-            callee,
-            ..
-        } = raw.fact
-        {
-            if callee == name && raw.path.ends_with(".rs") {
-                call_sites.insert((raw.path.to_string(), span.start, span.end, callee));
-            }
         }
         Ok::<(), std::convert::Infallible>(())
     })?;
@@ -106,14 +92,22 @@ pub(super) fn facts(
     .map_err(|error| format!("TypeScript LSP target {name}: {error}"))?;
     #[cfg(feature = "rust-checker")]
     {
-        let sites: Vec<_> = call_sites.into_iter().collect();
+        let seeds: Vec<(String, String)> = definitions
+            .keys()
+            .filter(|(path, definition_name, is_call)| {
+                *is_call && definition_name == name && path.ends_with(".rs")
+            })
+            .map(|(path, definition_name, _)| (path.clone(), definition_name.clone()))
+            .collect();
         let calls = sprefa_extract::lang::rust_checker::target_calls(
             root,
             &files,
-            &sites,
+            &seeds,
             Duration::from_secs(30),
         )
         .map_err(|error| format!("rust-analyzer target {name}: {error}"))?;
+        let loaded = calls.loaded;
+        let calls = calls.calls;
         let type_seeds: Vec<(String, String)> = facts
             .iter()
             .filter_map(|fact| {
@@ -209,9 +203,10 @@ pub(super) fn facts(
         for call in verified {
             let present = facts.iter().any(|fact| {
                 matches!(fact, FlatFact::ResolvedEdge {
-                    caller_path, caller_name, caller_site_start, caller_site_end, ..
+                    caller_path, caller_name, callee_name, caller_site_start, caller_site_end, ..
                 } if *caller_path == call.source_path
                     && *caller_name == call.caller_name
+                    && callee_name.as_deref() == Some(call.target_name.as_str())
                     && *caller_site_start <= call.site_start
                     && call.site_end <= *caller_site_end)
             });
@@ -285,7 +280,16 @@ pub(super) fn facts(
                 *resolution_origin = "checker".to_string();
             }
         }
-        scip_fill::fill_callers(&mut facts, request.paths, root, name, &sites)?;
+        // rust-analyzer answered every call of `name` in the files it loaded; a
+        // name-matched edge it did not confirm there calls some other `name`.
+        facts.retain(|fact| {
+            !matches!(fact, FlatFact::ResolvedEdge {
+                caller_path, callee_name, resolution_origin, ..
+            } if callee_name.as_deref() == Some(name)
+                && caller_path.ends_with(".rs")
+                && loaded.contains(caller_path)
+                && resolution_origin != "checker")
+        });
     }
     #[cfg(not(feature = "rust-checker"))]
     let _ = (root, name, files, Duration::from_secs(30));

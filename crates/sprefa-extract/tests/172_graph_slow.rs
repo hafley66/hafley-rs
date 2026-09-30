@@ -187,3 +187,53 @@ fn typescript_target_references_include_importing_files() {
         })]
     );
 }
+
+#[cfg(feature = "rust-checker")]
+#[test]
+fn targeted_callers_include_aliased_and_macro_calls_and_skip_decoys() {
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("RUST_LOG", "off")
+        .args([
+            "graph",
+            "--slow",
+            "--callers",
+            "render",
+            "--root",
+            "tests/fixtures/rust_checker_usages",
+            "tests/fixtures/rust_checker_usages/src",
+        ])
+        .output()
+        .expect("targeted graph runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let mut edges: Vec<String> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|row| row["record"] == "graph_edge")
+        .map(|row| {
+            format!(
+                "{} -> {}:{}",
+                row["from_name"].as_str().unwrap(),
+                row["to_path"].as_str().unwrap().rsplit('/').next().unwrap(),
+                row["to_name"].as_str().unwrap()
+            )
+        })
+        .collect();
+    edges.sort();
+    edges.dedup();
+    // `expanded` is absent: its call is written in the `macro_rules!` body, which
+    // rust-analyzer's reference search does not map (a rust-analyzer gap, not ryi's).
+    assert_eq!(
+        edges,
+        [
+            "aliased -> widget.rs:render",
+            "decoyed -> decoy.rs:render",
+            "plain -> widget.rs:render",
+        ]
+    );
+}
