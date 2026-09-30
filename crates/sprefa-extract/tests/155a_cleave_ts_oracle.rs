@@ -132,6 +132,22 @@ fn fast_stops_when_the_destination_declares_the_name() {
     assert_eq!(read(&root, "dest.ts"), "export const value = 2;\n");
 }
 
+#[test]
+fn overloads_move_and_export_together_and_reexports_are_not_imports() {
+    let (root, _) = cleave("overload", "wrap", "dest.ts");
+    assert_eq!(
+        read(&root, "dest.ts"),
+        "import { Code } from \"./lib\";\nimport { code } from \"./lib\";\nexport const marker = 1;\n\nexport function wrap(value: string): Code;\nexport function wrap(value: Code): Code;\nexport function wrap(value: string | Code): Code {\n  return typeof value === \"string\" ? code(value) : value;\n}\n"
+    );
+    assert_eq!(
+        read(&root, "source.ts"),
+        "import { Code } from \"./lib\";\nimport { wrap } from \"./dest\";\nexport { Code } from \"./lib\";\n\nexport function twice(text: string): Code {\n  return wrap(wrap(text));\n}\n"
+    );
+    let tsc = Path::new(env!("CARGO_MANIFEST_DIR")).join("ts7/node_modules/typescript/bin/tsc");
+    let check = Command::new(tsc).args(["-p", "tsconfig.json"]).current_dir(&root).output().unwrap();
+    assert!(check.status.success(), "{}", String::from_utf8_lossy(&check.stdout));
+}
+
 fn read(root: &Path, file: &str) -> String {
     std::fs::read_to_string(root.join(file)).unwrap()
 }

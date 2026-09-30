@@ -23,12 +23,13 @@ pub(super) fn scope_rows(
                 symbol,
                 ..
             } if role == "def" => {
-                let start = leading_trivia_start(text, &root_children, *decl_start, *decl_end);
-                let span = line_span(text, span_of(start, *decl_end));
                 if !top_level.contains(&(*decl_start, *decl_end)) {
                     continue;
                 }
                 let name = declared(symbol);
+                let first = overloads_start(text, &root_children, &kinds, &name, *decl_start, *decl_end);
+                let start = leading_trivia_start(text, &root_children, first, *decl_end);
+                let span = line_span(text, span_of(start, *decl_end));
                 if decls.iter().any(|held| held.name == name) {
                     continue;
                 }
@@ -66,4 +67,39 @@ pub(super) fn scope_rows(
         })
         .collect();
     Ok((decls, free, impls))
+}
+
+/// A TS overload signature (`function f(a: A): A;`) has no def row of its own;
+/// the root items right before the implementation that are signatures of the
+/// same name travel with it.
+fn overloads_start(
+    text: &str,
+    root_children: &[(u32, u32, String)],
+    kinds: &BTreeMap<(u32, u32), String>,
+    name: &str,
+    decl_start: u32,
+    decl_end: u32,
+) -> u32 {
+    let Some(index) = root_children
+        .iter()
+        .position(|(start, end, _)| *start <= decl_start && decl_end <= *end)
+    else {
+        return decl_start;
+    };
+    let mut first = decl_start;
+    for (start, end, _) in root_children[..index].iter().rev() {
+        let signature = kinds
+            .range((*start, *start)..)
+            .take_while(|((node_start, _), _)| node_start < end)
+            .any(|((_, node_end), kind)| kind == "function_signature" && node_end <= end);
+        let named = text.get(*start as usize..*end as usize).is_some_and(|item| {
+            item.split_once(&format!("function {name}"))
+                .is_some_and(|(_, rest)| rest.trim_start().starts_with(['(', '<']))
+        });
+        if !(signature && named) {
+            break;
+        }
+        first = *start;
+    }
+    first
 }

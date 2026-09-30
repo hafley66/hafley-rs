@@ -848,7 +848,11 @@ impl Plan {
         let mut travelling = Vec::new();
         let mut orphans = Vec::new();
         let mut glob_unresolved = BTreeSet::new();
-        for row in source.specifiers.iter().filter(|row| !row.glob) {
+        for row in source
+            .specifiers
+            .iter()
+            .filter(|row| !row.glob && row.kind != "reexport")
+        {
             let dest_module = match imports.target(&src, &row.name) {
                 Some(target) => {
                     let asked = row.module.rsplit("::").next().unwrap_or(&row.name);
@@ -1086,8 +1090,10 @@ impl Plan {
         )?;
         if source.refs_outside(&item, &moving) > 0 || !callers.is_empty() {
             if let Some(first) = moving_text.first_mut() {
-                if let Some(edit) = arm.edit_export(first, Span::anchor(0), true) {
-                    *first = apply(first, &edit);
+                for start in statement_starts(first, span_of(0, first.len() as u32), &item) {
+                    if let Some(edit) = arm.edit_export(first, Span::anchor(start), true) {
+                        *first = apply(first, &edit);
+                    }
                 }
             }
         }
@@ -1302,15 +1308,18 @@ impl Plan {
             .iter()
             .filter(|row| row.action == "exported")
         {
-            let Some(edit) = self.arm.edit_export(&self.source.text, row.span, true) else {
-                continue;
-            };
-            edits.push(Respell {
-                file: self.rows.src.clone(),
-                span: edit.span,
-                text: edit.text,
-                receipt: Some(format!("export {} stays in {}", row.name, self.rows.src)),
-            });
+            for start in statement_starts(&self.source.text, row.span, &row.name) {
+                let Some(edit) = self.arm.edit_export(&self.source.text, Span::anchor(start), true)
+                else {
+                    continue;
+                };
+                edits.push(Respell {
+                    file: self.rows.src.clone(),
+                    span: edit.span,
+                    text: edit.text,
+                    receipt: Some(format!("export {} stays in {}", row.name, self.rows.src)),
+                });
+            }
         }
         for (module, names) in self.source.modules() {
             let kept: Vec<String> = names
@@ -1920,6 +1929,28 @@ fn rust_route_index(
         .collect();
     let defs = hafley_scm::read::types::build_def_index(&pairs);
     Ok(RustModuleIndex::build(modules, &corpus, &defs))
+}
+
+/// Where `export` goes in a declaration: its start, plus each later line that
+/// opens another TS overload of `name`. Latest first, so earlier offsets hold.
+fn statement_starts(text: &str, span: Span, name: &str) -> Vec<u32> {
+    let body = text.get(span.start as usize..span.end() as usize).unwrap_or("");
+    let mut starts = vec![span.start];
+    for line in body.split_inclusive('\n').skip(1) {
+        let head = line.trim_start();
+        let at = line.as_ptr() as usize - body.as_ptr() as usize + (line.len() - head.len());
+        let head = head.strip_prefix("export ").unwrap_or(head);
+        let head = head.strip_prefix("async ").unwrap_or(head);
+        if head
+            .strip_prefix("function ")
+            .and_then(|rest| rest.strip_prefix(name))
+            .is_some_and(|rest| rest.starts_with(['(', '<']))
+        {
+            starts.push(span.start + at as u32);
+        }
+    }
+    starts.reverse();
+    starts
 }
 
 /// `edit` applied to `text`, which is how a block built from nothing grows.
