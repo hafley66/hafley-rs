@@ -6,48 +6,52 @@ use std::time::{Duration, Instant};
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
 use ra_ap_load_cargo::{load_workspace_at, LoadCargoConfig, ProcMacroServerChoice};
-use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
+use ra_ap_project_model::{CargoConfig, CargoFeatures, CfgOverrides, RustLibSource};
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
-use super::rust_checker::CheckerError;
+use super::rust_checker::{CheckerError, Tier};
 
 pub(super) struct CheckerWorkspace {
     pub(super) host: AnalysisHost,
     pub(super) vfs: Vfs,
 }
 
-static CHECKER_WORKSPACES: OnceLock<Mutex<HashMap<PathBuf, Arc<Mutex<CheckerWorkspace>>>>> =
+type SessionKey = (PathBuf, Tier);
+
+static CHECKER_WORKSPACES: OnceLock<Mutex<HashMap<SessionKey, Arc<Mutex<CheckerWorkspace>>>>> =
     OnceLock::new();
 
-pub fn warm_workspace_available(root: &Path) -> bool {
+pub fn warm_workspace_available(root: &Path, tier: Tier) -> bool {
     let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     CHECKER_WORKSPACES
         .get()
-        .is_some_and(|workspaces| workspaces.lock().unwrap().contains_key(&root))
+        .is_some_and(|workspaces| workspaces.lock().unwrap().contains_key(&(root, tier)))
 }
 
 pub(super) fn checker_workspace(
     root: &Path,
+    tier: Tier,
     files: &[(String, PathBuf)],
     budget: Duration,
 ) -> Result<(Arc<Mutex<CheckerWorkspace>>, Duration), CheckerError> {
     let root = std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
+    let key = (root.clone(), tier);
     let workspaces = CHECKER_WORKSPACES.get_or_init(|| Mutex::new(HashMap::new()));
     let mut all = workspaces.lock().unwrap();
     let mut load = Duration::ZERO;
-    let fresh = !all.contains_key(&root);
+    let fresh = !all.contains_key(&key);
     if fresh {
-        let (db, vfs, elapsed) = load_checker_workspace(&root, budget)?;
+        let (db, vfs, elapsed) = load_checker_workspace(&root, tier, budget)?;
         load = elapsed;
         all.insert(
-            root.clone(),
+            key.clone(),
             Arc::new(Mutex::new(CheckerWorkspace {
                 host: AnalysisHost::with_database(db),
                 vfs,
             })),
         );
     }
-    let handle = all.get(&root).unwrap().clone();
+    let handle = all.get(&key).unwrap().clone();
     drop(all);
     let mut workspace = handle.lock().unwrap();
     if !fresh && files.iter().any(|(_, file)| {
@@ -57,7 +61,7 @@ pub(super) fn checker_workspace(
             .file_id(&VfsPath::new_real_path(file.to_string_lossy().into_owned()))
             .is_none()
     }) {
-        let (db, vfs, elapsed) = load_checker_workspace(&root, budget)?;
+        let (db, vfs, elapsed) = load_checker_workspace(&root, tier, budget)?;
         workspace.host = AnalysisHost::with_database(db);
         workspace.vfs = vfs;
         load = elapsed;
@@ -136,7 +140,7 @@ mod warm_workspace_tests {
             .unwrap()
             .lock()
             .unwrap()
-            .remove(&root);
+            .remove(&(root.clone(), Tier::Slow));
         let fresh = field_reads(&root, &source, &files, &probes, budget).unwrap();
         let sites = |reads: Vec<FieldRead>| {
             reads
@@ -152,7 +156,7 @@ mod warm_workspace_tests {
             .unwrap()
             .lock()
             .unwrap()
-            .remove(&root);
+            .remove(&(root.clone(), Tier::Slow));
         let cold_graph = answer(&root, &files, budget, true).unwrap();
         assert_eq!(
             serde_json::to_value(warm_graph.tsi).unwrap(),
@@ -163,13 +167,32 @@ mod warm_workspace_tests {
             .unwrap()
             .lock()
             .unwrap()
-            .remove(&root);
+            .remove(&(root.clone(), Tier::Slow));
         std::fs::remove_dir_all(root).unwrap();
     }
 }
 
+/// Every feature of every workspace package, as `feature="…"` cfgs.
+fn workspace_features(root: &Path) -> Result<Vec<ra_ap_cfg::CfgAtom>, CheckerError> {
+    let metadata = crate::read::cargo_metadata::load(root)
+        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    let mut features: Vec<ra_ap_cfg::CfgAtom> = metadata
+        .workspace_packages()
+        .into_iter()
+        .flat_map(|package| package.features.keys())
+        .map(|feature| ra_ap_cfg::CfgAtom::KeyValue {
+            key: ra_ap_intern::Symbol::intern("feature"),
+            value: ra_ap_intern::Symbol::intern(feature),
+        })
+        .collect();
+    features.sort();
+    features.dedup();
+    Ok(features)
+}
+
 fn load_checker_workspace(
     root: &Path,
+    tier: Tier,
     budget: Duration,
 ) -> Result<(RootDatabase, ra_ap_vfs::Vfs, Duration), CheckerError> {
     let load_config = LoadCargoConfig {
@@ -179,15 +202,26 @@ fn load_checker_workspace(
         num_worker_threads: 4,
         proc_macro_processes: 0,
     };
-    // A crate graph with no sysroot declines every method whose receiver type
-    // flows through std; `set_test` puts `#[cfg(test)]` bodies in the tree.
-    let cargo_config = CargoConfig {
-        sysroot: Some(RustLibSource::Discover),
-        set_test: true,
-        // The default selects no feature, so a `cfg`-gated module stays out of
-        // the crate graph and every file it declares owns no module there.
-        features: CargoFeatures::All,
-        ..CargoConfig::default()
+    // `set_test` puts `#[cfg(test)]` bodies in the tree. `--no-deps` metadata
+    // has no resolve section, so Fast turns the features on as cfg overrides.
+    let cargo_config = match tier {
+        Tier::Fast => CargoConfig {
+            sysroot: None,
+            set_test: true,
+            features: CargoFeatures::All,
+            no_deps: true,
+            cfg_overrides: CfgOverrides {
+                global: ra_ap_cfg::CfgDiff::new(workspace_features(root)?, Vec::new()),
+                selective: Default::default(),
+            },
+            ..CargoConfig::default()
+        },
+        Tier::Slow => CargoConfig {
+            sysroot: Some(RustLibSource::Discover),
+            set_test: true,
+            features: CargoFeatures::All,
+            ..CargoConfig::default()
+        },
     };
     let started = Instant::now();
     let _load_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.load")).entered();
@@ -199,4 +233,26 @@ fn load_checker_workspace(
         return Err(CheckerError::Budget(budget));
     }
     Ok((db, vfs, load))
+}
+
+#[cfg(test)]
+mod fast_tier_tests {
+    use super::*;
+    use ra_ap_ide_db::base_db;
+
+    #[test]
+    fn fast_loads_workspace_crates_with_features_and_no_sysroot() {
+        let root = std::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
+        let (db, vfs, _) = load_checker_workspace(&root, Tier::Fast, Duration::from_secs(120)).unwrap();
+        let names: Vec<String> = base_db::all_crates(&db)
+            .iter()
+            .filter_map(|krate| krate.extra_data(&db).display_name.as_ref().map(|name| name.to_string()))
+            .collect();
+        assert!(names.iter().any(|name| name == "hafley_scm"));
+        assert!(!names.iter().any(|name| ["core", "std", "alloc"].contains(&name.as_str())));
+        assert!(!names.iter().any(|name| name == "serde_json"));
+        let trace = VfsPath::new_real_path(root.join("crates/hafley_scm/src/read/trace.rs").to_string_lossy().into_owned());
+        let trace = ra_ap_ide::FileId::from_raw(vfs.file_id(&trace).unwrap().0.index());
+        assert!(!base_db::relevant_crates(&db, trace).is_empty());
+    }
 }

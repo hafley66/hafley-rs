@@ -104,7 +104,7 @@ pub fn rename(
     budget: Duration,
 ) -> Result<Vec<RenameEdit>, RenameFailure> {
     let (workspace, _) =
-        super::super::rust_checker_session::checker_workspace(root, files, budget)?;
+        super::super::rust_checker_session::checker_workspace(root, super::super::rust_checker::Tier::Slow, files, budget)?;
     let mut workspace = workspace.lock().unwrap();
     let mut paths: HashMap<ra_ap_ide::FileId, String> = HashMap::new();
     let mut anchor_id = None;

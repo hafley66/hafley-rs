@@ -113,7 +113,7 @@ pub fn target_calls(
         return Ok(TargetCalls::default());
     }
     let (workspace, _) =
-        super::super::rust_checker_session::checker_workspace(root, files, budget)?;
+        super::super::rust_checker_session::checker_workspace(root, super::super::rust_checker::Tier::Slow, files, budget)?;
     let workspace = workspace.lock().unwrap();
     let _file_index_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.file_index")).entered();
     let wanted: HashMap<PathBuf, &str> = files

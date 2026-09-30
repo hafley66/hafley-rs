@@ -44,7 +44,7 @@ pub fn target_types(
         return Ok(Vec::new());
     }
     let (workspace, _) =
-        super::super::rust_checker_session::checker_workspace(root, files, budget)?;
+        super::super::rust_checker_session::checker_workspace(root, super::super::rust_checker::Tier::Slow, files, budget)?;
     let workspace = workspace.lock().unwrap();
     let wanted: HashMap<PathBuf, &str> = files
         .iter()

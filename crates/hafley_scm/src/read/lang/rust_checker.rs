@@ -12,7 +12,7 @@ pub use super::rust_checker_ra::{field_reads, FieldProbe, FieldRead};
 pub use super::rust_checker_session::warm_workspace_available;
 
 #[cfg(not(feature = "rust-checker"))]
-pub fn warm_workspace_available(_root: &std::path::Path) -> bool {
+pub fn warm_workspace_available(_root: &std::path::Path, _tier: Tier) -> bool {
     false
 }
 pub use super::CheckerAnswer;
@@ -63,6 +63,14 @@ pub struct CheckerAnswers {
     /// declined to name a function for: the tier's own answer-coverage gap.
     pub method_sites: usize,
     pub method_unresolved: usize,
+}
+
+/// `Fast`: workspace crates only, every feature on, no sysroot, nothing compiled.
+/// `Slow`: adds dependencies and the sysroot, so inference types std receivers.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum Tier {
+    Fast,
+    Slow,
 }
 
 /// Why the tier could not run. Every one falls back to the syntax leg.

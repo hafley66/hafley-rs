@@ -48,7 +48,7 @@ pub fn field_reads(
     probes: &[FieldProbe],
     budget: Duration,
 ) -> Result<Vec<FieldRead>, CheckerError> {
-    let (workspace, _) = super::rust_checker_session::checker_workspace(root, files, budget)?;
+    let (workspace, _) = super::rust_checker_session::checker_workspace(root, super::rust_checker::Tier::Slow, files, budget)?;
     let workspace = workspace.lock().unwrap();
     let host = &workspace.host;
     let vfs = &workspace.vfs;
@@ -154,7 +154,7 @@ pub fn answer(
     budget: Duration,
     tsi: bool,
 ) -> Result<CheckerAnswers, CheckerError> {
-    let (workspace, load) = super::rust_checker_session::checker_workspace(root, files, budget)?;
+    let (workspace, load) = super::rust_checker_session::checker_workspace(root, super::rust_checker::Tier::Slow, files, budget)?;
     let workspace = workspace.lock().unwrap();
     let host = &workspace.host;
     let vfs = &workspace.vfs;
