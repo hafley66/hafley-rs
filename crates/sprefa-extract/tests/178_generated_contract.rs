@@ -1,69 +1,42 @@
 #![cfg(feature = "cli")]
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::process::Command;
 
-fn files(root: &Path, dir: &Path, found: &mut Vec<PathBuf>) {
-    for entry in std::fs::read_dir(dir).expect("read generated directory") {
-        let path = entry.expect("generated entry").path();
-        if path.is_dir() {
-            files(root, &path, found);
-        } else {
-            found.push(
-                path.strip_prefix(root)
-                    .expect("generated relative path")
-                    .to_path_buf(),
-            );
-        }
-    }
-}
-
 #[test]
-fn committed_generated_contract_matches_just_gen_cli() {
-    if std::env::var_os("HAFLEY_TSP").is_none() {
-        eprintln!("skipped generated contract check: HAFLEY_TSP is absent");
+fn committed_generated_contract_matches_pnpm_gen() {
+    let schema = Path::new(env!("CARGO_MANIFEST_DIR")).join("schema/cli");
+    if !schema.join("node_modules").is_dir() {
+        eprintln!("skipped generated contract check: run pnpm install in schema/cli");
         return;
     }
-    let fresh = tempfile::tempdir().expect("fresh generation directory");
-    let output = Command::new("just")
-        .arg("gen-cli")
-        .arg(fresh.path())
+    let output = Command::new("pnpm")
+        .arg("gen")
+        .current_dir(&schema)
         .output()
-        .expect("run just gen-cli");
+        .expect("run pnpm gen");
     assert!(
         output.status.success(),
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
-    for (name, committed) in [
-        (
-            "server",
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("src/bin/ryi/gen"),
-        ),
-        (
-            "client",
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi/src/gen"),
-        ),
-        (
-            "proto",
-            Path::new(env!("CARGO_MANIFEST_DIR")).join("../ryi-proto/src/gen"),
-        ),
-    ] {
-        let staged = fresh.path().join(name);
-        let mut expected = Vec::new();
-        let mut actual = Vec::new();
-        files(&committed, &committed, &mut expected);
-        files(&staged, &staged, &mut actual);
-        expected.sort();
-        actual.sort();
-        assert_eq!(actual, expected, "{name} generated file roster");
-        for path in expected {
-            assert_eq!(
-                std::fs::read(staged.join(&path)).expect("fresh generated file"),
-                std::fs::read(committed.join(&path)).expect("committed generated file"),
-                "{name}/{}",
-                path.display(),
-            );
-        }
-    }
+    let generated = [
+        "../ryi-proto/src/gen",
+        "../ryi/src/gen",
+        "src/bin/ryi/gen",
+        "src/bin/ryi/ops.rs",
+    ];
+    let status = Command::new("git")
+        .args(["status", "--porcelain", "--"])
+        .args(generated)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("run git status");
+    // The worktree column: staged regeneration passes, drift from it fails.
+    let drift: Vec<&str> = std::str::from_utf8(&status.stdout)
+        .unwrap()
+        .lines()
+        .filter(|line| line.as_bytes()[1] != b' ')
+        .collect();
+    assert_eq!(drift, Vec::<&str>::new());
 }

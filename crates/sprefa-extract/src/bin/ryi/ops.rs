@@ -7,7 +7,7 @@ use std::sync::{mpsc, Arc, Mutex};
 use crate::cli_auto::{Cmd, Ryi};
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::{
-    CapabilitiesArgs, CleaveArgs, DiffArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs,
+    CapabilitiesArgs, CleaveArgs, DiffArgs, DismantleArgs, ExtractArgs, FastArgs, GraphArgs, IngestArgs, MoveArgs,
     OpError, OpResult, QueryArgs, RegionArgs, RenameArgs, SchemaArgs, ScipArgs, SlowArgs,
     StratifyArgs, TrailArgs, WatchArgs,
 };
@@ -307,6 +307,9 @@ pub fn r#move(args: &MoveArgs) -> OpResult<Vec<u8>> {
 }
 pub fn rename(args: &RenameArgs) -> OpResult<Vec<u8>> {
     one(command(Cmd::Rename(args.clone())))
+}
+pub fn dismantle(_args: &DismantleArgs) -> OpResult<Vec<u8>> {
+    Err(OpError("dismantle: TODO, not implemented".to_string(), 2))
 }
 pub fn region(args: &RegionArgs) -> OpResult<Vec<u8>> {
     one(command(Cmd::Region(args.clone())))

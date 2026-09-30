@@ -153,6 +153,7 @@ stream_handler!(capabilities, "capabilities", CapabilitiesArgs, capabilities);
 raw_handler!(cleave, "cleave", CleaveArgs, cleave);
 raw_handler!(r#move, "move", MoveArgs, r#move);
 raw_handler!(rename, "rename", RenameArgs, rename);
+raw_handler!(dismantle, "dismantle", DismantleArgs, dismantle);
 stream_handler!(watch, "watch", WatchArgs, watch);
 stream_handler!(diff, "diff", DiffArgs, diff);
 raw_handler!(schema, "schema", SchemaArgs, schema);
@@ -465,6 +466,7 @@ fn request_verb(path: &str) -> &'static str {
         "/cleave" => "cleave",
         "/move" => "move",
         "/rename" => "rename",
+        "/dismantle" => "dismantle",
         "/query" => "query",
         "/region" => "region",
         "/watch" => "watch",
@@ -516,6 +518,7 @@ fn router(state: DaemonState) -> axum::Router {
         .route("/cleave", post(cleave))
         .route("/move", post(r#move))
         .route("/rename", post(rename))
+        .route("/dismantle", post(dismantle))
         .route("/query", post(query))
         .route("/region", post(region))
         .route("/watch", post(watch))

@@ -1,0 +1,13 @@
+emit:
+  - "@hafley66/alloy-rs"
+options:
+  "@hafley66/alloy-rs":
+    emitter-output-dir: "{project-root}/../../.."
+    routes:
+      - { from: models, to: ryi-proto/src/gen/models }
+      - { from: ops_auto.rs, to: ryi-proto/src/gen/ops_auto.rs }
+      - { from: cli_auto.rs, to: ryi-proto/src/gen/cli_auto.rs }
+      - { from: daemon_auto.rs, to: ryi-proto/src/gen/daemon_auto.rs }
+      - { from: client_auto.rs, to: ryi/src/gen/client_auto.rs }
+      - { from: server_auto.rs, to: sprefa-extract/src/bin/ryi/gen/server_auto.rs }
+      - { from: ops.rs, to: sprefa-extract/src/bin/ryi/ops.rs }

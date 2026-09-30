@@ -1,2 +1,2 @@
-gen-cli out="":
-    python3 schema/cli/0_gen.py "{{out}}"
+gen-cli:
+    cd schema/cli && pnpm install --frozen-lockfile && pnpm gen

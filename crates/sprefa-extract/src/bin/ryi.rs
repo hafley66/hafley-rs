@@ -589,6 +589,7 @@ fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
                 return Err(RyiExit::new(error.exit, error.to_string()).into());
             }
         },
+        Some(Cmd::Dismantle(_)) => return Err(RyiExit::new(2, "dismantle: TODO, not implemented").into()),
         Some(Cmd::Region(args)) => match region_writer::run(args) {
             Ok(0) => return Ok(()),
             Ok(code) => return Err(RyiExit::new(code, "").into()),
@@ -691,6 +692,7 @@ fn run_formatted(ryi: Ryi, out: &mut dyn Write) -> Result<(), Box<dyn std::error
         Some(Cmd::Cleave(args)) => write_formatted_one(out, ops::cleave(&args)),
         Some(Cmd::Move(args)) => write_formatted_one(out, ops::r#move(&args)),
         Some(Cmd::Rename(args)) => write_formatted_one(out, ops::rename(&args)),
+        Some(Cmd::Dismantle(args)) => write_formatted_one(out, ops::dismantle(&args)),
         Some(Cmd::Region(args)) => write_formatted_one(out, ops::region(&args)),
         Some(Cmd::Schema) => write_formatted_one(out, ops::schema(&Default::default())),
         Some(Cmd::Trail(args)) => write_formatted_one(out, ops::trail(&args)),
@@ -726,6 +728,7 @@ fn run_verb(
         Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args)),
         Some(Cmd::Rename(args)) => source_rename::run(args)
             .map_err(|error| RyiExit::new(error.exit, error.to_string()).into()),
+        Some(Cmd::Dismantle(_)) => Err(RyiExit::new(2, "dismantle: TODO, not implemented").into()),
         Some(Cmd::Region(args)) => region_writer::run(args)
             .and_then(|code| {
                 if code == 0 {

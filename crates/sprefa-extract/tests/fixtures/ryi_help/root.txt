@@ -12,6 +12,7 @@ Commands:
   cleave        Move one item into another file, with its imports
   move          Move a file and repair every specifier that names it
   rename        Rename a symbol and every occurrence bound to it
+  dismantle     TODO: help. Delete a type and everything that depends on it
   query         Run a tree-sitter query over files
   region        Replace a generated region between sprefa markers
   watch         Stream fact deltas as the worktree changes

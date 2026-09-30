@@ -1,0 +1,15 @@
+{
+  "name": "ryi-cli-schema",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "tsp compile ops.tsp"
+  },
+  "devDependencies": {
+    "@hafley/typespec-decorator-def": "link:/Users/chrishafley/projects/hafley-tsp/packages/decorator-def",
+    "@hafley66/alloy-rs": "link:/Users/chrishafley/projects/hafley-tsp/packages/rust",
+    "@typespec/compiler": "1.10.0",
+    "@typespec/http": "1.10.0",
+    "@typespec/streams": "0.80.0"
+  }
+}

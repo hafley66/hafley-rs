@@ -57,6 +57,7 @@ pub fn request_uses_stdin(verb: &str, args: &serde_json::Value) -> bool {
         "cleave" => &[],
         "move" => &[],
         "rename" => &[],
+        "dismantle" => &[],
         "query" => &["paths"],
         "region" => &["generated"],
         "watch" => &[],
