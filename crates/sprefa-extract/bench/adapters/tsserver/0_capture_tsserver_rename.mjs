@@ -8,7 +8,7 @@ const require = createRequire(join(resolve(packagePath), 'package.json'));
 const ts = require(resolve(packagePath));
 if (!/^(5\.9\.3|6\.)/.test(ts.version)) throw new Error(`classic tsserver version: ${ts.version}`);
 
-const root = resolve(import.meta.dirname, '../tests/fixtures/ts7_api');
+const root = resolve(import.meta.dirname, '../../../tests/fixtures/ts7_api');
 const cases = [
   ['0_fixture.ts', 'old', 6, '0_fixture.rename.json'],
   ['1_shorthand.ts', 'old', 6, '1_shorthand.rename.json'],

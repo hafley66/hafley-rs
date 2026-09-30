@@ -15,7 +15,7 @@ LAB = HOME / ".cache/lanes/claude-375/recon/lab-tsserver-move-oracle"
 WORK = HOME / ".cache/lanes/claude-375/eval/bench/cleave-ts-oracle"
 BIN = HOME / ".cache/lanes/claude-375/target-writer/debug/ryii"
 DB = HOME / ".cache/lanes/claude-375/eval/bench/bench.db"
-TSV = Path(__file__).resolve().parents[1] / "plans/2026-09-28-cleave-ts-oracle-progress.tsv"
+TSV = Path(__file__).resolve().parents[4] / "plans/2026-09-28-cleave-ts-oracle-progress.tsv"
 
 CLASSES = {
     "declaration": "vite-02 vite-03 vite-09 cg-02 cg-03 cg-05 cg-08 cg-10",

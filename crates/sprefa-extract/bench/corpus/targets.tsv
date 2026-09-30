@@ -1,0 +1,301 @@
+repo	topology	operation	file	name	at_byte	dest	dest_new	cross_package
+ajv	single_package	cleave	lib/vocabularies/applicator/properties.ts	def	292	lib/vocabularies/applicator/additionalItems.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/applicator/propertyNames.ts	def	524	lib/vocabularies/applicator/additionalItems.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/applicator/thenElse.ts	def	168	lib/vocabularies/applicator/additionalItems.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/core/id.ts	def	62	lib/vocabularies/core/ref.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/core/ref.ts	def	429	lib/vocabularies/core/id.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/discriminator/index.ts	def	883	lib/vocabularies/discriminator/types.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/dynamic/dynamicAnchor.ts	def	307	lib/vocabularies/dynamic/dynamicRef.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/dynamic/dynamicRef.ts	def	254	lib/vocabularies/dynamic/dynamicAnchor.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/dynamic/recursiveAnchor.ts	def	159	lib/vocabularies/dynamic/dynamicAnchor.ts	False	False
+ajv	single_package	cleave	lib/vocabularies/dynamic/recursiveRef.ts	def	102	lib/vocabularies/dynamic/dynamicAnchor.ts	False	False
+ajv	single_package	cleave	lib/core.ts	$dataRef	30579	lib/core.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/code.ts	optimize	2547	lib/compile/codegen/code.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/code.ts	mergeExprItems	2856	lib/compile/codegen/code.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/code.ts	interpolate	3474	lib/compile/codegen/code.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/index.ts	addNames	20901	lib/compile/codegen/index.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/index.ts	addExprNames	21053	lib/compile/codegen/index.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/index.ts	optimizeExpr	21301	lib/compile/codegen/index.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/index.ts	subtractNames	22129	lib/compile/codegen/index.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/index.ts	mappend	22862	lib/compile/codegen/index.moved.ts	True	False
+ajv	single_package	cleave	lib/compile/codegen/index.ts	par	22985	lib/compile/codegen/index.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/project-config.ts	cache	4868	__tests__/adaptive-explore-sizing.test.ts	False	True
+codegraph-src	monorepo_many_packages	cleave	src/resolution/frameworks/package-deps.ts	cache	1323	__tests__/adaptive-explore-sizing.test.ts	False	True
+codegraph-src	monorepo_many_packages	cleave	src/ui-server/api/entrypoints.ts	cache	6637	__tests__/adaptive-explore-sizing.test.ts	False	True
+codegraph-src	monorepo_many_packages	cleave	src/ui-server/api/map.ts	cache	16894	__tests__/adaptive-explore-sizing.test.ts	False	True
+codegraph-src	monorepo_many_packages	cleave	src/graph/branch-guards.ts	indexOf	60026	__tests__/adaptive-explore-sizing.test.ts	False	True
+codegraph-src	monorepo_many_packages	cleave	src/graph/branch-guards.ts	JS	52125	src/graph/dead-code.ts	False	False
+codegraph-src	monorepo_many_packages	cleave	src/ui/shimmer-worker.ts	render	3063	src/ui/color.ts	False	False
+codegraph-src	monorepo_many_packages	cleave	src/graph/branch-guards.ts	guard	48346	src/graph/dead-code.ts	False	False
+codegraph-src	monorepo_many_packages	cleave	src/extraction/kernel/decode.ts	flag	1333	src/extraction/kernel/layout.ts	False	False
+codegraph-src	monorepo_many_packages	cleave	src/ui-server/api/program.ts	place	14117	src/ui-server/api/deadcode.ts	False	False
+codegraph-src	monorepo_many_packages	cleave	src/bin/codegraph.ts	loadCodeGraph	3968	src/bin/codegraph.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/bin/codegraph.ts	main	7464	src/bin/codegraph.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/bin/fatal-handler.ts	writeStderr	2870	src/bin/fatal-handler.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/context/formatter.ts	formatNodeTree	5846	src/context/formatter.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/context/formatter.ts	serializeNode	8040	src/context/formatter.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/context/formatter.ts	serializeEdge	8564	src/context/formatter.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/context/formatter.ts	truncate	8805	src/context/formatter.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/context/index.ts	extractSymbolsFromQuery	1353	src/context/index.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/db/index.ts	configureConnection	1250	src/db/index.moved.ts	True	False
+codegraph-src	monorepo_many_packages	cleave	src/db/migrations.ts	recordMigration	9801	src/db/migrations.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/vite/src/node/optimizer/index.ts	debug	1310	packages/create-vite/__tests__/cli.spec.ts	False	True
+vite	monorepo_many_packages	cleave	packages/vite/src/node/optimizer/optimizer.ts	debug	814	packages/create-vite/__tests__/cli.spec.ts	False	True
+vite	monorepo_many_packages	cleave	packages/vite/src/node/optimizer/scan.ts	debug	2537	packages/create-vite/__tests__/cli.spec.ts	False	True
+vite	monorepo_many_packages	cleave	packages/vite/src/node/plugins/esbuild.ts	debug	806	packages/create-vite/__tests__/cli.spec.ts	False	True
+vite	monorepo_many_packages	cleave	packages/vite/src/node/plugins/importAnalysis.ts	debug	2153	packages/create-vite/__tests__/cli.spec.ts	False	True
+vite	monorepo_many_packages	cleave	packages/vite/src/node/plugins/optimizedDeps.ts	debug	529	packages/vite/src/node/plugins/asset.ts	False	False
+vite	monorepo_many_packages	cleave	packages/vite/src/node/plugins/resolve.ts	debug	1909	packages/vite/src/node/plugins/asset.ts	False	False
+vite	monorepo_many_packages	cleave	packages/vite/src/node/server/bundledDev.ts	debug	790	packages/vite/src/node/server/environment.ts	False	False
+vite	monorepo_many_packages	cleave	packages/vite/src/node/server/middlewares/htmlFallback.ts	debug	275	packages/vite/src/node/server/middlewares/base.ts	False	False
+vite	monorepo_many_packages	cleave	packages/vite/src/node/server/middlewares/proxy.ts	debug	317	packages/vite/src/node/server/middlewares/base.ts	False	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	install	10449	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	start	10786	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	init	11081	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	formatTargetDir	19688	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	copy	19827	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	isValidPackageName	20002	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	toValidPackageName	20153	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	copyDir	20346	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	isEmpty	20621	packages/create-vite/src/index.moved.ts	True	False
+vite	monorepo_many_packages	cleave	packages/create-vite/src/index.ts	emptyDir	20769	packages/create-vite/src/index.moved.ts	True	False
+anyhow	single_package	rename	src/lib.rs	Error	11688		False	False
+anyhow	single_package	rename	src/lib.rs	Result	13642		False	False
+anyhow	single_package	rename	src/lib.rs	Ok	19461		False	False
+anyhow	single_package	rename	src/chain.rs	Chain	293		False	False
+anyhow	single_package	rename	src/lib.rs	Chain	12274		False	False
+anyhow	single_package	rename	src/nightly.rs	provide	1454		False	False
+anyhow	single_package	rename	src/error.rs	ErrorImpl	34450		False	False
+anyhow	single_package	rename	src/backtrace.rs	Backtrace	112		False	False
+anyhow	single_package	rename	src/nightly.rs	request_ref_backtrace	1070		False	False
+anyhow	single_package	rename	src/ptr.rs	Own	111		False	False
+anyhow	single_package	rename	src/ptr.rs	Ref	1088		False	False
+anyhow	single_package	rename	src/chain.rs	ChainState	368		False	False
+anyhow	single_package	rename	src/ensure.rs	render	1678		False	False
+anyhow	single_package	rename	src/error.rs	ContextError	35161		False	False
+anyhow	single_package	rename	src/kind.rs	Trait	2287		False	False
+anyhow	single_package	rename	src/error.rs	object_drop	27639		False	False
+anyhow	single_package	rename	src/error.rs	object_drop_front	27958		False	False
+anyhow	single_package	rename	src/error.rs	object_ref	28409		False	False
+anyhow	single_package	rename	src/error.rs	object_boxed	28908		False	False
+anyhow	single_package	rename	src/error.rs	object_reallocate_boxed	29328		False	False
+anyhow	single_package	rename	src/error.rs	object_downcast	29682		False	False
+anyhow	single_package	rename	src/error.rs	no_backtrace	30281		False	False
+anyhow	single_package	rename	src/error.rs	context_downcast	30503		False	False
+anyhow	single_package	rename	src/error.rs	context_drop_rest	31377		False	False
+anyhow	single_package	rename	src/error.rs	context_chain_downcast	32012		False	False
+anyhow	single_package	rename	src/error.rs	context_chain_drop_rest	32781		False	False
+anyhow	single_package	rename	src/error.rs	context_backtrace	33926		False	False
+anyhow	single_package	rename	src/error.rs	vtable	34794		False	False
+anyhow	single_package	rename	src/nightly.rs	request_ref	1173		False	False
+anyhow	single_package	rename	src/nightly.rs	provide_ref_backtrace	1317		False	False
+anyhow	single_package	cleave	src/nightly.rs	request_ref	1173	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/nightly.rs	provide_ref_backtrace	1317	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/ptr.rs	Mut	2156	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/wrapper.rs	MessageError	247	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/wrapper.rs	DisplayError	714	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/wrapper.rs	BoxedError	1215	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/context.rs	Quoted	4057	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/ensure.rs	Buf	676	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/error.rs	ErrorVTable	26843	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/error.rs	object_drop	27639	src/backtrace.rs	False	False
+anyhow	single_package	cleave	src/ensure.rs	render	1678	src/ensure.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	object_drop_front	27958	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	object_ref	28409	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	object_boxed	28908	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	object_reallocate_boxed	29328	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	object_downcast	29682	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	no_backtrace	30281	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	context_downcast	30503	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	context_drop_rest	31377	src/error.moved.rs	True	False
+anyhow	single_package	cleave	src/error.rs	context_chain_downcast	32012	src/error.moved.rs	True	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/task/mod.rs	Result	11440		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/context.rs	Context	781		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/scheduler/current_thread/mod.rs	Context	3296		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/scheduler/mod.rs	Context	968		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/scheduler/multi_thread/worker.rs	Context	8926		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/task/trace/mod.rs	Context	607		False	False
+tokio	monorepo_many_packages	rename	tokio/src/task/local.rs	Context	8119		False	False
+tokio	monorepo_many_packages	rename	tokio/src/io/ready.rs	Ready	631		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read.rs	read	1954		False	False
+tokio	monorepo_many_packages	rename	tokio/src/io/util/read.rs	read	509		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/write.rs	write	677		False	False
+tokio	monorepo_many_packages	rename	tokio/src/io/util/write.rs	write	710		False	False
+tokio	monorepo_many_packages	rename	tokio/src/time/error.rs	Error	1189		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/scheduler/multi_thread/queue.rs	len	20920		False	False
+tokio	monorepo_many_packages	rename	tokio/src/runtime/builder.rs	Builder	1566		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/canonicalize.rs	canonicalize	1537		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/copy.rs	copy	497		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/create_dir.rs	create_dir	1369		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/create_dir_all.rs	create_dir_all	1712		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/hard_link.rs	hard_link	1081		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/metadata.rs	metadata	1156		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/mocks.rs	spawn_blocking	4519		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/mocks.rs	spawn_mandatory_blocking	4843		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/mod.rs	asyncify	9472		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read.rs	read_spawn_blocking	3241		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read_dir.rs	read_dir	819		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read_link.rs	read_link	216		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read_to_string.rs	read_to_string	752		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read_uring.rs	read_uring	573		False	False
+tokio	monorepo_many_packages	rename	tokio/src/fs/read_uring.rs	read_to_end_uring	1861		False	False
+tokio	monorepo_many_packages	cleave	tokio/src/task/builder.rs	Builder	1865	tokio-util/src/lib.rs	False	True
+tokio	monorepo_many_packages	cleave	tokio/src/task/join_set.rs	Builder	2334	tokio-util/src/lib.rs	False	True
+tokio	monorepo_many_packages	cleave	tokio/src/runtime/blocking/shutdown.rs	channel	420	tokio-util/src/lib.rs	False	True
+tokio	monorepo_many_packages	cleave	tokio/src/sync/broadcast.rs	channel	17894	tokio-util/src/lib.rs	False	True
+tokio	monorepo_many_packages	cleave	tokio/src/sync/mpsc/bounded.rs	channel	5133	tokio-util/src/lib.rs	False	True
+tokio	monorepo_many_packages	cleave	tokio/src/sync/mpsc/chan.rs	channel	3172	tokio/src/sync/mpsc/block.rs	False	False
+tokio	monorepo_many_packages	cleave	tokio/src/sync/mpsc/list.rs	channel	1450	tokio/src/sync/mpsc/block.rs	False	False
+tokio	monorepo_many_packages	cleave	tokio/src/sync/oneshot.rs	channel	14027	tokio/src/sync/barrier.rs	False	False
+tokio	monorepo_many_packages	cleave	tokio/src/sync/watch.rs	channel	19443	tokio/src/sync/barrier.rs	False	False
+tokio	monorepo_many_packages	cleave	tokio/src/runtime/metrics/batch.rs	now	13388	tokio/src/runtime/metrics/histogram.rs	False	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/canonicalize.rs	canonicalize	1537	tokio/src/fs/canonicalize.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/copy.rs	copy	497	tokio/src/fs/copy.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/create_dir.rs	create_dir	1369	tokio/src/fs/create_dir.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/create_dir_all.rs	create_dir_all	1712	tokio/src/fs/create_dir_all.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/hard_link.rs	hard_link	1081	tokio/src/fs/hard_link.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/metadata.rs	metadata	1156	tokio/src/fs/metadata.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/mocks.rs	spawn_blocking	4519	tokio/src/fs/mocks.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/mocks.rs	spawn_mandatory_blocking	4843	tokio/src/fs/mocks.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/mod.rs	asyncify	9472	tokio/src/fs/mod.moved.rs	True	False
+tokio	monorepo_many_packages	cleave	tokio/src/fs/read.rs	read	1954	tokio/src/fs/read.moved.rs	True	False
+hafley-rs	monorepo_many_packages	rename	crates/sprefa-extract/src/bin/ryi/ops.rs	one	7971		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/lang/rust/10_module_resolution_rows.rs	collect	1721		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/lang/rust/3_module_specifier_rows.rs	collect	680		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/lang/rust/5_const_string_rows.rs	collect	4095		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/lang/rust/7_type_entity_rows.rs	collect	1542		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/lang/rust/9_type_candidate_rows.rs	collect	1790		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/read/lang/ts_receivers.rs	collect	25953		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley-observe-macros/src/lib.rs	test	3016		False	False
+hafley-rs	monorepo_many_packages	rename	crates/sprefa-extract/src/bin/ryi/ops.rs	file	8379		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop-mux/src/_4_click_lookup.rs	join	2732		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/read/lang/python/_2_modules.rs	join	6963		False	False
+hafley-rs	monorepo_many_packages	rename	crates/sprefa-extract/src/edit/_6_rename_verify.rs	row	5315		False	False
+hafley-rs	monorepo_many_packages	rename	crates/hafley_scm/src/read/lang/7_scm_rows.rs	rows	20292		False	False
+hafley-rs	monorepo_many_packages	rename	crates/sprefa-extract/src/bin/ryi/capabilities.rs	rows	775		False	False
+hafley-rs	monorepo_many_packages	rename	crates/ryi-proto/build.rs	output	31		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	main	368		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	env_stamp	1150		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	short_stamp	1434		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	full_stamp	1598		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	dirty_suffix	1750		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	rfc3339_now	1958		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/build.rs	git	2872		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/examples/instant_views.rs	main	212		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/examples/typed_rows.rs	main	263		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/labs/0_tmux_process_env/probe.rs	main	3588		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/labs/0_tmux_process_env/probe.rs	observe	5390		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/labs/0_tmux_process_env/probe.rs	assert_route	8020		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/labs/0_tmux_process_env/probe.rs	sysinfo_environment	8384		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/labs/0_tmux_process_env/probe.rs	extract_environment	8848		False	False
+hafley-rs	monorepo_many_packages	rename	crates/boop/labs/0_tmux_process_env/probe.rs	extract_os_environment	9195		False	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop-harness/src/identity.rs	env	4605	crates/boop-acp/src/channel.rs	False	True
+hafley-rs	monorepo_many_packages	cleave	crates/hafley-observe/src/4_counts.rs	text	3932	crates/boop-acp/src/channel.rs	False	True
+hafley-rs	monorepo_many_packages	cleave	crates/hafley_scm/src/lang/rust/18_tree_type_candidate_rows.rs	text	29326	crates/boop-acp/src/channel.rs	False	True
+hafley-rs	monorepo_many_packages	cleave	crates/hafley_scm/src/lang/rust/19_tree_call_rows.rs	text	12243	crates/boop-acp/src/channel.rs	False	True
+hafley-rs	monorepo_many_packages	cleave	crates/hafley_scm/src/lang/rust/20_tree_module_specifier_rows.rs	text	8721	crates/boop-acp/src/channel.rs	False	True
+hafley-rs	monorepo_many_packages	cleave	crates/hafley_scm/src/lang/rust/21_tree_module_resolution_rows.rs	text	13343	crates/hafley_scm/src/lang/rust/0_call_query.rs	False	False
+hafley-rs	monorepo_many_packages	cleave	crates/hafley_scm/src/lang/rust/22_tree_receiver_rows.rs	text	23858	crates/hafley_scm/src/lang/rust/0_call_query.rs	False	False
+hafley-rs	monorepo_many_packages	cleave	crates/hafley_scm/src/read/lang/prolog/_0_source.rs	text	1276	crates/boop/src/lib.rs	False	False
+hafley-rs	monorepo_many_packages	cleave	crates/sprefa-extract/src/5_diff.rs	text	10872	crates/sprefa-extract/src/0_graph.rs	False	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/src/cli/mod.rs	line	29039	crates/boop/src/cli/1_reminder.rs	False	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	main	368	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	env_stamp	1150	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	short_stamp	1434	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	full_stamp	1598	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	dirty_suffix	1750	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	rfc3339_now	1958	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/build.rs	git	2872	crates/boop/build.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/examples/instant_views.rs	main	212	crates/boop/examples/instant_views.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/examples/typed_rows.rs	main	263	crates/boop/examples/typed_rows.moved.rs	True	False
+hafley-rs	monorepo_many_packages	cleave	crates/boop/labs/0_tmux_process_env/probe.rs	main	3588	crates/boop/labs/0_tmux_process_env/probe.moved.rs	True	False
+ajv	single_package	rename	lib/standalone/index.ts	standaloneCode	339		False	False
+ajv	single_package	rename	lib/refs/jtd-schema.ts	jtdMetaSchema	2454		False	False
+ajv	single_package	rename	lib/vocabularies/draft2020.ts	draft2020Vocabularies	416		False	False
+ajv	single_package	rename	lib/vocabularies/draft7.ts	draft7Vocabularies	288		False	False
+ajv	single_package	rename	lib/vocabularies/jtd/index.ts	jtdVocabulary	527		False	False
+ajv	single_package	rename	lib/ajv.ts	Ajv	377		False	False
+ajv	single_package	rename	lib/compile/codegen/code.ts	Name	300		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	CodeGen	11078		False	False
+ajv	single_package	rename	lib/compile/codegen/scope.ts	Scope	1485		False	False
+ajv	single_package	rename	lib/compile/codegen/scope.ts	ValueScopeName	2495		False	False
+ajv	single_package	rename	lib/compile/codegen/scope.ts	ValueScope	2946		False	False
+ajv	single_package	rename	lib/compile/index.ts	SchemaEnv	3469		False	False
+ajv	single_package	rename	lib/compile/ref_error.ts	MissingRefError	127		False	False
+ajv	single_package	rename	lib/compile/validate/index.ts	KeywordCxt	11042		False	False
+ajv	single_package	rename	lib/core.ts	Ajv	8424		False	False
+ajv	single_package	rename	lib/compile/codegen/code.ts	optimize	2547		False	False
+ajv	single_package	rename	lib/compile/codegen/code.ts	mergeExprItems	2856		False	False
+ajv	single_package	rename	lib/compile/codegen/code.ts	interpolate	3474		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	addNames	20901		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	addExprNames	21053		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	optimizeExpr	21301		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	subtractNames	22129		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	mappend	22862		False	False
+ajv	single_package	rename	lib/compile/codegen/index.ts	par	22985		False	False
+ajv	single_package	rename	lib/compile/errors.ts	addError	2526		False	False
+ajv	single_package	rename	lib/compile/errors.ts	returnErrors	2774		False	False
+ajv	single_package	rename	lib/compile/errors.ts	errorObjectCode	3338		False	False
+ajv	single_package	rename	lib/compile/errors.ts	errorObject	3580		False	False
+ajv	single_package	rename	lib/compile/errors.ts	errorInstancePath	3933		False	False
+ajv	single_package	rename	lib/compile/errors.ts	errorSchemaPath	4205		False	False
+codegraph-src	monorepo_many_packages	rename	src/context/formatter.ts	serializeNode	8040		False	False
+codegraph-src	monorepo_many_packages	rename	src/context/formatter.ts	serializeEdge	8564		False	False
+codegraph-src	monorepo_many_packages	rename	src/extraction/index.ts	defaultsOnlyIgnore	17740		False	False
+codegraph-src	monorepo_many_packages	rename	src/extraction/languages/terraform.ts	emitModuleWiring	14910		False	False
+codegraph-src	monorepo_many_packages	rename	src/extraction/languages/terraform.ts	readStringAttr	20759		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	renderGuard	4145		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	argumentsOf	26125		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	abbreviateArgument	26711		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	guard	48346		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	exitKindOr	50709		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	afterElse	55789		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/branch-guards.ts	javaCaseText	65592		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/named-symbol-flow.ts	callSitesOf	14886		False	False
+codegraph-src	monorepo_many_packages	rename	src/graph/type-hierarchy.ts	walkAncestors	8393		False	False
+codegraph-src	monorepo_many_packages	rename	src/installer/index.ts	tildify	24203		False	False
+codegraph-src	monorepo_many_packages	rename	src/bin/codegraph.ts	loadCodeGraph	3968		False	False
+codegraph-src	monorepo_many_packages	rename	src/bin/codegraph.ts	main	7464		False	False
+codegraph-src	monorepo_many_packages	rename	src/bin/fatal-handler.ts	writeStderr	2870		False	False
+codegraph-src	monorepo_many_packages	rename	src/context/formatter.ts	formatNodeTree	5846		False	False
+codegraph-src	monorepo_many_packages	rename	src/context/formatter.ts	truncate	8805		False	False
+codegraph-src	monorepo_many_packages	rename	src/context/index.ts	extractSymbolsFromQuery	1353		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/index.ts	configureConnection	1250		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/migrations.ts	recordMigration	9801		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/queries.ts	isLowValueFile	1267		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/queries.ts	referenceNameTail	5470		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/queries.ts	rowToNode	5927		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/queries.ts	rowToEdge	6885		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/queries.ts	rowToFileRecord	7280		False	False
+codegraph-src	monorepo_many_packages	rename	src/db/queries.ts	foldModuleRows	158060		False	False
+codegraph-src	monorepo_many_packages	rename	src/directory.ts	looksLikeProjectRoot	8915		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	emptyDir	20769		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	createColors	32639		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/client/bundledDevHmrClient.ts	BundledDevHMRClient	1071		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/client/bundledDevHmrClient.ts	BundledDevHMRContext	12403		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/client/overlay.ts	ErrorOverlay	4681		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/module-runner/esmEvaluator.ts	ESModulesEvaluator	331		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/module-runner/evaluatedModules.ts	EvaluatedModuleNode	397		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/module-runner/evaluatedModules.ts	EvaluatedModules	816		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/module-runner/runner.ts	ModuleRunner	1280		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/module-runner/sourcemap/decoder.ts	DecodedMap	383		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/node/baseEnvironment.ts	PartialEnvironment	294		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/node/baseEnvironment.ts	BaseEnvironment	2821		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/node/baseEnvironment.ts	UnknownEnvironment	3558		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/node/build.ts	ChunkMetadataMap	38186		False	False
+vite	monorepo_many_packages	rename	packages/vite/src/node/build.ts	BuildEnvironment	52921		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	run	10063		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	install	10449		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	start	10786		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	init	11081		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	formatTargetDir	19688		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	copy	19827		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	isValidPackageName	20002		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	toValidPackageName	20153		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	copyDir	20346		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	isEmpty	20621		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	pkgFromUserAgent	21074		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	setupReactCompiler	21342		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	setupEslint	23492		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	updateReactCompilerReadme	29101		False	False
+vite	monorepo_many_packages	rename	packages/create-vite/src/index.ts	editFile	29695		False	False

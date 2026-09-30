@@ -13,7 +13,7 @@ from pathlib import Path
 
 BENCH = Path.home() / ".cache/lanes/claude-375/eval/bench"
 WORK = Path.home() / ".cache/lanes/claude-375/eval/bench/slow-rename-work"
-TSC = Path(__file__).resolve().parents[1] / "crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc"
+TSC = Path(__file__).resolve().parents[4] / "crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc"
 RYII = Path.home() / ".cache/lanes/claude-375/target-writer/debug/ryii"
 
 

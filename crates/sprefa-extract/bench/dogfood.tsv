@@ -1,0 +1,8 @@
+step	command	language	operation	tier	plan_ok	commit_ok	typecheck_ok	manual_fix_needed	note
+1	ryi move crates/sprefa-extract/ts7/0_capture_tsserver_rename.mjs crates/sprefa-extract/bench/adapters/tsserver/0_capture_tsserver_rename.mjs	typescript	move	fast	yes	yes	not_applicable	no	repaired the import.meta.dirname-relative fixture path
+1	ryi move --list (scripts/0..4_*.py)	python	move	fast	no	no	not_applicable	yes	ryi move does not support Python; moved with git mv
+1	hand edit: Path(__file__).parents[1] -> parents[4] in bench/scripts/{0,2,3,4}_*.py	python	edit	none	not_applicable	not_applicable	not_applicable	yes	Python is outside ryi's languages
+1	copy from ~/.cache lanes (corpus, labs, serena, recon)	mixed	copy	none	not_applicable	not_applicable	not_applicable	yes	sources are outside the repository; ryi move works inside one corpus
+0	ryii rename --slow --root crates/sprefa-extract src/edit/_1_rename_cx.rs#ts_slow_edit slow_edit	rust	rename	slow	yes	yes	yes	no	slow plan: 4 files; fast plan found 1 (method calls on cx)
+0	ryii rename --slow ... #put_ts_slow_edit put_slow_edit	rust	rename	slow	yes	yes	yes	no	3 files
+0	ryii rename --slow ... #ts_slow_edits slow_edits	rust	rename	slow	yes	yes	yes	no	field

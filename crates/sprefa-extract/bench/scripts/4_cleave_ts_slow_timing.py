@@ -12,7 +12,7 @@ import sys
 import time
 
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[4]
 BENCH = Path.home() / ".cache/lanes/claude-375/eval/bench"
 LAB = Path.home() / ".cache/lanes/claude-375/recon/lab-tsserver-move-oracle"
 BIN = Path.home() / ".cache/lanes/claude-375/target-writer/debug"

@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[4]
 BENCH = Path.home() / ".cache/lanes/claude-375/eval/bench"
 BIN = Path.home() / ".cache/lanes/claude-375/target-writer/debug"
 CACHE = BENCH / "daemon-timing-cache"
