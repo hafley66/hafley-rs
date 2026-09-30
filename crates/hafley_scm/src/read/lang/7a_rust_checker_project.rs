@@ -23,12 +23,10 @@ fn is_library(kind: &TargetKind) -> bool {
 }
 
 /// rust-analyzer's own minimal `core` (its test fixture) and ryi's `std` shim over it,
-/// written to the user cache; returns the library directory holding `core/` and `std/`.
-fn sysroot_library() -> Result<PathBuf, CheckerError> {
+/// written under the repo's ryi state dir; returns the directory holding `core/` and `std/`.
+fn sysroot_library(root: &Path) -> Result<PathBuf, CheckerError> {
     let failed = |error: std::io::Error| CheckerError::NoWorkspace(error.to_string());
-    let library = dirs::cache_dir()
-        .ok_or_else(|| CheckerError::NoWorkspace("no user cache directory".to_owned()))?
-        .join("hafley/ra-minicore-0.0.352");
+    let library = root.join(".dl/.state/ra-sysroot-0.0.352");
     let core = ra_ap_test_utils::MiniCore::from_flags([
         "iterator", "iterators", "try", "future", "async_fn", "range", "option", "result", "fn",
         "deref", "deref_mut", "index", "from", "sized", "copy", "clone", "eq", "ord", "default",
@@ -138,7 +136,7 @@ pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
 
     // `for`, `?`, `.await` and ranges lower through core's lang items; without
     // them rust-analyzer drops the whole expression, calls inside included.
-    let library = sysroot_library()?;
+    let library = sysroot_library(root)?;
     let data: ProjectJsonData = serde_json::from_value(serde_json::json!({
         "sysroot_src": library,
         "sysroot_project": { "crates": [

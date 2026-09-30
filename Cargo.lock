@@ -1580,7 +1580,6 @@ version = "0.0.1"
 dependencies = [
  "basic-toml",
  "cargo_metadata",
- "dirs 6.0.0",
  "gomod-parser",
  "hafley-observe",
  "ignore",

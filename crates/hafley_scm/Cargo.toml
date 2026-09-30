@@ -64,7 +64,6 @@ ra_ap_ide_db = { version = "0.0.352", optional = true }
 ra_ap_cfg = { version = "0.0.352", optional = true }
 ra_ap_intern = { version = "0.0.352", optional = true }
 ra_ap_test_utils = { version = "0.0.352", optional = true }
-dirs = { version = "6", optional = true }
 ra_ap_load-cargo = { version = "0.0.352", optional = true }
 ra_ap_project_model = { version = "0.0.352", optional = true }
 ra_ap_vfs = { version = "0.0.352", optional = true }
@@ -122,7 +121,6 @@ rust-checker = [
     "dep:ra_ap_cfg",
     "dep:ra_ap_intern",
     "dep:ra_ap_test_utils",
-    "dep:dirs",
     "dep:ra_ap_load-cargo",
     "dep:ra_ap_project_model",
     "dep:ra_ap_vfs",
