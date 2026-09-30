@@ -113,6 +113,25 @@ fn slow_diagnostic_stops_before_writing() {
     assert_eq!(read(&root, "dest.ts"), "export const value = 2;\n");
 }
 
+#[test]
+fn fast_stops_when_the_destination_declares_the_name() {
+    let (root, state) = fixture("diagnostic");
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "source.ts#value", "dest.ts", "--commit"])
+        .arg("--root")
+        .arg(&root)
+        .arg("--state")
+        .arg(&state)
+        .current_dir(&root)
+        .env("RUST_LOG", "error")
+        .output()
+        .unwrap();
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("dest.ts already declares value"), "{stderr}");
+    assert_eq!(read(&root, "dest.ts"), "export const value = 2;\n");
+}
+
 fn read(root: &Path, file: &str) -> String {
     std::fs::read_to_string(root.join(file)).unwrap()
 }

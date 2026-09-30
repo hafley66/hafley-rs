@@ -818,6 +818,27 @@ impl Plan {
             .flat_map(|facts| facts.decls.iter())
             .map(|decl| decl.name.as_str())
             .collect();
+        // Slow TS asks tsc (the planned edits' diagnostics); everything else checks here.
+        if let Some(facts) = dest_facts.as_ref().filter(|_| !(slow && arm.name() == "ts")) {
+            let arriving = std::iter::once(item.as_str()).chain(
+                dragged
+                    .iter()
+                    .filter(|row| row.action == "moved" && !row.name.starts_with("impl "))
+                    .map(|row| row.name.as_str()),
+            );
+            for name in arriving {
+                let declared = dest_bound.contains(name);
+                let imported_elsewhere = facts.specifiers.iter().any(|row| {
+                    row.name == name && imports.target(&dest, &row.name) != Some(src.as_str())
+                });
+                if declared || imported_elsewhere {
+                    return Err(format!(
+                        "{dest} already {} {name}; moving {src}#{item} there would declare it twice",
+                        if declared { "declares" } else { "imports" }
+                    ));
+                }
+            }
+        }
         let carried: BTreeSet<(String, String)> = dest_facts
             .iter()
             .flat_map(|facts| facts.specifiers.iter())
