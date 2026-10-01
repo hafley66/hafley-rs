@@ -10,7 +10,7 @@ use boop::{bus, ident, tmux};
 #[cfg(feature = "agent-read")]
 use boop::{query, usage};
 
-use crate::cli::mail::deliver_hail;
+use crate::cli::mail::deliver_hail_to_stderr;
 use crate::cli::{append_acks, append_message, line, mail_dir, now_ms, write_route};
 #[cfg(feature = "agent-read")]
 use crate::{
@@ -815,7 +815,7 @@ pub(crate) fn sync_all_budgeted(
                 .get(harness)
                 .native_child_completion_visible(parent, child)
         },
-        |message| deliver_hail(registry, &native_child_mail_dir, message, None),
+        |message| deliver_hail_to_stderr(registry, &native_child_mail_dir, message),
     )?;
     let elapsed_ms = started.elapsed().as_millis();
     phases.db_after_bytes = store.db_bytes().unwrap_or(phases.db_before_bytes);
@@ -1328,13 +1328,24 @@ pub(crate) fn run_db(registry: &Registry, cmd: DbCmd) -> Result<()> {
             human,
             limit,
             format,
+            sync: _,
         } => {
             let store = open_ro_store()?;
             let since = now_ms().saturating_sub(days * 24 * 60 * 60 * 1000);
-            emit_json_rows(
-                &store.search_turns(&text, since, harness.as_deref(), human, limit)?,
-                format,
-            );
+            let rows = store.search_turns(&text, since, harness.as_deref(), human, limit)?;
+            match format {
+                QueryFormat::Ndjson => emit_json_rows(&rows, format),
+                QueryFormat::Text => {
+                    for row in &rows {
+                        emit_json_rows(std::slice::from_ref(row), format);
+                        line(&format!(
+                            "\tboop me favorite --session {} --turn {}",
+                            row["session_id"].as_str().unwrap_or_default(),
+                            row["turn"].as_i64().unwrap_or_default(),
+                        ));
+                    }
+                }
+            }
             Ok(())
         }
         #[cfg(feature = "agent-read")]

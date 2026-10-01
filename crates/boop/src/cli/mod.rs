@@ -212,6 +212,10 @@ DELIVERY: what one send does after the row is written.
   (lane children, floor BOOP_DOOR_FLOOR=32, window BOOP_DOOR_WINDOW_SECS=60);
   past that it is cooled off for BOOP_DOOR_COOLDOWN_SECS=300, the row lands
   `cooled-off`, and the trip is a row in agent_door_blowout.
+  A held row whose route's session is dead (no live session, or a failed door
+  transport) for BOOP_DEAD_ROUTE_ATTEMPTS=3 holds lands `route-dead`, along
+  with every other held row of that route; the drain stops pushing them and
+  `boop mail wait --me` still reads them.
 
 REMINDERS: recurring sends to an existing explicit route, no agent spawn:
     boop beep remind add <name> <route> <body> --every 30m --until <unix-seconds-or-RFC3339>
@@ -340,7 +344,8 @@ BOOP_NO_SYNC=1 in the environment skips the startup transcript sync for every
   verb, so a read hits the store as it stands instead of paying a cold sync.
 
 READ: the questions agents ask most, each one verb, no SQL and no schema probe:
-    boop db search <text> [--days 7] [--harness H] [--limit 50]   who said X
+    boop db search <text> [--days 7] [--harness H] [--limit 50] [--sync]
+                                                who said X
     boop db sessions [--days 7] [--harness H]   what ran where: id, harness,
                                                 cwd, branch, turns, last_ts
     boop db lanes [--days 7]                    spawns with model, branch,
@@ -350,6 +355,11 @@ READ: the questions agents ask most, each one verb, no SQL and no schema probe:
     boop db status [--window <min>]             who is alive and what it cost
     boop db usage burn-rate                     tokens/min, dollars/hour
     boop db price list                          the model price table
+  search, sessions, lanes, mail, favorite list/show and `me whoami` neither
+  sync transcripts nor drain held mail: stdout carries only their rows, read
+  from the store as the last sync left it. `db search --sync` projects new
+  transcript bytes first; any other sync-carrying verb (db status, db turn,
+  db chat, db \"<sql>\") also refreshes the store.
   `--format text` prints tab-separated rows; the default is NDJSON. Every
   text column in the store is an id into a `dict_*` table (`agent_turn` holds
   `role_id`, `session_id`, and its text in `said`); the verbs above do those
@@ -358,6 +368,9 @@ READ: the questions agents ask most, each one verb, no SQL and no schema probe:
 FAVORITE: pin markdown you want to keep, read it back later:
     boop me favorite -1 --note <why>      the newest assistant turn of the
       caller's own conversation; -2 is the one before, and -1 is the default
+    boop me favorite --session <session_id> --turn <turn> [--note <why>]
+      the exact turn a `db search` hit names; `db search --format text`
+      prints this command under every hit
     boop db favorite add --file <md> [--note <why>] [--source <text>]
     boop db favorite list --limit 10 --format text
     boop db favorite show <id>

@@ -84,6 +84,8 @@ mod t4_lifecycle_gate;
 mod t5_delayed_worker_delivery;
 #[path = "5_live_harness.rs"]
 mod t5_live_harness;
+#[path = "6_read_verbs_quiet.rs"]
+mod t6_read_verbs_quiet;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]
