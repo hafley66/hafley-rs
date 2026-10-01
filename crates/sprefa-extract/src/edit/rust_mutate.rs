@@ -165,7 +165,7 @@ impl Cleave for RustSource {
                 .find(|candidate| cx.contains(candidate))?,
         };
         let text = cx.text(&parent)?;
-        let parsed = syn::parse_file(&text).ok()?;
+        let parsed = hafley_scm::lang::rust::parse_rust_file(&text).ok()?;
         let (name, numbered) = module_name(file);
         if parsed
             .items
@@ -189,14 +189,13 @@ impl Cleave for RustSource {
             true => "pub ",
             false => "pub(crate) ",
         };
-        let line_starts = crate::lang::rust::build_line_starts(&text);
         let last_mod = parsed
             .items
             .iter()
             .filter(|item| matches!(item, syn::Item::Mod(module) if module.content.is_none()))
             .last()
             .map(|item| {
-                crate::lang::rust::syn_span(&line_starts, syn::spanned::Spanned::span(item)).end()
+                crate::lang::rust::syn_span(syn::spanned::Spanned::span(item)).end()
             });
         let at = match last_mod {
             Some(end) => text[end as usize..]
@@ -206,9 +205,7 @@ impl Cleave for RustSource {
                 .items
                 .first()
                 .map(|item| {
-                    let start = crate::lang::rust::syn_span(
-                        &line_starts,
-                        syn::spanned::Spanned::span(item),
+                    let start = crate::lang::rust::syn_span(syn::spanned::Spanned::span(item),
                     )
                     .start as usize;
                     text[..start].rfind('\n').map_or(0, |found| found + 1)
@@ -234,7 +231,7 @@ impl Cleave for RustSource {
         if matches!(head, "" | "crate" | "self" | "super") {
             return None;
         }
-        let parsed = syn::parse_file(&cx.text(src)?).ok()?;
+        let parsed = hafley_scm::lang::rust::parse_rust_file(&cx.text(src)?).ok()?;
         let child = parsed
             .items
             .iter()
@@ -250,8 +247,7 @@ impl Cleave for RustSource {
             .filter(|candidate| cx.contains(candidate))
         {
             let text = cx.text(&parent)?;
-            let parsed = syn::parse_file(&text).ok()?;
-            let line_starts = crate::lang::rust::build_line_starts(&text);
+            let parsed = hafley_scm::lang::rust::parse_rust_file(&text).ok()?;
             let Some(module) = parsed.items.iter().find_map(|item| match item {
                 syn::Item::Mod(module) if module.ident == name && module.content.is_none() => {
                     Some(module)
@@ -263,15 +259,13 @@ impl Cleave for RustSource {
             let edit = match &module.vis {
                 syn::Visibility::Public(_) => return None,
                 syn::Visibility::Restricted(restricted) => Edit {
-                    span: crate::lang::rust::syn_span(
-                        &line_starts,
-                        syn::spanned::Spanned::span(restricted),
+                    span: crate::lang::rust::syn_span(syn::spanned::Spanned::span(restricted),
                     ),
                     text: "pub".to_string(),
                 },
                 syn::Visibility::Inherited => Edit {
                     span: Span::anchor(
-                        crate::lang::rust::syn_span(&line_starts, module.mod_token.span).start,
+                        crate::lang::rust::syn_span(module.mod_token.span).start,
                     ),
                     text: "pub ".to_string(),
                 },
@@ -283,7 +277,7 @@ impl Cleave for RustSource {
 
     fn imports_visible_to_children(&self, cx: &MoveCx, src: &str) -> bool {
         cx.text(src)
-            .and_then(|text| syn::parse_file(&text).ok())
+            .and_then(|text| hafley_scm::lang::rust::parse_rust_file(&text).ok())
             .is_some_and(|file| {
                 file.items
                     .iter()
@@ -332,7 +326,7 @@ fn declared_public(cx: &MoveCx, path: &str) -> bool {
     parent_candidates(dir)
         .into_iter()
         .filter_map(|parent| cx.text(&parent))
-        .filter_map(|text| syn::parse_file(&text).ok())
+        .filter_map(|text| hafley_scm::lang::rust::parse_rust_file(&text).ok())
         .flat_map(|file| file.items.into_iter())
         .any(|item| {
             matches!(item, syn::Item::Mod(module)
@@ -620,7 +614,7 @@ fn module_parts(cx: &MoveCx, rel: &str) -> Vec<String> {
         let declared = ["lib.rs", "mod.rs", "main.rs"]
             .iter()
             .filter_map(|index| cx.text(&format!("{parent}/{index}")))
-            .filter_map(|text| syn::parse_file(&text).ok())
+            .filter_map(|text| hafley_scm::lang::rust::parse_rust_file(&text).ok())
             .flat_map(|file| file.items.into_iter())
             .filter_map(|item| match item {
                 syn::Item::Mod(module) => Some(module),

@@ -1,14 +1,15 @@
-//! One syn parse and byte-offset table shared by Rust syntax producers.
+//! The one syn parse every Rust span producer reads.
 
-use super::call_metadata_rows::build_line_starts;
-
-pub struct RustSyntax {
-    pub file: syn::File,
-    pub line_starts: Vec<u32>,
-}
-
-pub fn parse_rust_syntax(source: &str) -> Result<RustSyntax, syn::Error> {
+/// `syn::parse_file` with the BOM and shebang it strips blanked to spaces
+/// instead, so every span's `byte_range()` is a byte offset into `source`.
+pub fn parse_rust_file(source: &str) -> syn::Result<syn::File> {
     let file = syn::parse_file(source)?;
-    let line_starts = build_line_starts(source);
-    Ok(RustSyntax { file, line_starts })
+    let bom = if source.starts_with('\u{feff}') { '\u{feff}'.len_utf8() } else { 0 };
+    let prefix = bom + file.shebang.as_ref().map_or(0, String::len);
+    if prefix == 0 {
+        return Ok(file);
+    }
+    let mut blanked = syn::parse_file(&(" ".repeat(prefix) + &source[prefix..]))?;
+    blanked.shebang = file.shebang;
+    Ok(blanked)
 }

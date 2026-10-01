@@ -5,7 +5,6 @@ use std::ops::Range;
 use crate::QueryExt;
 
 use super::call_definition_rows::{call_definition_rows, CallDefinitionKind};
-use super::call_metadata_rows::build_line_starts;
 use super::call_site_rows::call_site_rows;
 use super::syn_macro_expansion_defs::expand_file;
 
@@ -46,7 +45,7 @@ pub fn expanded_call_rows(
     let Some(expanded) = expand_file(src) else {
         return ExpandedCallRows::default();
     };
-    let Ok(parsed) = syn::parse_file(&expanded.text) else {
+    let Ok(parsed) = super::syntax::parse_rust_file(&expanded.text) else {
         return ExpandedCallRows::default();
     };
     let mut parser = tree_sitter::Parser::new();
@@ -57,7 +56,7 @@ pub fn expanded_call_rows(
 
     let defs = call_definition_rows(query, "rust-call", expanded.text.as_bytes(), &tree);
     let def_ranges = defs.iter().map(|row| row.range.clone()).collect::<Vec<_>>();
-    let sites = call_site_rows(&parsed, &build_line_starts(&expanded.text), &def_ranges);
+    let sites = call_site_rows(&parsed, &def_ranges);
     let mut rows = ExpandedCallRows::default();
     for row in defs {
         if expanded.is_macro_span(row.range.clone()) {

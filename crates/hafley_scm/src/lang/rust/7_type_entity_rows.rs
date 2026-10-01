@@ -61,13 +61,13 @@ pub struct TypeEntityRows {
     pub docs: Vec<DocRow>,
 }
 
-pub fn type_entity_rows(parsed: &syn::File, line_starts: &[u32]) -> TypeEntityRows {
+pub fn type_entity_rows(parsed: &syn::File) -> TypeEntityRows {
     let mut rows = TypeEntityRows::default();
-    collect(&parsed.items, line_starts, &mut rows);
+    collect(&parsed.items, &mut rows);
     rows
 }
 
-fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) {
+fn collect(items: &[syn::Item], rows: &mut TypeEntityRows) {
     for item in items {
         match item {
             syn::Item::Struct(item) => {
@@ -75,18 +75,16 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                     item.ident.span(),
                     item.ident.to_string(),
                     TypeEntityKind::Struct,
-                    line_starts,
                 ));
-                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+                push_doc(rows, item.ident.span(), &item.attrs, None);
             }
             syn::Item::Enum(item) => {
                 rows.entities.push(named(
                     item.ident.span(),
                     item.ident.to_string(),
                     TypeEntityKind::Enum,
-                    line_starts,
                 ));
-                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+                push_doc(rows, item.ident.span(), &item.attrs, None);
             }
             // The existing TypeF vocabulary maps Rust unions onto Struct.
             syn::Item::Union(item) => {
@@ -94,37 +92,32 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                     item.ident.span(),
                     item.ident.to_string(),
                     TypeEntityKind::Struct,
-                    line_starts,
                 ));
-                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+                push_doc(rows, item.ident.span(), &item.attrs, None);
             }
             syn::Item::Type(item) => rows.entities.push(named(
                 item.ident.span(),
                 item.ident.to_string(),
                 TypeEntityKind::Alias,
-                line_starts,
             )),
             syn::Item::Trait(item) => {
                 rows.entities.push(named(
                     item.ident.span(),
                     item.ident.to_string(),
                     TypeEntityKind::Trait,
-                    line_starts,
                 ));
-                push_doc(rows, item.ident.span(), &item.attrs, None, line_starts);
+                push_doc(rows, item.ident.span(), &item.attrs, None);
                 for child in &item.items {
                     match child {
                         syn::TraitItem::Type(assoc) => rows.entities.push(named(
                             assoc.ident.span(),
                             assoc.ident.to_string(),
                             TypeEntityKind::Alias,
-                            line_starts,
                         )),
                         syn::TraitItem::Fn(method) if method.default.is_some() => {
                             rows.entities.push(callable(
                                 &method.sig,
                                 TypeEntityKind::Method,
-                                line_starts,
                             ));
                         }
                         _ => {}
@@ -133,8 +126,8 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
             }
             syn::Item::Fn(item) => {
                 rows.entities
-                    .push(callable(&item.sig, TypeEntityKind::Function, line_starts));
-                push_doc(rows, item.sig.ident.span(), &item.attrs, None, line_starts);
+                    .push(callable(&item.sig, TypeEntityKind::Function));
+                push_doc(rows, item.sig.ident.span(), &item.attrs, None);
             }
             syn::Item::Impl(item) => {
                 let parent = super::call_metadata_rows::primary_type(&item.self_ty);
@@ -142,7 +135,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                     if self_path.qself.is_none() && self_path.path.segments.len() == 1 {
                         if let Some(segment) = self_path.path.segments.first() {
                             rows.impl_self_heads.push(ImplSelfHeadRow {
-                                range: span_range(line_starts, segment.ident.span()),
+                                range: span_range(segment.ident.span()),
                                 name: segment.ident.to_string(),
                             });
                         }
@@ -153,21 +146,19 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut TypeEntityRows) 
                         rows.entities.push(callable(
                             &method.sig,
                             TypeEntityKind::Method,
-                            line_starts,
                         ));
                         push_doc(
                             rows,
                             method.sig.ident.span(),
                             &method.attrs,
                             parent.as_deref(),
-                            line_starts,
                         );
                     }
                 }
             }
             syn::Item::Mod(item) => {
                 if let Some((_, inner)) = &item.content {
-                    collect(inner, line_starts, rows);
+                    collect(inner, rows);
                 }
             }
             _ => {}
@@ -180,7 +171,6 @@ fn push_doc(
     span: proc_macro2::Span,
     attrs: &[syn::Attribute],
     parent: Option<&str>,
-    line_starts: &[u32],
 ) {
     let lines: Vec<String> = attrs
         .iter()
@@ -204,7 +194,7 @@ fn push_doc(
     }
     let text = lines.join("\n");
     rows.docs.push(DocRow {
-        range: span_range(line_starts, span),
+        range: span_range(span),
         parent: parent.map(str::to_owned),
         sections: doc_sections(&text),
         text,
@@ -244,18 +234,17 @@ fn named(
     span: proc_macro2::Span,
     name: String,
     kind: TypeEntityKind,
-    line_starts: &[u32],
 ) -> TypeEntityRow {
     TypeEntityRow {
-        range: span_range(line_starts, span),
+        range: span_range(span),
         name,
         kind,
         sigs: Vec::new(),
     }
 }
 
-fn callable(sig: &syn::Signature, kind: TypeEntityKind, line_starts: &[u32]) -> TypeEntityRow {
-    let mut row = named(sig.ident.span(), sig.ident.to_string(), kind, line_starts);
+fn callable(sig: &syn::Signature, kind: TypeEntityKind) -> TypeEntityRow {
+    let mut row = named(sig.ident.span(), sig.ident.to_string(), kind);
     let mut pos = 0u32;
     for arg in &sig.inputs {
         if let syn::FnArg::Typed(arg) = arg {

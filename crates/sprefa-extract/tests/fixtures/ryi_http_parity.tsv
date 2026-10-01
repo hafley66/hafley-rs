@@ -22,8 +22,8 @@ diff    cli       1 750777a29f8d
 diff    router    1 750777a29f8d
 ingest  cli      24 0239bab7fd61
 ingest  router   24 0239bab7fd61
-schema  cli     436 e82ba078cc0e
-schema  router  436 e82ba078cc0e
+schema  cli     434 d886b98b7113
+schema  router  434 d886b98b7113
 trail   cli       1 cf5200e026ab
 trail   router    1 cf5200e026ab
 fast    socket  322 97e58c9e70ac

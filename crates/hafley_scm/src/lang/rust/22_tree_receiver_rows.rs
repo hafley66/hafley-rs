@@ -176,14 +176,14 @@ impl ReceiverWalk<'_> {
                                 .map(|receiver| self.receiver_outcome(receiver))
                                 .unwrap_or(ReceiverOutcome::Inferred);
                             self.out.push(ReceiverBinding {
-                                call_site: span(method, self.source),
+                                call_site: span(method),
                                 outcome,
                             });
                         }
                     } else if let Some(path) = self.simple_path(function) {
                         if path.len() == 1 && path[0] != "self" && self.lookup(&path[0]).is_some() {
                             self.out.push(ReceiverBinding {
-                                call_site: span(function, self.source),
+                                call_site: span(function),
                                 outcome: ReceiverOutcome::Shadowed,
                             });
                         }
@@ -599,25 +599,13 @@ fn is_type_node(kind: &str) -> bool {
     )
 }
 
-fn span(node: tree_sitter::Node<'_>, source: &[u8]) -> Span {
-    let start = syn_compatible_byte(source, node.start_byte());
-    let end = syn_compatible_byte(source, node.end_byte());
+fn span(node: tree_sitter::Node<'_>) -> Span {
+    let start = node.start_byte() as u32;
+    let end = node.end_byte() as u32;
     Span {
         start,
         len: end - start,
     }
-}
-
-fn syn_compatible_byte(source: &[u8], offset: usize) -> u32 {
-    let line_start = source[..offset]
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map_or(0, |newline| newline + 1);
-    let column = std::str::from_utf8(&source[line_start..offset])
-        .expect("Rust source is UTF-8")
-        .chars()
-        .count();
-    (line_start + column) as u32
 }
 
 fn text<'a>(node: tree_sitter::Node<'_>, source: &'a [u8]) -> &'a str {

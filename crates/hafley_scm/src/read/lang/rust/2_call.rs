@@ -1068,16 +1068,7 @@ fn syn_call_metadata(
         .map(|node| (node.span.start, node.span.end()))
         .collect();
     let defs = defs.into_iter().collect::<Vec<_>>();
-    let (cfg, owners) = call_metadata_rows_from_tree(tree, source, &defs);
-    for row in cfg {
-        sink.aux.cfg_scopes.push(CfgScope {
-            span: Span {
-                start: row.start,
-                len: row.end - row.start,
-            },
-            cfg: strings.intern(&row.predicate),
-        });
-    }
+    let owners = call_metadata_rows_from_tree(tree, source, &defs);
     for row in owners {
         sink.aux.method_owners.push(MethodOwner {
             span: Span {
@@ -1117,8 +1108,7 @@ pub(super) fn project_call(
                 strings.intern(ty),
             )
         }));
-    // Mint the CONST_INIT defs in walk order, before metadata reads the node
-    // set: a gated const's cfg row is admitted by its own CONST_INIT node.
+    // Mint the CONST_INIT defs in walk order, before metadata reads the node set.
     for row in rows.const_inits {
         let span = Span {
             start: row.range.start,
@@ -1128,13 +1118,6 @@ pub(super) fn project_call(
             .push(Node::new(span, CONST_INIT).with_name(strings.intern(&row.name)));
     }
     syn_call_metadata(tree, source, strings, sink);
-
-    for (callee, predicate) in rows.test_only_calls {
-        sink.aux.test_only_calls.push(TestOnlyCall {
-            callee: strings.intern(&callee),
-            cfg: strings.intern(&predicate),
-        });
-    }
     for site in rows.sites {
         sink.aux.sites.push(CallSite {
             span: Span {

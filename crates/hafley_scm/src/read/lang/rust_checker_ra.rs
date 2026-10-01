@@ -17,7 +17,7 @@ use ra_ap_syntax::ast::HasName;
 use ra_ap_syntax::{ast, AstNode};
 use tracing::Span;
 
-use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef, OffsetMap};
+use super::rust_checker::{CheckerAnswers, CheckerError, CheckerRef};
 #[path = "8a_rust_checker_target.rs"]
 mod target;
 pub use target::{target_calls, TargetCall, TargetCalls};
@@ -140,13 +140,11 @@ pub fn field_reads(
     })
 }
 
-/// One corpus file the walk visits: its supplied path, its ra file id, its
-/// text and the byte -> parse-plane offset map over that text.
+/// One corpus file the walk visits: its supplied path, its ra file id, its text.
 struct WalkFile {
     path: String,
     file_id: ra_ap_ide::FileId,
     text: String,
-    offsets: OffsetMap,
 }
 
 pub fn answer(
@@ -208,7 +206,6 @@ pub fn answer(
                 WalkFile {
                     path: (*path).to_string(),
                     file_id: *file_id,
-                    offsets: OffsetMap::new(&text),
                     text,
                 }
             })
@@ -487,8 +484,7 @@ fn nav_of(sema: &Semantics<'_, RootDatabase>, def: ModuleDef) -> Option<Navigati
     def.try_to_nav(sema).map(|nav| nav.call_site)
 }
 
-/// One nav plus one reference range -> a seam row, with both offsets converted
-/// out of rust-analyzer's byte space into the parse plane's.
+/// One nav plus one reference range -> a seam row, in rust-analyzer's byte offsets.
 fn mint(
     sema: &Semantics<'_, RootDatabase>,
     def: ModuleDef,
@@ -504,10 +500,7 @@ fn mint(
     let (dst_path, dst_offset) = match destination.get(&nav.file_id) {
         Some(target) => {
             let declaration = nav.focus_range.unwrap_or(nav.full_range).start();
-            (
-                target.path.clone(),
-                target.offsets.to_span_offset(u32::from(declaration)),
-            )
+            (target.path.clone(), u32::from(declaration))
         }
         None => (String::new(), 0),
     };
@@ -519,8 +512,8 @@ fn mint(
         nav.name.as_str().to_string()
     };
     Some(CheckerRef {
-        start: file.offsets.to_span_offset(start),
-        end: file.offsets.to_span_offset(end),
+        start,
+        end,
         name: file.text.get(start as usize..end as usize)?.to_string(),
         written: String::new(),
         dst_path,
@@ -759,8 +752,8 @@ impl<'db, 'a> TsiWalk<'db, 'a> {
         (id, fresh)
     }
 
-    /// A corpus declaration origins at its own name in the parse plane's offset
-    /// unit; one outside the supplied files keeps its file's byte range.
+    /// A declaration origins at its own name's byte range, under the supplied
+    /// path for a corpus file and the absolute path for any other.
     fn origin_at(&mut self, nav: Option<NavigationTarget>, krate: Option<Crate>) -> Arg {
         let fallback = || {
             let name = krate
@@ -773,15 +766,13 @@ impl<'db, 'a> TsiWalk<'db, 'a> {
         let range = nav.focus_range.unwrap_or(nav.full_range);
         let start = u32::from(range.start());
         let end = u32::from(range.end());
-        if let Some(target) = self.destination.get(&nav.file_id) {
-            return Arg::Span(
-                target.path.clone(),
-                target.offsets.to_span_offset(start),
-                target.offsets.to_span_offset(end),
-            );
-        }
-        match self.path_of.get(&nav.file_id) {
-            Some(path) => Arg::Span(path.clone(), start, end),
+        let path = self
+            .destination
+            .get(&nav.file_id)
+            .map(|target| target.path.clone())
+            .or_else(|| self.path_of.get(&nav.file_id).cloned());
+        match path {
+            Some(path) => Arg::Span(path, start, end),
             None => fallback(),
         }
     }

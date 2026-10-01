@@ -540,26 +540,6 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
-    pub struct CfgScope {
-        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
-        pub fact: Option<u32>,
-        pub family: FamilyTag,
-        pub span: SpanOut,
-        pub cfg: String,
-    }
-
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
-    pub struct TestOnlyCall {
-        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
-        pub fact: Option<u32>,
-        pub family: FamilyTag,
-        pub callee: String,
-        pub cfg: String,
-    }
-
-    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-    #[serde(deny_unknown_fields)]
     pub struct MacroSite {
         pub family: FamilyTag,
         pub span: SpanOut,
@@ -1146,12 +1126,6 @@ pub enum Fact {
     #[serde(rename = "method_owner")]
     MethodOwner(models::MethodOwner),
 
-    #[serde(rename = "cfg_scope")]
-    CfgScope(models::CfgScope),
-
-    #[serde(rename = "test_only_call")]
-    TestOnlyCall(models::TestOnlyCall),
-
     #[serde(rename = "macro_site")]
     MacroSite(models::MacroSite),
 
@@ -1352,10 +1326,6 @@ impl Fact {
 
             Self::MethodOwner(row) => row.insert(conn, source),
 
-            Self::CfgScope(row) => row.insert(conn, source),
-
-            Self::TestOnlyCall(row) => row.insert(conn, source),
-
             Self::MacroSite(row) => row.insert(conn, source),
 
             Self::Reference(row) => row.insert(conn, source),
@@ -1456,7 +1426,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 74;
+pub const TABLE_COUNT: usize = 72;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1553,10 +1523,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut specifier: Vec<(usize, &models::Specifier)> = Vec::new();
 
     let mut method_owner: Vec<(usize, &models::MethodOwner)> = Vec::new();
-
-    let mut cfg_scope: Vec<(usize, &models::CfgScope)> = Vec::new();
-
-    let mut test_only_call: Vec<(usize, &models::TestOnlyCall)> = Vec::new();
 
     let mut macro_site: Vec<(usize, &models::MacroSite)> = Vec::new();
 
@@ -1706,10 +1672,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::MethodOwner(value) => method_owner.push((index, value)),
 
-            Fact::CfgScope(value) => cfg_scope.push((index, value)),
-
-            Fact::TestOnlyCall(value) => test_only_call.push((index, value)),
-
             Fact::MacroSite(value) => macro_site.push((index, value)),
 
             Fact::Reference(value) => reference.push((index, value)),
@@ -1857,10 +1819,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let specifier_capacity = if specifier.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"specifier\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"name\", \"kind\", \"module\", \"imported\", \"type_only\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let method_owner_capacity = if method_owner.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
-
-    let cfg_scope_capacity = if cfg_scope.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"cfg_scope\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"cfg\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
-
-    let test_only_call_capacity = if test_only_call.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"test_only_call\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"callee\", \"cfg\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let macro_site_capacity = if macro_site.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"macro_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"family\", \"span__start\", \"span__end\", \"macro_name\", \"source\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2224,28 +2182,6 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in method_owner.chunks(method_owner_capacity) {
         let sql = multi_row_sql("INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
-        let mut statement = conn.prepare_cached(&sql)?;
-        let mut parameter = 1;
-        for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
-            parameter = row.bind(&mut statement, parameter, &row_source)?;
-        }
-        inserted += statement.raw_execute()?;
-    }
-
-    for chunk in cfg_scope.chunks(cfg_scope_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"cfg_scope\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"cfg\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
-        let mut statement = conn.prepare_cached(&sql)?;
-        let mut parameter = 1;
-        for (index, row) in chunk {
-            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
-            parameter = row.bind(&mut statement, parameter, &row_source)?;
-        }
-        inserted += statement.raw_execute()?;
-    }
-
-    for chunk in test_only_call.chunks(test_only_call_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"test_only_call\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"callee\", \"cfg\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -3578,64 +3514,6 @@ impl models::MethodOwner {
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"method_owner\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"owner__start\", \"owner__end\", \"self_type\", \"trait\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
-        self.bind(&mut statement, 1, source)?;
-        Ok(statement.raw_execute()?)
-    }
-}
-
-impl models::CfgScope {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
-        statement.raw_bind_parameter(parameter, source.row)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "cfg_scope")?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.fact)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.family.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.span.start)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.span.end)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.cfg.as_str())?;
-        parameter += 1;
-        Ok(parameter)
-    }
-    #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"cfg_scope\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"cfg\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
-        self.bind(&mut statement, 1, source)?;
-        Ok(statement.raw_execute()?)
-    }
-}
-
-impl models::TestOnlyCall {
-    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
-        statement.raw_bind_parameter(parameter, source.row)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.input_path)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, source.content_id)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, "test_only_call")?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.fact)?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.family.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.callee.as_str())?;
-        parameter += 1;
-        statement.raw_bind_parameter(parameter, self.cfg.as_str())?;
-        parameter += 1;
-        Ok(parameter)
-    }
-    #[cfg(test)]
-    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"test_only_call\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"callee\", \"cfg\") VALUES (?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

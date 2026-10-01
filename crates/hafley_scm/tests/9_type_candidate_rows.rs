@@ -1,15 +1,15 @@
 #![cfg(feature = "rust_syn")]
 
 use hafley_scm::lang::rust::{
-    build_line_starts, type_candidate_rows, type_candidate_rows_from_tree,
+    type_candidate_rows, type_candidate_rows_from_tree,
     TypeCandidateKind as Kind, TypeCandidateOwner,
 };
 
 #[test]
 fn type_candidates_drop_generic_parameters_and_keep_owner_reference_order() {
     let src = "struct S<T: Clone> { x: Option<T> }\nimpl<T: Send> Trait<u8> for S<T> {}\ntype Alias = Vec<S<i32>>;\n";
-    let parsed = syn::parse_file(src).expect("Rust parses");
-    let groups = type_candidate_rows(&parsed, &build_line_starts(src));
+    let parsed = hafley_scm::lang::rust::parse_rust_file(src).expect("Rust parses");
+    let groups = type_candidate_rows(&parsed);
     assert_eq!(groups.len(), 3);
     assert!(matches!(groups[0].owner, TypeCandidateOwner::Declared(_)));
     assert!(
@@ -92,8 +92,8 @@ fn tree_type_candidates_match_syn_across_the_pinned_soopy_fixture() {
                 continue;
             }
             let source = std::fs::read_to_string(&path).expect("Rust fixture reads as UTF-8");
-            let syn_file = syn::parse_file(&source).expect("Syn parses the Rust fixture");
-            let syn_groups = type_candidate_rows(&syn_file, &build_line_starts(&source));
+            let syn_file = hafley_scm::lang::rust::parse_rust_file(&source).expect("Syn parses the Rust fixture");
+            let syn_groups = type_candidate_rows(&syn_file);
             let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
             let mut parser = tree_sitter::Parser::new();
             parser.set_language(&language).expect("Rust grammar loads");

@@ -1,6 +1,6 @@
 #![cfg(feature = "rust_syn")]
 
-use hafley_scm::lang::rust::{build_line_starts, module_resolution_rows};
+use hafley_scm::lang::rust::{module_resolution_rows};
 
 #[test]
 fn module_rows_keep_imports_declarations_and_definition_ranges() {
@@ -14,8 +14,8 @@ trait Work { fn required(&self); fn defaulted(&self) {} }
 type Alias = Choice;
 impl Work for Choice { fn required(&self) {} }
 "#;
-    let parsed = syn::parse_file(source).expect("Rust parses");
-    let rows = module_resolution_rows(&parsed, &build_line_starts(source));
+    let parsed = hafley_scm::lang::rust::parse_rust_file(source).expect("Rust parses");
+    let rows = module_resolution_rows(&parsed);
 
     let imports: Vec<_> = rows
         .uses

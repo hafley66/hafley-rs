@@ -5,7 +5,8 @@ use std::ops::Range;
 use syn::spanned::Spanned;
 use syn::visit::Visit;
 
-use super::call_metadata_rows::{build_line_starts, line_col_to_byte};
+use super::call_metadata_rows::span_range;
+use super::syntax::parse_rust_file;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct MacroInvocationRow {
@@ -13,19 +14,14 @@ pub struct MacroInvocationRow {
     pub name: String,
 }
 
-struct Collector<'a> {
-    line_starts: &'a [u32],
+struct Collector {
     rows: Vec<MacroInvocationRow>,
 }
 
-impl<'ast> Visit<'ast> for Collector<'_> {
+impl<'ast> Visit<'ast> for Collector {
     fn visit_macro(&mut self, mac: &'ast syn::Macro) {
-        let span = mac.span();
-        let start = span.start();
-        let end = span.end();
         self.rows.push(MacroInvocationRow {
-            range: line_col_to_byte(self.line_starts, start.line as u32, start.column as u32)
-                ..line_col_to_byte(self.line_starts, end.line as u32, end.column as u32),
+            range: span_range(mac.span()),
             name: macro_name(mac),
         });
         syn::visit::visit_macro(self, mac);
@@ -52,12 +48,8 @@ fn macro_name(mac: &syn::Macro) -> String {
         .unwrap_or(trailing)
 }
 
-pub fn macro_invocation_rows_from_parsed(
-    parsed: &syn::File,
-    line_starts: &[u32],
-) -> Vec<MacroInvocationRow> {
+pub fn macro_invocation_rows_from_parsed(parsed: &syn::File) -> Vec<MacroInvocationRow> {
     let mut collector = Collector {
-        line_starts,
         rows: Vec::new(),
     };
     collector.visit_file(parsed);
@@ -91,8 +83,7 @@ pub fn macro_invocation_rows_from_tree(
                         node.end_byte()
                     };
                     rows.push(MacroInvocationRow {
-                        range: syn_compatible_byte(source, node.start_byte())
-                            ..syn_compatible_byte(source, end),
+                        range: node.start_byte() as u32..end as u32,
                         name,
                     });
                 }
@@ -100,8 +91,7 @@ pub fn macro_invocation_rows_from_tree(
             "macro_definition" => {
                 if node.child_by_field_name("name").is_some() {
                     rows.push(MacroInvocationRow {
-                        range: syn_compatible_byte(source, node.start_byte())
-                            ..syn_compatible_byte(source, node.end_byte()),
+                        range: node.start_byte() as u32..node.end_byte() as u32,
                         name: "macro_rules".to_owned(),
                     });
                 }
@@ -117,24 +107,12 @@ pub fn macro_invocation_rows_from_tree(
     rows
 }
 
-fn syn_compatible_byte(source: &[u8], offset: usize) -> u32 {
-    let line_start = source[..offset]
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map_or(0, |newline| newline + 1);
-    let column = std::str::from_utf8(&source[line_start..offset])
-        .expect("Rust source is UTF-8")
-        .chars()
-        .count();
-    (line_start + column) as u32
-}
-
 pub fn macro_invocation_rows(content: &[u8]) -> Vec<MacroInvocationRow> {
     let Ok(text) = std::str::from_utf8(content) else {
         return Vec::new();
     };
-    let Ok(parsed) = syn::parse_file(text) else {
+    let Ok(parsed) = parse_rust_file(text) else {
         return Vec::new();
     };
-    macro_invocation_rows_from_parsed(&parsed, &build_line_starts(text))
+    macro_invocation_rows_from_parsed(&parsed)
 }

@@ -59,13 +59,13 @@ pub struct ModuleResolutionRows {
     pub impls: Vec<ImplMethodsRow>,
 }
 
-pub fn module_resolution_rows(parsed: &syn::File, line_starts: &[u32]) -> ModuleResolutionRows {
+pub fn module_resolution_rows(parsed: &syn::File) -> ModuleResolutionRows {
     let mut rows = ModuleResolutionRows::default();
-    collect(&parsed.items, line_starts, &mut rows);
+    collect(&parsed.items, &mut rows);
     rows
 }
 
-fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolutionRows) {
+fn collect(items: &[syn::Item], rows: &mut ModuleResolutionRows) {
     for item in items {
         match item {
             syn::Item::Use(item) => {
@@ -84,7 +84,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
                             .default
                             .as_ref()
                             .map_or(method.sig.span(), |body| body.span());
-                        let (start, end) = def_range(line_starts, method.sig.ident.span(), end);
+                        let (start, end) = def_range(method.sig.ident.span(), end);
                         Some(TraitMethodRow {
                             name: method.sig.ident.to_string(),
                             range: start..end,
@@ -100,7 +100,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
             syn::Item::Mod(item) => match &item.content {
                 Some((_, inner)) => {
                     rows.inline_mods.push(item.ident.to_string());
-                    collect(inner, line_starts, rows);
+                    collect(inner, rows);
                 }
                 None => rows
                     .mod_decls
@@ -111,7 +111,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
                     .variants
                     .iter()
                     .filter_map(|variant| {
-                        variant_def_range(line_starts, variant)
+                        variant_def_range(variant)
                             .map(|(start, end)| (variant.ident.to_string(), start..end))
                     })
                     .collect();
@@ -122,7 +122,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
             }
             syn::Item::Type(item) => rows
                 .aliases
-                .push(span_range(line_starts, item.ident.span())),
+                .push(span_range(item.ident.span())),
             syn::Item::Impl(item) => {
                 if let Some(self_type) = principal_ty(&item.self_ty) {
                     let trait_name = item.trait_.as_ref().and_then(|(path, _)| {
@@ -137,9 +137,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut ModuleResolution
                             let syn::ImplItem::Fn(method) = child else {
                                 return None;
                             };
-                            let (start, end) = def_range(
-                                line_starts,
-                                method.sig.ident.span(),
+                            let (start, end) = def_range(method.sig.ident.span(),
                                 method.block.span(),
                             );
                             Some((method.sig.ident.to_string(), start..end))

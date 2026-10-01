@@ -10,14 +10,15 @@ from node n
 where n.family = 'call' and n.kind in ('function', 'method', 'lambda')
   and n._input_path like 'crates/%/src/%'
   and not exists (
-    select 1 from cfg_scope c
-    where c._input_path = n._input_path and c.cfg = 'test'
+    select 1 from test_scope c
+    where c.path = n._input_path
       and n.span__start between c.span__start and c.span__end);
 
 drop table if exists mutation_site;
 create table mutation_site as
-select m._input_path as path, m.span__start as start, m.kind as marker
-from node m
+select m._input_path as path,
+  m.span__start as start, m.kind as marker
+from node m join file_text f on f.path = m._input_path
 where m.family = 'cst'
   and m.kind in ('mutable_specifier', 'assignment_expression', 'compound_assignment_expr', 'unsafe_block')
 union all
@@ -40,9 +41,9 @@ select x.path, x.start, x.end, x.kind, x.name,
   (select count(*) from effect_site e
      where e.path = x.path and e.effect not in ('log', 'clock', 'env')
        and e.line between
-         (select length(t) - length(replace(t, x'0a', '')) + 1 from (select substr(cast(readfile(x.path) as text), 1, x.start) as t))
+         (select length(t) - length(replace(t, x'0a', '')) + 1 from (select cast(substr(cast((select text from file_text where path = x.path) as blob), 1, x.start) as text) as t))
          and
-         (select length(t) - length(replace(t, x'0a', '')) + 1 from (select substr(cast(readfile(x.path) as text), 1, x.end) as t))
+         (select length(t) - length(replace(t, x'0a', '')) + 1 from (select cast(substr(cast((select text from file_text where path = x.path) as blob), 1, x.end) as text) as t))
   ) as effects
 from unit x;
 

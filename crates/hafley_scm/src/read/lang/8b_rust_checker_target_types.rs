@@ -124,18 +124,12 @@ pub fn target_types(
                     let Some(source_path) = paths.get(&source_id) else {
                         continue;
                     };
-                    let text = sema
-                        .parse_guess_edition(source_id)
-                        .syntax()
-                        .text()
-                        .to_string();
-                    let offsets = OffsetMap::new(&text);
                     for reference in references {
                         found.insert(TargetTypeReference {
                             source_path: source_path.clone(),
                             owner_name: owner_name(&reference),
-                            site_start: offsets.to_span_offset(u32::from(reference.range.start())),
-                            site_end: offsets.to_span_offset(u32::from(reference.range.end())),
+                            site_start: u32::from(reference.range.start()),
+                            site_end: u32::from(reference.range.end()),
                             target_path: target_path.clone(),
                         });
                     }

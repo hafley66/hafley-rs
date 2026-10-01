@@ -21,26 +21,26 @@ pub struct ModuleSpecifierRow {
     pub module: String,
 }
 
-pub fn module_specifier_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<ModuleSpecifierRow> {
+pub fn module_specifier_rows(parsed: &syn::File) -> Vec<ModuleSpecifierRow> {
     let mut rows = Vec::new();
-    collect(&parsed.items, line_starts, &mut rows);
+    collect(&parsed.items, &mut rows);
     rows
 }
 
-fn collect(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<ModuleSpecifierRow>) {
+fn collect(items: &[syn::Item], out: &mut Vec<ModuleSpecifierRow>) {
     for item in items {
         match item {
             syn::Item::Use(item) => {
                 let reexport = !matches!(item.vis, syn::Visibility::Inherited);
-                use_tree(&item.tree, reexport, line_starts, &mut Vec::new(), out);
+                use_tree(&item.tree, reexport, &mut Vec::new(), out);
             }
             syn::Item::Mod(item) => match &item.content {
-                Some((_, inner)) => collect(inner, line_starts, out),
+                Some((_, inner)) => collect(inner, out),
                 None => {
                     let name = item.ident.to_string();
                     let path = mod_path_attr(&item.attrs);
                     out.push(ModuleSpecifierRow {
-                        range: span_range(line_starts, item.span()),
+                        range: span_range(item.span()),
                         module: path.clone().unwrap_or_else(|| name.clone()),
                         name,
                         kind: if path.is_some() {
@@ -59,25 +59,24 @@ fn collect(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<ModuleSpecifi
 fn use_tree(
     tree: &syn::UseTree,
     reexport: bool,
-    line_starts: &[u32],
     prefix: &mut Vec<String>,
     out: &mut Vec<ModuleSpecifierRow>,
 ) {
     match tree {
         syn::UseTree::Path(path) => {
             prefix.push(path.ident.to_string());
-            use_tree(&path.tree, reexport, line_starts, prefix, out);
+            use_tree(&path.tree, reexport, prefix, out);
             prefix.pop();
         }
         syn::UseTree::Group(group) => {
             for member in &group.items {
-                use_tree(member, reexport, line_starts, prefix, out);
+                use_tree(member, reexport, prefix, out);
             }
         }
         syn::UseTree::Name(leaf) => push_leaf(
             &leaf.ident.to_string(),
             None,
-            span_range(line_starts, leaf.ident.span()),
+            span_range(leaf.ident.span()),
             reexport,
             prefix,
             out,
@@ -85,7 +84,7 @@ fn use_tree(
         syn::UseTree::Rename(leaf) => push_leaf(
             &leaf.ident.to_string(),
             Some(leaf.rename.to_string()),
-            span_range(line_starts, leaf.span()),
+            span_range(leaf.span()),
             reexport,
             prefix,
             out,
@@ -93,7 +92,7 @@ fn use_tree(
         syn::UseTree::Glob(glob) => {
             let Some(last) = prefix.last() else { return };
             out.push(ModuleSpecifierRow {
-                range: span_range(line_starts, glob.star_token.span()),
+                range: span_range(glob.star_token.span()),
                 name: last.clone(),
                 kind: if reexport {
                     ModuleSpecifierKind::Reexport

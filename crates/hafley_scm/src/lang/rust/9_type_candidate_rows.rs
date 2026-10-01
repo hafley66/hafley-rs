@@ -45,7 +45,7 @@ pub struct TypeCandidateGroup {
     pub candidates: Vec<TypeCandidateRow>,
 }
 
-pub fn type_candidate_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<TypeCandidateGroup> {
+pub fn type_candidate_rows(parsed: &syn::File) -> Vec<TypeCandidateGroup> {
     let mut groups = Vec::new();
     let file_types: Vec<String> = parsed
         .items
@@ -59,13 +59,12 @@ pub fn type_candidate_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<TypeC
             _ => None,
         })
         .collect();
-    collect(&parsed.items, line_starts, &file_types, &[], &mut groups);
+    collect(&parsed.items, &file_types, &[], &mut groups);
     groups
 }
 
 fn collect(
     items: &[syn::Item],
-    line_starts: &[u32],
     file_types: &[String],
     shadowed: &[String],
     groups: &mut Vec<TypeCandidateGroup>,
@@ -78,7 +77,7 @@ fn collect(
                 generic_candidates(&item.generics, &mut candidates);
                 field_candidates(&item.fields, &mut candidates);
                 retain_non_generic(&item.generics, &mut candidates);
-                groups.push(declared(item.ident.span(), line_starts, candidates));
+                groups.push(declared(item.ident.span(), candidates));
             }
             syn::Item::Enum(item) => {
                 let mut candidates = Vec::new();
@@ -97,7 +96,7 @@ fn collect(
                     if !variant_candidates.is_empty() {
                         variant_groups.push(TypeCandidateGroup {
                             owner: TypeCandidateOwner::Synthetic {
-                                range: span_range(line_starts, variant.ident.span()),
+                                range: span_range(variant.ident.span()),
                                 name: variant.ident.to_string(),
                             },
                             candidates: variant_candidates,
@@ -105,7 +104,7 @@ fn collect(
                     }
                 }
                 retain_non_generic(&item.generics, &mut candidates);
-                groups.push(declared(item.ident.span(), line_starts, candidates));
+                groups.push(declared(item.ident.span(), candidates));
                 groups.extend(variant_groups);
             }
             syn::Item::Union(item) => {
@@ -113,7 +112,7 @@ fn collect(
                 generic_candidates(&item.generics, &mut candidates);
                 field_candidates(&Fields::Named(item.fields.clone()), &mut candidates);
                 retain_non_generic(&item.generics, &mut candidates);
-                groups.push(declared(item.ident.span(), line_starts, candidates));
+                groups.push(declared(item.ident.span(), candidates));
             }
             syn::Item::Type(item) => {
                 let mut candidates = Vec::new();
@@ -123,13 +122,13 @@ fn collect(
                     kind: TypeCandidateKind::Uses,
                 }));
                 retain_non_generic(&item.generics, &mut candidates);
-                groups.push(declared(item.ident.span(), line_starts, candidates));
+                groups.push(declared(item.ident.span(), candidates));
             }
             syn::Item::Fn(item) => {
                 let mut candidates = signature_candidates(&item.sig);
                 candidates.extend(body_type_candidates(&item.block));
                 retain_non_generic(&item.sig.generics, &mut candidates);
-                groups.push(declared(item.sig.ident.span(), line_starts, candidates));
+                groups.push(declared(item.sig.ident.span(), candidates));
             }
             syn::Item::Trait(item) => {
                 let mut candidates = Vec::new();
@@ -138,7 +137,7 @@ fn collect(
                     bound_candidate(bound, &mut candidates);
                 }
                 retain_non_generic(&item.generics, &mut candidates);
-                groups.push(declared(item.ident.span(), line_starts, candidates));
+                groups.push(declared(item.ident.span(), candidates));
                 for child in &item.items {
                     if let syn::TraitItem::Fn(method) = child {
                         let mut candidates = signature_candidates(&method.sig);
@@ -148,11 +147,11 @@ fn collect(
                         retain_non_generic(&item.generics, &mut candidates);
                         retain_non_generic(&method.sig.generics, &mut candidates);
                         if method.default.is_some() {
-                            groups.push(declared(method.sig.ident.span(), line_starts, candidates));
+                            groups.push(declared(method.sig.ident.span(), candidates));
                         } else {
                             groups.push(TypeCandidateGroup {
                                 owner: TypeCandidateOwner::Synthetic {
-                                    range: span_range(line_starts, method.sig.ident.span()),
+                                    range: span_range(method.sig.ident.span()),
                                     name: method.sig.ident.to_string(),
                                 },
                                 candidates,
@@ -165,7 +164,7 @@ fn collect(
                 let Some(primary_name) = primary_type(&item.self_ty) else {
                     continue;
                 };
-                let bare_head = bare_self_head(&item.self_ty, line_starts);
+                let bare_head = bare_self_head(&item.self_ty);
                 let mut candidates = Vec::new();
                 generic_candidates(&item.generics, &mut candidates);
                 if let Some((path, _)) = &item.trait_ {
@@ -229,7 +228,7 @@ fn collect(
                         }
                         retain_non_generic(&item.generics, &mut candidates);
                         retain_non_generic(&method.sig.generics, &mut candidates);
-                        groups.push(declared(method.sig.ident.span(), line_starts, candidates));
+                        groups.push(declared(method.sig.ident.span(), candidates));
                     }
                     if let syn::ImplItem::Type(assoc) = child {
                         let mut candidates: Vec<_> = type_refs(&assoc.ty)
@@ -243,7 +242,7 @@ fn collect(
                         retain_non_generic(&assoc.generics, &mut candidates);
                         groups.push(TypeCandidateGroup {
                             owner: TypeCandidateOwner::Synthetic {
-                                range: span_range(line_starts, assoc.ident.span()),
+                                range: span_range(assoc.ident.span()),
                                 name: assoc.ident.to_string(),
                             },
                             candidates,
@@ -259,7 +258,7 @@ fn collect(
                             inner_shadowed.push(imported);
                         }
                     }
-                    collect(inner, line_starts, file_types, &inner_shadowed, groups);
+                    collect(inner, file_types, &inner_shadowed, groups);
                 }
             }
             _ => {}
@@ -476,12 +475,12 @@ fn projection_trait(name: &str, bounds: &[(String, String)]) -> String {
     )
 }
 
-pub fn bare_self_head(ty: &Type, line_starts: &[u32]) -> Option<(Range<u32>, String)> {
+pub fn bare_self_head(ty: &Type) -> Option<(Range<u32>, String)> {
     match strip_type(ty) {
         Type::Path(path) if path.qself.is_none() && path.path.segments.len() == 1 => {
             path.path.segments.first().map(|seg| {
                 (
-                    span_range(line_starts, seg.ident.span()),
+                    span_range(seg.ident.span()),
                     seg.ident.to_string(),
                 )
             })
@@ -492,11 +491,10 @@ pub fn bare_self_head(ty: &Type, line_starts: &[u32]) -> Option<(Range<u32>, Str
 
 fn declared(
     span: proc_macro2::Span,
-    line_starts: &[u32],
     candidates: Vec<TypeCandidateRow>,
 ) -> TypeCandidateGroup {
     TypeCandidateGroup {
-        owner: TypeCandidateOwner::Declared(span_range(line_starts, span)),
+        owner: TypeCandidateOwner::Declared(span_range(span)),
         candidates,
     }
 }

@@ -7,14 +7,11 @@
 //! the arm. Df argument slots, parameter positions, field names and literal
 //! texts are emitted.
 //!
-//! Span bridge: syn's proc_macro2 spans are line/col; v6 `Span` is byte offsets,
-//! so one `line_starts` table + `line_col_to_byte` converts (the rust-specific
-//! bit oxc gives for free). v5's `rust_line` used `span.start().line`; the
-//! parity oracle (v5_normalize) reconstructs the byte as `line_starts[line-1] +
-//! col`, which is exactly `line_col_to_byte`.
+//! Spans are UTF-8 byte offsets: syn spans through `byte_range()`, tree-sitter
+//! nodes through their byte ranges.
 
 use hafley_scm::lang::rust::{
-    call_metadata_rows_from_tree, call_site_rows_from_tree, fast_file_query, line_col_to_byte,
+    call_metadata_rows_from_tree, call_site_rows_from_tree, fast_file_query,
     CallDefinitionKind, RustFastFile, RUST_FAST_QUERY,
 };
 use std::collections::BTreeSet;
@@ -41,25 +38,11 @@ use crate::read::trace;
 use crate::read::types::LangKind;
 use crate::read::types::ScipIndex;
 use crate::read::types::{
-    CfgScope, DefSite, MacroSite, MacroSiteSource, PathIndex, ReceiverOutcome, TestOnlyCall,
+    DefSite, MacroSite, MacroSiteSource, PathIndex, ReceiverOutcome,
     UnresolvedReason,
 };
 
-// ── span bridge: proc_macro2 line/col -> v6 byte Span ───────────────────────
-pub use hafley_scm::lang::rust::build_line_starts;
-
-/// A proc_macro2 span -> v6 byte Span. Used for entity/def spans where a real
-/// length is kept (joins + future resolution); df nodes use start-only anchors.
-pub fn syn_span(line_starts: &[u32], span: proc_macro2::Span) -> Span {
-    let start = span.start();
-    let end = span.end();
-    let start_byte = line_col_to_byte(line_starts, start.line as u32, start.column as u32);
-    let end_byte = line_col_to_byte(line_starts, end.line as u32, end.column as u32);
-    Span {
-        start: start_byte,
-        len: end_byte.saturating_sub(start_byte),
-    }
-}
+pub use hafley_scm::lang::rust::{build_line_starts, syn_span};
 
 #[path = "1_type.rs"]
 mod type_facts;

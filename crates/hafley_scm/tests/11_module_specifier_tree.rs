@@ -1,7 +1,7 @@
 #![cfg(feature = "rust_syn")]
 
 use hafley_scm::lang::rust::{
-    build_line_starts, module_specifier_rows, module_specifier_rows_from_tree,
+    module_specifier_rows, module_specifier_rows_from_tree,
 };
 
 #[test]
@@ -20,10 +20,10 @@ mod inline { use super::Thing; use super::*; }
     let tree = parser.parse(source, None).expect("Rust parses");
 
     let rows = module_specifier_rows_from_tree(&tree, source.as_bytes());
-    let parsed = syn::parse_file(source).expect("Rust parses");
+    let parsed = hafley_scm::lang::rust::parse_rust_file(source).expect("Rust parses");
     assert_eq!(
         rows,
-        module_specifier_rows(&parsed, &build_line_starts(source)),
+        module_specifier_rows(&parsed),
         "{}",
         tree.root_node().to_sexp()
     );

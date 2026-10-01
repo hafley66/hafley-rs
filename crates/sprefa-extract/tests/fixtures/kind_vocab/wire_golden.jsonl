@@ -5259,10 +5259,6 @@
 {"record":"site","family":"call","span":{"start":350,"end":368},"callee":"shared_step","callee_path":"super::shared_step"}
 {"record":"site","family":"call","span":{"start":488,"end":515},"callee":"deeply_tested","callee_path":"super::super::deeply_tested"}
 {"record":"site","family":"call","span":{"start":610,"end":622},"callee":"only_shipped","callee_path":null}
-{"record":"cfg_scope","family":"call","span":{"start":263,"end":417},"cfg":"test"}
-{"record":"cfg_scope","family":"call","span":{"start":447,"end":527},"cfg":"test"}
-{"record":"test_only_call","family":"call","callee":"only_tested","cfg":"test"}
-{"record":"test_only_call","family":"call","callee":"deeply_tested","cfg":"test"}
 {"record":"node","family":"df","span":{"start":43,"end":56},"kind":"call_res","name":null}
 {"record":"node","family":"df","span":{"start":36,"end":40},"kind":"let_bind","name":"step"}
 {"record":"node","family":"df","span":{"start":62,"end":66},"kind":"var_read","name":"step"}
@@ -5315,10 +5311,6 @@
 {"record":"node","family":"call","span":{"start":394,"end":447},"kind":"function","name":"not_guarded_the_token_is_a_substring"}
 {"record":"node","family":"call","span":{"start":465,"end":515},"kind":"function","name":"not_guarded_a_different_predicate"}
 {"record":"site","family":"call","span":{"start":28,"end":42},"callee":"shipped_helper","callee_path":null}
-{"record":"cfg_scope","family":"call","span":{"start":99,"end":132},"cfg":"test"}
-{"record":"cfg_scope","family":"call","span":{"start":166,"end":204},"cfg":"test"}
-{"record":"cfg_scope","family":"call","span":{"start":234,"end":273},"cfg":"test"}
-{"record":"cfg_scope","family":"call","span":{"start":323,"end":361},"cfg":"any (test , feature = \"extra\")"}
 {"record":"node","family":"df","span":{"start":28,"end":44},"kind":"call_res","name":null}
 {"record":"node","family":"df","span":{"start":28,"end":44},"kind":"ret","name":null}
 {"record":"node","family":"df","span":{"start":78,"end":79},"kind":"lit","name":null}
@@ -5388,7 +5380,6 @@
 {"record":"site","family":"call","span":{"start":334,"end":341},"callee":"closure","callee_path":null}
 {"record":"method_owner","family":"call","owner":{"start":410,"end":432},"self_type":"Inner","trait":null}
 {"record":"method_owner","family":"call","owner":{"start":470,"end":496},"self_type":null,"trait":"Nested"}
-{"record":"cfg_scope","family":"call","span":{"start":539,"end":549},"cfg":"test"}
 {"record":"node","family":"df","span":{"start":153,"end":163},"kind":"call_res","name":null}
 {"record":"node","family":"df","span":{"start":209,"end":227},"kind":"call_res","name":null}
 {"record":"node","family":"df","span":{"start":307,"end":308},"kind":"param","name":"x"}

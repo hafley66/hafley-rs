@@ -1,4 +1,4 @@
-//! rust-analyzer's rename, as text edits in the parse plane's offsets.
+//! rust-analyzer's rename, as text edits at byte offsets.
 
 use super::*;
 use ra_ap_ide::{FilePosition, RenameConfig};
@@ -6,8 +6,8 @@ use ra_ap_syntax::ast::HasModuleItem;
 use ra_ap_syntax::{match_ast, TextSize};
 use ra_ap_vfs::VfsPath;
 
-/// One replacement: `start..end` in the parse plane's offsets of `path`
-/// (`OffsetMap`), the text there now, and the text rust-analyzer writes.
+/// One replacement: `start..end` in the byte offsets of `path`, the text
+/// there now, and the text rust-analyzer writes.
 #[derive(Clone, Debug, Eq, PartialEq, Ord, PartialOrd)]
 pub struct RenameEdit {
     pub path: String,
@@ -18,7 +18,7 @@ pub struct RenameEdit {
 }
 
 pub enum RenameSeed<'a> {
-    /// A parse-plane offset inside the declaration's name.
+    /// A byte offset inside the declaration's name.
     At(u32),
     /// The item named this at the anchor file's root; it must be the only one.
     Name(&'a str),
@@ -28,7 +28,7 @@ pub enum RenameSeed<'a> {
 pub enum RenameFailure {
     Checker(CheckerError),
     NotFound,
-    /// Parse-plane `(start, end)` of every candidate declaration.
+    /// Byte `(start, end)` of every candidate declaration.
     Ambiguous(Vec<(u32, u32)>),
     /// rust-analyzer's own refusal, verbatim.
     Refused(String),
@@ -40,19 +40,6 @@ impl From<CheckerError> for RenameFailure {
     fn from(error: CheckerError) -> Self {
         RenameFailure::Checker(error)
     }
-}
-
-/// Inverse of `OffsetMap::to_span_offset`: line start byte plus a character column.
-fn to_byte_offset(text: &str, span_offset: u32) -> u32 {
-    let line_start = text.as_bytes()[..(span_offset as usize).min(text.len())]
-        .iter()
-        .rposition(|byte| *byte == b'\n')
-        .map_or(0, |newline| newline + 1);
-    let column = span_offset as usize - line_start;
-    text[line_start..]
-        .char_indices()
-        .nth(column)
-        .map_or(text.len(), |(byte, _)| line_start + byte) as u32
 }
 
 fn item_name(node: &ra_ap_syntax::SyntaxNode) -> Option<ast::Name> {
@@ -161,10 +148,9 @@ fn rename_in(
 ) -> Result<Vec<RenameEdit>, RenameFailure> {
     let analysis = workspace.host.analysis();
     let cancelled = |_| RenameFailure::Refused("rust-analyzer cancelled the query".to_string());
-    let anchor_text = analysis.file_text(anchor_id).map_err(cancelled)?.to_string();
     let offset = match seed {
         RenameSeed::At(at) => {
-            let byte = TextSize::from(to_byte_offset(&anchor_text, at));
+            let byte = TextSize::from(at);
             let file = analysis.parse(anchor_id).map_err(cancelled)?;
             let on_name = file
                 .syntax()
@@ -184,7 +170,6 @@ fn rename_in(
         }
         RenameSeed::Name(name) => {
             let file = analysis.parse(anchor_id).map_err(cancelled)?;
-            let offsets = OffsetMap::new(&anchor_text);
             match declarations(&file, name).as_slice() {
                 [] => return Err(RenameFailure::NotFound),
                 [one] => u32::from(one.syntax().text_range().start()),
@@ -194,8 +179,8 @@ fn rename_in(
                             .map(|name| {
                                 let range = name.syntax().text_range();
                                 (
-                                    offsets.to_span_offset(u32::from(range.start())),
-                                    offsets.to_span_offset(u32::from(range.end())),
+                                    u32::from(range.start()),
+                                    u32::from(range.end()),
                                 )
                             })
                             .collect(),
@@ -233,14 +218,13 @@ fn rename_in(
             )));
         };
         let text = analysis.file_text(file_id).map_err(cancelled)?.to_string();
-        let offsets = OffsetMap::new(&text);
         for indel in text_edit.iter() {
             let start = u32::from(indel.delete.start());
             let end = u32::from(indel.delete.end());
             edits.push(RenameEdit {
                 path: path.clone(),
-                start: offsets.to_span_offset(start),
-                end: offsets.to_span_offset(end),
+                start,
+                end,
                 old: text[start as usize..end as usize].to_string(),
                 new: indel.insert.clone(),
             });

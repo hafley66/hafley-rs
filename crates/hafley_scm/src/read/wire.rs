@@ -430,22 +430,6 @@ fn flatten_call<E>(
             trait_name: owner.trait_name.map(|id| strings.lookup(id).to_string()),
         })?;
     }
-    for scope in &bundle.aux.cfg_scopes {
-        push(FlatFact::CfgScopeOut {
-            fact: None,
-            family: CallF::TAG,
-            span: SpanOut::new(scope.span.start, scope.span.end()),
-            cfg: strings.lookup(scope.cfg).to_string(),
-        })?;
-    }
-    for call in &bundle.aux.test_only_calls {
-        push(FlatFact::TestOnlyCallOut {
-            fact: None,
-            family: CallF::TAG,
-            callee: strings.lookup(call.callee).to_string(),
-            cfg: strings.lookup(call.cfg).to_string(),
-        })?;
-    }
     for site in &bundle.aux.macro_sites {
         push(FlatFact::MacroSiteOut {
             family: CallF::TAG,

@@ -94,18 +94,15 @@ pub fn rust_module_facts(path: &str, content: &[u8]) -> Option<RustModuleFacts> 
         return None;
     }
     let text = std::str::from_utf8(content).ok()?;
-    let parsed = hafley_scm::lang::rust::parse_rust_syntax(text).ok()?;
-    Some(rust_module_facts_from_parsed(
-        &parsed.file,
-        &parsed.line_starts,
-    ))
+    let parsed = hafley_scm::lang::rust::parse_rust_file(text).ok()?;
+    Some(rust_module_facts_from_parsed(&parsed))
 }
 
 /// The module facts off the extract pass's own syn parse, so no second parse.
-pub fn rust_module_facts_from_parsed(parsed: &syn::File, line_starts: &[u32]) -> RustModuleFacts {
-    let rows = hafley_scm::lang::rust::module_resolution_rows(parsed, line_starts);
-    let macros = hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed, line_starts);
-    rust_module_facts_from_rows(rows, macros, syn_module_extras(parsed, line_starts))
+pub fn rust_module_facts_from_parsed(parsed: &syn::File) -> RustModuleFacts {
+    let rows = hafley_scm::lang::rust::module_resolution_rows(parsed);
+    let macros = hafley_scm::lang::rust::macro_invocation_rows_from_parsed(parsed);
+    rust_module_facts_from_rows(rows, macros, syn_module_extras(parsed))
 }
 
 pub fn rust_module_facts_from_tree(tree: &tree_sitter::Tree, source: &[u8]) -> RustModuleFacts {
@@ -122,9 +119,8 @@ struct ModuleExtras {
     private_defs: HashSet<String>,
 }
 
-fn syn_module_extras(parsed: &syn::File, line_starts: &[u32]) -> ModuleExtras {
+fn syn_module_extras(parsed: &syn::File) -> ModuleExtras {
     let mut return_walk = ReturnReceiverWalk {
-        line_starts,
         method_returns: Vec::new(),
         receivers: Vec::new(),
     };
@@ -143,25 +139,11 @@ fn syn_module_extras(parsed: &syn::File, line_starts: &[u32]) -> ModuleExtras {
                         let syn::TraitItem::Type(assoc) = child else {
                             return None;
                         };
-                        let begin = assoc.ident.span().start();
-                        let finish = assoc.ident.span().end();
-                        let start = hafley_scm::lang::rust::line_col_to_byte(
-                            line_starts,
-                            begin.line as u32,
-                            begin.column as u32,
-                        );
-                        let end = hafley_scm::lang::rust::line_col_to_byte(
-                            line_starts,
-                            finish.line as u32,
-                            finish.column as u32,
-                        );
+                        let span = hafley_scm::lang::rust::syn_span(assoc.ident.span());
                         Some((
                             item.ident.to_string(),
                             assoc.ident.to_string(),
-                            Span {
-                                start,
-                                len: end - start,
-                            },
+                            span,
                         ))
                     })
                     .collect::<Vec<_>>(),
@@ -511,13 +493,12 @@ fn rust_module_facts_from_rows(
     }
 }
 
-struct ReturnReceiverWalk<'a> {
-    line_starts: &'a [u32],
+struct ReturnReceiverWalk {
     method_returns: Vec<(String, String, String)>,
     receivers: Vec<(Span, String, String)>,
 }
 
-impl<'ast> syn::visit::Visit<'ast> for ReturnReceiverWalk<'_> {
+impl<'ast> syn::visit::Visit<'ast> for ReturnReceiverWalk {
     fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
         if let Some(owner) = hafley_scm::lang::rust::principal_ty(&item.self_ty) {
             for child in &item.items {
@@ -545,23 +526,9 @@ impl<'ast> syn::visit::Visit<'ast> for ReturnReceiverWalk<'_> {
             if let syn::Expr::Path(path) = receiver.func.as_ref() {
                 let segments: Vec<_> = path.path.segments.iter().collect();
                 if segments.len() >= 2 {
-                    let begin = call.method.span().start();
-                    let finish = call.method.span().end();
-                    let start = hafley_scm::lang::rust::line_col_to_byte(
-                        self.line_starts,
-                        begin.line as u32,
-                        begin.column as u32,
-                    );
-                    let end = hafley_scm::lang::rust::line_col_to_byte(
-                        self.line_starts,
-                        finish.line as u32,
-                        finish.column as u32,
-                    );
+                    let span = hafley_scm::lang::rust::syn_span(call.method.span());
                     self.receivers.push((
-                        Span {
-                            start,
-                            len: end - start,
-                        },
+                        span,
                         segments[segments.len() - 2].ident.to_string(),
                         segments[segments.len() - 1].ident.to_string(),
                     ));
@@ -2679,12 +2646,12 @@ mod tree_facts_tests {
                 }
                 let source = std::fs::read(&path).expect("fixture source reads");
                 let source_text = std::str::from_utf8(&source).expect("fixture source is UTF-8");
-                let parsed = hafley_scm::lang::rust::parse_rust_syntax(source_text)
+                let parsed = hafley_scm::lang::rust::parse_rust_file(source_text)
                     .expect("Syn parses fixture");
                 let tree = parser
                     .parse(&source, None)
                     .expect("tree-sitter parses fixture");
-                let syn_facts = rust_module_facts_from_parsed(&parsed.file, &parsed.line_starts);
+                let syn_facts = rust_module_facts_from_parsed(&parsed);
                 let tree_facts = rust_module_facts_from_tree(&tree, &source);
                 assert_eq!(tree_facts.uses, syn_facts.uses, "uses: {}", path.display());
                 assert_eq!(
