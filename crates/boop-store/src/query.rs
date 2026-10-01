@@ -482,6 +482,8 @@ impl Store {
     /// Turns whose text contains `needle` (case-insensitive), across every
     /// harness, newest first. `since_ts` is a lower bound on the turn's ms
     /// timestamp; `harness` narrows to one adapter name.
+    // CROSS JOIN pins agent_session first so agent_turn seeks
+    // idx_turn_session_ts; agent_turn first scans every turn's text.
     pub fn search_turns(
         &self,
         needle: &str,
@@ -496,13 +498,16 @@ impl Store {
                     t.turn AS turn, t.ts AS ts, dict_role.value AS role,
                     t.source_class AS source_class,
                     substr(t.said, max(1, instr(lower(t.said), lower(?1)) - 80), 240) AS snippet
-             FROM agent_turn t
-             JOIN agent_session ON agent_session.session_id = t.session_id
+             FROM agent_session
+             CROSS JOIN agent_turn t
+               ON t.session_id = agent_session.session_id AND t.ts >= ?2
              JOIN dict_session ON dict_session.id = t.session_id
              JOIN dict_harness ON dict_harness.id = agent_session.harness_id
              JOIN dict_role ON dict_role.id = t.role_id
              LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
-             WHERE t.ts >= ?2 AND instr(lower(t.said), lower(?1)) > 0",
+             WHERE (SELECT max(m.ts) FROM agent_turn m
+                     WHERE m.session_id = agent_session.session_id) >= ?2
+               AND instr(lower(t.said), lower(?1)) > 0",
         );
         let mut values: Vec<rusqlite::types::Value> =
             vec![needle.to_string().into(), (since_ts as i64).into()];
