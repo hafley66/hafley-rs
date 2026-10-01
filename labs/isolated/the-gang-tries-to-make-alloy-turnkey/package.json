@@ -1,0 +1,20 @@
+{
+  "name": "lab-alloy-turnkey",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "node 0_gen.mjs c typespec",
+    "report": "node 3_report.mjs",
+    "test": "node 0_gen.mjs c typespec && tsc -p . && vitest run"
+  },
+  "dependencies": {
+    "@alloy-js/core": "0.23.0-dev.12",
+    "tree-sitter-c": "0.24.1",
+    "web-tree-sitter": "0.25.10"
+  },
+  "devDependencies": {
+    "@alloy-js/rollup-plugin": "^0.1.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.0"
+  }
+}
