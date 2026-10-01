@@ -489,6 +489,16 @@ pub(crate) fn deliver_hail(
     deliver_hail_reported(registry, dir, message, line)
 }
 
+/// A delivery a sync pass makes as a side effect: its receipt goes to stderr,
+/// so the verb that carried the sync owns stdout.
+pub(crate) fn deliver_hail_to_stderr(
+    registry: &Registry,
+    dir: &Path,
+    message: &bus::Message,
+) -> Result<()> {
+    deliver_hail_reported(registry, dir, message, |text| eprintln!("{text}"))
+}
+
 /// Deliver a completion found by the resident native-TUI projector and write
 /// its receipt only to that wrapper's trail. Failure to open or write the
 /// diagnostic trail is silent: the harness owns the terminal, so stdout and

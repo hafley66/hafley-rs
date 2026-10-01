@@ -183,11 +183,34 @@ pub(crate) fn run_me_favorite(index: i64, note: Option<&str>) -> Result<()> {
             rows.len()
         )
     })?;
+    pin_turn(&store, row, note)
+}
+
+/// `boop me favorite --session <id> --turn <n>`: the exact turn a
+/// `boop db search` hit names, any role.
+#[cfg(feature = "agent-read")]
+pub(crate) fn run_me_favorite_turn(session: &str, turn: u64, note: Option<&str>) -> Result<()> {
+    let store = open_store()?;
+    let rows = store.turn_rows(&ident::TurnQuery {
+        session: Some(session.to_owned()),
+        turn_from: Some(turn),
+        turn_to: Some(turn),
+        ..Default::default()
+    })?;
+    let row = rows
+        .first()
+        .with_context(|| format!("session {session} has no turn {turn} in the store"))?;
+    pin_turn(&store, row, note)
+}
+
+#[cfg(feature = "agent-read")]
+fn pin_turn(store: &ident::Store, row: &boop::TurnRow, note: Option<&str>) -> Result<()> {
     anyhow::ensure!(
         !row.said.trim().is_empty(),
-        "selected assistant message is empty"
+        "selected {} message is empty",
+        row.role
     );
-    let source = format!("{}:{}:assistant:{}", row.harness, session, row.turn);
+    let source = format!("{}:{}:{}:{}", row.harness, row.session, row.role, row.turn);
     let id = store.favorite_add(&row.said, note, &source, now_ms())?;
     // The note stays free text on the row; its tags also land in agent_tag,
     // so the CLI path and the instant path feed one table.

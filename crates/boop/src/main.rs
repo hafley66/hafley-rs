@@ -482,9 +482,10 @@ fn run_cli(cli: Cli) -> Result<()> {
     }
     let registry = Registry::discover();
     let needs_startup_sync = startup_sync_wanted(&command, sync_suppressed());
+    let drain_held_mail = !command_is_a_read_verb(&command);
     run_with_startup_sync(
         needs_startup_sync,
-        || sync_before_local_command(&registry),
+        || sync_before_local_command(&registry, drain_held_mail),
         || match command {
             SubCmd::ShellInit { shell } => {
                 print_shell_init(shell);
@@ -695,7 +696,17 @@ fn run_cli(cli: Cli) -> Result<()> {
                     mail_dir.as_deref(),
                 ),
                 #[cfg(feature = "agent-read")]
-                MeCmd::Favorite { index, note } => run_me_favorite(index, note.as_deref()),
+                MeCmd::Favorite {
+                    index,
+                    session,
+                    turn,
+                    note,
+                } => match (session, turn) {
+                    (Some(session), Some(turn)) => {
+                        cli::me::run_me_favorite_turn(&session, turn, note.as_deref())
+                    }
+                    _ => run_me_favorite(index, note.as_deref()),
+                },
             },
             #[cfg(feature = "agent-read")]
             SubCmd::Remind { count } => run_me_remind(count),
@@ -749,14 +760,44 @@ fn missing_beep_argument(name: &str) -> ! {
         .exit()
 }
 
-fn sync_before_local_command(registry: &Registry) -> Result<()> {
+fn sync_before_local_command(registry: &Registry, drain: bool) -> Result<()> {
     let started = std::time::Instant::now();
     sync_before_read(registry)?;
     warn_if_slow("startup transcript sync", started, SLOW_STARTUP_EFFECT);
-    let started = std::time::Instant::now();
-    drain_all_held_mail_best_effort(registry);
-    warn_if_slow("held-mail drain", started, SLOW_STARTUP_EFFECT);
+    if drain {
+        let started = std::time::Instant::now();
+        drain_all_held_mail_best_effort(registry);
+        warn_if_slow("held-mail drain", started, SLOW_STARTUP_EFFECT);
+    }
     Ok(())
+}
+
+/// Read verbs never drain held mail; `db search --sync` syncs transcripts only.
+#[cfg(feature = "agent-read")]
+fn command_is_a_read_verb(command: &SubCmd) -> bool {
+    matches!(
+        command,
+        SubCmd::Db {
+            cmd: Some(
+                DbCmd::Search { .. }
+                    | DbCmd::Sessions { .. }
+                    | DbCmd::Lanes { .. }
+                    | DbCmd::Mail { .. }
+                    | DbCmd::Favorite {
+                        cmd: FavoriteCmd::List { .. } | FavoriteCmd::Show { .. },
+                    }
+            ),
+            ..
+        } | SubCmd::Me {
+            cmd: MeCmd::Whoami { .. },
+            ..
+        } | SubCmd::Whoami { .. }
+    )
+}
+
+#[cfg(not(feature = "agent-read"))]
+fn command_is_a_read_verb(_: &SubCmd) -> bool {
+    false
 }
 
 /// A startup effect a read verb pays before its own query; past this the
@@ -837,11 +878,7 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 ..
             }
             | SubCmd::Db {
-                cmd: Some(DbCmd::Search { .. }),
-                ..
-            }
-            | SubCmd::Db {
-                cmd: Some(DbCmd::Lanes { .. }),
+                cmd: Some(DbCmd::Search { sync: true, .. }),
                 ..
             }
             | SubCmd::Db {
@@ -869,7 +906,11 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 ..
             }
             | SubCmd::Db {
-                cmd: Some(DbCmd::Favorite { .. }),
+                cmd: Some(DbCmd::Favorite {
+                    cmd: FavoriteCmd::Add { .. }
+                        | FavoriteCmd::Edit { .. }
+                        | FavoriteCmd::Delete { .. },
+                }),
                 ..
             }
             | SubCmd::Db {
@@ -896,7 +937,10 @@ fn command_needs_startup_sync(command: &SubCmd) -> bool {
                 cmd: Some(DbCmd::Span { .. }),
                 ..
             }
-            | SubCmd::Me { .. }
+            | SubCmd::Me {
+                cmd: MeCmd::Register { .. } | MeCmd::Mood { .. } | MeCmd::Favorite { .. },
+                ..
+            }
             | SubCmd::Remind { .. }
             | SubCmd::Debug { .. }
     )
@@ -1934,6 +1978,10 @@ enum DbCmd {
         limit: u64,
         #[arg(long, value_enum, default_value_t = QueryFormat::Ndjson)]
         format: QueryFormat,
+        /// Project new transcript bytes before searching. Without it the
+        /// search reads the store as the last sync left it.
+        #[arg(long)]
+        sync: bool,
     },
     /// Sessions across every harness that moved in the window, newest first.
     #[cfg(feature = "agent-read")]
@@ -2176,12 +2224,20 @@ enum MeCmd {
         #[arg(long = "as", value_name = "SESSION")]
         as_name: Option<String>,
     },
-    /// Save one assistant turn from the caller's conversation as a favorite.
+    /// Save one turn as a favorite: the caller's own assistant turn by index,
+    /// or any session's exact turn with `--session` and `--turn`.
     #[cfg(feature = "agent-read")]
     Favorite {
         /// Assistant turn position: -1 is newest, -2 is the one before it.
         #[arg(default_value_t = -1, allow_hyphen_values = true)]
         index: i64,
+        /// Favorite this exact session's turn (a `boop db search` hit's
+        /// `session_id`); needs `--turn`.
+        #[arg(long, requires = "turn")]
+        session: Option<String>,
+        /// The turn number within `--session` (a search hit's `turn`).
+        #[arg(long, requires = "session")]
+        turn: Option<u64>,
         /// Why this message is kept.
         #[arg(long)]
         note: Option<String>,
@@ -2516,10 +2572,31 @@ mod tests {
                 "{argv:?} reads no agent_* row and must not sync"
             );
         }
+        let read_verbs = [
+            vec!["boop", "db", "search", "wombat"],
+            vec!["boop", "db", "sessions"],
+            vec!["boop", "db", "lanes"],
+            vec!["boop", "db", "mail", "root"],
+            vec!["boop", "db", "favorite", "list"],
+            vec!["boop", "db", "favorite", "show", "1"],
+            vec!["boop", "me", "whoami"],
+        ];
+        for argv in read_verbs {
+            let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
+            let command = cli.command.as_ref().unwrap();
+            assert!(
+                !command_needs_startup_sync(command) && command_is_a_read_verb(command),
+                "{argv:?} is a read verb: no sync, no drain"
+            );
+        }
+        let cli = Cli::try_parse_from(["boop", "db", "search", "wombat", "--sync"]).unwrap();
+        let command = cli.command.as_ref().unwrap();
+        assert!(command_needs_startup_sync(command) && command_is_a_read_verb(command));
         let transcript_readers = [
             vec!["boop", "db", "turn", "list"],
             vec!["boop", "db", "status"],
             vec!["boop", "remind", "2"],
+            vec!["boop", "me", "favorite"],
         ];
         for argv in transcript_readers {
             let cli = Cli::try_parse_from(&argv).unwrap_or_else(|e| panic!("{argv:?}: {e}"));
