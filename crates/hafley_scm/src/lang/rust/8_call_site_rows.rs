@@ -1,18 +1,16 @@
 //! Rust call sites and const-initializer definitions from the caller's syn parse.
 
-use std::collections::HashSet;
 use std::ops::Range;
 
 use syn::spanned::Spanned;
 
-use super::call_metadata_rows::{cfg_test_predicate, item_attrs, path_string, span_range};
+use super::call_metadata_rows::{path_string, span_range};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CallSiteRow {
     pub range: Range<u32>,
     pub callee: String,
     pub callee_path: Option<String>,
-    pub cfg: Option<String>,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -26,7 +24,6 @@ pub struct CallSiteRows {
     pub sites: Vec<CallSiteRow>,
     pub expected_types: Vec<(Range<u32>, String)>,
     pub const_inits: Vec<ConstInitRow>,
-    pub test_only_calls: Vec<(String, String)>,
 }
 
 pub fn call_site_rows(
@@ -38,32 +35,15 @@ pub fn call_site_rows(
         line_starts,
         sites: Vec::new(),
         expected_types: Vec::new(),
-        under_cfg: None,
         defs: def_ranges,
         const_inits: Vec::new(),
         in_block: false,
     };
     syn::visit::visit_file(&mut collector, parsed);
-    let shipped: HashSet<&str> = collector
-        .sites
-        .iter()
-        .filter(|site| site.cfg.is_none())
-        .map(|site| site.callee.as_str())
-        .collect();
-    let mut seen = HashSet::new();
-    let test_only_calls = collector
-        .sites
-        .iter()
-        .filter_map(|site| site.cfg.as_ref().map(|cfg| (&site.callee, cfg)))
-        .filter(|(callee, _)| !shipped.contains(callee.as_str()))
-        .filter(|(callee, _)| seen.insert(callee.as_str()))
-        .map(|(callee, cfg)| (callee.clone(), cfg.clone()))
-        .collect();
     CallSiteRows {
         sites: collector.sites,
         expected_types: collector.expected_types,
         const_inits: collector.const_inits,
-        test_only_calls,
     }
 }
 
@@ -71,7 +51,6 @@ struct CallCollector<'a> {
     line_starts: &'a [u32],
     sites: Vec<CallSiteRow>,
     expected_types: Vec<(Range<u32>, String)>,
-    under_cfg: Option<String>,
     defs: &'a [Range<u32>],
     const_inits: Vec<ConstInitRow>,
     in_block: bool,
@@ -93,9 +72,6 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
     }
 
     fn visit_item(&mut self, item: &'ast syn::Item) {
-        let outer = self.under_cfg.take();
-        let own = cfg_test_predicate(item_attrs(item));
-        self.under_cfg = outer.clone().or(own);
         let candidate = match item {
             syn::Item::Const(item) if !self.in_block => {
                 Some((item.ident.span(), &item.expr, item.ident.to_string()))
@@ -127,7 +103,6 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                 });
             }
         }
-        self.under_cfg = outer;
     }
 
     fn visit_block(&mut self, block: &'ast syn::Block) {
@@ -147,7 +122,6 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                             callee: segment.ident.to_string(),
                             callee_path: (path.path.segments.len() > 1)
                                 .then(|| path_string(&path.path)),
-                            cfg: self.under_cfg.clone(),
                         });
                     }
                 }
@@ -158,7 +132,6 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                     range: span_range(self.line_starts, call.method.span()),
                     callee: call.method.to_string(),
                     callee_path: None,
-                    cfg: self.under_cfg.clone(),
                 });
                 syn::visit::visit_expr(self, expr);
             }
@@ -182,7 +155,6 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                         callee: segment.ident.to_string(),
                         callee_path: (struct_expr.path.segments.len() > 1)
                             .then(|| path_string(&struct_expr.path)),
-                        cfg: self.under_cfg.clone(),
                     });
                 }
                 syn::visit::visit_expr(self, expr);

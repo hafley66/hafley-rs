@@ -26,7 +26,7 @@ const VALUE: () = helper();
 
 #[cfg(test)]
 mod tests {
-    fn inherited_cfg() {}
+    fn test_mod_item() {}
 }
 
 mint!(generated);
@@ -53,14 +53,6 @@ fn production_call_rows_cover_scm_and_focused_supplements() {
             )
         })
         .collect();
-    rows.extend(call.aux.cfg_scopes.iter().map(|scope| {
-        format!(
-            "cfg {}..{} {}",
-            scope.span.start,
-            scope.span.end(),
-            output.strings.lookup(scope.cfg)
-        )
-    }));
     rows.extend(call.aux.method_owners.iter().map(|owner| {
         let self_type = owner
             .self_type
@@ -78,15 +70,14 @@ fn production_call_rows_cover_scm_and_focused_supplements() {
     }));
     rows.sort();
     let actual = rows.join("\n");
-    let expected = "cfg 364..382 test
-node 124..129 Lambda -
+    let expected = "node 124..129 Lambda -
 node 168..186 Method inherent
 node 211..230 Method with_body
 node 238..259 Method signature_only
 node 278..285 Free Variant
 node 291..302 Free helper
 node 309..329 Ext(LangKind { lang: \"rust\", tag: \"const_init\" }) VALUE
-node 364..382 Free inherited_cfg
+node 364..382 Free test_mod_item
 node 386..403 Free generated
 node 78..132 Free free
 node 94..105 Free nested

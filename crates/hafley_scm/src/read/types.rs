@@ -763,14 +763,6 @@ pub struct CallFAux {
     /// One row per `Method` def whose declaration names an owner, joined to the
     /// def node by span. Rust populates it; other languages leave it empty.
     pub method_owners: Vec<MethodOwner>,
-    /// One row per def that a `#[cfg(...)]` predicate naming `test` guards,
-    /// its own or an enclosing module's, joined to the def node by span.
-    /// Emitted ONLY for guarded defs, so a consumer declaring the `cfg` column
-    /// receives exactly the conditional set and nothing else.
-    pub cfg_scopes: Vec<CfgScope>,
-    /// One row per callee this file names ONLY from cfg-guarded sites, so a
-    /// consumer can subtract the name and still keep every shipped call.
-    pub test_only_calls: Vec<TestOnlyCall>,
     /// One row per call site whose receiver type this file could trace, joined
     /// to `CallSite.span`. The go and rust arms populate it; other languages
     /// leave it empty.
@@ -924,23 +916,6 @@ impl MacroSiteSource {
             MacroSiteSource::Scip => "scip",
         }
     }
-}
-
-/// A def the compiler only builds under a cfg predicate. Carried so a caller
-/// counting definitions can subtract the ones that never reach a release
-/// binary, which otherwise inflate every per-file count.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct CfgScope {
-    pub span: Span,
-    pub cfg: NameId,
-}
-
-/// A callee EVERY site in this file names under a cfg predicate naming `test`.
-/// One site outside the predicate keeps the callee off this list.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct TestOnlyCall {
-    pub callee: NameId,
-    pub cfg: NameId,
 }
 
 impl Family for CallF {
@@ -3003,26 +2978,6 @@ pub enum FlatFact {
         #[serde(rename = "trait")]
         trait_name: Option<String>,
     },
-    /// CallF cfg scope: a def guarded by a cfg predicate naming `test`, joined
-    /// to its def node by `span`. v6-ONLY, no v5 oracle facet.
-    #[serde(rename = "cfg_scope")]
-    CfgScopeOut {
-        #[serde(skip_serializing_if = "Option::is_none", default)]
-        fact: Option<u32>,
-        family: FamilyTag,
-        span: SpanOut,
-        cfg: String,
-    },
-    /// CallF test-only callee: a name this file calls from cfg-guarded sites
-    /// ONLY. No span: it is a per-file set row, not a per-occurrence one.
-    #[serde(rename = "test_only_call")]
-    TestOnlyCallOut {
-        #[serde(skip_serializing_if = "Option::is_none", default)]
-        fact: Option<u32>,
-        family: FamilyTag,
-        callee: String,
-        cfg: String,
-    },
     /// CallF macro site: the invocation `span` whose expansion minted a
     /// def/site elsewhere in this file, and which arm found it.
     #[serde(rename = "macro_site")]
@@ -3612,8 +3567,6 @@ impl FlatFact {
             | FlatFact::DocNodeOut { fact, .. }
             | FlatFact::Specifier { fact, .. }
             | FlatFact::MethodOwnerOut { fact, .. }
-            | FlatFact::CfgScopeOut { fact, .. }
-            | FlatFact::TestOnlyCallOut { fact, .. }
             | FlatFact::ResolvedEdge { fact, .. }
             | FlatFact::ResolvedTypeEdge { fact, .. }
             | FlatFact::Reference { fact, .. } => Some(fact),

@@ -53,8 +53,8 @@ pub use call_definition_rows::{
     call_definition_rows, call_definition_rows_from_arena, CallDefinitionKind, CallDefinitionRow,
 };
 pub use call_metadata_rows::{
-    build_line_starts, call_metadata_rows, cfg_test_predicate, item_attrs, line_col_to_byte,
-    path_name, path_string, primary_type, variant_def_range, CallCfgRow, CallOwnerRow,
+    build_line_starts, call_metadata_rows, item_attrs, line_col_to_byte, path_name,
+    path_string, primary_type, variant_def_range, CallOwnerRow,
 };
 pub use call_query::RUST_CALL_QUERY;
 pub const RUST_FAST_QUERY: &str = include_str!("4_fast_query.scm");

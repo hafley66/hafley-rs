@@ -41,7 +41,7 @@ use crate::read::trace;
 use crate::read::types::LangKind;
 use crate::read::types::ScipIndex;
 use crate::read::types::{
-    CfgScope, DefSite, MacroSite, MacroSiteSource, PathIndex, ReceiverOutcome, TestOnlyCall,
+    DefSite, MacroSite, MacroSiteSource, PathIndex, ReceiverOutcome,
     UnresolvedReason,
 };
 

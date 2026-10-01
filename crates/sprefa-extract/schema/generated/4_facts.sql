@@ -326,29 +326,6 @@ CREATE TABLE IF NOT EXISTS "method_owner" (
     "trait" TEXT
 );
 
-CREATE TABLE IF NOT EXISTS "cfg_scope" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
-    "fact" INTEGER,
-    "family" TEXT NOT NULL,
-    "span__start" INTEGER NOT NULL,
-    "span__end" INTEGER NOT NULL,
-    "cfg" TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS "test_only_call" (
-    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
-    "_input_path" TEXT,
-    "_content_id" TEXT,
-    "record" TEXT NOT NULL,
-    "fact" INTEGER,
-    "family" TEXT NOT NULL,
-    "callee" TEXT NOT NULL,
-    "cfg" TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS "macro_site" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,
