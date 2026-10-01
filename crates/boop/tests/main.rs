@@ -86,6 +86,8 @@ mod t5_delayed_worker_delivery;
 mod t5_live_harness;
 #[path = "6_read_verbs_quiet.rs"]
 mod t6_read_verbs_quiet;
+#[path = "7_search_window.rs"]
+mod t7_search_window;
 #[path = "tell.rs"]
 mod tell;
 #[path = "temp_home_rail.rs"]
