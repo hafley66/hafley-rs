@@ -1,4 +1,4 @@
--- Input: ryii --resolve --rust-checker --kinds call --sqlite over crates/boop*.
+-- Input: ryii --resolve --rust-checker --kinds call --sqlite over crates/boop*, then 0_test_scope.sql.
 -- `unresolved.detail` holds rust-analyzer's crate-qualified callee path.
 
 drop table if exists effect_rule;
@@ -29,7 +29,6 @@ insert into effect_rule values
   ('tracing::%', 'log'), ('tracing_subscriber::%', 'log'), ('hafley_observe::%', 'log');
 
 create index if not exists node_owner on node(_input_path, family, kind, span__start);
-create index if not exists cfg_scope_path on cfg_scope(_input_path, cfg);
 
 drop table if exists effect_site;
 create table effect_site as
@@ -41,8 +40,8 @@ with prod as (
     and u.path like 'crates/%/src/%'
     and u.path not like '%/tests/%'
     and not exists (
-      select 1 from cfg_scope c
-      where c._input_path = u.path and c.cfg = 'test'
+      select 1 from test_scope c
+      where c.path = u.path
         and u.span__start between c.span__start and c.span__end)
 )
 select

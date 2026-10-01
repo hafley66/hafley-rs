@@ -1986,7 +1986,6 @@ crates/boop-turnstrip/src/_3_layout.rs	222	lambda
 crates/boop-turnstrip/src/_3_layout.rs	259	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	260	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	261	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	263	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	287	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	320	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	334	lambda	
@@ -1996,7 +1995,6 @@ crates/boop-turnstrip/src/_3_layout.rs	407	lambda
 crates/boop-turnstrip/src/_3_layout.rs	411	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	412	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	413	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	432	lambda	
 crates/boop-turnstrip/src/_3a_gap.rs	4	lambda	
 crates/boop-turnstrip/src/_3a_gap.rs	6	lambda	
 crates/boop-turnstrip/src/_3a_gap.rs	9	lambda	
@@ -2026,7 +2024,6 @@ crates/boop-turnvis/src/0_candidates.rs	56	lambda
 crates/boop-turnvis/src/lib.rs	34	function	Anchored
 crates/boop-turnvis/src/lib.rs	35	function	Extended
 crates/boop-turnvis/src/lib.rs	88	function	is_js_whitespace
-crates/boop-turnvis/src/lib.rs	103	function	is_leading_marker
 crates/boop-turnvis/src/lib.rs	131	lambda	
 crates/boop-turnvis/src/lib.rs	155	function	line_matches
 crates/boop-turnvis/src/lib.rs	162	lambda	
@@ -2034,7 +2031,7 @@ crates/boop-turnvis/src/lib.rs	169	function	truncated_prefix
 crates/boop-turnvis/src/lib.rs	196	lambda	
 crates/boop-turnvis/src/lib.rs	260	lambda	
 crates/boop-turnvis/src/lib.rs	261	lambda	
-crates/boop-turnvis/src/lib.rs	297	function	said_lines
+crates/boop-turnvis/src/lib.rs	321	function	match_row_owners
 crates/boop-turnvis/src/lib.rs	340	lambda	
 crates/boop-turnvis/src/lib.rs	343	function	has_discriminating_hit
 crates/boop-turnvis/src/lib.rs	348	lambda	
@@ -2046,14 +2043,9 @@ crates/boop-turnvis/src/lib.rs	373	function	is_terminal_chrome
 crates/boop-turnvis/src/lib.rs	387	lambda	
 crates/boop-turnvis/src/lib.rs	422	lambda	
 crates/boop-turnvis/src/lib.rs	434	lambda	
-crates/boop-turnvis/src/lib.rs	439	lambda	
 crates/boop-turnvis/src/lib.rs	446	lambda	
-crates/boop-turnvis/src/lib.rs	450	lambda	
-crates/boop-turnvis/src/lib.rs	458	lambda	
 crates/boop-turnvis/src/lib.rs	488	lambda	
 crates/boop-turnvis/src/lib.rs	498	lambda	
-crates/boop-turnvis/src/lib.rs	503	lambda	
-crates/boop-turnvis/src/lib.rs	509	lambda	
 crates/boop-turnvis/src/lib.rs	510	lambda	
 crates/boop-turnvis/src/lib.rs	518	lambda	
 crates/boop-turnvis/src/lib.rs	519	lambda	
@@ -2061,7 +2053,6 @@ crates/boop-turnvis/src/lib.rs	521	lambda
 crates/boop-turnvis/src/lib.rs	530	lambda	
 crates/boop-turnvis/src/lib.rs	535	lambda	
 crates/boop-turnvis/src/lib.rs	539	lambda	
-crates/boop-turnvis/src/lib.rs	541	lambda	
 crates/boop-turnvis/src/lib.rs	566	lambda	
 crates/boop-turnvis/src/lib.rs	574	lambda	
 crates/boop-turnvis/src/lib.rs	578	lambda	
