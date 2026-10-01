@@ -3,6 +3,8 @@
 //! the mailbox a lane drains, and the coroutine host a caller embeds.
 
 pub mod config;
+#[path = "1_dead_route.rs"]
+pub mod dead_route;
 pub mod deliver;
 pub mod headwatch;
 pub mod inbox;

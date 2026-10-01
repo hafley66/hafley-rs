@@ -322,7 +322,8 @@ pub fn update_native_route(
 /// keeps it out of this list. The pre-fix query read only the latest
 /// transition, and a re-push that landed one rung lower rewrote that latest
 /// word every 5 s, so a row a claude session already held was pushed at it
-/// again on every wrapper tick and every sync-carrying command.
+/// again on every wrapper tick and every sync-carrying command. A
+/// `route-dead` row is terminal for the drain the same way.
 pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Message>> {
     let mut statement = store.connection().prepare(
         "SELECT m.message_id, m.from_route, m.to_route, m.from_timestamp, m.to_timestamp,
@@ -333,7 +334,7 @@ pub fn held_messages(store: &crate::ident::Store, route: &str) -> Result<Vec<Mes
                SELECT 1 FROM agent_delivery_transition t
                WHERE t.message_id = m.message_id
                  AND t.route = m.to_route
-                 AND (t.outcome IN ('accepted-by-harness', 'pasted-into-pane')
+                 AND (t.outcome IN ('accepted-by-harness', 'pasted-into-pane', 'route-dead')
                       OR t.detail IN ('door', 'door queue')))
          ORDER BY m.seq",
     )?;

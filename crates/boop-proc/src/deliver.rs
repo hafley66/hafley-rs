@@ -16,6 +16,8 @@ use boop_store::bus::{Message, Route};
 use boop_store::harness_id::HarnessId;
 use boop_store::ident::{DeliveryState, LiveRow, Store};
 
+use crate::dead_route;
+
 /// One rung of the delivery ladder. Every send path walks these top to
 /// bottom and stops at the first that takes the row, so a message is never
 /// reported lost: the last rung is the mailbox itself.
@@ -785,7 +787,7 @@ fn door_failure_cooldown() -> Duration {
 
 /// Whether a door answer is a transport failure (dead or unreachable) rather
 /// than a live door declining this body for now. A busy door is not cooled off.
-fn door_transport_failure(why: &str) -> bool {
+pub(crate) fn door_transport_failure(why: &str) -> bool {
     let why = why.to_ascii_lowercase();
     // A session that has not published its socket yet has no door to fail;
     // cooling it off holds the next row (a lane's result) for the whole bound.
@@ -1126,25 +1128,27 @@ pub fn drain_route_held_mail_budgeted(
         Ok(routes) => routes,
         Err(_) => return 0,
     };
+    // A progress row is never pushed, so re-walking the ladder would only
+    // stamp a second `held-in-mailbox`; an end row retries like a hail. A
+    // commit row in Door mode that is not done is the one progress row
+    // that retries: the door may have been cooling off when it landed.
+    let pushable: Vec<Message> = held
+        .into_iter()
+        .filter(|message| {
+            let commit_retry = message.kind.commit_row()
+                && message.detail.as_deref() != Some("done")
+                && commit_push_mode(store, &routes, &message.to, &message.from) == CommitPush::Door;
+            !(message.kind.lane_progress_row() && !commit_retry
+                || message
+                    .r#ref
+                    .as_deref()
+                    .is_some_and(|reference| reference.starts_with("reminder:")))
+        })
+        .collect();
     let mut pushed = 0usize;
-    for message in held {
-        // A progress row is never pushed, so re-walking the ladder would only
-        // stamp a second `held-in-mailbox`; an end row retries like a hail. A
-        // commit row in Door mode that is not done is the one progress row
-        // that retries: the door may have been cooling off when it landed.
-        let commit_retry = message.kind.commit_row()
-            && message.detail.as_deref() != Some("done")
-            && commit_push_mode(store, &routes, &message.to, &message.from) == CommitPush::Door;
-        if message.kind.lane_progress_row() && !commit_retry
-            || message
-                .r#ref
-                .as_deref()
-                .is_some_and(|reference| reference.starts_with("reminder:"))
-        {
-            continue;
-        }
+    for (index, message) in pushable.iter().enumerate() {
         let Ok(landing) =
-            deliver_hail_budgeted(registry, store, &routes, &message, &TmuxPaster, budget)
+            deliver_hail_budgeted(registry, store, &routes, message, &TmuxPaster, budget)
         else {
             continue;
         };
@@ -1154,6 +1158,13 @@ pub fn drain_route_held_mail_budgeted(
         // Nothing answered: every later row walks the same dead door, so the
         // pass ends here and the next tick retries from the oldest row.
         if landing.rung == Rung::Mailbox {
+            dead_route::retire_if_dead(
+                store,
+                route_name,
+                route.harness,
+                &pushable[index..],
+                &landing.detail,
+            );
             break;
         }
         if landing.carried_the_body() {

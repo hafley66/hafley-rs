@@ -340,6 +340,10 @@ pub enum DeliveryState {
     /// The route's door budget is blown; the row is held through the cool-off
     /// and the drain retries it after (failure mode 14, rail 2).
     CooledOff,
+    /// The route's session answered nothing for the bounded number of drain
+    /// attempts. Terminal: the drain stops pushing the row; it stays unread
+    /// for `boop wait --me`.
+    RouteDead,
 }
 
 /// One door budget trip (`agent_door_blowout`).
@@ -393,6 +397,7 @@ impl DeliveryState {
             DeliveryState::ParentDoorDelivered => "parent-door-delivered",
             DeliveryState::ParentDoorFailed => "parent-door-failed",
             DeliveryState::CooledOff => "cooled-off",
+            DeliveryState::RouteDead => "route-dead",
         }
     }
 
@@ -416,7 +421,7 @@ impl DeliveryState {
     /// Read one stored `outcome` word back. Unknown text is `None` rather than
     /// a guess, so a store written by a newer boop reads as unknown.
     pub fn parse(word: &str) -> Option<DeliveryState> {
-        const ALL: [DeliveryState; 18] = [
+        const ALL: [DeliveryState; 19] = [
             DeliveryState::Appended,
             DeliveryState::ClaimedBySupervisor,
             DeliveryState::SubmittedToHarness,
@@ -435,6 +440,7 @@ impl DeliveryState {
             DeliveryState::ParentDoorDelivered,
             DeliveryState::ParentDoorFailed,
             DeliveryState::CooledOff,
+            DeliveryState::RouteDead,
         ];
         ALL.into_iter().find(|state| state.as_str() == word)
     }
