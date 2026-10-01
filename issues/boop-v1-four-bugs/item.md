@@ -2,10 +2,11 @@
 created: 2026-10-01
 updated: 2026-10-01
 type: bug
-status: in-progress
+status: fixed
 priority: normal
 epic: burndown-2026-10
 labels: [boop]
+closed: 2026-10-01
 ---
 
 # boop v1: fix wait-on-failed-lane, shout tally, split store, orphan supervisor
