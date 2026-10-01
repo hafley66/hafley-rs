@@ -1,3 +1,4 @@
+pub(crate) mod _2_wait_target;
 pub(crate) mod acpx;
 pub(crate) mod control;
 pub(crate) mod db;

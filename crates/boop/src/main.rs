@@ -8,13 +8,14 @@ use std::path::PathBuf;
 use anyhow::{Context, Result};
 use clap::{CommandFactory, FromArgMatches, Parser, Subcommand, ValueEnum};
 
+use boop::mailwait;
 use boop::registry::Registry;
 use boop::supervise::ParentDeathPolicy;
-use boop::{bus, mailwait};
 
 mod cli;
 mod invoke;
 
+use cli::_2_wait_target::wait_target_is_a_lane;
 use cli::control::run_native_tui;
 #[cfg(feature = "agent-read")]
 use cli::db::run_public_agent_command;
@@ -829,18 +830,6 @@ fn drain_all_held_mail_best_effort(registry: &Registry) {
     if pushed > 0 {
         tracing::info!(pushed, "held mail drained through doors");
     }
-}
-
-/// Whether `boop wait <id>` names a registered lane, so it dispatches to
-/// `run_lane_wait`. An unreadable registry falls through to the mail wait.
-fn wait_target_is_a_lane(mail_dir_arg: Option<&std::path::Path>, id: &str) -> bool {
-    let Ok(dir) = mail_dir(mail_dir_arg) else {
-        return false;
-    };
-    bus::read_routes(&dir)
-        .ok()
-        .and_then(|routes| routes.get(id).map(|route| route.kind == "lane"))
-        .unwrap_or(false)
 }
 
 /// The name of the escape hatch that suppresses the startup transcript sync.
@@ -3105,18 +3094,6 @@ mod tests {
         let lane = LaneCmd::augment_subcommands(clap::Command::new("lane"));
         let run = lane.find_subcommand("run").expect("run subcommand exists");
         assert!(run.is_hide_set(), "beep lane run must stay hidden");
-    }
-
-    /// RECEIPT (one-wait-verb): `boop wait <id>` dispatches to `run_lane_wait`
-    /// only when `<id>` names a registered lane route, never a message id.
-    #[test]
-    fn wait_dispatches_to_lane_wait_only_for_a_registered_lane_route() {
-        let dir = crate::cli::testkit::temp_mail_dir();
-        std::fs::create_dir_all(&dir).unwrap();
-        crate::cli::write_route(&dir, "worker", crate::cli::testkit::route_with(None)).unwrap();
-        assert!(wait_target_is_a_lane(Some(&dir), "worker"));
-        assert!(!wait_target_is_a_lane(Some(&dir), "m-does-not-exist"));
-        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
