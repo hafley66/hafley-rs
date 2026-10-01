@@ -48,7 +48,7 @@ select
   substr(p.path, 8, instr(substr(p.path, 8), '/') - 1) as crate,
   p.path,
   (select length(t) - length(replace(t, x'0a', '')) + 1
-     from (select substr(cast(readfile(p.path) as text), 1, p.start) as t)) as line,
+     from (select cast(substr(readfile(p.path), 1, p.start) as text) as t)) as line,
   (select n.name from node n
      where n._input_path = p.path and n.family = 'call' and n.kind in ('function', 'method')
        and p.start between n.span__start and n.span__end
@@ -56,7 +56,7 @@ select
   (select r.effect from effect_rule r where p.callee like r.pattern limit 1) as effect,
   p.callee,
   -- Call arguments as written, for program names and SQL text.
-  replace(replace(substr(cast(readfile(p.path) as text), p.end + 1, 60), x'0a', ' '), '    ', '') as written_after
+  replace(replace(cast(substr(readfile(p.path), p.end + 1, 60) as text), x'0a', ' '), '    ', '') as written_after
 from prod p;
 delete from effect_site where effect is null;
 

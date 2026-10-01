@@ -275,24 +275,24 @@ crates/boop-harness/src/harness.rs	149	lambda
 crates/boop-harness/src/harness.rs	155	lambda	
 crates/boop-harness/src/harness.rs	158	lambda	
 crates/boop-harness/src/harness.rs	164	lambda	
-crates/boop-harness/src/harness.rs	230	lambda	
+crates/boop-harness/src/harness.rs	229	lambda	
 crates/boop-harness/src/harness.rs	238	lambda	
 crates/boop-harness/src/harness.rs	244	lambda	
-crates/boop-harness/src/harness.rs	263	function	Session
-crates/boop-harness/src/harness.rs	268	function	Settings
-crates/boop-harness/src/harness.rs	273	function	Closed
-crates/boop-harness/src/harness.rs	278	function	Failed
-crates/boop-harness/src/harness.rs	283	function	Root
+crates/boop-harness/src/harness.rs	262	function	Session
+crates/boop-harness/src/harness.rs	267	function	Settings
+crates/boop-harness/src/harness.rs	272	function	Closed
+crates/boop-harness/src/harness.rs	275	function	Failed
+crates/boop-harness/src/harness.rs	282	function	Root
 crates/boop-harness/src/harness.rs	283	function	NativeChild
 crates/boop-harness/src/harness.rs	284	function	WrappedChild
-crates/boop-harness/src/harness.rs	383	function	Spawned
-crates/boop-harness/src/harness.rs	388	function	Completed
+crates/boop-harness/src/harness.rs	382	function	Spawned
+crates/boop-harness/src/harness.rs	387	function	Completed
 crates/boop-harness/src/harness.rs	396	method	direct
 crates/boop-harness/src/harness.rs	455	method	matches_model
 crates/boop-harness/src/harness.rs	461	method	uses_native_tui
 crates/boop-harness/src/harness.rs	466	method	native_worktrees
 crates/boop-harness/src/harness.rs	471	method	id
-crates/boop-harness/src/harness.rs	476	method	mock_tui_launch
+crates/boop-harness/src/harness.rs	475	method	mock_tui_launch
 crates/boop-harness/src/harness.rs	482	method	capabilities
 crates/boop-harness/src/harness.rs	486	method	session_topology
 crates/boop-harness/src/harness.rs	496	method	route_topology
@@ -312,7 +312,7 @@ crates/boop-harness/src/harness.rs	572	method	sync_candidates
 crates/boop-harness/src/harness.rs	588	lambda	
 crates/boop-harness/src/harness.rs	589	lambda	
 crates/boop-harness/src/harness.rs	611	method	read_from
-crates/boop-harness/src/harness.rs	628	method	migrate_projection
+crates/boop-harness/src/harness.rs	627	method	migrate_projection
 crates/boop-harness/src/harness.rs	642	method	observe_native_children
 crates/boop-harness/src/harness.rs	654	method	native_child_completion_visible
 crates/boop-harness/src/harness.rs	666	method	control_capabilities
@@ -322,12 +322,12 @@ crates/boop-harness/src/harness.rs	689	lambda
 crates/boop-harness/src/harness.rs	697	method	composer_submit_key
 crates/boop-harness/src/harness.rs	702	method	one_shot
 crates/boop-harness/src/harness.rs	707	method	spawn
-crates/boop-harness/src/harness.rs	719	method	open_channel
+crates/boop-harness/src/harness.rs	718	method	open_channel
 crates/boop-harness/src/harness.rs	728	method	describe
 crates/boop-harness/src/harness.rs	734	method	native_settings
-crates/boop-harness/src/harness.rs	746	method	messages
+crates/boop-harness/src/harness.rs	745	method	messages
 crates/boop-harness/src/harness.rs	755	method	resume_id
-crates/boop-harness/src/harness.rs	764	method	session_by_id
+crates/boop-harness/src/harness.rs	763	method	session_by_id
 crates/boop-harness/src/harness.rs	774	method	lists_session
 crates/boop-harness/src/harness.rs	890	lambda	
 crates/boop-harness/src/harness.rs	893	lambda	
@@ -356,7 +356,7 @@ crates/boop-harness/src/harness/1_claude_summary.rs	127	lambda
 crates/boop-harness/src/harness/1_claude_summary.rs	128	lambda	
 crates/boop-harness/src/harness/1_claude_summary.rs	132	lambda	
 crates/boop-harness/src/harness/1_claude_summary.rs	133	lambda	
-crates/boop-harness/src/harness/1_claude_summary.rs	148	lambda	
+crates/boop-harness/src/harness/1_claude_summary.rs	147	lambda	
 crates/boop-harness/src/harness/1_claude_summary.rs	154	lambda	
 crates/boop-harness/src/harness/1_claude_summary.rs	160	lambda	
 crates/boop-harness/src/harness/claude.rs	125	method	matches_model
@@ -1643,6 +1643,7 @@ crates/boop-store/src/ident.rs	2551	lambda
 crates/boop-store/src/ident.rs	2564	lambda	
 crates/boop-store/src/ident.rs	2564	lambda	
 crates/boop-store/src/ident.rs	2595	lambda	
+crates/boop-store/src/ident.rs	2596	lambda	
 crates/boop-store/src/ident.rs	2638	lambda	
 crates/boop-store/src/ident.rs	2674	lambda	
 crates/boop-store/src/ident.rs	2675	lambda	
@@ -1658,6 +1659,7 @@ crates/boop-store/src/ident.rs	2772	lambda
 crates/boop-store/src/ident.rs	2778	lambda	
 crates/boop-store/src/ident.rs	2783	lambda	
 crates/boop-store/src/ident.rs	2908	lambda	
+crates/boop-store/src/ident.rs	2909	lambda	
 crates/boop-store/src/ident.rs	3100	lambda	
 crates/boop-store/src/ident.rs	3151	lambda	
 crates/boop-store/src/ident.rs	3430	lambda	
@@ -1943,18 +1945,18 @@ crates/boop-turnstrip/src/_0_types.rs	40	method	index
 crates/boop-turnstrip/src/_0_types.rs	52	function	clamp
 crates/boop-turnstrip/src/_0_types.rs	61	function	kind_of
 crates/boop-turnstrip/src/_0_types.rs	76	function	lines_of
-crates/boop-turnstrip/src/_0_types.rs	186	function	Relative
-crates/boop-turnstrip/src/_0_types.rs	189	function	Recent
+crates/boop-turnstrip/src/_0_types.rs	185	function	Relative
+crates/boop-turnstrip/src/_0_types.rs	186	function	Recent
 crates/boop-turnstrip/src/_0_types.rs	232	method	default
 crates/boop-turnstrip/src/_0_types.rs	305	function	Relative
-crates/boop-turnstrip/src/_0_types.rs	309	function	Recent
+crates/boop-turnstrip/src/_0_types.rs	306	function	Recent
 crates/boop-turnstrip/src/_0_types.rs	311	method	squares
-crates/boop-turnstrip/src/_0_types.rs	321	method	band
+crates/boop-turnstrip/src/_0_types.rs	320	method	band
 crates/boop-turnstrip/src/_1_measure.rs	20	function	utf16_len
 crates/boop-turnstrip/src/_1_measure.rs	28	function	row_score
 crates/boop-turnstrip/src/_1_measure.rs	57	lambda	
 crates/boop-turnstrip/src/_1_measure.rs	61	lambda	
-crates/boop-turnstrip/src/_1_measure.rs	134	lambda	
+crates/boop-turnstrip/src/_1_measure.rs	133	lambda	
 crates/boop-turnstrip/src/_1_measure.rs	179	lambda	
 crates/boop-turnstrip/src/_1_measure.rs	202	lambda	
 crates/boop-turnstrip/src/_1_measure.rs	203	lambda	
@@ -1977,24 +1979,26 @@ crates/boop-turnstrip/src/_3_layout.rs	106	function	drawn_as_tool
 crates/boop-turnstrip/src/_3_layout.rs	138	function	window_row
 crates/boop-turnstrip/src/_3_layout.rs	191	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	192	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	193	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	192	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	194	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	202	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	201	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	218	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	221	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	222	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	259	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	260	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	261	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	260	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	263	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	287	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	320	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	334	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	342	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	341	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	405	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	407	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	406	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	410	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	411	lambda	
 crates/boop-turnstrip/src/_3_layout.rs	412	lambda	
-crates/boop-turnstrip/src/_3_layout.rs	413	lambda	
+crates/boop-turnstrip/src/_3_layout.rs	431	lambda	
 crates/boop-turnstrip/src/_3a_gap.rs	4	lambda	
 crates/boop-turnstrip/src/_3a_gap.rs	6	lambda	
 crates/boop-turnstrip/src/_3a_gap.rs	9	lambda	
@@ -2023,41 +2027,48 @@ crates/boop-turnvis/src/0_candidates.rs	48	lambda
 crates/boop-turnvis/src/0_candidates.rs	56	lambda	
 crates/boop-turnvis/src/lib.rs	34	function	Anchored
 crates/boop-turnvis/src/lib.rs	35	function	Extended
-crates/boop-turnvis/src/lib.rs	88	function	is_js_whitespace
-crates/boop-turnvis/src/lib.rs	131	lambda	
-crates/boop-turnvis/src/lib.rs	155	function	line_matches
-crates/boop-turnvis/src/lib.rs	162	lambda	
-crates/boop-turnvis/src/lib.rs	169	function	truncated_prefix
-crates/boop-turnvis/src/lib.rs	196	lambda	
-crates/boop-turnvis/src/lib.rs	260	lambda	
-crates/boop-turnvis/src/lib.rs	261	lambda	
-crates/boop-turnvis/src/lib.rs	321	function	match_row_owners
-crates/boop-turnvis/src/lib.rs	340	lambda	
-crates/boop-turnvis/src/lib.rs	343	function	has_discriminating_hit
-crates/boop-turnvis/src/lib.rs	348	lambda	
-crates/boop-turnvis/src/lib.rs	349	lambda	
-crates/boop-turnvis/src/lib.rs	350	lambda	
-crates/boop-turnvis/src/lib.rs	373	function	Up
-crates/boop-turnvis/src/lib.rs	373	function	Down
-crates/boop-turnvis/src/lib.rs	373	function	is_terminal_chrome
-crates/boop-turnvis/src/lib.rs	387	lambda	
-crates/boop-turnvis/src/lib.rs	422	lambda	
-crates/boop-turnvis/src/lib.rs	434	lambda	
-crates/boop-turnvis/src/lib.rs	446	lambda	
-crates/boop-turnvis/src/lib.rs	488	lambda	
+crates/boop-turnvis/src/lib.rs	83	function	is_js_whitespace
+crates/boop-turnvis/src/lib.rs	97	function	is_leading_marker
+crates/boop-turnvis/src/lib.rs	125	lambda	
+crates/boop-turnvis/src/lib.rs	150	function	line_matches
+crates/boop-turnvis/src/lib.rs	157	lambda	
+crates/boop-turnvis/src/lib.rs	161	function	truncated_prefix
+crates/boop-turnvis/src/lib.rs	191	lambda	
+crates/boop-turnvis/src/lib.rs	255	lambda	
+crates/boop-turnvis/src/lib.rs	256	lambda	
+crates/boop-turnvis/src/lib.rs	292	function	said_lines
+crates/boop-turnvis/src/lib.rs	332	lambda	
+crates/boop-turnvis/src/lib.rs	336	function	has_discriminating_hit
+crates/boop-turnvis/src/lib.rs	342	lambda	
+crates/boop-turnvis/src/lib.rs	345	lambda	
+crates/boop-turnvis/src/lib.rs	346	lambda	
+crates/boop-turnvis/src/lib.rs	364	function	Up
+crates/boop-turnvis/src/lib.rs	365	function	Down
+crates/boop-turnvis/src/lib.rs	368	function	is_terminal_chrome
+crates/boop-turnvis/src/lib.rs	380	lambda	
+crates/boop-turnvis/src/lib.rs	417	lambda	
+crates/boop-turnvis/src/lib.rs	429	lambda	
+crates/boop-turnvis/src/lib.rs	433	lambda	
+crates/boop-turnvis/src/lib.rs	439	lambda	
+crates/boop-turnvis/src/lib.rs	443	lambda	
+crates/boop-turnvis/src/lib.rs	452	lambda	
+crates/boop-turnvis/src/lib.rs	480	lambda	
+crates/boop-turnvis/src/lib.rs	491	lambda	
 crates/boop-turnvis/src/lib.rs	498	lambda	
-crates/boop-turnvis/src/lib.rs	510	lambda	
-crates/boop-turnvis/src/lib.rs	518	lambda	
-crates/boop-turnvis/src/lib.rs	519	lambda	
-crates/boop-turnvis/src/lib.rs	521	lambda	
-crates/boop-turnvis/src/lib.rs	530	lambda	
-crates/boop-turnvis/src/lib.rs	535	lambda	
-crates/boop-turnvis/src/lib.rs	539	lambda	
-crates/boop-turnvis/src/lib.rs	566	lambda	
+crates/boop-turnvis/src/lib.rs	502	lambda	
+crates/boop-turnvis/src/lib.rs	503	lambda	
+crates/boop-turnvis/src/lib.rs	513	lambda	
+crates/boop-turnvis/src/lib.rs	514	lambda	
+crates/boop-turnvis/src/lib.rs	515	lambda	
+crates/boop-turnvis/src/lib.rs	523	lambda	
+crates/boop-turnvis/src/lib.rs	528	lambda	
+crates/boop-turnvis/src/lib.rs	532	lambda	
+crates/boop-turnvis/src/lib.rs	534	lambda	
+crates/boop-turnvis/src/lib.rs	560	lambda	
+crates/boop-turnvis/src/lib.rs	570	lambda	
+crates/boop-turnvis/src/lib.rs	571	lambda	
 crates/boop-turnvis/src/lib.rs	574	lambda	
-crates/boop-turnvis/src/lib.rs	578	lambda	
-crates/boop-turnvis/src/lib.rs	581	lambda	
-crates/boop-turnvis/src/lib.rs	609	lambda	
+crates/boop-turnvis/src/lib.rs	600	lambda	
 crates/boop/src/cli/1_reminder.rs	9	function	Add
 crates/boop/src/cli/1_reminder.rs	24	function	List
 crates/boop/src/cli/1_reminder.rs	29	function	Cancel

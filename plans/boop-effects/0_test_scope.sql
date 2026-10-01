@@ -20,11 +20,8 @@ with attr as materialized (
     on p._input_path = a.path and p.family = 'cst' and p.kind = 'child'
    and p.to__start = a.s and p.to__end = a.e
 )
--- CST spans are bytes; call facts are characters, so the scope is stored in characters.
-select p.path,
-  length(cast(substr(cast(f.text as blob), 1, min(c.to__start)) as text)) as span__start,
-  length(cast(substr(cast(f.text as blob), 1, c.to__end) as text)) as span__end
-from parent p join file_text f on f.path = p.path join edge c
+select p.path, min(c.to__start) as span__start, c.to__end as span__end
+from parent p join edge c
   on c._input_path = p.path and c.family = 'cst' and c.kind = 'child'
  and c.from__start = p.ps and c.from__end = p.pe and c.to__start >= p.e
 where not exists (
