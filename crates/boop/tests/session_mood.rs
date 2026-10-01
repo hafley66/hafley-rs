@@ -210,7 +210,9 @@ fn me_favorite_follows_the_callers_bound_native_thread() {
     );
     let source: String = store
         .connection()
-        .query_row("SELECT source FROM agent_favorite", [], |row| row.get(0))
+        .query_row("SELECT source_text FROM agent_favorite", [], |row| {
+            row.get(0)
+        })
         .unwrap();
     assert_eq!(source, "claude:native-thread:assistant:2");
 }

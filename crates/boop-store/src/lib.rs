@@ -35,6 +35,8 @@ pub mod touched;
 pub mod trail;
 #[cfg(feature = "agent-read")]
 pub mod usage;
+#[path = "1_user_slice.rs"]
+pub mod user_slice;
 
 #[cfg(feature = "agent-read")]
 pub use _0_session_graph::{

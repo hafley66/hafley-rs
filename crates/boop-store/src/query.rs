@@ -769,31 +769,6 @@ impl Store {
         Ok(out)
     }
 
-    /// Favorites newest-first, body included.
-    pub fn query_favorites(&self, limit: Option<u64>) -> Result<Vec<Row>> {
-        let mut sql = String::from(
-            "SELECT f.favorite_id, f.note, f.source, f.created_ts, m.bytes, m.body
-               FROM agent_favorite f
-               JOIN markdown_cache m ON m.markdown_id = f.markdown_id
-              ORDER BY f.favorite_id DESC",
-        );
-        if let Some(limit) = limit {
-            sql.push_str(&format!(" LIMIT {limit}"));
-        }
-        self.rows(&sql, Vec::new())
-    }
-
-    /// One favorite by id, body included; empty when the id names none.
-    pub fn query_favorite(&self, id: i64) -> Result<Vec<Row>> {
-        self.rows(
-            "SELECT f.favorite_id, f.note, f.source, f.created_ts, m.bytes, m.body
-               FROM agent_favorite f
-               JOIN markdown_cache m ON m.markdown_id = f.markdown_id
-              WHERE f.favorite_id = ?1",
-            vec![rusqlite::types::Value::Integer(id)],
-        )
-    }
-
     /// How far ingest has read each transcript.
     pub fn query_sync_cursors(&self, limit: Option<u64>) -> Result<Vec<Row>> {
         let mut sql = String::from(
@@ -1293,8 +1268,8 @@ mod tests {
         })
         .unwrap();
 
-        // A window wide enough to include the transcript row.
-        let rows = store.status_rows(60 * 24 * 3600 * 1000, now_ms).unwrap();
+        // Include the fixed August fixture regardless of the current calendar date.
+        let rows = store.status_rows(now_ms, now_ms).unwrap();
         assert_eq!(rows.len(), 1);
         let row = &rows[0];
         let rss = row.rss_kb.expect("live pid must carry rss_kb");

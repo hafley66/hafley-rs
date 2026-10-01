@@ -210,8 +210,9 @@ fn pin_turn(store: &ident::Store, row: &boop::TurnRow, note: Option<&str>) -> Re
         "selected {} message is empty",
         row.role
     );
-    let source = format!("{}:{}:{}:{}", row.harness, row.session, row.role, row.turn);
-    let id = store.favorite_add(&row.said, note, &source, now_ms())?;
+    let source =
+        boop_store::user_slice::FavoriteSource::assistant(&row.harness, &row.session, row.turn);
+    let id = store.favorite_add_typed(&row.said, note, &source, now_ms())?;
     // The note stays free text on the row; its tags also land in agent_tag,
     // so the CLI path and the instant path feed one table.
     if let Some(note) = note {

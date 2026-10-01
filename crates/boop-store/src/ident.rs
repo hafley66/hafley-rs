@@ -67,7 +67,8 @@ pub struct Store {
 /// 36 = favorite-context and project-membership SQL views.
 /// 37 = durable expiring reminders over the mailbox.
 /// 38 = durable session identity observations and continuation relations.
-pub const SCHEMA_VERSION: i64 = 38;
+/// 39 = typed favorite references and inline closed mood names.
+pub const SCHEMA_VERSION: i64 = 39;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -105,7 +106,7 @@ const MOOD_ANCESTRY_LIMIT: i64 = 64;
 
 /// The moods a store is born with. A row edited afterwards is never rewritten:
 /// seeding is `INSERT OR IGNORE`.
-const MOOD_SEEDS: [(&str, &str); 3] = [
+pub(crate) const MOOD_SEEDS: [(&str, &str); 3] = [
     (DEFAULT_MOOD, DEFAULT_MOOD_TEMPLATE),
     (
         "unga",
@@ -620,6 +621,7 @@ fn enable_wal(connection: &Connection, path: &std::path::Path) -> Result<()> {
 /// walks both directions so the two cannot drift.
 pub const USER_AUTHORED: &[&str] = &[
     "agent_favorite",
+    "mood",
     "agent_turn_comment",
     "agent_turn_comment_target",
     "agent_turn_comment_fork",
@@ -699,7 +701,9 @@ fn carry_select(table: &str) -> String {
                                 ORDER BY span.attached_ts, session.value"
             .to_owned(),
         "agent_favorite" => "SELECT f.favorite_id AS favorite_id, m.body AS body, f.note AS note,
-                                    f.source AS source, f.created_ts AS created_ts,
+                                    f.source_text AS source, f.source_kind, f.source_session, f.source_turn,
+                                    f.source_turn_end, f.source_harness, f.source_role, f.source_codex_ref,
+                                    f.created_ts AS created_ts,
                                     m.first_ts AS first_ts
                                FROM agent_favorite f
                                JOIN markdown_cache m ON m.markdown_id = f.markdown_id
@@ -770,6 +774,7 @@ impl Store {
             "user-authored tables missing from a current-version store; re-applying the schema"
         );
         self.connection.execute_batch(SCHEMA)?;
+        self.migrate_user_slice()?;
         Ok(())
     }
 
@@ -866,6 +871,7 @@ impl Store {
             self.connection
                 .execute_batch(crate::reminder::SCHEMA)
                 .with_context(|| format!("initialise reminder schedules at {}", path.display()))?;
+            self.migrate_user_slice()?;
             self.seed_moods()?;
             if self.schema_version()? == 0 {
                 self.connection.execute_batch(
@@ -1209,6 +1215,7 @@ impl Store {
                 )?;
                 self.connection.execute_batch("PRAGMA user_version = 38;")?;
             }
+            self.migrate_user_slice()?;
             self.stamp_version()?;
             Ok(())
         })();
@@ -1316,17 +1323,24 @@ impl Store {
                     let markdown_id = self.intern_markdown(&body, first_ts as u64)?;
                     self.connection.execute(
                         "INSERT OR REPLACE INTO agent_favorite
-                           (favorite_id, markdown_id, note, source, created_ts)
-                         VALUES (?1, ?2, ?3, ?4, ?5)",
+                           (favorite_id, markdown_id, note, source_text, created_ts, source_kind, source_session, source_turn, source_turn_end, source_harness, source_role, source_codex_ref)
+                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12)",
                         params![
                             favorite_id,
                             markdown_id,
                             row[carried.column("note")?],
                             row[carried.column("source")?],
                             row[carried.column("created_ts")?],
+                            row[carried.column("source_kind")?],
+                            row[carried.column("source_session")?],
+                            row[carried.column("source_turn")?],
+                            row[carried.column("source_turn_end")?],
+                            row[carried.column("source_harness")?],
+                            row[carried.column("source_role")?],
+                            row[carried.column("source_codex_ref")?],
                         ],
                     )?;
-                    moved.insert(favorite_id, self.connection.last_insert_rowid());
+                    moved.insert(favorite_id, favorite_id);
                 }
                 Ok(())
             }
@@ -2168,36 +2182,6 @@ impl Store {
             params![digest],
             |row| row.get(0),
         )?)
-    }
-
-    /// Pin one markdown body as a favorite. The body dedupes through
-    /// markdown_cache; note and source ride on the favorite row itself.
-    pub fn favorite_add(
-        &self,
-        body: &str,
-        note: Option<&str>,
-        source: &str,
-        ts: u64,
-    ) -> Result<i64> {
-        let markdown_id = self.intern_markdown(body, ts)?;
-        self.connection.execute(
-            "INSERT INTO agent_favorite (markdown_id, note, source, created_ts)
-             VALUES (?1, ?2, ?3, ?4)",
-            params![markdown_id, note, source, ts as i64],
-        )?;
-        Ok(self.connection.last_insert_rowid())
-    }
-
-    /// Rewrite a favorite's note and/or source. `None` leaves a field as it
-    /// is. `false` when the id names no favorite.
-    pub fn favorite_edit(&self, id: i64, note: Option<&str>, source: Option<&str>) -> Result<bool> {
-        let changed = self.connection.execute(
-            "UPDATE agent_favorite
-                SET note = COALESCE(?2, note), source = COALESCE(?3, source)
-              WHERE favorite_id = ?1",
-            params![id, note, source],
-        )?;
-        Ok(changed == 1)
     }
 
     /// Drop one favorite. The markdown body stays in markdown_cache, which
@@ -3062,38 +3046,6 @@ impl Store {
         Ok(self.connection.last_insert_rowid())
     }
 
-    /// Write the moods a store is born with. Reentrant: an edited template
-    /// survives every later open.
-    fn seed_moods(&self) -> Result<()> {
-        for (name, template) in MOOD_SEEDS {
-            self.connection.execute(
-                "INSERT OR IGNORE INTO dict_mood_name (id, value) VALUES (NULL, ?1)",
-                params![name],
-            )?;
-            self.connection.execute(
-                "INSERT OR IGNORE INTO mood (name_id, template)
-                   SELECT id, ?2 FROM dict_mood_name WHERE value = ?1",
-                params![name, template],
-            )?;
-        }
-        Ok(())
-    }
-
-    /// Every mood a session may be set to, alphabetical.
-    pub fn mood_names(&self) -> Result<Vec<String>> {
-        let mut statement = self.connection.prepare(
-            "SELECT name.value FROM mood
-               JOIN dict_mood_name name ON name.id = mood.name_id
-              ORDER BY name.value",
-        )?;
-        let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
-        let mut names = Vec::new();
-        for row in rows {
-            names.push(row?);
-        }
-        Ok(names)
-    }
-
     /// Clear a process observation only while this PID still owns it. The
     /// ownership read and both liveness writes share one writer transaction.
     pub fn detach_process(&self, session: &str, pid: u32, ts: u64) -> Result<bool> {
@@ -3177,7 +3129,7 @@ impl Store {
                         AND ancestry.depth < ?4
                  )
                  SELECT name, template, set_by FROM (
-                     SELECT mood_name.value AS name,
+                     SELECT mood.name AS name,
                             mood.template AS template,
                             setter.value AS set_by,
                             ancestry.depth AS rank
@@ -3185,14 +3137,12 @@ impl Store {
                        JOIN agent_session_attr attr ON attr.session_id = ancestry.session_id
                        JOIN dict_attr_key attr_key
                          ON attr_key.id = attr.key_id AND attr_key.value = ?2
-                       JOIN dict_mood_name mood_name ON mood_name.value = attr.value
-                       JOIN mood ON mood.name_id = mood_name.id
+                       JOIN mood ON mood.name = attr.value
                        JOIN dict_session setter ON setter.id = ancestry.session_id
                      UNION ALL
-                     SELECT mood_name.value, mood.template, NULL, ?4 + 1
+                     SELECT mood.name, mood.template, NULL, ?4 + 1
                        FROM mood
-                       JOIN dict_mood_name mood_name ON mood_name.id = mood.name_id
-                      WHERE mood_name.value = ?3
+                      WHERE mood.name = ?3
                  )
                  ORDER BY rank, set_by
                  LIMIT 1",
@@ -4955,45 +4905,17 @@ SELECT current.session,
        ) END AS prev_assistant_n
   FROM v_conversational_turn current;
 CREATE VIEW IF NOT EXISTS v_favorite AS
-WITH source_parts AS (
-  SELECT favorite.favorite_id AS id,
-         favorite.note,
-         markdown.body,
-         favorite.source,
-         instr(favorite.source, ':') AS harness_end,
-         instr(favorite.source, ':assistant:') AS turn_start,
-         CASE WHEN substr(favorite.source, 1, 5) = 'turn:'
-              THEN instr(substr(favorite.source, 6), ':') + 5
-         END AS legacy_turn_start
-    FROM agent_favorite favorite
-    JOIN markdown_cache markdown ON markdown.markdown_id = favorite.markdown_id
-), parsed AS (
-  SELECT id, note, body, source,
-         CASE WHEN legacy_turn_start > 5
-              THEN substr(source, 6, legacy_turn_start - 6)
-              WHEN harness_end > 0 AND turn_start > harness_end
-                    AND substr(source, 1, harness_end - 1)
-                        IN ('claude', 'codex', 'kimi', 'opencode', 'omp')
-              THEN substr(source, harness_end + 1, turn_start - harness_end - 1)
-         END AS session,
-         CASE WHEN legacy_turn_start > 5
-                    AND length(substr(source, legacy_turn_start + 1)) > 0
-                    AND substr(source, legacy_turn_start + 1) NOT GLOB '*[^0-9]*'
-              THEN CAST(substr(source, legacy_turn_start + 1) AS INTEGER)
-              WHEN turn_start > 0
-                    AND length(substr(source, turn_start + length(':assistant:'))) > 0
-                    AND substr(source, turn_start + length(':assistant:')) NOT GLOB '*[^0-9]*'
-              THEN CAST(substr(source, turn_start + length(':assistant:')) AS INTEGER)
-         END AS turn
-    FROM source_parts
-)
-SELECT parsed.id, parsed.note, parsed.body, parsed.source,
-       parsed.session, parsed.turn, message.n, message.source_class
-  FROM parsed
+SELECT favorite.favorite_id AS id, favorite.note, markdown.body,
+       favorite.source_text AS source, favorite.source_session AS session,
+       CASE WHEN favorite.source_turn_end IS NULL THEN favorite.source_turn END AS turn,
+       message.n, message.source_class
+  FROM agent_favorite favorite
+  JOIN markdown_cache markdown ON markdown.markdown_id = favorite.markdown_id
   LEFT JOIN v_message message
-    ON message.session = parsed.session
-   AND message.turn = parsed.turn
-   AND message.role = 'assistant';
+    ON message.session = favorite.source_session
+   AND message.turn = favorite.source_turn
+   AND message.role = 'assistant'
+   AND favorite.source_turn_end IS NULL;
 
 CREATE VIEW IF NOT EXISTS v_session_project AS
 WITH projects AS (
@@ -5244,13 +5166,20 @@ CREATE TABLE IF NOT EXISTS markdown_cache (
 
 -- User-pinned markdown, the one user-authored state in the store: no
 -- transcript re-projects it, so rebuild() carries it across the drop by value.
--- source is plain text (a session id, a url, whatever the user typed), never a
--- dict id, so re-import needs no id remap.
+-- Reference columns carry stable session text and turn ordinals. source_text
+-- preserves the exact entered provenance, including unstructured notes.
 CREATE TABLE IF NOT EXISTS agent_favorite (
   favorite_id INTEGER PRIMARY KEY,
   markdown_id INTEGER NOT NULL,
   note TEXT,
-  source TEXT NOT NULL DEFAULT '',
+  source_kind TEXT NOT NULL DEFAULT 'empty' CHECK (source_kind IN ('empty','text','session','agent_session','codex','turn','turn_range','missing_turn')),
+  source_session TEXT,
+  source_turn INTEGER,
+  source_turn_end INTEGER,
+  source_harness TEXT,
+  source_role TEXT,
+  source_codex_ref TEXT,
+  source_text TEXT NOT NULL DEFAULT '',
   created_ts INTEGER NOT NULL
 );
 
@@ -5711,7 +5640,7 @@ CREATE TABLE IF NOT EXISTS sync_root_stamp (
 ) WITHOUT ROWID;
 
 CREATE TABLE IF NOT EXISTS dict_attr_key (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
-CREATE TABLE IF NOT EXISTS dict_mood_name (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
+
 
 CREATE TABLE IF NOT EXISTS agent_session_attr (
   session_id INTEGER NOT NULL,
@@ -5721,9 +5650,10 @@ CREATE TABLE IF NOT EXISTS agent_session_attr (
   PRIMARY KEY (session_id, key_id)
 ) WITHOUT ROWID;
 
+-- user-authored mood templates survive rebuilds.
 CREATE TABLE IF NOT EXISTS mood (
   id INTEGER PRIMARY KEY,
-  name_id INTEGER NOT NULL UNIQUE,
+  name TEXT NOT NULL UNIQUE CHECK (name IN ('plain','unga','board')),
   template TEXT NOT NULL
 );
 ";
@@ -6745,7 +6675,7 @@ mod tests {
             .connection
             .execute_batch(
                 "UPDATE mood SET template = 'edited {body}'
-                   WHERE name_id = (SELECT id FROM dict_mood_name WHERE value = 'unga');
+                   WHERE name = 'unga';
                  PRAGMA user_version = 12;",
             )
             .unwrap();
@@ -8431,6 +8361,13 @@ mod tests {
                 "favorite_id": id,
                 "note": null,
                 "source": "chat",
+                "source_kind": "text",
+                "source_session": null,
+                "source_turn": null,
+                "source_turn_end": null,
+                "source_harness": null,
+                "source_role": null,
+                "source_codex_ref": null,
                 "created_ts": 1,
                 "bytes": 7,
                 "body": "# keep\n",
@@ -8803,7 +8740,7 @@ mod tests {
         let mut statement = store
             .connection
             .prepare(
-                "SELECT favorite_id, markdown_id, note, source, created_ts
+                "SELECT favorite_id, markdown_id, note, source_text, created_ts
                    FROM agent_favorite
                   ORDER BY favorite_id",
             )
@@ -8865,7 +8802,7 @@ mod tests {
         let (note, source): (String, String) = store
             .connection
             .query_row(
-                "SELECT note, source FROM agent_favorite WHERE favorite_id = ?1",
+                "SELECT note, source_text FROM agent_favorite WHERE favorite_id = ?1",
                 params![id],
                 |row| Ok((row.get(0)?, row.get(1)?)),
             )
@@ -8899,7 +8836,7 @@ mod tests {
             store.rebuild().unwrap();
             let (_, rows) = store
                 .passthrough(
-                    "SELECT f.note, f.source, m.body FROM agent_favorite f
+                    "SELECT f.note, f.source_text, m.body FROM agent_favorite f
                      JOIN markdown_cache m ON m.markdown_id = f.markdown_id",
                 )
                 .unwrap();

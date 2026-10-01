@@ -20,6 +20,7 @@ testing = []
 clap = ["dep:clap"]
 
 [dependencies]
+uuid = "1"
 # Optional, off by default: `--group-by` parses straight into `usage::GroupBy`,
 # so the one enum carries its own value list.
 clap = { version = "4", features = ["derive"], optional = true }
