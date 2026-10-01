@@ -1,0 +1,1934 @@
+path	name	effects
+crates/boop-acp/src/channel.rs	now_ms	clock
+crates/boop-acp/src/channel/1_acpx.rs	acpx_command	env process
+crates/boop-acp/src/channel/1_acpx.rs	checked	env process
+crates/boop-acp/src/channel/1_acpx.rs	ensure	env process
+crates/boop-acp/src/channel/1_acpx.rs	invoke	env process
+crates/boop-acp/src/channel/1_acpx.rs	prompt	env process
+crates/boop-acp/src/channel/acp.rs	a_join_without_a_running_turn_answers_at_once	channel
+crates/boop-acp/src/channel/acp.rs	a_real_claude_acp_session_is_resumed_by_a_second_child	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	a_real_claude_acp_turn_ends_the_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	a_real_codex_acp_turn_ends_the_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	a_real_kimi_acp_session_is_resumed_by_a_second_child	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	a_real_kimi_acp_turn_ends_the_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	a_real_opencode_acp_turn_ends_the_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	agent_with_process_group	env fs jsonrpc
+crates/boop-acp/src/channel/acp.rs	an_empty_command_is_refused_before_a_thread_is_spawned	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	an_unknown_terminal_id_answers_an_error_rather_than_wedging_the_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	close	channel thread
+crates/boop-acp/src/channel/acp.rs	closure@17219	clock
+crates/boop-acp/src/channel/acp.rs	closure@19264	channel lock process thread
+crates/boop-acp/src/channel/acp.rs	closure@19804	channel lock
+crates/boop-acp/src/channel/acp.rs	closure@20471	channel lock
+crates/boop-acp/src/channel/acp.rs	closure@21360	lock process
+crates/boop-acp/src/channel/acp.rs	closure@21904	lock process
+crates/boop-acp/src/channel/acp.rs	closure@22371	jsonrpc
+crates/boop-acp/src/channel/acp.rs	closure@63781	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	closure@8485	channel clock jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	codex_steer	jsonrpc
+crates/boop-acp/src/channel/acp.rs	codex_steering_extension_admits_mail_during_an_active_prompt	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	connect	channel clock jsonrpc lock process thread
+crates/boop-acp/src/channel/acp.rs	drain_tool_calls	lock
+crates/boop-acp/src/channel/acp.rs	drive	channel clock jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	drop	fs
+crates/boop-acp/src/channel/acp.rs	failed_codex_steering_returns_an_error_for_the_delivery_receipt	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	handshake	jsonrpc
+crates/boop-acp/src/channel/acp.rs	interrupt	channel
+crates/boop-acp/src/channel/acp.rs	live_pong_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	live_resumed_turn	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	next_event	channel
+crates/boop-acp/src/channel/acp.rs	open	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	open_adapter	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	open_with_steering	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	report	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	select_effort	jsonrpc
+crates/boop-acp/src/channel/acp.rs	select_full_access_mode	jsonrpc
+crates/boop-acp/src/channel/acp.rs	select_model	jsonrpc
+crates/boop-acp/src/channel/acp.rs	spawned_agent_reports_its_owned_process_group	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	start_turn	channel
+crates/boop-acp/src/channel/acp.rs	steer	channel
+crates/boop-acp/src/channel/acp.rs	terminal_create_answers_with_an_id	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	terminal_output_carries_both_pipes_and_the_status	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/acp.rs	terminal_release_frees_the_id	channel clock env fs jsonrpc lock process task thread
+crates/boop-acp/src/channel/claude.rs	a_completed_transcript_reports_ok_even_when_the_cli_exits_nonzero	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	a_minted_session_id_is_a_v4_uuid	clock process
+crates/boop-acp/src/channel/claude.rs	a_spawn_that_emits_nothing_reports_failed	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	a_zero_exit_with_a_completed_transcript_reports_ok	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	blackhole	process
+crates/boop-acp/src/channel/claude.rs	close	process
+crates/boop-acp/src/channel/claude.rs	closure@3528	clock
+crates/boop-acp/src/channel/claude.rs	interrupt	process
+crates/boop-acp/src/channel/claude.rs	interrupt_writes_the_control_request_frame	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	new_uuid	clock process
+crates/boop-acp/src/channel/claude.rs	next_event	channel clock
+crates/boop-acp/src/channel/claude.rs	open	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	open_spawns_the_executable_override_instead_of_claude	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	open_with_binary	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	poll_after_open	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	start_turn	process
+crates/boop-acp/src/channel/claude.rs	steer	process
+crates/boop-acp/src/channel/claude.rs	streamed_activity_is_reported_to_the_stall_watchdog	channel clock env fs process thread
+crates/boop-acp/src/channel/claude.rs	write_interrupt	process
+crates/boop-acp/src/channel/claude.rs	write_user	process
+crates/boop-acp/src/channel/terminal.rs	a_byte_limit_drops_the_oldest_output_and_flags_the_truncation	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	a_created_terminal_inherits_the_lane_env	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	a_created_terminal_runs_under_the_session_cwd	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	a_created_terminal_takes_the_request_cwd_and_env	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	a_killed_terminal_reports_its_signal_and_stays_readable	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	a_missing_command_fails_create_instead_of_registering_a_terminal	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	await_exit	channel
+crates/boop-acp/src/channel/terminal.rs	closure@8296	lock
+crates/boop-acp/src/channel/terminal.rs	closure@9773	lock
+crates/boop-acp/src/channel/terminal.rs	create	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	exit_status	process
+crates/boop-acp/src/channel/terminal.rs	exit_watch	channel lock
+crates/boop-acp/src/channel/terminal.rs	find	lock
+crates/boop-acp/src/channel/terminal.rs	finish	lock
+crates/boop-acp/src/channel/terminal.rs	kill	lock process
+crates/boop-acp/src/channel/terminal.rs	kill_child	lock process
+crates/boop-acp/src/channel/terminal.rs	killing_a_finished_terminal_is_a_no_op	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	open_count	lock
+crates/boop-acp/src/channel/terminal.rs	output	channel lock
+crates/boop-acp/src/channel/terminal.rs	output_carries_both_pipes_and_the_exit_status	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	output_on_an_unknown_terminal_names_the_id	channel lock
+crates/boop-acp/src/channel/terminal.rs	pump	lock thread
+crates/boop-acp/src/channel/terminal.rs	reap	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	release	lock process
+crates/boop-acp/src/channel/terminal.rs	release_forgets_the_terminal_and_stops_the_child	channel lock process thread
+crates/boop-acp/src/channel/terminal.rs	wait	lock
+crates/boop-acp/src/channel/terminal.rs	wait_blocking	channel lock
+crates/boop-acp/src/channel/terminal.rs	wait_for_exit_answers_with_the_childs_code	channel lock process thread
+crates/boop-harness/src/click.rs	a_directory_relative_to_a_sibling_repository_resolves_there	fs lock process
+crates/boop-harness/src/click.rs	a_ref_in_a_document_resolves_from_the_document	clock fs lock process thread
+crates/boop-harness/src/click.rs	a_relative_directory_resolves_from_the_clicked_pane	clock fs lock process thread
+crates/boop-harness/src/click.rs	a_token_under_several_sibling_repositories_is_a_tagged_choice	fs lock process
+crates/boop-harness/src/click.rs	a_token_under_several_worktrees_is_a_tagged_choice	fs lock process
+crates/boop-harness/src/click.rs	a_touched_path_outranks_the_worktree_choices	fs lock process
+crates/boop-harness/src/click.rs	click_sessions	sqlite
+crates/boop-harness/src/click.rs	closure@1621	sqlite
+crates/boop-harness/src/click.rs	closure@2237	process
+crates/boop-harness/src/click.rs	closure@2554	sqlite
+crates/boop-harness/src/click.rs	closure@2723	sqlite
+crates/boop-harness/src/click.rs	resolve_click	clock env fs lock process sqlite thread
+crates/boop-harness/src/click/_0_roots.rs	click_roots	fs lock process
+crates/boop-harness/src/click/_0_roots.rs	closure@728	fs
+crates/boop-harness/src/click/_0_roots.rs	roots_order_dedupe_and_fan_out_to_worktrees	fs lock process
+crates/boop-harness/src/click/_1_ladder.rs	a_token_resolves_beside_a_file_the_agent_touched	clock fs lock process thread
+crates/boop-harness/src/click/_1_ladder.rs	closure@5066	clock fs lock process thread
+crates/boop-harness/src/click/_1_ladder.rs	resolve	clock fs lock process thread
+crates/boop-harness/src/click/_1_ladder.rs	resolve_from_evidence	fs
+crates/boop-harness/src/click/_1_ladder.rs	resolve_in_doc	clock fs lock process thread
+crates/boop-harness/src/click/_1_ladder.rs	resolve_with	clock fs lock process thread
+crates/boop-harness/src/door.rs	now	clock
+crates/boop-harness/src/door/0_claude_hooks.rs	closure@5444	fs
+crates/boop-harness/src/door/0_claude_hooks.rs	installed_for	env fs
+crates/boop-harness/src/door/0_claude_hooks.rs	read_settings_value	fs
+crates/boop-harness/src/door/claude.rs	a_dead_socket_is_unreachable_not_an_error	env fs process
+crates/boop-harness/src/door/claude.rs	a_delivery_writes_the_documented_json_lines	env fs process
+crates/boop-harness/src/door/claude.rs	a_parked_host_presents_its_live_job	env fs process
+crates/boop-harness/src/door/claude.rs	a_registry_file_becomes_a_live_session	env fs process
+crates/boop-harness/src/door/claude.rs	closure@4211	process
+crates/boop-harness/src/door/claude.rs	closure@4798	env fs
+crates/boop-harness/src/door/claude.rs	file_for	env fs
+crates/boop-harness/src/door/claude.rs	files	env fs
+crates/boop-harness/src/door/claude.rs	inbox_hook_installed	env fs
+crates/boop-harness/src/door/claude.rs	live_claude_sessions_lists_this_machine	env fs process
+crates/boop-harness/src/door/claude.rs	live_files	env fs process
+crates/boop-harness/src/door/claude.rs	live_session_for_route	env fs process
+crates/boop-harness/src/door/claude.rs	live_session_in_pane	env fs process
+crates/boop-harness/src/door/claude.rs	live_sessions	env fs process
+crates/boop-harness/src/door/claude.rs	notify_idle	clock env fs thread
+crates/boop-harness/src/door/claude.rs	pane_id	env fs process
+crates/boop-harness/src/door/claude.rs	presented_from_host	env fs
+crates/boop-harness/src/door/claude.rs	presented_session	env fs process
+crates/boop-harness/src/door/claude.rs	presented_session_in_pane	env fs process
+crates/boop-harness/src/door/claude.rs	sessions_dir	env
+crates/boop-harness/src/door/claude.rs	the_idle_poll_reads_the_registry_status	clock env fs process thread
+crates/boop-harness/src/door/claude.rs	the_public_pane_lookup_follows_a_parked_host	clock env fs process sqlite thread
+crates/boop-harness/src/door/claude.rs	token_for	env fs
+crates/boop-harness/src/door/codex.rs	active_turn_delivery_probe	ws
+crates/boop-harness/src/door/codex.rs	app_server_rpc	ws
+crates/boop-harness/src/door/codex.rs	change_native_settings	ws
+crates/boop-harness/src/door/codex.rs	closure@16648	channel
+crates/boop-harness/src/door/codex.rs	closure@54911	ws
+crates/boop-harness/src/door/codex.rs	closure@7479	ws
+crates/boop-harness/src/door/codex.rs	closure@7548	process
+crates/boop-harness/src/door/codex.rs	deliver	process ws
+crates/boop-harness/src/door/codex.rs	emit_tui_event	channel
+crates/boop-harness/src/door/codex.rs	explicit_resume_seeds_the_native_plan_session	channel clock env fs net process task thread
+crates/boop-harness/src/door/codex.rs	forward_tui	channel lock net ws
+crates/boop-harness/src/door/codex.rs	live_session_for_route	clock env fs sqlite
+crates/boop-harness/src/door/codex.rs	live_sessions	clock env fs sqlite
+crates/boop-harness/src/door/codex.rs	native_connection_forwards_large_frames_in_both_directions_and_observes_resume	channel net task thread
+crates/boop-harness/src/door/codex.rs	new	clock
+crates/boop-harness/src/door/codex.rs	notify_idle	clock ws
+crates/boop-harness/src/door/codex.rs	observe_tui	channel net task thread
+crates/boop-harness/src/door/codex.rs	queue_message	process
+crates/boop-harness/src/door/codex.rs	route_session_keeps_the_registered_codex_pane	clock env fs sqlite
+crates/boop-harness/src/door/codex.rs	socket	env
+crates/boop-harness/src/door/codex.rs	state_db	env
+crates/boop-harness/src/door/codex.rs	the_thread_source_marks_guardian_and_spawned_threads_as_children	clock env fs sqlite
+crates/boop-harness/src/door/codex.rs	the_thread_table_lists_live_threads_only	clock env fs sqlite
+crates/boop-harness/src/door/codex.rs	tui_launch	channel clock env fs net process task thread
+crates/boop-harness/src/door/codex.rs	tui_relaunch	channel clock env fs net process task thread
+crates/boop-harness/src/door/codex.rs	wait_for_idle	clock ws
+crates/boop-harness/src/door/opencode.rs	a_busy_delivery_stays_pending_without_replacing_the_active_prompt	env http
+crates/boop-harness/src/door/opencode.rs	a_delivery_posts_one_text_part	env http
+crates/boop-harness/src/door/opencode.rs	agent	http
+crates/boop-harness/src/door/opencode.rs	an_already_idle_session_answers_from_the_status_map	env http
+crates/boop-harness/src/door/opencode.rs	base	env
+crates/boop-harness/src/door/opencode.rs	change_native_settings	env http
+crates/boop-harness/src/door/opencode.rs	clear_native_session	env http
+crates/boop-harness/src/door/opencode.rs	closure@11666	env http
+crates/boop-harness/src/door/opencode.rs	closure@9280	http
+crates/boop-harness/src/door/opencode.rs	configured_model	env http
+crates/boop-harness/src/door/opencode.rs	create_session	http
+crates/boop-harness/src/door/opencode.rs	default_model	env http
+crates/boop-harness/src/door/opencode.rs	deliver	env http
+crates/boop-harness/src/door/opencode.rs	ensure_server	clock env http process thread
+crates/boop-harness/src/door/opencode.rs	get	env http
+crates/boop-harness/src/door/opencode.rs	get_url	http
+crates/boop-harness/src/door/opencode.rs	initial_session_event	env http
+crates/boop-harness/src/door/opencode.rs	live_session_for_route	clock env http
+crates/boop-harness/src/door/opencode.rs	live_sessions	env http
+crates/boop-harness/src/door/opencode.rs	native_model_is_owned_backend_configuration	env
+crates/boop-harness/src/door/opencode.rs	native_request	env
+crates/boop-harness/src/door/opencode.rs	native_route_settings	env http
+crates/boop-harness/src/door/opencode.rs	notify_idle	clock env http
+crates/boop-harness/src/door/opencode.rs	observe	channel env http thread
+crates/boop-harness/src/door/opencode.rs	observer_subscribes_to_the_exact_directory_and_reports_clear_selection	channel env http thread
+crates/boop-harness/src/door/opencode.rs	project_worktrees	env http
+crates/boop-harness/src/door/opencode.rs	resume_args_round_trip_through_native_request	env
+crates/boop-harness/src/door/opencode.rs	route_uses_its_observed_http_server	clock env http
+crates/boop-harness/src/door/opencode.rs	session_has_model	env http
+crates/boop-harness/src/door/opencode.rs	session_settings	env http
+crates/boop-harness/src/door/opencode.rs	status_map	env http
+crates/boop-harness/src/door/opencode.rs	statuses	env http
+crates/boop-harness/src/door/opencode.rs	the_event_stream_reports_idle	clock env http
+crates/boop-harness/src/door/opencode.rs	the_session_list_becomes_live_sessions	env http
+crates/boop-harness/src/door/opencode.rs	tui_launch	channel clock env http net process thread
+crates/boop-harness/src/harness.rs	assert_fixture_sessions_project	clock fs process sqlite thread
+crates/boop-harness/src/harness.rs	closure@15332	clock fs process sqlite
+crates/boop-harness/src/harness.rs	drop	fs process thread
+crates/boop-harness/src/harness.rs	first_projection_gap	lock
+crates/boop-harness/src/harness.rs	ingest	clock fs process sqlite
+crates/boop-harness/src/harness.rs	jsonl_files	fs lock
+crates/boop-harness/src/harness.rs	reader_home	env
+crates/boop-harness/src/harness.rs	stop	fs process
+crates/boop-harness/src/harness.rs	sync_candidate	fs
+crates/boop-harness/src/harness.rs	sync_session	clock fs process sqlite
+crates/boop-harness/src/harness.rs	sync_session_with_pid	clock fs process sqlite
+crates/boop-harness/src/harness/claude.rs	a_transcript_whose_head_is_metadata_still_reports_its_cwd	fs lock
+crates/boop-harness/src/harness/claude.rs	busy_peer_attachment_is_a_native_message_receipt	fs
+crates/boop-harness/src/harness/claude.rs	claude_agent_worktrees	process
+crates/boop-harness/src/harness/claude.rs	claude_agent_worktrees_lists_locked_and_unlocked_agents	process
+crates/boop-harness/src/harness/claude.rs	claude_fixture_projects_through_the_graph_query	clock fs lock process sqlite thread
+crates/boop-harness/src/harness/claude.rs	claude_launch_resumes_with_session_id	env fs process
+crates/boop-harness/src/harness/claude.rs	claude_projects_dir	env
+crates/boop-harness/src/harness/claude.rs	claude_reads_subagent_edge_from_real_fixture	fs lock
+crates/boop-harness/src/harness/claude.rs	claude_session_path	fs
+crates/boop-harness/src/harness/claude.rs	claude_session_path_with	fs
+crates/boop-harness/src/harness/claude.rs	claude_spawn_returns_handle_and_stop_tears_down	clock env fs process thread tmux
+crates/boop-harness/src/harness/claude.rs	closure@11114	sqlite
+crates/boop-harness/src/harness/claude.rs	continued_in_transcript_relation_is_projected_by_claude_adapter	clock fs process sqlite thread
+crates/boop-harness/src/harness/claude.rs	describe	fs
+crates/boop-harness/src/harness/claude.rs	drop	env fs process
+crates/boop-harness/src/harness/claude.rs	extracts_file_paths_and_urls_from_tool_use	fs
+crates/boop-harness/src/harness/claude.rs	first_record_context	fs
+crates/boop-harness/src/harness/claude.rs	has_session_on	process tmux
+crates/boop-harness/src/harness/claude.rs	ingest	clock fs process sqlite
+crates/boop-harness/src/harness/claude.rs	messages	fs
+crates/boop-harness/src/harness/claude.rs	mock_tui_launch	env fs
+crates/boop-harness/src/harness/claude.rs	native_settings	fs
+crates/boop-harness/src/harness/claude.rs	native_worktrees	process
+crates/boop-harness/src/harness/claude.rs	new	env fs process
+crates/boop-harness/src/harness/claude.rs	open_channel	channel clock env fs jsonrpc lock process task thread
+crates/boop-harness/src/harness/claude.rs	random_hex	clock process
+crates/boop-harness/src/harness/claude.rs	read_claude	fs
+crates/boop-harness/src/harness/claude.rs	read_from	fs
+crates/boop-harness/src/harness/claude.rs	session_by_id	env fs
+crates/boop-harness/src/harness/claude.rs	sessions	env fs lock
+crates/boop-harness/src/harness/claude.rs	sessions_for_cwd	env fs lock
+crates/boop-harness/src/harness/claude.rs	sessions_in	fs lock
+crates/boop-harness/src/harness/claude.rs	sessions_in_with_known	fs lock
+crates/boop-harness/src/harness/claude.rs	skips_an_invalid_json_line_but_keeps_the_rest	fs
+crates/boop-harness/src/harness/claude.rs	spawn	clock fs process thread tmux
+crates/boop-harness/src/harness/claude.rs	stop	process tmux
+crates/boop-harness/src/harness/claude.rs	sync_candidates	env fs lock
+crates/boop-harness/src/harness/claude.rs	two_transcripts_sharing_a_stem_get_distinct_session_ids	fs lock
+crates/boop-harness/src/harness/codex.rs	a_partial_trailing_line_is_not_consumed	fs
+crates/boop-harness/src/harness/codex.rs	agent_message_projects_under_the_assistant_role	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	agent_reasoning_web_search_and_mcp_calls_project_instead_of_warning	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	an_unknown_record_type_keeps_its_raw_json	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	bookkeeping_records_leave_no_row_and_reasoning_keeps_its_summary	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	closure@24549	fs
+crates/boop-harness/src/harness/codex.rs	codex_fixture_projects_through_the_graph_query	clock fs lock process sqlite thread
+crates/boop-harness/src/harness/codex.rs	codex_fixture_tool_and_assistant_turns_keep_their_content	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	codex_home	env
+crates/boop-harness/src/harness/codex.rs	codex_sessions_dir	env
+crates/boop-harness/src/harness/codex.rs	codex_spawn_returns_handle_and_stop_tears_down	clock env fs process thread tmux
+crates/boop-harness/src/harness/codex.rs	codex_thread_by_id	env fs sqlite
+crates/boop-harness/src/harness/codex.rs	codex_thread_by_id_in	fs sqlite
+crates/boop-harness/src/harness/codex.rs	codex_thread_ref	fs
+crates/boop-harness/src/harness/codex.rs	codex_threads_for_cwd	env fs sqlite
+crates/boop-harness/src/harness/codex.rs	codex_threads_for_cwd_in	fs sqlite
+crates/boop-harness/src/harness/codex.rs	custom_tool_call_output_joins_input_text_parts	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	custom_tool_call_projects_name_and_input	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	describe	fs
+crates/boop-harness/src/harness/codex.rs	discovers_a_forked_subagent_session_from_the_fixture	fs lock
+crates/boop-harness/src/harness/codex.rs	drop	env fs process
+crates/boop-harness/src/harness/codex.rs	explicit_settings_override_the_turn_context_model	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	extracts_patch_apply_paths	fs
+crates/boop-harness/src/harness/codex.rs	first_session_meta	fs
+crates/boop-harness/src/harness/codex.rs	function_call_output_keeps_the_raw_string	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	function_call_projects_name_and_arguments	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	has_session_on	process tmux
+crates/boop-harness/src/harness/codex.rs	human_search_excludes_codex_auto_review_history	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	incremental_resume_attributes_the_appended_turn_model	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	ingest	fs lock sqlite
+crates/boop-harness/src/harness/codex.rs	known_transcript_uses_persisted_metadata_without_parsing_its_first_record	fs lock
+crates/boop-harness/src/harness/codex.rs	latest_root_session_for_cwd	env fs lock
+crates/boop-harness/src/harness/codex.rs	messages	fs
+crates/boop-harness/src/harness/codex.rs	missing_model_metadata_preserves_unknown	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	mock_tui_launch	env fs
+crates/boop-harness/src/harness/codex.rs	native_child_completion_visible	env fs lock
+crates/boop-harness/src/harness/codex.rs	native_child_observer_projects_the_codex_child_fixture	fs lock
+crates/boop-harness/src/harness/codex.rs	native_child_ownership_before	fs
+crates/boop-harness/src/harness/codex.rs	native_settings	fs
+crates/boop-harness/src/harness/codex.rs	new	env fs process
+crates/boop-harness/src/harness/codex.rs	now_ms	clock
+crates/boop-harness/src/harness/codex.rs	observe_native_children	fs
+crates/boop-harness/src/harness/codex.rs	open_channel	channel clock env fs jsonrpc lock process task thread
+crates/boop-harness/src/harness/codex.rs	patch_apply_end_names_its_call_and_files	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	project_line	lock sqlite
+crates/boop-harness/src/harness/codex.rs	project_one_line	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	random_hex	clock process
+crates/boop-harness/src/harness/codex.rs	read_codex	fs
+crates/boop-harness/src/harness/codex.rs	read_from	fs
+crates/boop-harness/src/harness/codex.rs	reads_a_message_and_a_token_count_line	fs
+crates/boop-harness/src/harness/codex.rs	same_turn_token_counts_sum_into_one_usage_row	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	session_by_id	env fs sqlite
+crates/boop-harness/src/harness/codex.rs	session_lookup_uses_the_codex_thread_index	fs sqlite
+crates/boop-harness/src/harness/codex.rs	sessions	env fs lock
+crates/boop-harness/src/harness/codex.rs	sessions_for_cwd	env fs sqlite
+crates/boop-harness/src/harness/codex.rs	sessions_in	fs lock
+crates/boop-harness/src/harness/codex.rs	sessions_in_with_known	fs lock
+crates/boop-harness/src/harness/codex.rs	skips_an_invalid_json_line_but_keeps_the_rest	fs
+crates/boop-harness/src/harness/codex.rs	spawn	clock env fs process thread tmux
+crates/boop-harness/src/harness/codex.rs	stop	process tmux
+crates/boop-harness/src/harness/codex.rs	sync_candidates	env fs lock
+crates/boop-harness/src/harness/codex.rs	token_usage_record_duplicating_token_count_projects_nothing	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	token_usage_record_without_a_token_count_projects_usage	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	turn_context_cwd_projects_two_distinct_turn_cwds	clock fs process sqlite thread
+crates/boop-harness/src/harness/codex.rs	turn_context_model_attributes_usage_rows_to_the_real_model	clock fs lock sqlite thread
+crates/boop-harness/src/harness/codex.rs	usage_models	sqlite
+crates/boop-harness/src/harness/codex.rs	write_cumulative_usage	sqlite
+crates/boop-harness/src/harness/kimi.rs	a_display_command_part_reads_its_command_key	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	a_failed_tool_result_keeps_its_text_under_an_error_tag	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	a_partial_trailing_line_is_not_consumed	fs
+crates/boop-harness/src/harness/kimi.rs	a_text_part_rides_bare	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	a_think_part_keeps_its_body_under_a_think_tag	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	a_tool_call_projects_its_name_and_arguments	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	a_tool_result_projects_its_output	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	a_usage_row_before_any_content_names_its_model_instead_of_nothing	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	an_unknown_part_kind_keeps_its_raw_json	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	canonical_future	fs
+crates/boop-harness/src/harness/kimi.rs	consume_first_turn	channel clock
+crates/boop-harness/src/harness/kimi.rs	describe	fs
+crates/boop-harness/src/harness/kimi.rs	discovers_main_and_a_sub_agent_from_the_fixture	fs
+crates/boop-harness/src/harness/kimi.rs	ingest	fs sqlite
+crates/boop-harness/src/harness/kimi.rs	kimi_fixture_projects_through_the_graph_query	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	kimi_session_path	fs
+crates/boop-harness/src/harness/kimi.rs	kimi_sessions_dir	env
+crates/boop-harness/src/harness/kimi.rs	kimi_wire_meta	fs
+crates/boop-harness/src/harness/kimi.rs	live_sessions	env fs
+crates/boop-harness/src/harness/kimi.rs	messages	fs
+crates/boop-harness/src/harness/kimi.rs	mock_tui_launch	clock env fs
+crates/boop-harness/src/harness/kimi.rs	open_channel	channel clock env fs jsonrpc lock process task thread
+crates/boop-harness/src/harness/kimi.rs	project_line	sqlite
+crates/boop-harness/src/harness/kimi.rs	project_one_line	clock fs process sqlite thread
+crates/boop-harness/src/harness/kimi.rs	read_from	fs
+crates/boop-harness/src/harness/kimi.rs	read_kimi	fs
+crates/boop-harness/src/harness/kimi.rs	read_state	fs
+crates/boop-harness/src/harness/kimi.rs	reads_a_user_message_and_a_tool_call	fs
+crates/boop-harness/src/harness/kimi.rs	same_turn_usage_records_sum_into_one_usage_row	clock fs sqlite thread
+crates/boop-harness/src/harness/kimi.rs	seed_workspace_trust	clock fs
+crates/boop-harness/src/harness/kimi.rs	session_by_id	env fs
+crates/boop-harness/src/harness/kimi.rs	sessions	env fs
+crates/boop-harness/src/harness/kimi.rs	sessions_in	fs
+crates/boop-harness/src/harness/kimi.rs	skips_an_invalid_json_line_but_keeps_the_rest	fs
+crates/boop-harness/src/harness/kimi.rs	spawn	clock env fs process thread tmux
+crates/boop-harness/src/harness/kimi.rs	stop	process tmux
+crates/boop-harness/src/harness/kimi.rs	the_probe_fixture_keeps_every_tool_and_assistant_body	clock fs process sqlite thread
+crates/boop-harness/src/harness/mock_tui.rs	drop	process
+crates/boop-harness/src/harness/mock_tui.rs	resolve_executable	env fs
+crates/boop-harness/src/harness/mock_tui.rs	resolve_llmock	env fs
+crates/boop-harness/src/harness/mock_tui.rs	spawn	clock fs net process thread
+crates/boop-harness/src/harness/mock_tui.rs	terminal_env	env
+crates/boop-harness/src/harness/mock_tui.rs	terminal_env_carries_home_and_term	env
+crates/boop-harness/src/harness/mock_tui.rs	unused_loopback_port	net
+crates/boop-harness/src/harness/mock_tui.rs	wait_for_bind	clock net process thread
+crates/boop-harness/src/harness/mock_tui.rs	workspace_spellings	fs
+crates/boop-harness/src/harness/mock_tui.rs	write_default_fixture	fs
+crates/boop-harness/src/harness/omp.rs	a_pin_keeps_existing_blocks_and_copies_their_api_key	fs
+crates/boop-harness/src/harness/omp.rs	a_pin_mints_the_provider_block_once_and_spells_the_model_through_it	fs
+crates/boop-harness/src/harness/omp.rs	a_pin_refuses_a_model_not_spelled_through_openrouter	fs
+crates/boop-harness/src/harness/omp.rs	describe	fs
+crates/boop-harness/src/harness/omp.rs	ingest	fs sqlite
+crates/boop-harness/src/harness/omp.rs	live_session_in_pane	env fs process
+crates/boop-harness/src/harness/omp.rs	live_session_in_pane_on_socket	env fs process
+crates/boop-harness/src/harness/omp.rs	live_sessions	env fs
+crates/boop-harness/src/harness/omp.rs	messages	fs
+crates/boop-harness/src/harness/omp.rs	mock_tui_launch	env fs
+crates/boop-harness/src/harness/omp.rs	mock_tui_launch_with_executable	env fs
+crates/boop-harness/src/harness/omp.rs	omp_agent_dir	env fs
+crates/boop-harness/src/harness/omp.rs	omp_live_session_for_pane	fs
+crates/boop-harness/src/harness/omp.rs	omp_live_session_for_terminal	fs
+crates/boop-harness/src/harness/omp.rs	omp_live_session_from_record	fs
+crates/boop-harness/src/harness/omp.rs	omp_live_sessions_in	fs
+crates/boop-harness/src/harness/omp.rs	omp_meta	fs
+crates/boop-harness/src/harness/omp.rs	omp_sessions_dir	env fs
+crates/boop-harness/src/harness/omp.rs	omp_terminal_records_bind_only_their_exact_tmux_transcript	fs
+crates/boop-harness/src/harness/omp.rs	omp_terminal_sessions_dir	env fs
+crates/boop-harness/src/harness/omp.rs	one_shot	process
+crates/boop-harness/src/harness/omp.rs	open_channel	channel clock env fs jsonrpc lock process task thread
+crates/boop-harness/src/harness/omp.rs	pin_openrouter_upstream	fs
+crates/boop-harness/src/harness/omp.rs	project_line	sqlite
+crates/boop-harness/src/harness/omp.rs	read_from	fs
+crates/boop-harness/src/harness/omp.rs	read_omp	fs
+crates/boop-harness/src/harness/omp.rs	session_by_id	env fs lock
+crates/boop-harness/src/harness/omp.rs	session_header	fs
+crates/boop-harness/src/harness/omp.rs	sessions	env fs lock
+crates/boop-harness/src/harness/omp.rs	sessions_for_cwd	env fs lock
+crates/boop-harness/src/harness/omp.rs	sessions_in	fs lock
+crates/boop-harness/src/harness/omp.rs	spawn	clock env fs process thread tmux
+crates/boop-harness/src/harness/omp.rs	stop	process tmux
+crates/boop-harness/src/harness/opencode.rs	a_model_switch_survives_a_partless_errored_assistant_message	clock fs process sqlite thread
+crates/boop-harness/src/harness/opencode.rs	closure@12865	lock sqlite
+crates/boop-harness/src/harness/opencode.rs	describe	sqlite
+crates/boop-harness/src/harness/opencode.rs	drop	env fs process
+crates/boop-harness/src/harness/opencode.rs	every_content_bearing_part_kind_projects_a_body	clock fs process sqlite thread
+crates/boop-harness/src/harness/opencode.rs	exact_sync_candidate_refreshes_the_session_rowid_cursor	sqlite
+crates/boop-harness/src/harness/opencode.rs	finish_message	sqlite
+crates/boop-harness/src/harness/opencode.rs	has_session_on	process tmux
+crates/boop-harness/src/harness/opencode.rs	ingest	lock sqlite
+crates/boop-harness/src/harness/opencode.rs	last_message_rowid	sqlite
+crates/boop-harness/src/harness/opencode.rs	last_message_rowids_for	sqlite
+crates/boop-harness/src/harness/opencode.rs	messages	sqlite
+crates/boop-harness/src/harness/opencode.rs	messages_after	sqlite
+crates/boop-harness/src/harness/opencode.rs	messages_for_ids	sqlite
+crates/boop-harness/src/harness/opencode.rs	migrate_projection	sqlite
+crates/boop-harness/src/harness/opencode.rs	mock_tui_launch	env fs
+crates/boop-harness/src/harness/opencode.rs	native_settings	sqlite
+crates/boop-harness/src/harness/opencode.rs	new	env fs process
+crates/boop-harness/src/harness/opencode.rs	no_projected_turn_from_the_fixture_has_an_empty_body	clock fs process sqlite thread
+crates/boop-harness/src/harness/opencode.rs	now_ms	clock
+crates/boop-harness/src/harness/opencode.rs	one_shot	clock process thread
+crates/boop-harness/src/harness/opencode.rs	one_shot_requires_a_model_before_starting_a_process	clock process thread
+crates/boop-harness/src/harness/opencode.rs	open_channel	channel clock env fs jsonrpc lock process task thread
+crates/boop-harness/src/harness/opencode.rs	open_read_only	sqlite
+crates/boop-harness/src/harness/opencode.rs	opencode_db_path	env
+crates/boop-harness/src/harness/opencode.rs	opencode_fixture_acquisition_and_parent_project_through_graph	clock fs process sqlite thread
+crates/boop-harness/src/harness/opencode.rs	opencode_message_text	sqlite
+crates/boop-harness/src/harness/opencode.rs	opencode_parts_batch_skips_malformed_json_without_reordering	sqlite
+crates/boop-harness/src/harness/opencode.rs	opencode_parts_fixture_receipt_uses_one_part_query_and_preserves_order	sqlite
+crates/boop-harness/src/harness/opencode.rs	opencode_projection_preserves_assistant_and_complete_tool_bodies	clock fs process sqlite thread
+crates/boop-harness/src/harness/opencode.rs	opencode_spawn_returns_handle_and_stop_tears_down	clock env fs process thread tmux
+crates/boop-harness/src/harness/opencode.rs	preview_uses_the_canonical_supervisor_with_model_variant_resume_and_epilogue	env fs process
+crates/boop-harness/src/harness/opencode.rs	projected_turns	sqlite
+crates/boop-harness/src/harness/opencode.rs	random_hex	clock process
+crates/boop-harness/src/harness/opencode.rs	read_from	sqlite
+crates/boop-harness/src/harness/opencode.rs	read_opencode	sqlite
+crates/boop-harness/src/harness/opencode.rs	repair_empty_messages	sqlite
+crates/boop-harness/src/harness/opencode.rs	session_by_id	env fs sqlite
+crates/boop-harness/src/harness/opencode.rs	session_from	sqlite
+crates/boop-harness/src/harness/opencode.rs	session_roots	env fs
+crates/boop-harness/src/harness/opencode.rs	sessions	env fs sqlite
+crates/boop-harness/src/harness/opencode.rs	sessions_for_cwd	env fs sqlite
+crates/boop-harness/src/harness/opencode.rs	sessions_for_cwd_from	sqlite
+crates/boop-harness/src/harness/opencode.rs	sessions_from	sqlite
+crates/boop-harness/src/harness/opencode.rs	spawn	clock env fs process thread tmux
+crates/boop-harness/src/harness/opencode.rs	steady_candidate_discovery_skips_message_scan_and_batches_projection_upgrades	sqlite
+crates/boop-harness/src/harness/opencode.rs	stop	process tmux
+crates/boop-harness/src/harness/opencode.rs	store_path	env fs
+crates/boop-harness/src/harness/opencode.rs	streamed_assistant_waits_for_completion_and_legacy_empty_turn_repairs	clock fs process sqlite thread
+crates/boop-harness/src/harness/opencode.rs	sync_candidate	sqlite
+crates/boop-harness/src/harness/opencode.rs	sync_candidates	env fs sqlite
+crates/boop-harness/src/harness/opencode.rs	sync_candidates_from	sqlite
+crates/boop-harness/src/harness/opencode.rs	sync_candidates_from_connection	sqlite
+crates/boop-harness/src/harness/opencode.rs	visit_parts_for_messages	sqlite
+crates/boop-harness/src/harness/opencode.rs	write_part	lock sqlite
+crates/boop-harness/src/harness/replay.rs	drive	thread
+crates/boop-harness/src/harness/replay.rs	drive_to_vecs	thread
+crates/boop-harness/src/harness/replay.rs	empty_payload_round_trips_and_channels_stay_separate	thread
+crates/boop-harness/src/harness/replay.rs	input_after_eof_marker_is_rejected	thread
+crates/boop-harness/src/harness/replay.rs	markers_and_resizes_are_typed_facts	thread
+crates/boop-harness/src/harness/replay.rs	output_chunks_split_across_events_reassemble_in_schedule_order	thread
+crates/boop-harness/src/harness/replay.rs	replay_drains_output_while_input_exceeds_channel_capacity	thread
+crates/boop-harness/src/identity.rs	a_caller_with_neither_rung_is_unresolved	env
+crates/boop-harness/src/identity.rs	boop_lane_alone_answers_for_an_old_spawn	env
+crates/boop-harness/src/identity.rs	closure@6669	env
+crates/boop-harness/src/identity.rs	closure@7387	env
+crates/boop-harness/src/identity.rs	closure@8093	env
+crates/boop-harness/src/identity.rs	closure@8898	env
+crates/boop-harness/src/identity.rs	env	env
+crates/boop-harness/src/identity.rs	from_env	env
+crates/boop-harness/src/identity.rs	require	env process
+crates/boop-harness/src/identity.rs	resolve_as	env
+crates/boop-harness/src/identity.rs	the_as_flag_outranks_the_env_stamp	env
+crates/boop-harness/src/identity.rs	the_env_stamp_is_the_second_rung	env
+crates/boop-harness/src/live.rs	live_registered_session	sqlite
+crates/boop-harness/src/live.rs	live_registered_session_in_pane	clock env fs process sqlite thread
+crates/boop-harness/src/live.rs	now_ms	clock
+crates/boop-harness/src/live.rs	pid_alive	process
+crates/boop-harness/src/live.rs	ps_ttys	process
+crates/boop-harness/src/live.rs	ps_ttys_answers_the_asked_pids	process
+crates/boop-harness/src/live.rs	registered_route_requires_its_live_process_and_pane_observation	clock sqlite thread
+crates/boop-harness/src/live.rs	route_session_in_pane	clock env fs process sqlite thread
+crates/boop-harness/src/live.rs	session_in_pane	clock env fs process sqlite thread
+crates/boop-harness/src/live.rs	session_in_pane_on_socket	clock env fs process sqlite thread
+crates/boop-harness/src/pane.rs	a_blank_pane_is_one_frame_with_nothing_on_it	clock
+crates/boop-harness/src/pane.rs	a_capture_becomes_spans_in_one_frame	clock
+crates/boop-harness/src/pane.rs	a_frame_crosses_json_under_its_rust_names	clock
+crates/boop-harness/src/pane.rs	a_frame_is_unchanged_only_when_what_the_client_draws_is	clock
+crates/boop-harness/src/pane.rs	a_prompt_above_the_capture_rides_the_frame_as_a_pin	clock
+crates/boop-harness/src/pane.rs	classify	sqlite
+crates/boop-harness/src/pane.rs	closure@23217	clock
+crates/boop-harness/src/pane.rs	closure@26963	clock
+crates/boop-harness/src/pane.rs	frame	clock process sqlite
+crates/boop-harness/src/pane.rs	frame_turns	sqlite
+crates/boop-harness/src/pane.rs	now_ms	clock
+crates/boop-harness/src/pane.rs	project	clock
+crates/boop-harness/src/pane.rs	reset_from	sqlite
+crates/boop-harness/src/pane.rs	the_composer_is_not_a_turn	clock
+crates/boop-harness/src/pane.rs	the_window_follows_the_pane_height_and_its_scroll	clock
+crates/boop-harness/src/pane.rs	tool_args	sqlite
+crates/boop-harness/src/pane.rs	turns	sqlite
+crates/boop-harness/src/transcript.rs	created	fs
+crates/boop-harness/src/transcript.rs	head_values	fs
+crates/boop-harness/src/transcript.rs	mtime	fs
+crates/boop-harness/src/transcript.rs	tail_values	fs
+crates/boop-harness/src/transcript_tests.rs	a_resume_id_is_the_stem_for_claude_and_the_session_id_elsewhere	fs
+crates/boop-harness/src/transcript_tests.rs	after_seq_skips_up_to_and_including_that_index	env fs
+crates/boop-harness/src/transcript_tests.rs	an_archived_opencode_session_is_not_a_row	env fs sqlite
+crates/boop-harness/src/transcript_tests.rs	assistant_d2_write_retains_the_complete_fenced_file	env fs
+crates/boop-harness/src/transcript_tests.rs	assistant_line_is_unaffected	env fs
+crates/boop-harness/src/transcript_tests.rs	captured_claude_session_labels_every_row_by_its_wire_shape	fs
+crates/boop-harness/src/transcript_tests.rs	captured_claude_subagent_session_parses	fs
+crates/boop-harness/src/transcript_tests.rs	claude_messages_resolve_one_exact_file_without_session_discovery	env fs
+crates/boop-harness/src/transcript_tests.rs	compact_summary_is_a_meta_row	env fs
+crates/boop-harness/src/transcript_tests.rs	fixture_home	env fs
+crates/boop-harness/src/transcript_tests.rs	four_harnesses_lower_into_one_session_shape	env fs sqlite
+crates/boop-harness/src/transcript_tests.rs	interrupted_message_stays_a_user_row	env fs
+crates/boop-harness/src/transcript_tests.rs	kimi_wire_usage_sums_inputs	env fs
+crates/boop-harness/src/transcript_tests.rs	legacy_command_body_is_a_meta_row	env fs
+crates/boop-harness/src/transcript_tests.rs	meta_string_content_is_a_meta_row	env fs
+crates/boop-harness/src/transcript_tests.rs	meta_text_block_is_a_meta_row	env fs
+crates/boop-harness/src/transcript_tests.rs	opencode_tokens_take_max_not_latest	env fs sqlite
+crates/boop-harness/src/transcript_tests.rs	prose_about_a_tag_stays_a_user_row	env fs
+crates/boop-harness/src/transcript_tests.rs	seq_is_the_line_index_across_skipped_lines	env fs
+crates/boop-harness/src/transcript_tests.rs	session_ref	fs
+crates/boop-harness/src/transcript_tests.rs	string_content_is_a_user_row	env fs
+crates/boop-harness/src/transcript_tests.rs	task_notification_is_a_meta_row	env fs
+crates/boop-harness/src/transcript_tests.rs	title_lookup_skips_leading_tool_and_meta_rows	env fs
+crates/boop-harness/src/transcript_tests.rs	tool_result_block_is_a_tool_row	env fs
+crates/boop-harness/src/transcript_tests.rs	typed_and_queued_input_stay_user_rows	env fs
+crates/boop-harness/src/transcript_tests.rs	write_temp	env fs
+crates/boop-harness/src/worktree.rs	a_bulk_delete_of_two_siblings_leaves_the_third_and_the_parent_alone	fs process
+crates/boop-harness/src/worktree.rs	a_captured_child_reads_eof_instead_of_a_prompt	clock process thread
+crates/boop-harness/src/worktree.rs	a_failing_boop_start_blocks_the_spawn	clock process thread
+crates/boop-harness/src/worktree.rs	a_hung_setup_step_fails_within_its_deadline_instead_of_hanging	clock process thread
+crates/boop-harness/src/worktree.rs	a_reclaim_clears_a_clean_worktree_and_its_branch	clock fs process thread
+crates/boop-harness/src/worktree.rs	a_reclaim_refuses_a_branch_no_other_ref_carries	clock fs process thread
+crates/boop-harness/src/worktree.rs	absolute_git_path	fs process
+crates/boop-harness/src/worktree.rs	branch_exists	process
+crates/boop-harness/src/worktree.rs	brief_with_preamble	fs
+crates/boop-harness/src/worktree.rs	deletable_worktree	fs process
+crates/boop-harness/src/worktree.rs	find_start_recipe	clock process thread
+crates/boop-harness/src/worktree.rs	git_stdout	process
+crates/boop-harness/src/worktree.rs	kill_process_group	process
+crates/boop-harness/src/worktree.rs	main_tree_spawn_refuses_a_non_fast_forward	clock fs process thread
+crates/boop-harness/src/worktree.rs	merge_ff_only	clock process thread
+crates/boop-harness/src/worktree.rs	prepare_spawn_dir	clock fs process thread
+crates/boop-harness/src/worktree.rs	reclaim_carcass	clock fs process thread
+crates/boop-harness/src/worktree.rs	record_start_status	fs
+crates/boop-harness/src/worktree.rs	run_captured_with_deadline	clock process thread
+crates/boop-harness/src/worktree.rs	run_git	clock process thread
+crates/boop-harness/src/worktree.rs	run_shell	clock process thread
+crates/boop-harness/src/worktree.rs	run_status_with_deadline	clock process thread
+crates/boop-harness/src/worktree.rs	setup_steps_run_in_order_in_the_worktree	clock fs process thread
+crates/boop-harness/src/worktree.rs	spawn_grouped	process
+crates/boop-harness/src/worktree.rs	the_killed_child_leaves_no_orphan	clock process thread
+crates/boop-harness/src/worktree.rs	unique_commits	process
+crates/boop-harness/src/worktree.rs	wait_with_deadline	clock process thread
+crates/boop-harness/src/worktree.rs	warm_start	clock process thread
+crates/boop-harness/src/worktree.rs	warm_start_is_a_no_op_where_no_recipe_is_declared	clock process thread
+crates/boop-harness/src/worktree.rs	worktree_dirt	process
+crates/boop-harness/src/worktree.rs	worktree_owner	fs process
+crates/boop-harness/src/worktree.rs	worktree_spawn_creates_a_branch_at_the_base	clock fs process thread
+crates/boop-mux/src/_2_click_rungs.rs	absolute_on_disk	fs
+crates/boop-mux/src/_2_click_rungs.rs	clear_index_cache	lock
+crates/boop-mux/src/_2_click_rungs.rs	git_absent	process
+crates/boop-mux/src/_2_click_rungs.rs	git_out	process
+crates/boop-mux/src/_2_click_rungs.rs	git_probe_repos	fs
+crates/boop-mux/src/_2_click_rungs.rs	home_dir	env
+crates/boop-mux/src/_2_click_rungs.rs	index_for	clock fs lock
+crates/boop-mux/src/_2_click_rungs.rs	index_with	clock fs lock
+crates/boop-mux/src/_2_click_rungs.rs	repo_root_for	fs
+crates/boop-mux/src/_2_click_rungs.rs	repo_root_of	fs
+crates/boop-mux/src/_2_click_rungs.rs	sibling_candidates	fs
+crates/boop-mux/src/_2_click_rungs.rs	under_indexed_dirs	fs
+crates/boop-mux/src/_3_click_roots.rs	a_document_roots_at_its_directory_checkout_and_worktrees	fs lock process
+crates/boop-mux/src/_3_click_roots.rs	click_roots	fs lock process
+crates/boop-mux/src/_3_click_roots.rs	closure@5206	fs
+crates/boop-mux/src/_3_click_roots.rs	common_git_dir	fs
+crates/boop-mux/src/_3_click_roots.rs	doc_roots	fs lock process
+crates/boop-mux/src/_3_click_roots.rs	parse_worktree_list	fs
+crates/boop-mux/src/_3_click_roots.rs	push	fs
+crates/boop-mux/src/_3_click_roots.rs	repos_beside	fs lock
+crates/boop-mux/src/_3_click_roots.rs	worktrees_of	fs lock process
+crates/boop-mux/src/_4_click_lookup.rs	a_bare_filename_lists_every_match_across_worktree_and_sibling_roots	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	a_file_inside_a_gitignored_directory_still_resolves	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	a_tail_under_a_sibling_repository_subdirectory_resolves_there	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	closure@10737	clock fs lock
+crates/boop-mux/src/_4_click_lookup.rs	closure@20683	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	cmd_click_lookup	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	crawls_sideways_into_a_sibling_checkout	fs
+crates/boop-mux/src/_4_click_lookup.rs	doc_join	fs lock process
+crates/boop-mux/src/_4_click_lookup.rs	exact_groups	fs lock process
+crates/boop-mux/src/_4_click_lookup.rs	exact_matches	clock fs lock thread
+crates/boop-mux/src/_4_click_lookup.rs	lane_tree	lock
+crates/boop-mux/src/_4_click_lookup.rs	local_join	fs
+crates/boop-mux/src/_4_click_lookup.rs	pane_local_bare_filename_wins_before_cross_root_choices	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	reports_a_path_only_git_still_holds	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	resolve	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	resolve_fs	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	resolve_fs_in_doc	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	resolve_with	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	sibling_join	fs lock
+crates/boop-mux/src/_4_click_lookup.rs	the_lookup_from_a_linked_worktree_needs_only_the_filesystem	clock fs lock process thread
+crates/boop-mux/src/_4_click_lookup.rs	worktree_join	fs
+crates/boop-mux/src/lib.rs	a_dropped_control_client_leaves_no_tmux_process	clock env fs process tmux
+crates/boop-mux/src/lib.rs	a_failing_command_returns_err_from_error_block	clock env fs process tmux
+crates/boop-mux/src/lib.rs	a_live_pane_answers_a_snapshot_with_the_geometry_of_its_wrap	env fs process tmux
+crates/boop-mux/src/lib.rs	a_snapshot_carries_history_above_the_window_and_the_copy_mode_scroll	env fs process tmux
+crates/boop-mux/src/lib.rs	a_spawn_against_an_unreachable_socket_returns_err	process tmux
+crates/boop-mux/src/lib.rs	capture_pane	process tmux
+crates/boop-mux/src/lib.rs	closure@18978	process
+crates/boop-mux/src/lib.rs	command	clock process
+crates/boop-mux/src/lib.rs	create_session	tmux
+crates/boop-mux/src/lib.rs	current_pane	process
+crates/boop-mux/src/lib.rs	drop	env fs process
+crates/boop-mux/src/lib.rs	exact_target_does_not_prefix_match_a_sibling_session	env fs process tmux
+crates/boop-mux/src/lib.rs	has_session	process tmux
+crates/boop-mux/src/lib.rs	kill_session	tmux
+crates/boop-mux/src/lib.rs	kill_test_server	env fs process
+crates/boop-mux/src/lib.rs	kill_window	tmux
+crates/boop-mux/src/lib.rs	list_panes	process
+crates/boop-mux/src/lib.rs	lists_the_created_session_inside_one_block	clock env fs process tmux
+crates/boop-mux/src/lib.rs	live_sessions	process
+crates/boop-mux/src/lib.rs	live_sessions_detailed	process
+crates/boop-mux/src/lib.rs	new	env fs process
+crates/boop-mux/src/lib.rs	new_bare_session	tmux
+crates/boop-mux/src/lib.rs	new_detached_session	process tmux
+crates/boop-mux/src/lib.rs	new_window	process
+crates/boop-mux/src/lib.rs	next_line	clock
+crates/boop-mux/src/lib.rs	pane_at	process
+crates/boop-mux/src/lib.rs	pane_at_names_the_split_pane_under_the_cell	env fs process tmux
+crates/boop-mux/src/lib.rs	pane_id	process
+crates/boop-mux/src/lib.rs	pane_pid	process tmux
+crates/boop-mux/src/lib.rs	pane_pid_resolves_a_percent_pane_target	env fs process tmux
+crates/boop-mux/src/lib.rs	pane_pids	process
+crates/boop-mux/src/lib.rs	pane_snapshot	process
+crates/boop-mux/src/lib.rs	poll_snapshot	process
+crates/boop-mux/src/lib.rs	send_key_named	process
+crates/boop-mux/src/lib.rs	send_keys_literal	process
+crates/boop-mux/src/lib.rs	send_text	process
+crates/boop-mux/src/lib.rs	session_of_pane	process
+crates/boop-mux/src/lib.rs	sink	process tmux
+crates/boop-mux/src/lib.rs	spawn	process
+crates/boop-mux/src/lib.rs	swap_windows	process
+crates/boop-mux/src/lib.rs	target_alive	process tmux
+crates/boop-mux/src/lib.rs	target_alive_tracks_a_live_pane_and_drops_a_dead_session	env fs process tmux
+crates/boop-mux/src/lib.rs	tmux_command	process
+crates/boop-mux/src/lib.rs	two_commands_match_their_replies_by_number	clock env fs process tmux
+crates/boop-mux/src/lib.rs	unreachable_is_not_the_same_as_empty	env fs process tmux
+crates/boop-mux/src/lib.rs	user_paste_sends_text_through_a_scratch_tmux_server	env fs process tmux
+crates/boop-proc/src/0_resource_guard.rs	capture	process
+crates/boop-proc/src/0_resource_guard.rs	closure@1862	process
+crates/boop-proc/src/0_resource_guard.rs	from_env	env
+crates/boop-proc/src/0_resource_guard.rs	pause	process
+crates/boop-proc/src/0_resource_guard.rs	pauses_and_resumes_a_child_in_its_own_process_group	clock process
+crates/boop-proc/src/0_resource_guard.rs	process_group_id	process
+crates/boop-proc/src/0_resource_guard.rs	process_group_members	process
+crates/boop-proc/src/0_resource_guard.rs	resume	process
+crates/boop-proc/src/0_resource_guard.rs	sample	clock process
+crates/boop-proc/src/0_resource_guard.rs	signal	process
+crates/boop-proc/src/0_resource_guard.rs	validate_leader	process
+crates/boop-proc/src/config.rs	a_legacy_at_effort_string_resolves_to_model_plus_effort	fs
+crates/boop-proc/src/config.rs	a_preset_carries_its_harness_and_effort_as_fields	fs
+crates/boop-proc/src/config.rs	a_preset_carries_its_openrouter_upstream_as_a_field	fs
+crates/boop-proc/src/config.rs	an_unknown_effort_is_refused_by_name	fs
+crates/boop-proc/src/config.rs	closure@6818	fs
+crates/boop-proc/src/config.rs	default_path	env fs
+crates/boop-proc/src/config.rs	load	fs
+crates/boop-proc/src/config.rs	load_once	env fs
+crates/boop-proc/src/config.rs	missing_preset_lists_available_names	fs
+crates/boop-proc/src/config.rs	post_pr_parses_globally_and_per_preset	fs
+crates/boop-proc/src/config.rs	preset_object_form_carries_a_bin	fs
+crates/boop-proc/src/config.rs	resolve_preset	fs
+crates/boop-proc/src/config.rs	resolve_spawn_preset	fs
+crates/boop-proc/src/config.rs	show	fs
+crates/boop-proc/src/config.rs	show_on_missing_file_prints_the_default_config	fs
+crates/boop-proc/src/deliver.rs	a_body_the_door_already_took_this_window_trips_at_once	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_burst_past_the_recipients_live_connects_trips_and_cools_off	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_commit_head_already_pushed_is_held_on_a_second_row	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_commit_row_to_a_lane_parent_stays_in_the_mailbox	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_cool_off_ends_and_the_drip_resumes_at_budget	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_done_commit_row_stays_in_the_mailbox	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_door_queue_landing_stamps_the_row_at_the_ladder	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_lane_end_row_takes_the_door_of_a_live_route	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_lane_progress_row_stays_off_the_door	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_row_a_door_already_queued_is_never_pushed_again	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	a_wildcard_mailbox_subscription_keeps_the_parents_commit_held	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	a_wip_commit_row_pushes_through_a_coordinator_door_once	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	acpx_failure_retries_after_store_reopen_then_stays_accepted	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	alive	process tmux
+crates/boop-proc/src/deliver.rs	an_end_row_under_a_blown_budget_cools_off	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	bind_route_session	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	burst_fixture	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	cancelled_reminder_is_not_sent_or_retried_through_the_ladder	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	claim_open_session	fs
+crates/boop-proc/src/deliver.rs	claimed_sessions	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	closure@36467	clock
+crates/boop-proc/src/deliver.rs	closure@67436	sqlite
+crates/boop-proc/src/deliver.rs	closure@72436	sqlite
+crates/boop-proc/src/deliver.rs	commit_fixture	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	commit_push_mode	sqlite
+crates/boop-proc/src/deliver.rs	cooling_off	sqlite
+crates/boop-proc/src/deliver.rs	default_floor_admits_unique_progress_and_bounds_the_33rd_push	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	deliver_hail	clock env fs process sqlite tmux
+crates/boop-proc/src/deliver.rs	deliver_hail_budgeted	clock env fs process sqlite tmux
+crates/boop-proc/src/deliver.rs	deliver_hail_with	clock env fs process sqlite tmux
+crates/boop-proc/src/deliver.rs	door_failure_cooldown	env
+crates/boop-proc/src/deliver.rs	door_gate	sqlite
+crates/boop-proc/src/deliver.rs	door_verdict	sqlite
+crates/boop-proc/src/deliver.rs	drain_all_held_mail	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	drain_budget	env
+crates/boop-proc/src/deliver.rs	drain_route_held_mail	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	drain_route_held_mail_budgeted	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	explicit_clock_reproduces_two_push_cooloff_and_subsequent_unique_burst	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	from_env	env
+crates/boop-proc/src/deliver.rs	held_mail_pushes_itself_once_the_route_can_take_it	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	keystroke_route	process tmux
+crates/boop-proc/src/deliver.rs	kind_fixture	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	land	clock env fs process sqlite tmux
+crates/boop-proc/src/deliver.rs	land_one	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	live_session	clock sqlite
+crates/boop-proc/src/deliver.rs	no_door_route	process tmux
+crates/boop-proc/src/deliver.rs	notify_idle	clock
+crates/boop-proc/src/deliver.rs	pane_notice_is_sent_once_and_body_stays_unread_across_restarts	clock env fs process sqlite thread tmux
+crates/boop-proc/src/deliver.rs	paste	process
+crates/boop-proc/src/deliver.rs	paste_into_pane	process tmux
+crates/boop-proc/src/deliver.rs	projected	clock
+crates/boop-proc/src/deliver.rs	prune_claims	fs
+crates/boop-proc/src/deliver.rs	record	clock sqlite
+crates/boop-proc/src/deliver.rs	record_door_failure	env sqlite
+crates/boop-proc/src/deliver.rs	submit	process
+crates/boop-proc/src/deliver.rs	the_door_gate_trips_once_then_only_reports_the_cool_off	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	the_gate_counts_a_pre_fix_door_queue_row	clock env fs sqlite thread
+crates/boop-proc/src/deliver.rs	transitions	sqlite
+crates/boop-proc/src/headwatch.rs	a_blocked_trailer_carries_its_ask	clock fs process
+crates/boop-proc/src/headwatch.rs	a_reset_to_an_older_commit_reports_a_rewind	clock fs process
+crates/boop-proc/src/headwatch.rs	a_single_commit_reports_one_wip_row	clock fs process
+crates/boop-proc/src/headwatch.rs	an_unseeded_watch_reports_the_first_commit	clock fs process
+crates/boop-proc/src/headwatch.rs	burst_has_blocked	clock process
+crates/boop-proc/src/headwatch.rs	closure@2812	clock process
+crates/boop-proc/src/headwatch.rs	commits_inside_the_quiet_window_coalesce_into_one_row	clock fs process
+crates/boop-proc/src/headwatch.rs	descends_from	clock process
+crates/boop-proc/src/headwatch.rs	dirty_count	clock process
+crates/boop-proc/src/headwatch.rs	git_line	clock process
+crates/boop-proc/src/headwatch.rs	git_output	clock process
+crates/boop-proc/src/headwatch.rs	git_repo	clock process
+crates/boop-proc/src/headwatch.rs	head	clock process
+crates/boop-proc/src/headwatch.rs	new	clock fs process
+crates/boop-proc/src/headwatch.rs	nudge_forces_a_head_read_over_an_unchanged_mtime	clock fs process
+crates/boop-proc/src/headwatch.rs	read_commit_facts	clock process
+crates/boop-proc/src/headwatch.rs	reflog_path	clock process
+crates/boop-proc/src/headwatch.rs	rev_list_count	clock process
+crates/boop-proc/src/headwatch.rs	stat_gate_returns_none_for_an_unchanged_reflog	clock fs process
+crates/boop-proc/src/headwatch.rs	stat_mtime	fs
+crates/boop-proc/src/headwatch.rs	tick	clock fs process
+crates/boop-proc/src/inbox.rs	a_drained_id_is_never_offered_again	fs
+crates/boop-proc/src/inbox.rs	drained	fs
+crates/boop-proc/src/inbox.rs	record_drained	fs
+crates/boop-proc/src/lane.rs	a_reclaim_refuses_while_the_pane_is_alive	clock fs process thread
+crates/boop-proc/src/lane.rs	a_yield_body_with_no_tree_reads_as_dashes	process
+crates/boop-proc/src/lane.rs	closure@16686	process
+crates/boop-proc/src/lane.rs	closure@16831	process
+crates/boop-proc/src/lane.rs	default_base_sha	process
+crates/boop-proc/src/lane.rs	delete_carcass	clock fs process thread
+crates/boop-proc/src/lane.rs	find_carcass	process
+crates/boop-proc/src/lane.rs	git_line	process
+crates/boop-proc/src/lane.rs	locale_stamp	env
+crates/boop-proc/src/lane.rs	pane_process_alive	process
+crates/boop-proc/src/lane.rs	pid_alive	process
+crates/boop-proc/src/lane.rs	reclaim_for_spawn	clock fs process thread
+crates/boop-proc/src/lane.rs	repo_root	process
+crates/boop-proc/src/lane.rs	rev_parse	process
+crates/boop-proc/src/lane.rs	the_default_base_sha_falls_back_to_origin_head	process
+crates/boop-proc/src/lane.rs	the_default_base_sha_prefers_origin_main	process
+crates/boop-proc/src/lane.rs	the_locale_stamp_sets_lc_all_and_lang	env
+crates/boop-proc/src/lane.rs	utf8_locale	env
+crates/boop-proc/src/lane.rs	yield_body	process
+crates/boop-proc/src/supervise.rs	a_blocked_commit_is_minted_as_a_request	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_brief_turn_that_is_empty_twice_fails_the_lane	env fs
+crates/boop-proc/src/supervise.rs	a_cancel_row_interrupts_the_turn_and_feeds_the_next_one	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_commit_advance_mails_the_parent_one_commit_row	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_commit_burst_reports_the_whole_range_in_one_row	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_conversation_that_moves_mid_run_stays_on_the_same_spawn	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_flaked_brief_turn_is_refed_even_when_the_channel_has_an_id	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_fresh_identified_channel_acknowledges_before_receiving_the_full_brief	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_lane_parent_reads_its_yield_rows_off_the_mailbox_too	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_lane_that_declared_no_output_keeps_its_short_brief_turn	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_lane_that_never_opened_mails_the_parent_and_writes_its_result	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_legacy_plain_text_trail_never_resumes	env fs
+crates/boop-proc/src/supervise.rs	a_missing_path_is_named	process
+crates/boop-proc/src/supervise.rs	a_parentless_park_mails_nothing	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_park_after_the_result_row_mails_no_yield	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_pin_from_no_spawn_never_resumes	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	a_pinned_conversation_answers_only_the_spawn_that_pinned_it	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	a_result_row_names_head_and_commits_past_base	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_result_row_to_a_coordinator_parent_also_stops_at_the_mailbox	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_resume_pinned_for_another_cwd_starts_fresh_and_says_so	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_revived_run_keeps_its_spawn_and_resumes_on_it	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	a_rewind_mails_one_head_rewound_row	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_seeded_head_watch_never_reports_the_same_head_again	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	a_seeded_watch_does_not_repeat_a_warning_that_already_landed	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	a_signalled_supervisor_writes_a_typed_result_row	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	a_supervisor_error_still_writes_the_lane_s_result_row	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	a_supervisor_panic_still_writes_the_lane_s_result_row	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_supervisor_whose_own_pane_is_gone_ends_the_lane	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_turn_with_no_pending_hail_parks_instead_of_ending	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	a_wrong_subject_is_named	process
+crates/boop-proc/src/supervise.rs	accepted_resume	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	ack	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	ack_stamps_the_row_so_the_next_read_skips_it	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	already_hailed	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	an_empty_brief_turn_is_re_sent_once	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	an_explicit_resume_receives_the_resume_nudge	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	an_explicit_subscriber_gets_its_own_commit_row	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	an_idle_yield_reaches_the_trail_and_stops_at_the_mailbox	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	an_unmet_expectation_turns_exit_zero_into_rc_four	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	append_row	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	apply_expectations	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	arm_signal_trail	clock env fs process signal sqlite thread tmux
+crates/boop-proc/src/supervise.rs	biggest_targets	fs
+crates/boop-proc/src/supervise.rs	closure@119979	env fs
+crates/boop-proc/src/supervise.rs	closure@157397	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@157482	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@162601	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@165675	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@165760	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@167568	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@167653	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@169216	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@169300	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@171342	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@171426	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@176796	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@176881	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@178651	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@178736	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@183161	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@183246	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@184663	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@184748	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	closure@185532	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@19469	process tmux
+crates/boop-proc/src/supervise.rs	closure@21395	fs
+crates/boop-proc/src/supervise.rs	closure@21846	fs
+crates/boop-proc/src/supervise.rs	closure@26653	sqlite
+crates/boop-proc/src/supervise.rs	closure@28596	process
+crates/boop-proc/src/supervise.rs	closure@33828	sqlite
+crates/boop-proc/src/supervise.rs	closure@36540	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@40409	clock env fs process signal sqlite thread tmux
+crates/boop-proc/src/supervise.rs	closure@43540	sqlite
+crates/boop-proc/src/supervise.rs	closure@44025	process
+crates/boop-proc/src/supervise.rs	closure@72069	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	closure@81732	clock sqlite
+crates/boop-proc/src/supervise.rs	closure@95463	clock process
+crates/boop-proc/src/supervise.rs	codex_steer_receipts_keep_acceptance_and_error_detail	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	commit_quiet	env
+crates/boop-proc/src/supervise.rs	commit_subjects	process
+crates/boop-proc/src/supervise.rs	commits_past_base	process
+crates/boop-proc/src/supervise.rs	deliver_outbound	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	dir_size	fs
+crates/boop-proc/src/supervise.rs	dirty_count	process
+crates/boop-proc/src/supervise.rs	disk_floor_gb	env
+crates/boop-proc/src/supervise.rs	evaluate_expect	fs process
+crates/boop-proc/src/supervise.rs	evict_targets_until_above_floor	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	evictable_targets	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	expectations_all_met_is_empty_unmet	process
+crates/boop-proc/src/supervise.rs	free_disk_gb	process
+crates/boop-proc/src/supervise.rs	git_repo	process
+crates/boop-proc/src/supervise.rs	hail_parent_once	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	has_answered	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	head_progress_detail	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	head_sha	process
+crates/boop-proc/src/supervise.rs	idle_shutdown	env
+crates/boop-proc/src/supervise.rs	lane_targets	fs
+crates/boop-proc/src/supervise.rs	last_episode_kind	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	last_result_rc	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	mail_parent	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	mail_retirement	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	mail_to_parent_kind	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	mint_spawn	env fs
+crates/boop-proc/src/supervise.rs	mood_template	env fs sqlite
+crates/boop-proc/src/supervise.rs	new	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	newest_kind_ts	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	next_event	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	outcomes_of	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	owes_a_file	env fs
+crates/boop-proc/src/supervise.rs	parent_alive	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	parent_policy	fs
+crates/boop-proc/src/supervise.rs	path_under	fs
+crates/boop-proc/src/supervise.rs	pending	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	pending_takes_only_this_lane_s_unacked_actionable_rows	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	pin_resume	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	pinned_conversation	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	pinned_conversation_for	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	pr_view	clock env process
+crates/boop-proc/src/supervise.rs	pr_view_timeout	env
+crates/boop-proc/src/supervise.rs	probe	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	produced_nothing_yet	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	progress_warning	env
+crates/boop-proc/src/supervise.rs	publish_pr	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	read_residency	fs
+crates/boop-proc/src/supervise.rs	reclaim_lane_target	env fs
+crates/boop-proc/src/supervise.rs	record	clock sqlite
+crates/boop-proc/src/supervise.rs	record_conversation	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	record_delivery	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	record_hail_transition	clock sqlite
+crates/boop-proc/src/supervise.rs	record_parent_policy	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	record_residency	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	record_result	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	record_spawn_policy	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	record_steer_outcome	clock sqlite
+crates/boop-proc/src/supervise.rs	registered_parent	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	remember_conversation	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	reminder_buffer_is_rechecked_at_turn_boundary	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	reminder_turn_end_receipt_lives_in_the_lane_mail_store	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	remove_target_under	fs
+crates/boop-proc/src/supervise.rs	reparent	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	repo_after_base	process
+crates/boop-proc/src/supervise.rs	report_head_move	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	report_open_failure	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	result_rows	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	result_without_verify_says_verified_none	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	retain_active_reminders	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	retirement_already_sent	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	retirement_is_reported_once_per_episode_and_again_after_a_revive	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	rows_of_kind	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	run	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	run_verify	clock process
+crates/boop-proc/src/supervise.rs	runtime_timeout_writes_rc_124_within_one_poll_of_the_deadline	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	seeded	clock env fs sqlite thread
+crates/boop-proc/src/supervise.rs	signal_exit	clock env fs process signal sqlite thread tmux
+crates/boop-proc/src/supervise.rs	spawn_id_of	env fs
+crates/boop-proc/src/supervise.rs	stale_limit	env
+crates/boop-proc/src/supervise.rs	stall_limit	env
+crates/boop-proc/src/supervise.rs	start_ack_limit	env
+crates/boop-proc/src/supervise.rs	statvfs_gb	process
+crates/boop-proc/src/supervise.rs	supervise	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane	clock env fs log process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	the_pr_producer_notifies_each_subscriber_once	clock env fs process sqlite thread
+crates/boop-proc/src/supervise.rs	the_spawn_stamp_answers_for_its_own_lane_only	env fs
+crates/boop-proc/src/supervise.rs	tick	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	too_few_commits_is_named	process
+crates/boop-proc/src/supervise.rs	verify_failure_sets_the_result_rc_and_carries_a_bounded_receipt	clock env fs process sqlite thread tmux
+crates/boop-proc/src/supervise.rs	yield_to_parent	clock env fs process sqlite thread tmux
+crates/boop-store/src/1_reminder.rs	admission_does_not_release_overlap_but_turn_end_does	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	cancellation_and_replacement_do_not_overlap_accepted_work	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	cancellation_hides_held_mail_without_deleting_history	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	due_expiry_and_missed_intervals	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	explicit_threaded_reply_releases_occurrence	clock env fs process sqlite thread
+crates/boop-store/src/1_reminder.rs	known_refusal_retries_same_envelope_but_crashed_retry_does_not	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	new	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	one_active_schedule_per_route_and_missing_route_validation	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	reminder_add	sqlite
+crates/boop-store/src/1_reminder.rs	reminder_cancel	sqlite
+crates/boop-store/src/1_reminder.rs	reminder_claim	clock sqlite
+crates/boop-store/src/1_reminder.rs	reminder_detail	sqlite
+crates/boop-store/src/1_reminder.rs	reminder_expire	sqlite
+crates/boop-store/src/1_reminder.rs	reminder_message_active	sqlite
+crates/boop-store/src/1_reminder.rs	reminder_retry	clock sqlite
+crates/boop-store/src/1_reminder.rs	reminders	sqlite
+crates/boop-store/src/1_reminder.rs	restart_and_other_connections_do_not_repeat_uncertain_delivery	clock env fs sqlite thread
+crates/boop-store/src/1_reminder.rs	schema_36_upgrade_creates_the_reminder_tables	clock env fs sqlite thread
+crates/boop-store/src/_0_session_graph.rs	current_graph_keeps_discovered_native_sessions_with_idle_status	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	default_keeps_trace_events_and_explicit_opt_out_skips	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	durable_live_sessions_without_fresh_corroboration_read_idle	clock process sqlite thread
+crates/boop-store/src/_0_session_graph.rs	focused_runtime_route_seeds_its_native_session_component	clock process sqlite thread
+crates/boop-store/src/_0_session_graph.rs	focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference	clock process sqlite thread
+crates/boop-store/src/_0_session_graph.rs	graph_json_contains_trace_event_fixture_and_applies_cwd_and_history_filters	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	graph_projects_sessions_edges_and_shells_from_setwise_relations	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	graph_read_uses_sqlite_without_runtime_calls	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	load_agent_session_graph	sqlite
+crates/boop-store/src/_0_session_graph.rs	load_agent_session_graph_stored	clock sqlite
+crates/boop-store/src/_0_session_graph.rs	load_agent_session_graph_with_runtime	clock sqlite
+crates/boop-store/src/_0_session_graph.rs	pane_residue_reads_dead_and_a_fresh_tree_reads_live	clock process sqlite thread
+crates/boop-store/src/_0_session_graph.rs	poll	sqlite
+crates/boop-store/src/_0_session_graph.rs	public_graph_projects_a_live_harness_coordinator_without_a_transcript	clock process sqlite thread
+crates/boop-store/src/_0_session_graph.rs	qualified_identity_preserves_harness_for_distinct_native_rows	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	query_trace_events	sqlite
+crates/boop-store/src/_0_session_graph.rs	scoped_activity_uses_the_latest_turn_or_usage_timestamp	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	scoped_graph_activity_plan_avoids_whole_corpus_aggregates	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	session_graph_reader_returns_none_until_store_changes	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	unresolved_live_lane_appears_as_shell_then_merges_into_sessions	clock process sqlite thread
+crates/boop-store/src/_0_session_graph.rs	waterfall_plan_seeks_the_lane_and_trace_event_indexes	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	waterfall_query_returns_one_versioned_row_set_for_all_four_kinds	clock sqlite thread
+crates/boop-store/src/_0_session_graph.rs	wide_turn_bodies_do_not_change_scoped_activity_and_index_covers	clock sqlite thread
+crates/boop-store/src/activity.rs	activity_count	sqlite
+crates/boop-store/src/activity.rs	activity_counts	sqlite
+crates/boop-store/src/activity.rs	activity_counts_for_traces	sqlite
+crates/boop-store/src/activity.rs	aggregation_query_has_no_per_identity_subquery	clock sqlite thread
+crates/boop-store/src/activity.rs	closure@10669	sqlite
+crates/boop-store/src/activity.rs	closure@11348	sqlite
+crates/boop-store/src/activity.rs	count	sqlite
+crates/boop-store/src/activity.rs	fresh_store	clock sqlite thread
+crates/boop-store/src/activity.rs	lane	sqlite
+crates/boop-store/src/activity.rs	projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes	clock sqlite thread
+crates/boop-store/src/activity.rs	scoped_trace_counts_seek_selected_sessions_only	clock sqlite thread
+crates/boop-store/src/activity.rs	session	sqlite
+crates/boop-store/src/activity.rs	turn	sqlite
+crates/boop-store/src/activity.rs	usage	sqlite
+crates/boop-store/src/bus.rs	a_mail_row_without_a_transition_is_refused	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_newer_registered_route_outranks_the_file	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_partial_last_line_is_left_for_the_next_open	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_registry_without_the_goal_field_still_loads	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_registry_without_the_parent_field_still_loads	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_route_round_trips_its_goal_field	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_route_round_trips_its_parent_field	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	a_route_with_an_unknown_kind_still_loads	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	ack_messages	sqlite
+crates/boop-store/src/bus.rs	an_append_carries_its_first_transition	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	append	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	append_message	clock sqlite
+crates/boop-store/src/bus.rs	atomic_write	fs
+crates/boop-store/src/bus.rs	captured_legacy_registry_row_migrates_into_the_canonical_route_shape	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	cas_update_json	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	closure@15603	clock sqlite
+crates/boop-store/src/bus.rs	closure@32382	clock sqlite
+crates/boop-store/src/bus.rs	closure@34053	sqlite
+crates/boop-store/src/bus.rs	closure@46778	sqlite
+crates/boop-store/src/bus.rs	db_path	env fs
+crates/boop-store/src/bus.rs	default_mail_dir	env fs
+crates/boop-store/src/bus.rs	drop	fs
+crates/boop-store/src/bus.rs	each_open_imports_only_the_ndjson_tail	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	finish	sqlite
+crates/boop-store/src/bus.rs	getrandom_bytes	clock process
+crates/boop-store/src/bus.rs	held_messages	clock sqlite
+crates/boop-store/src/bus.rs	import_legacy	clock fs sqlite
+crates/boop-store/src/bus.rs	import_mark	sqlite
+crates/boop-store/src/bus.rs	import_ndjson_tail	clock fs sqlite
+crates/boop-store/src/bus.rs	import_registry_file	fs sqlite
+crates/boop-store/src/bus.rs	incremental_mailbox_skips_unchanged_files_and_reads_only_appends	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	insert_message	clock sqlite
+crates/boop-store/src/bus.rs	lane_subscribers	sqlite
+crates/boop-store/src/bus.rs	lane_subscribers_is_the_parent_plus_explicit_rows	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	mail_with_landing	sqlite
+crates/boop-store/src/bus.rs	messages_for_route	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	messages_in	clock sqlite
+crates/boop-store/src/bus.rs	mint_id	clock process
+crates/boop-store/src/bus.rs	now_iso	clock
+crates/boop-store/src/bus.rs	now_ms	clock
+crates/boop-store/src/bus.rs	open_store	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	parse_box	clock fs sqlite thread
+crates/boop-store/src/bus.rs	parse_ndjson	fs
+crates/boop-store/src/bus.rs	poll	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	read_boxes	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	read_from	fs
+crates/boop-store/src/bus.rs	read_messages	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	read_ndjson_files	fs
+crates/boop-store/src/bus.rs	read_routes	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	recipient_reads_use_the_covering_mail_index	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	registry_update	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	route_lock_release_is_explicit_even_with_an_inherited_descriptor	fs
+crates/boop-store/src/bus.rs	route_rewrite_keeps_selection_and_route_delete_cascades_it	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	routes_in	sqlite
+crates/boop-store/src/bus.rs	set_import_mark	sqlite
+crates/boop-store/src/bus.rs	the_files_beside_the_database_are_read_in_place	clock env fs sqlite thread
+crates/boop-store/src/bus.rs	try_route_lock	fs
+crates/boop-store/src/bus.rs	update_native_route	sqlite
+crates/boop-store/src/bus.rs	upsert_route	sqlite
+crates/boop-store/src/bus.rs	write_message	clock sqlite
+crates/boop-store/src/bus.rs	write_route	clock env fs sqlite thread
+crates/boop-store/src/ident.rs	a_comment_reads_by_id_and_keeps_the_lanes_forked_off_it	clock sqlite thread
+crates/boop-store/src/ident.rs	a_current_store_missing_a_user_table_heals_on_open	clock sqlite thread
+crates/boop-store/src/ident.rs	a_cursor_is_per_transcript_not_per_session	clock sqlite thread
+crates/boop-store/src/ident.rs	a_cycle_in_the_lane_tree_still_answers	clock sqlite thread
+crates/boop-store/src/ident.rs	a_favorite_is_edited_in_place_and_deleted_by_id	clock sqlite thread
+crates/boop-store/src/ident.rs	a_favorite_note_is_null_when_omitted	clock sqlite thread
+crates/boop-store/src/ident.rs	a_favorite_survives_rebuild	clock sqlite thread
+crates/boop-store/src/ident.rs	a_foreign_dict_harness_value_reads_back_without_error	clock env fs log process sqlite thread
+crates/boop-store/src/ident.rs	a_fresh_store_carries_the_schema_version	clock sqlite thread
+crates/boop-store/src/ident.rs	a_fresh_store_carries_the_seed_moods	clock sqlite thread
+crates/boop-store/src/ident.rs	a_lane_reported_head_round_trips_and_updates_in_place	clock sqlite thread
+crates/boop-store/src/ident.rs	a_lane_spawn_keeps_the_goal_the_path_and_the_brief_bytes	clock sqlite thread
+crates/boop-store/src/ident.rs	a_lane_takes_the_nearest_ancestor_mood	clock sqlite thread
+crates/boop-store/src/ident.rs	a_lower_output_snapshot_never_wins	clock sqlite thread
+crates/boop-store/src/ident.rs	a_missing_request_id_still_dedups	clock sqlite thread
+crates/boop-store/src/ident.rs	a_pr_notice_is_claimed_once	clock sqlite thread
+crates/boop-store/src/ident.rs	a_second_commit_push_for_the_same_head_is_a_noop	clock sqlite thread
+crates/boop-store/src/ident.rs	a_second_delivery_of_one_message_appends_a_transition	clock sqlite thread
+crates/boop-store/src/ident.rs	a_sent_comment_reads_the_assistant_turn_that_answered_it	clock sqlite thread
+crates/boop-store/src/ident.rs	a_session_mood_round_trips_and_clears	clock sqlite thread
+crates/boop-store/src/ident.rs	a_session_never_moves_to_a_second_trace	clock sqlite thread
+crates/boop-store/src/ident.rs	a_session_with_no_attr_row_anywhere_takes_the_default	clock sqlite thread
+crates/boop-store/src/ident.rs	a_store_stamped_28_without_the_tag_tables_gets_them_on_open	clock sqlite thread
+crates/boop-store/src/ident.rs	a_thinking_block_burns_no_ordinal	clock sqlite thread
+crates/boop-store/src/ident.rs	a_thinking_only_response_still_gets_a_usage_row	clock sqlite thread
+crates/boop-store/src/ident.rs	a_v13_store_gains_the_door_columns_and_the_delivery_ledger	clock sqlite thread
+crates/boop-store/src/ident.rs	a_v7_store_migrates_agent_pr_onto_the_three_column_key	clock sqlite thread
+crates/boop-store/src/ident.rs	add_cmd	sqlite
+crates/boop-store/src/ident.rs	add_edge	clock sqlite
+crates/boop-store/src/ident.rs	add_edge_at	sqlite
+crates/boop-store/src/ident.rs	add_fetch	sqlite
+crates/boop-store/src/ident.rs	add_pr	sqlite
+crates/boop-store/src/ident.rs	add_search	sqlite
+crates/boop-store/src/ident.rs	add_skill	sqlite
+crates/boop-store/src/ident.rs	add_touch	sqlite
+crates/boop-store/src/ident.rs	add_turn	sqlite
+crates/boop-store/src/ident.rs	add_turn_with_source	sqlite
+crates/boop-store/src/ident.rs	add_usage	sqlite
+crates/boop-store/src/ident.rs	ambiguous_continuation_is_stored_without_merging_trace_spans	clock sqlite thread
+crates/boop-store/src/ident.rs	an_exact_commit_subscription_beats_the_wildcard	clock sqlite thread
+crates/boop-store/src/ident.rs	an_observed_live_lane_row_carries_its_pid	clock sqlite thread
+crates/boop-store/src/ident.rs	an_unknown_mood_name_names_the_known_ones	clock sqlite thread
+crates/boop-store/src/ident.rs	append_delivery_transition	sqlite
+crates/boop-store/src/ident.rs	assistant_line_ingests_as_assistant	clock sqlite thread
+crates/boop-store/src/ident.rs	attach_trace	sqlite
+crates/boop-store/src/ident.rs	backfill_cursor_modified	sqlite
+crates/boop-store/src/ident.rs	backfill_peer_turn_role	sqlite
+crates/boop-store/src/ident.rs	backfill_traces	sqlite
+crates/boop-store/src/ident.rs	backfill_traces_one_component_and_skips_the_edgeless	clock sqlite thread
+crates/boop-store/src/ident.rs	begin	sqlite
+crates/boop-store/src/ident.rs	begin_walk	sqlite
+crates/boop-store/src/ident.rs	both_open_paths_carry_a_busy_timeout	clock sqlite thread
+crates/boop-store/src/ident.rs	bounded_write_open_fails_fast_under_a_held_writer_lock	clock sqlite thread
+crates/boop-store/src/ident.rs	bounded_write_open_leaves_a_stale_schema_untouched	clock sqlite thread
+crates/boop-store/src/ident.rs	carry_rebuild_state	sqlite
+crates/boop-store/src/ident.rs	carry_table	sqlite
+crates/boop-store/src/ident.rs	check_mood_name	sqlite
+crates/boop-store/src/ident.rs	claim_pr_notice	sqlite
+crates/boop-store/src/ident.rs	claude_cursor_metadata_is_two_statements_per_line_and_resumes	clock fs process sqlite thread
+crates/boop-store/src/ident.rs	clear_session_attr	sqlite
+crates/boop-store/src/ident.rs	closure@102936	sqlite
+crates/boop-store/src/ident.rs	closure@103098	sqlite
+crates/boop-store/src/ident.rs	closure@103261	sqlite
+crates/boop-store/src/ident.rs	closure@103439	sqlite
+crates/boop-store/src/ident.rs	closure@104557	sqlite
+crates/boop-store/src/ident.rs	closure@116902	sqlite
+crates/boop-store/src/ident.rs	closure@117069	sqlite
+crates/boop-store/src/ident.rs	closure@117251	sqlite
+crates/boop-store/src/ident.rs	closure@117427	sqlite
+crates/boop-store/src/ident.rs	closure@117599	sqlite
+crates/boop-store/src/ident.rs	closure@117857	sqlite
+crates/boop-store/src/ident.rs	closure@118062	sqlite
+crates/boop-store/src/ident.rs	closure@144420	sqlite
+crates/boop-store/src/ident.rs	closure@156644	sqlite
+crates/boop-store/src/ident.rs	closure@279079	clock sqlite thread
+crates/boop-store/src/ident.rs	closure@280160	clock sqlite thread
+crates/boop-store/src/ident.rs	closure@281319	clock sqlite thread
+crates/boop-store/src/ident.rs	closure@281742	clock sqlite thread
+crates/boop-store/src/ident.rs	closure@32955	sqlite
+crates/boop-store/src/ident.rs	closure@53931	sqlite
+crates/boop-store/src/ident.rs	closure@58390	sqlite
+crates/boop-store/src/ident.rs	closure@58606	sqlite
+crates/boop-store/src/ident.rs	closure@58845	sqlite
+crates/boop-store/src/ident.rs	closure@59173	sqlite
+crates/boop-store/src/ident.rs	closure@66417	sqlite
+crates/boop-store/src/ident.rs	closure@66498	sqlite
+crates/boop-store/src/ident.rs	closure@68034	sqlite
+crates/boop-store/src/ident.rs	closure@69575	sqlite
+crates/boop-store/src/ident.rs	closure@93336	sqlite
+crates/boop-store/src/ident.rs	commit	sqlite
+crates/boop-store/src/ident.rs	commit_push_exists	sqlite
+crates/boop-store/src/ident.rs	commit_subscription	sqlite
+crates/boop-store/src/ident.rs	commit_subscriptions_for_lane	sqlite
+crates/boop-store/src/ident.rs	concurrent_first_open_converges_on_one_current_schema	clock sqlite thread
+crates/boop-store/src/ident.rs	configure_connection	sqlite
+crates/boop-store/src/ident.rs	context_views_keep_source_ordinals_and_project_evidence	clock sqlite thread
+crates/boop-store/src/ident.rs	continued_in_relation_preserves_trace_after_writer_exit	clock sqlite thread
+crates/boop-store/src/ident.rs	cost_views_compute_rates_coalesce_and_window	clock sqlite thread
+crates/boop-store/src/ident.rs	cost_views_exist_after_fresh_open_migration_and_rebuild	clock sqlite thread
+crates/boop-store/src/ident.rs	counts	sqlite
+crates/boop-store/src/ident.rs	current_schema_open_and_readonly_query_do_not_wait_for_a_wal_writer	clock sqlite thread
+crates/boop-store/src/ident.rs	cursor_offset	sqlite
+crates/boop-store/src/ident.rs	cursor_state	sqlite
+crates/boop-store/src/ident.rs	cursors_missing_modified	sqlite
+crates/boop-store/src/ident.rs	db_bytes	sqlite
+crates/boop-store/src/ident.rs	default_path	env fs
+crates/boop-store/src/ident.rs	delivery_accepted	sqlite
+crates/boop-store/src/ident.rs	delivery_rows	sqlite
+crates/boop-store/src/ident.rs	detach_process	sqlite
+crates/boop-store/src/ident.rs	dict_model_exists	clock sqlite thread
+crates/boop-store/src/ident.rs	discovery_projects_empty_unchanged_session_and_parent_edge	clock sqlite thread
+crates/boop-store/src/ident.rs	door_blowouts	sqlite
+crates/boop-store/src/ident.rs	door_pushed_body_since	sqlite
+crates/boop-store/src/ident.rs	door_pushes_since	sqlite
+crates/boop-store/src/ident.rs	drop_commit_subscription	sqlite
+crates/boop-store/src/ident.rs	drop_lane_commit_state	sqlite
+crates/boop-store/src/ident.rs	drop_lane_commit_state_removes_only_that_lane	clock sqlite thread
+crates/boop-store/src/ident.rs	edge_rows	sqlite
+crates/boop-store/src/ident.rs	effective_mood	sqlite
+crates/boop-store/src/ident.rs	emit_tool_fact	sqlite
+crates/boop-store/src/ident.rs	empty_turn_request_ids	sqlite
+crates/boop-store/src/ident.rs	enable_wal	clock sqlite thread
+crates/boop-store/src/ident.rs	ensure_cursor	sqlite
+crates/boop-store/src/ident.rs	ensure_edge	clock sqlite
+crates/boop-store/src/ident.rs	ensure_edge_at	sqlite
+crates/boop-store/src/ident.rs	error_events_since	sqlite
+crates/boop-store/src/ident.rs	favorite_add	sqlite
+crates/boop-store/src/ident.rs	favorite_delete	sqlite
+crates/boop-store/src/ident.rs	favorite_edit	sqlite
+crates/boop-store/src/ident.rs	fill_empty_turns_for_requests	sqlite
+crates/boop-store/src/ident.rs	fresh_store	clock sqlite thread
+crates/boop-store/src/ident.rs	fresh_store_carries_covering_turn_activity_index	clock sqlite thread
+crates/boop-store/src/ident.rs	has_delivery_transition	sqlite
+crates/boop-store/src/ident.rs	heal_user_authored	sqlite
+crates/boop-store/src/ident.rs	initialise_or_migrate	clock sqlite thread
+crates/boop-store/src/ident.rs	insert_carried	sqlite
+crates/boop-store/src/ident.rs	intern	sqlite
+crates/boop-store/src/ident.rs	intern_markdown	sqlite
+crates/boop-store/src/ident.rs	intern_public	sqlite
+crates/boop-store/src/ident.rs	intern_request	sqlite
+crates/boop-store/src/ident.rs	interrupted_line_ingests_as_user	clock sqlite thread
+crates/boop-store/src/ident.rs	is_stale	sqlite
+crates/boop-store/src/ident.rs	known_sessions	clock env fs log process sqlite
+crates/boop-store/src/ident.rs	known_sessions_restore_candidate_metadata_and_cursor	clock env fs log process sqlite thread
+crates/boop-store/src/ident.rs	known_sessions_stays_under_budget	clock env fs log process sqlite thread
+crates/boop-store/src/ident.rs	lane_reported_head	sqlite
+crates/boop-store/src/ident.rs	last_assistant_turn	sqlite
+crates/boop-store/src/ident.rs	latest_door_blowout	sqlite
+crates/boop-store/src/ident.rs	latest_turn_role	sqlite
+crates/boop-store/src/ident.rs	live_row	sqlite
+crates/boop-store/src/ident.rs	live_span	sqlite
+crates/boop-store/src/ident.rs	liveness_coalesces_same_timestamp_and_rejects_older_observations	clock sqlite thread
+crates/boop-store/src/ident.rs	liveness_intervals_fold_adjacent_and_ignore_repeats	clock sqlite thread
+crates/boop-store/src/ident.rs	load_turn_comments	sqlite
+crates/boop-store/src/ident.rs	max_turn	sqlite
+crates/boop-store/src/ident.rs	missing_user_authored	sqlite
+crates/boop-store/src/ident.rs	mixed_case_verbs_land_one_canonical_with_raw_retained	clock sqlite thread
+crates/boop-store/src/ident.rs	mood_names	sqlite
+crates/boop-store/src/ident.rs	native_child_completion_outbox	sqlite
+crates/boop-store/src/ident.rs	notify_pr	clock process sqlite
+crates/boop-store/src/ident.rs	notify_pr_appends_one_row_per_subscriber_once	clock env fs process sqlite thread
+crates/boop-store/src/ident.rs	one_trace_holds_every_session_id_a_lane_wears	clock sqlite thread
+crates/boop-store/src/ident.rs	open	clock sqlite thread
+crates/boop-store/src/ident.rs	open_bounded_write	sqlite
+crates/boop-store/src/ident.rs	open_readonly	sqlite
+crates/boop-store/src/ident.rs	ordinals_continue_across_an_incremental_sync	clock sqlite thread
+crates/boop-store/src/ident.rs	pane_death_flips_the_stored_runtime_liveness_row	clock sqlite thread
+crates/boop-store/src/ident.rs	pane_occupant_nickname_is_mutable_without_changing_session_identity	clock sqlite thread
+crates/boop-store/src/ident.rs	passthrough	sqlite
+crates/boop-store/src/ident.rs	passthrough_select_returns_rows	clock sqlite thread
+crates/boop-store/src/ident.rs	passthrough_update_is_refused_read_only	clock sqlite thread
+crates/boop-store/src/ident.rs	peer_fixup_flips_legacy_user_rows_once	clock sqlite thread
+crates/boop-store/src/ident.rs	peer_message_ingests_as_meta	clock sqlite thread
+crates/boop-store/src/ident.rs	project_cursor	clock fs process sqlite
+crates/boop-store/src/ident.rs	project_discovered_session	clock sqlite
+crates/boop-store/src/ident.rs	project_line	clock process sqlite
+crates/boop-store/src/ident.rs	project_transcript	clock fs process sqlite
+crates/boop-store/src/ident.rs	project_transcript_with	clock fs process sqlite
+crates/boop-store/src/ident.rs	prune_trace_events	sqlite
+crates/boop-store/src/ident.rs	prune_trace_events_in_transaction	sqlite
+crates/boop-store/src/ident.rs	query_cursors_expose_transcript_identity	clock sqlite thread
+crates/boop-store/src/ident.rs	query_edges	sqlite
+crates/boop-store/src/ident.rs	query_live_at	sqlite
+crates/boop-store/src/ident.rs	query_recent_trace_events	sqlite
+crates/boop-store/src/ident.rs	query_trace_events	sqlite
+crates/boop-store/src/ident.rs	query_trace_events_ordered	sqlite
+crates/boop-store/src/ident.rs	query_turns	sqlite
+crates/boop-store/src/ident.rs	rebuild	sqlite
+crates/boop-store/src/ident.rs	rebuild_trace_projection	sqlite
+crates/boop-store/src/ident.rs	recent_trace_events_are_bounded_and_returned_oldest_first	clock sqlite thread
+crates/boop-store/src/ident.rs	record_commit_push	sqlite
+crates/boop-store/src/ident.rs	record_delivery	sqlite
+crates/boop-store/src/ident.rs	record_door_blowout	sqlite
+crates/boop-store/src/ident.rs	record_lane_spawn	sqlite
+crates/boop-store/src/ident.rs	record_live_door	sqlite
+crates/boop-store/src/ident.rs	record_session_observation	sqlite
+crates/boop-store/src/ident.rs	record_session_relation	sqlite
+crates/boop-store/src/ident.rs	record_status	sqlite
+crates/boop-store/src/ident.rs	record_tmux_session	sqlite
+crates/boop-store/src/ident.rs	record_trace_event	sqlite
+crates/boop-store/src/ident.rs	record_turn_comment_fork	sqlite
+crates/boop-store/src/ident.rs	repeated_hails_accumulate_on_one_edge	clock sqlite thread
+crates/boop-store/src/ident.rs	resolving_the_effective_mood_is_one_statement	clock sqlite thread
+crates/boop-store/src/ident.rs	restore_rebuild_state	sqlite
+crates/boop-store/src/ident.rs	restore_table	sqlite
+crates/boop-store/src/ident.rs	rollback	sqlite
+crates/boop-store/src/ident.rs	route_by_session	sqlite
+crates/boop-store/src/ident.rs	rows	sqlite
+crates/boop-store/src/ident.rs	schema_rows_lists_views_and_join_keys	clock sqlite thread
+crates/boop-store/src/ident.rs	schema_v20_adds_projection_version_to_existing_cursors	clock sqlite thread
+crates/boop-store/src/ident.rs	schema_version	sqlite
+crates/boop-store/src/ident.rs	schema_version_of	sqlite
+crates/boop-store/src/ident.rs	seed_moods	sqlite
+crates/boop-store/src/ident.rs	session_attr	sqlite
+crates/boop-store/src/ident.rs	session_id	sqlite
+crates/boop-store/src/ident.rs	session_in_pane	sqlite
+crates/boop-store/src/ident.rs	session_name	sqlite
+crates/boop-store/src/ident.rs	set_commit_subscription	sqlite
+crates/boop-store/src/ident.rs	set_cursor	sqlite
+crates/boop-store/src/ident.rs	set_cursor_modified	sqlite
+crates/boop-store/src/ident.rs	set_lane_reported_head	sqlite
+crates/boop-store/src/ident.rs	set_session_attr	sqlite
+crates/boop-store/src/ident.rs	set_session_mood	sqlite
+crates/boop-store/src/ident.rs	set_session_nickname	sqlite
+crates/boop-store/src/ident.rs	slash_command_body_ingests_as_meta	clock sqlite thread
+crates/boop-store/src/ident.rs	sparse_sessions	sqlite
+crates/boop-store/src/ident.rs	spawn_under	sqlite
+crates/boop-store/src/ident.rs	stamp_version	sqlite
+crates/boop-store/src/ident.rs	stored_role_and_source	clock sqlite thread
+crates/boop-store/src/ident.rs	surrogate_ids_intern_once	clock sqlite thread
+crates/boop-store/src/ident.rs	sync_lines	clock sqlite
+crates/boop-store/src/ident.rs	sync_projects_facts_and_cursor_is_incremental	clock sqlite thread
+crates/boop-store/src/ident.rs	sync_session_with	clock sqlite
+crates/boop-store/src/ident.rs	sync_writes_the_spawn_edge	clock sqlite thread
+crates/boop-store/src/ident.rs	the_ingest_producer_appends_a_held_pr_row_per_subscriber	clock env fs process sqlite thread
+crates/boop-store/src/ident.rs	the_same_brief_interns_once_however_often_it_is_spawned	clock sqlite thread
+crates/boop-store/src/ident.rs	the_usage_time_range_query_seeks_an_index	clock sqlite thread
+crates/boop-store/src/ident.rs	trace_and_transcript_style_writers_complete_with_all_rows	clock sqlite thread
+crates/boop-store/src/ident.rs	trace_event_diagnostic_is_redacted_and_bounded	clock sqlite thread
+crates/boop-store/src/ident.rs	trace_event_retention_is_deterministic_and_preserves_newest_rows	clock sqlite thread
+crates/boop-store/src/ident.rs	trace_events_round_trip_stable_identity_endpoints_and_absent_times	clock sqlite thread
+crates/boop-store/src/ident.rs	trace_of	sqlite
+crates/boop-store/src/ident.rs	trace_sessions	sqlite
+crates/boop-store/src/ident.rs	turn_comment	sqlite
+crates/boop-store/src/ident.rs	turn_comment_delete	sqlite
+crates/boop-store/src/ident.rs	turn_comment_forks	sqlite
+crates/boop-store/src/ident.rs	turn_comment_mark_sent	sqlite
+crates/boop-store/src/ident.rs	turn_comment_round_trip	clock sqlite thread
+crates/boop-store/src/ident.rs	turn_comment_upsert	sqlite
+crates/boop-store/src/ident.rs	turn_comments_pending	sqlite
+crates/boop-store/src/ident.rs	turn_comments_sent	sqlite
+crates/boop-store/src/ident.rs	turn_cwds	sqlite
+crates/boop-store/src/ident.rs	two_prs_in_one_turn_survive_and_resync_dedups	clock sqlite thread
+crates/boop-store/src/ident.rs	typed_line_ingests_as_user	clock sqlite thread
+crates/boop-store/src/ident.rs	upsert_session_row	sqlite
+crates/boop-store/src/ident.rs	usage_dedups_to_one_row_and_the_last_output_wins	clock sqlite thread
+crates/boop-store/src/ident.rs	v11_open_keeps_existing_rows_when_migration_is_reentered	clock sqlite thread
+crates/boop-store/src/ident.rs	v13_open_seeds_moods_once_and_keeps_an_edited_template	clock sqlite thread
+crates/boop-store/src/ident.rs	v18_favorite_migration_preserves_rows_and_ids	clock sqlite thread
+crates/boop-store/src/ident.rs	v26_stamps_the_rows_a_door_already_took	clock sqlite thread
+crates/boop-store/src/ident.rs	v27_claude_fixture_projects_two_distinct_turn_cwds	clock sqlite thread
+crates/boop-store/src/ident.rs	v27_migrates_live_db_in_place_without_backfill	clock sqlite thread
+crates/boop-store/src/ident.rs	v27_view_falls_back_to_session_cwd_for_null_turn	clock sqlite thread
+crates/boop-store/src/ident.rs	v30_migrates_a_v29_store_keeps_rows_and_creates_the_commit_tables	clock sqlite thread
+crates/boop-store/src/ident.rs	v31_migrates_a_v30_store_and_creates_the_pr_notice_table	clock sqlite thread
+crates/boop-store/src/ident.rs	v32_migrates_previous_schema_and_adds_activity_index	clock sqlite thread
+crates/boop-store/src/ident.rs	v34_adds_unknown_source_class_to_existing_turns	clock sqlite thread
+crates/boop-store/src/ident.rs	v37_migration_seeds_observations_from_legacy_trace_spans	clock sqlite thread
+crates/boop-store/src/ident.rs	writable_store_persists_wal_mode	clock sqlite thread
+crates/boop-store/src/ident.rs	write_tool_fact	sqlite
+crates/boop-store/src/ident.rs	write_turn	sqlite
+crates/boop-store/src/ident.rs	write_turn_classified	sqlite
+crates/boop-store/src/ident.rs	write_usage	sqlite
+crates/boop-store/src/lib.rs	open_default	clock env fs sqlite thread
+crates/boop-store/src/proc.rs	capture	process
+crates/boop-store/src/proc.rs	children	process
+crates/boop-store/src/proc.rs	descendant_count	process
+crates/boop-store/src/proc.rs	descendants	process
+crates/boop-store/src/proc.rs	environment_variable	process
+crates/boop-store/src/proc.rs	is_alive	process
+crates/boop-store/src/proc.rs	open_files	process
+crates/boop-store/src/proc.rs	process	process
+crates/boop-store/src/proc.rs	sys_now_secs	clock
+crates/boop-store/src/proc.rs	tree_sum	process
+crates/boop-store/src/proc.rs	tree_sum_exceeds_pane_only_on_a_fixture_tree	process
+crates/boop-store/src/proc.rs	tree_sum_of	process
+crates/boop-store/src/query.rs	a_path_filter_is_a_bound_prefix	clock sqlite thread
+crates/boop-store/src/query.rs	closure@45134	clock fs process sqlite
+crates/boop-store/src/query.rs	closure@48024	clock fs process sqlite
+crates/boop-store/src/query.rs	closure@49288	sqlite
+crates/boop-store/src/query.rs	closure@51960	clock fs process sqlite
+crates/boop-store/src/query.rs	closure@52695	clock fs process sqlite
+crates/boop-store/src/query.rs	command_rows	sqlite
+crates/boop-store/src/query.rs	declared_foreign_keys	sqlite
+crates/boop-store/src/query.rs	edge_rows_typed_receipt	clock sqlite thread
+crates/boop-store/src/query.rs	every_fact_list_runs_on_an_empty_store	clock sqlite thread
+crates/boop-store/src/query.rs	fetch_rows	sqlite
+crates/boop-store/src/query.rs	live_pid_status_row_carries_nonzero_rss	clock fs process sqlite thread
+crates/boop-store/src/query.rs	query_cursors	sqlite
+crates/boop-store/src/query.rs	query_facts	sqlite
+crates/boop-store/src/query.rs	query_favorite	sqlite
+crates/boop-store/src/query.rs	query_favorites	sqlite
+crates/boop-store/src/query.rs	query_sessions	sqlite
+crates/boop-store/src/query.rs	query_status	clock process sqlite
+crates/boop-store/src/query.rs	query_sync_cursors	sqlite
+crates/boop-store/src/query.rs	recent_lanes	sqlite
+crates/boop-store/src/query.rs	recent_sessions	sqlite
+crates/boop-store/src/query.rs	recent_turn_rows_bounds_before_materializing_and_restores_chronology	clock fs process sqlite thread
+crates/boop-store/src/query.rs	route_mail	sqlite
+crates/boop-store/src/query.rs	schema_rows	sqlite
+crates/boop-store/src/query.rs	search_turns	sqlite
+crates/boop-store/src/query.rs	session_id_lookup	sqlite
+crates/boop-store/src/query.rs	session_rows	sqlite
+crates/boop-store/src/query.rs	session_turn_read_uses_primary_key_not_scan	clock sqlite thread
+crates/boop-store/src/query.rs	status_rows	clock process sqlite
+crates/boop-store/src/query.rs	store	clock sqlite thread
+crates/boop-store/src/query.rs	touch_rows	sqlite
+crates/boop-store/src/query.rs	turn_rows	sqlite
+crates/boop-store/src/query.rs	turn_rows_ordered	sqlite
+crates/boop-store/src/query.rs	turn_rows_recent	sqlite
+crates/boop-store/src/query.rs	typed_rows_populate_for_a_real_session	clock fs process sqlite thread
+crates/boop-store/src/query.rs	window_rows	sqlite
+crates/boop-store/src/query.rs	window_sql_partitions_runs_and_binds_params	clock sqlite thread
+crates/boop-store/src/runtime.rs	a_target_missing_from_the_batch_falls_back_to_the_per_target_probe	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	add_session	sqlite
+crates/boop-store/src/runtime.rs	an_unreachable_batch_falls_back_per_target	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	attached_session_activity_seeks_each_session_instead_of_materializing_the_corpus	clock sqlite thread
+crates/boop-store/src/runtime.rs	closure@11186	sqlite
+crates/boop-store/src/runtime.rs	closure@14313	process
+crates/boop-store/src/runtime.rs	closure@15227	process tmux
+crates/boop-store/src/runtime.rs	closure@16294	process
+crates/boop-store/src/runtime.rs	closure@8759	process tmux
+crates/boop-store/src/runtime.rs	equal_activity_is_an_ambiguous_current_session	clock sqlite thread
+crates/boop-store/src/runtime.rs	fresh_store	clock sqlite thread
+crates/boop-store/src/runtime.rs	inaccessible_tmux_and_stale_live_report_do_not_prove_liveness	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	missing_lane_and_trace_are_reported_as_typed_diagnostics	clock sqlite thread
+crates/boop-store/src/runtime.rs	pane_less_routes_fall_back_to_the_stored_pid_probe	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	process_liveness	process
+crates/boop-store/src/runtime.rs	resolve	sqlite
+crates/boop-store/src/runtime.rs	resolve_lane_runtime	sqlite
+crates/boop-store/src/runtime.rs	resolve_lane_runtime_with_messages	sqlite
+crates/boop-store/src/runtime.rs	resolve_with_completion	sqlite
+crates/boop-store/src/runtime.rs	resolves_placeholder_to_latest_attached_session_and_completion	clock sqlite thread
+crates/boop-store/src/runtime.rs	runtime_attached_sessions	sqlite
+crates/boop-store/src/runtime.rs	runtime_batch	sqlite
+crates/boop-store/src/runtime.rs	runtime_lane_exists	sqlite
+crates/boop-store/src/runtime.rs	runtime_lane_names	sqlite
+crates/boop-store/src/runtime.rs	runtime_liveness_facts	sqlite
+crates/boop-store/src/runtime.rs	runtime_process	sqlite
+crates/boop-store/src/runtime.rs	runtime_row	process tmux
+crates/boop-store/src/runtime.rs	runtime_snapshot	clock sqlite
+crates/boop-store/src/runtime.rs	runtime_snapshot_live	process sqlite tmux
+crates/boop-store/src/runtime.rs	runtime_snapshot_live_now	process sqlite tmux
+crates/boop-store/src/runtime.rs	runtime_snapshot_query_count	process sqlite tmux
+crates/boop-store/src/runtime.rs	runtime_snapshot_with_batch	process tmux
+crates/boop-store/src/runtime.rs	runtime_trace_names	sqlite
+crates/boop-store/src/runtime.rs	runtime_trace_root	sqlite
+crates/boop-store/src/runtime.rs	runtime_trace_span_query_seeks_only_candidate_lane_ids	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	snapshot_joins_live_dead_and_shell_only_routes_from_one_tmux_observation	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	snapshot_preserves_an_orphan_lane_trace_diagnostic	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	snapshot_resolves_many_lanes_from_one_pane_pid_batch	clock process sqlite thread tmux
+crates/boop-store/src/runtime.rs	snapshot_rows	process sqlite tmux
+crates/boop-store/src/runtime.rs	snapshot_uses_fixed_durable_query_count_for_many_lanes	clock process sqlite thread tmux
+crates/boop-store/src/summary.rs	agent_summary_live	process sqlite tmux
+crates/boop-store/src/summary.rs	agent_summary_live_now	process sqlite tmux
+crates/boop-store/src/summary.rs	agent_summary_stored	clock sqlite
+crates/boop-store/src/summary.rs	fresh_store	clock sqlite thread
+crates/boop-store/src/summary.rs	multiple_lanes_share_one_tmux_observation_and_process_snapshot	clock process sqlite thread tmux
+crates/boop-store/src/summary.rs	reused_lane_with_ambiguous_traces_has_non_combined_activity	clock process sqlite thread tmux
+crates/boop-store/src/summary.rs	schema_fixture_joins_activity_runtime_mailbox_and_completion	clock process sqlite thread tmux
+crates/boop-store/src/tags.rs	a_batch_read_answers_every_source_asked_about	clock sqlite thread
+crates/boop-store/src/tags.rs	a_comment_its_targets_and_its_fork_survive_a_rebuild	clock sqlite thread
+crates/boop-store/src/tags.rs	a_favorite_survives_a_rebuild_whole	clock sqlite thread
+crates/boop-store/src/tags.rs	a_note_applies_every_tag_it_holds	clock sqlite thread
+crates/boop-store/src/tags.rs	a_tag_reads_both_directions	clock sqlite thread
+crates/boop-store/src/tags.rs	applying_the_same_tag_twice_counts_two_uses_and_keeps_one_link	clock sqlite thread
+crates/boop-store/src/tags.rs	backfill_turns_favorite_notes_into_tags_once	clock sqlite thread
+crates/boop-store/src/tags.rs	fresh_store	clock sqlite thread
+crates/boop-store/src/tags.rs	read_tag	sqlite
+crates/boop-store/src/tags.rs	recent_puts_the_last_used_tag_first	clock sqlite thread
+crates/boop-store/src/tags.rs	recent_stops_at_the_limit	clock sqlite thread
+crates/boop-store/src/tags.rs	search_matches_the_tag_column_most_used_first	clock sqlite thread
+crates/boop-store/src/tags.rs	search_never_reads_a_note_body	clock sqlite thread
+crates/boop-store/src/tags.rs	sources_for	sqlite
+crates/boop-store/src/tags.rs	tag	sqlite
+crates/boop-store/src/tags.rs	tag_apply	sqlite
+crates/boop-store/src/tags.rs	tag_rows	sqlite
+crates/boop-store/src/tags.rs	tag_unlink	sqlite
+crates/boop-store/src/tags.rs	tags_and_their_links_survive_a_rebuild	clock sqlite thread
+crates/boop-store/src/tags.rs	tags_apply_note	sqlite
+crates/boop-store/src/tags.rs	tags_backfill_favorites	sqlite
+crates/boop-store/src/tags.rs	tags_for	sqlite
+crates/boop-store/src/tags.rs	tags_for_many	sqlite
+crates/boop-store/src/tags.rs	tags_list	sqlite
+crates/boop-store/src/tags.rs	tags_recent	sqlite
+crates/boop-store/src/tags.rs	tags_search	sqlite
+crates/boop-store/src/tail.rs	completes_a_partial_line	fs
+crates/boop-store/src/tail.rs	leaves_a_partial_line_untouched	fs
+crates/boop-store/src/tail.rs	picks_up_one_new_complete_line	fs
+crates/boop-store/src/tail.rs	read_complete_lines	fs
+crates/boop-store/src/tail.rs	read_from	fs
+crates/boop-store/src/tail.rs	resets_when_truncated_below_offset	fs
+crates/boop-store/src/tail.rs	tails_three_lines_from_zero	fs
+crates/boop-store/src/testing.rs	append_mail	clock sqlite thread
+crates/boop-store/src/testing.rs	boop_test_root	env process
+crates/boop-store/src/testing.rs	boop_test_root_pins_the_omp_session_directory	env process
+crates/boop-store/src/testing.rs	boop_test_root_preserves_an_explicit_omp_session_directory	env process
+crates/boop-store/src/testing.rs	drop	fs
+crates/boop-store/src/testing.rs	mail_rows	clock sqlite thread
+crates/boop-store/src/testing.rs	new	env fs process
+crates/boop-store/src/testing.rs	routes_json	clock sqlite thread
+crates/boop-store/src/testing.rs	usage_totals_at	sqlite
+crates/boop-store/src/testing.rs	write_tmux_fixture	fs
+crates/boop-store/src/touched.rs	session_touched	sqlite
+crates/boop-store/src/touched.rs	sessions_in_cwd	sqlite
+crates/boop-store/src/touched.rs	touched_paths_and_cwds_come_newest_first_with_subagents	clock sqlite thread
+crates/boop-store/src/trail.rs	a_child_s_stderr_lands_in_the_lane_trail	fs process
+crates/boop-store/src/trail.rs	a_legacy_plain_text_pin_belongs_to_no_spawn	env fs
+crates/boop-store/src/trail.rs	a_pin_answers_only_the_cwd_it_was_written_for	clock env fs
+crates/boop-store/src/trail.rs	a_spawn_record_carries_the_id_that_minted_it	clock env fs
+crates/boop-store/src/trail.rs	agent_root	env fs
+crates/boop-store/src/trail.rs	append_sync_trail	fs
+crates/boop-store/src/trail.rs	child_stderr	env fs process
+crates/boop-store/src/trail.rs	child_stderr_in	fs process
+crates/boop-store/src/trail.rs	clear_conversation	env fs
+crates/boop-store/src/trail.rs	clearing_a_pin_leaves_nothing_for_the_next_spawn	clock env fs
+crates/boop-store/src/trail.rs	closure@11371	env fs
+crates/boop-store/src/trail.rs	dead_reason	clock env fs sqlite thread
+crates/boop-store/src/trail.rs	expect_round_trips_through_the_lane_trail	env fs
+crates/boop-store/src/trail.rs	file_writer	log
+crates/boop-store/src/trail.rs	lane_dir	env fs
+crates/boop-store/src/trail.rs	lane_target_dir	env fs
+crates/boop-store/src/trail.rs	lane_target_root	env fs
+crates/boop-store/src/trail.rs	lane_writer	log
+crates/boop-store/src/trail.rs	lanes_root	env fs
+crates/boop-store/src/trail.rs	now_ms	clock
+crates/boop-store/src/trail.rs	open	env fs
+crates/boop-store/src/trail.rs	open_in	fs
+crates/boop-store/src/trail.rs	read_conversation	env fs
+crates/boop-store/src/trail.rs	read_conversation_pin	env fs
+crates/boop-store/src/trail.rs	read_expect	env fs
+crates/boop-store/src/trail.rs	read_spawn	env fs
+crates/boop-store/src/trail.rs	read_spawn_id	env fs
+crates/boop-store/src/trail.rs	read_sync_trail	fs
+crates/boop-store/src/trail.rs	recorded	clock
+crates/boop-store/src/trail.rs	sync_trail_path	env fs
+crates/boop-store/src/trail.rs	the_lane_writer_tees_every_event_into_supervise_log	fs log
+crates/boop-store/src/trail.rs	write_conversation	clock env fs
+crates/boop-store/src/trail.rs	write_conversation_pin	env fs
+crates/boop-store/src/trail.rs	write_expect	env fs
+crates/boop-store/src/trail.rs	write_spawn	env fs
+crates/boop-store/src/usage.rs	assert_agrees	clock fs process sqlite thread
+crates/boop-store/src/usage.rs	closure@26152	clock fs process sqlite
+crates/boop-store/src/usage.rs	closure@33559	clock fs process sqlite
+crates/boop-store/src/usage.rs	context_tokens	sqlite
+crates/boop-store/src/usage.rs	fold_and_cte_agree_across_a_gap	clock fs process sqlite thread
+crates/boop-store/src/usage.rs	fold_and_cte_agree_on_one_busy_window	clock fs process sqlite thread
+crates/boop-store/src/usage.rs	fold_and_cte_agree_when_a_window_times_out_from_its_start	clock fs process sqlite thread
+crates/boop-store/src/usage.rs	price_list	sqlite
+crates/boop-store/src/usage.rs	price_set	clock sqlite
+crates/boop-store/src/usage.rs	store_with	clock fs process sqlite thread
+crates/boop-store/src/usage.rs	token_usage_for_sessions	sqlite
+crates/boop-store/src/usage.rs	typed_usage_rows_carry_bucket_and_calls	clock fs process sqlite thread
+crates/boop-store/src/usage.rs	unpriced_models	sqlite
+crates/boop-store/src/usage.rs	usage_blocks	sqlite
+crates/boop-store/src/usage.rs	usage_burn_rate	sqlite
+crates/boop-store/src/usage.rs	usage_report	sqlite
+crates/boop-store/src/usage.rs	usage_report_rows	sqlite
+crates/boop-store/src/usage.rs	usage_timeline	sqlite
+crates/boop-store/src/usage.rs	usage_totals	sqlite
+crates/boop/examples/instant_views.rs	main	clock env fs process sqlite thread
+crates/boop/examples/typed_rows.rs	main	clock env fs process sqlite thread
+crates/boop/src/cli/1_reminder.rs	closure@5652	process tmux
+crates/boop/src/cli/1_reminder.rs	closure@9629	clock env fs sqlite thread
+crates/boop/src/cli/1_reminder.rs	run	clock env fs process sqlite thread tmux
+crates/boop/src/cli/acpx.rs	resolve_agent_and_model	env fs
+crates/boop/src/cli/acpx.rs	run_foreground	clock env fs process sqlite thread
+crates/boop/src/cli/control.rs	a_named_route_has_one_wrapper_owner_and_can_be_reacquired	fs
+crates/boop/src/cli/control.rs	apply_native_event	clock process sqlite
+crates/boop/src/cli/control.rs	bind_native_session	clock process sqlite
+crates/boop/src/cli/control.rs	clear_boundaries_preserve_process_siblings_without_linking_a_reused_pid	clock process sqlite thread
+crates/boop/src/cli/control.rs	closure@15770	env
+crates/boop/src/cli/control.rs	closure@17647	clock env fs log process sqlite
+crates/boop/src/cli/control.rs	closure@19932	clock
+crates/boop/src/cli/control.rs	closure@21641	clock env fs process sqlite thread tmux
+crates/boop/src/cli/control.rs	closure@31136	clock env fs process sqlite thread tmux
+crates/boop/src/cli/control.rs	closure@51218	process tmux
+crates/boop/src/cli/control.rs	closure@75290	sqlite
+crates/boop/src/cli/control.rs	drop	fs process
+crates/boop/src/cli/control.rs	live_session_owner	clock env fs sqlite thread
+crates/boop/src/cli/control.rs	native_exit_releases_its_transport_and_preserves_a_concurrent_owner	clock env fs sqlite thread
+crates/boop/src/cli/control.rs	native_observation_preserves_a_registered_parent_update	clock env fs sqlite thread
+crates/boop/src/cli/control.rs	native_route_name	env
+crates/boop/src/cli/control.rs	observed_transitions_preserve_parent_and_ignore_late_thread_events	clock process sqlite thread
+crates/boop/src/cli/control.rs	opened_session	clock fs thread
+crates/boop/src/cli/control.rs	print_candidates	lock process
+crates/boop/src/cli/control.rs	release_native_route	clock env fs sqlite thread
+crates/boop/src/cli/control.rs	respawn_wanted	process
+crates/boop/src/cli/control.rs	revive_candidates	clock env fs log process sqlite thread
+crates/boop/src/cli/control.rs	revive_route	clock env fs net process sqlite thread tmux
+crates/boop/src/cli/control.rs	run_lane_revive	clock env fs lock log net process sqlite thread tmux
+crates/boop/src/cli/control.rs	run_native_tui	channel clock env fs log process signal sqlite thread tmux
+crates/boop/src/cli/control.rs	session_digest	clock fs process sqlite
+crates/boop/src/cli/control.rs	session_for_cwd	fs
+crates/boop/src/cli/control.rs	wait_for_free_route_lock	clock env fs thread
+crates/boop/src/cli/control.rs	wait_for_revived_route	clock env fs process sqlite thread
+crates/boop/src/cli/db.rs	a_delivery_failure_retries_the_one_persisted_completion_message	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	a_held_child_completion_remains_pending_until_transport_acceptance	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	a_later_parent_route_delivers_an_already_committed_completion	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	a_read_verb_succeeds_against_a_readonly_opened_store	clock sqlite thread
+crates/boop/src/cli/db.rs	begin	env fs
+crates/boop/src/cli/db.rs	claim_sync	clock fs thread
+crates/boop/src/cli/db.rs	closure@25517	process tmux
+crates/boop/src/cli/db.rs	closure@25720	clock fs process sqlite
+crates/boop/src/cli/db.rs	closure@28814	clock env fs process sqlite thread tmux
+crates/boop/src/cli/db.rs	closure@38090	clock fs process sqlite
+crates/boop/src/cli/db.rs	closure@40727	process tmux
+crates/boop/src/cli/db.rs	closure@76404	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	closure@78182	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	closure@78567	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	closure@82485	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	closure@83535	clock sqlite
+crates/boop/src/cli/db.rs	closure@85413	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	closure@87436	clock env fs log process sqlite thread
+crates/boop/src/cli/db.rs	closure@87853	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	closure@94791	clock env fs log process sqlite thread
+crates/boop/src/cli/db.rs	closure@95210	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	completion_rows	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	defer	env fs
+crates/boop/src/cli/db.rs	deliver_native_child_completions	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	drop	env fs
+crates/boop/src/cli/db.rs	emit_edges	lock process sqlite
+crates/boop/src/cli/db.rs	emit_json_rows	lock process
+crates/boop/src/cli/db.rs	emit_named_rows	lock process
+crates/boop/src/cli/db.rs	emit_rows	lock process
+crates/boop/src/cli/db.rs	finish	env fs
+crates/boop/src/cli/db.rs	guardian_reviews_do_not_mail_the_parent_but_delegated_workers_still_do	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	ingest	fs lock sqlite
+crates/boop/src/cli/db.rs	native_child_completion_message	clock
+crates/boop/src/cli/db.rs	native_child_projector_is_harness_neutral_and_idempotent	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	native_parent_notification_acks_without_duplicate_injection	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	new	clock process
+crates/boop/src/cli/db.rs	observe_native_children	fs
+crates/boop/src/cli/db.rs	open_ro_store	env fs sqlite
+crates/boop/src/cli/db.rs	open_store	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	parse_waterfall_since	clock
+crates/boop/src/cli/db.rs	precreated_codex_parent_delivers_an_appended_child_completion	clock env fs log process sqlite thread
+crates/boop/src/cli/db.rs	project_native_children	sqlite
+crates/boop/src/cli/db.rs	read_from	fs
+crates/boop/src/cli/db.rs	record_parent_acceptance	clock env fs sqlite thread
+crates/boop/src/cli/db.rs	refuse_stale	sqlite
+crates/boop/src/cli/db.rs	resident_child_poller_delivers_an_appended_completion_without_manual_sync	clock env fs log process sqlite thread
+crates/boop/src/cli/db.rs	resident_native_poller_projects_appended_parent_assistant_turns	clock env fs log process sqlite thread
+crates/boop/src/cli/db.rs	run_agent_sessions	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_agent_summary	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_agent_waterfall	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_chat_query	env fs lock process sqlite thread
+crates/boop/src/cli/db.rs	run_db	clock env fs lock log process sqlite thread tmux
+crates/boop/src/cli/db.rs	run_fact	env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_follow	clock env fs log process sqlite thread tmux
+crates/boop/src/cli/db.rs	run_harnesses	lock process
+crates/boop/src/cli/db.rs	run_passthrough	env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_passthrough_at	lock process sqlite
+crates/boop/src/cli/db.rs	run_price	clock env fs lock process sqlite thread
+crates/boop/src/cli/db.rs	run_public_agent_command	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_query	env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_status	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_sync_all	clock env fs log process sqlite thread tmux
+crates/boop/src/cli/db.rs	run_usage	env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_usage_blocks	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	run_usage_burn_rate	clock env fs lock process sqlite
+crates/boop/src/cli/db.rs	session_route_pid	process tmux
+crates/boop/src/cli/db.rs	sync_all	clock env fs log process sqlite thread tmux
+crates/boop/src/cli/db.rs	sync_all_budgeted	clock env fs log process sqlite thread tmux
+crates/boop/src/cli/db.rs	sync_before_read	clock env fs log process sqlite thread tmux
+crates/boop/src/cli/db.rs	sync_native_child_route_once	clock env fs process sqlite thread
+crates/boop/src/cli/db.rs	sync_native_child_route_with_parent	clock env fs process sqlite thread
+crates/boop/src/cli/db.rs	sync_native_parent_route_once	clock env fs process sqlite thread
+crates/boop/src/cli/db.rs	sync_native_session	clock fs process sqlite
+crates/boop/src/cli/db.rs	trail	env fs
+crates/boop/src/cli/debug.rs	closure@2484	sqlite
+crates/boop/src/cli/debug.rs	closure@4046	sqlite
+crates/boop/src/cli/debug.rs	closure@4947	sqlite
+crates/boop/src/cli/debug.rs	closure@6067	sqlite
+crates/boop/src/cli/debug.rs	closure@6453	fs
+crates/boop/src/cli/debug.rs	default_preset_for_harness	fs
+crates/boop/src/cli/debug.rs	git	process
+crates/boop/src/cli/debug.rs	last_turn_ms	env fs sqlite
+crates/boop/src/cli/debug.rs	presets_json	env fs
+crates/boop/src/cli/debug.rs	presets_rows	env fs
+crates/boop/src/cli/debug.rs	presets_table	env fs
+crates/boop/src/cli/debug.rs	print_tail	env fs lock process sqlite
+crates/boop/src/cli/debug.rs	run_config	env fs lock process
+crates/boop/src/cli/debug.rs	run_debug	clock env fs lock process sqlite
+crates/boop/src/cli/debug.rs	run_lane_debug	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/debug.rs	the_default_preset_reaches_only_its_own_harness	fs
+crates/boop/src/cli/job.rs	a_dead_pane_in_a_live_session_reads_dead_residue	clock env fs sqlite thread tmux
+crates/boop/src/cli/job.rs	a_done_row_older_than_the_taken_resume_row_does_not_satisfy_the_wait	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	a_duplicate_result_row_leaves_the_wait_unchanged	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	a_non_result_row_does_not_satisfy_the_wait	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	a_parked_lane_reads_idle_while_its_pane_stays_live	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	a_pre_branch_registry_row_still_reads_and_deletes	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	a_result_row_beats_a_dead_route	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	an_alive_pane_process_tree_reads_live	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	branch_merged	process
+crates/boop/src/cli/job.rs	cass_hit	clock process thread
+crates/boop/src/cli/job.rs	clear_conversation_pin	env fs
+crates/boop/src/cli/job.rs	clear_expect	env fs
+crates/boop/src/cli/job.rs	closure@110202	process tmux
+crates/boop/src/cli/job.rs	closure@111012	process
+crates/boop/src/cli/job.rs	closure@11254	env fs
+crates/boop/src/cli/job.rs	closure@116315	fs process tmux
+crates/boop/src/cli/job.rs	closure@117224	sqlite
+crates/boop/src/cli/job.rs	closure@126752	sqlite
+crates/boop/src/cli/job.rs	closure@129855	process tmux
+crates/boop/src/cli/job.rs	closure@135170	process tmux
+crates/boop/src/cli/job.rs	closure@150498	process tmux
+crates/boop/src/cli/job.rs	closure@156478	process tmux
+crates/boop/src/cli/job.rs	closure@157384	process
+crates/boop/src/cli/job.rs	closure@16762	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	closure@180997	clock fs sqlite thread
+crates/boop/src/cli/job.rs	closure@197995	process
+crates/boop/src/cli/job.rs	closure@24295	channel clock env fs lock process sqlite thread
+crates/boop/src/cli/job.rs	closure@26845	sqlite
+crates/boop/src/cli/job.rs	closure@29831	sqlite
+crates/boop/src/cli/job.rs	closure@55503	process
+crates/boop/src/cli/job.rs	closure@57959	clock sqlite
+crates/boop/src/cli/job.rs	closure@93387	env fs
+crates/boop/src/cli/job.rs	closure@95079	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	closure@95206	clock fs sqlite thread
+crates/boop/src/cli/job.rs	create_from_markdown_mail	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	create_refuses_a_name_whose_pane_is_alive	clock env fs process thread tmux
+crates/boop/src/cli/job.rs	create_resets_a_dead_name_and_says_what_it_removed	clock env fs process thread tmux
+crates/boop/src/cli/job.rs	dead_reason	process tmux
+crates/boop/src/cli/job.rs	dead_reason_is_none_for_a_live_session	process tmux
+crates/boop/src/cli/job.rs	dead_reason_names_a_gone_session_with_no_pid	process
+crates/boop/src/cli/job.rs	dead_reason_names_no_recorded_session_when_tmux_is_absent	process
+crates/boop/src/cli/job.rs	dead_reason_token_from_rows	fs
+crates/boop/src/cli/job.rs	delete_takes_a_carcass_whose_only_pane_is_dead	clock fs process thread tmux
+crates/boop/src/cli/job.rs	disk_floor_admit	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	drop	tmux
+crates/boop/src/cli/job.rs	drop_rows_already_delivered	env fs sqlite
+crates/boop/src/cli/job.rs	effective_target	env fs
+crates/boop/src/cli/job.rs	ensure_ahead	process
+crates/boop/src/cli/job.rs	ensure_clean	process
+crates/boop/src/cli/job.rs	epoch_ms	clock
+crates/boop/src/cli/job.rs	fork_diff_contains_the_changed_path	process
+crates/boop/src/cli/job.rs	fork_join_dry_run_runs_nothing	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	fork_join_merges_the_branch_and_writes_the_reply	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	fork_join_refuses_a_branch_with_nothing_past_base	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	fork_join_refuses_a_dirty_index	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	git_diff	process
+crates/boop/src/cli/job.rs	git_head	process
+crates/boop/src/cli/job.rs	git_lines	process
+crates/boop/src/cli/job.rs	gone_parent	fs process tmux
+crates/boop/src/cli/job.rs	lane_last_claim_at	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	lane_result_rc	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	lane_result_rc_since	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	lane_retired	fs
+crates/boop/src/cli/job.rs	lane_spawn_env	env fs
+crates/boop/src/cli/job.rs	lane_state	fs process tmux
+crates/boop/src/cli/job.rs	lane_state_agrees_with_the_ps_tree_on_every_pane_route	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	lane_state_hop	fs process tmux
+crates/boop/src/cli/job.rs	lane_state_resolves_three_lanes_from_one_pane_pid_batch	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	lane_state_with_pids	fs process tmux
+crates/boop/src/cli/job.rs	merged_base_branch	process
+crates/boop/src/cli/job.rs	message	clock process
+crates/boop/src/cli/job.rs	native_registration_stays_live_until_explicit_done_and_done_is_once	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	new	tmux
+crates/boop/src/cli/job.rs	now_unix_secs	clock
+crates/boop/src/cli/job.rs	pane_less_route_inherits_parent_liveness	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	pick_fork	sqlite
+crates/boop/src/cli/job.rs	pick_fork_requires_lane_when_several_match	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	pick_fork_returns_the_named_lane	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	pick_fork_returns_the_one_row_by_default	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	prune_dry_run_removes_nothing	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	prune_removes_a_dead_row_and_keeps_a_live_one	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	reclaim_merged_worktree	clock fs process thread
+crates/boop/src/cli/job.rs	record_lane_mood	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	record_lane_purpose	clock env fs sqlite
+crates/boop/src/cli/job.rs	remove_one_worktree	process
+crates/boop/src/cli/job.rs	repo_drift_line	process
+crates/boop/src/cli/job.rs	repo_root	env process
+crates/boop/src/cli/job.rs	report_delivery	env fs lock process sqlite
+crates/boop/src/cli/job.rs	reset_dead_identity	clock env fs process thread tmux
+crates/boop/src/cli/job.rs	residency_never_rescues_a_dead_pane_pid	clock env fs sqlite thread tmux
+crates/boop/src/cli/job.rs	resolve_harness_binary	fs process
+crates/boop/src/cli/job.rs	retired_lanes	env fs
+crates/boop/src/cli/job.rs	route_liveness	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	route_only_delete_drops_the_registry_row_without_tmux	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	route_registered_at	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	run_agent	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_beep	channel clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/cli/job.rs	run_beep_lane	clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/cli/job.rs	run_beep_lane_with_tui	clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/cli/job.rs	run_dispatch	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_fork	clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/cli/job.rs	run_fork_diff	clock env fs process sqlite thread
+crates/boop/src/cli/job.rs	run_fork_join	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_attach	clock env fs process sqlite thread
+crates/boop/src/cli/job.rs	run_lane_bulk_delete	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_delete	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_delete_carcass	clock env fs process thread tmux
+crates/boop/src/cli/job.rs	run_lane_get	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_kill	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_list	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_pane	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	run_lane_prune	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_resource_resume	clock env fs process sqlite thread
+crates/boop/src/cli/job.rs	run_lane_signal	clock env fs process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_supervisor	clock env fs log process signal sqlite thread tmux
+crates/boop/src/cli/job.rs	run_lane_wait	clock env fs lock process sqlite thread
+crates/boop/src/cli/job.rs	run_lane_where	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	run_ps	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_ps_with	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_ps_with_drives_the_injected_proc_reader	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_pstree	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/job.rs	run_resolve	clock env fs process sqlite thread
+crates/boop/src/cli/job.rs	run_sweep	clock env fs process sqlite thread
+crates/boop/src/cli/job.rs	run_wait	channel clock env fs lock process sqlite thread
+crates/boop/src/cli/job.rs	run_wait_all_children	clock env fs lock process sqlite thread
+crates/boop/src/cli/job.rs	spawn_repo	process
+crates/boop/src/cli/job.rs	stale_hours_reads_the_newest_non_alarm_row	clock process
+crates/boop/src/cli/job.rs	start_plan	clock process thread
+crates/boop/src/cli/job.rs	the_cwd_flag_outranks_the_briefs_repo	process tmux
+crates/boop/src/cli/job.rs	the_repo_comes_from_the_brief_when_no_cwd_flag_names_one	process tmux
+crates/boop/src/cli/job.rs	touched_lines	process
+crates/boop/src/cli/job.rs	touched_names_the_commit_and_the_changed_path	process tmux
+crates/boop/src/cli/job.rs	touched_reads_none_on_a_fresh_worktree	process tmux
+crates/boop/src/cli/job.rs	wait_accepts_a_result_row_after_the_current_spawn	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_accepts_a_result_row_with_no_route_registered	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_and_exit	channel clock env fs lock process sqlite thread
+crates/boop/src/cli/job.rs	wait_boundary	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_calls_a_lane_dead_when_its_route_stops_being_live	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_for_outcome	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_for_result	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_matches_the_row_the_supervisor_actually_writes	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_propagates_a_failing_rc_and_times_out_otherwise	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_skips_a_result_row_older_than_the_current_spawn	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	wait_times_out_when_no_result_row_arrives	clock env fs sqlite thread
+crates/boop/src/cli/job.rs	waiting_as	clock env fs process sqlite thread
+crates/boop/src/cli/job.rs	watch_turn_end	channel clock env fs sqlite thread
+crates/boop/src/cli/job.rs	where_and_touched_read_the_spawn_record_when_the_route_is_gone	process tmux
+crates/boop/src/cli/job.rs	worktree_branch	process
+crates/boop/src/cli/job/0_interactive.rs	dispatch	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	all_messages	clock env fs sqlite thread
+crates/boop/src/cli/mail.rs	appended_only_import_is_marked_uncertain_after_restart	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	archive_markdown_file	fs
+crates/boop/src/cli/mail.rs	caller_identity	env
+crates/boop/src/cli/mail.rs	child_reach	process tmux
+crates/boop/src/cli/mail.rs	closure@14612	env
+crates/boop/src/cli/mail.rs	closure@17784	fs
+crates/boop/src/cli/mail.rs	closure@24527	sqlite
+crates/boop/src/cli/mail.rs	closure@29743	sqlite
+crates/boop/src/cli/mail.rs	deliver_hail	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	deliver_hail_reported	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	deliver_hail_to_tui_trail	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	fan_out_to_children	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	last_delivery_state	clock env fs sqlite thread
+crates/boop/src/cli/mail.rs	native_tui_completion_delivery_uses_only_its_trail	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	new_message	clock process
+crates/boop/src/cli/mail.rs	persist_message	clock env fs sqlite thread
+crates/boop/src/cli/mail.rs	print_tell_parent_receipt	clock env fs lock process sqlite thread
+crates/boop/src/cli/mail.rs	process_markdown_file	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	push_wait	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	record_control_edge	clock env fs sqlite thread
+crates/boop/src/cli/mail.rs	registered_recipient_uses_the_shared_message_and_receipt_path	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	residency_written_since	fs
+crates/boop/src/cli/mail.rs	revive_if_retired	clock env fs process sqlite thread tmux
+crates/boop/src/cli/mail.rs	run_inbox	clock env fs lock process sqlite thread
+crates/boop/src/cli/mail.rs	run_inbox_drain	clock env fs lock process sqlite thread
+crates/boop/src/cli/mail.rs	run_list	clock env fs lock process sqlite thread
+crates/boop/src/cli/mail.rs	run_send	channel clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	run_watch	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	sender_name	env
+crates/boop/src/cli/mail.rs	spawned_children	env fs sqlite
+crates/boop/src/cli/mail.rs	unknown_recipient_without_session_metadata_is_refused_once_with_a_reason_row	clock env fs lock process sqlite thread tmux
+crates/boop/src/cli/mail.rs	write_inbox_hooks	clock env fs sqlite thread
+crates/boop/src/cli/me.rs	adopt_reads_the_session_from_the_live_registry_and_explicit_id_wins	clock env fs process sqlite thread
+crates/boop/src/cli/me.rs	canonical	fs
+crates/boop/src/cli/me.rs	closure@1125	process
+crates/boop/src/cli/me.rs	closure@3692	fs
+crates/boop/src/cli/me.rs	lone_session_in_cwd	fs
+crates/boop/src/cli/me.rs	register_route	clock env fs process sqlite thread
+crates/boop/src/cli/me.rs	run_me_favorite	clock env fs lock process sqlite thread
+crates/boop/src/cli/me.rs	run_me_mood	clock env fs process sqlite thread
+crates/boop/src/cli/me.rs	run_me_remind	clock env fs lock process sqlite thread
+crates/boop/src/cli/me.rs	run_whoami	env process
+crates/boop/src/cli/mod.rs	append_ack	clock env fs sqlite thread
+crates/boop/src/cli/mod.rs	append_acks	clock env fs sqlite thread
+crates/boop/src/cli/mod.rs	append_message	clock env fs sqlite thread
+crates/boop/src/cli/mod.rs	append_message_to	clock env fs sqlite thread
+crates/boop/src/cli/mod.rs	line	lock process
+crates/boop/src/cli/mod.rs	mail_dir	env fs
+crates/boop/src/cli/mod.rs	open_tui_owned_trail	env fs
+crates/boop/src/cli/mod.rs	route_goal_round_trips	clock env fs sqlite thread
+crates/boop/src/cli/mod.rs	write_route	clock env fs sqlite thread
+crates/boop/src/cli/paste.rs	run_paste	clock env fs process sqlite thread
+crates/boop/src/cli/paste.rs	write_pasteboard	process
+crates/boop/src/cli/screen.rs	emit_text	lock process
+crates/boop/src/cli/screen.rs	run_lane_squares	clock env fs lock process sqlite thread
+crates/boop/src/cli/selection.rs	closure@11091	clock
+crates/boop/src/cli/selection.rs	live_rows	process sqlite
+crates/boop/src/cli/selection.rs	open	clock env fs sqlite thread
+crates/boop/src/cli/selection.rs	pane_snapshot	process
+crates/boop/src/cli/selection.rs	run	clock env fs process sqlite thread
+crates/boop/src/cli/selection.rs	selected_routes	clock env fs sqlite thread
+crates/boop/src/cli/shout.rs	caller_name	env
+crates/boop/src/cli/shout.rs	closure@4006	process
+crates/boop/src/cli/shout.rs	closure@9876	process tmux
+crates/boop/src/cli/shout.rs	press_interrupt_keys	process
+crates/boop/src/cli/shout.rs	prove_door	net
+crates/boop/src/cli/shout.rs	prove_route	net process
+crates/boop/src/cli/shout.rs	record_proof	sqlite
+crates/boop/src/cli/shout.rs	run_broadcast	clock env fs net process sqlite thread tmux
+crates/boop/src/cli/shout.rs	two_failed_proofs_mark_a_route_dead_until_a_live_proof_or_registration	clock env fs sqlite thread
+crates/boop/src/cli/subscribe.rs	children_writes_one_row_per_child_plus_a_wildcard	clock env fs lock process sqlite thread
+crates/boop/src/cli/subscribe.rs	run_subscribe	clock env fs lock process sqlite thread
+crates/boop/src/cli/subscribe.rs	run_unsubscribe	clock env fs lock process sqlite thread
+crates/boop/src/cli/subscribe.rs	subscribe_then_unsubscribe_leaves_zero_rows	clock env fs lock process sqlite thread
+crates/boop/src/cli/subscribe.rs	subscriber	env process
+crates/boop/src/cli/tag.rs	caller_source	env
+crates/boop/src/cli/tag.rs	emit	lock process
+crates/boop/src/cli/tag.rs	now_ms	clock
+crates/boop/src/cli/tag.rs	run_tag_add	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_backfill	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_for	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_list	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_of	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_recent	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_rm	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_search	clock env fs lock process sqlite thread
+crates/boop/src/cli/tag.rs	run_tag_sources	clock env fs lock process sqlite thread
+crates/boop/src/debug.rs	a_clean_window_has_no_banner_and_says_so	fs
+crates/boop/src/debug.rs	a_lane_filter_reads_one_lane	fs
+crates/boop/src/debug.rs	help_banner	env fs
+crates/boop/src/debug.rs	only_the_tail_of_a_long_log_is_read	fs
+crates/boop/src/debug.rs	only_warn_and_error_inside_the_window_are_taken	fs
+crates/boop/src/debug.rs	store_alerts	sqlite
+crates/boop/src/debug.rs	tail	fs
+crates/boop/src/debug.rs	the_banner_counts_lines_and_lanes	fs
+crates/boop/src/debug.rs	the_report_groups_by_lane	fs
+crates/boop/src/debug.rs	trail_alerts	fs
+crates/boop/src/debug.rs	write_log	fs
+crates/boop/src/invoke.rs	finish	env fs sqlite
+crates/boop/src/invoke.rs	finish_with	sqlite
+crates/boop/src/invoke.rs	invocation_rows_group_by_distinct_build_sha	clock sqlite thread
+crates/boop/src/invoke.rs	persist_with	sqlite
+crates/boop/src/invoke.rs	record_round_trips_into_the_trace_table	clock sqlite thread
+crates/boop/src/invoke.rs	start	env fs sqlite
+crates/boop/src/invoke.rs	start_and_finish_share_the_build_identity_in_sqlite	clock sqlite thread
+crates/boop/src/invoke.rs	start_with	sqlite
+crates/boop/src/main.rs	closure@16273	env
+crates/boop/src/main.rs	closure@16576	clock env fs log process sqlite thread tmux
+crates/boop/src/main.rs	closure@16625	channel clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/main.rs	closure@32186	env fs
+crates/boop/src/main.rs	drain_all_held_mail_best_effort	clock env fs process sqlite thread tmux
+crates/boop/src/main.rs	help_wanted	env
+crates/boop/src/main.rs	init_tracing	env fs log
+crates/boop/src/main.rs	main	channel clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/main.rs	run_cli	channel clock env fs lock log net process signal sqlite thread tmux
+crates/boop/src/main.rs	sync_before_local_command	clock env fs log process sqlite thread tmux
+crates/boop/src/main.rs	sync_suppressed	env
+crates/boop/src/main.rs	tui_trail	env
+crates/boop/src/main.rs	wait_dispatches_to_lane_wait_only_for_a_registered_lane_route	clock env fs sqlite thread
+crates/boop/src/main.rs	wait_target_is_a_lane	clock env fs sqlite thread

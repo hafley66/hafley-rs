@@ -450,7 +450,7 @@ impl Resolve<TypeF> for RustSource {
             // No corpus declaration IS this type, so no name-match leg may
             // invent one; the zero leg carries the row instead.
             let (dst_blob, dst_span, origin) = match checked {
-                Some(CheckerAnswer::External) => zero,
+                Some(CheckerAnswer::External(_)) => zero,
                 _ => name_match().unwrap_or(zero),
             };
             edges.push(ProjectEdge::new(

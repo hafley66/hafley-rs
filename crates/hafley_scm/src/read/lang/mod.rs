@@ -34,7 +34,8 @@ pub struct CheckerRef {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CheckerAnswer {
     Corpus(ContentId, Span),
-    External,
+    /// Resolved outside the corpus; carries the crate-qualified path.
+    External(String),
 }
 
 fn answer_of(
@@ -45,7 +46,7 @@ fn answer_of(
 ) -> Option<CheckerAnswer> {
     let (dst_path, dst_name, dst_offset) = reference;
     if dst_path.is_empty() {
-        return Some(CheckerAnswer::External);
+        return Some(CheckerAnswer::External(dst_name.to_string()));
     }
     let blob = *blob_of.get(dst_path)?;
     let sites = defs.map.get(dst_name)?;

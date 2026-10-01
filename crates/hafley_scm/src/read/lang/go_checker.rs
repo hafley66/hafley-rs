@@ -124,7 +124,7 @@ impl GoCheckerIndex {
                     defs,
                 ) {
                     Some(answer) => {
-                        index.external += (answer == GoCheckerAnswer::External) as usize;
+                        index.external += matches!(answer, GoCheckerAnswer::External(_)) as usize;
                         bounds.push(Bound {
                             start: reference.start,
                             end: reference.end,
@@ -154,7 +154,7 @@ impl GoCheckerIndex {
                     index.unjoined += 1;
                     continue;
                 };
-                index.external += (answer == GoCheckerAnswer::External) as usize;
+                index.external += matches!(answer, GoCheckerAnswer::External(_)) as usize;
                 match by_name.entry(reference.name) {
                     std::collections::hash_map::Entry::Vacant(slot) => {
                         slot.insert(Some(answer));
@@ -250,7 +250,7 @@ pub fn apply_calls(
                 }
                 true
             }
-            Some(GoCheckerAnswer::External) => false,
+            Some(GoCheckerAnswer::External(_)) => false,
             None => true,
         }
     });
@@ -318,7 +318,7 @@ pub fn apply_types(
                     ResolutionOrigin::Checker,
                 ));
             }
-            Some(GoCheckerAnswer::External) => {
+            Some(GoCheckerAnswer::External(_)) => {
                 replaced.insert(name.to_string());
             }
             None => {}

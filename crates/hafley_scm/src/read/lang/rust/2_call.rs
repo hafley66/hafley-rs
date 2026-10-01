@@ -801,7 +801,7 @@ impl Resolve<CallF> for RustSource {
                 .and_then(|(index, path)| index.call_at(path, site.span, callee))
                 .filter(|answer| match answer {
                     CheckerAnswer::Corpus(blob, span) => callable(blob, *span),
-                    CheckerAnswer::External => true,
+                    CheckerAnswer::External(_) => true,
                 }) {
                 Some(CheckerAnswer::Corpus(dst_blob, dst_span)) => {
                     // Off `witness` the syntax fold's scip leg never runs here.
@@ -831,7 +831,7 @@ impl Resolve<CallF> for RustSource {
                 }
                 // No corpus definition IS this callee, so no name-match leg
                 // may invent one; `call_drops` reads the same answer.
-                Some(CheckerAnswer::External) => continue,
+                Some(CheckerAnswer::External(_)) => continue,
                 None => {}
             }
             let Some(((dst_blob, dst_span), kind, origin)) = syntax_t(name_t) else {
@@ -951,13 +951,14 @@ pub fn call_drops(
                     )
                     .then_some(())
                 });
-            let checker_external = matches!(
-                checker
-                    .zip(own_path)
-                    .and_then(|(index, path)| index.call_at(path, site.span, callee)),
-                Some(CheckerAnswer::External)
-            );
-            let reason = if checker_external {
+            let checker_external = match checker
+                .zip(own_path)
+                .and_then(|(index, path)| index.call_at(path, site.span, callee))
+            {
+                Some(CheckerAnswer::External(qualified)) => Some(qualified),
+                _ => None,
+            };
+            let reason = if checker_external.is_some() {
                 UnresolvedReason::External
             } else if inferred.contains(&(site.span.start, site.span.end())) {
                 UnresolvedReason::Inferred
@@ -970,10 +971,13 @@ pub fn call_drops(
             } else {
                 UnresolvedReason::Ambiguous
             };
-            let detail = site.callee_path.map_or_else(
-                || callee.to_string(),
-                |id| output.strings.lookup(id).to_string(),
-            );
+            // The checker's crate-qualified path, else the path as written.
+            let detail = checker_external.unwrap_or_else(|| {
+                site.callee_path.map_or_else(
+                    || callee.to_string(),
+                    |id| output.strings.lookup(id).to_string(),
+                )
+            });
             ResolveDrop {
                 span: site.span,
                 reason,

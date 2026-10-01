@@ -173,7 +173,7 @@ impl RustCheckerIndex {
                     defs,
                 ) {
                     Some(answer) => {
-                        index.external += (answer == CheckerAnswer::External) as usize;
+                        index.external += matches!(answer, CheckerAnswer::External(_)) as usize;
                         bounds.push(Bound {
                             start: reference.start,
                             end: reference.end,
@@ -205,7 +205,7 @@ impl RustCheckerIndex {
                     index.unjoined += 1;
                     continue;
                 };
-                index.external += (answer == CheckerAnswer::External) as usize;
+                index.external += matches!(answer, CheckerAnswer::External(_)) as usize;
                 match first_answer.entry(reference.name.clone()) {
                     std::collections::hash_map::Entry::Vacant(slot) => {
                         slot.insert((answer.clone(), false));

@@ -171,13 +171,17 @@ fn the_checker_answers_inside_a_cfg_test_body() {
     );
 }
 
-/// A std method is knowledge, not absence: the tier says `external` and no
-/// name-match leg may invent a corpus edge for it.
+/// A std method is knowledge, not absence: the tier says `external`, names the
+/// crate-qualified definition, and no name-match leg invents a corpus edge.
 #[test]
 fn a_std_method_stays_an_external_answer() {
     let facts = run();
     let reasons = drops(&facts);
-    for callee in ["first", "unwrap", "len"] {
+    for callee in [
+        "core::slice::first",
+        "core::option::Option::unwrap",
+        "alloc::string::String::len",
+    ] {
         assert!(
             reasons
                 .iter()

@@ -4449,7 +4449,7 @@ impl Resolve<TypeF> for TsSource {
             // No corpus declaration IS this type, so no name-match leg may
             // invent one; the zero leg carries the row instead.
             let (dst_blob, dst_span, origin) = match checked {
-                Some(TsCheckerAnswer::External) => zero(),
+                Some(TsCheckerAnswer::External(_)) => zero(),
                 _ => name_match().unwrap_or_else(zero),
             };
             edges.push(ProjectEdge::new(
@@ -5178,7 +5178,7 @@ impl Resolve<CallF> for TsSource {
                     }
                     // No corpus definition IS this callee, so no name-match leg
                     // may invent one.
-                    Some(TsCheckerAnswer::External) => None,
+                    Some(TsCheckerAnswer::External(_)) => None,
                     None => syntax_t,
                 };
             // The one-hop return-type inference: a `const x = f()` init call

@@ -10,7 +10,8 @@ use ra_ap_hir::{
     attach_db, Adt, AssocItem, Crate, Field, Function, GenericDef, HirDisplay, Impl, ModuleDef,
     PathResolution, Semantics, Trait, Type,
 };
-use ra_ap_ide::{NavigationTarget, RootDatabase, TryToNav};
+use ra_ap_hir::AsAssocItem;
+use ra_ap_ide::{Edition, NavigationTarget, RootDatabase, TryToNav};
 use ra_ap_ide_db::defs::Definition;
 use ra_ap_syntax::ast::HasName;
 use ra_ap_syntax::{ast, AstNode};
@@ -430,7 +431,7 @@ fn method_call_ref(
     let name_ref = call.name_ref()?;
     let function = spans.method.call(|| sema.resolve_method_call(call))?;
     let nav = spans.destination_of(sema, ModuleDef::Function(function))?;
-    mint(destination, file, name_ref.syntax().text_range(), &nav)
+    mint(sema, ModuleDef::Function(function), destination, file, name_ref.syntax().text_range(), &nav)
 }
 
 /// `a::b::c(..)` and `Foo { .. }`: the item the trailing segment names.
@@ -449,7 +450,7 @@ fn path_call_ref(
         return None;
     }
     let nav = spans.destination_of(sema, def)?;
-    mint(destination, file, name_ref.syntax().text_range(), &nav)
+    mint(sema, def, destination, file, name_ref.syntax().text_range(), &nav)
 }
 
 /// A path naming a type declaration, the shape `Resolve<TypeF>`'s candidates
@@ -472,7 +473,7 @@ fn type_ref(
         return None;
     }
     let nav = spans.destination_of(sema, def)?;
-    let mut reference = mint(destination, file, name_ref.syntax().text_range(), &nav)?;
+    let mut reference = mint(sema, def, destination, file, name_ref.syntax().text_range(), &nav)?;
     reference.written = path
         .segments()
         .filter_map(|segment| segment.name_ref())
@@ -489,6 +490,8 @@ fn nav_of(sema: &Semantics<'_, RootDatabase>, def: ModuleDef) -> Option<Navigati
 /// One nav plus one reference range -> a seam row, with both offsets converted
 /// out of rust-analyzer's byte space into the parse plane's.
 fn mint(
+    sema: &Semantics<'_, RootDatabase>,
+    def: ModuleDef,
     destination: &HashMap<ra_ap_ide::FileId, &WalkFile>,
     file: &WalkFile,
     reference: ra_ap_syntax::TextRange,
@@ -508,15 +511,41 @@ fn mint(
         }
         None => (String::new(), 0),
     };
+    // Outside the universe, the name is the definition's crate-qualified
+    // path (`tokio::task::spawn::spawn`, `std::process::Command::new`).
+    let dst_name = if dst_path.is_empty() {
+        qualified(sema, def).unwrap_or_else(|| nav.name.as_str().to_string())
+    } else {
+        nav.name.as_str().to_string()
+    };
     Some(CheckerRef {
         start: file.offsets.to_span_offset(start),
         end: file.offsets.to_span_offset(end),
         name: file.text.get(start as usize..end as usize)?.to_string(),
         written: String::new(),
         dst_path,
-        dst_name: nav.name.as_str().to_string(),
+        dst_name,
         dst_offset,
     })
+}
+
+/// `crate::module::[SelfType|Trait::]name` of a definition, by its declaring module.
+fn qualified(sema: &Semantics<'_, RootDatabase>, def: ModuleDef) -> Option<String> {
+    let db = sema.db;
+    let module = def.module(db)?;
+    let krate = module.krate(db).display_name(db)?.to_string();
+    let owner = match def {
+        ModuleDef::Function(function) => function.as_assoc_item(db).and_then(|item| match item.container(db) {
+            ra_ap_hir::AssocItemContainer::Trait(owner) => Some(owner.name(db)),
+            ra_ap_hir::AssocItemContainer::Impl(owner) => owner.self_ty(db).as_adt().map(|adt| adt.name(db)),
+        }),
+        _ => None,
+    };
+    let segments = std::iter::once(krate)
+        .chain(module.path_segments(db).map(|name| name.display(db, Edition::CURRENT).to_string()))
+        .chain(owner.map(|name| name.display(db, Edition::CURRENT).to_string()))
+        .chain(Some(def.name(db)?.display(db, Edition::CURRENT).to_string()));
+    Some(segments.collect::<Vec<String>>().join("::"))
 }
 
 /// Every relation the item walk enumerates to exhaustion. A claim is emitted

@@ -110,7 +110,7 @@ impl TsCheckerIndex {
                     defs,
                 ) {
                     Some(answer) => {
-                        index.external += (answer == TsCheckerAnswer::External) as usize;
+                        index.external += matches!(answer, TsCheckerAnswer::External(_)) as usize;
                         bounds.push(Bound {
                             start: reference.start,
                             end: reference.end,
@@ -140,7 +140,7 @@ impl TsCheckerIndex {
                     index.unjoined += 1;
                     continue;
                 };
-                index.external += (answer == TsCheckerAnswer::External) as usize;
+                index.external += matches!(answer, TsCheckerAnswer::External(_)) as usize;
                 match by_name.entry(reference.name) {
                     std::collections::hash_map::Entry::Vacant(slot) => {
                         slot.insert(Some(answer));
