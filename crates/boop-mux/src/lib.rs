@@ -17,11 +17,15 @@ use tracing::{debug, warn};
 
 static NEXT_PASTE_BUFFER: AtomicU64 = AtomicU64::new(0);
 
+mod _0_target;
+pub use _0_target::exact_pane_target;
 mod _0_snapshot;
 pub use _0_snapshot::{
     rows_from_capture, History, Screen, TerminalRow, TerminalSize, TerminalSnapshot,
     TerminalTarget, Viewport,
 };
+mod _1_status;
+pub use _1_status::{parse_status_geometry, StatusGeometry};
 mod _1_pane_at;
 pub use _1_pane_at::{parse_pane_at, PaneHit};
 mod _2_click_rungs;
@@ -247,7 +251,7 @@ impl Multiplexer for Tmux {
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
         }
-        builder.args(["display-message", "-p", "-t", target, "#{pane_id}"]);
+        builder.args(["display-message", "-p", "-t", &exact_pane_target(target), "#{pane_id}"]);
         let output = builder.output().ok()?;
         if !output.status.success() {
             return None;
@@ -271,7 +275,7 @@ impl Multiplexer for Tmux {
             builder.arg("-L").arg(socket);
         }
         let output = builder
-            .args(["list-panes", "-t", target, "-F", "#{pane_pid}"])
+            .args(["list-panes", "-t", &exact_pane_target(target), "-F", "#{pane_pid}"])
             .output()
             .ok()?;
         if !output.status.success() {
@@ -415,11 +419,7 @@ impl Multiplexer for Tmux {
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
         }
-        let target = if target.starts_with('%') {
-            target.to_owned()
-        } else {
-            exact_target(target)
-        };
+        let target = exact_pane_target(target);
         let output = builder
             .args(["list-panes", "-t", &target, "-F", "#{pane_pid}"])
             .output()
@@ -433,14 +433,14 @@ impl Multiplexer for Tmux {
         target: &str,
         lines: Option<u32>,
     ) -> Result<String> {
-        if !target.contains(':') && !self.has_session(socket, target)? {
+        if !target.contains(':') && !target.starts_with(['%', '@', '$']) && !self.has_session(socket, target)? {
             anyhow::bail!("no such tmux session {target}");
         }
         let mut builder = Command::new("tmux");
         if let Some(socket) = socket {
             builder.arg("-L").arg(socket);
         }
-        builder.args(["capture-pane", "-p", "-t", target]);
+        builder.args(["capture-pane", "-p", "-t", &exact_pane_target(target)]);
         let start;
         if let Some(lines) = lines {
             start = format!("-{lines}");
@@ -478,7 +478,7 @@ impl Multiplexer for Tmux {
                 "display-message",
                 "-p",
                 "-t",
-                target,
+                &exact_pane_target(target),
                 "#{pane_id}\t#{pane_width}\t#{pane_height}\t#{history_size}\t#{history_limit}\t#{cursor_x}\t#{cursor_y}\t#{alternate_on}\t#{pid}\t#{scroll_position}",
             ])
             .output()
@@ -493,7 +493,7 @@ impl Multiplexer for Tmux {
         let start = format!("-{depth}");
         let capture = |extra: Option<&str>| {
             let mut builder = tmux_command(socket);
-            builder.args(["capture-pane", "-p", "-t", target]);
+            builder.args(["capture-pane", "-p", "-t", &exact_pane_target(target)]);
             if depth > 0 {
                 builder.args(["-S", &start]);
             }
@@ -539,11 +539,7 @@ impl Multiplexer for Tmux {
     }
 
     fn pane_at(&self, socket: Option<&str>, session: &str, col: u16, row: u16) -> Option<PaneHit> {
-        let target = if session.starts_with('%') {
-            session.to_owned()
-        } else {
-            exact_target(session)
-        };
+        let target = exact_pane_target(session);
         let output = tmux_command(socket)
             .args([
                 "list-panes",

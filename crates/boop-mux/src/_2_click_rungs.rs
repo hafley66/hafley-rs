@@ -454,7 +454,7 @@ pub(crate) fn index_with(root: &Path, threads: usize) -> Arc<Vec<IndexEntry>> {
         .git_exclude(true)
         .parents(true)
         .follow_links(false)
-        .threads(threads)
+        .threads(if threads == 0 { 2 } else { threads.min(2) })
         // Dependency trees and git internals are never what a pasted path
         // means; keeping them out stops fzf offering node_modules noise.
         .filter_entry(|entry| {

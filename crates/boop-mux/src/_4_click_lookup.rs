@@ -303,10 +303,10 @@ fn exact_matches(
         path.strip_prefix(&format!("{}/", trim_slash(&dir.to_string_lossy())))
             .map(str::to_owned)
     };
-    // One walker thread per core across all checkouts, never a pool per checkout.
+    // Interactive lookup shares at most two walkers across all checkouts.
     let next = std::sync::atomic::AtomicUsize::new(ranked.start);
     let workers = std::thread::available_parallelism()
-        .map_or(4, |n| n.get())
+        .map_or(2, |n| n.get().min(2))
         .min(ranked.len().max(1));
     let mut indexes: Vec<(usize, Arc<Vec<IndexEntry>>)> = std::thread::scope(|scope| {
         let pool: Vec<_> = (0..workers)
