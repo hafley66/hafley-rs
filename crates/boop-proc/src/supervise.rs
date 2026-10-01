@@ -8,6 +8,7 @@ use std::time::{Duration, Instant};
 use anyhow::{Context, Result};
 use tracing::{debug, error, info, warn};
 
+use crate::_1_end_latch::{main_end, signal_end};
 use crate::resource_guard::{AgentProcessGroup, GuardAction, ResourceGuard, ResourceGuardConfig};
 use boop_acp::channel::{Delivery, LaneChannel, ToolCallFact, TurnEvent, TOOL_STATUS_COMPLETED};
 use boop_store::bus;
@@ -990,7 +991,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         Err(payload) => {
             let text = panic_text(&payload);
             error!(lane = lane.lane, panic = text, "lane supervisor panicked");
-            record_result(&lane, PANIC_EXIT, Some(&format!("panic: {text}")));
+            main_end(|| record_result(&lane, PANIC_EXIT, Some(&format!("panic: {text}"))));
             reclaim_lane_target(&lane.lane);
             anyhow::bail!("supervisor panic: {text}");
         }
@@ -1021,7 +1022,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
                 None,
                 "supervisor exited with error",
             );
-            record_result(&lane, 1, Some(&format!("supervisor error: {error}")));
+            main_end(|| record_result(&lane, 1, Some(&format!("supervisor error: {error}"))));
             reclaim_lane_target(&lane.lane);
             return Err(error);
         }
@@ -1043,7 +1044,7 @@ pub fn run(lane: LaneRun, channel: &mut dyn LaneChannel) -> Result<i32> {
         ended.detail.as_deref().unwrap_or("supervisor exited"),
     );
     if !ended.retired {
-        record_result(&lane, ended.exit_code, ended.detail.as_deref());
+        main_end(|| record_result(&lane, ended.exit_code, ended.detail.as_deref()));
     }
     reclaim_lane_target(&lane.lane);
     Ok(ended.exit_code)
@@ -1100,14 +1101,12 @@ pub fn arm_signal_trail(lane: &LaneRun) {
         // The first signal is the last: the row is written and the process
         // ends, so nothing here iterates twice.
         if let Some(signal) = signals.forever().next() {
-            let code = signal_exit(&lane, signal);
             // `std::process::exit` from this thread runs atexit and stdio
             // cleanup that wait on locks the parked main thread holds; on
             // 2026-08-25 38 supervisors wrote their row and then sat for two
             // days on that exit. The row is already fsync-free on disk, so
-            // leave without unwinding anything.
-            // SAFETY: _exit is async-signal-safe and touches no Rust state.
-            unsafe { libc::_exit(code) }
+            // `signal_end` leaves through `_exit` without unwinding anything.
+            signal_end(|| signal_exit(&lane, signal), 128 + signal)
         }
     });
 }

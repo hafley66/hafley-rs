@@ -446,7 +446,7 @@ pub(crate) fn run_lane_supervisor(
     );
     let adapter = registry.resolve(Some(harness_id))?;
     let dir = mail_dir(mail_dir_arg)?;
-    let liveness_store = boop::Store::open(dir.join("boop.db")).ok();
+    let liveness_store = bus::db_path(&dir).and_then(boop::Store::open).ok();
     if let Some(store) = &liveness_store {
         let _ = store.record_status(
             lane,
@@ -4035,7 +4035,7 @@ pub(crate) fn route_liveness(dir: &std::path::Path, lane: &str) -> RouteLiveness
         &snapshot,
     );
     if matches!(state, "live" | "idle" | "dead") {
-        if let Ok(store) = boop::Store::open(dir.join("boop.db")) {
+        if let Ok(store) = bus::db_path(dir).and_then(boop::Store::open) {
             let observed = route.session_id.as_deref().unwrap_or(lane);
             let pid = store
                 .live_row(observed)

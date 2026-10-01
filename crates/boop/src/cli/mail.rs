@@ -746,7 +746,7 @@ fn fan_out_to_children(
             (ChildReach::Hook, boop::mail::Rung::HookInbox)
                 | (ChildReach::Supervisor, boop::mail::Rung::TurnBoundary)
         );
-        if landing.rung.carried_the_body() || owned_inbox {
+        if landing.carried_the_body() || owned_inbox {
             landed += 1;
             let label = if matches!(reach, ChildReach::Supervisor) && owned_inbox {
                 "lane supervisor"

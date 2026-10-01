@@ -366,7 +366,7 @@ pub(crate) fn run_broadcast(
             (Reach::DoorOnly, boop::mail::Rung::HookInbox)
         ) | matches!(landing.rung, boop::mail::Rung::TurnBoundary);
         match landing.rung {
-            rung if rung.carried_the_body() || owned_inbox => {
+            rung if landing.carried_the_body() || owned_inbox => {
                 landed += 1;
                 landed_rows.push(name);
                 if !broadcast.json {

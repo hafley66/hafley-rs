@@ -2,6 +2,7 @@
 //! into, the supervisor that owns the harness child and writes its result row,
 //! the mailbox a lane drains, and the coroutine host a caller embeds.
 
+mod _1_end_latch;
 pub mod config;
 pub mod deliver;
 pub mod headwatch;
