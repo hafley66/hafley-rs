@@ -21,7 +21,7 @@
   `plans/recon/` in the repo, no worktree.
 - No work output in cache folders (`~/.cache`, `~/Library/Caches`, `/tmp`), user-set 2026-09-30:
   reports go to `plans/`, bench clones and databases to `crates/sprefa-extract/bench/`.
-- Writing is serial in ONE worktree checkout folder: codex `gpt-6-sol` medium (boop preset `sol6-med`).
+- Writing is serial in ONE worktree checkout folder: codex `gpt-6.1-sol` medium (boop preset `sol61-med`).
   One writer at a time; merge to main before the next writer starts. Do not create per-task worktrees.
 - The coordinator reviews every writer's diff before merge.
 
