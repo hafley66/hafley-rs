@@ -72,6 +72,7 @@ const ROSTER_FIXTURES: &[(&str, &str)] = &[
     ("markdown", "tests/fixtures/markdown/0_sample.md"),
     ("gdscript", "tests/fixtures/gdscript/sample.gd"),
     ("commonlisp", "tests/fixtures/commonlisp/sample.lisp"),
+    ("typespec", "tests/fixtures/typespec/sample.tsp"),
     ("data", "tests/fixtures/data/nested.json"),
     ("fallback", "tests/fixtures/astgrep/sample.html"),
 ];

@@ -302,13 +302,14 @@ data = ["shared", "hafley_scm/data", "dep:tree-sitter-json", "dep:tree-sitter-ya
 fallback = ["shared", "hafley_scm/fallback", "dep:tree-sitter-html"]
 gdscript = ["shared", "hafley_scm/gdscript", "dep:tree-sitter-gdscript"]
 commonlisp = ["shared", "hafley_scm/commonlisp", "dep:tree-sitter-commonlisp"]
+typespec = ["shared", "hafley_scm/typespec"]
 read = [
     "hafley_scm/read",
     "dep:lsp-server",
     "dep:lsp-types",
     "dep:url",
     "shared", "rust", "typescript", "go", "kotlin", "python", "prolog", "markdown",
-    "data", "fallback", "gdscript", "commonlisp",
+    "data", "fallback", "gdscript", "commonlisp", "typespec",
 ]
 cli = ["shared", "dep:ryi-proto", "hafley_scm/cli", "dep:clap", "dep:axum", "dep:axum-extra", "dep:tokio", "dep:tokio-util", "dep:futures-util", "dep:fs4", "dep:daemonize", "dep:base64", "dep:http-body-util", "dep:http-body", "dep:tracing-subscriber", "dep:hafley-observe", "dep:libc", "dep:tempfile", "rust-checker"]
 profile-alloc = ["hafley-observe/span-alloc", "hafley-observe/rusage"]

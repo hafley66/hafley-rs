@@ -161,6 +161,8 @@ pub mod source_facts;
 pub mod source_query;
 #[cfg(feature = "typescript")]
 pub mod ts;
+#[cfg(feature = "typespec")]
+pub mod typespec;
 #[cfg(any(feature = "typescript", feature = "go-checker"))]
 pub mod ts_checker;
 #[cfg(feature = "typescript")]
@@ -215,6 +217,8 @@ pub use ts::{
 };
 #[cfg(feature = "typescript")]
 pub use ts_resolve::{respell, TsResolver};
+#[cfg(feature = "typespec")]
+pub use typespec::TypespecSource;
 
 use crate::read::source::Source;
 
@@ -229,7 +233,7 @@ use crate::read::source::Source;
 /// it delegates its own cst plane back to FallbackSource, so no row is lost.
 /// GdscriptSource/CommonlispSource precede FallbackSource so their rows route a
 /// `.gd`/`.lisp` at all. Neither claims a suffix an earlier row owns
-/// (`.gd`, `.lisp`, `.lsp`, `.cl`, `.asd` are unclaimed above).
+/// (`.gd`, `.lisp`, `.lsp`, `.cl`, `.asd`, `.tsp` are unclaimed above).
 pub fn sources() -> &'static [&'static dyn Source] {
     &[
         #[cfg(feature = "rust")]
@@ -252,6 +256,8 @@ pub fn sources() -> &'static [&'static dyn Source] {
         &GdscriptSource,
         #[cfg(feature = "commonlisp")]
         &CommonlispSource,
+        #[cfg(feature = "typespec")]
+        &TypespecSource,
         #[cfg(feature = "fallback")]
         &FallbackSource,
     ]

@@ -9,7 +9,7 @@ use std::borrow::Cow;
 
 /// `MarkdownInline` is never routed from a path (a `.md` routes to the block
 /// grammar); a caller names it directly to reach the inline plane.
-/// `Gdscript`/`Commonlisp` are the two syntax-only front-ends: a `.gd`/`.lisp`
+/// `Gdscript`/`Commonlisp`/`Typespec` are the syntax-only front-ends: a `.gd`/`.lisp`/`.tsp`
 /// routes to the `Source` that owns the parse, and the grammar table here
 /// names their linked crates.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -26,6 +26,7 @@ pub enum RyiLang {
     MarkdownInline,
     Gdscript,
     Commonlisp,
+    Typespec,
     Html,
     /// The data family's two cst-delegated grammars: `.json`/`.yaml` carry
     /// ast-era cst rows through the data Source, so their grammars stay on
@@ -57,6 +58,7 @@ impl RyiLang {
             Self::MarkdownInline => "markdown_inline",
             Self::Gdscript => "gdscript",
             Self::Commonlisp => "commonlisp",
+            Self::Typespec => "typespec",
             Self::Html => "html",
             Self::Json => "json",
             Self::Yaml => "yaml",
@@ -91,6 +93,8 @@ impl RyiLang {
             "gdscript" | "gd" => Some(Self::Gdscript),
             #[cfg(feature = "commonlisp")]
             "commonlisp" | "lisp" | "cl" => Some(Self::Commonlisp),
+            #[cfg(feature = "typespec")]
+            "typespec" | "tsp" => Some(Self::Typespec),
             #[cfg(feature = "fallback")]
             "html" | "htm" => Some(Self::Html),
             #[cfg(feature = "data")]
@@ -134,6 +138,8 @@ impl RyiLang {
             Self::Commonlisp => {
                 tree_sitter::Language::new(tree_sitter_commonlisp::LANGUAGE_COMMONLISP)
             }
+            #[cfg(feature = "typespec")]
+            Self::Typespec => tree_sitter::Language::new(tree_sitter_typespec::LANGUAGE),
             #[cfg(feature = "fallback")]
             Self::Html => tree_sitter::Language::new(tree_sitter_html::LANGUAGE),
             #[cfg(feature = "data")]
@@ -152,6 +158,7 @@ impl RyiLang {
                 feature = "fallback",
                 feature = "gdscript",
                 feature = "commonlisp",
+                feature = "typespec",
             )))]
             _ => panic!("grammar feature for {} is disabled", self.name()),
         }
