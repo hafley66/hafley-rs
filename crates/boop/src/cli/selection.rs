@@ -7,9 +7,8 @@
 //! deleting the route removes the child so a re-created route starts clean.
 use std::collections::BTreeMap;
 use std::path::Path;
-use std::process::Command;
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use boop::{bus, ident::Store};
 use clap::Subcommand;
 use rusqlite::OptionalExtension;
@@ -167,10 +166,7 @@ fn pane_snapshot() -> Result<(Vec<PaneObs>, Option<String>)> {
         "#{pane_title}",
     ]
     .join(&FIELD_SEP.to_string());
-    let output = Command::new("tmux")
-        .args(["list-panes", "-a", "-F", &format])
-        .output()
-        .context("run tmux list-panes")?;
+    let output = boop_store::tmux::mux().list_panes_formatted(None, None, &format)?;
     if output.status.success() {
         return Ok((parse_panes(&String::from_utf8_lossy(&output.stdout)), None));
     }

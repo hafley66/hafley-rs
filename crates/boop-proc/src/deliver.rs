@@ -249,19 +249,17 @@ pub struct TmuxPaster;
 
 impl PanePaster for TmuxPaster {
     fn paste(&self, pane: &str, notice: &str) -> Option<String> {
-        let status = std::process::Command::new("tmux")
-            .args(["send-keys", "-t", pane, "-l", notice])
-            .status()
+        boop_store::tmux::mux()
+            .send_keys_literal(None, pane, notice)
             .ok()?;
-        status.success().then(|| pane.to_owned())
+        Some(pane.to_owned())
     }
 
     fn submit(&self, pane: &str, key: &str) -> Option<String> {
-        let status = std::process::Command::new("tmux")
-            .args(["send-keys", "-t", pane, key])
-            .status()
+        boop_store::tmux::mux()
+            .send_key_named(None, pane, key)
             .ok()?;
-        status.success().then(|| pane.to_owned())
+        Some(pane.to_owned())
     }
 }
 

@@ -3858,14 +3858,7 @@ pub(crate) fn run_lane_attach(mail_dir_arg: Option<&Path>, lane: &str) -> Result
     let target = tmux::mux()
         .session_of_pane(route.socket.as_deref(), pane)
         .unwrap_or_else(|| pane.to_owned());
-    let mut command = std::process::Command::new("tmux");
-    if let Some(socket) = route.socket.as_deref() {
-        command.args(["-L", socket]);
-    }
-    let status = command
-        .args(["attach-session", "-t", &target])
-        .status()
-        .context("run tmux attach-session")?;
+    let status = tmux::mux().attach_session(route.socket.as_deref(), &target)?;
     anyhow::ensure!(status.success(), "tmux could not attach to job `{lane}`");
     Ok(())
 }

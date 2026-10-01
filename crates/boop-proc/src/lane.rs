@@ -555,16 +555,11 @@ fn carcass_in_listing(repo: &Path, listing: &str, lane: &str) -> Option<LaneCarc
 /// True when the session exists AND a pane of it still runs a process. A
 /// session whose panes are all dead answers `has-session` yes and is not alive.
 pub fn pane_process_alive(session: &str) -> Result<bool> {
-    let output = std::process::Command::new("tmux")
-        .args([
-            "list-panes",
-            "-t",
-            &format!("={session}"),
-            "-F",
-            "#{pane_dead} #{pane_pid}",
-        ])
-        .output()
-        .context("run tmux list-panes")?;
+    let output = boop_store::tmux::mux().list_panes_formatted(
+        None,
+        Some(&format!("={session}")),
+        "#{pane_dead} #{pane_pid}",
+    )?;
     if !output.status.success() {
         // No such session, or no tmux server at all: nothing of this lane runs.
         return Ok(false);
