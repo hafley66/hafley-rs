@@ -68,7 +68,7 @@ pub struct Store {
 /// 37 = durable expiring reminders over the mailbox.
 /// 38 = durable session identity observations and continuation relations.
 /// 39 = typed favorite references and inline closed mood names.
-pub const SCHEMA_VERSION: i64 = 39;
+pub const SCHEMA_VERSION: i64 = 40;
 pub const TRACE_EVENT_RETENTION_LIMIT: u64 = 10_000;
 const TRACE_EVENT_QUERY_LIMIT: u64 = 1_000;
 
@@ -660,45 +660,41 @@ fn carry_select(table: &str) -> String {
         "agent_session_observation" => "SELECT observation.observation_key,
                                                 session.value AS session_id,
                                                 observation.observed_ts,
-                                                harness.value AS harness,
+                                                observation.harness AS harness,
                                                 cwd.value AS cwd,
                                                 observation.pid,
                                                 observation.parent_pid,
                                                 pane.value AS pane,
                                                 tui.value AS tui_session,
-                                                source.value AS source
+                                                observation.source AS source
                                            FROM agent_session_observation observation
                                            JOIN dict_session session ON session.id = observation.session_id
-                                           LEFT JOIN dict_harness harness ON harness.id = observation.harness_id
-                                           LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
+LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
                                            LEFT JOIN dict_pane pane ON pane.id = observation.pane_id
                                            LEFT JOIN dict_tui_session tui ON tui.id = observation.tui_session_id
-                                           JOIN dict_observation_source source ON source.id = observation.source_id
-                                          ORDER BY observation.observation_id"
+ORDER BY observation.observation_id"
             .to_owned(),
         "agent_session_relation" => "SELECT relation.relation_key,
                                             source_session.value AS from_session,
                                             target_session.value AS to_session,
-                                            kind.value AS kind,
-                                            source.value AS source,
+                                            relation.kind AS kind,
+                                            relation.source AS source,
                                             relation.observed_ts,
                                             relation.matched_identity_key
                                        FROM agent_session_relation relation
                                        JOIN dict_session source_session ON source_session.id = relation.from_session
                                        JOIN dict_session target_session ON target_session.id = relation.to_session
-                                       JOIN dict_session_relation_kind kind ON kind.id = relation.kind_id
-                                       JOIN dict_observation_source source ON source.id = relation.source_id
+
                                       ORDER BY relation.relation_id"
             .to_owned(),
         "agent_trace_span" => "SELECT session.value AS session,
                                       trace.value AS trace,
-                                      attach.value AS attach,
+                                      span.attach AS attach,
                                       span.attached_ts
                                  FROM agent_trace_span span
                                  JOIN dict_session session ON session.id = span.session_id
                                  JOIN dict_trace trace ON trace.id = span.trace_id
-                                 JOIN dict_attach attach ON attach.id = span.attach_id
-                                ORDER BY span.attached_ts, session.value"
+ORDER BY span.attached_ts, session.value"
             .to_owned(),
         "agent_favorite" => "SELECT f.favorite_id AS favorite_id, m.body AS body, f.note AS note,
                                     f.source_text AS source, f.source_kind, f.source_session, f.source_turn,
@@ -773,8 +769,8 @@ impl Store {
             version = self.schema_version()?,
             "user-authored tables missing from a current-version store; re-applying the schema"
         );
-        self.connection.execute_batch(SCHEMA)?;
-        self.migrate_user_slice()?;
+        self.connection.execute_batch(crate::closed_sets::SCHEMA)?;
+
         Ok(())
     }
 
@@ -859,6 +855,8 @@ impl Store {
             if self.schema_version()? >= SCHEMA_VERSION {
                 return Ok(());
             }
+            let backfill_traces = self.schema_version()? > 0 && self.schema_version()? < 9;
+            let backfill_peer_roles = self.schema_version()? > 0 && self.schema_version()? < 33;
             self.connection
                 .execute_batch(SCHEMA)
                 .with_context(|| format!("initialise boop.db schema at {}", path.display()))?;
@@ -878,6 +876,7 @@ impl Store {
                     "CREATE INDEX IF NOT EXISTS idx_live_last_seen ON agent_live(last_seen_ts);",
                 )?;
                 self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
+                self.migrate_closed_sets()?;
                 self.stamp_version()?;
                 return Ok(());
             }
@@ -907,9 +906,6 @@ impl Store {
                  ALTER TABLE agent_pr_new RENAME TO agent_pr;
                  PRAGMA user_version = 8;",
                 )?;
-            }
-            if self.schema_version()? < 9 {
-                self.backfill_traces()?;
             }
             if self.schema_version()? < 11 {
                 self.connection.execute_batch(
@@ -1134,7 +1130,6 @@ impl Store {
                 self.connection.execute_batch("PRAGMA user_version = 32;")?;
             }
             if self.schema_version()? < 33 {
-                self.backfill_peer_turn_role()?;
                 self.connection.execute_batch("PRAGMA user_version = 33;")?;
             }
             if self.schema_version()? < 34 {
@@ -1216,6 +1211,13 @@ impl Store {
                 self.connection.execute_batch("PRAGMA user_version = 38;")?;
             }
             self.migrate_user_slice()?;
+            self.migrate_closed_sets()?;
+            if backfill_traces {
+                self.backfill_traces()?;
+            }
+            if backfill_peer_roles {
+                self.backfill_peer_turn_role()?;
+            }
             self.stamp_version()?;
             Ok(())
         })();
@@ -1253,12 +1255,12 @@ impl Store {
                 .execute_batch(&format!("DROP TABLE IF EXISTS \"{name}\""))
                 .with_context(|| format!("drop table {name} during rebuild"))?;
         }
-        self.connection.execute_batch(SCHEMA)?;
+        self.connection.execute_batch(crate::closed_sets::SCHEMA)?;
         self.connection.execute_batch(MAILBOX_SCHEMA)?;
-        self.connection.execute_batch(COST_VIEW_SCHEMA)?;
-        self.connection.execute_batch(CONTEXT_VIEW_SCHEMA)?;
+
         self.connection.execute_batch(crate::reminder::SCHEMA)?;
         self.seed_moods()?;
+
         self.stamp_version()?;
         self.restore_rebuild_state(&carried)?;
         self.rebuild_trace_projection()?;
@@ -1378,7 +1380,7 @@ impl Store {
                     )?)?;
                     let harness_id =
                         optional_text_at(row, carried.column("harness")?, "observation harness")?
-                            .map(|value| self.intern("dict_harness", &value))
+                            .map(|value| crate::closed_sets::value("dict_harness", &value))
                             .transpose()?;
                     let cwd_id = optional_text_at(row, carried.column("cwd")?, "observation cwd")?
                         .map(|value| self.intern("dict_cwd", &value))
@@ -1394,14 +1396,14 @@ impl Store {
                     )?
                     .map(|value| self.intern("dict_tui_session", &value))
                     .transpose()?;
-                    let source_id = self.intern(
+                    let source_id = crate::closed_sets::value(
                         "dict_observation_source",
                         &text_at(row, carried.column("source")?, "observation source")?,
                     )?;
                     self.connection.execute(
                         "INSERT OR IGNORE INTO agent_session_observation
-                           (observation_key, session_id, observed_ts, harness_id, cwd_id,
-                            pid, parent_pid, pane_id, tui_session_id, source_id)
+                           (observation_key, session_id, observed_ts, harness, cwd_id,
+                            pid, parent_pid, pane_id, tui_session_id, source)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
                         params![
                             text_at(row, carried.column("observation_key")?, "observation key")?,
@@ -1431,17 +1433,17 @@ impl Store {
                         carried.column("to_session")?,
                         "relation target session",
                     )?)?;
-                    let kind_id = self.intern(
+                    let kind_id = crate::closed_sets::value(
                         "dict_session_relation_kind",
                         &text_at(row, carried.column("kind")?, "relation kind")?,
                     )?;
-                    let source_id = self.intern(
+                    let source_id = crate::closed_sets::value(
                         "dict_observation_source",
                         &text_at(row, carried.column("source")?, "relation source")?,
                     )?;
                     self.connection.execute(
                         "INSERT OR IGNORE INTO agent_session_relation
-                           (relation_key, from_session, to_session, kind_id, source_id,
+                           (relation_key, from_session, to_session, kind, source,
                             observed_ts, matched_identity_key)
                          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                         params![
@@ -1465,7 +1467,7 @@ impl Store {
                         "dict_trace",
                         &text_at(row, carried.column("trace")?, "trace name")?,
                     )?;
-                    let attach_id = self.intern(
+                    let attach_id = crate::closed_sets::value(
                         "dict_attach",
                         &text_at(row, carried.column("attach")?, "trace attach rule")?,
                     )?;
@@ -1479,7 +1481,7 @@ impl Store {
                     )?;
                     self.connection.execute(
                         "INSERT OR REPLACE INTO agent_trace_span
-                           (session_id, trace_id, attach_id, attached_ts)
+                           (session_id, trace_id, attach, attached_ts)
                          VALUES (?1, ?2, ?3, ?4)",
                         params![session_id, trace_id, attach_id, attached_ts],
                     )?;
@@ -1561,13 +1563,13 @@ impl Store {
         started_ts: u64,
     ) -> Result<()> {
         let sid = self.session_id(session)?;
-        let harness_id = self.intern("dict_harness", harness)?;
+        let harness_id = crate::closed_sets::value("dict_harness", harness)?;
         let cwd_id = cwd.map(|c| self.intern("dict_cwd", c)).transpose()?;
         let branch_id = branch.map(|b| self.intern("dict_branch", b)).transpose()?;
         self.connection.execute(
-            "INSERT INTO agent_session (session_id, harness_id, nickname, cwd_id, branch_id, started_ts)
+            "INSERT INTO agent_session (session_id, harness, nickname, cwd_id, branch_id, started_ts)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-             ON CONFLICT(session_id) DO UPDATE SET harness_id=excluded.harness_id,
+             ON CONFLICT(session_id) DO UPDATE SET harness=excluded.harness,
                nickname=excluded.nickname, cwd_id=excluded.cwd_id,
                branch_id=excluded.branch_id,
                started_ts=MIN(agent_session.started_ts, excluded.started_ts)",
@@ -1605,10 +1607,10 @@ impl Store {
         source_class: &str,
     ) -> Result<usize> {
         let sid = self.session_id(session)?;
-        let role_id = self.intern("dict_role", role)?;
+        let role_id = crate::closed_sets::value("dict_role", role)?;
         let cwd_id = cwd.map(|c| self.intern("dict_cwd", c)).transpose()?;
         Ok(self.connection.execute(
-            "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role_id, said, cwd_id, source_class)
+            "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role, said, cwd_id, source_class)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![sid, turn as i64, ts as i64, role_id, said, cwd_id, source_class],
         )?)
@@ -1809,11 +1811,11 @@ impl Store {
         let path_id = self.intern("dict_path", path)?;
         // verb_id is the canonical lowercase spelling; raw_verb_id keeps the
         // harness's own casing on disk so a consumer never re-normalizes.
-        let verb_id = self.intern("dict_verb", verb)?;
-        let raw_verb_id = self.intern("dict_verb", raw_verb)?;
+        let verb_id = crate::closed_sets::value("dict_verb", verb)?;
+        let raw_verb_id = crate::closed_sets::value("dict_verb", raw_verb)?;
         self.connection.execute(
             "INSERT OR IGNORE INTO agent_touch
-               (session_id, turn, ts, path_id, verb_id, raw_verb_id)
+               (session_id, turn, ts, path_id, verb, raw_verb)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![sid, turn as i64, ts as i64, path_id, verb_id, raw_verb_id],
         )?;
@@ -1840,11 +1842,11 @@ impl Store {
 
     fn add_fetch(&self, session: &str, turn: u64, ts: u64, url: &str, domain: &str) -> Result<()> {
         let sid = self.session_id(session)?;
-        let kind_id = self.intern("dict_netkind", "fetch")?;
+        let kind_id = crate::closed_sets::value("dict_netkind", "fetch")?;
         let url_id = self.intern("dict_url", url)?;
         let domain_id = self.intern("dict_domain", domain)?;
         self.connection.execute(
-            "INSERT OR IGNORE INTO agent_fetch (session_id, turn, ts, kind_id, url_id, domain_id)
+            "INSERT OR IGNORE INTO agent_fetch (session_id, turn, ts, kind, url_id, domain_id)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
             params![sid, turn as i64, ts as i64, kind_id, url_id, domain_id],
         )?;
@@ -1853,9 +1855,9 @@ impl Store {
 
     fn add_search(&self, session: &str, turn: u64, ts: u64, query: &str) -> Result<()> {
         let sid = self.session_id(session)?;
-        let kind_id = self.intern("dict_netkind", "search")?;
+        let kind_id = crate::closed_sets::value("dict_netkind", "search")?;
         self.connection.execute(
-            "INSERT OR IGNORE INTO agent_fetch (session_id, turn, ts, kind_id, query)
+            "INSERT OR IGNORE INTO agent_fetch (session_id, turn, ts, kind, query)
              VALUES (?1, ?2, ?3, ?4, ?5)",
             params![sid, turn as i64, ts as i64, kind_id, query],
         )?;
@@ -2014,20 +2016,18 @@ impl Store {
             writeln!(trail, "{}", std::process::id())?;
         }
         let mut statement = self.connection.prepare(
-            "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value, harness.value,
+            "SELECT dp.value, ds.value, COALESCE(s.nickname, ds.value), cwd.value, branch.value, s.harness,
                     (SELECT parent.value
                        FROM agent_edge edge
-                       JOIN dict_edekind kind ON kind.id = edge.edge_kind_id
-                       JOIN dict_session parent ON parent.id = edge.parent_session_id
-                      WHERE edge.child_session_id = sc.session_id AND kind.value = 'spawned'
+JOIN dict_session parent ON parent.id = edge.parent_session_id
+                      WHERE edge.child_session_id = sc.session_id AND edge.edge_kind = 'spawned'
                       LIMIT 1),
                     sc.offset, sc.modified_ms, sc.projection_version
              FROM sync_cursor sc
              JOIN dict_session ds ON ds.id = sc.session_id
              JOIN dict_path dp ON dp.id = sc.path_id
              JOIN agent_session s ON s.session_id = sc.session_id
-             JOIN dict_harness harness ON harness.id = s.harness_id
-             LEFT JOIN dict_cwd cwd ON cwd.id = s.cwd_id
+LEFT JOIN dict_cwd cwd ON cwd.id = s.cwd_id
              LEFT JOIN dict_branch branch ON branch.id = s.branch_id",
         )?;
         let mut out = KnownSessions::new();
@@ -2121,12 +2121,12 @@ impl Store {
     pub fn add_edge_at(&self, parent: &str, child: &str, kind: &str, ts: u64) -> Result<()> {
         let parent_id = self.session_id(parent)?;
         let child_id = self.session_id(child)?;
-        let kind_id = self.intern("dict_edekind", kind)?;
+        let kind_id = crate::closed_sets::value("dict_edekind", kind)?;
         self.connection.execute(
             "INSERT INTO agent_edge
-               (parent_session_id, child_session_id, edge_kind_id, first_ts, last_ts, n)
+               (parent_session_id, child_session_id, edge_kind, first_ts, last_ts, n)
              VALUES (?1, ?2, ?3, ?4, ?4, 1)
-             ON CONFLICT(parent_session_id, child_session_id, edge_kind_id) DO UPDATE SET
+             ON CONFLICT(parent_session_id, child_session_id, edge_kind) DO UPDATE SET
                last_ts = excluded.last_ts,
                n = agent_edge.n + 1",
             params![parent_id, child_id, kind_id, ts as i64],
@@ -2139,12 +2139,12 @@ impl Store {
     pub fn ensure_edge_at(&self, parent: &str, child: &str, kind: &str, ts: u64) -> Result<bool> {
         let parent_id = self.session_id(parent)?;
         let child_id = self.session_id(child)?;
-        let kind_id = self.intern("dict_edekind", kind)?;
+        let kind_id = crate::closed_sets::value("dict_edekind", kind)?;
         let changed = self.connection.execute(
             "INSERT INTO agent_edge
-               (parent_session_id, child_session_id, edge_kind_id, first_ts, last_ts, n)
+               (parent_session_id, child_session_id, edge_kind, first_ts, last_ts, n)
              VALUES (?1, ?2, ?3, ?4, ?4, 1)
-             ON CONFLICT(parent_session_id, child_session_id, edge_kind_id) DO NOTHING",
+             ON CONFLICT(parent_session_id, child_session_id, edge_kind) DO NOTHING",
             params![parent_id, child_id, kind_id, ts as i64],
         )?;
         Ok(changed == 1)
@@ -2157,12 +2157,12 @@ impl Store {
             .unwrap_or(0);
         let parent_id = self.session_id(parent)?;
         let child_id = self.session_id(child)?;
-        let kind_id = self.intern("dict_edekind", kind)?;
+        let kind_id = crate::closed_sets::value("dict_edekind", kind)?;
         self.connection.execute(
             "INSERT INTO agent_edge
-               (parent_session_id, child_session_id, edge_kind_id, first_ts, last_ts, n)
+               (parent_session_id, child_session_id, edge_kind, first_ts, last_ts, n)
              VALUES (?1, ?2, ?3, ?4, ?4, 1)
-             ON CONFLICT(parent_session_id, child_session_id, edge_kind_id) DO NOTHING",
+             ON CONFLICT(parent_session_id, child_session_id, edge_kind) DO NOTHING",
             params![parent_id, child_id, kind_id, now as i64],
         )?;
         Ok(())
@@ -2331,8 +2331,7 @@ impl Store {
         let mut statement = self.connection.prepare(
             "SELECT t.turn, t.said FROM agent_turn t
                JOIN dict_session ds ON ds.id = t.session_id
-               JOIN dict_role r ON r.id = t.role_id
-              WHERE ds.value = ?1 AND r.value = 'assistant'
+WHERE ds.value = ?1 AND t.role = 'assistant'
                 AND t.said IS NOT NULL AND t.said != ''
               ORDER BY t.turn DESC LIMIT 1",
         )?;
@@ -2380,12 +2379,11 @@ impl Store {
             }
         }
         let mut statement = self.connection.prepare(
-            "SELECT t.comment_id, s.value, t.turn, COALESCE(r.value, ''), v.reply_turn
+            "SELECT t.comment_id, s.value, t.turn, COALESCE(a.role, ''), v.reply_turn
                FROM agent_turn_comment_target t
                JOIN dict_session s ON s.id = t.session_id
                LEFT JOIN agent_turn a ON a.session_id = t.session_id AND a.turn = t.turn
-               LEFT JOIN dict_role r ON r.id = a.role_id
-               LEFT JOIN agent_turn_comment_reply v
+LEFT JOIN agent_turn_comment_reply v
                  ON v.comment_id = t.comment_id AND v.session_id = t.session_id
                 AND v.target_turn = t.turn
               ORDER BY t.comment_id, t.turn",
@@ -2435,7 +2433,7 @@ impl Store {
         let harness_id = observation
             .harness
             .as_deref()
-            .map(|value| self.intern("dict_harness", value))
+            .map(|value| crate::closed_sets::value("dict_harness", value))
             .transpose()?;
         let cwd_id = observation
             .cwd
@@ -2452,11 +2450,11 @@ impl Store {
             .as_deref()
             .map(|value| self.intern("dict_tui_session", value))
             .transpose()?;
-        let source_id = self.intern("dict_observation_source", &observation.source)?;
+        let source_id = crate::closed_sets::value("dict_observation_source", &observation.source)?;
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO agent_session_observation
-               (observation_key, session_id, observed_ts, harness_id, cwd_id,
-                pid, parent_pid, pane_id, tui_session_id, source_id)
+               (observation_key, session_id, observed_ts, harness, cwd_id,
+                pid, parent_pid, pane_id, tui_session_id, source)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
             params![
                 observation.observation_key,
@@ -2480,11 +2478,12 @@ impl Store {
         let result = (|| {
             let from_session = self.session_id(&relation.from_session)?;
             let to_session = self.session_id(&relation.to_session)?;
-            let kind_id = self.intern("dict_session_relation_kind", relation.kind.as_str())?;
-            let source_id = self.intern("dict_observation_source", &relation.source)?;
+            let kind_id =
+                crate::closed_sets::value("dict_session_relation_kind", relation.kind.as_str())?;
+            let source_id = crate::closed_sets::value("dict_observation_source", &relation.source)?;
             let inserted = self.connection.execute(
                 "INSERT OR IGNORE INTO agent_session_relation
-                   (relation_key, from_session, to_session, kind_id, source_id,
+                   (relation_key, from_session, to_session, kind, source,
                     observed_ts, matched_identity_key)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
                 params![
@@ -2564,16 +2563,14 @@ impl Store {
         let observations = {
             let mut statement = self.connection.prepare(
                 "SELECT observation.observation_key, session.value, observation.observed_ts,
-                        harness.value, cwd.value, observation.pid, observation.parent_pid,
-                        pane.value, tui.value, source.value
+                        observation.harness, cwd.value, observation.pid, observation.parent_pid,
+                        pane.value, tui.value, observation.source
                    FROM agent_session_observation observation
                    JOIN dict_session session ON session.id = observation.session_id
-                   LEFT JOIN dict_harness harness ON harness.id = observation.harness_id
-                   LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
+LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
                    LEFT JOIN dict_pane pane ON pane.id = observation.pane_id
                    LEFT JOIN dict_tui_session tui ON tui.id = observation.tui_session_id
-                   JOIN dict_observation_source source ON source.id = observation.source_id
-                  ORDER BY observation.observed_ts, observation.observation_id",
+ORDER BY observation.observed_ts, observation.observation_id",
             )?;
             let rows = statement.query_map([], |row| {
                 Ok(SessionObservation {
@@ -2593,13 +2590,12 @@ impl Store {
         };
         let relations = {
             let mut statement = self.connection.prepare(
-                "SELECT relation.relation_key, source.value, target.value, kind.value,
-                        origin.value, relation.observed_ts, relation.matched_identity_key
+                "SELECT relation.relation_key, source.value, target.value, relation.kind,
+                        relation.source, relation.observed_ts, relation.matched_identity_key
                    FROM agent_session_relation relation
                    JOIN dict_session source ON source.id = relation.from_session
                    JOIN dict_session target ON target.id = relation.to_session
-                   JOIN dict_session_relation_kind kind ON kind.id = relation.kind_id
-                   JOIN dict_observation_source origin ON origin.id = relation.source_id
+
                   ORDER BY relation.observed_ts, relation.relation_id",
             )?;
             let rows = statement.query_map([], |row| {
@@ -2624,7 +2620,7 @@ impl Store {
         };
         let traces =
             derive_traces(&observations, &relations, limits).map_err(anyhow::Error::new)?;
-        let derived_attach = self.intern("dict_attach", "derived-session-relation")?;
+        let derived_attach = crate::closed_sets::value("dict_attach", "derived-session-relation")?;
         for trace in traces.iter().filter(|trace| !trace.evidence.is_empty()) {
             let mut existing = BTreeMap::new();
             for session in &trace.sessions {
@@ -2690,11 +2686,11 @@ impl Store {
                     .unwrap_or(started_ts);
                 self.connection.execute(
                     "INSERT INTO agent_trace_span
-                       (session_id, trace_id, attach_id, attached_ts)
+                       (session_id, trace_id, attach, attached_ts)
                      VALUES (?1, ?2, ?3, ?4)
                      ON CONFLICT(session_id) DO UPDATE SET
                        trace_id = excluded.trace_id,
-                       attach_id = excluded.attach_id",
+                       attach = excluded.attach",
                     params![session_id, trace_id, derived_attach, attached_ts],
                 )?;
             }
@@ -2708,14 +2704,14 @@ impl Store {
     pub fn attach_trace(&self, session: &str, trace: &str, rule: &str, ts: u64) -> Result<()> {
         let session_id = self.session_id(session)?;
         let trace_id = self.intern("dict_trace", trace)?;
-        let attach_id = self.intern("dict_attach", rule)?;
+        let attach_id = crate::closed_sets::value("dict_attach", rule)?;
         self.connection.execute(
             "INSERT OR IGNORE INTO agent_trace (trace_id, root_session_id, started_ts)
              VALUES (?1, ?2, ?3)",
             params![trace_id, session_id, ts as i64],
         )?;
         self.connection.execute(
-            "INSERT OR IGNORE INTO agent_trace_span (session_id, trace_id, attach_id, attached_ts)
+            "INSERT OR IGNORE INTO agent_trace_span (session_id, trace_id, attach, attached_ts)
              VALUES (?1, ?2, ?3, ?4)",
             params![session_id, trace_id, attach_id, ts as i64],
         )?;
@@ -2761,23 +2757,23 @@ impl Store {
                 .as_deref()
                 .map(|value| self.session_id(value))
                 .transpose()?;
-            let kind_id = self.intern("dict_trace_kind", &event.kind)?;
+            let kind_id = crate::closed_sets::value("dict_trace_kind", &event.kind)?;
             let delivery_state_id = event
                 .delivery_state
                 .as_deref()
-                .map(|value| self.intern("dict_trace_delivery", value))
+                .map(|value| crate::closed_sets::value("dict_trace_delivery", value))
                 .transpose()?;
             let classification_id = event
                 .classification
                 .as_deref()
-                .map(|value| self.intern("dict_trace_classification", value))
+                .map(|value| crate::closed_sets::value("dict_trace_classification", value))
                 .transpose()?;
             let detail = bounded_diagnostic(&event.detail);
             self.connection.execute(
                 "INSERT OR IGNORE INTO agent_trace_event
                    (event_key, lane_id, trace_id, session_id, from_lane_id, to_lane_id,
-                    kind_id, started_ts, finished_ts, delivery_state_id,
-                    classification_id, detail, created_ts)
+                    kind, started_ts, finished_ts, delivery_state,
+                    classification, detail, created_ts)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13)",
                 params![
                     event.event_key,
@@ -2866,8 +2862,8 @@ impl Store {
         let direction = if newest { "DESC" } else { "ASC" };
         let sql = format!(
             "SELECT e.event_key, lane.value, trace.value, session.value,
-                    kind.value, from_lane.value, to_lane.value, e.started_ts,
-                    e.finished_ts, delivery.value, classification.value, e.detail,
+                    e.kind, from_lane.value, to_lane.value, e.started_ts,
+                    e.finished_ts, e.delivery_state, e.classification, e.detail,
                     e.created_ts
                FROM agent_trace_event e
                JOIN dict_session lane ON lane.id = e.lane_id
@@ -2875,11 +2871,8 @@ impl Store {
                LEFT JOIN dict_session session ON session.id = e.session_id
                LEFT JOIN dict_session from_lane ON from_lane.id = e.from_lane_id
                LEFT JOIN dict_session to_lane ON to_lane.id = e.to_lane_id
-               JOIN dict_trace_kind kind ON kind.id = e.kind_id
-               LEFT JOIN dict_trace_delivery delivery ON delivery.id = e.delivery_state_id
-              LEFT JOIN dict_trace_classification classification
-                 ON classification.id = e.classification_id
-              WHERE (?1 IS NULL OR lane.value = ?1)
+
+WHERE (?1 IS NULL OR lane.value = ?1)
               ORDER BY e.created_ts {direction}, e.event_id {direction}
               LIMIT ?2"
         );
@@ -2920,8 +2913,7 @@ impl Store {
             "SELECT lane.value, e.created_ts, e.detail
                FROM agent_trace_event e
                JOIN dict_session lane ON lane.id = e.lane_id
-               JOIN dict_trace_kind kind ON kind.id = e.kind_id
-              WHERE kind.value = 'error'
+WHERE e.kind = 'error'
                 AND e.created_ts >= ?1
                 AND (?2 IS NULL OR lane.value = ?2)
               ORDER BY e.created_ts, e.event_id
@@ -2997,7 +2989,7 @@ impl Store {
             None => None,
         };
         let harness_id = match &spawn.harness {
-            Some(value) => Some(self.intern("dict_harness", value)?),
+            Some(value) => Some(crate::closed_sets::value("dict_harness", value)?),
             None => None,
         };
         let branch_id = match &spawn.branch {
@@ -3026,7 +3018,7 @@ impl Store {
         };
         self.connection.execute(
             "INSERT INTO agent_lane
-               (lane_id, trace_id, harness_id, branch_id, cwd_id, model_id,
+               (lane_id, trace_id, harness, branch_id, cwd_id, model_id,
                 parent_lane_id, goal, brief_path_id, brief_markdown_id, spawned_ts)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
             params![
@@ -3067,7 +3059,7 @@ impl Store {
     /// Read one observed session attribute without inheritance.
     pub fn session_attr(&self, session: &str, key: &str) -> Result<Option<String>> {
         Ok(self.connection.query_row(
-            "SELECT attr.value FROM agent_session_attr attr JOIN dict_attr_key key ON key.id = attr.key_id JOIN dict_session session ON session.id = attr.session_id WHERE session.value = ?1 AND key.value = ?2",
+            "SELECT attr.value FROM agent_session_attr attr  JOIN dict_session session ON session.id = attr.session_id WHERE session.value = ?1 AND attr.key = ?2",
             params![session, key], |row| row.get(0),
         ).optional()?)
     }
@@ -3075,11 +3067,11 @@ impl Store {
     /// One session attribute, last write wins.
     pub fn set_session_attr(&self, session: &str, key: &str, value: &str, ts: u64) -> Result<()> {
         let session_id = self.session_id(session)?;
-        let key_id = self.intern("dict_attr_key", key)?;
+        let key_id = crate::closed_sets::value("dict_attr_key", key)?;
         self.connection.execute(
-            "INSERT INTO agent_session_attr (session_id, key_id, value, set_ts)
+            "INSERT INTO agent_session_attr (session_id, key, value, set_ts)
              VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT (session_id, key_id)
+             ON CONFLICT (session_id, key)
                DO UPDATE SET value = excluded.value, set_ts = excluded.set_ts",
             params![session_id, key_id, value, ts as i64],
         )?;
@@ -3091,7 +3083,7 @@ impl Store {
         let removed = self.connection.execute(
             "DELETE FROM agent_session_attr
               WHERE session_id = (SELECT id FROM dict_session WHERE value = ?1)
-                AND key_id = (SELECT id FROM dict_attr_key WHERE value = ?2)",
+                AND key = ?2",
             params![session, key],
         )?;
         Ok(removed > 0)
@@ -3135,8 +3127,7 @@ impl Store {
                             ancestry.depth AS rank
                        FROM ancestry
                        JOIN agent_session_attr attr ON attr.session_id = ancestry.session_id
-                       JOIN dict_attr_key attr_key
-                         ON attr_key.id = attr.key_id AND attr_key.value = ?2
+                        AND attr.key = ?2
                        JOIN mood ON mood.name = attr.value
                        JOIN dict_session setter ON setter.id = ancestry.session_id
                      UNION ALL
@@ -3166,7 +3157,7 @@ impl Store {
         let mut parents: BTreeMap<i64, i64> = BTreeMap::new();
         let mut statement = self.connection.prepare(
             "SELECT a.parent_session_id, a.child_session_id, a.first_ts FROM agent_edge a
-               JOIN dict_edekind k ON k.id = a.edge_kind_id WHERE k.value = 'spawned'",
+                WHERE a.edge_kind = 'spawned'",
         )?;
         let mut edges = Vec::new();
         let rows = statement.query_map([], |row| {
@@ -3196,7 +3187,7 @@ impl Store {
                 let root = find(&mut parents, *session);
                 let name = self.session_name(root)?;
                 let trace_id = self.intern("dict_trace", &format!("trace-{name}"))?;
-                let attach_id = self.intern("dict_attach", "backfill-spawned-edge")?;
+                let attach_id = crate::closed_sets::value("dict_attach", "backfill-spawned-edge")?;
                 self.connection.execute(
                     "INSERT OR IGNORE INTO agent_trace (trace_id, root_session_id, started_ts)
                      VALUES (?1, ?2, ?3)",
@@ -3204,7 +3195,7 @@ impl Store {
                 )?;
                 attached += self.connection.execute(
                     "INSERT OR IGNORE INTO agent_trace_span
-                       (session_id, trace_id, attach_id, attached_ts)
+                       (session_id, trace_id, attach, attached_ts)
                      VALUES (?1, ?2, ?3, ?4)",
                     params![session, trace_id, attach_id, ts],
                 )?;
@@ -3220,11 +3211,11 @@ impl Store {
     /// message, so nothing a user typed matches. Runs once, gated by the v33
     /// migration step.
     fn backfill_peer_turn_role(&self) -> Result<usize> {
-        let meta_id = self.intern("dict_role", "meta")?;
+        let meta_id = crate::closed_sets::value("dict_role", "meta")?;
         Ok(self.connection.execute(
             "UPDATE agent_turn
-                SET role_id = ?1
-              WHERE role_id = (SELECT id FROM dict_role WHERE value = 'user')
+                SET role = ?1
+              WHERE role = 'user'
                 AND said LIKE 'Another Claude session sent a message:%'",
             params![meta_id],
         )?)
@@ -3241,13 +3232,12 @@ impl Store {
     /// Query spawn edges, joined back to the TEXT query surface. `session`
     /// filters to edges touching that session id; none means all edges.
     pub fn query_edges(&self, session: Option<&str>) -> Result<Vec<Row>> {
-        let sql = "SELECT p.value AS parent, c.value AS child, e.value AS edge,
+        let sql = "SELECT p.value AS parent, c.value AS child, a.edge_kind AS edge,
                           a.first_ts, a.last_ts, a.n
                    FROM agent_edge a
                    JOIN dict_session p ON p.id = a.parent_session_id
                    JOIN dict_session c ON c.id = a.child_session_id
-                   JOIN dict_edekind e ON e.id = a.edge_kind_id
-                   WHERE (?1 IS NULL OR c.value = ?1 OR p.value = ?1)
+WHERE (?1 IS NULL OR c.value = ?1 OR p.value = ?1)
                    ORDER BY p.value, c.value";
         let mut statement = self.connection.prepare(sql)?;
         let value: Option<String> = session.map(str::to_owned);
@@ -3271,12 +3261,11 @@ impl Store {
 
     /// Edges as typed rows, with temporal and count evidence.
     pub fn edge_rows(&self, session: Option<&str>) -> Result<Vec<crate::rows::EdgeRow>> {
-        let sql = "SELECT p.value, c.value, e.value, a.first_ts, a.last_ts, a.n
+        let sql = "SELECT p.value, c.value, a.edge_kind, a.first_ts, a.last_ts, a.n
                    FROM agent_edge a
                    JOIN dict_session p ON p.id = a.parent_session_id
                    JOIN dict_session c ON c.id = a.child_session_id
-                   JOIN dict_edekind e ON e.id = a.edge_kind_id
-                   WHERE (?1 IS NULL OR c.value = ?1 OR p.value = ?1)
+WHERE (?1 IS NULL OR c.value = ?1 OR p.value = ?1)
                    ORDER BY p.value, c.value";
         let mut statement = self.connection.prepare(sql)?;
         let value: Option<String> = session.map(str::to_owned);
@@ -3310,23 +3299,20 @@ impl Store {
             "SELECT parent.value, child.value, completed.first_ts,
                     EXISTS(
                         SELECT 1 FROM agent_edge mailed
-                        JOIN dict_edekind mailed_kind ON mailed_kind.id = mailed.edge_kind_id
-                        WHERE mailed.parent_session_id = completed.parent_session_id
+WHERE mailed.parent_session_id = completed.parent_session_id
                           AND mailed.child_session_id = completed.child_session_id
-                          AND mailed_kind.value = 'completion-mailed'
+                          AND mailed.edge_kind = 'completion-mailed'
                     )
                FROM agent_edge completed
                JOIN dict_session parent ON parent.id = completed.parent_session_id
                JOIN dict_session child ON child.id = completed.child_session_id
-               JOIN dict_edekind completed_kind ON completed_kind.id = completed.edge_kind_id
-               WHERE completed_kind.value = 'completed'
+WHERE completed.edge_kind = 'completed'
                  AND parent.value IN ({placeholders})
                  AND NOT EXISTS(
                     SELECT 1 FROM agent_edge delivered
-                    JOIN dict_edekind delivered_kind ON delivered_kind.id = delivered.edge_kind_id
-                    WHERE delivered.parent_session_id = completed.parent_session_id
+WHERE delivered.parent_session_id = completed.parent_session_id
                       AND delivered.child_session_id = completed.child_session_id
-                      AND delivered_kind.value = 'completion-delivered'
+                      AND delivered.edge_kind = 'completion-delivered'
                  )
                ORDER BY parent.value, child.value"
         );
@@ -3360,7 +3346,7 @@ impl Store {
             .execute_batch("SAVEPOINT live_observation")?;
         let result = (|| {
             let sid = self.session_id(session)?;
-            let status_id = self.intern("dict_status", status)?;
+            let status_id = crate::closed_sets::value("dict_status", status)?;
             let pane_id = match tmux_pane {
                 Some(pane) => Some(self.intern("dict_pane", pane)?),
                 None => None,
@@ -3385,10 +3371,10 @@ impl Store {
                 .as_deref()
                 .filter(|target| !target.starts_with('%'))
                 .map(|target| target.split(':').next().unwrap_or(target).to_owned());
-            let open: Option<(i64, i64, Option<i64>, Option<i64>)> = self
+            let open: Option<(i64, String, Option<i64>, Option<i64>)> = self
                 .connection
                 .query_row(
-                    "SELECT from_ts, status_id, pid, tmux_pane_id FROM agent_live_span
+                    "SELECT from_ts, status, pid, tmux_pane_id FROM agent_live_span
                      WHERE session_id = ?1 AND to_ts IS NULL
                      ORDER BY from_ts DESC LIMIT 1",
                     params![sid],
@@ -3404,13 +3390,13 @@ impl Store {
             }
             self.connection.execute(
                 "INSERT INTO agent_live
-                   (session_id, pid, tmux_pane_id, status_id, last_seen_ts,
+                   (session_id, pid, tmux_pane_id, status, last_seen_ts,
                     pane_alive, pid_alive, tmux_session)
                  VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
                  ON CONFLICT(session_id) DO UPDATE SET
                    pid = excluded.pid,
                    tmux_pane_id = excluded.tmux_pane_id,
-                   status_id = excluded.status_id,
+                   status = excluded.status,
                    last_seen_ts = excluded.last_seen_ts,
                    pane_alive = excluded.pane_alive,
                    pid_alive = excluded.pid_alive,
@@ -3453,10 +3439,10 @@ impl Store {
                 )?;
             }
             self.connection.execute(
-                "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status_id, pid, tmux_pane_id)
+                "INSERT INTO agent_live_span (session_id, from_ts, to_ts, status, pid, tmux_pane_id)
                  VALUES (?1, ?2, NULL, ?3, ?4, ?5)
                  ON CONFLICT(session_id, from_ts) DO UPDATE SET
-                   to_ts = NULL, status_id = excluded.status_id,
+                   to_ts = NULL, status = excluded.status,
                    pid = excluded.pid, tmux_pane_id = excluded.tmux_pane_id",
                 params![sid, ts as i64, status_id, pid, pane_id],
             )?;
@@ -3515,13 +3501,12 @@ impl Store {
         let row = self
             .connection
             .query_row(
-                "SELECT dict_session.value, live.pid, pane.value, status.value,
+                "SELECT dict_session.value, live.pid, pane.value, live.status,
                         live.door_kind, live.door_addr
                    FROM agent_live live
                    JOIN dict_session ON dict_session.id = live.session_id
                    LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
-                   LEFT JOIN dict_status status ON status.id = live.status_id
-                  WHERE dict_session.value = ?1",
+WHERE dict_session.value = ?1",
                 params![session],
                 |row| {
                     Ok(LiveRow {
@@ -3599,11 +3584,10 @@ impl Store {
     /// Every recorded receiver-boundary transition for one message. Empty
     /// means no path has observed or attempted delivery yet.
     pub fn delivery_rows(&self, message_id: &str) -> Result<Vec<DeliveryRow>> {
-        let sql = "SELECT d.message_id, d.sequence, d.route, h.value, d.outcome, d.detail,
+        let sql = "SELECT d.message_id, d.sequence, d.route, d.harness, d.outcome, d.detail,
                           d.error_code, d.at_ms
                    FROM agent_delivery_transition d
-                   LEFT JOIN dict_harness h ON h.id = d.harness_id
-                   WHERE d.message_id = ?1
+WHERE d.message_id = ?1
                    ORDER BY d.sequence";
         let mut statement = self.connection().prepare(sql)?;
         let iter = statement.query_map(params![message_id], |row| {
@@ -3650,13 +3634,13 @@ impl Store {
         at_ms: u64,
     ) -> Result<()> {
         let harness_id = harness
-            .map(|id| self.intern("dict_harness", id.as_str()))
+            .map(|id| crate::closed_sets::value("dict_harness", id.as_str()))
             .transpose()?;
         self.connection.execute(
-            "INSERT INTO agent_delivery (message_id, route, harness_id, outcome, detail, at_ms)
+            "INSERT INTO agent_delivery (message_id, route, harness, outcome, detail, at_ms)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6)
              ON CONFLICT(message_id, route) DO UPDATE SET
-               harness_id = excluded.harness_id,
+               harness = excluded.harness,
                outcome = excluded.outcome,
                detail = excluded.detail,
                at_ms = excluded.at_ms",
@@ -3664,7 +3648,7 @@ impl Store {
         )?;
         self.connection.execute(
             "INSERT INTO agent_delivery_transition
-               (message_id, sequence, route, harness_id, outcome, detail, error_code, at_ms)
+               (message_id, sequence, route, harness, outcome, detail, error_code, at_ms)
              VALUES (
                ?1,
                (SELECT COALESCE(MAX(sequence), 0) + 1
@@ -3977,12 +3961,11 @@ impl Store {
     /// Every liveness interval for one session (or all when `session` is
     /// `None`), joined back to the TEXT status surface.
     pub fn live_span(&self, session: Option<&str>) -> Result<Vec<crate::rows::LiveSpanRow>> {
-        let sql = "SELECT dict_session.value, d.value AS status,
+        let sql = "SELECT dict_session.value, s.status AS status,
                           s.from_ts, s.to_ts, s.pid, p.value AS tmux_pane
                    FROM agent_live_span s
                    JOIN dict_session ON dict_session.id = s.session_id
-                   JOIN dict_status d ON d.id = s.status_id
-                   LEFT JOIN dict_pane p ON p.id = s.tmux_pane_id
+LEFT JOIN dict_pane p ON p.id = s.tmux_pane_id
                    WHERE (?1 IS NULL OR dict_session.value = ?1)
                    ORDER BY dict_session.value, s.from_ts";
         let mut statement = self.connection.prepare(sql)?;
@@ -4007,12 +3990,11 @@ impl Store {
     /// The interval active at a point in time, using the half-open rule
     /// `from_ts <= T AND (to_ts IS NULL OR to_ts > T)`.
     pub fn query_live_at(&self, at_ts: u64) -> Result<Vec<crate::rows::LiveSpanRow>> {
-        let sql = "SELECT dict_session.value, d.value AS status, s.from_ts, s.to_ts, s.pid,
+        let sql = "SELECT dict_session.value, s.status AS status, s.from_ts, s.to_ts, s.pid,
                           p.value AS tmux_pane
                    FROM agent_live_span s
                    JOIN dict_session ON dict_session.id = s.session_id
-                   JOIN dict_status d ON d.id = s.status_id
-                   LEFT JOIN dict_pane p ON p.id = s.tmux_pane_id
+LEFT JOIN dict_pane p ON p.id = s.tmux_pane_id
                    WHERE s.from_ts <= ?1 AND (s.to_ts IS NULL OR s.to_ts > ?1)
                    ORDER BY dict_session.value";
         let mut statement = self.connection.prepare(sql)?;
@@ -4083,17 +4065,19 @@ impl Store {
         let path = query.path.as_deref();
         let limit = query.limit;
         let mut sql = String::from(
-            "SELECT s.value AS session, h.value AS harness, t.turn, t.ts, r.value AS role,
+            "SELECT s.value AS session, a.harness AS harness, t.turn, t.ts, t.role AS role,
                     t.source_class AS source_class, t.said
              FROM agent_turn t
+             JOIN agent_session a ON a.session_id = t.session_id
              JOIN dict_session s ON s.id = t.session_id
-             JOIN dict_harness h ON h.id = (SELECT harness_id FROM agent_session a WHERE a.session_id = t.session_id)
-             JOIN dict_role r ON r.id = t.role_id
+
              WHERE 1=1",
         );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
         if let Some(harness) = harness {
-            sql.push_str(" AND h.value = ?");
+            sql.push_str(
+                " AND a.harness = ?",
+            );
             values.push(harness.to_string().into());
         }
         if let Some(session) = session {
@@ -4101,7 +4085,7 @@ impl Store {
             values.push(session.to_string().into());
         }
         if let Some(role) = role {
-            sql.push_str(" AND r.value = ?");
+            sql.push_str(" AND t.role = ?");
             values.push(role.to_string().into());
         }
         if let Some(since) = since {
@@ -4157,11 +4141,10 @@ impl Store {
         let row = self
             .connection
             .query_row(
-                "SELECT turn.turn, role.value
+                "SELECT turn.turn, turn.role
                    FROM agent_turn turn
                    JOIN dict_session session ON session.id = turn.session_id
-                   JOIN dict_role role ON role.id = turn.role_id
-                  WHERE session.value = ?1
+WHERE session.value = ?1
                   ORDER BY turn.turn DESC
                   LIMIT 1",
                 params![session],
@@ -5641,7 +5624,6 @@ CREATE TABLE IF NOT EXISTS sync_root_stamp (
 
 CREATE TABLE IF NOT EXISTS dict_attr_key (id INTEGER PRIMARY KEY, value TEXT NOT NULL UNIQUE);
 
-
 CREATE TABLE IF NOT EXISTS agent_session_attr (
   session_id INTEGER NOT NULL,
   key_id INTEGER NOT NULL,
@@ -5868,6 +5850,7 @@ mod tests {
         assert_eq!(view_count(&store), 3);
         drop(store);
         let rewind = Connection::open(&path).unwrap();
+        crate::legacy_tests::restore(&rewind);
         rewind
             .execute_batch(
                 "DROP VIEW v_usage_cost;
@@ -5892,18 +5875,15 @@ mod tests {
             .connection
             .execute_batch(
                 "INSERT INTO dict_session (id, value) VALUES (1, 's1');
-                 INSERT INTO dict_harness (id, value) VALUES (1, 'claude');
                  INSERT INTO dict_skill (id, value) VALUES (1, 'my-skill');
-                 INSERT INTO dict_role (id, value) VALUES (1, 'user');
                  INSERT INTO dict_model (id, value) VALUES (1, 'm1');
-                 INSERT INTO dict_price_source (id, value) VALUES (1, 'test');
-                 INSERT INTO agent_session (session_id, harness_id, started_ts) VALUES (1, 1, 100);
-                 INSERT INTO agent_turn (session_id, turn, role_id) VALUES (1, 1, 1), (1, 2, 2), (1, 3, 1);
+                 INSERT INTO agent_session (session_id, harness, started_ts) VALUES (1, 'claude', 100);
+                 INSERT INTO agent_turn (session_id, turn, role) VALUES (1, 1, 'user'), (1, 2, 'assistant'), (1, 3, 'user');
                  INSERT INTO agent_skill (session_id, turn, skill_id) VALUES (1, 2, 1);
                  INSERT INTO model_price (model_id, input_per_mtok, output_per_mtok,
                      cache_write_5m_per_mtok, cache_write_1h_per_mtok, cache_read_per_mtok,
-                     source_id, fetched_ts)
-                   VALUES (1, 2.0, 1.0, 0.0, 0.0, 0.0, 1, 0);
+                     source, fetched_ts)
+                   VALUES (1, 2.0, 1.0, 0.0, 0.0, 0.0, 'litellm', 0);
                  INSERT INTO agent_usage (session_id, turn, ts, request_ref, model_id,
                      input_tokens, output_tokens)
                    VALUES (1, 2, 100, 1, 1, 1000000, 1000000);",
@@ -6245,10 +6225,11 @@ mod tests {
                 )
                 .unwrap();
         }
-        store
-            .connection
-            .execute_batch("PRAGMA user_version = 25")
-            .unwrap();
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch("PRAGMA user_version = 25")
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(path.clone()).unwrap();
@@ -6327,11 +6308,11 @@ mod tests {
         let (path, store) = fresh_store("v27-null-fallback");
         let cwd_id = store.intern("dict_cwd", "/repo").unwrap();
         let sid = store.session_id("null-ses").unwrap();
-        let harness_id = store.intern("dict_harness", "claude").unwrap();
+        let harness_id = crate::closed_sets::value("dict_harness", "claude").unwrap();
         store
             .connection
             .execute(
-                "INSERT INTO agent_session (session_id, harness_id, cwd_id, started_ts)
+                "INSERT INTO agent_session (session_id, harness, cwd_id, started_ts)
                  VALUES (?1, ?2, ?3, 100)",
                 params![sid, harness_id, cwd_id],
             )
@@ -6361,9 +6342,9 @@ mod tests {
     #[test]
     fn v27_migrates_live_db_in_place_without_backfill() {
         let (path, store) = fresh_store("v27-migrate");
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "DROP VIEW IF EXISTS v_session_project;
                  DROP VIEW IF EXISTS v_turn_cwd;
                  ALTER TABLE agent_turn RENAME TO agent_turn_v26;
@@ -6380,7 +6361,8 @@ mod tests {
                  DROP TABLE agent_turn_v26;
                  PRAGMA user_version = 26;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(path.clone()).unwrap();
@@ -6448,6 +6430,7 @@ mod tests {
             .unwrap();
         drop(store);
         let rewind = Connection::open(&path).unwrap();
+        crate::legacy_tests::restore(&rewind);
         rewind
             .execute_batch(
                 "DROP INDEX idx_turn_session_ts;
@@ -6508,10 +6491,11 @@ mod tests {
         store
             .add_edge_at("old-parent", "old-child", "spawned", 7)
             .unwrap();
-        store
-            .connection
-            .execute_batch("PRAGMA user_version = 10")
-            .unwrap();
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch("PRAGMA user_version = 10")
+        }
+        .unwrap();
         drop(store);
         let migrated = Store::open(path.clone()).unwrap();
         assert_eq!(migrated.schema_version().unwrap(), super::SCHEMA_VERSION);
@@ -6671,14 +6655,15 @@ mod tests {
     fn v13_open_seeds_moods_once_and_keeps_an_edited_template() {
         let (path, store) = fresh_store("mood-migration");
         store.set_session_mood("coord", "unga", 10).unwrap();
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "UPDATE mood SET template = 'edited {body}'
                    WHERE name = 'unga';
                  PRAGMA user_version = 12;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(path.clone()).unwrap();
@@ -6747,6 +6732,7 @@ mod tests {
         let (path, store) = fresh_store("bounded-write-stale");
         drop(store);
         let rewind = Connection::open(&path).unwrap();
+        crate::legacy_tests::restore(&rewind);
         rewind.execute_batch("PRAGMA user_version = 25;").unwrap();
         drop(rewind);
 
@@ -6971,7 +6957,7 @@ mod tests {
             from_session: "session-before".into(),
             to_session: "session-after".into(),
             kind: SessionRelationKind::ContinuedIn,
-            source: "claude-transcript".into(),
+            source: "transcript-session-metadata".into(),
             observed_at_ms: 1,
             matched_identity_key: None,
         };
@@ -7023,10 +7009,11 @@ mod tests {
         store
             .attach_trace("legacy-session", "trace-legacy", "lane-create", 42)
             .unwrap();
-        store
-            .connection
-            .execute_batch("PRAGMA user_version = 37;")
-            .unwrap();
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch("PRAGMA user_version = 37;")
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(db_path.clone()).unwrap();
@@ -7035,8 +7022,7 @@ mod tests {
             .connection
             .query_row(
                 "SELECT COUNT(*) FROM agent_session_observation observation
-                   JOIN dict_observation_source source ON source.id = observation.source_id
-                  WHERE source.value = 'legacy-agent-trace-span'",
+WHERE observation.source = 'legacy-agent-trace-span'",
                 [],
                 |row| row.get(0),
             )
@@ -7061,7 +7047,7 @@ mod tests {
                 from_session: "old-a".into(),
                 to_session: "new".into(),
                 kind: SessionRelationKind::ContinuedIn,
-                source: "test".into(),
+                source: "transcript-session-metadata".into(),
                 observed_at_ms: 12,
                 matched_identity_key: None,
             })
@@ -7072,7 +7058,7 @@ mod tests {
                 from_session: "old-b".into(),
                 to_session: "new".into(),
                 kind: SessionRelationKind::ContinuedIn,
-                source: "test".into(),
+                source: "transcript-session-metadata".into(),
                 observed_at_ms: 13,
                 matched_identity_key: None,
             })
@@ -7659,16 +7645,17 @@ mod tests {
         store
             .write_turn("ses-source-class", 1, 42, "user", "existing", None)
             .unwrap();
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "DROP VIEW IF EXISTS v_favorite;
                  DROP VIEW IF EXISTS v_message;
                  DROP VIEW IF EXISTS v_conversational_turn;
                  ALTER TABLE agent_turn DROP COLUMN source_class;
                  PRAGMA user_version = 34;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(path.clone()).unwrap();
@@ -7938,14 +7925,15 @@ mod tests {
     #[test]
     fn a_store_stamped_28_without_the_tag_tables_gets_them_on_open() {
         let (path, store) = fresh_store("stamped-28-no-tags");
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "DROP TABLE agent_tag;
                  DROP TABLE agent_tag_link;
                  PRAGMA user_version = 28;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
 
         let store = Store::open(path.clone()).unwrap();
@@ -7993,15 +7981,16 @@ mod tests {
                 why: "keep".into(),
             })
             .unwrap();
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "DROP TABLE agent_commit_subscription;
                  DROP TABLE agent_commit_push;
                  DROP TABLE agent_lane_head;
                  PRAGMA user_version = 29;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(path.clone()).unwrap();
@@ -8293,13 +8282,14 @@ mod tests {
     #[test]
     fn v31_migrates_a_v30_store_and_creates_the_pr_notice_table() {
         let (path, store) = fresh_store("v31-migrate");
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "DROP TABLE agent_pr_notice;
                  PRAGMA user_version = 30;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
 
         let migrated = Store::open(path.clone()).unwrap();
@@ -8670,16 +8660,17 @@ mod tests {
                 .unwrap();
             assert_eq!(exists, 1, "{view} survives store rebuild");
         }
-        store
-            .connection
-            .execute_batch(
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch(
                 "DROP VIEW v_message;
                  DROP VIEW v_favorite;
                  DROP VIEW v_session_project;
                  DROP VIEW v_conversational_turn;
                  PRAGMA user_version = 35;",
             )
-            .unwrap();
+        }
+        .unwrap();
         drop(store);
         let migrated = Store::open(path.clone()).unwrap();
         assert_eq!(migrated.schema_version().unwrap(), super::SCHEMA_VERSION);
@@ -8730,10 +8721,11 @@ mod tests {
                 params![markdown_id],
             )
             .unwrap();
-        store
-            .connection
-            .execute_batch("PRAGMA user_version = 18")
-            .unwrap();
+        {
+            crate::legacy_tests::restore(store.connection());
+            store.connection.execute_batch("PRAGMA user_version = 18")
+        }
+        .unwrap();
         drop(store);
 
         let store = Store::open(db_path.clone()).unwrap();
@@ -9195,7 +9187,7 @@ mod tests {
         let current: String = store
             .connection
             .query_row(
-                "SELECT d.value FROM agent_live a JOIN dict_status d ON d.id = a.status_id
+                "SELECT a.status FROM agent_live a
                  WHERE a.session_id = (SELECT id FROM dict_session WHERE value = 's1')",
                 [],
                 |row| row.get(0),
@@ -9240,9 +9232,9 @@ mod tests {
 
         // The canonical verb (verb_id) is lowercase for every spelling.
         let verb_sql = "SELECT json_group_array(value) FROM (
-                          SELECT DISTINCT dv.value
-                          FROM agent_touch t JOIN dict_verb dv ON dv.id = t.verb_id
-                          ORDER BY dv.value)";
+                          SELECT DISTINCT t.verb AS value
+                          FROM agent_touch t
+                          ORDER BY t.verb)";
         let verbs: String = store
             .connection
             .query_row(verb_sql, [], |row| row.get(0))
@@ -9258,8 +9250,7 @@ mod tests {
 
         // The raw spelling (raw_verb_id) retains the harness casing.
         let raw_sql = "SELECT COUNT(*) FROM agent_touch t
-                       JOIN dict_verb dv ON dv.id = t.raw_verb_id
-                       WHERE dv.value = 'Read'";
+WHERE t.raw_verb = 'Read'";
         let raw_read: i64 = store
             .connection
             .query_row(raw_sql, [], |row| row.get(0))
@@ -9269,8 +9260,7 @@ mod tests {
             .connection
             .query_row(
                 "SELECT COUNT(*) FROM agent_touch t
-                 JOIN dict_verb dv ON dv.id = t.raw_verb_id
-                 WHERE dv.value = 'read'",
+WHERE t.raw_verb = 'read'",
                 [],
                 |row| row.get(0),
             )
@@ -9487,10 +9477,13 @@ mod tests {
                 None,
             )
             .unwrap();
-        store
-            .connection()
-            .execute_batch("PRAGMA user_version = 32;")
-            .unwrap();
+        {
+            crate::legacy_tests::restore(store.connection());
+            store
+                .connection()
+                .execute_batch("PRAGMA user_version = 32;")
+        }
+        .unwrap();
         drop(store);
         let session = "ses-fixup";
 
@@ -9499,7 +9492,7 @@ mod tests {
         let role: String = store
             .connection()
             .query_row(
-                "SELECT r.value FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+                "SELECT t.role FROM agent_turn t
                  WHERE t.session_id = (SELECT id FROM dict_session WHERE value = ?1)",
                 params![session],
                 |row| row.get(0),
@@ -9512,7 +9505,7 @@ mod tests {
         let role: String = store
             .connection()
             .query_row(
-                "SELECT r.value FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+                "SELECT t.role FROM agent_turn t
                  WHERE t.session_id = (SELECT id FROM dict_session WHERE value = ?1)",
                 params![session],
                 |row| row.get(0),

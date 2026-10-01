@@ -2253,10 +2253,10 @@ mod tests {
                 ))
                 .collect::<Vec<_>>(),
             [
-                ("parent-session", "child-session", "spawned", 1),
                 ("parent-session", "child-session", "completed", 1),
-                ("parent-session", "child-session", "completion-mailed", 1),
                 ("parent-session", "child-session", "completion-delivered", 1),
+                ("parent-session", "child-session", "completion-mailed", 1),
+                ("parent-session", "child-session", "spawned", 1),
             ]
         );
         let messages = completion_rows(&dir);

@@ -1,0 +1,13 @@
+gate	result
+contract_passed	71
+contract_skipped	4
+contract_not_ok	0
+contract_exit	0
+rust_bin_passed	170
+store_passed	245
+store_ignored	1
+key_type_conflicts	0
+tsp_build	pass
+real_favorite_count	306
+real_tag_count	418
+real_tripwire	unchanged

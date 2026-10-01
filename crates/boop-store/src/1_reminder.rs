@@ -455,10 +455,13 @@ mod tests {
     #[test]
     fn schema_36_upgrade_creates_the_reminder_tables() {
         let f = Fixture::new();
-        f.store
-            .connection()
-            .execute_batch("DROP TABLE agent_reminder; PRAGMA user_version = 36;")
-            .unwrap();
+        {
+            crate::legacy_tests::restore(f.store.connection());
+            f.store
+                .connection()
+                .execute_batch("DROP TABLE agent_reminder; PRAGMA user_version = 36;")
+        }
+        .unwrap();
         let migrated = bus::open_store(&f.dir).unwrap();
         assert_eq!(
             migrated.schema_version().unwrap(),

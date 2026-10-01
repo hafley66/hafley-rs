@@ -1832,7 +1832,7 @@ mod tests {
         use boop::harness::NativeTuiEvent::{Closed, Session, Settings};
         let store = boop::Store::open(":memory:".into()).unwrap();
         store
-            .attach_trace("independent", "separate-trace", "fixture", 1)
+            .attach_trace("independent", "separate-trace", "native-tui-session", 1)
             .unwrap();
         let mut route = crate::cli::testkit::route_with(Some("parent"));
         let mut trace = None;

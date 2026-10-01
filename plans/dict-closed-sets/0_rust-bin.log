@@ -1,0 +1,203 @@
+   Compiling boop-proc v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-proc)
+   Compiling boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop)
+    Finished `test` profile [optimized + debuginfo] target(s) in 6.34s
+warning: the following packages contain code that will be rejected by a future version of Rust: nix v0.28.0
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 1`
+     Running unittests src/main.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop/e6cf25e3dcbb0cf3/out/boop-e6cf25e3dcbb0cf3)
+
+running 170 tests
+test cli::control::tests::a_route_missing_one_of_three_fields_cannot_revive ... ok
+test cli::control::tests::cells_are_cut_to_width_and_ages_read_coarse ... ok
+test cli::control::tests::an_explicit_exit_is_read_through_its_own_echo ... ok
+test cli::control::tests::a_killed_pane_reads_as_an_unclean_death ... ok
+test cli::_2_wait_target::tests::a_lane_whose_route_was_dropped_is_still_a_lane_by_its_spawn_record ... ok
+test cli::control::tests::a_named_route_has_one_wrapper_owner_and_can_be_reacquired ... ok
+test cli::control::tests::native_refresh_preserves_pid_precedence ... ok
+test cli::control::tests::each_harness_spells_its_own_resume_arguments ... ok
+test cli::control::tests::native_start_and_refresh_use_the_tty_pane_endpoint_over_a_tmux_fallback ... ok
+test cli::control::tests::nonzero_exit_after_min_uptime_respawns ... ok
+test cli::control::tests::signal_death_fast_death_and_exhaustion_end_the_wrapper ... ok
+test cli::control::tests::the_revive_command_replays_the_hand_typed_recovery ... ok
+test cli::control::tests::the_route_records_the_executable_its_pane_ran ... ok
+test cli::control::tests::the_selection_prompt_reads_all_a_list_and_none ... ok
+test cli::db::tests::agent_summary_text_fixture_has_fixed_columns ... ok
+test cli::db::tests::a_held_child_completion_remains_pending_until_transport_acceptance ... ok
+test cli::db::tests::none_cwd_on_both_sides_is_not_a_route_match ... ok
+test cli::db::tests::a_read_verb_succeeds_against_a_readonly_opened_store ... ok
+test cli::db::tests::public_agent_sessions_accepts_focused_family_filters ... ok
+test cli::control::tests::observed_transitions_preserve_parent_and_ignore_late_thread_events ... ok
+test cli::control::tests::clear_boundaries_preserve_process_siblings_without_linking_a_reused_pid ... ok
+test cli::db::tests::session_id_match_needs_no_cwd ... ok
+test cli::db::tests::shared_concrete_cwd_matches_and_none_session_cwd_does_not ... ok
+test cli::db::tests::sync_decision_preserves_each_independent_queue_reason ... ok
+test cli::debug::tests::the_default_preset_reaches_only_its_own_harness ... ok
+test cli::job::interactive::tests::claude_fork_command_preserves_settings_and_quotes_the_brief ... ok
+test cli::control::tests::native_observation_preserves_a_registered_parent_update ... ok
+test cli::db::tests::native_parent_notification_acks_without_duplicate_injection ... ok
+test cli::db::tests::native_child_projector_is_harness_neutral_and_idempotent ... ok
+test cli::job::tests::a_fork_brief_carries_the_ask_the_quote_and_the_quoted_turns ... ok
+test cli::job::tests::a_lane_with_no_dispatch_shadow_is_a_root ... ok
+test cli::job::tests::a_live_route_outranks_the_record_and_a_stranger_names_neither ... ok
+test cli::_2_wait_target::tests::wait_dispatches_to_lane_wait_only_for_a_registered_lane_route ... ok
+test cli::db::tests::a_delivery_failure_retries_the_one_persisted_completion_message ... ok
+test cli::db::tests::a_later_parent_route_delivers_an_already_committed_completion ... ok
+test cli::control::tests::native_exit_releases_its_transport_and_preserves_a_concurrent_owner ... ok
+test cli::job::tests::a_non_result_row_does_not_satisfy_the_wait ... ok
+test cli::job::tests::a_dead_pane_in_a_live_session_reads_dead_residue ... ok
+test cli::job::tests::an_env_stamp_shared_with_native_children_is_refused_not_guessed ... ok
+test cli::job::tests::a_parked_lane_reads_idle_while_its_pane_stays_live ... ok
+test cli::job::tests::beep_fork_bare_spelling_still_parses ... ok
+test cli::job::tests::a_pre_branch_registry_row_still_reads_and_deletes ... ok
+test cli::db::tests::resident_native_poller_projects_appended_parent_assistant_turns ... ok
+test cli::job::tests::dead_reason_is_none_for_a_live_session ... ok
+test cli::job::tests::dead_reason_names_a_gone_session_with_no_pid ... ok
+test cli::job::tests::create_refuses_a_name_whose_pane_is_alive ... ok
+test cli::job::tests::dead_reason_names_no_recorded_session_when_tmux_is_absent ... ok
+test cli::job::tests::dispatch_refuses_an_unregistered_harness ... ok
+test cli::job::tests::explicit_parent_beats_inferred_dispatch ... ok
+test cli::job::tests::foreground_wait_owns_a_result_recipient_without_a_parent ... ok
+test cli::job::tests::a_result_row_beats_a_dead_route ... ok
+test cli::db::tests::precreated_codex_parent_delivers_an_appended_child_completion ... ok
+test cli::db::tests::guardian_reviews_do_not_mail_the_parent_but_delegated_workers_still_do ... ok
+test cli::db::tests::resident_child_poller_delivers_an_appended_completion_without_manual_sync ... ok
+test cli::job::tests::a_duplicate_result_row_leaves_the_wait_unchanged ... ok
+test cli::job::tests::lane_list_omits_empty_columns_and_bounds_model_width ... ok
+test cli::job::tests::a_single_dead_observation_does_not_end_the_wait ... ok
+test cli::job::tests::fork_diff_contains_the_changed_path ... ok
+test cli::job::tests::legacy_fallback_never_overrides_an_explicit_coordinator_kind ... ok
+test cli::job::tests::a_done_row_older_than_the_taken_resume_row_does_not_satisfy_the_wait ... ok
+test cli::job::tests::orphan_infers_summoner_from_first_dispatch ... ok
+test cli::job::tests::orphan_root_prints_gone_summoner ... ok
+test cli::job::tests::create_resets_a_dead_name_and_says_what_it_removed ... ok
+test cli::job::tests::delete_takes_a_carcass_whose_only_pane_is_dead ... ok
+test cli::job::tests::an_alive_pane_process_tree_reads_live ... ok
+test cli::job::tests::lane_state_agrees_with_the_ps_tree_on_every_pane_route ... ok
+test cli::job::tests::an_undecidable_route_still_times_out_rather_than_reporting_death ... ok
+test cli::job::tests::lane_state_resolves_three_lanes_from_one_pane_pid_batch ... ok
+test cli::job::tests::pstree_carries_the_goal ... ok
+test cli::job::tests::pstree_goal_null_when_absent ... ok
+held m-6b0bf83f from native-child -> coordinator for the next turn boundary (lane supervisor)
+test cli::job::tests::pane_less_route_inherits_parent_liveness ... ok
+test cli::job::tests::pick_fork_requires_lane_when_several_match ... ok
+test cli::job::tests::pick_fork_returns_the_named_lane ... ok
+test cli::job::tests::stale_hours_reads_the_newest_non_alarm_row ... ok
+test cli::job::tests::native_registration_stays_live_until_explicit_done_and_done_is_once ... ok
+test cli::job::tests::fork_join_dry_run_runs_nothing ... ok
+test cli::job::tests::pick_fork_returns_the_one_row_by_default ... ok
+test cli::job::tests::the_cwd_flag_outranks_the_briefs_repo ... ok
+test cli::job::tests::transcript_scope_resolves_native_markers_without_partial_id_hits ... ok
+test cli::job::tests::unregistered_sessions_names_claimless_tmux_sessions ... ok
+test cli::job::tests::the_repo_comes_from_the_brief_when_no_cwd_flag_names_one ... ok
+test cli::job::tests::touched_reads_none_on_a_fresh_worktree ... ok
+test cli::job::tests::touched_names_the_commit_and_the_changed_path ... ok
+lane dead-lane boop-prune-dead-44168-19 tmux session gone, no pid recorded
+1 lane(s) would be pruned (dry run)
+test cli::job::tests::residency_never_rescues_a_dead_pane_pid ... ok
+test cli::job::tests::prune_dry_run_removes_nothing ... ok
+lane dead-lane boop-prune-dead-44168-21 tmux session gone, no pid recorded
+1 lane(s) pruned
+test cli::job::tests::prune_removes_a_dead_row_and_keeps_a_live_one ... ok
+lane	pid	rss_kb	cpu_pct	uptime_sec	children
+test cli::job::tests::run_ps_with_drives_the_injected_proc_reader ... ok
+test cli::job::tests::route_only_delete_drops_the_registry_row_without_tmux ... ok
+test cli::job::tests::where_prints_the_worktree_path_alone ... ok
+test cli::mail::delivery_report_tests::native_tui_completion_delivery_uses_only_its_trail ... ok
+test cli::job::tests::where_and_touched_read_the_spawn_record_when_the_route_is_gone ... ok
+test cli::mail::markdown_watch_tests::frontmatter_is_removed_and_body_bytes_are_retained ... ok
+test cli::job::tests::wait_accepts_a_result_row_after_the_current_spawn ... ok
+test cli::job::tests::wait_accepts_a_result_row_with_no_route_registered ... ok
+test cli::job::tests::wait_matches_the_row_the_supervisor_actually_writes ... ok
+test cli::me::tests::me_favorite_accepts_an_older_negative_position ... ok
+test cli::me::tests::me_favorite_defaults_to_the_newest_assistant_message ... ok
+test cli::me::tests::remind_reads_a_positive_message_count ... ok
+test cli::paste::tests::an_image_pastes_and_everything_else_is_typed ... ok
+test cli::reminder::tests::time_arguments_are_explicit_and_checked ... ok
+test cli::selection::tests::a_session_focus_matches_one_active_pane_route ... ok
+test cli::selection::tests::a_session_target_picks_the_active_window_pane ... ok
+test cli::selection::tests::a_title_with_tabs_and_separators_keeps_its_fields ... ok
+test cli::selection::tests::a_window_target_picks_the_active_pane ... ok
+test cli::selection::tests::dead_panes_are_dropped ... ok
+test cli::selection::tests::only_registered_harness_routes_on_live_panes_resolve ... ok
+test cli::selection::tests::pane_targets_resolve_without_process_heuristics ... ok
+test cli::shout::tests::broadcast_proofs_select_only_the_registered_harness_in_the_registered_pane ... ok
+test cli::shout::tests::caller_name_resolves_registered_senders_and_honors_explicit_as ... ok
+test cli::shout::tests::dead_door_is_skipped_without_a_delivery_attempt ... ok
+test cli::shout::tests::default_bodies_are_the_stop_gap_phrases ... ok
+test cli::shout::tests::interrupt_keys_require_busy_status_and_use_the_adapter_key ... ok
+test cli::shout::tests::laneless_broadcasts_are_marked_human ... ok
+test cli::shout::tests::retained_tmux_pane_without_live_harness_session_cannot_be_interrupted ... ok
+held m-da85936b from fork-comment-7 -> parent-lane for the next turn boundary (lane supervisor)
+to await the reply: boop wait m-da85936b   (or: boop wait --me &)
+test cli::job::tests::wait_calls_a_lane_dead_when_its_route_stops_being_live ... ok
+test cli::job::tests::fork_join_merges_the_branch_and_writes_the_reply ... ok
+test cli::job::tests::wait_skips_a_result_row_older_than_the_current_spawn ... ok
+test cli::job::tests::wait_propagates_a_failing_rc_and_times_out_otherwise ... ok
+test invoke::tests::detail_omits_body_and_secret_values ... ok
+test invoke::tests::identity_reads_common_command_matches_without_panicking ... ok
+test cli::job::tests::wait_times_out_when_no_result_row_arrives ... ok
+test invoke::tests::option_names_accept_only_schema_options_and_never_values ... ok
+test invoke::tests::option_names_count_and_drop_values ... ok
+test invoke::tests::option_names_exclude_schema_defaults ... ok
+test invoke::tests::parse_errors_use_an_opaque_command_sentinel ... ok
+m-56716cd5 uncertain; inspect its delivery receipt
+test cli::mail::markdown_watch_tests::appended_only_import_is_marked_uncertain_after_restart ... ok
+held m-da55284d from coordinator-x -> agent-a in the mailbox (route agent-a names no harness); agent-a reads it with `boop wait --me` and the drain retries it
+m-da55284d -> agent-a (markdown:agent-a.md:39077a58fcf0d184c75508be1489532fef54685f9283293cfad4df6c3232ff9d)
+test cli::mail::markdown_watch_tests::registered_recipient_uses_the_shared_message_and_receipt_path ... ok
+test invoke::tests::unavailable_store_never_breaks_the_caller ... ok
+test tests::agent_subscribe_and_unsubscribe_parse ... ok
+test tests::beep_agent_waterfall_accepts_each_output_format ... ok
+test tests::beep_lane_run_is_hidden_a_human_never_calls_it ... ok
+test tests::clap_help_version_and_parse_errors_are_classified ... ok
+test tests::db_help_lists_the_read_verbs_besides_the_sql_passthrough ... ok
+test tests::db_search_human_flag_parses ... ok
+test tests::db_subcommand_tree_has_no_blank_help ... ok
+test tests::every_help_example_parses_through_clap ... ok
+test tests::foreground_acp_coordinator_parses_without_a_subcommand ... ok
+test tests::help_text_documents_commit_push ... ok
+test tests::help_text_documents_pr_push ... ok
+test tests::help_text_names_the_current_schema_version ... ok
+test tests::help_text_names_the_no_sync_hatch ... ok
+test tests::job_commands_are_available_without_the_legacy_beep_lane_prefix ... ok
+test tests::lane_create_and_lane_run_both_take_a_bin_override ... ok
+test tests::lane_create_takes_a_commit_push_mode ... ok
+test tests::lane_create_takes_the_post_pr_toggle ... ok
+test tests::mail_and_me_commands_have_direct_root_namespaces ... ok
+test tests::mail_watch_is_explicit_and_parses_the_directory ... ok
+test tests::post_pr_and_no_post_pr_conflict ... ok
+test tests::public_agent_summary_command_parses ... ok
+test tests::root_help_lists_only_canonical_namespaces_and_help ... ok
+held m-bba6987a from parent -> missing-agent in the mailbox (no registry route for missing-agent); missing-agent reads it with `boop wait --me` and the drain retries it
+m-bba6987a refused: refused unknown recipient `missing-agent`: add `harness`, `cwd`, and `worktree` session metadata
+test cli::me::tests::adopt_reads_the_session_from_the_live_registry_and_explicit_id_wins ... ok
+test tests::shout_and_scream_parse_body_optional_and_skip_the_sync ... ok
+test tests::startup_sync_policy_limits_projection_to_transcript_consumers ... ok
+test tests::startup_sync_runs_once_before_the_command ... ok
+test tests::tag_add_takes_several_tags_and_one_source ... ok
+test tests::tag_for_takes_a_batch_of_sources ... ok
+test tests::tag_recent_takes_a_count_and_defaults_to_five ... ok
+test tests::the_no_sync_hatch_clears_every_verb_that_would_sync ... ok
+test tests::the_no_sync_hatch_never_makes_a_registry_verb_sync ... ok
+test tests::shell_wrappers_share_the_tui_path_preserve_arguments_and_propagate_exit ... ok
+held m-bba6987a from parent -> missing-agent in the mailbox (no registry route for missing-agent); missing-agent reads it with `boop wait --me` and the drain retries it
+test cli::mail::markdown_watch_tests::unknown_recipient_without_session_metadata_is_refused_once_with_a_reason_row ... ok
+test cli::shout::tests::two_failed_proofs_mark_a_route_dead_until_a_live_proof_or_registration ... ok
+subscribe obs feature-x door
+subscribed 1 row(s)
+unsubscribe obs feature-x
+dropped 1 row(s)
+test cli::tests::route_goal_round_trips ... ok
+subscribe obs c1 mailbox
+subscribe obs c2 mailbox
+subscribe obs * mailbox
+subscribed 3 row(s)
+test cli::subscribe::tests::subscribe_then_unsubscribe_leaves_zero_rows ... ok
+test cli::subscribe::tests::children_writes_one_row_per_child_plus_a_wildcard ... ok
+test invoke::tests::invocation_rows_group_by_distinct_build_sha ... ok
+test invoke::tests::record_round_trips_into_the_trace_table ... ok
+test invoke::tests::start_and_finish_share_the_build_identity_in_sqlite ... ok
+test cli::job::tests::fork_join_refuses_a_branch_with_nothing_past_base ... ok
+test cli::job::tests::fork_join_refuses_a_dirty_index ... ok
+
+test result: ok. 170 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 4.33s
+

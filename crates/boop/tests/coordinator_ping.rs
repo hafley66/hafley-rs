@@ -151,8 +151,8 @@ fn hail_to_a_coordinator_with_no_live_session_stays_unread_in_the_mailbox() {
     let ledger = Command::new(BOOP)
         .args([
             "db",
-            "select d.route, h.value as harness, d.outcome, d.detail from agent_delivery d \
-             left join dict_harness h on h.id = d.harness_id order by d.at_ms desc limit 1",
+            "select d.route, d.harness as harness, d.outcome, d.detail from agent_delivery d \
+              order by d.at_ms desc limit 1",
         ])
         .env("BOOP_DB", dir.join("boop.db"))
         .boop_test_root(dir.join("home"))

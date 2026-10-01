@@ -40,7 +40,7 @@ WITH lane_span AS (
            )) AS end_ts,
            MAX(l.parent_lane_id) AS parent_lane_id,
            MAX(l.goal) AS goal,
-           MAX(l.harness_id) AS harness_id
+           MAX(l.harness) AS harness
       FROM agent_lane l INDEXED BY idx_lane_lane
       LEFT JOIN dict_cwd cwd ON cwd.id = l.cwd_id
      WHERE l.lane_id > 0
@@ -49,20 +49,19 @@ WITH lane_span AS (
      GROUP BY l.lane_id
 ), rows AS (
     SELECT 'lane' AS kind, s.value AS row_id, s.value AS lane, p.value AS peer,
-           sp.start_ts AS t0, sp.end_ts AS t1, h.value AS label,
+           sp.start_ts AS t0, sp.end_ts AS t1, sp.harness AS label,
            sp.goal AS detail, :schema_version AS schema_version
       FROM lane_span sp
       JOIN dict_session s ON s.id = sp.lane_id
       LEFT JOIN dict_session p ON p.id = sp.parent_lane_id
-      LEFT JOIN dict_harness h ON h.id = sp.harness_id
+
     UNION ALL
     SELECT 'event', e.event_key, s.value, COALESCE(f.value, t.value),
-           COALESCE(e.started_ts, e.created_ts), e.finished_ts, k.value,
+           COALESCE(e.started_ts, e.created_ts), e.finished_ts, e.kind,
            e.detail, :schema_version
       FROM agent_trace_event e INDEXED BY idx_trace_event_lane_time
       JOIN dict_session s ON s.id = e.lane_id
-      JOIN dict_trace_kind k ON k.id = e.kind_id
-      LEFT JOIN dict_session f ON f.id = e.from_lane_id
+LEFT JOIN dict_session f ON f.id = e.from_lane_id
       LEFT JOIN dict_session t ON t.id = e.to_lane_id
       LEFT JOIN agent_lane l ON l.lane_id = e.lane_id
       LEFT JOIN dict_cwd cwd ON cwd.id = l.cwd_id
@@ -71,25 +70,23 @@ WITH lane_span AS (
        AND (:cwd IS NULL OR cwd.value = :cwd)
     UNION ALL
     SELECT 'live', CAST(v.session_id AS TEXT) || '@' || CAST(v.from_ts AS TEXT),
-           s.value, NULL, v.from_ts, v.to_ts, st.value, '', :schema_version
+           s.value, NULL, v.from_ts, v.to_ts, v.status, '', :schema_version
       FROM agent_live_span v
       JOIN dict_session s ON s.id = v.session_id
-      LEFT JOIN dict_status st ON st.id = v.status_id
-      LEFT JOIN agent_session a ON a.session_id = v.session_id
+LEFT JOIN agent_session a ON a.session_id = v.session_id
       LEFT JOIN dict_cwd cwd ON cwd.id = a.cwd_id
       LEFT JOIN agent_lane lane_row ON lane_row.lane_id = v.session_id
       LEFT JOIN dict_cwd lane_cwd ON lane_cwd.id = lane_row.cwd_id
      WHERE v.from_ts >= :since
        AND (:cwd IS NULL OR COALESCE(lane_cwd.value, cwd.value) = :cwd)
     UNION ALL
-    SELECT 'edge', pa.value || '>' || ch.value || '/' || ek.value,
-           pa.value, ch.value, g.first_ts, g.last_ts, ek.value,
+    SELECT 'edge', pa.value || '>' || ch.value || '/' || g.edge_kind,
+           pa.value, ch.value, g.first_ts, g.last_ts, g.edge_kind,
            CAST(g.n AS TEXT), :schema_version
       FROM agent_edge g
       JOIN dict_session pa ON pa.id = g.parent_session_id
       JOIN dict_session ch ON ch.id = g.child_session_id
-      JOIN dict_edekind ek ON ek.id = g.edge_kind_id
-     WHERE COALESCE(g.last_ts, g.first_ts) >= :since
+WHERE COALESCE(g.last_ts, g.first_ts) >= :since
        AND (:cwd IS NULL OR EXISTS (
            SELECT 1 FROM agent_lane l
            JOIN dict_cwd cwd ON cwd.id = l.cwd_id
@@ -280,27 +277,24 @@ const SESSION_GRAPH_SQL: &str = r#"
 WITH scoped_sessions AS MATERIALIZED (
     SELECT a.session_id,
            s.value AS session,
-           h.value AS harness,
+           a.harness AS harness,
            c.value AS cwd,
            p.value AS tmux,
-           st.value AS state,
+           live.status AS state,
            trace.value AS trace,
            span.attached_ts,
            a.started_ts,
            (SELECT MAX(dead.from_ts) FROM agent_live_span dead
-             JOIN dict_status dead_status ON dead_status.id = dead.status_id
-            WHERE dead.session_id = a.session_id AND dead_status.value = 'dead') AS finished_ts
+WHERE dead.session_id = a.session_id AND dead.status = 'dead') AS finished_ts
       FROM agent_session a
       JOIN dict_session s ON s.id = a.session_id
-      JOIN dict_harness h ON h.id = a.harness_id
-      LEFT JOIN dict_cwd c ON c.id = a.cwd_id
+LEFT JOIN dict_cwd c ON c.id = a.cwd_id
       LEFT JOIN agent_live live ON live.session_id = a.session_id
       LEFT JOIN dict_pane p ON p.id = live.tmux_pane_id
-      LEFT JOIN dict_status st ON st.id = live.status_id
-      LEFT JOIN agent_trace_span span ON span.session_id = a.session_id
+LEFT JOIN agent_trace_span span ON span.session_id = a.session_id
       LEFT JOIN dict_trace trace ON trace.id = span.trace_id
      WHERE (?1 IS NULL OR c.value = ?1)
-       AND (?2 OR st.value IS NULL OR st.value <> 'dead')
+       AND (?2 OR live.status IS NULL OR live.status <> 'dead')
 ),
 turns AS (
     SELECT t.session_id, MAX(t.ts) AS last_ts
@@ -377,16 +371,15 @@ pub fn load_agent_session_graph(
         .iter()
         .map(|session| session.session.id.as_str())
         .collect::<BTreeSet<_>>();
-    let edge_sql = "SELECT p.value, c.value, hp.value, hc.value, k.value, e.first_ts, e.last_ts
+    let edge_sql =
+        "SELECT p.value, c.value, ap.harness, ac.harness, e.edge_kind, e.first_ts, e.last_ts
                       FROM agent_edge e
                       JOIN dict_session p ON p.id = e.parent_session_id
                       JOIN dict_session c ON c.id = e.child_session_id
                       JOIN agent_session ap ON ap.session_id = e.parent_session_id
                       JOIN agent_session ac ON ac.session_id = e.child_session_id
-                      JOIN dict_harness hp ON hp.id = ap.harness_id
-                      JOIN dict_harness hc ON hc.id = ac.harness_id
-                      JOIN dict_edekind k ON k.id = e.edge_kind_id
-                     ORDER BY p.value, c.value, k.value";
+
+ORDER BY p.value, c.value, e.edge_kind";
     let mut statement = store.connection().prepare(edge_sql)?;
     let edges = statement
         .query_map([], |row| {
@@ -416,7 +409,7 @@ pub fn load_agent_session_graph(
         .collect::<Vec<_>>();
 
     let shell_sql = "SELECT lane.value, parent.value, trace.value, cwd.value, pane.value,
-                            live.pid, COALESCE(status.value, 'unknown'), lane_row.spawned_ts,
+                            live.pid, COALESCE(live.status, 'unknown'), lane_row.spawned_ts,
                             live.last_seen_ts, live.tmux_session
                        FROM agent_lane lane_row
                        JOIN dict_session lane ON lane.id = lane_row.lane_id
@@ -425,10 +418,9 @@ pub fn load_agent_session_graph(
                        LEFT JOIN dict_cwd cwd ON cwd.id = lane_row.cwd_id
                        LEFT JOIN agent_live live ON live.session_id = lane_row.lane_id
                        LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
-                       LEFT JOIN dict_status status ON status.id = live.status_id
-                      WHERE (?1 IS NULL OR cwd.value = ?1)
-                        AND (?2 OR status.value = 'live')
-                        AND lane_row.harness_id IS NULL
+WHERE (?1 IS NULL OR cwd.value = ?1)
+                        AND (?2 OR live.status = 'live')
+                        AND lane_row.harness IS NULL
                       ORDER BY lane.value, lane_row.spawned_ts DESC";
     let mut statement = store.connection().prepare(shell_sql)?;
     let mut shells = Vec::new();
@@ -934,11 +926,11 @@ mod tests {
         let session = writer
             .intern_public("dict_session", "reader-session")
             .unwrap();
-        let harness = writer.intern_public("dict_harness", "codex").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
         writer
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
@@ -964,11 +956,11 @@ mod tests {
             .unwrap();
         let parent = store.intern_public("dict_session", "parent").unwrap();
         let child = store.intern_public("dict_session", "child").unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id, cwd_id) VALUES (?1, ?2, NULL), (?3, ?2, NULL)",
+                "INSERT INTO agent_session(session_id, harness, cwd_id) VALUES (?1, ?2, NULL), (?3, ?2, NULL)",
                 rusqlite::params![parent, harness, child],
             )
             .unwrap();
@@ -1009,14 +1001,12 @@ mod tests {
         store
             .intern_public("dict_session", "waterfall-parent")
             .unwrap();
-        let kind = store
-            .intern_public("dict_trace_kind", "turn-start")
-            .unwrap();
-        let status = store.intern_public("dict_status", "live").unwrap();
+        let kind = crate::closed_sets::value("dict_trace_kind", "turn-start").unwrap();
+        let status = crate::closed_sets::value("dict_status", "live").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_trace_event(event_key, lane_id, kind_id, created_ts, detail)
+                "INSERT INTO agent_trace_event(event_key, lane_id, kind, created_ts, detail)
                  VALUES ('waterfall-event', ?1, ?2, 20, 'turn started')",
                 rusqlite::params![lane, kind],
             )
@@ -1024,7 +1014,7 @@ mod tests {
         store
             .connection()
             .execute(
-                "INSERT INTO agent_live_span(session_id, from_ts, to_ts, status_id)
+                "INSERT INTO agent_live_span(session_id, from_ts, to_ts, status)
                  VALUES (?1, 21, 22, ?2)",
                 rusqlite::params![lane, status],
             )
@@ -1097,11 +1087,11 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         let session = store.intern_public("dict_session", "idle-native").unwrap();
-        let harness = store.intern_public("dict_harness", "claude").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "claude").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
@@ -1131,20 +1121,20 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         let session = store.intern_public("dict_session", "active").unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
-        let role = store.intern_public("dict_role", "assistant").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
+        let role = crate::closed_sets::value("dict_role", "assistant").unwrap();
         let model = store.intern_public("dict_model", "model").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_turn(session_id, turn, ts, role_id, said) VALUES (?1, 1, 20, ?2, '')",
+                "INSERT INTO agent_turn(session_id, turn, ts, role, said) VALUES (?1, 1, 20, ?2, '')",
                 rusqlite::params![session, role],
             )
             .unwrap();
@@ -1183,12 +1173,12 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         let session = store.intern_public("dict_session", "scoped").unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
         let cwd = store.intern_public("dict_cwd", "/scoped").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id, cwd_id) VALUES (?1, ?2, ?3)",
+                "INSERT INTO agent_session(session_id, harness, cwd_id) VALUES (?1, ?2, ?3)",
                 rusqlite::params![session, harness, cwd],
             )
             .unwrap();
@@ -1230,12 +1220,12 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         let session = store.intern_public("dict_session", "wide").unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
-        let role = store.intern_public("dict_role", "assistant").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
+        let role = crate::closed_sets::value("dict_role", "assistant").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
@@ -1245,7 +1235,7 @@ mod tests {
             store
                 .connection()
                 .execute(
-                    "INSERT INTO agent_turn(session_id, turn, ts, role_id, said)
+                    "INSERT INTO agent_turn(session_id, turn, ts, role, said)
                      VALUES (?1, ?2, ?3, ?4, ?5)",
                     rusqlite::params![session, turn as i64, ts as i64, role, wide],
                 )
@@ -1480,14 +1470,14 @@ mod tests {
         assert!(graph.shells[0].session.is_none());
         assert!(graph.shells[0].session_id.is_none());
 
-        let harness = store.intern_public("dict_harness", "opencode").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "opencode").unwrap();
         let session = store
             .intern_public("dict_session", "native-session")
             .unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
@@ -1522,7 +1512,7 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
-        let harness = store.intern_public("dict_harness", "claude").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "claude").unwrap();
         let parent = store
             .intern_public("dict_session", "claude-parent")
             .unwrap();
@@ -1530,7 +1520,7 @@ mod tests {
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?3), (?2, ?3)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?3), (?2, ?3)",
                 rusqlite::params![parent, child, harness],
             )
             .unwrap();
@@ -1695,7 +1685,7 @@ mod tests {
             std::env::temp_dir().join(format!("boop-session-idle-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
         for (name, pid) in [
             ("stale-live", exited_pid() as i64),
             ("corroborated-live", std::process::id() as i64),
@@ -1704,7 +1694,7 @@ mod tests {
             store
                 .connection()
                 .execute(
-                    "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                    "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                     rusqlite::params![session, harness],
                 )
                 .unwrap();
@@ -1779,13 +1769,13 @@ mod tests {
             ("opencode", "opencode-parent", "opencode-child"),
             ("kimi", "kimi-parent", "kimi-child"),
         ] {
-            let harness = store.intern_public("dict_harness", harness_name).unwrap();
+            let harness = crate::closed_sets::value("dict_harness", harness_name).unwrap();
             let parent = store.intern_public("dict_session", parent_name).unwrap();
             let child = store.intern_public("dict_session", child_name).unwrap();
             store
                 .connection()
                 .execute(
-                    "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2), (?3, ?2)",
+                    "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2), (?3, ?2)",
                     rusqlite::params![parent, harness, child],
                 )
                 .unwrap();
@@ -1833,7 +1823,7 @@ mod tests {
         ));
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
         let repo = store.intern_public("dict_cwd", "/repo").unwrap();
         let other = store.intern_public("dict_cwd", "/other").unwrap();
         for (name, cwd_id) in [
@@ -1845,7 +1835,7 @@ mod tests {
             store
                 .connection()
                 .execute(
-                    "INSERT INTO agent_session(session_id, harness_id, cwd_id) VALUES (?1, ?2, ?3)",
+                    "INSERT INTO agent_session(session_id, harness, cwd_id) VALUES (?1, ?2, ?3)",
                     rusqlite::params![session, harness, cwd_id],
                 )
                 .unwrap();
@@ -1893,7 +1883,7 @@ mod tests {
                     to_lane: Some(lane.into()),
                     started_ts: Some(7),
                     finished_ts: Some(8),
-                    delivery_state: Some("delivered".into()),
+                    delivery_state: Some("midturn".into()),
                     classification: Some("completed".into()),
                     detail: "fixture detail".into(),
                     created_ts,
@@ -1933,7 +1923,7 @@ mod tests {
                     "to_lane": "native-live",
                     "started_ts": 7,
                     "finished_ts": 8,
-                    "delivery_state": "delivered",
+                    "delivery_state": "midturn",
                     "classification": "completed",
                     "detail": "fixture detail",
                     "created_ts": 10
@@ -1948,7 +1938,7 @@ mod tests {
                     "to_lane": "shell-live",
                     "started_ts": 7,
                     "finished_ts": 8,
-                    "delivery_state": "delivered",
+                    "delivery_state": "midturn",
                     "classification": "completed",
                     "detail": "fixture detail",
                     "created_ts": 40
@@ -2019,11 +2009,11 @@ mod tests {
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
         let session = store.intern_public("dict_session", "optin").unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id) VALUES (?1, ?2)",
+                "INSERT INTO agent_session(session_id, harness) VALUES (?1, ?2)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
@@ -2120,8 +2110,8 @@ mod tests {
             std::env::temp_dir().join(format!("boop-session-family-{}.db", std::process::id()));
         let _ = std::fs::remove_file(&path);
         let store = Store::open(path.clone()).unwrap();
-        let codex = store.intern_public("dict_harness", "codex").unwrap();
-        let claude = store.intern_public("dict_harness", "claude").unwrap();
+        let codex = crate::closed_sets::value("dict_harness", "codex").unwrap();
+        let claude = crate::closed_sets::value("dict_harness", "claude").unwrap();
         for (id, harness, started) in [
             ("codex-coordinator-root", codex, 10),
             ("dispatched-child", codex, 20),
@@ -2131,7 +2121,7 @@ mod tests {
         ] {
             let session = store.intern_public("dict_session", id).unwrap();
             store.connection().execute(
-                "INSERT INTO agent_session(session_id, harness_id, started_ts) VALUES (?1, ?2, ?3)",
+                "INSERT INTO agent_session(session_id, harness, started_ts) VALUES (?1, ?2, ?3)",
                 rusqlite::params![session, harness, started],
             ).unwrap();
         }
@@ -2178,11 +2168,16 @@ mod tests {
             "completed-descendant",
         ] {
             store
-                .attach_trace(id, "trace-focused", "fixture", 61)
+                .attach_trace(id, "trace-focused", "supervisor-conversation", 61)
                 .unwrap();
         }
         store
-            .attach_trace("claude-coordinator-root", "trace-unrelated", "fixture", 101)
+            .attach_trace(
+                "claude-coordinator-root",
+                "trace-unrelated",
+                "supervisor-conversation",
+                101,
+            )
             .unwrap();
         let mut routes = BTreeMap::new();
         for (lane, session_id, tmux, parent) in [

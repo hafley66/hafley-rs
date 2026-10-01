@@ -30,7 +30,7 @@ impl GroupBy {
             GroupBy::Model => ("dict_model.value", false),
             GroupBy::Session => ("dict_session.value", true),
             GroupBy::Project => ("COALESCE(dict_cwd.value, '-')", true),
-            GroupBy::Harness => ("dict_harness.value", true),
+            GroupBy::Harness => ("agent_session.harness", true),
             GroupBy::Hour => (
                 "STRFTIME('%Y-%m-%dT%H', usage.ts / 1000, 'unixepoch')",
                 false,
@@ -273,8 +273,7 @@ impl Store {
             sql.push_str(
                 " JOIN agent_session ON agent_session.session_id = usage.session_id
                   JOIN dict_session ON dict_session.id = usage.session_id
-                  JOIN dict_harness ON dict_harness.id = agent_session.harness_id
-                  LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id",
+LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id",
             );
         }
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
@@ -428,11 +427,10 @@ impl Store {
             "SELECT dict_model.value AS model, model_price.input_per_mtok,
                     model_price.output_per_mtok, model_price.cache_write_5m_per_mtok,
                     model_price.cache_write_1h_per_mtok, model_price.cache_read_per_mtok,
-                    dict_price_source.value AS source, model_price.fetched_ts
+                    model_price.source AS source, model_price.fetched_ts
              FROM model_price
              JOIN dict_model ON dict_model.id = model_price.model_id
-             JOIN dict_price_source ON dict_price_source.id = model_price.source_id
-             ORDER BY dict_model.value",
+ORDER BY dict_model.value",
             Vec::new(),
         )
     }
@@ -457,7 +455,7 @@ impl Store {
     /// Write one rate row, replacing whatever was there.
     pub fn price_set(&self, price: &ModelPrice) -> Result<()> {
         let model_id = self.intern_public("dict_model", price.model)?;
-        let source_id = self.intern_public("dict_price_source", price.source)?;
+        let source_id = crate::closed_sets::value("dict_price_source", price.source)?;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)
@@ -465,7 +463,7 @@ impl Store {
         self.connection().execute(
             "INSERT INTO model_price (model_id, input_per_mtok, output_per_mtok,
                cache_write_5m_per_mtok, cache_write_1h_per_mtok, cache_read_per_mtok,
-               source_id, fetched_ts)
+               source, fetched_ts)
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)
              ON CONFLICT(model_id) DO UPDATE SET
                input_per_mtok = excluded.input_per_mtok,
@@ -473,7 +471,7 @@ impl Store {
                cache_write_5m_per_mtok = excluded.cache_write_5m_per_mtok,
                cache_write_1h_per_mtok = excluded.cache_write_1h_per_mtok,
                cache_read_per_mtok = excluded.cache_read_per_mtok,
-               source_id = excluded.source_id,
+               source = excluded.source,
                fetched_ts = excluded.fetched_ts",
             rusqlite::params![
                 model_id,

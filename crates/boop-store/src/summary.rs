@@ -311,24 +311,24 @@ mod tests {
             })
             .unwrap();
         let session = store.intern_public("dict_session", "session-a").unwrap();
-        let harness = store.intern_public("dict_harness", "codex").unwrap();
-        let role = store.intern_public("dict_role", "assistant").unwrap();
+        let harness = crate::closed_sets::value("dict_harness", "codex").unwrap();
+        let role = crate::closed_sets::value("dict_role", "assistant").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id, nickname, started_ts) VALUES (?1, ?2, 'a', 11)",
+                "INSERT INTO agent_session(session_id, harness, nickname, started_ts) VALUES (?1, ?2, 'a', 11)",
                 rusqlite::params![session, harness],
             )
             .unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_turn(session_id, turn, ts, role_id, said) VALUES (?1, 1, 12, ?2, '')",
+                "INSERT INTO agent_turn(session_id, turn, ts, role, said) VALUES (?1, 1, 12, ?2, '')",
                 rusqlite::params![session, role],
             )
             .unwrap();
         store
-            .attach_trace("session-a", "trace-a", "fixture", 11)
+            .attach_trace("session-a", "trace-a", "supervisor-conversation", 11)
             .unwrap();
         store
             .record_status("session-a", 13, "live", Some(101), Some("%1"))
@@ -525,13 +525,15 @@ mod tests {
                     ..LaneSpawn::default()
                 })
                 .unwrap();
-            store.attach_trace(session, trace, "fixture", ts).unwrap();
+            store
+                .attach_trace(session, trace, "supervisor-conversation", ts)
+                .unwrap();
             let session_id = store.intern_public("dict_session", session).unwrap();
-            let role_id = store.intern_public("dict_role", "assistant").unwrap();
+            let role_id = crate::closed_sets::value("dict_role", "assistant").unwrap();
             store
                 .connection()
                 .execute(
-                    "INSERT INTO agent_turn(session_id, turn, ts, role_id, said) VALUES (?1, 1, ?2, ?3, '')",
+                    "INSERT INTO agent_turn(session_id, turn, ts, role, said) VALUES (?1, 1, ?2, ?3, '')",
                     rusqlite::params![session_id, ts as i64, role_id],
                 )
                 .unwrap();

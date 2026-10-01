@@ -1,0 +1,9 @@
+   Compiling boop-store v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-store)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.42s
+     Running tests/wal_three_writers.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-store/627eedb5308fa66c/out/wal_three_writers-627eedb5308fa66c)
+
+running 1 test
+test three_concurrent_writers_all_land ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+

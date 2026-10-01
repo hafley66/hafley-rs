@@ -105,10 +105,9 @@ mod tests {
                 "INSERT INTO dict_session(id, value) VALUES (1, 'sess'), (2, 'sess/sub'), (3, 'other');
                  INSERT INTO dict_cwd(id, value) VALUES (1, '/repo'), (2, '/repo-wt/'), (3, '/elsewhere');
                  INSERT INTO dict_path(id, value) VALUES (1, '/repo/a.rs'), (2, '/repo-wt/b.rs'), (3, '/elsewhere/c.rs');
-                 INSERT INTO dict_verb(id, value) VALUES (1, 'read');
-                 INSERT INTO agent_session(session_id, harness_id, cwd_id, started_ts) VALUES (1, 1, 1, 10), (2, 1, 1, 11), (3, 1, 3, 12);
-                 INSERT INTO agent_turn(session_id, turn, ts, role_id, cwd_id) VALUES (1, 1, 100, 1, NULL), (1, 2, 200, 1, 2), (2, 1, 150, 1, NULL), (3, 1, 300, 1, NULL);
-                 INSERT INTO agent_touch(session_id, turn, ts, path_id, verb_id) VALUES (1, 1, 100, 1, 1), (2, 1, 150, 2, 1), (1, 2, 200, 1, 1), (3, 1, 300, 3, 1);",
+                 INSERT INTO agent_session(session_id, harness, cwd_id, started_ts) VALUES (1, 'claude', 1, 10), (2, 'claude', 1, 11), (3, 'claude', 3, 12);
+                 INSERT INTO agent_turn(session_id, turn, ts, role, cwd_id) VALUES (1, 1, 100, 'user', NULL), (1, 2, 200, 'user', 2), (2, 1, 150, 'user', NULL), (3, 1, 300, 'user', NULL);
+                 INSERT INTO agent_touch(session_id, turn, ts, path_id, verb) VALUES (1, 1, 100, 1, 'read'), (2, 1, 150, 2, 'read'), (1, 2, 200, 1, 'read'), (3, 1, 300, 3, 'read');",
             )
             .unwrap();
         let touched = store.session_touched(&["sess".to_owned()], 2000).unwrap();

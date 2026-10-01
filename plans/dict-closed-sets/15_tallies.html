@@ -1,0 +1,67 @@
+<!doctype html><meta charset="utf-8"><title>Schema 40 migration tallies</title>
+<link rel="stylesheet" href="https://cdn.datatables.net/2.1.8/css/dataTables.dataTables.min.css">
+<style>body{font:14px system-ui;margin:32px}h2{margin-top:40px}th,td{text-align:left}</style>
+<h1>Schema 38 → 39 → 40 migration tallies</h1>
+<p>Rows and decoded value multisets compare the backup copy before and after migration. Value bins include NULL. Dictionary tallies count referenced non-NULL values.</p>
+<h2>13_table_tallies.tsv</h2><table class="tallies"><thead><tr><th>table_name</th><th>before_rows</th><th>after_rows</th><th>enum_columns</th><th>value_bins</th><th>multiset_equal</th></tr></thead><tbody>
+<tr><td>agent_trace_span</td><td>4456</td><td>4456</td><td>1</td><td>5</td><td>1</td></tr>
+<tr><td>agent_session_attr</td><td>355</td><td>355</td><td>1</td><td>5</td><td>1</td></tr>
+<tr><td>agent_edge</td><td>5320</td><td>5320</td><td>1</td><td>9</td><td>1</td></tr>
+<tr><td>agent_fetch</td><td>8498</td><td>8498</td><td>1</td><td>2</td><td>1</td></tr>
+<tr><td>agent_turn</td><td>1306200</td><td>1306200</td><td>1</td><td>6</td><td>1</td></tr>
+<tr><td>agent_touch</td><td>137285</td><td>137285</td><td>2</td><td>15</td><td>1</td></tr>
+<tr><td>agent_session_relation</td><td>0</td><td>0</td><td>2</td><td>0</td><td>1</td></tr>
+<tr><td>agent_session_observation</td><td>91247</td><td>91247</td><td>2</td><td>7</td><td>1</td></tr>
+<tr><td>model_price</td><td>34</td><td>34</td><td>1</td><td>2</td><td>1</td></tr>
+<tr><td>agent_trace_event</td><td>10000</td><td>10000</td><td>3</td><td>34</td><td>1</td></tr>
+<tr><td>agent_live</td><td>7064</td><td>7064</td><td>1</td><td>4</td><td>1</td></tr>
+<tr><td>agent_live_span</td><td>11489</td><td>11489</td><td>1</td><td>3</td><td>1</td></tr>
+<tr><td>agent_session</td><td>7031</td><td>7031</td><td>1</td><td>5</td><td>1</td></tr>
+<tr><td>agent_lane</td><td>1576</td><td>1576</td><td>1</td><td>6</td><td>1</td></tr>
+<tr><td>agent_delivery</td><td>14822</td><td>14822</td><td>1</td><td>6</td><td>1</td></tr>
+<tr><td>agent_delivery_transition</td><td>350659</td><td>350659</td><td>1</td><td>6</td><td>1</td></tr>
+<tr><td>sync_root_stamp</td><td>4</td><td>4</td><td>1</td><td>4</td><td>1</td></tr>
+</tbody></table>
+<h2>12_column_tallies.tsv</h2><table class="tallies"><thead><tr><th>table_name</th><th>column_name</th><th>value_bins</th><th>before_rows</th><th>after_rows</th><th>multiset_equal</th></tr></thead><tbody>
+<tr><td>agent_trace_span</td><td>attach</td><td>5</td><td>4456</td><td>4456</td><td>1</td></tr>
+<tr><td>agent_session_attr</td><td>key</td><td>5</td><td>355</td><td>355</td><td>1</td></tr>
+<tr><td>agent_edge</td><td>edge_kind</td><td>9</td><td>5320</td><td>5320</td><td>1</td></tr>
+<tr><td>agent_fetch</td><td>kind</td><td>2</td><td>8498</td><td>8498</td><td>1</td></tr>
+<tr><td>agent_turn</td><td>role</td><td>6</td><td>1306200</td><td>1306200</td><td>1</td></tr>
+<tr><td>agent_touch</td><td>verb</td><td>5</td><td>137285</td><td>137285</td><td>1</td></tr>
+<tr><td>agent_touch</td><td>raw_verb</td><td>10</td><td>137285</td><td>137285</td><td>1</td></tr>
+<tr><td>agent_session_relation</td><td>kind</td><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+<tr><td>agent_session_relation</td><td>source</td><td>0</td><td>0</td><td>0</td><td>1</td></tr>
+<tr><td>agent_session_observation</td><td>harness</td><td>4</td><td>91247</td><td>91247</td><td>1</td></tr>
+<tr><td>agent_session_observation</td><td>source</td><td>3</td><td>91247</td><td>91247</td><td>1</td></tr>
+<tr><td>model_price</td><td>source</td><td>2</td><td>34</td><td>34</td><td>1</td></tr>
+<tr><td>agent_trace_event</td><td>kind</td><td>12</td><td>10000</td><td>10000</td><td>1</td></tr>
+<tr><td>agent_trace_event</td><td>delivery_state</td><td>9</td><td>10000</td><td>10000</td><td>1</td></tr>
+<tr><td>agent_trace_event</td><td>classification</td><td>13</td><td>10000</td><td>10000</td><td>1</td></tr>
+<tr><td>agent_live</td><td>status</td><td>4</td><td>7064</td><td>7064</td><td>1</td></tr>
+<tr><td>agent_live_span</td><td>status</td><td>3</td><td>11489</td><td>11489</td><td>1</td></tr>
+<tr><td>agent_session</td><td>harness</td><td>5</td><td>7031</td><td>7031</td><td>1</td></tr>
+<tr><td>agent_lane</td><td>harness</td><td>6</td><td>1576</td><td>1576</td><td>1</td></tr>
+<tr><td>agent_delivery</td><td>harness</td><td>6</td><td>14822</td><td>14822</td><td>1</td></tr>
+<tr><td>agent_delivery_transition</td><td>harness</td><td>6</td><td>350659</td><td>350659</td><td>1</td></tr>
+<tr><td>sync_root_stamp</td><td>harness</td><td>4</td><td>4</td><td>4</td><td>1</td></tr>
+</tbody></table>
+<h2>14_dictionary_tallies.tsv</h2><table class="tallies"><thead><tr><th>dictionary_name</th><th>referenced_values</th></tr></thead><tbody>
+<tr><td>dict_attach</td><td>5</td></tr>
+<tr><td>dict_attr_key</td><td>5</td></tr>
+<tr><td>dict_edekind</td><td>9</td></tr>
+<tr><td>dict_harness</td><td>6</td></tr>
+<tr><td>dict_netkind</td><td>2</td></tr>
+<tr><td>dict_observation_source</td><td>3</td></tr>
+<tr><td>dict_price_source</td><td>2</td></tr>
+<tr><td>dict_role</td><td>6</td></tr>
+<tr><td>dict_session_relation_kind</td><td>0</td></tr>
+<tr><td>dict_status</td><td>3</td></tr>
+<tr><td>dict_trace_classification</td><td>12</td></tr>
+<tr><td>dict_trace_delivery</td><td>8</td></tr>
+<tr><td>dict_trace_kind</td><td>12</td></tr>
+<tr><td>dict_verb</td><td>10</td></tr>
+</tbody></table>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
+<script>$('.tallies').DataTable({paging:false,initComplete:function(){this.api().columns().every(function(){const column=this;const input=document.createElement('input');input.placeholder='Filter';input.style.width='100%';column.header().appendChild(input);input.addEventListener('input',()=>column.search(input.value).draw());});}});</script>

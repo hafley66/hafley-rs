@@ -1,0 +1,187 @@
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+# BOOP_BIN=/Users/chrishafley/.cache/boop/cargo-target/debug/boop
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+1..75
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 1 whoami reports route pane harness
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 2 tag add links sources and repeated use keeps one link
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 3 tag add defaults to caller route
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 4 tag recent limits newest use and bare tag requires a verb
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 5 tag list orders usage and includes every tag
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 6 tag rm unlinks only the named source and missing link is idempotent
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 7 tag search matches tag substring and ignores favorite body
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 8 tag for includes empty sources and returns batch tags
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 9 tag of reads sorted tags on one source
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 10 tag sources reads every linked source
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 11 tag backfill applies favorite notes once
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 12 favorite add reads file and stdin and shares cached markdown
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 13 favorite list limits newest first and bare group requires a verb
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 14 favorite show includes body and missing id fails
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 15 favorite edit preserves body and omitted metadata
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 16 favorite delete keeps cached body and missing id fails
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 17 me mood sets reads clears and inherits parent mood
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 18 me favorite selects newest and older assistant turns with note tags
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 19 whoami explicit caller overrides environment on both spellings
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 20 whoami without identity exits two and requests as
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 21 agent register updates preserve omitted route metadata
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 22 agent register binds a live pane and rejects missing targets
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 23 route groups require a subcommand
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 24 selection list returns live registered panes ordered by focus
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 25 selection set changes one checkbox and rejects unknown route
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 26 selection focus resolves pane and keeps checkbox
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 27 selection clear resets checkboxes and keeps focus
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 28 lane create
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 29 lane create refuses a target dir outside the target root # skip v1 lacks: CARGO_TARGET_DIR outside BOOP_LANE_TARGET_ROOT is accepted and the lane spawns
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 30 one store: nothing writes a boop.db beside BOOP_MAIL_DIR
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 31 mail send and deliver into a pane
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 32 held mail drains once
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 33 mail send persists addressed body kind and mailbox receipt
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 34 mail send unknown recipient records no route receipt
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 35 inbox drain hands over addressed rows once and leaves other inbox
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 36 mail recv emits stop hook payload once
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 37 inbox hooks install idempotently and uninstall preserves unrelated settings
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 38 mail wait reads threaded reply and empty inbox times out
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 39 mail watch imports markdown once without spawning unknown recipients
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 40 message ack closes old lane mail and keeps unrelated rows
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 41 mail inbox and message groups require subcommands
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 42 remind add persists interval and rejects invalid route and interval
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 43 remind list expires old schedules and reports active schedule
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 44 remind cancel stops future delivery and repeated cancel fails
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 45 remind run once claims one occurrence and retains outstanding mail on rerun
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 46 remind group requires subcommand
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 47 remind reads caller user turns in conversation order
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 48 lane create --wait mirrors stub exit 0
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 49 lane create --wait mirrors stub exit 1
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 50 wait on a finished lane mirrors stub exit 1
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 51 wait on a finished lane mirrors stub exit 0
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 52 lane supervisor ends once when its tmux server dies
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 53 lane delete dry run keeps a merged lane
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 54 gc lists an unregistered target # skip v1 lacks: no gc verb
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 55 dead rows expire from lane list
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 56 lane list filters state harness and prints complete dead route
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 57 lane get reports dead route and touched worktree
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 58 lane where prints worktree alone and missing lane fails
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 59 lane route reads bound conversation and pane on both spellings
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 60 lane revive lists dead coordinators and refuses incomplete route
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 61 lane revive reopens dead coordinator on its stored session
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 62 lane message lists incoming and outgoing rows oldest first
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 63 lane and lane message groups require subcommands
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 64 lane delete removes merged worktree branch and route
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 65 lane delete keeps unmerged worktree and removes route
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 66 lane route only delete keeps live pane and selection is removed
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 67 lane retirement retains result conversation and worktree for inspection
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 68 db search returns seeded hits newest first
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 69 read verbs spawn nothing
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 70 coordinator vs lane
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 71 ACP lane has no pane # skip v1 lacks: no --transport flag; every v1 lane is an ACP channel hosted in a tmux pane
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 72 new harness via config only # skip v1 lacks: the harness registry is compiled in: unknown harness `fake`
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 73 shout reaches every live route but the caller
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 74 scream interrupts busy, pastes idle
+bash: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8): No such file or directory
+ok 75 children tally counts a typed kimi body as landed
+ops 155 covered 93 todo 62

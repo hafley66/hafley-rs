@@ -311,7 +311,7 @@ TRACE + PURPOSE: a process can host successive conversation ids after /clear
 or /new. A resumed conversation can retain its id in a new process. Compaction
 can retain the conversation id. Traces group conversations on recorded evidence:
     agent_trace       trace_id, root_session_id, started_ts
-    agent_trace_span  session_id -> trace_id, attach_id (WHY it attached)
+    agent_trace_span  session_id -> trace_id, attach (WHY it attached)
     agent_lane        one row per spawn: goal text, brief path id, brief body id
     markdown_cache    digest UNIQUE, body, bytes, first_ts (briefs dedupe here)
   `lane create` opens `trace-<lane>`; `--trace <id>` continues an existing one.
@@ -362,9 +362,9 @@ READ: the questions agents ask most, each one verb, no SQL and no schema probe:
   transcript bytes first; any other sync-carrying verb (db status, db turn,
   db chat, db \"<sql>\") also refreshes the store.
   `--format text` prints tab-separated rows; the default is NDJSON. Every
-  text column in the store is an id into a `dict_*` table (`agent_turn` holds
-  `role_id`, `session_id`, and its text in `said`); the verbs above do those
-  joins so a hand-written query is the exception.
+  open vocabulary uses ids into `dict_*` tables. Closed vocabulary uses checked
+  TEXT columns (`agent_turn` holds `role`, `session_id`, and its text in `said`);
+  the verbs above resolve dictionary joins.
 
 FAVORITE: pin markdown you want to keep, read it back later:
     boop me favorite -1 --note <why>      the newest assistant turn of the

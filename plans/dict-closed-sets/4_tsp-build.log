@@ -1,0 +1,12 @@
+
+> boop2-contract@0.0.0 build /Users/chrishafley/projects/boop2-dict
+> tsp compile schema/
+
+TypeSpec compiler v1.10.0
+
+- Compiling...
+✔ Compiling
+
+Compilation completed successfully.
+
+No emitter was configured, no output was generated. Use `--emit <emitterName>` to pick emitter or specify it in the TypeSpec config.

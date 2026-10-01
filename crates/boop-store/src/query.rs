@@ -106,20 +106,13 @@ impl FactKind {
         &'static [(&'static str, &'static str, &'static str)],
     ) {
         match self {
-            FactKind::Touch => (
-                "agent_touch",
-                &[
-                    ("path_id", "dict_path", "path"),
-                    ("verb_id", "dict_verb", "verb"),
-                ],
-            ),
+            FactKind::Touch => ("agent_touch", &[("path_id", "dict_path", "path")]),
             FactKind::Command => ("agent_cmd", &[("program_id", "dict_program", "program")]),
             FactKind::Fetch => (
                 "agent_fetch",
                 &[
                     ("url_id", "dict_url", "url"),
                     ("domain_id", "dict_domain", "domain"),
-                    ("kind_id", "dict_netkind", "kind"),
                 ],
             ),
             FactKind::Skill => ("agent_skill", &[("skill_id", "dict_skill", "skill")]),
@@ -157,6 +150,12 @@ impl Store {
             joins.push_str(&format!(
                 " LEFT JOIN {dict} AS {alias} ON {alias}.id = {table}.{column}"
             ));
+        }
+        if matches!(kind, FactKind::Touch) {
+            columns.push(format!("{table}.verb AS verb"));
+        }
+        if matches!(kind, FactKind::Fetch) {
+            columns.push(format!("{table}.kind AS kind"));
         }
         columns.push(format!("{table}.turn"));
         if kind.has_ts() {
@@ -202,12 +201,11 @@ impl Store {
     /// Tool touches as typed rows, with the canonical verb and the raw spelling.
     pub fn touch_rows(&self, filter: &FactQuery) -> Result<Vec<TouchRow>> {
         let mut sql = String::from(
-            "SELECT dict_session.value, t.turn, t.ts, dp.value, dv.value, drv.value
+            "SELECT dict_session.value, t.turn, t.ts, dp.value, t.verb, t.raw_verb
              FROM agent_touch t
              JOIN dict_session ON dict_session.id = t.session_id
              JOIN dict_path dp ON dp.id = t.path_id
-             JOIN dict_verb dv ON dv.id = t.verb_id
-             JOIN dict_verb drv ON drv.id = t.raw_verb_id
+
              WHERE 1=1",
         );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
@@ -299,13 +297,12 @@ impl Store {
     /// Network acts (fetch and search) as typed rows.
     pub fn fetch_rows(&self, filter: &FactQuery) -> Result<Vec<FetchRow>> {
         let mut sql = String::from(
-            "SELECT dict_session.value, f.turn, f.ts, u.value, d.value, nk.value, f.query
+            "SELECT dict_session.value, f.turn, f.ts, u.value, d.value, f.kind, f.query
              FROM agent_fetch f
              JOIN dict_session ON dict_session.id = f.session_id
              LEFT JOIN dict_url u ON u.id = f.url_id
              LEFT JOIN dict_domain d ON d.id = f.domain_id
-             LEFT JOIN dict_netkind nk ON nk.id = f.kind_id
-             WHERE 1=1",
+WHERE 1=1",
         );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
         if let Some(session) = &filter.session {
@@ -376,11 +373,11 @@ impl Store {
         // for a single-session read, since the planner cannot use the
         // (session_id, turn) primary key behind an OR.
         let mut sql = String::from(
-            "SELECT s.value, h.value, t.turn, t.ts, r.value, t.source_class, t.said
+            "SELECT s.value, a.harness, t.turn, t.ts, t.role, t.source_class, t.said
                FROM agent_turn t
+             JOIN agent_session a ON a.session_id = t.session_id
                JOIN dict_session s ON s.id = t.session_id
-               JOIN dict_harness h ON h.id = (SELECT harness_id FROM agent_session a WHERE a.session_id = t.session_id)
-               JOIN dict_role r ON r.id = t.role_id
+
               WHERE 1 = 1",
         );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
@@ -390,7 +387,10 @@ impl Store {
             values.push(value);
         };
         if let Some(harness) = query.harness.as_deref() {
-            push("h.value = ?", opt_string(Some(harness)));
+            push(
+                "a.harness = ?",
+                opt_string(Some(harness)),
+            );
         }
         if let Some(session) = query.session.as_deref() {
             push(
@@ -399,7 +399,7 @@ impl Store {
             );
         }
         if let Some(role) = query.role.as_deref() {
-            push("r.value = ?", opt_string(Some(role)));
+            push("t.role = ?", opt_string(Some(role)));
         }
         if let Some(since) = query.since {
             push("t.ts >= ?", opt_i64(Some(since)));
@@ -449,14 +449,14 @@ impl Store {
     /// The per-transcript resume cursor for each session: the harness, session
     /// id, transcript path, byte offset, and the last emitted record fields.
     pub fn query_cursors(&self, session: Option<&str>) -> Result<Vec<FactCursor>> {
-        let sql = "SELECT dict_harness.value, dict_session.value, dict_path.value, cursor.offset,
+        let sql =
+            "SELECT agent_session.harness, dict_session.value, dict_path.value, cursor.offset,
                           COALESCE(dict_record.value, ''), cursor.turn, cursor.timestamp
                    FROM sync_cursor cursor
                    JOIN dict_session ON dict_session.id = cursor.session_id
                    JOIN dict_path ON dict_path.id = cursor.path_id
                    JOIN agent_session ON agent_session.session_id = cursor.session_id
-                   JOIN dict_harness ON dict_harness.id = agent_session.harness_id
-                   LEFT JOIN dict_record ON dict_record.id = cursor.record_id_id
+LEFT JOIN dict_record ON dict_record.id = cursor.record_id_id
                    WHERE (?1 IS NULL OR dict_session.value = ?1)
                    ORDER BY dict_session.value, dict_path.value";
         let mut statement = self.connection().prepare(sql)?;
@@ -493,17 +493,16 @@ impl Store {
         limit: u64,
     ) -> Result<Vec<Row>> {
         let mut sql = String::from(
-            "SELECT dict_session.value AS session_id, dict_harness.value AS harness,
+            "SELECT dict_session.value AS session_id, agent_session.harness AS harness,
                     dict_cwd.value AS cwd, agent_session.nickname AS nickname,
-                    t.turn AS turn, t.ts AS ts, dict_role.value AS role,
+                    t.turn AS turn, t.ts AS ts, t.role AS role,
                     t.source_class AS source_class,
                     substr(t.said, max(1, instr(lower(t.said), lower(?1)) - 80), 240) AS snippet
              FROM agent_session
              CROSS JOIN agent_turn t
                ON t.session_id = agent_session.session_id AND t.ts >= ?2
              JOIN dict_session ON dict_session.id = t.session_id
-             JOIN dict_harness ON dict_harness.id = agent_session.harness_id
-             JOIN dict_role ON dict_role.id = t.role_id
+
              LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
              WHERE (SELECT max(m.ts) FROM agent_turn m
                      WHERE m.session_id = agent_session.session_id) >= ?2
@@ -531,15 +530,14 @@ impl Store {
         limit: u64,
     ) -> Result<Vec<Row>> {
         let mut sql = String::from(
-            "SELECT dict_session.value AS session_id, dict_harness.value AS harness,
+            "SELECT dict_session.value AS session_id, agent_session.harness AS harness,
                     dict_cwd.value AS cwd, dict_branch.value AS branch,
                     agent_session.nickname AS nickname,
                     COUNT(t.turn) AS turns, agent_session.started_ts AS started_ts,
                     MAX(t.ts) AS last_ts
              FROM agent_session
              JOIN dict_session ON dict_session.id = agent_session.session_id
-             JOIN dict_harness ON dict_harness.id = agent_session.harness_id
-             LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
+LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
              LEFT JOIN dict_branch ON dict_branch.id = agent_session.branch_id
              LEFT JOIN agent_turn t ON t.session_id = agent_session.session_id
              WHERE 1=1",
@@ -560,7 +558,7 @@ impl Store {
     /// of their result row when one was mailed.
     pub fn recent_lanes(&self, since_ts: u64, limit: u64) -> Result<Vec<Row>> {
         let sql = format!(
-            "SELECT lane_name.value AS lane, dict_harness.value AS harness,
+            "SELECT lane_name.value AS lane, agent_lane.harness AS harness,
                     dict_model.value AS model, dict_branch.value AS branch,
                     dict_cwd.value AS cwd, parent_name.value AS parent,
                     agent_lane.goal AS goal, agent_lane.spawned_ts AS spawned_ts,
@@ -568,8 +566,7 @@ impl Store {
                     result.from_timestamp AS ended_at
              FROM agent_lane
              JOIN dict_session lane_name ON lane_name.id = agent_lane.lane_id
-             JOIN dict_harness ON dict_harness.id = agent_lane.harness_id
-             LEFT JOIN dict_model ON dict_model.id = agent_lane.model_id
+LEFT JOIN dict_model ON dict_model.id = agent_lane.model_id
              LEFT JOIN dict_branch ON dict_branch.id = agent_lane.branch_id
              LEFT JOIN dict_cwd ON dict_cwd.id = agent_lane.cwd_id
              LEFT JOIN dict_session parent_name ON parent_name.id = agent_lane.parent_lane_id
@@ -729,14 +726,13 @@ impl Store {
     ) -> Result<Vec<SessionRow>> {
         let mut sql = String::from(
             "SELECT dict_session.value, agent_session.nickname,
-                    dict_harness.value, dict_cwd.value, dict_branch.value,
+                    agent_session.harness, dict_cwd.value, dict_branch.value,
                     agent_session.started_ts,
                     (SELECT COUNT(*) FROM agent_turn t WHERE t.session_id = agent_session.session_id) AS turns,
                     (SELECT MAX(t.ts) FROM agent_turn t WHERE t.session_id = agent_session.session_id) AS last_ts
              FROM agent_session
              JOIN dict_session ON dict_session.id = agent_session.session_id
-             JOIN dict_harness ON dict_harness.id = agent_session.harness_id
-             LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
+LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
              LEFT JOIN dict_branch ON dict_branch.id = agent_session.branch_id
              WHERE 1=1",
         );
@@ -800,7 +796,7 @@ impl Store {
         let floor = now_ms.saturating_sub(window_ms) as i64;
         let sql = "
             SELECT dict_session.value, agent_session.nickname,
-                   dict_harness.value, dict_cwd.value,
+                   agent_session.harness, dict_cwd.value,
                    parent.value,
                    MAX(agent_turn.ts) AS last_turn_ts,
                    COUNT(agent_turn.turn) AS turns,
@@ -811,7 +807,7 @@ impl Store {
                       FROM agent_usage u
                       WHERE u.session_id = agent_session.session_id AND u.ts >= ?1) AS tokens_in_window,
                    NULL AS lane,
-                   live_status.value AS state,
+                   live.status AS state,
                    live.pid,
                    live_pane.value AS tmux_pane,
                    NULL AS rss_kb,
@@ -828,14 +824,12 @@ impl Store {
                                           AND open_span.to_ts IS NULL)) AS died_ts
             FROM agent_session
             JOIN dict_session ON dict_session.id = agent_session.session_id
-            JOIN dict_harness ON dict_harness.id = agent_session.harness_id
-            LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
+LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
             LEFT JOIN agent_turn ON agent_turn.session_id = agent_session.session_id
             LEFT JOIN agent_edge ON agent_edge.child_session_id = agent_session.session_id
             LEFT JOIN dict_session AS parent ON parent.id = agent_edge.parent_session_id
             LEFT JOIN agent_live live ON live.session_id = agent_session.session_id
-            LEFT JOIN dict_status live_status ON live_status.id = live.status_id
-            LEFT JOIN dict_pane live_pane ON live_pane.id = live.tmux_pane_id
+LEFT JOIN dict_pane live_pane ON live_pane.id = live.tmux_pane_id
             GROUP BY agent_session.session_id
             HAVING last_turn_ts >= ?1
             ORDER BY last_turn_ts DESC";
@@ -946,10 +940,10 @@ mod tests {
         store.write_turn("ses", 3, 12, "user", "u1", None).unwrap();
         store.write_turn("ses", 4, 13, "user", "u2", None).unwrap();
         let sql = "WITH marked AS (
-                       SELECT t.turn, t.ts, r.value AS role, t.said,
+                       SELECT t.turn, t.ts, t.role AS role, t.said,
                               ROW_NUMBER() OVER (ORDER BY t.ts, t.turn)
-                            - ROW_NUMBER() OVER (PARTITION BY r.value ORDER BY t.ts, t.turn) AS island
-                       FROM agent_turn t JOIN dict_role r ON r.id = t.role_id
+                            - ROW_NUMBER() OVER (PARTITION BY t.role ORDER BY t.ts, t.turn) AS island
+                       FROM agent_turn t
                        WHERE t.session_id = :session_id AND t.ts > :cursor)
                    SELECT max(turn) AS id, max(ts) AS ts, group_concat(said, ' | ') AS text
                    FROM marked GROUP BY role, island ORDER BY min(ts)";

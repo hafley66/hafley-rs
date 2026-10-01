@@ -99,15 +99,14 @@ fn activity_sql(scope: ActivityScope) -> String {
 WITH
 turn_counts AS (
     SELECT turn.session_id,
-           COUNT(*) FILTER (WHERE role.value = 'user') AS user_count,
-           COUNT(*) FILTER (WHERE role.value = 'assistant') AS assistant_count,
-           COUNT(*) FILTER (WHERE role.value = 'tool') AS tool_count,
+           COUNT(*) FILTER (WHERE turn.role = 'user') AS user_count,
+           COUNT(*) FILTER (WHERE turn.role = 'assistant') AS assistant_count,
+           COUNT(*) FILTER (WHERE turn.role = 'tool') AS tool_count,
            COUNT(*) AS total_count,
            MIN(turn.ts) AS first_ts,
            MAX(turn.ts) AS last_ts
       FROM agent_turn AS turn
-      JOIN dict_role AS role ON role.id = turn.role_id
-     GROUP BY turn.session_id
+GROUP BY turn.session_id
 ),
 usage_counts AS (
     SELECT session_id,
@@ -177,15 +176,14 @@ members(session_id, identity) AS MATERIALIZED (
 ),
 turn_counts AS (
     SELECT turn.session_id,
-           COUNT(*) FILTER (WHERE role.value = 'user') AS user_count,
-           COUNT(*) FILTER (WHERE role.value = 'assistant') AS assistant_count,
-           COUNT(*) FILTER (WHERE role.value = 'tool') AS tool_count,
+           COUNT(*) FILTER (WHERE turn.role = 'user') AS user_count,
+           COUNT(*) FILTER (WHERE turn.role = 'assistant') AS assistant_count,
+           COUNT(*) FILTER (WHERE turn.role = 'tool') AS tool_count,
            COUNT(*) AS total_count,
            MIN(turn.ts) AS first_ts,
            MAX(turn.ts) AS last_ts
       FROM agent_turn AS turn
-      JOIN dict_role AS role ON role.id = turn.role_id
-     WHERE turn.session_id IN (
+WHERE turn.session_id IN (
                SELECT session_id FROM members WHERE session_id IS NOT NULL
            )
      GROUP BY turn.session_id
@@ -313,11 +311,11 @@ mod tests {
 
     fn session(store: &Store, id: &str, harness: &str, started_ts: i64) {
         let session_id = store.intern_public("dict_session", id).unwrap();
-        let harness_id = store.intern_public("dict_harness", harness).unwrap();
+        let harness_id = crate::closed_sets::value("dict_harness", harness).unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id, nickname, started_ts)
+                "INSERT INTO agent_session(session_id, harness, nickname, started_ts)
                  VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![session_id, harness_id, id, started_ts],
             )
@@ -326,11 +324,11 @@ mod tests {
 
     fn turn(store: &Store, session: &str, ordinal: i64, ts: i64, role: &str) {
         let session_id = store.intern_public("dict_session", session).unwrap();
-        let role_id = store.intern_public("dict_role", role).unwrap();
+        let role_id = crate::closed_sets::value("dict_role", role).unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_turn(session_id, turn, ts, role_id, said)
+                "INSERT INTO agent_turn(session_id, turn, ts, role, said)
                  VALUES (?1, ?2, ?3, ?4, '')",
                 rusqlite::params![session_id, ordinal, ts, role_id],
             )
@@ -389,7 +387,7 @@ mod tests {
             ("kimi-child", "trace-kimi", 60),
         ] {
             store
-                .attach_trace(session_id, trace, "fixture", attach_ts)
+                .attach_trace(session_id, trace, "supervisor-conversation", attach_ts)
                 .unwrap();
         }
         lane(&store, "lane-claude", Some("trace-claude"), 10);
@@ -503,7 +501,12 @@ mod tests {
         ] {
             session(&store, session_id, harness, turn_ts);
             store
-                .attach_trace(session_id, "trace-selected", "fixture", turn_ts as u64)
+                .attach_trace(
+                    session_id,
+                    "trace-selected",
+                    "supervisor-conversation",
+                    turn_ts as u64,
+                )
                 .unwrap();
             turn(&store, session_id, 1, turn_ts, "assistant");
             usage(
@@ -521,7 +524,7 @@ mod tests {
                 .attach_trace(
                     &session_id,
                     &format!("trace-unrelated-{number}"),
-                    "fixture",
+                    "supervisor-conversation",
                     20,
                 )
                 .unwrap();

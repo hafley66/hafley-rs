@@ -512,8 +512,7 @@ mod tests {
             .prepare(
                 "SELECT json_extract(e.detail, '$.build_sha'), COUNT(*)
                    FROM agent_trace_event e
-                   JOIN dict_trace_kind k ON k.id = e.kind_id
-                  WHERE k.value = 'cli-invocation'
+WHERE e.kind = 'cli-invocation'
                   GROUP BY 1 ORDER BY 1",
             )
             .unwrap();

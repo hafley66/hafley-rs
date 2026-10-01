@@ -246,9 +246,9 @@ fn wait_for_recorded_turn(scratch: &Scratch, case: &Case, session: &str) {
         ]);
         let with_text = scratch.scalar(&format!(
             "SELECT COUNT(*) AS n FROM agent_turn t \
-             JOIN dict_role r ON r.id = t.role_id \
+              \
              JOIN dict_session s ON s.id = t.session_id \
-             WHERE s.value = '{session}' AND r.value = 'assistant' AND t.said <> ''"
+             WHERE s.value = '{session}' AND t.role = 'assistant' AND t.said <> ''"
         ));
         if with_text != "0" {
             return;

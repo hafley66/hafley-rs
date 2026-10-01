@@ -1,0 +1,5 @@
+check	result
+row_counts	equal
+decoded_value_multisets	equal
+open_dictionary_rows	equal
+integrity_check	ok

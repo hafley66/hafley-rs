@@ -27,6 +27,7 @@ fn favorite_bodies(connection: &Connection) -> Vec<(i64, Vec<u8>)> {
 fn v38_migration_preserves_every_kind_body_and_user_row() {
     let path = fixture_path("migration");
     let store = Store::open(path.clone()).unwrap();
+    store.connection().execute_batch(include_str!("../sql/39_interned_fixture.sql")).unwrap();
     store.connection().execute_batch("DROP VIEW v_favorite; DROP TABLE agent_favorite;
       CREATE TABLE agent_favorite(favorite_id INTEGER PRIMARY KEY, markdown_id INTEGER NOT NULL, note TEXT, source TEXT NOT NULL DEFAULT '', created_ts INTEGER NOT NULL);
       DROP TABLE mood;
@@ -79,7 +80,7 @@ fn v38_migration_preserves_every_kind_body_and_user_row() {
     let before = favorite_bodies(store.connection());
     drop(store);
     let store = Store::open(path.clone()).unwrap();
-    assert_eq!(store.schema_version().unwrap(), 39);
+    assert_eq!(store.schema_version().unwrap(), 40);
     assert_eq!(favorite_bodies(store.connection()), before);
     let rows=store.rows("SELECT source_kind,source_session,source_turn,source_turn_end,source_harness,source_role,source_codex_ref,source_text FROM agent_favorite ORDER BY favorite_id",vec![]).unwrap();
     let kinds: Vec<_> = rows

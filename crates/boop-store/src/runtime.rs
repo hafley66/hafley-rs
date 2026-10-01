@@ -572,11 +572,10 @@ const RUNTIME_ATTACHED_SESSIONS_ALL_SQL: &str = "SELECT trace.value, d.value, sp
        JOIN dict_trace trace ON trace.id = span.trace_id
        JOIN dict_session d ON d.id = span.session_id";
 
-const RUNTIME_PROCESSES_SQL: &str = "SELECT d.value, status.value, live.pid, pane.value
+const RUNTIME_PROCESSES_SQL: &str = "SELECT d.value, live.status, live.pid, pane.value
           FROM agent_live live
           JOIN dict_session d ON d.id = live.session_id
-          LEFT JOIN dict_status status ON status.id = live.status_id
-          LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id";
+LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id";
 
 pub(crate) fn sql_placeholders(count: usize) -> String {
     if count == 0 {
@@ -1189,11 +1188,10 @@ impl Store {
     }
 
     fn runtime_process(&self, session: &str) -> Result<Option<ProcessIdentity>> {
-        let sql = "SELECT status.value, live.pid, pane.value
+        let sql = "SELECT live.status, live.pid, pane.value
                      FROM agent_live live
                      LEFT JOIN dict_session d ON d.id = live.session_id
-                     LEFT JOIN dict_status status ON status.id = live.status_id
-                     LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
+LEFT JOIN dict_pane pane ON pane.id = live.tmux_pane_id
                     WHERE d.value = ?1";
         let row = self
             .connection()
@@ -1333,20 +1331,20 @@ mod tests {
 
     fn add_session(store: &Store, session: &str, ts: i64) {
         let session_id = store.intern_public("dict_session", session).unwrap();
-        let harness_id = store.intern_public("dict_harness", "opencode").unwrap();
+        let harness_id = crate::closed_sets::value("dict_harness", "opencode").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_session(session_id, harness_id, nickname, started_ts)
+                "INSERT INTO agent_session(session_id, harness, nickname, started_ts)
                  VALUES (?1, ?2, ?3, ?4)",
                 rusqlite::params![session_id, harness_id, session, ts],
             )
             .unwrap();
-        let role_id = store.intern_public("dict_role", "assistant").unwrap();
+        let role_id = crate::closed_sets::value("dict_role", "assistant").unwrap();
         store
             .connection()
             .execute(
-                "INSERT INTO agent_turn(session_id, turn, ts, role_id, said)
+                "INSERT INTO agent_turn(session_id, turn, ts, role, said)
                  VALUES (?1, 1, ?2, ?3, 'answer')",
                 rusqlite::params![session_id, ts, role_id],
             )
@@ -1482,7 +1480,12 @@ mod tests {
                 .attach_trace(lane, &format!("trace-{lane}"), "lane-create", 10)
                 .unwrap();
             store
-                .attach_trace(session, &format!("trace-{lane}"), "supervisor", 11)
+                .attach_trace(
+                    session,
+                    &format!("trace-{lane}"),
+                    "supervisor-conversation",
+                    11,
+                )
                 .unwrap();
             add_session(&store, session, 20);
             store
@@ -1594,7 +1597,12 @@ mod tests {
                 .attach_trace(lane, &format!("trace-{lane}"), "lane-create", 10)
                 .unwrap();
             store
-                .attach_trace(session, &format!("trace-{lane}"), "supervisor", 11)
+                .attach_trace(
+                    session,
+                    &format!("trace-{lane}"),
+                    "supervisor-conversation",
+                    11,
+                )
                 .unwrap();
             add_session(&store, session, 20);
             store
@@ -1641,7 +1649,12 @@ mod tests {
             .attach_trace("lane-fb", "trace-lane-fb", "lane-create", 10)
             .unwrap();
         store
-            .attach_trace("generated-fb", "trace-lane-fb", "supervisor", 11)
+            .attach_trace(
+                "generated-fb",
+                "trace-lane-fb",
+                "supervisor-conversation",
+                11,
+            )
             .unwrap();
         add_session(&store, "generated-fb", 20);
         store
@@ -1677,7 +1690,12 @@ mod tests {
             .attach_trace("lane-out", "trace-lane-out", "lane-create", 10)
             .unwrap();
         store
-            .attach_trace("generated-out", "trace-lane-out", "supervisor", 11)
+            .attach_trace(
+                "generated-out",
+                "trace-lane-out",
+                "supervisor-conversation",
+                11,
+            )
             .unwrap();
         add_session(&store, "generated-out", 20);
         store
@@ -1751,14 +1769,14 @@ mod tests {
             })
             .unwrap();
         store
-            .attach_trace("route-only", "trace-route", "fixture", 11)
+            .attach_trace("route-only", "trace-route", "supervisor-conversation", 11)
             .unwrap();
         for number in 0..7 {
             store
                 .attach_trace(
                     &format!("unrelated-{number}"),
                     &format!("trace-unrelated-{number}"),
-                    "fixture",
+                    "supervisor-conversation",
                     12,
                 )
                 .unwrap();
@@ -1849,7 +1867,7 @@ mod tests {
             .attach_trace("lane-a", "trace-lane-a", "lane-create", 10)
             .unwrap();
         store
-            .attach_trace("generated-a", "trace-lane-a", "supervisor", 11)
+            .attach_trace("generated-a", "trace-lane-a", "supervisor-conversation", 11)
             .unwrap();
         add_session(&store, "generated-a", 20);
         // This report was durable when written but PID 999 is absent from the
@@ -1890,7 +1908,12 @@ mod tests {
                 .attach_trace(lane, &format!("trace-{lane}"), "lane-create", 10)
                 .unwrap();
             store
-                .attach_trace(session, &format!("trace-{lane}"), "supervisor", 11)
+                .attach_trace(
+                    session,
+                    &format!("trace-{lane}"),
+                    "supervisor-conversation",
+                    11,
+                )
                 .unwrap();
             add_session(&store, session, 20);
             store

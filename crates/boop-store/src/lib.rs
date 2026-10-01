@@ -13,6 +13,8 @@ pub mod _0_trace_identity;
 #[cfg(feature = "agent-read")]
 pub mod activity;
 pub mod bus;
+#[path = "2_closed_sets.rs"]
+pub mod closed_sets;
 pub mod event;
 pub mod harness_id;
 pub mod ident;
@@ -83,3 +85,10 @@ pub use usage::{GroupBy, SessionTokenUsage, TokenTotals, UsageQuery};
 pub fn open_default() -> anyhow::Result<Store> {
     Store::open(Store::default_path()?)
 }
+
+#[cfg(test)]
+#[path = "4_closed_sets_tests.rs"]
+mod closed_sets_tests;
+#[cfg(test)]
+#[path = "3_legacy_tests.rs"]
+mod legacy_tests;
