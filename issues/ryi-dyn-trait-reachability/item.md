@@ -4,6 +4,7 @@ updated: 2026-10-01
 type: bug
 status: open
 priority: normal
+epic: burndown-2026-10
 ---
 
 # ryi: reachability stops at trait-object calls (`dyn Trait`)

@@ -4,6 +4,7 @@ updated: 2026-10-01
 type: bug
 status: open
 priority: normal
+epic: burndown-2026-10
 ---
 
 # ryi TS: slow misses method callers that fast finds; both tiers print every edge twice
