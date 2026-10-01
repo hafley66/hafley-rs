@@ -1,0 +1,27 @@
+# Vendored tree-sitter-typespec grammar: src/parser.c, src/tree_sitter/*.h,
+# src/*.json, grammar.js and LICENSE (MIT, Hilmar Wiegand) copied unchanged from
+# github.com/happenslol/tree-sitter-typespec at 395bef1e1eb4dd18365401642beb534e8a244056.
+# Upstream's own Rust binding pins `tree-sitter = "~0.20.10"`, a second core
+# (and a second `links = "tree-sitter"`), so a git dependency cannot resolve
+# beside the 0.27 runtime; this crate swaps only that binding for the
+# `tree-sitter-language` + `cc` shape tree-sitter-gdscript 6 ships. No crates.io
+# release exists (`cargo search tree-sitter-typespec`, 2026-10-01). parser.c is
+# generated at LANGUAGE_VERSION 15. Regenerate: copy src/ from a newer commit.
+[package]
+name = "tree-sitter-typespec"
+version = "0.0.1"
+edition = "2021"
+license = "MIT"
+build = "bindings/rust/build.rs"
+
+[lib]
+path = "bindings/rust/lib.rs"
+
+[dependencies]
+tree-sitter-language = "0.1"
+
+[build-dependencies]
+cc = "1"
+
+[dev-dependencies]
+tree-sitter = "0.27"

@@ -523,6 +523,7 @@ pub(crate) fn default_patterns() -> Vec<soopy::Pattern> {
         "**/*.lsp",
         "**/*.cl",
         "**/*.asd",
+        "**/*.tsp",
     ]
     .into_iter()
     .map(|pattern| soopy::Pattern(pattern.into()))

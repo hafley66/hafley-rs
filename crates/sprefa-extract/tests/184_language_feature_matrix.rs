@@ -32,6 +32,7 @@ fn capabilities_roster_and_single_language_grammar_features_match() {
             "ts",
             "gdscript",
             "commonlisp",
+            "typespec",
             "fallback",
         ]
     );
@@ -59,6 +60,7 @@ fn capabilities_roster_and_single_language_grammar_features_match() {
         ("fallback", &["tree-sitter-html"]),
         ("gdscript", &["tree-sitter-gdscript"]),
         ("commonlisp", &["tree-sitter-commonlisp"]),
+        ("typespec", &["tree-sitter-typespec"]),
     ];
     let all_grammars: Vec<&str> = grammar_features
         .iter()

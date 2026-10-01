@@ -265,6 +265,10 @@ const V6_ONLY_LANGS: &[(&str, &str)] = &[
         "commonlisp",
         "v5 had no lisp front-end at all; the cst plane is the grammar's own output",
     ),
+    (
+        "typespec",
+        "v5 had no TypeSpec front-end; the vendored grammar's cst plane is the whole increment",
+    ),
 ];
 
 #[test]

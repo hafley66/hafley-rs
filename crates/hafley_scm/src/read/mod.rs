@@ -72,6 +72,8 @@ pub use family::{
 };
 #[cfg(feature = "commonlisp")]
 pub use lang::CommonlispSource;
+#[cfg(feature = "typespec")]
+pub use lang::TypespecSource;
 #[cfg(feature = "data")]
 pub use lang::DataSource;
 #[cfg(feature = "fallback")]

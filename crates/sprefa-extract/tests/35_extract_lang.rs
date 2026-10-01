@@ -10,6 +10,7 @@ fn from_path_routes_the_roster_grammars_and_delegates_the_rest() {
     assert_eq!(RyiLang::from_path("a.md"), Some(RyiLang::Markdown));
     assert_eq!(RyiLang::from_path("a.markdown"), Some(RyiLang::Markdown));
     assert_eq!(RyiLang::from_path("p.gd"), Some(RyiLang::Gdscript));
+    assert_eq!(RyiLang::from_path("s.tsp"), Some(RyiLang::Typespec));
     for lisp in ["l.lisp", "l.lsp", "l.cl", "l.asd"] {
         assert_eq!(
             RyiLang::from_path(lisp),
@@ -52,6 +53,7 @@ fn every_lang_name_round_trips_through_the_yaml_spelling() {
         RyiLang::MarkdownInline,
         RyiLang::Gdscript,
         RyiLang::Commonlisp,
+        RyiLang::Typespec,
         RyiLang::Html,
         RyiLang::Json,
         RyiLang::Yaml,
@@ -81,6 +83,7 @@ fn parse_name_answers_the_alias_table() {
         Some(RyiLang::MarkdownInline)
     );
     assert_eq!(RyiLang::parse_name("gd"), Some(RyiLang::Gdscript));
+    assert_eq!(RyiLang::parse_name("tsp"), Some(RyiLang::Typespec));
     for lisp in ["lisp", "cl"] {
         assert_eq!(
             RyiLang::parse_name(lisp),
@@ -109,6 +112,7 @@ fn every_variant_carries_a_linked_grammar() {
         RyiLang::MarkdownInline,
         RyiLang::Gdscript,
         RyiLang::Commonlisp,
+        RyiLang::Typespec,
         RyiLang::Html,
         RyiLang::Json,
         RyiLang::Yaml,

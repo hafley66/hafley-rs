@@ -67,5 +67,6 @@ data         cst,data                                               no      -   
 ts           cst,types,call,df      call+types manifests,text_spellings,plan_check yes     tsc             typescript
 gdscript     cst                                                    no      -               -
 commonlisp   cst                                                    no      -               -
+typespec     cst                                                    no      -               -
 fallback     cst,call               call                            no      -               -
 cpp                                                                 no      -               cpp
