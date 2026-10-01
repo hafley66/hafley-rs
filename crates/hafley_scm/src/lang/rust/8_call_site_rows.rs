@@ -28,11 +28,9 @@ pub struct CallSiteRows {
 
 pub fn call_site_rows(
     parsed: &syn::File,
-    line_starts: &[u32],
     def_ranges: &[Range<u32>],
 ) -> CallSiteRows {
     let mut collector = CallCollector {
-        line_starts,
         sites: Vec::new(),
         expected_types: Vec::new(),
         defs: def_ranges,
@@ -48,7 +46,6 @@ pub fn call_site_rows(
 }
 
 struct CallCollector<'a> {
-    line_starts: &'a [u32],
     sites: Vec<CallSiteRow>,
     expected_types: Vec<(Range<u32>, String)>,
     defs: &'a [Range<u32>],
@@ -62,7 +59,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
             if let (syn::Type::Path(ty), Some(call)) = (&*pattern.ty, default_call(&init.expr)) {
                 if !ty.path.segments.is_empty() {
                     self.expected_types.push((
-                        span_range(self.line_starts, call.func.span()),
+                        span_range(call.func.span()),
                         path_string(&ty.path),
                     ));
                 }
@@ -84,7 +81,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
         let mark = self.sites.len();
         syn::visit::visit_item(self, item);
         if let Some((ident, expr, name)) = candidate {
-            let init = span_range(self.line_starts, expr.span());
+            let init = span_range(expr.span());
             if self.sites[mark..]
                 .iter()
                 .filter(|site| init.start <= site.range.start && site.range.end <= init.end)
@@ -95,8 +92,8 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                         .any(|range| range.start <= site.range.start && site.range.end <= range.end)
                 })
             {
-                let start = span_range(self.line_starts, ident).start;
-                let end = span_range(self.line_starts, expr.span()).end;
+                let start = span_range(ident).start;
+                let end = span_range(expr.span()).end;
                 self.const_inits.push(ConstInitRow {
                     range: start..end,
                     name,
@@ -118,7 +115,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                 if let syn::Expr::Path(path) = peel_parens(&call.func) {
                     if let Some(segment) = path.path.segments.last() {
                         self.sites.push(CallSiteRow {
-                            range: span_range(self.line_starts, call.func.span()),
+                            range: span_range(call.func.span()),
                             callee: segment.ident.to_string(),
                             callee_path: (path.path.segments.len() > 1)
                                 .then(|| path_string(&path.path)),
@@ -129,7 +126,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
             }
             syn::Expr::MethodCall(call) => {
                 self.sites.push(CallSiteRow {
-                    range: span_range(self.line_starts, call.method.span()),
+                    range: span_range(call.method.span()),
                     callee: call.method.to_string(),
                     callee_path: None,
                 });
@@ -139,7 +136,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                 if let Some(rest) = &struct_expr.rest {
                     if let Some(call) = default_call(rest) {
                         self.expected_types.push((
-                            span_range(self.line_starts, call.func.span()),
+                            span_range(call.func.span()),
                             path_string(&struct_expr.path),
                         ));
                     }
@@ -151,7 +148,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for CallCollector<'a> {
                     .filter(|_| !is_variant_literal_path(&struct_expr.path))
                 {
                     self.sites.push(CallSiteRow {
-                        range: span_range(self.line_starts, struct_expr.path.span()),
+                        range: span_range(struct_expr.path.span()),
                         callee: segment.ident.to_string(),
                         callee_path: (struct_expr.path.segments.len() > 1)
                             .then(|| path_string(&struct_expr.path)),

@@ -12,7 +12,7 @@ use super::{
     MOD_RELOCATE_OUT, WIDEN_VIS,
 };
 use crate::edit_seams::ImportRefKind;
-use crate::lang::rust::{build_line_starts, syn_span};
+use crate::lang::rust::syn_span;
 use crate::lang::rust_modules::CargoManifest;
 use crate::manifests::{fold_package_edges, Manifest, ManifestKind};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
@@ -170,11 +170,9 @@ struct Scanned {
 }
 
 fn extras(text: &str) -> Option<Extras> {
-    let parsed = syn::parse_file(text).ok()?;
-    let line_starts = build_line_starts(text);
+    let parsed = hafley_scm::lang::rust::parse_rust_file(text).ok()?;
     let mut walk = ExtraWalk {
         source: text,
-        line_starts: &line_starts,
         chain: Vec::new(),
         fn_depth: 0,
         out: Extras {
@@ -188,7 +186,6 @@ fn extras(text: &str) -> Option<Extras> {
 
 struct ExtraWalk<'a> {
     source: &'a str,
-    line_starts: &'a [u32],
     chain: Vec<String>,
     fn_depth: usize,
     out: Extras,
@@ -196,7 +193,7 @@ struct ExtraWalk<'a> {
 
 impl ExtraWalk<'_> {
     fn span_of(&self, span: proc_macro2::Span) -> Span {
-        syn_span(self.line_starts, span)
+        syn_span(span)
     }
 
     /// The first offset past `attrs` and whitespace: where a `pub ` insertion
@@ -445,7 +442,6 @@ impl<'ast> syn::visit::Visit<'ast> for ExtraWalk<'_> {
         let mut grouped = false;
         use_leaves(
             &node.tree,
-            self.line_starts,
             &mut Vec::new(),
             &mut leaves,
             &mut grouped,
@@ -463,7 +459,6 @@ impl<'ast> syn::visit::Visit<'ast> for ExtraWalk<'_> {
 
 fn use_leaves(
     tree: &syn::UseTree,
-    line_starts: &[u32],
     prefix: &mut Vec<(String, Span)>,
     out: &mut Vec<UseLeaf>,
     grouped: &mut bool,
@@ -489,22 +484,22 @@ fn use_leaves(
         syn::UseTree::Path(segment) => {
             prefix.push((
                 segment.ident.to_string(),
-                syn_span(line_starts, segment.ident.span()),
+                syn_span(segment.ident.span()),
             ));
-            use_leaves(&segment.tree, line_starts, prefix, out, grouped);
+            use_leaves(&segment.tree, prefix, out, grouped);
             prefix.pop();
         }
         syn::UseTree::Group(group) => {
             *grouped = true;
             for member in &group.items {
-                use_leaves(member, line_starts, prefix, out, grouped);
+                use_leaves(member, prefix, out, grouped);
             }
         }
         syn::UseTree::Name(leaf) => emit(
             prefix,
             Some((
                 leaf.ident.to_string(),
-                syn_span(line_starts, leaf.ident.span()),
+                syn_span(leaf.ident.span()),
             )),
             None,
             false,
@@ -513,7 +508,7 @@ fn use_leaves(
             prefix,
             Some((
                 leaf.ident.to_string(),
-                syn_span(line_starts, leaf.ident.span()),
+                syn_span(leaf.ident.span()),
             )),
             Some(leaf.rename.to_string()),
             false,

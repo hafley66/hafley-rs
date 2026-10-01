@@ -5,7 +5,7 @@ use std::collections::BTreeSet;
 
 use hafley_scm::build;
 use hafley_scm::lang::rust::{
-    build_line_starts, call_definition_rows, call_metadata_rows, call_metadata_rows_from_tree,
+    call_definition_rows, call_metadata_rows, call_metadata_rows_from_tree,
     RUST_CALL_QUERY,
 };
 use tree_sitter::{Language, Parser};
@@ -27,9 +27,9 @@ fn defs_of(src: &str) -> BTreeSet<(u32, u32)> {
 }
 
 fn snap(src: &str) -> Vec<Owner> {
-    let parsed = syn::parse_file(src).expect("parses");
+    let parsed = hafley_scm::lang::rust::parse_rust_file(src).expect("parses");
     let defs = defs_of(src);
-    let owners: Vec<Owner> = call_metadata_rows(&parsed, &build_line_starts(src))
+    let owners: Vec<Owner> = call_metadata_rows(&parsed)
         .iter()
         .map(|row| {
             (

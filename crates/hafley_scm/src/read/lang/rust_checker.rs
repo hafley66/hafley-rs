@@ -22,8 +22,7 @@ use crate::read::tsi::stamp_digests;
 use crate::read::types::{ContentId, DefIndex};
 use hafley_scm::span::Span;
 
-/// One resolved reference. Offsets are the parse plane's unit (a line's start
-/// byte plus the CHARACTER column), converted by `OffsetMap`, never raw bytes.
+/// One resolved reference. Offsets are UTF-8 byte offsets into the file.
 #[derive(Clone, Debug)]
 pub struct CheckerRef {
     pub start: u32,
@@ -347,46 +346,4 @@ pub fn target_types(
     budget: Duration,
 ) -> Result<Vec<TargetTypeReference>, CheckerError> {
     super::rust_checker_ra::target_types(root, files, seeds, budget)
-}
-
-/// A file's byte offset -> the parse plane's offset for the same position: a
-/// line's start byte plus its CHARACTER column, the unit `syn_span` writes.
-pub struct OffsetMap {
-    line_starts: Vec<u32>,
-    /// Per line, the byte offsets of its non-ASCII bytes. An all-ASCII line
-    /// carries an empty slice and converts by identity.
-    wide: Vec<Vec<u32>>,
-}
-
-impl OffsetMap {
-    pub fn new(text: &str) -> OffsetMap {
-        let mut line_starts = vec![0u32];
-        let mut wide: Vec<Vec<u32>> = vec![Vec::new()];
-        for (offset, byte) in text.bytes().enumerate() {
-            if byte == b'\n' {
-                line_starts.push(offset as u32 + 1);
-                wide.push(Vec::new());
-            } else if byte >= 0x80 {
-                wide.last_mut()
-                    .expect("a line entry per line start")
-                    .push(offset as u32);
-            }
-        }
-        OffsetMap { line_starts, wide }
-    }
-
-    /// Every continuation byte of a multi-byte character is one byte the
-    /// character column does not count.
-    pub fn to_span_offset(&self, byte: u32) -> u32 {
-        let line = match self.line_starts.binary_search(&byte) {
-            Ok(exact) => exact,
-            Err(next) => next.saturating_sub(1),
-        };
-        let start = self.line_starts[line];
-        let continuations = self.wide[line]
-            .iter()
-            .take_while(|offset| **offset < byte)
-            .count() as u32;
-        start + (byte - start) - continuations
-    }
 }

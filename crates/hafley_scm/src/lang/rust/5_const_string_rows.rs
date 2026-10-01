@@ -9,9 +9,9 @@ pub struct ConstStringRow {
     pub value: String,
 }
 
-pub fn const_string_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<ConstStringRow> {
+pub fn const_string_rows(parsed: &syn::File) -> Vec<ConstStringRow> {
     let mut rows = Vec::new();
-    collect(&parsed.items, line_starts, &mut rows);
+    collect(&parsed.items, &mut rows);
     rows
 }
 
@@ -114,11 +114,11 @@ pub(super) fn decode_string_literal(literal: &str) -> Option<String> {
     Some(out)
 }
 
-fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut Vec<ConstStringRow>) {
+fn collect(items: &[syn::Item], rows: &mut Vec<ConstStringRow>) {
     for item in items {
         if let syn::Item::Mod(module) = item {
             if let Some((_, inner)) = &module.content {
-                collect(inner, line_starts, rows);
+                collect(inner, rows);
             }
             continue;
         }
@@ -133,7 +133,7 @@ fn collect(items: &[syn::Item], line_starts: &[u32], rows: &mut Vec<ConstStringR
             continue;
         };
         rows.push(ConstStringRow {
-            range: span_range(line_starts, item.ident.span()),
+            range: span_range(item.ident.span()),
             name: item.ident.to_string(),
             value: value.value(),
         });

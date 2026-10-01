@@ -11,7 +11,7 @@
 //! (`-> Result<T, _>`/`-> Option<T>` take T). Everything else stays
 //! `Inferred`; resolution never guesses and never invents an edge.
 
-use super::call_metadata_rows::line_col_to_byte;
+use super::call_metadata_rows::span_range;
 use super::df_syntax_rows::Span;
 use super::module_resolution_rows::principal_ty;
 use syn::spanned::Spanned as _;
@@ -29,14 +29,11 @@ pub struct ReceiverBinding {
     pub outcome: ReceiverOutcome,
 }
 
-fn syn_span(line_starts: &[u32], span: proc_macro2::Span) -> Span {
-    let start = span.start();
-    let end = span.end();
-    let start = line_col_to_byte(line_starts, start.line as u32, start.column as u32);
-    let end = line_col_to_byte(line_starts, end.line as u32, end.column as u32);
+fn syn_span(span: proc_macro2::Span) -> Span {
+    let range = span_range(span);
     Span {
-        start,
-        len: end.saturating_sub(start),
+        start: range.start,
+        len: range.end.saturating_sub(range.start),
     }
 }
 
@@ -111,8 +108,7 @@ enum TypeBinding {
 
 /// The receiver walk: one visit per file, `ReceiverBinding` per method-call
 /// site appended to `sink.aux.receivers`.
-struct ReceiverWalk<'a> {
-    line_starts: &'a [u32],
+struct ReceiverWalk {
     /// Same-file fn name -> declared return type (the one-hop table).
     rets: std::collections::HashMap<String, String>,
     /// Same-file (impl self type, method) -> declared return type, `Self`
@@ -126,7 +122,7 @@ struct ReceiverWalk<'a> {
     out: Vec<ReceiverBinding>,
 }
 
-impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
+impl<'ast> syn::visit::Visit<'ast> for ReceiverWalk {
     fn visit_item_impl(&mut self, imp: &'ast syn::ItemImpl) {
         if let Some(self_type) = principal_ty(&imp.self_ty) {
             self.impl_stack.push(self_type);
@@ -186,7 +182,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
 
     fn visit_expr_method_call(&mut self, call: &'ast syn::ExprMethodCall) {
         let outcome = self.receiver_outcome(&call.receiver);
-        let span = syn_span(self.line_starts, call.method.span());
+        let span = syn_span(call.method.span());
         self.out.push(ReceiverBinding {
             call_site: span,
             outcome,
@@ -217,7 +213,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
         if path.path.segments.len() == 1 {
             let ident = path.path.segments[0].ident.to_string();
             if ident != "self" && self.lookup(&ident).is_some() {
-                let span = syn_span(self.line_starts, path.span());
+                let span = syn_span(path.span());
                 self.out.push(ReceiverBinding {
                     call_site: span,
                     outcome: ReceiverOutcome::Shadowed,
@@ -228,7 +224,7 @@ impl<'ast, 'a> syn::visit::Visit<'ast> for ReceiverWalk<'a> {
     }
 }
 
-impl<'a> ReceiverWalk<'a> {
+impl ReceiverWalk {
     fn insert(&mut self, name: String, binding: TypeBinding) {
         let Some(frame) = self.scopes.last_mut() else {
             return;
@@ -513,13 +509,12 @@ fn tables(
 }
 
 /// Phase-1 entry: one `ReceiverBinding` per method-call site in the file.
-pub fn receiver_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<ReceiverBinding> {
+pub fn receiver_rows(parsed: &syn::File) -> Vec<ReceiverBinding> {
     let mut rets = Default::default();
     let mut assoc_rets = Default::default();
     let mut fields = Default::default();
     tables(&parsed.items, &mut rets, &mut assoc_rets, &mut fields);
     let mut walk = ReceiverWalk {
-        line_starts,
         rets,
         assoc_rets,
         fields,

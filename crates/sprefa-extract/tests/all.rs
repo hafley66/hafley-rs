@@ -211,6 +211,8 @@ mod t_188_rust_cargo_metadata;
 mod t_189_lift_scope_rows;
 #[path = "190_rename_rust_slow.rs"]
 mod t_190_rename_rust_slow;
+#[path = "191_rust_byte_spans.rs"]
+mod t_191_rust_byte_spans;
 #[path = "18_df_aux_fields_lits.rs"]
 mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]

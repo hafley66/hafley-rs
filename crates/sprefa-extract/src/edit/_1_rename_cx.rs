@@ -141,7 +141,7 @@ impl RenameCx {
     /// it. An overlay invalidates that file's parsed version.
     pub fn with_rust_parse<T>(&self, rel: &str, read: impl FnOnce(&syn::File) -> T) -> Option<T> {
         if !self.rust_parse.borrow().contains_key(rel) {
-            let parsed = syn::parse_file(&self.text(rel)?).ok()?;
+            let parsed = hafley_scm::lang::rust::parse_rust_file(&self.text(rel)?).ok()?;
             self.rust_parse.borrow_mut().insert(rel.to_string(), parsed);
         }
         let parsed = self.rust_parse.borrow();

@@ -31,7 +31,7 @@ ratchet_soopy/src/_5a_git_status.rs nodes=1356 edges=1309 params=82 args=497 fie
 ratchet_soopy/src/_6_git_batch.rs nodes=125 edges=109 params=5 args=53 fields=3 literals=7 loops=0 allocations=2 loop_spans=0 allocator_hits=0 debug_hash=d94eb1588680d0f8
 ratchet_soopy/src/_7_source_tree.rs nodes=299 edges=279 params=17 args=83 fields=15 literals=1 loops=3 allocations=6 loop_spans=2 allocator_hits=0 debug_hash=3ac565231bc26319
 ratchet_soopy/src/_7a_spans.rs nodes=504 edges=487 params=24 args=199 fields=26 literals=27 loops=3 allocations=11 loop_spans=3 allocator_hits=0 debug_hash=30ebc194e3a7d6df
-ratchet_soopy/src/_7b_source_actions.rs nodes=270 edges=279 params=23 args=68 fields=48 literals=5 loops=2 allocations=4 loop_spans=2 allocator_hits=0 debug_hash=4afdcee7171e83f8
+ratchet_soopy/src/_7b_source_actions.rs nodes=270 edges=279 params=23 args=68 fields=48 literals=5 loops=2 allocations=4 loop_spans=2 allocator_hits=0 debug_hash=65bed56d4835d82f
 ratchet_soopy/src/_7c_edit_producers.rs nodes=178 edges=157 params=15 args=59 fields=19 literals=0 loops=2 allocations=4 loop_spans=2 allocator_hits=0 debug_hash=66217186405d53a4
 ratchet_soopy/src/_7d_mutation_plan.rs nodes=1268 edges=1250 params=53 args=460 fields=111 literals=18 loops=13 allocations=23 loop_spans=13 allocator_hits=0 debug_hash=257ebe27289c2d93
 ratchet_soopy/src/_7e_stage_store.rs nodes=1089 edges=1013 params=52 args=408 fields=42 literals=21 loops=10 allocations=14 loop_spans=10 allocator_hits=0 debug_hash=690551c1a9f0fafa

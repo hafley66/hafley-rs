@@ -1,7 +1,6 @@
 //! `impl Rename for RustSource`: every question `extract rename` asks a language,
 //! answered for Rust over `syn`, the parse `lang/rust.rs` already carries. Spans
-//! are identifier spans bridged by `build_line_starts` (`rust.rs:57`) and
-//! `syn_span` (`rust.rs:81`); no new crate.
+//! are identifier byte spans from `syn_span`; no new crate.
 //! @comment-ok: module header, the seam list every lang file opens with
 //!
 //! rustc's module-file law (crate roots, `mod.rs` owning its directory, a module
@@ -202,10 +201,9 @@ impl Rename for RustSource {
         // `Owner { old }` respells to `new: old`, keeping the local name; the
         // typing walk proves the shape so a same-spelled use leaf never matches.
         let shorthand = match cx.text(&reference.file) {
-            Some(source) => match syn::parse_file(&source) {
+            Some(source) => match hafley_scm::lang::rust::parse_rust_file(&source) {
                 Ok(parsed) => {
-                    let line_starts = build_line_starts(&source);
-                    field_sites(&parsed, &line_starts, &request.old)
+                    field_sites(&parsed, &request.old)
                         .iter()
                         .any(|site| {
                             matches!(site,
@@ -330,12 +328,10 @@ impl Corpus {
             if !carries_name && !may_forward_glob {
                 continue;
             }
-            let line_starts = build_line_starts(&text);
             let Some(scanned) = cx.with_rust_parse(rel, |parsed| {
                 let mut scan = Scan {
                     old,
                     source: &text,
-                    line_starts: &line_starts,
                     names: &mut interned,
                     chain: Vec::new(),
                     blocks: Vec::new(),
@@ -344,7 +340,7 @@ impl Corpus {
                     out: FileScan::default(),
                 };
                 syn::visit::Visit::visit_file(&mut scan, parsed);
-                scan.out.field_sites = field_sites(parsed, &line_starts, old);
+                scan.out.field_sites = field_sites(parsed, old);
                 scan.out
             }) else {
                 continue;
@@ -920,7 +916,7 @@ impl Corpus {
             .map(|(rel, span)| RenameStop::Inexact {
                 file: rel.to_string(),
                 span,
-                why: "a syn char column does not read back as the identifier",
+                why: "the identifier span does not read back as the old name",
             })
     }
 }
@@ -1102,7 +1098,6 @@ struct PathSeat {
 struct Scan<'a> {
     old: &'a str,
     source: &'a str,
-    line_starts: &'a [u32],
     names: &'a mut Strings,
     chain: Vec<String>,
     blocks: Vec<Span>,
@@ -1115,7 +1110,7 @@ struct Scan<'a> {
 impl Scan<'_> {
     /// A span that reads back as the old name, else a recorded `inexact`.
     fn exact(&mut self, span: proc_macro2::Span) -> Option<Span> {
-        let span = syn_span(self.line_starts, span);
+        let span = syn_span(span);
         let start = span.start as usize;
         match self.source.get(start..start + span.len as usize) {
             Some(text) if text == self.old => Some(span),
@@ -1281,7 +1276,6 @@ enum TypeBinding {
 /// Everything else stays Unknown, and Unknown is a stop.
 struct FieldWalk<'a> {
     old: &'a str,
-    line_starts: &'a [u32],
     /// Same-file fn name -> declared return type.
     rets: HashMap<String, String>,
     /// (impl self type, method) -> declared return type, `Self` resolved.
@@ -1299,10 +1293,9 @@ struct FieldWalk<'a> {
 
 /// The field-shaped spellings of `old` in one file, off the same-file typing
 /// rules the receiver plane uses plus the literal's owner.
-fn field_sites(parsed: &syn::File, line_starts: &[u32], old: &str) -> Vec<FieldSite> {
+fn field_sites(parsed: &syn::File, old: &str) -> Vec<FieldSite> {
     let mut walk = FieldWalk {
         old,
-        line_starts,
         rets: Default::default(),
         assoc_rets: Default::default(),
         fields: Default::default(),
@@ -1594,7 +1587,7 @@ impl FieldWalk<'_> {
             return;
         };
         self.out.push(FieldSite::Owner {
-            span: syn_span(self.line_starts, ident.span()),
+            span: syn_span(ident.span()),
             chain: self.chain.clone(),
             prefix: segments[..segments.len() - 1].to_vec(),
             owner,
@@ -1713,8 +1706,8 @@ impl<'ast> syn::visit::Visit<'ast> for FieldWalk<'_> {
         if let syn::Member::Named(ident) = &node.member {
             if ident == self.old {
                 self.out.push(FieldSite::Access {
-                    span: syn_span(self.line_starts, ident.span()),
-                    receiver: syn_span(self.line_starts, node.base.span()),
+                    span: syn_span(ident.span()),
+                    receiver: syn_span(node.base.span()),
                     ty: self.value_ty(&node.base),
                     write: self.write,
                 });
@@ -1812,7 +1805,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
 
     fn visit_block(&mut self, node: &'ast syn::Block) {
         self.blocks
-            .push(syn_span(self.line_starts, node.brace_token.span.join()));
+            .push(syn_span(node.brace_token.span.join()));
         syn::visit::visit_block(self, node);
         self.blocks.pop();
     }
@@ -1856,7 +1849,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
             return;
         }
         let exported = !matches!(node.vis, syn::Visibility::Inherited);
-        let item = syn_span(self.line_starts, node.span());
+        let item = syn_span(node.span());
         let block = self.blocks.last().copied();
         let mut branches = Vec::new();
         use_branches(&node.tree, &mut Vec::new(), &mut branches);
@@ -2009,7 +2002,7 @@ impl<'ast> syn::visit::Visit<'ast> for Scan<'_> {
     }
 
     fn visit_expr_for_loop(&mut self, node: &'ast syn::ExprForLoop) {
-        let body = syn_span(self.line_starts, node.body.brace_token.span.join());
+        let body = syn_span(node.body.brace_token.span.join());
         self.local(&node.pat, Some(body));
         syn::visit::visit_expr_for_loop(self, node);
     }
@@ -2171,9 +2164,8 @@ fn module_dir(rel: &str, roots: &BTreeSet<String>) -> String {
     }
 }
 
-/// The `#[path = ".."]` literals on a `mod` decl, as spans against the file's
-/// line table.
-fn path_attrs(attrs: &[syn::Attribute], line_starts: &[u32]) -> Vec<(Span, String)> {
+/// The `#[path = ".."]` literals on a `mod` decl, as byte spans.
+fn path_attrs(attrs: &[syn::Attribute]) -> Vec<(Span, String)> {
     let mut out = Vec::new();
     for attr in attrs {
         if !attr.path().is_ident("path") {
@@ -2182,7 +2174,7 @@ fn path_attrs(attrs: &[syn::Attribute], line_starts: &[u32]) -> Vec<(Span, Strin
         if let syn::Meta::NameValue(meta) = &attr.meta {
             if let syn::Expr::Lit(lit) = &meta.value {
                 if let syn::Lit::Str(text) = &lit.lit {
-                    let span = syn_span(line_starts, text.span());
+                    let span = syn_span(text.span());
                     out.push((span, text.value()));
                 }
             }
@@ -2203,10 +2195,9 @@ fn path_module_table(cx: &RenameCx, roots: &BTreeSet<String>) -> BTreeMap<String
         if !text.contains("path") {
             continue;
         }
-        let Ok(parsed) = syn::parse_file(&text) else {
+        let Ok(parsed) = hafley_scm::lang::rust::parse_rust_file(&text) else {
             continue;
         };
-        let line_starts = build_line_starts(&text);
         let home = module_path(rel, roots);
         path_decls(
             &parsed.items,
@@ -2214,7 +2205,6 @@ fn path_module_table(cx: &RenameCx, roots: &BTreeSet<String>) -> BTreeMap<String
             rel,
             &home,
             roots,
-            &line_starts,
             &mut named,
         );
     }
@@ -2233,7 +2223,6 @@ fn path_decls(
     rel: &str,
     home: &ModuleId,
     roots: &BTreeSet<String>,
-    line_starts: &[u32],
     out: &mut BTreeMap<String, Vec<ModuleId>>,
 ) {
     let mut dir = module_dir(rel, roots);
@@ -2251,7 +2240,7 @@ fn path_decls(
                 target.extend(chain.iter().cloned());
                 target.push(decl.ident.to_string());
                 let root = owning_root(rel, roots).unwrap_or_else(|| rel.to_string());
-                for (_, value) in path_attrs(&decl.attrs, line_starts) {
+                for (_, value) in path_attrs(&decl.attrs) {
                     out.entry(join_rel(&dir, &value))
                         .or_default()
                         .push((root.clone(), target.clone()));
@@ -2260,7 +2249,7 @@ fn path_decls(
             Some((_, inner)) => {
                 let mut inner_chain = chain.to_vec();
                 inner_chain.push(decl.ident.to_string());
-                path_decls(inner, &inner_chain, rel, home, roots, line_starts, out);
+                path_decls(inner, &inner_chain, rel, home, roots, out);
             }
         }
     }

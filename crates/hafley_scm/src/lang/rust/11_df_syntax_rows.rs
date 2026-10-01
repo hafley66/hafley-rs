@@ -1023,7 +1023,7 @@ impl TreeDf<'_, '_> {
     }
 
     fn span(&self, node: tree_sitter::Node<'_>) -> Span {
-        tree_expression_span_with_attributes(node, self.source)
+        tree_expression_span_with_attributes(node)
     }
 }
 
@@ -1036,29 +1036,11 @@ fn tree_text<'a>(node: tree_sitter::Node<'_>, source: &'a [u8]) -> &'a str {
     std::str::from_utf8(&source[node.byte_range()]).expect("Rust source is UTF-8")
 }
 
-fn tree_span_for_syn_columns(node: tree_sitter::Node<'_>, source: &[u8]) -> Span {
-    let position = |offset: usize| {
-        let prefix = &source[..offset];
-        let line_start = prefix
-            .iter()
-            .rposition(|byte| *byte == b'\n')
-            .map_or(0, |index| index + 1);
-        let column = std::str::from_utf8(&source[line_start..offset])
-            .expect("tree-sitter span boundaries are UTF-8 boundaries")
-            .chars()
-            .count();
-        line_start as u32 + column as u32
+fn tree_expression_span_with_attributes(node: tree_sitter::Node<'_>) -> Span {
+    let span = Span {
+        start: node.start_byte() as u32,
+        len: (node.end_byte() - node.start_byte()) as u32,
     };
-    let start = position(node.start_byte());
-    let end = position(node.end_byte());
-    Span {
-        start,
-        len: end.saturating_sub(start),
-    }
-}
-
-fn tree_expression_span_with_attributes(node: tree_sitter::Node<'_>, source: &[u8]) -> Span {
-    let span = tree_span_for_syn_columns(node, source);
     let Some(statement) = node.parent() else {
         return span;
     };
@@ -1081,7 +1063,7 @@ fn tree_expression_span_with_attributes(node: tree_sitter::Node<'_>, source: &[u
             )
         })
         .filter(|child| child.kind() == "attribute_item")
-        .map(|child| tree_span_for_syn_columns(child, source).start)
+        .map(|child| child.start_byte() as u32)
         .min();
     let Some(start) = attribute_start else {
         return span;

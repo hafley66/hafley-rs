@@ -22,13 +22,10 @@ pub struct TargetCall {
     pub target_name: String,
 }
 
-fn target_owner_name(
-    node: &ra_ap_syntax::SyntaxNode,
-    offsets: &OffsetMap,
-) -> Option<String> {
+fn target_owner_name(node: &ra_ap_syntax::SyntaxNode) -> Option<String> {
     for ancestor in node.ancestors() {
         if let Some(closure) = ast::ClosureExpr::cast(ancestor.clone()) {
-            let start = offsets.to_span_offset(u32::from(closure.syntax().text_range().start()));
+            let start = u32::from(closure.syntax().text_range().start());
             return Some(format!("closure@{start}"));
         }
         if let Some(function) = ast::Fn::cast(ancestor) {
@@ -155,7 +152,6 @@ pub fn target_calls(
     attach_db(db, || {
         let sema = Semantics::new(db);
         let mut found = BTreeSet::new();
-        let mut offsets: HashMap<ra_ap_ide::FileId, OffsetMap> = HashMap::new();
         for (definition_path, name) in seeds {
             let Some(&definition_file) = ids.get(definition_path) else {
                 continue;
@@ -211,13 +207,6 @@ pub fn target_calls(
                     let Some(source_path) = paths.get(&source_id) else {
                         continue;
                     };
-                    for id in [source_id, nav.file_id] {
-                        offsets.entry(id).or_insert_with(|| {
-                            OffsetMap::new(&sema.parse_guess_edition(id).syntax().text().to_string())
-                        });
-                    }
-                    let source_offsets = &offsets[&source_id];
-                    let target_offsets = &offsets[&nav.file_id];
                     for reference in references {
                         let Some(name_ref) = reference.name.as_name_ref() else {
                             continue;
@@ -237,15 +226,15 @@ pub fn target_calls(
                         };
                         found.insert(TargetCall {
                             source_path: source_path.clone(),
-                            caller_name: target_owner_name(&site, source_offsets),
+                            caller_name: target_owner_name(&site),
                             enclosing_name: enclosing_name(&site),
-                            site_start: source_offsets.to_span_offset(u32::from(reference.range.start())),
-                            site_end: source_offsets.to_span_offset(u32::from(reference.range.end())),
+                            site_start: u32::from(reference.range.start()),
+                            site_end: u32::from(reference.range.end()),
                             target_path: target_path.clone(),
-                            target_start: target_offsets.to_span_offset(u32::from(
+                            target_start: u32::from(
                                 nav.focus_range.unwrap_or(nav.full_range).start(),
-                            )),
-                            target_end: target_offsets.to_span_offset(u32::from(nav.full_range.end())),
+                            ),
+                            target_end: u32::from(nav.full_range.end()),
                             target_name: nav.name.as_str().to_string(),
                         });
                     }

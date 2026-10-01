@@ -27,7 +27,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use rayon::prelude::*;
 use syn::spanned::Spanned;
 
-use crate::lang::rust::{build_line_starts, syn_span, RustSource};
+use crate::lang::rust::{syn_span, RustSource};
 use crate::move_cx::{dirname, join_rel, relative_between, stem, MoveCx};
 use crate::project::extract_pool;
 use crate::types::LangKind;
@@ -314,23 +314,20 @@ fn scan_file(text: &str) -> Option<FileScan> {
 /// ONE parse. `runs` adds the crate-wide path walk `--relocate-mod` needs and
 /// every other caller pays nothing for.
 fn scan_with(text: &str, runs: bool) -> Option<(FileScan, Vec<SegRun>)> {
-    let parsed = syn::parse_file(text).ok()?;
-    let line_starts = build_line_starts(text);
+    let parsed = hafley_scm::lang::rust::parse_rust_file(text).ok()?;
     let mut scan = FileScan::default();
     collect_items(
         &parsed.items,
         text,
-        &line_starts,
         &mut Vec::new(),
         &mut scan,
     );
     scan.first_item = parsed
         .items
         .first()
-        .map(|item| syn_span(&line_starts, item.span()).start);
+        .map(|item| syn_span(item.span()).start);
     let mut includes = IncludeScan {
         source: text,
-        line_starts: &line_starts,
         out: Vec::new(),
     };
     syn::visit::Visit::visit_file(&mut includes, &parsed);
@@ -340,7 +337,6 @@ fn scan_with(text: &str, runs: bool) -> Option<(FileScan, Vec<SegRun>)> {
     }
     let mut paths = PathScan {
         source: text,
-        line_starts: &line_starts,
         depth: 0,
         out: Vec::new(),
     };
@@ -353,24 +349,23 @@ fn scan_with(text: &str, runs: bool) -> Option<(FileScan, Vec<SegRun>)> {
 fn collect_items(
     items: &[syn::Item],
     source: &str,
-    line_starts: &[u32],
     chain: &mut Vec<String>,
     out: &mut FileScan,
 ) {
     for item in items {
         match item {
             syn::Item::Mod(mod_item) => {
-                if let Some(own) = own_item(item, source, line_starts, chain) {
+                if let Some(own) = own_item(item, source, chain) {
                     out.items.push(own);
                 }
                 match &mod_item.content {
                     Some((_, inner)) => {
                         chain.push(mod_item.ident.to_string());
-                        collect_items(inner, source, line_starts, chain, out);
+                        collect_items(inner, source, chain, out);
                         chain.pop();
                     }
                     None => {
-                        let span = syn_span(line_starts, mod_item.span());
+                        let span = syn_span(mod_item.span());
                         let Some(text) = slice(source, span).filter(|text| text.contains("mod"))
                         else {
                             continue;
@@ -380,14 +375,14 @@ fn collect_items(
                             text,
                             name: mod_item.ident.to_string(),
                             chain: chain.clone(),
-                            attr: path_attr(&mod_item.attrs, source, line_starts),
-                            vis: vis_text(&mod_item.vis, source, line_starts),
+                            attr: path_attr(&mod_item.attrs),
+                            vis: vis_text(&mod_item.vis, source),
                         });
                     }
                 }
             }
             syn::Item::Use(use_item) => {
-                let span = syn_span(line_starts, use_item.span());
+                let span = syn_span(use_item.span());
                 let Some(text) = slice(source, span) else {
                     continue;
                 };
@@ -400,7 +395,7 @@ fn collect_items(
                 });
             }
             _ => {
-                if let Some(own) = own_item(item, source, line_starts, chain) {
+                if let Some(own) = own_item(item, source, chain) {
                     out.items.push(own);
                 }
             }
@@ -415,7 +410,6 @@ fn collect_items(
 fn own_item(
     item: &syn::Item,
     source: &str,
-    line_starts: &[u32],
     chain: &[String],
 ) -> Option<OwnItem> {
     let (kw, name, vis, attrs) = match item {
@@ -436,9 +430,9 @@ fn own_item(
     let bytes = source.as_bytes();
     // Docs and attributes precede the keyword as written; `syn` reports them as
     // spans too, so their last byte is where the keyword scan may start.
-    let mut offset = syn_span(line_starts, item.span()).start as usize;
+    let mut offset = syn_span(item.span()).start as usize;
     for attr in attrs {
-        let end = syn_span(line_starts, attr.span());
+        let end = syn_span(attr.span());
         offset = offset.max(end.start as usize + end.len as usize);
     }
     while offset < source.len() && bytes[offset].is_ascii_whitespace() {
@@ -458,11 +452,7 @@ fn own_item(
 
 /// `#[path = "x.rs"]` as (literal span, value). The span covers the quotes, so a
 /// respell reproduces the literal whole.
-fn path_attr(
-    attrs: &[syn::Attribute],
-    source: &str,
-    line_starts: &[u32],
-) -> Option<(Span, String)> {
+fn path_attr(attrs: &[syn::Attribute]) -> Option<(Span, String)> {
     attrs.iter().find_map(|attr| {
         if !attr.path().is_ident("path") {
             return None;
@@ -476,28 +466,21 @@ fn path_attr(
         let syn::Lit::Str(text) = &literal.lit else {
             return None;
         };
-        let span = syn_span(line_starts, text.span());
-        is_literal(source, span).then(|| (span, text.value()))
+        Some((syn_span(text.span()), text.value()))
     })
 }
 
 /// `pub`, `pub(crate)`, `pub(in path)` as written; `""` for a private decl.
-fn vis_text(vis: &syn::Visibility, source: &str, line_starts: &[u32]) -> String {
+fn vis_text(vis: &syn::Visibility, source: &str) -> String {
     match vis {
         syn::Visibility::Inherited => String::new(),
         written => {
-            let span = syn_span(line_starts, written.span());
+            let span = syn_span(written.span());
             slice(source, span)
                 .filter(|text| text.starts_with("pub"))
                 .unwrap_or_else(|| "pub".to_string())
         }
     }
-}
-
-/// Whether `span` really covers a string literal. `syn_span` bridges a
-/// proc_macro2 CHAR column, so a non-ASCII byte earlier on the line shifts it.
-fn is_literal(source: &str, span: Span) -> bool {
-    slice(source, span).is_some_and(|text| text.starts_with('"') || text.starts_with('r'))
 }
 
 /// Every module segment a `use` tree names. A glob binds no segment of its own.
@@ -526,7 +509,6 @@ fn use_segments(tree: &syn::UseTree, out: &mut BTreeSet<String>) {
 /// pattern position, which is what one `Visit` over the file reaches.
 struct IncludeScan<'a> {
     source: &'a str,
-    line_starts: &'a [u32],
     out: Vec<IncludeLit>,
 }
 
@@ -541,8 +523,8 @@ impl<'ast> syn::visit::Visit<'ast> for IncludeScan<'_> {
         let Ok(literal) = node.parse_body::<syn::LitStr>() else {
             return;
         };
-        let span = syn_span(self.line_starts, literal.span());
-        let Some(text) = slice(self.source, span).filter(|_| is_literal(self.source, span)) else {
+        let span = syn_span(literal.span());
+        let Some(text) = slice(self.source, span) else {
             return;
         };
         self.out.push(IncludeLit {
@@ -577,23 +559,13 @@ struct SegRun {
 /// position and `use crate::a::f;` reach `--relocate-mod` the same way.
 struct PathScan<'a> {
     source: &'a str,
-    line_starts: &'a [u32],
     depth: usize,
     out: Vec<SegRun>,
 }
 
 impl PathScan<'_> {
-    /// Drops a run whose spans do not slice back to their own idents:
-    /// `syn_span` bridges a CHAR column, so a non-ASCII byte shifts the line.
     fn push(&mut self, idents: Vec<String>, spans: Vec<Span>, from_use: bool) {
         if idents.is_empty() || idents.len() != spans.len() {
-            return;
-        }
-        let honest = idents
-            .iter()
-            .zip(&spans)
-            .all(|(ident, span)| slice(self.source, *span).as_deref() == Some(ident.as_str()));
-        if !honest {
             return;
         }
         self.out.push(SegRun {
@@ -623,7 +595,7 @@ impl<'ast> syn::visit::Visit<'ast> for PathScan<'_> {
             return;
         }
         let mut branches = Vec::new();
-        use_runs(&node.tree, self.line_starts, &mut Vec::new(), &mut branches);
+        use_runs(&node.tree, &mut Vec::new(), &mut branches);
         for (idents, spans) in branches {
             self.push(idents, spans, true);
         }
@@ -635,7 +607,7 @@ impl<'ast> syn::visit::Visit<'ast> for PathScan<'_> {
             let mut spans = Vec::new();
             for segment in &node.segments {
                 idents.push(segment.ident.to_string());
-                spans.push(syn_span(self.line_starts, segment.ident.span()));
+                spans.push(syn_span(segment.ident.span()));
             }
             self.push(idents, spans, false);
         }
@@ -647,7 +619,6 @@ impl<'ast> syn::visit::Visit<'ast> for PathScan<'_> {
 /// at the module it stars.
 fn use_runs(
     tree: &syn::UseTree,
-    line_starts: &[u32],
     prefix: &mut Vec<(String, Span)>,
     out: &mut Vec<(Vec<String>, Vec<Span>)>,
 ) {
@@ -664,28 +635,28 @@ fn use_runs(
         syn::UseTree::Path(segment) => {
             prefix.push((
                 segment.ident.to_string(),
-                syn_span(line_starts, segment.ident.span()),
+                syn_span(segment.ident.span()),
             ));
-            use_runs(&segment.tree, line_starts, prefix, out);
+            use_runs(&segment.tree, prefix, out);
             prefix.pop();
         }
         syn::UseTree::Group(group) => {
             for member in &group.items {
-                use_runs(member, line_starts, prefix, out);
+                use_runs(member, prefix, out);
             }
         }
         syn::UseTree::Name(leaf) => emit(
             prefix,
             Some((
                 leaf.ident.to_string(),
-                syn_span(line_starts, leaf.ident.span()),
+                syn_span(leaf.ident.span()),
             )),
         ),
         syn::UseTree::Rename(leaf) => emit(
             prefix,
             Some((
                 leaf.ident.to_string(),
-                syn_span(line_starts, leaf.ident.span()),
+                syn_span(leaf.ident.span()),
             )),
         ),
         syn::UseTree::Glob(_) => emit(prefix, None),

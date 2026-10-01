@@ -13,36 +13,25 @@ pub fn build_line_starts(src: &str) -> Vec<u32> {
     out
 }
 
-/// Convert a syn (1-based line, 0-based column) coordinate to a byte offset.
-pub fn line_col_to_byte(line_starts: &[u32], line: u32, col: u32) -> u32 {
-    line_starts
-        .get((line as usize).saturating_sub(1))
-        .copied()
-        .unwrap_or(0)
-        .saturating_add(col)
+/// A proc-macro span's byte range in the text `parse_rust_file` read.
+pub fn span_range(span: proc_macro2::Span) -> std::ops::Range<u32> {
+    let range = span.byte_range();
+    range.start as u32..range.end as u32
 }
 
-/// Byte range of a proc-macro span under the caller's one line-start table.
-pub(super) fn span_range(line_starts: &[u32], span: proc_macro2::Span) -> std::ops::Range<u32> {
-    let start = span.start();
-    let end = span.end();
-    line_col_to_byte(line_starts, start.line as u32, start.column as u32)
-        ..line_col_to_byte(line_starts, end.line as u32, end.column as u32)
+/// A proc-macro span as a byte `Span` of the text `parse_rust_file` read.
+pub fn syn_span(span: proc_macro2::Span) -> crate::span::Span {
+    let range = span_range(span);
+    crate::span::Span {
+        start: range.start,
+        len: range.end.saturating_sub(range.start),
+    }
 }
 
 /// A def's byte range over `[start.start, end.end)`, the whole callable body.
-pub(super) fn def_range(
-    line_starts: &[u32],
-    start: proc_macro2::Span,
-    end: proc_macro2::Span,
-) -> (u32, u32) {
-    let start_byte = line_col_to_byte(
-        line_starts,
-        start.start().line as u32,
-        start.start().column as u32,
-    );
-    let end_byte = line_col_to_byte(line_starts, end.end().line as u32, end.end().column as u32);
-    (start_byte, start_byte + end_byte.saturating_sub(start_byte))
+pub(super) fn def_range(start: proc_macro2::Span, end: proc_macro2::Span) -> (u32, u32) {
+    let start = span_range(start).start;
+    (start, span_range(end).end.max(start))
 }
 
 /// Render a syn::Path as `a::b::c`.
@@ -111,13 +100,13 @@ pub struct CallOwnerRow {
 
 /// Walks the file once, emitting owner rows for every impl/trait method in
 /// source order.
-pub fn call_metadata_rows(parsed: &syn::File, line_starts: &[u32]) -> Vec<CallOwnerRow> {
+pub fn call_metadata_rows(parsed: &syn::File) -> Vec<CallOwnerRow> {
     let mut out = Vec::new();
-    visit(&parsed.items, line_starts, &mut out);
+    visit(&parsed.items, &mut out);
     out
 }
 
-fn visit(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<CallOwnerRow>) {
+fn visit(items: &[syn::Item], out: &mut Vec<CallOwnerRow>) {
     for item in items {
         match item {
             syn::Item::Impl(item) => {
@@ -126,7 +115,7 @@ fn visit(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<CallOwnerRow>) 
                 for child in &item.items {
                     if let syn::ImplItem::Fn(method) = child {
                         let range =
-                            def_range(line_starts, method.sig.ident.span(), method.block.span());
+                            def_range(method.sig.ident.span(), method.block.span());
                         push_owner(out, range, self_type.clone(), trait_name.clone());
                     }
                 }
@@ -135,8 +124,8 @@ fn visit(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<CallOwnerRow>) 
                 for child in &item.items {
                     if let syn::TraitItem::Fn(method) = child {
                         let range = method.default.as_ref().map_or_else(
-                            || def_range(line_starts, method.sig.ident.span(), method.sig.span()),
-                            |body| def_range(line_starts, method.sig.ident.span(), body.span()),
+                            || def_range(method.sig.ident.span(), method.sig.span()),
+                            |body| def_range(method.sig.ident.span(), body.span()),
                         );
                         push_owner(out, range, None, Some(item.ident.to_string()));
                     }
@@ -144,7 +133,7 @@ fn visit(items: &[syn::Item], line_starts: &[u32], out: &mut Vec<CallOwnerRow>) 
             }
             syn::Item::Mod(item) => {
                 if let Some((_, inner)) = &item.content {
-                    visit(inner, line_starts, out);
+                    visit(inner, out);
                 }
             }
             _ => {}
@@ -167,8 +156,8 @@ fn push_owner(
 }
 
 /// One variant's def range: the ident alone; None when wider (mbe-expanded).
-pub fn variant_def_range(line_starts: &[u32], variant: &syn::Variant) -> Option<(u32, u32)> {
-    let range = def_range(line_starts, variant.ident.span(), variant.ident.span());
+pub fn variant_def_range(variant: &syn::Variant) -> Option<(u32, u32)> {
+    let range = def_range(variant.ident.span(), variant.ident.span());
     (range.1 - range.0 == variant.ident.to_string().len() as u32).then_some(range)
 }
 

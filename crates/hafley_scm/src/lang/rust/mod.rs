@@ -53,7 +53,7 @@ pub use call_definition_rows::{
     call_definition_rows, call_definition_rows_from_arena, CallDefinitionKind, CallDefinitionRow,
 };
 pub use call_metadata_rows::{
-    build_line_starts, call_metadata_rows, item_attrs, line_col_to_byte, path_name,
+    build_line_starts, call_metadata_rows, item_attrs, path_name, span_range, syn_span,
     path_string, primary_type, variant_def_range, CallOwnerRow,
 };
 pub use call_query::RUST_CALL_QUERY;
@@ -80,7 +80,7 @@ pub use module_specifier_rows::{
 };
 pub use receiver_rows::{receiver_rows, ReceiverOutcome as RustReceiverOutcome};
 pub use syn_macro_expansion_defs::{expand_file, Expanded};
-pub use syntax::{parse_rust_syntax, RustSyntax};
+pub use syntax::parse_rust_file;
 pub use tree_call_rows::{call_metadata_rows_from_tree, call_site_rows_from_tree};
 pub use tree_entity_rows::type_entity_rows_from_tree;
 pub use tree_module_resolution_rows::module_resolution_rows_from_tree;

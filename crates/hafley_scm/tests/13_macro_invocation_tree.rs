@@ -1,7 +1,7 @@
 #![cfg(feature = "rust_syn")]
 
 use hafley_scm::lang::rust::{
-    build_line_starts, macro_invocation_rows_from_parsed, macro_invocation_rows_from_tree,
+    macro_invocation_rows_from_parsed, macro_invocation_rows_from_tree,
 };
 
 #[test]
@@ -24,8 +24,8 @@ fn tree_macro_invocation_rows_match_syn_across_rust_fixtures() {
                 continue;
             }
             let source = std::fs::read_to_string(&path).expect("Rust fixture reads as UTF-8");
-            let parsed = syn::parse_file(&source).expect("Syn parses the Rust fixture");
-            let syn_rows = macro_invocation_rows_from_parsed(&parsed, &build_line_starts(&source));
+            let parsed = hafley_scm::lang::rust::parse_rust_file(&source).expect("Syn parses the Rust fixture");
+            let syn_rows = macro_invocation_rows_from_parsed(&parsed);
             let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
             let mut parser = tree_sitter::Parser::new();
             parser.set_language(&language).expect("Rust grammar loads");

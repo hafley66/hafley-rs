@@ -1,12 +1,12 @@
 #![cfg(feature = "rust_syn")]
 
-use hafley_scm::lang::rust::{build_line_starts, call_site_rows, call_site_rows_from_tree};
+use hafley_scm::lang::rust::{call_site_rows, call_site_rows_from_tree};
 
 #[test]
 fn sites_and_const_initializers_share_the_syn_walk() {
     let src = "const TOP: u8 = make();\n#[cfg(test)] fn only() { secret(); }\nfn live() { api::make(); value.run(); S { x: 1 }; E::Variant { x: 1 }; }\nmod inner { static N: u8 = make(); }\n";
-    let parsed = syn::parse_file(src).expect("Rust parses");
-    let rows = call_site_rows(&parsed, &build_line_starts(src), &[]);
+    let parsed = hafley_scm::lang::rust::parse_rust_file(src).expect("Rust parses");
+    let rows = call_site_rows(&parsed, &[]);
     let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
     let mut parser = tree_sitter::Parser::new();
     parser.set_language(&language).expect("Rust grammar loads");

@@ -362,18 +362,17 @@ fn impl_self_bindings(index: &ScipIndex, doc: &Doc<'_>) -> Vec<ImplSelfBinding> 
     use syn::spanned::Spanned;
     use syn::visit::Visit;
 
-    struct Heads<'a> {
-        lines: &'a [u32],
+    struct Heads {
         rows: Vec<(Span, Span, String)>,
     }
-    impl<'ast> Visit<'ast> for Heads<'_> {
+    impl<'ast> Visit<'ast> for Heads {
         fn visit_item_impl(&mut self, item: &'ast syn::ItemImpl) {
             if let syn::Type::Path(path) = hafley_scm::lang::rust::strip_type(&item.self_ty) {
                 if path.qself.is_none() {
                     if let Some(head) = path.path.segments.last() {
                         self.rows.push((
-                            crate::read::lang::rust::syn_span(self.lines, item.span()),
-                            crate::read::lang::rust::syn_span(self.lines, head.ident.span()),
+                            crate::read::lang::rust::syn_span(item.span()),
+                            crate::read::lang::rust::syn_span(head.ident.span()),
                             head.ident.to_string(),
                         ));
                     }
@@ -386,14 +385,13 @@ fn impl_self_bindings(index: &ScipIndex, doc: &Doc<'_>) -> Vec<ImplSelfBinding> 
     let Ok(source) = std::str::from_utf8(doc.content) else {
         return Vec::new();
     };
-    let Ok(parsed) = hafley_scm::lang::rust::parse_rust_syntax(source) else {
+    let Ok(parsed) = hafley_scm::lang::rust::parse_rust_file(source) else {
         return Vec::new();
     };
     let mut heads = Heads {
-        lines: &parsed.line_starts,
         rows: Vec::new(),
     };
-    heads.visit_file(&parsed.file);
+    heads.visit_file(&parsed);
     let header_symbols: HashMap<(u32, u32), SymbolId> = index.documents[doc.ix]
         .occurrences
         .iter()
