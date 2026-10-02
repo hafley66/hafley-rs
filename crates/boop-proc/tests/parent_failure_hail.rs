@@ -10,7 +10,6 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::Once;
 use std::time::Duration;
 
 use anyhow::Result;
@@ -28,16 +27,15 @@ use boop_store::ident::Store;
 /// The word a duplicated end-of-lane row used to wear. Nothing writes it now.
 const NO_DUPLICATE_END_ROW: &str = "exited_without_completion";
 
-/// One temp HOME and store for this whole binary, so the mood lookup inside a
-/// lane run never opens the machine's own store.
+// Each test and its supervisor threads share only their own fixture root.
 fn root() -> PathBuf {
-    static ONCE: Once = Once::new();
-    let root = std::env::temp_dir().join(format!("boop-failure-hail-{}", std::process::id()));
-    ONCE.call_once(|| {
-        std::fs::create_dir_all(root.join("home")).unwrap();
-        std::env::set_var("HOME", root.join("home"));
-        std::env::set_var("BOOP_DB", root.join("boop.db"));
-    });
+    let root = std::env::temp_dir().join(format!(
+        "boop-parent_failure_hail-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::create_dir_all(root.join(".agent")).unwrap();
+    boop_store::test_paths::set_root(&root);
     root
 }
 
@@ -253,7 +251,7 @@ fn a_clean_completion_hails_nothing_but_its_rc() {
     let dir = mail_dir("clean");
     parented(&dir);
     let lane = lane_run(&dir);
-    std::thread::spawn(move || {
+    boop_store::test_paths::spawn(move || {
         let _ = boop_proc::supervise::run(lane, &mut DoneChannel::default());
     });
 

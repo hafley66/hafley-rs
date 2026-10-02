@@ -14,9 +14,10 @@ use anyhow::{Context, Result};
 use rusqlite::{params, Connection, OpenFlags, OptionalExtension};
 use serde::{Deserialize, Serialize};
 
-use crate::_0_trace_identity::{
-    derive_traces, SessionObservation, SessionRelation, SessionRelationKind, TraceJoinLimits,
-};
+use crate::_0_trace_identity::{SessionObservation, SessionRelation, SessionRelationKind};
+
+#[path = "1_trace_projection.rs"]
+mod trace_projection;
 use crate::session::{Ingested, KnownSession, KnownSessions, SessionRef};
 
 /// Every SQLite connection waits for a contending reader or the one WAL writer
@@ -744,6 +745,7 @@ fn int_at(row: &[rusqlite::types::Value], at: usize, what: &str) -> Result<i64> 
 
 impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
+        crate::test_paths::guard(&path);
         let connection = Connection::open(&path)
             .with_context(|| format!("open boop.db at {}", path.display()))?;
         configure_connection(&connection, &path)?;
@@ -794,6 +796,7 @@ impl Store {
     /// runs here: a read-only connection cannot write, so it must not appear
     /// to migrate a stale store.
     pub fn open_readonly(path: PathBuf) -> Result<Self> {
+        crate::test_paths::guard(&path);
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .with_context(|| format!("open boop.db read-only at {}", path.display()))?;
         configure_connection(&connection, &path)?;
@@ -809,6 +812,7 @@ impl Store {
     /// [`Store::open`] stays the schema owner; this path assumes the schema is
     /// already present and reports its absence as an ordinary error.
     pub fn open_bounded_write(path: PathBuf, busy: std::time::Duration) -> Result<Self> {
+        crate::test_paths::guard(&path);
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
             .with_context(|| format!("open boop.db at {}", path.display()))?;
         connection
@@ -1513,14 +1517,19 @@ impl Store {
     }
 
     pub fn default_path() -> Result<PathBuf> {
-        if let Some(path) = std::env::var_os("BOOP_DB").filter(|path| !path.is_empty()) {
-            return Ok(PathBuf::from(path));
-        }
-        if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
-            return Ok(PathBuf::from(dir).join("boop.db"));
-        }
-        let home = dirs::home_dir().context("resolve home directory")?;
-        Ok(home.join(".agent").join("boop.db"))
+        let path = if let Some(root) = crate::test_paths::root() {
+            root.join(".agent/boop.db")
+        } else if let Some(path) = std::env::var_os("BOOP_DB").filter(|path| !path.is_empty()) {
+            PathBuf::from(path)
+        } else if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
+            PathBuf::from(dir).join("boop.db")
+        } else {
+            dirs::home_dir()
+                .context("resolve home directory")?
+                .join(".agent/boop.db")
+        };
+        crate::test_paths::guard_default(&path);
+        Ok(path)
     }
 
     /// Wrap the next writes in one transaction so a batch of per-fact INSERTs
@@ -2529,172 +2538,6 @@ LEFT JOIN agent_turn_comment_reply v
                 Err(error)
             }
         }
-    }
-
-    fn rebuild_trace_projection(&self) -> Result<()> {
-        let limits = TraceJoinLimits::default();
-        let observation_count: usize = self.connection.query_row(
-            "SELECT COUNT(*) FROM agent_session_observation",
-            [],
-            |row| row.get::<_, i64>(0).map(|count| count as usize),
-        )?;
-        if observation_count > limits.max_observations {
-            return Err(anyhow::Error::new(
-                crate::_0_trace_identity::TraceJoinDiagnostic::ObservationBudgetExceeded {
-                    limit: limits.max_observations,
-                    observed: observation_count,
-                },
-            ));
-        }
-        let relation_count: usize = self.connection.query_row(
-            "SELECT COUNT(*) FROM agent_session_relation",
-            [],
-            |row| row.get::<_, i64>(0).map(|count| count as usize),
-        )?;
-        if relation_count > limits.max_relations {
-            return Err(anyhow::Error::new(
-                crate::_0_trace_identity::TraceJoinDiagnostic::RelationBudgetExceeded {
-                    limit: limits.max_relations,
-                    observed: relation_count,
-                },
-            ));
-        }
-        let observations = {
-            let mut statement = self.connection.prepare(
-                "SELECT observation.observation_key, session.value, observation.observed_ts,
-                        observation.harness, cwd.value, observation.pid, observation.parent_pid,
-                        pane.value, tui.value, observation.source
-                   FROM agent_session_observation observation
-                   JOIN dict_session session ON session.id = observation.session_id
-LEFT JOIN dict_cwd cwd ON cwd.id = observation.cwd_id
-                   LEFT JOIN dict_pane pane ON pane.id = observation.pane_id
-                   LEFT JOIN dict_tui_session tui ON tui.id = observation.tui_session_id
-ORDER BY observation.observed_ts, observation.observation_id",
-            )?;
-            let rows = statement.query_map([], |row| {
-                Ok(SessionObservation {
-                    observation_key: row.get(0)?,
-                    session_id: row.get(1)?,
-                    observed_at_ms: row.get::<_, i64>(2)? as u64,
-                    harness: row.get(3)?,
-                    cwd: row.get(4)?,
-                    pid: row.get::<_, Option<i64>>(5)?.map(|value| value as u32),
-                    parent_pid: row.get::<_, Option<i64>>(6)?.map(|value| value as u32),
-                    pane_id: row.get(7)?,
-                    tui_session_id: row.get(8)?,
-                    source: row.get(9)?,
-                })
-            })?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()?
-        };
-        let relations = {
-            let mut statement = self.connection.prepare(
-                "SELECT relation.relation_key, source.value, target.value, relation.kind,
-                        relation.source, relation.observed_ts, relation.matched_identity_key
-                   FROM agent_session_relation relation
-                   JOIN dict_session source ON source.id = relation.from_session
-                   JOIN dict_session target ON target.id = relation.to_session
-
-                  ORDER BY relation.observed_ts, relation.relation_id",
-            )?;
-            let rows = statement.query_map([], |row| {
-                let kind: String = row.get(3)?;
-                Ok(SessionRelation {
-                    relation_key: row.get(0)?,
-                    from_session: row.get(1)?,
-                    to_session: row.get(2)?,
-                    kind: SessionRelationKind::from_str(&kind).ok_or_else(|| {
-                        rusqlite::Error::InvalidColumnType(
-                            3,
-                            "kind".into(),
-                            rusqlite::types::Type::Text,
-                        )
-                    })?,
-                    source: row.get(4)?,
-                    observed_at_ms: row.get::<_, i64>(5)? as u64,
-                    matched_identity_key: row.get(6)?,
-                })
-            })?;
-            rows.collect::<rusqlite::Result<Vec<_>>>()?
-        };
-        let traces =
-            derive_traces(&observations, &relations, limits).map_err(anyhow::Error::new)?;
-        let derived_attach = crate::closed_sets::value("dict_attach", "derived-session-relation")?;
-        for trace in traces.iter().filter(|trace| !trace.evidence.is_empty()) {
-            let mut existing = BTreeMap::new();
-            for session in &trace.sessions {
-                let attached: Option<(i64, i64)> = self
-                    .connection
-                    .query_row(
-                        "SELECT span.trace_id, trace.started_ts
-                           FROM agent_trace_span span
-                           JOIN dict_session member ON member.id = span.session_id
-                           JOIN agent_trace trace ON trace.trace_id = span.trace_id
-                          WHERE member.value = ?1",
-                        params![session],
-                        |row| Ok((row.get(0)?, row.get(1)?)),
-                    )
-                    .optional()?;
-                if let Some((trace_id, started_ts)) = attached {
-                    existing.entry(trace_id).or_insert(started_ts);
-                }
-            }
-            if existing.len() > 1 {
-                tracing::warn!(
-                    diagnostic = "conflicting-existing-trace-attachments",
-                    session_count = trace.sessions.len(),
-                    trace_count = existing.len(),
-                    "trace projection skipped a relation component with conflicting existing spans"
-                );
-                continue;
-            }
-            let trace_id = if let Some((&trace_id, _)) = existing.iter().next() {
-                trace_id
-            } else {
-                self.intern("dict_trace", &format!("trace-{}", trace.root_session))?
-            };
-            let root_id = self.session_id(&trace.root_session)?;
-            let started_ts = observations
-                .iter()
-                .filter(|observation| trace.sessions.contains(&observation.session_id))
-                .map(|observation| observation.observed_at_ms as i64)
-                .min()
-                .unwrap_or(0);
-            self.connection.execute(
-                "INSERT OR IGNORE INTO agent_trace (trace_id, root_session_id, started_ts)
-                 VALUES (?1, ?2, ?3)",
-                params![trace_id, root_id, started_ts],
-            )?;
-            for session in &trace.sessions {
-                let session_id = self.session_id(session)?;
-                let attached_ts = observations
-                    .iter()
-                    .filter(|observation| observation.session_id == *session)
-                    .map(|observation| observation.observed_at_ms as i64)
-                    .min()
-                    .or_else(|| {
-                        trace
-                            .evidence
-                            .iter()
-                            .filter(|relation| {
-                                relation.from_session == *session || relation.to_session == *session
-                            })
-                            .map(|relation| relation.observed_at_ms as i64)
-                            .min()
-                    })
-                    .unwrap_or(started_ts);
-                self.connection.execute(
-                    "INSERT INTO agent_trace_span
-                       (session_id, trace_id, attach, attached_ts)
-                     VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(session_id) DO UPDATE SET
-                       trace_id = excluded.trace_id,
-                       attach = excluded.attach",
-                    params![session_id, trace_id, derived_attach, attached_ts],
-                )?;
-            }
-        }
-        Ok(())
     }
 
     /// Put `session` under `trace`, recording which rule decided it. The first
@@ -4074,9 +3917,7 @@ LEFT JOIN dict_pane p ON p.id = s.tmux_pane_id
         );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
         if let Some(harness) = harness {
-            sql.push_str(
-                " AND a.harness = ?",
-            );
+            sql.push_str(" AND a.harness = ?");
             values.push(harness.to_string().into());
         }
         if let Some(session) = session {

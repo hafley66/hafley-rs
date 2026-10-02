@@ -29,7 +29,9 @@ fn segment(lane: &str) -> String {
 
 /// The trail directory for one lane under `root`.
 pub fn lane_dir_in(root: &Path, lane: &str) -> PathBuf {
-    root.join(segment(lane))
+    let path = root.join(segment(lane));
+    crate::test_paths::guard(&path);
+    path
 }
 
 /// The trail directory for one lane under `~/.agent/lanes`.
@@ -41,12 +43,19 @@ pub fn lane_dir(lane: &str) -> Result<PathBuf> {
 /// names it when set; otherwise `~/.cache/boop/lanes`, so placement and
 /// reclaim read one location and a delete can prove a path is under it.
 pub fn lane_target_root() -> Result<PathBuf> {
-    if let Some(root) = std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty()) {
-        return Ok(PathBuf::from(root));
-    }
-    Ok(dirs::home_dir()
-        .context("resolve home directory")?
-        .join(".cache/boop/lanes"))
+    let path = if let Some(root) = crate::test_paths::root() {
+        root.join(".cache/boop/lanes")
+    } else if let Some(root) =
+        std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty())
+    {
+        PathBuf::from(root)
+    } else {
+        dirs::home_dir()
+            .context("resolve home directory")?
+            .join(".cache/boop/lanes")
+    };
+    crate::test_paths::guard_default(&path);
+    Ok(path)
 }
 
 /// The cargo target dir boop owns for one lane: `<root>/<lane>/target`.
@@ -479,7 +488,7 @@ mod tests {
             return;
         }
         let root = tempdir("path-overrides");
-        let default = dirs::home_dir().unwrap().join(".agent/boop.db");
+        let default = root.join("home/.agent/boop.db");
         for (mail, db, expected) in [
             (None, None, default),
             (Some(root.join("mail")), None, root.join("mail/boop.db")),
@@ -495,7 +504,9 @@ mod tests {
                     "--exact",
                     "trail::tests::configured_store_and_trails_are_isolated",
                 ])
+                .env("HOME", root.join("home"))
                 .env("BOOP_STORE_PATH_PROBE", expected)
+                .env_remove("BOOP_TEST_STRICT_PATHS")
                 .env_remove("BOOP_DB")
                 .env_remove("BOOP_MAIL_DIR");
             if let Some(mail) = mail {
@@ -723,15 +734,15 @@ mod tests {
         let _ = std::fs::remove_dir_all(&root);
     }
 
-    /// HOME is process-wide in this binary, so every trail test shares one and
-    /// none of them removes it.
+    /// Each test thread owns its trail root.
     fn pin_home() {
-        static PIN: std::sync::Once = std::sync::Once::new();
-        PIN.call_once(|| {
-            let root = std::env::temp_dir().join(format!("boop-trail-home-{}", std::process::id()));
-            std::fs::create_dir_all(&root).unwrap();
-            std::env::set_var("HOME", &root);
-        });
+        let root = std::env::temp_dir().join(format!(
+            "boop-trail-home-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        crate::test_paths::set_root(&root);
     }
 
     /// A lane name no other test in this binary writes.

@@ -31,6 +31,8 @@ pub mod session;
 pub mod summary;
 pub mod tags;
 pub mod tail;
+#[path = "0_test_paths.rs"]
+pub mod test_paths;
 pub use _0_target_root as target_root;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;

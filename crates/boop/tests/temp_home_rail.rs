@@ -1,5 +1,5 @@
 //! Boop subprocess fixtures isolate transcript readers, configuration, route
-//! stamps and storage while preserving the real HOME and CODEX_HOME.
+//! stamps, HOME, storage, and lane targets.
 
 use std::path::{Path, PathBuf};
 
@@ -27,18 +27,11 @@ const FIXTURE_LANES: &[&str] = &[
 /// Files under `src/` handing a `SpawnSpec` with no `env_stamp` to `.spawn(`.
 /// The supervisor tmux starts inherits the test process `HOME`, so each run
 /// appends to the machine's own `~/.agent/lanes/lane-test/supervise.log`.
-const SPAWN_WAIVED: &[&str] = &[
-    "harness/claude.rs",
-    "harness/codex.rs",
-    "harness/opencode.rs",
-];
+const SPAWN_WAIVED: &[&str] = &[];
 
-/// Files under `src/` reaching `Store::default_path()` that also name a
-/// fixture lane. `supervise.rs` is the measured offender. `cli/db.rs` and
-/// `cli/job.rs` match on route and tmux names their own test binary wrote 0
-/// rows for, measured 2026-08-19 by counting `agent_trace_event` around each
-/// target.
-const STORE_WAIVED: &[&str] = &["cli/db.rs", "cli/job.rs"];
+/// cli/db.rs has default store calls in product code, with fixture tests
+/// using explicit database paths. The runtime strict audit covers this case.
+const STORE_WAIVED: &[&str] = &["cli/db.rs"];
 
 #[test]
 fn every_boop_subprocess_fixture_isolates_readers_and_storage() {
@@ -67,7 +60,6 @@ fn every_boop_subprocess_fixture_isolates_readers_and_storage() {
             }
             if !text.contains(".boop_test_root(")
                 || !text.contains(".env(\"BOOP_DB\"")
-                || text.contains(".env(\"HOME\"")
                 || text.contains(".env(\"CODEX_HOME\"")
             {
                 offenders.push(name);
@@ -155,13 +147,15 @@ fn no_new_src_unit_test_reaches_the_machine_s_own_agent_root() {
 
     for (name, path) in src_modules() {
         let text = std::fs::read_to_string(&path).unwrap();
-        let spawns = text.contains("env_stamp: None") && text.contains(".spawn(&");
+        let spawns = text.contains("env_stamp: None")
+            && text.contains(".spawn(&")
+            && !text.contains("test_env::stamp(");
         let names_a_fixture = FIXTURE_LANES
             .iter()
             .any(|lane| text.contains(&format!("\"{lane}\"")));
-        // A module whose test helper pins `BOOP_DB` (a `set_var` under a
-        // `Once`, as `supervise.rs` does in `tempdir()`) reaches a temp store.
-        let pins_store = text.contains("set_var(\"BOOP_DB\"");
+        // Fixture roots redirect default resolution for each test thread.
+        let pins_store =
+            text.contains("set_var(\"BOOP_DB\"") || text.contains("test_paths::set_root(");
         // Resolving a default path alone is read-only. Opening a store is the
         // operation that can create/migrate production data.
         let stores = text.contains("Store::default_path()")

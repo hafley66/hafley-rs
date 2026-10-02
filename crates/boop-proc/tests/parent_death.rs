@@ -5,22 +5,20 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
-use std::sync::Once;
 use std::time::Duration;
 
 use boop_acp::channel::{Delivery, LaneChannel, TurnEvent, TurnReceipt};
 use boop_proc::supervise::{record_parent_policy, LaneRun, ParentDeathPolicy};
 
-/// One temp HOME and store for this whole binary; the store is opened for a
-/// mood the moment any lane runs, and the machine's own must stay untouched.
+// Each test and its supervisor threads share only their own fixture root.
 fn root() -> PathBuf {
-    static ONCE: Once = Once::new();
-    let root = std::env::temp_dir().join(format!("boop-parent-death-{}", std::process::id()));
-    ONCE.call_once(|| {
-        std::fs::create_dir_all(root.join("home")).unwrap();
-        std::env::set_var("HOME", root.join("home"));
-        std::env::set_var("BOOP_DB", root.join("boop.db"));
-    });
+    let root = std::env::temp_dir().join(format!(
+        "boop-parent_death-{}-{:?}",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    std::fs::create_dir_all(root.join(".agent")).unwrap();
+    boop_store::test_paths::set_root(&root);
     root
 }
 
@@ -224,7 +222,7 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
     boss.kill();
 
     let lane = lane_run(&dir);
-    std::thread::spawn(move || {
+    boop_store::test_paths::spawn(move || {
         let mut channel = OpenTurnChannel::default();
         let _ = boop_proc::supervise::run(lane, &mut channel);
     });
@@ -273,7 +271,7 @@ fn an_orphan_policy_leaves_the_lane_and_its_edge_alone() {
     boss.kill();
 
     let lane = lane_run(&dir);
-    std::thread::spawn(move || {
+    boop_store::test_paths::spawn(move || {
         let mut channel = OpenTurnChannel::default();
         let _ = boop_proc::supervise::run(lane, &mut channel);
     });

@@ -751,6 +751,15 @@ pub fn try_route_lock(db: &Path, route: &str, operation: &str) -> Result<Option<
 /// redirected the mailbox with it, so no verb reaches into `~/.agent` behind
 /// its back.
 pub fn default_mail_dir() -> Result<PathBuf> {
+    let path = configured_mail_dir()?;
+    crate::test_paths::guard_default(&path);
+    Ok(path)
+}
+
+fn configured_mail_dir() -> Result<PathBuf> {
+    if let Some(root) = crate::test_paths::root() {
+        return Ok(root.join(".agent/mail"));
+    }
     if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
         return Ok(PathBuf::from(dir));
     }
@@ -808,10 +817,12 @@ const APPENDED: &str = "appended";
 /// The database `dir` addresses: a mail dir holds its own `boop.db`, and the
 /// default mail dir maps to the one store every other verb opens.
 pub fn db_path(dir: &Path) -> Result<PathBuf> {
-    if default_mail_dir().is_ok_and(|home| home == dir) {
+    if configured_mail_dir().is_ok_and(|home| home == dir) {
         return crate::ident::Store::default_path();
     }
-    Ok(dir.join("boop.db"))
+    let path = dir.join("boop.db");
+    crate::test_paths::guard(&path);
+    Ok(path)
 }
 
 /// Open the mailbox `dir` addresses, importing any `bus.ndjson` and

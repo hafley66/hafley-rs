@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use crate::tmux::{LiveSessions, Multiplexer};
 
 /// Isolate a Boop subprocess from ambient route identity, databases and reader
-/// roots while preserving the real HOME and CODEX_HOME. Explicit command env
+/// roots, HOME, and lane targets. Explicit command env
 /// values take precedence, including values set before this call.
 pub trait BoopCommandExt {
     fn boop_test_root(&mut self, root: impl AsRef<Path>) -> &mut Self;
@@ -38,6 +38,20 @@ impl BoopCommandExt for Command {
         }
         let root = root.as_ref();
         self.env("BOOP_READER_HOME", root);
+        for (name, path) in [
+            ("HOME", root.to_path_buf()),
+            ("CODEX_HOME", root.join(".codex")),
+            ("XDG_CONFIG_HOME", root.join(".config")),
+            ("XDG_CACHE_HOME", root.join(".cache")),
+            ("BOOP_DB", root.join(".agent/boop.db")),
+            ("BOOP_MAIL_DIR", root.join(".agent/mail")),
+            ("BOOP_LANE_TARGET_ROOT", root.join(".cache/boop/lanes")),
+        ] {
+            if !explicit.contains(std::ffi::OsStr::new(name)) {
+                self.env(name, path);
+            }
+        }
+
         if !explicit.contains(std::ffi::OsStr::new("PI_CODING_AGENT_DIR")) {
             self.env("PI_CODING_AGENT_DIR", root.join(".omp/agent"));
         }
@@ -46,6 +60,22 @@ impl BoopCommandExt for Command {
         }
         self
     }
+}
+
+/// The same sandbox environment for a SpawnSpec handed to a tmux supervisor.
+pub fn boop_test_env(root: &Path) -> Vec<(String, String)> {
+    std::fs::create_dir_all(root.join(".agent")).unwrap();
+    let mut command = Command::new("boop");
+    command.boop_test_root(root);
+    command
+        .get_envs()
+        .map(|(key, value)| {
+            (
+                key.to_string_lossy().into_owned(),
+                value.unwrap_or_default().to_string_lossy().into_owned(),
+            )
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -59,6 +89,37 @@ mod tests {
         command
             .get_envs()
             .find_map(|(key, value)| (key == name).then_some(value))
+    }
+
+    #[test]
+    fn boop_subprocess_paths_all_share_the_fixture_root() {
+        let root = Path::new("fixture-home");
+        let mut command = Command::new("boop");
+        command.boop_test_root(root);
+        let paths = [
+            "HOME",
+            "BOOP_DB",
+            "BOOP_MAIL_DIR",
+            "BOOP_LANE_TARGET_ROOT",
+            "BOOP_CONFIG",
+        ]
+        .map(|name| {
+            env_value(&command, OsStr::new(name))
+                .unwrap()
+                .unwrap()
+                .to_string_lossy()
+                .into_owned()
+        });
+        assert_eq!(
+            paths,
+            [
+                "fixture-home",
+                "fixture-home/.agent/boop.db",
+                "fixture-home/.agent/mail",
+                "fixture-home/.cache/boop/lanes",
+                "fixture-home/config/boop/config.json"
+            ]
+        );
     }
 
     #[test]

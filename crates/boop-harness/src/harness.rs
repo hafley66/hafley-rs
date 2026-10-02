@@ -3,6 +3,10 @@
 use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
+#[cfg(test)]
+#[path = "harness/0_test_env.rs"]
+mod test_env;
+
 use anyhow::Result;
 
 use boop_store::ident::{Store, SyncStat};

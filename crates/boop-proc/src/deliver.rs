@@ -1416,7 +1416,8 @@ mod tests {
             }
         }
         let dir = std::env::temp_dir().join(format!("boop-pane-notice-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
         let registry = Registry::with(vec![]);
         let mut route = unbound_route(&dir);
         route.harness = None;
@@ -1515,7 +1516,8 @@ mod tests {
     fn cancelled_reminder_is_not_sent_or_retried_through_the_ladder() {
         let dir = std::env::temp_dir().join(format!("boop-reminder-cancel-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
         let mut route = unbound_route(&dir);
         route.harness = None;
         bus::write_route(&dir, "recipient", &route).unwrap();
@@ -1549,7 +1551,8 @@ mod tests {
     fn route_binding_requires_authoritative_route_evidence() {
         let dir = std::env::temp_dir().join(format!("boop-bind-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
 
         let mut observed = unbound_route(&dir);
         observed.mode = Some("native-owned".into());
@@ -1596,7 +1599,8 @@ mod tests {
     fn held_mail_pushes_itself_once_the_route_can_take_it() {
         let dir = std::env::temp_dir().join(format!("boop-drain-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
 
         let registry = Registry::with(vec![Box::new(FakeClaude)]);
         let mut route = unbound_route(&dir);
@@ -1673,7 +1677,8 @@ mod tests {
         let _guard = ENV_LOCK.lock().unwrap();
         let dir = std::env::temp_dir().join(format!("boop-acpx-restart-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
         let executable = dir.join("fake-acpx");
         let calls = dir.join("calls");
         let failing = format!("#!/bin/sh\nprintf x >> '{}'\nexit 7\n", calls.display());
@@ -2049,7 +2054,8 @@ mod tests {
     fn burst_fixture(tag: &str, lanes: usize, bodies: &[&str]) -> (PathBuf, Store) {
         let dir = std::env::temp_dir().join(format!("boop-burst-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
         let name = format!("claude-{tag}");
         let mut route = unbound_route(&dir);
         route.session_id = Some("ses-fake-claude".to_owned());
@@ -2327,7 +2333,8 @@ mod tests {
     fn a_row_a_door_already_queued_is_never_pushed_again() {
         let dir = std::env::temp_dir().join(format!("boop-requeue-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
 
         let registry = Registry::with(vec![Box::new(FakeClaude)]);
         let mut route = unbound_route(&dir);
@@ -2486,7 +2493,8 @@ mod tests {
     fn a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed() {
         let dir = std::env::temp_dir().join(format!("boop-door-only-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
         assert!(
             !dir.join(".claude").join("settings.json").exists(),
             "the probe project carries no installed hook"
@@ -2643,7 +2651,8 @@ mod tests {
     fn a_commit_row_to_a_lane_parent_stays_in_the_mailbox() {
         let dir = std::env::temp_dir().join(format!("boop-commit-lane-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
-        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(dir.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&dir);
         let mut route = unbound_route(&dir);
         route.kind = "lane".into();
         bus::write_route(&dir, "parent-lane", &route).unwrap();

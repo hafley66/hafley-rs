@@ -612,11 +612,14 @@ pub(crate) mod testkit {
     pub(crate) fn temp_mail_dir() -> PathBuf {
         use std::sync::atomic::{AtomicUsize, Ordering};
         static NEXT: AtomicUsize = AtomicUsize::new(0);
-        std::env::temp_dir().join(format!(
+        let root = std::env::temp_dir().join(format!(
             "boop_mail_{}_{}",
             std::process::id(),
             NEXT.fetch_add(1, Ordering::Relaxed)
-        ))
+        ));
+        std::fs::create_dir_all(root.join(".agent")).unwrap();
+        boop_store::test_paths::set_root(&root);
+        root
     }
 
     pub(crate) fn route_with(parent: Option<&str>) -> Route {

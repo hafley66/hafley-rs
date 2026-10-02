@@ -1,0 +1,201 @@
+Boop hermetic path audit
+Source baseline: 3aba70e4; source locations below refer to that commit.
+Every executed cargo test used HOME=$WORKTREE/scratch/home, BOOP_DB and BOOP_MAIL_DIR unset,
+CARGO_BUILD_JOBS=4, and an empty chmod-000 scratch/home/.agent/boop.db sentinel.
+The strict audit also set BOOP_TEST_STRICT_PATHS=1, making unscoped default resolution panic.
+This catches reads whose permission errors would otherwise be swallowed.
+
+Direct strict-audit failures: 28
+The binary's two additional failures were mutex-poison cascades after the fork-join panic.
+Supervisor child failures in this audit reflect replacing its old process-wide HOME/BOOP_DB
+pin with thread-local roots before propagating those roots to child threads.
+The old process-wide supervisor pin also let other tests race its first initialization.
+
+crates/boop-proc/src/deliver.rs:1596
+  held_mail_pushes_itself_once_the_route_can_take_it
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2117
+  a_lane_end_row_takes_the_door_of_a_live_route
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2186
+  a_burst_past_the_recipients_live_connects_trips_and_cools_off
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2263
+  a_cool_off_ends_and_the_drip_resumes_at_budget
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2294
+  a_body_the_door_already_took_this_window_trips_at_once
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2393
+  a_door_queue_landing_stamps_the_row_at_the_ladder
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2486
+  a_claude_coordinator_takes_its_row_at_the_door_with_no_hooks_installed
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2624
+  a_wip_commit_row_pushes_through_a_coordinator_door_once
+  ~/.agent/boop.db
+
+crates/boop-proc/src/deliver.rs:2677
+  a_commit_head_already_pushed_is_held_on_a_second_row
+  ~/.agent/boop.db
+
+crates/boop-proc/src/lane.rs:1067
+  a_gpt_model_names_the_codex_harness
+  ~/Library/Application Support/boop/config.json (macOS); ~/.config/boop/config.json (Linux)
+
+crates/boop-proc/src/lane.rs:1092
+  plan_family_models_are_banned_from_opencode
+  ~/Library/Application Support/boop/config.json (macOS); ~/.config/boop/config.json (Linux)
+
+crates/boop-proc/src/lane.rs:1148
+  an_unnamed_harness_never_guesses_opencode
+  ~/Library/Application Support/boop/config.json (macOS); ~/.config/boop/config.json (Linux)
+
+crates/boop-proc/src/supervise.rs:3989
+  a_flaked_brief_turn_is_refed_even_when_the_channel_has_an_id
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4120
+  a_cancel_row_interrupts_the_turn_and_feeds_the_next_one
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4211
+  a_fresh_identified_channel_acknowledges_before_receiving_the_full_brief
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4264
+  an_explicit_resume_receives_the_resume_nudge
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4285
+  a_resume_pinned_for_another_cwd_starts_fresh_and_says_so
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4355
+  a_conversation_that_moves_mid_run_stays_on_the_same_spawn
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4495
+  an_empty_brief_turn_is_re_sent_once
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4547
+  a_lane_that_declared_no_output_keeps_its_short_brief_turn
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4670
+  a_turn_with_no_pending_hail_parks_instead_of_ending
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4703
+  the_brief_reaches_the_channel_before_a_resume_nudge_opens_the_lane
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop-proc/src/supervise.rs:4722
+  a_park_after_the_result_row_mails_no_yield
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop/src/cli/_2_wait_target.rs:58
+  wait_dispatches_to_lane_wait_only_for_a_registered_lane_route
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop/src/cli/job.rs:4683
+  fork_join_merges_the_branch_and_writes_the_reply
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop/src/cli/job.rs:6375
+  create_resets_a_dead_name_and_says_what_it_removed
+  ~/.agent/boop.db; ~/.agent/lanes/<lane>/*
+
+crates/boop/src/cli/mail.rs:1095
+  native_tui_completion_delivery_uses_only_its_trail
+  ~/.agent/boop.db
+
+crates/boop/src/cli/mail.rs:1212
+  unknown_recipient_without_session_metadata_is_refused_once_with_a_reason_row
+  ~/.agent/boop.db
+
+Additional source-audited fixtures:
+
+crates/boop-store/src/trail.rs:470
+  configured_store_and_trails_are_isolated
+  ~/.agent/boop.db; ~/.agent/lanes (default-path subprocess case inherited HOME)
+
+crates/boop-harness/src/harness/claude.rs:1453
+  claude_spawn_returns_handle_and_stop_tears_down
+  ~/.agent/lanes/lane-test/supervise.log; /tmp/boop.db; harness config under HOME
+
+crates/boop-harness/src/harness/codex.rs:2066
+  codex_spawn_returns_handle_and_stop_tears_down
+  ~/.agent/lanes/lane-test/supervise.log; /tmp/boop.db; harness config under HOME
+
+crates/boop-harness/src/harness/opencode.rs:2348
+  opencode_spawn_returns_handle_and_stop_tears_down
+  ~/.agent/lanes/lane-test/supervise.log; /tmp/boop.db; harness config under HOME
+
+Shared subprocess fixture:
+crates/boop-store/src/testing.rs:18, BoopCommandExt::boop_test_root
+  Previously preserved HOME and omitted BOOP_LANE_TARGET_ROOT. It now defaults HOME,
+  BOOP_DB, BOOP_MAIL_DIR, config, reader home and lane targets to the caller's temp root.
+  Explicit fixture env values still take precedence.
+  The source rail has zero spawn waivers and only the measured cli/db.rs store false positive.
+
+Per-thread fixtures also replace process-global pins in trail.rs, supervise.rs,
+parent_death.rs and parent_failure_hail.rs. Supervisor test threads inherit the fixture root.
+The three live harness spawn fixtures were compiled, with sandbox env stamps; their
+model-running tests were not executed for this task.
+
+Guard:
+0_test_paths.rs reads the account home through getpwuid_r, independently of HOME.
+Default store/mail/trail/cache/config resolution and explicit store opens reject paths in
+that account's .agent, .cache/boop, .config/boop and macOS Boop config roots, including aliases.
+The guard test calls Store::default_path with a fixture root deliberately set to the account home.
+
+Sync measurement:
+Backup: /Users/chrishafley/backups/boop/boop-v40-20261001-210341.db
+Copy size: 4,550,066,176 bytes; schema 40.
+Before rehearsal: 96,805 observations, 4,388 distinct sessions, 0 session relations.
+The complete dictionary join also returns 96,805 rows, proving no row multiplication.
+7c9b54bf introduced this projection in schema 38 with COUNT(*) over retained observation rows.
+Schema 40 changed vocabulary storage from dictionaries to checked TEXT; it preserved this count.
+Observation source counts: transcript-sync=90,113; legacy-agent-trace-span=4,368; trace-event=2,324.
+The projection now reads MIN(observed_ts) per session with LIMIT 10,001, while keeping
+max_observations=10,000, max_relations=10,000 and max_sessions=10,000.
+A store without relations has no derived components to materialize and returns immediately.
+Tests cover repeated history, earliest timestamp/root/span preservation, edgeless history,
+and rejection/rollback when distinct-session history exceeds the budget.
+
+Plain copy sync: exit 0, wall=3.33s, user=0.13s, sys=0.24s, sync phase=234ms.
+A scratch continued-in JSONL transcript then forces the join against that retained history.
+Continuation copy sync: exit 0, wall=2.08s, user=0.15s, sys=0.16s, sync phase=210ms.
+After: 96,811 observations, 4,389 observed sessions, 1 relation;
+budget-before and budget-after both have materialized trace spans. Zero budget warnings.
+Command:
+  HOME=$WORKTREE/scratch/home BOOP_DB=$WORKTREE/scratch/boop-v40.db   BOOP_READER_HOME=$WORKTREE/scratch/home CODEX_HOME=$WORKTREE/scratch/home/.codex   BOOP_CODEX_STATE_DB=$WORKTREE/scratch/home/.codex/state_5.sqlite   BOOP_CONFIG=$WORKTREE/scratch/home/config.json   BOOP_LANE_TARGET_ROOT=$WORKTREE/scratch/home/.cache/boop/lanes   PI_CODING_AGENT_DIR=$WORKTREE/scratch/home/.omp/agent   $BOOP_BIN db sync create --mail-dir $WORKTREE/scratch/rehearsal-mail
+  BOOP_MAIL_DIR, BOOP_CLAUDE_SESSIONS_DIR and BOOP_NO_SYNC unset.
+The database copy and SQLite sidecars are removed after verification.
+
+Contract baseline:
+boop2-harmonize detached at 5626aaa initially has seven snapshot differences,
+each adding the target.json ownership record from pre-existing f56861e4 behavior.
+The seven snapshots receive that one file line only. No contract test logic changes.
+
+Final validation:
+  cargo test -p boop-store -p boop-proc --lib: proc 188 passed; store 247 passed, 1 existing ignore.
+  cargo test -p boop --bin boop: 170 passed.
+  Parent integration fixtures: 4 + 7 passed.
+  Standalone path-rail rustc test target: 2 passed (the cargo integration target is named main).
+  cargo test -p boop-harness --lib --no-run: compiled successfully; live spawn tests not run.
+  boop2-harmonize contract suite: 82 TAP cases, zero not-ok after seven one-line snapshot updates.
+  Database copy and WAL/SHM sidecars deleted; sandbox sentinel remains mode 000 and length 0.
+Contract snapshot commit: bc2803c (detached boop2-harmonize checkout).
+Contract result detail: 80 passed, 2 existing skips, 0 not-ok.
+Final gates repeated after fixture changes: proc 188, store 247 with 1 existing ignore, binary 170.

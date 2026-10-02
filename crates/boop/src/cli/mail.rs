@@ -1123,6 +1123,7 @@ mod delivery_report_tests {
         }
 
         let root = std::path::PathBuf::from(std::env::var_os(CHILD_ENV).unwrap());
+        boop_store::test_paths::set_root(&root);
         let mail = root.join("mail");
         let trails = root.join("lanes");
         std::fs::create_dir_all(&mail).unwrap();

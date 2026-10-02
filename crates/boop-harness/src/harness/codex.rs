@@ -2071,6 +2071,9 @@ mod tests {
         req.base_sha = Some(repo.sha.clone());
         req.repo = repo.dir.clone();
         req.worktree_dir = Some(repo.worktree.display().to_string());
+        let home = repo.dir.join("fixture-home");
+        req.env_stamp = Some(super::super::test_env::stamp(&home));
+        req.mail_dir = home.join(".agent/mail");
         req.model = Some("gpt-5.6-luna@medium".to_owned());
         let codex = Codex;
         let session = codex.spawn(&req).unwrap();
