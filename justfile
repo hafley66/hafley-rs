@@ -109,8 +109,8 @@ boop-start:
     #!/usr/bin/env bash
     set -euo pipefail
     started=$SECONDS
-    cache="${BOOP_START_CACHE:-$HOME/.cache/boop}"
-    shared="${BOOP_CARGO_TARGET_DIR:-$cache/cargo-target}"
+    root="${BOOP_LANE_TARGET_ROOT:-$HOME/.cache/boop/lanes}"
+    shared="$root/_shared"
     export CARGO_TARGET_DIR="$shared"
     # Spotlight indexes a cargo target dir as cargo writes it, and mds_stores
     # then competes with rustc for the whole build. This marker turns it off

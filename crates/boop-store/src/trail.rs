@@ -38,13 +38,15 @@ pub fn lane_dir(lane: &str) -> Result<PathBuf> {
 }
 
 /// The root every lane cargo target dir lives under. `BOOP_LANE_TARGET_ROOT`
-/// names it when set; otherwise the lane trail root itself, so placement and
+/// names it when set; otherwise `~/.cache/boop/lanes`, so placement and
 /// reclaim read one location and a delete can prove a path is under it.
 pub fn lane_target_root() -> Result<PathBuf> {
     if let Some(root) = std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty()) {
         return Ok(PathBuf::from(root));
     }
-    lanes_root()
+    Ok(dirs::home_dir()
+        .context("resolve home directory")?
+        .join(".cache/boop/lanes"))
 }
 
 /// The cargo target dir boop owns for one lane: `<root>/<lane>/target`.

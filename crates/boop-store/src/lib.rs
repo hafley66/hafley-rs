@@ -30,6 +30,8 @@ pub mod session;
 pub mod summary;
 pub mod tags;
 pub mod tail;
+#[path = "0_target_root.rs"]
+pub mod target_root;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod tmux;

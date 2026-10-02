@@ -35,7 +35,7 @@ pub const BUILD_INFO: BuildInfo = BuildInfo {
 pub use boop_store::_0_session_graph;
 #[cfg(feature = "agent-read")]
 pub use boop_store::activity;
-pub use boop_store::{bus, event, proc, rows, runtime, session, tail, tmux, trail};
+pub use boop_store::{bus, event, proc, rows, runtime, session, tail, target_root, tmux, trail};
 #[cfg(feature = "agent-read")]
 pub use boop_store::{query, summary, usage};
 

@@ -15,6 +15,8 @@ pub(crate) mod selection;
 pub(crate) mod shout;
 pub(crate) mod subscribe;
 pub(crate) mod tag;
+#[path = "1_target_root.rs"]
+pub(crate) mod target_root;
 
 use std::path::{Path, PathBuf};
 
@@ -433,9 +435,9 @@ PRESETS: model spelling is presets only; `boop config presets` lists name,
 
 DISK: each lane's cargo target dir belongs to boop, so no lane fills the laptop.
   PLACEMENT: `lane create` sets CARGO_TARGET_DIR=<lanes root>/<lane>/target on
-    the lane's spawn (lanes root = BOOP_LANE_TARGET_ROOT, else ~/.agent/lanes).
-    A caller `--env CARGO_TARGET_DIR=...` wins; `--dry-run` prints `target:`.
-    The `boop-start` warmup keeps its own shared cache and is unchanged.
+    the lane's spawn (lanes root = BOOP_LANE_TARGET_ROOT, else ~/.cache/boop/lanes).
+    A caller `--env CARGO_TARGET_DIR=...` must stay under that root; `--dry-run` prints `target:`.
+    The `boop-start` warmup uses <lanes root>/_shared, counted by the disk floor.
   RECLAIM: every supervisor exit path (result written, retired, signalled)
     deletes that lane's target dir; so does `lane delete`. Only a path under the
     lane target root is ever removed; anything else is refused with a WARN. A

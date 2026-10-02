@@ -1223,6 +1223,7 @@ fn resolve_post_pr(
 /// Register and spawn a lane. No match on harness id here; the adapter's own
 /// `spawn`/`preview_command` decides how `prompt` becomes a real invocation.
 pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
+    super::target_root::validate_target(&args.env)?;
     // Resolved before any `args` field is moved, so the expectation is ready
     // for both the dry-run line and the post-spawn write.
     let expect = lane_expect(&args);
