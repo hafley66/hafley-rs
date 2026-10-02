@@ -686,3 +686,47 @@ fn relational_follows_named_comment_boundary() {
         );
     }
 }
+
+#[test]
+fn relational_nth_child_named_comment() {
+    let rows = [
+        // expression_statement:nth-child(3)
+        Row {
+            name: "comment_counts",
+            args: "#nth-child? @c 3",
+        },
+        // expression_statement:nth-child(2 of expression_statement)
+        Row {
+            name: "of_excludes_comment",
+            args: "#nth-child? @c 2 of expression_statement",
+        },
+        // expression_statement:not(:nth-child(3))
+        Row {
+            name: "not_comment_counts",
+            args: "#not-nth-child? @c 3",
+        },
+    ];
+    for (language, source) in [
+        (
+            tree_sitter::Language::new(tree_sitter_rust::LANGUAGE),
+            "fn host() { a(); /* gap */ b(); }",
+        ),
+        (
+            tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT),
+            "function host() { a(); /* gap */ b(); }",
+        ),
+    ] {
+        let actual = rows
+            .iter()
+            .map(|row| {
+                let scm = format!("((expression_statement) @c ({}))", row.args);
+                format!("{}: {}", row.name, matches(&language, source, &scm))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            actual,
+            "comment_counts: c=b();\nof_excludes_comment: c=b();\nnot_comment_counts: c=a();"
+        );
+    }
+}
