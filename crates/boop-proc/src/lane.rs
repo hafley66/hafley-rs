@@ -1066,7 +1066,7 @@ mod tests {
     #[test]
     fn a_gpt_model_names_the_codex_harness() {
         let root = seed_repo("a_gpt_model_names_the_codex_harness");
-        boop_store::test_paths::set_root(&root);
+        boop_store::_0_test_paths::set_root(&root);
         let registry = Registry::discover();
         assert_eq!(
             harness_for_model("gpt-5.6-luna@medium").unwrap(),
@@ -1093,7 +1093,7 @@ mod tests {
     #[test]
     fn plan_family_models_are_banned_from_opencode() {
         let root = seed_repo("plan_family_models_are_banned_from_opencode");
-        boop_store::test_paths::set_root(&root);
+        boop_store::_0_test_paths::set_root(&root);
         let registry = Registry::discover();
         let err = harness_for_spawn(&registry, None, Some("openrouter/openai/gpt-5.6-sol"))
             .unwrap_err()
@@ -1131,7 +1131,7 @@ mod tests {
     #[test]
     fn an_explicit_harness_wins_over_the_model_spelling() {
         let root = seed_repo("an_explicit_harness_wins_over_the_model_spelling");
-        boop_store::test_paths::set_root(&root);
+        boop_store::_0_test_paths::set_root(&root);
         let registry = Registry::discover();
         assert_eq!(
             harness_for_spawn(&registry, Some("kimi"), Some("gpt-5.6-luna")).unwrap(),
@@ -1153,7 +1153,7 @@ mod tests {
     #[test]
     fn an_unnamed_harness_never_guesses_opencode() {
         let root = seed_repo("an_unnamed_harness_never_guesses_opencode");
-        boop_store::test_paths::set_root(&root);
+        boop_store::_0_test_paths::set_root(&root);
         let registry = Registry::discover();
         let claude = harness_for_spawn(&registry, None, Some("claude-opus-4"))
             .unwrap_err()

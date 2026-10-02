@@ -2355,7 +2355,7 @@ mod tests {
         req.repo = repo.dir.clone();
         req.worktree_dir = Some(worktree.display().to_string());
         let home = repo.dir.join("fixture-home");
-        req.env_stamp = Some(super::super::test_env::stamp(&home));
+        req.env_stamp = Some(super::super::_0_test_env::stamp(&home));
         req.mail_dir = home.join(".agent/mail");
         let opencode = Opencode;
         let session = opencode.spawn(&req).unwrap();

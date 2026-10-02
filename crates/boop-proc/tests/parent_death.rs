@@ -18,7 +18,7 @@ fn root() -> PathBuf {
         std::thread::current().id()
     ));
     std::fs::create_dir_all(root.join(".agent")).unwrap();
-    boop_store::test_paths::set_root(&root);
+    boop_store::_0_test_paths::set_root(&root);
     root
 }
 
@@ -222,7 +222,7 @@ fn a_reparent_policy_moves_the_edge_onto_the_registered_coordinator() {
     boss.kill();
 
     let lane = lane_run(&dir);
-    boop_store::test_paths::spawn(move || {
+    boop_store::_0_test_paths::spawn(move || {
         let mut channel = OpenTurnChannel::default();
         let _ = boop_proc::supervise::run(lane, &mut channel);
     });
@@ -271,7 +271,7 @@ fn an_orphan_policy_leaves_the_lane_and_its_edge_alone() {
     boss.kill();
 
     let lane = lane_run(&dir);
-    boop_store::test_paths::spawn(move || {
+    boop_store::_0_test_paths::spawn(move || {
         let mut channel = OpenTurnChannel::default();
         let _ = boop_proc::supervise::run(lane, &mut channel);
     });

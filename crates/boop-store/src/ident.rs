@@ -16,8 +16,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::_0_trace_identity::{SessionObservation, SessionRelation, SessionRelationKind};
 
-#[path = "1_trace_projection.rs"]
-mod trace_projection;
+mod _1_trace_projection;
 use crate::session::{Ingested, KnownSession, KnownSessions, SessionRef};
 
 /// Every SQLite connection waits for a contending reader or the one WAL writer
@@ -745,7 +744,7 @@ fn int_at(row: &[rusqlite::types::Value], at: usize, what: &str) -> Result<i64> 
 
 impl Store {
     pub fn open(path: PathBuf) -> Result<Self> {
-        crate::test_paths::guard(&path);
+        crate::_0_test_paths::guard(&path);
         let connection = Connection::open(&path)
             .with_context(|| format!("open boop.db at {}", path.display()))?;
         configure_connection(&connection, &path)?;
@@ -796,7 +795,7 @@ impl Store {
     /// runs here: a read-only connection cannot write, so it must not appear
     /// to migrate a stale store.
     pub fn open_readonly(path: PathBuf) -> Result<Self> {
-        crate::test_paths::guard(&path);
+        crate::_0_test_paths::guard(&path);
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_ONLY)
             .with_context(|| format!("open boop.db read-only at {}", path.display()))?;
         configure_connection(&connection, &path)?;
@@ -812,7 +811,7 @@ impl Store {
     /// [`Store::open`] stays the schema owner; this path assumes the schema is
     /// already present and reports its absence as an ordinary error.
     pub fn open_bounded_write(path: PathBuf, busy: std::time::Duration) -> Result<Self> {
-        crate::test_paths::guard(&path);
+        crate::_0_test_paths::guard(&path);
         let connection = Connection::open_with_flags(&path, OpenFlags::SQLITE_OPEN_READ_WRITE)
             .with_context(|| format!("open boop.db at {}", path.display()))?;
         connection
@@ -1517,7 +1516,7 @@ impl Store {
     }
 
     pub fn default_path() -> Result<PathBuf> {
-        let path = if let Some(root) = crate::test_paths::root() {
+        let path = if let Some(root) = crate::_0_test_paths::root() {
             root.join(".agent/boop.db")
         } else if let Some(path) = std::env::var_os("BOOP_DB").filter(|path| !path.is_empty()) {
             PathBuf::from(path)
@@ -1528,7 +1527,7 @@ impl Store {
                 .context("resolve home directory")?
                 .join(".agent/boop.db")
         };
-        crate::test_paths::guard_default(&path);
+        crate::_0_test_paths::guard_default(&path);
         Ok(path)
     }
 

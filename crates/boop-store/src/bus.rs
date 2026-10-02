@@ -752,12 +752,12 @@ pub fn try_route_lock(db: &Path, route: &str, operation: &str) -> Result<Option<
 /// its back.
 pub fn default_mail_dir() -> Result<PathBuf> {
     let path = configured_mail_dir()?;
-    crate::test_paths::guard_default(&path);
+    crate::_0_test_paths::guard_default(&path);
     Ok(path)
 }
 
 fn configured_mail_dir() -> Result<PathBuf> {
-    if let Some(root) = crate::test_paths::root() {
+    if let Some(root) = crate::_0_test_paths::root() {
         return Ok(root.join(".agent/mail"));
     }
     if let Some(dir) = std::env::var_os("BOOP_MAIL_DIR").filter(|dir| !dir.is_empty()) {
@@ -821,7 +821,7 @@ pub fn db_path(dir: &Path) -> Result<PathBuf> {
         return crate::ident::Store::default_path();
     }
     let path = dir.join("boop.db");
-    crate::test_paths::guard(&path);
+    crate::_0_test_paths::guard(&path);
     Ok(path)
 }
 

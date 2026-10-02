@@ -1417,7 +1417,7 @@ mod tests {
         }
         let dir = std::env::temp_dir().join(format!("boop-pane-notice-{}", std::process::id()));
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
         let registry = Registry::with(vec![]);
         let mut route = unbound_route(&dir);
         route.harness = None;
@@ -1517,7 +1517,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-reminder-cancel-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
         let mut route = unbound_route(&dir);
         route.harness = None;
         bus::write_route(&dir, "recipient", &route).unwrap();
@@ -1552,7 +1552,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-bind-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
 
         let mut observed = unbound_route(&dir);
         observed.mode = Some("native-owned".into());
@@ -1600,7 +1600,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-drain-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
 
         let registry = Registry::with(vec![Box::new(FakeClaude)]);
         let mut route = unbound_route(&dir);
@@ -1678,7 +1678,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-acpx-restart-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
         let executable = dir.join("fake-acpx");
         let calls = dir.join("calls");
         let failing = format!("#!/bin/sh\nprintf x >> '{}'\nexit 7\n", calls.display());
@@ -2055,7 +2055,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-burst-{tag}-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
         let name = format!("claude-{tag}");
         let mut route = unbound_route(&dir);
         route.session_id = Some("ses-fake-claude".to_owned());
@@ -2334,7 +2334,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-requeue-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
 
         let registry = Registry::with(vec![Box::new(FakeClaude)]);
         let mut route = unbound_route(&dir);
@@ -2494,7 +2494,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-door-only-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
         assert!(
             !dir.join(".claude").join("settings.json").exists(),
             "the probe project carries no installed hook"
@@ -2652,7 +2652,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("boop-commit-lane-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(dir.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&dir);
+        boop_store::_0_test_paths::set_root(&dir);
         let mut route = unbound_route(&dir);
         route.kind = "lane".into();
         bus::write_route(&dir, "parent-lane", &route).unwrap();

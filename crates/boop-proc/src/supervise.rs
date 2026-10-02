@@ -3991,7 +3991,7 @@ mod tests {
         let lane = parented_lane(&dir, "mine", "coordinator");
         let mut channel = BriefFlakesThenCompletesChannel::default();
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4133,7 +4133,7 @@ mod tests {
             channel.steers.clone(),
             channel.interrupts.clone(),
         );
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
         // The result row lands after turn 2, before turn 3 opens; the turns
@@ -4213,7 +4213,7 @@ mod tests {
         let lane = parented_lane(&dir, "mine", "coordinator");
         let mut channel = FreshIdentifiedChannel::default();
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4267,7 +4267,7 @@ mod tests {
         pin_resume(&mut lane, "existing-thread-id");
         let mut channel = FreshIdentifiedChannel::default();
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4304,7 +4304,7 @@ mod tests {
         mint_spawn("wrong-cwd", &dir, 8);
         let mut channel = FreshIdentifiedChannel::default();
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
@@ -4360,7 +4360,7 @@ mod tests {
         lane.resume = None;
         let mut channel = CompactingChannel::default();
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
         wait_for(|| result_rows(&dir).len() == 1, Duration::from_secs(5));
@@ -4502,7 +4502,7 @@ mod tests {
             ..EmptyBriefChannel::default()
         };
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4553,7 +4553,7 @@ mod tests {
             ..EmptyBriefChannel::default()
         };
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4673,7 +4673,7 @@ mod tests {
         let mut channel = ParksThenWakesChannel::default();
         let turns = channel.turns.clone();
         let closed = channel.closed.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4707,7 +4707,7 @@ mod tests {
         let mut channel = FreshIdentifiedChannel::default();
         let turns = channel.turns.clone();
         let brief = channel.brief.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -4727,7 +4727,7 @@ mod tests {
         append_row(&dir, &seed).unwrap();
         let mut channel = ParksThenWakesChannel::default();
         let turns = channel.turns.clone();
-        boop_store::test_paths::spawn(move || {
+        boop_store::_0_test_paths::spawn(move || {
             let _ = run(lane, &mut channel);
         });
 
@@ -5049,7 +5049,7 @@ mod tests {
         ));
         let _ = std::fs::remove_dir_all(&root);
         std::fs::create_dir_all(root.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&root);
+        boop_store::_0_test_paths::set_root(&root);
         boop_store::Store::open(boop_store::Store::default_path().unwrap()).unwrap();
         root
     }

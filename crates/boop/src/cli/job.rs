@@ -6269,7 +6269,7 @@ mod tests {
             let dir = std::env::temp_dir().join(unique_name(&format!("boop-job-{tag}")));
             let _ = std::fs::remove_dir_all(&dir);
             std::fs::create_dir_all(dir.join(".agent")).unwrap();
-            boop_store::test_paths::set_root(&dir);
+            boop_store::_0_test_paths::set_root(&dir);
             let repo = GitRepo { dir };
             repo.git(&["init", "-q", "-b", "main"]);
             repo.git(&["config", "user.email", "t@t"]);

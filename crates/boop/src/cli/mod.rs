@@ -618,7 +618,7 @@ pub(crate) mod testkit {
             NEXT.fetch_add(1, Ordering::Relaxed)
         ));
         std::fs::create_dir_all(root.join(".agent")).unwrap();
-        boop_store::test_paths::set_root(&root);
+        boop_store::_0_test_paths::set_root(&root);
         root
     }
 

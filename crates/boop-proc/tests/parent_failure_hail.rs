@@ -35,7 +35,7 @@ fn root() -> PathBuf {
         std::thread::current().id()
     ));
     std::fs::create_dir_all(root.join(".agent")).unwrap();
-    boop_store::test_paths::set_root(&root);
+    boop_store::_0_test_paths::set_root(&root);
     root
 }
 
@@ -251,7 +251,7 @@ fn a_clean_completion_hails_nothing_but_its_rc() {
     let dir = mail_dir("clean");
     parented(&dir);
     let lane = lane_run(&dir);
-    boop_store::test_paths::spawn(move || {
+    boop_store::_0_test_paths::spawn(move || {
         let _ = boop_proc::supervise::run(lane, &mut DoneChannel::default());
     });
 

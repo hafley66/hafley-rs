@@ -30,7 +30,7 @@ fn segment(lane: &str) -> String {
 /// The trail directory for one lane under `root`.
 pub fn lane_dir_in(root: &Path, lane: &str) -> PathBuf {
     let path = root.join(segment(lane));
-    crate::test_paths::guard(&path);
+    crate::_0_test_paths::guard(&path);
     path
 }
 
@@ -43,7 +43,7 @@ pub fn lane_dir(lane: &str) -> Result<PathBuf> {
 /// names it when set; otherwise `~/.cache/boop/lanes`, so placement and
 /// reclaim read one location and a delete can prove a path is under it.
 pub fn lane_target_root() -> Result<PathBuf> {
-    let path = if let Some(root) = crate::test_paths::root() {
+    let path = if let Some(root) = crate::_0_test_paths::root() {
         root.join(".cache/boop/lanes")
     } else if let Some(root) =
         std::env::var_os("BOOP_LANE_TARGET_ROOT").filter(|root| !root.is_empty())
@@ -54,7 +54,7 @@ pub fn lane_target_root() -> Result<PathBuf> {
             .context("resolve home directory")?
             .join(".cache/boop/lanes")
     };
-    crate::test_paths::guard_default(&path);
+    crate::_0_test_paths::guard_default(&path);
     Ok(path)
 }
 
@@ -742,7 +742,7 @@ mod tests {
             std::thread::current().id()
         ));
         std::fs::create_dir_all(&root).unwrap();
-        crate::test_paths::set_root(&root);
+        crate::_0_test_paths::set_root(&root);
     }
 
     /// A lane name no other test in this binary writes.
