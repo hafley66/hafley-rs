@@ -100,3 +100,127 @@ Arguments:
   [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
              fork <id>`; `join` and `diff` take their own
 ```
+
+## ryi TS RTKQ and JSX fact goldens (2026-10-02)
+
+Issue: `issues/ryi-ts-rtkq-jsx-golden/item.md`.
+Branch: `feature/ryi-ts-rtkq-jsx`.
+
+Scope follows the coordinator's final correction: extraction and existing
+fact outputs only. RTKQ hook-to-operation derivation is excluded from this
+increment. No analysis SQL files, graph analyses, CLI commands, or flags were
+added. Component and prop resolution belongs to the separate slow lane; the
+fast JSX rows here preserve written tag/attribute syntax and callable ownership.
+
+### Changes and contracts
+
+Copied the read-only dl5 `examples/openapi-sim/{openapi.json,components.tsx,hooks.ts}`
+verbatim into `crates/sprefa-extract/tests/fixtures/rtkq_jsx/`. The new
+`0_nested.tsx` covers nested JSX, member tags, fragments, boolean and spread
+attributes, a nested declaration, a variable-bound arrow, member calls, and
+nested calls. Comment/string lookalikes produce no expected syntax rows.
+
+| Record | Payload columns |
+| --- | --- |
+| `call_site` | `callee`, `path`, `line`, `fn`, `start`, `end` |
+| `jsx_element` | `name`, `path`, `line`, `fn`, `start`, `end`, `parent_start` |
+| `jsx_attribute` | `path`, `element_start`, `name`, `value`, `start`, `end` |
+
+`start` and `end` are UTF-8 byte offsets with exclusive end; `line` is 1-based.
+Calls retain full written callee text, independently of resolution. `fn` names
+the innermost callable, including variable-bound arrows; anonymous callables
+use `<anonymous>`, file-level sites use `<root>`.
+
+Element identity is `(path,start)`. `parent_start` is the enclosing JSX element's
+start, or NULL at a JSX root. Fragments use `<fragment>`; member tags preserve
+text such as `UI.Badge`. Attribute ownership is `(path,element_start)`.
+Attribute values retain written syntax, including quotes/braces; boolean
+attributes have NULL value. Spread attributes use name `..` and text such as
+`{...props}`. These facts do not claim checker-resolved component symbols.
+
+TypeSpec declares the three tables; generated DDL, catalog and typed writers
+were regenerated. SQLite also supplies its standard `_row`, `_input_path`, and
+`_content_id` export columns. These syntax payloads are emitted as project rows,
+like the existing fast SCM rows, so their source coordinates are carried by
+`path` and the payload offsets. The existing fast pass reuses the CST parse;
+resolve retains captures while leaving the CST plane masked. Nested callees
+retain query-match pairing, so `factory()()` has separate `factory` and
+`factory()` callee texts.
+
+### Golden fact rows
+
+`tests/goldens/193_ts_syntax.jsonl` pins 25 rows: 11 `call_site`,
+7 `jsx_element`, and 7 `jsx_attribute`. Paths are normalized to fixture basenames
+only in the assertion. Payload offsets, lines, names, ownership and duplicates
+remain pinned.
+
+| components.tsx callee | line | enclosing fn | start | end |
+| --- | ---: | --- | ---: | ---: |
+| `useGetUserQuery` | 9 | `UserCard` | 460 | 479 |
+| `useListUsersQuery` | 14 | `UserList` | 560 | 579 |
+| `useCreateOrderMutation` | 19 | `NewOrderButton` | 673 | 697 |
+| `useLazyGetUserQuery` | 24 | `PrefetchedUser` | 787 | 808 |
+| `useDeleteWidgetMutation` | 31 | `WidgetRow` | 1060 | 1085 |
+
+| 0_nested.tsx element | enclosing fn | start | end | parent_start |
+| --- | --- | ---: | ---: | ---: |
+| `article` | `Card` | 55 | 108 | NULL |
+| `span` | `Card` | 78 | 98 | 55 |
+| `section` | `Panel` | 175 | 317 | NULL |
+| `Card` | `Panel` | 218 | 240 | 175 |
+| `UI.Badge` | `Panel` | 245 | 267 | 175 |
+| `<fragment>` | `Panel` | 272 | 304 | 175 |
+| `footer` | `Panel` | 274 | 301 | 272 |
+
+Attribute rows: article `title={title}`; section `id="panel"`, boolean `hidden`,
+spread `{...props}`; Card `title={title}`; UI.Badge `count={1}`; footer
+`data-label="end"`. Full positions and values are in the golden.
+
+`tests/193_ts_rtkq_jsx.rs` asserts the same fact payloads across fast JSONL,
+resolve JSONL, fast SQLite, resolve SQLite, and direct SCM projection.
+`tests/fixtures/rtkq_jsx/1_dogfood.sh` is an unrun case script requiring an
+already built binary through `RYII`; it compares existing output payloads and
+reads the stored columns without deriving graph results. No frozen golden or
+roster was changed; no dependency was added.
+
+### Timing and verification status
+
+Pre-change samples used the installed `/Users/chrishafley/.cargo/bin/ryii`:
+`/usr/bin/time -p ryii fast /Users/chrishafley/projects/hafley-rxjs/packages`.
+This is the packages corpus requested by `ryii fast packages`.
+
+| sample | logging | real seconds | user seconds | sys seconds | JSONL rows |
+| --- | --- | ---: | ---: | ---: | ---: |
+| before 1 | default | 1.37 | 6.35 | 0.82 | 301603 |
+| before 2 | `RUST_LOG=off` | 1.53 | 5.88 | 0.92 | 301603 |
+| after | deferred by user stop instruction | unmeasured | unmeasured | unmeasured | unmeasured |
+
+Before the stop instruction, an intermediate `cargo build --features cli --bin
+ryii` completed through the installed rcargo wrapper (2m 04s). An intermediate
+fast run emitted the five hook rows and the JSX rows shown above. That run
+exposed the nested-callee pairing defect; the subsequent pairing fix has NOT
+been compiled or executed. The golden corrects the inner call to `factory`
+by source review; it has NOT been validated against the final implementation.
+The rcargo wrapper overrides `CARGO_BUILD_JOBS` with `RCARGO_JOBS` (default 12);
+the coordinator should set both to 4 for the deferred serialized gate.
+
+A second build was terminated at the user's stop instruction. No cargo gate,
+new Rust test, SQLite comparison, dogfood script, or after timing was run.
+`git diff --check` reported no whitespace errors. The final source, golden and
+script remain unverified at runtime.
+
+Deferred serialized checks, to be run by the coordinator:
+
+```sh
+cd crates/sprefa-extract
+CARGO_BUILD_JOBS=4 RCARGO_JOBS=4 cargo test --features cli
+RYII=/absolute/path/to/built/ryii tests/fixtures/rtkq_jsx/1_dogfood.sh
+RUST_LOG=off /usr/bin/time -p /absolute/path/to/built/ryii fast /Users/chrishafley/projects/hafley-rxjs/packages > /tmp/ryi-ts-after.jsonl
+```
+
+The crate gate has two declared pre-existing root-prefix oracle differences:
+`golden_parity::ported_facets_match_v5` and `golden_parity::rust_doc_parity`.
+They were not rerun or modified. No boop tests were run. No push was performed.
+
+Commits before this report: `eb55297f` fixtures; `826a1a05` fact extraction and
+storage; `9401921a` fact goldens and unrun dogfood script.
