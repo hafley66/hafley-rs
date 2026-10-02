@@ -1334,10 +1334,11 @@ impl Plan {
         {
             let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);
             let type_head = if self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.type_only) { " type" } else { "" };
+            let (quote, semicolon, _) = sprefa_extract::edit::ts_mutate::import_style(&self.source.text);
             edits.push(Respell {
                 file: self.rows.src.clone(),
                 span: Span::anchor(self.rows.item_span.start),
-                text: format!("export{type_head} {{ {} }} from \"{module}\";\n", self.rows.item),
+                text: format!("export{type_head} {{ {} }} from {quote}{module}{quote}{}\n", self.rows.item, if semicolon { ";" } else { "" }),
                 receipt: Some(format!("public API {} keeps {}", self.rows.src, self.rows.item)),
             });
         }

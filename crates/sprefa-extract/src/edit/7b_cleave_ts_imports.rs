@@ -1,17 +1,33 @@
 use super::{inside, line_span, FileFacts, Respell, SpecifierRow};
-use hafley_scm::span::Span;
+use sprefa_extract::edit::ts_mutate::{import_style, styled_module};
 
-fn line(row: &SpecifierRow, module: &str) -> String {
-    let imported = row.imported.as_deref().unwrap_or(&row.name);
-    let clause = match row.kind.as_str() {
-        "default" => row.name.clone(),
-        "namespace" => format!("* as {}", row.name),
-        _ if imported == row.name => format!("{{ {} }}", row.name),
-        _ => format!("{{ {imported} as {} }}", row.name),
-    };
-    let type_head = if row.type_only { " type" } else { "" };
-    let keyword = if row.kind == "reexport" { "export" } else { "import" };
-    format!("{keyword}{type_head} {clause} from \"{module}\";\n")
+fn lines(rows: &[SpecifierRow], module: &str, style_text: &str) -> String {
+    let (quote, semicolon, _) = import_style(style_text);
+    let end = if semicolon { ";" } else { "" };
+    let mut out = String::new();
+    for reexport in [false, true] {
+        for type_only in [false, true] {
+            let group: Vec<_> = rows.iter().filter(|row| (row.kind == "reexport") == reexport && row.type_only == type_only).collect();
+            if group.is_empty() {
+                continue;
+            }
+            let mut clauses = Vec::new();
+            for row in group.iter().filter(|row| row.kind == "default" || row.kind == "namespace") {
+                clauses.push(if row.kind == "default" { row.name.clone() } else { format!("* as {}", row.name) });
+            }
+            let named: Vec<_> = group.iter().filter(|row| row.kind != "default" && row.kind != "namespace").map(|row| {
+                let imported = row.imported.as_deref().unwrap_or(&row.name);
+                if imported == row.name { row.name.clone() } else { format!("{imported} as {}", row.name) }
+            }).collect();
+            if !named.is_empty() {
+                clauses.push(format!("{{ {} }}", named.join(", ")));
+            }
+            let keyword = if reexport { "export" } else { "import" };
+            let type_head = if type_only { " type" } else { "" };
+            out.push_str(&format!("{keyword}{type_head} {} from {quote}{module}{quote}{end}\n", clauses.join(", ")));
+        }
+    }
+    out
 }
 
 pub(super) fn caller(
@@ -23,41 +39,25 @@ pub(super) fn caller(
     type_only: bool,
 ) -> Vec<Respell> {
     let mut out = Vec::new();
-    let mut moved = None;
     for statement in &facts.import_statements {
         let old = facts.specifiers.iter().find(|row| {
             row.imported.as_deref().unwrap_or(&row.name) == item && row.module == old_module && inside(row.span, *statement)
         });
         let Some(old) = old else { continue };
-        moved = Some(old);
-        let replacement = facts
-            .specifiers
-            .iter()
-            .filter(|row| {
-                inside(row.span, *statement)
-                    && row.span != old.span
-                    && matches!(row.kind.as_str(), "named" | "default" | "namespace" | "reexport")
-            })
-            .map(|row| line(row, &row.module))
-            .collect();
-        out.push(Respell {
-            file: rel.to_string(),
-            span: line_span(&facts.text, *statement),
-            text: replacement,
-            receipt: Some(format!("caller {rel}: {old_module} loses {item}")),
-        });
-    }
-    if let Some(old) = moved {
+        let kept: Vec<_> = facts.specifiers.iter().filter(|row| {
+            inside(row.span, *statement) && row.span != old.span
+                && matches!(row.kind.as_str(), "named" | "default" | "namespace" | "reexport")
+        }).cloned().collect();
         let mut landed = old.clone();
-        if old.kind != "reexport" {
-            landed.kind = "named".to_string();
-            landed.imported = None;
-        }
         landed.type_only |= type_only;
+        let new_module = styled_module(new_module, old_module);
+        let span = line_span(&facts.text, *statement);
+        let style_text = facts.slice(span);
+        let replacement = format!("{}{}", lines(&kept, old_module, style_text), lines(&[landed], &new_module, style_text));
         out.push(Respell {
             file: rel.to_string(),
-            span: Span::anchor(facts.import_end),
-            text: line(&landed, new_module),
+            span,
+            text: replacement,
             receipt: Some(format!("caller {rel}: {item} -> {new_module}")),
         });
     }
@@ -72,34 +72,28 @@ pub(super) fn add(
     names: &[String],
 ) -> String {
     let mut out = block.to_string();
+    let mut rows = Vec::new();
+    let style = dest.filter(|facts| !facts.specifiers.is_empty()).unwrap_or(source);
     for name in names {
-        if dest.is_some_and(|facts| {
-            facts.specifiers.iter().any(|row| {
-                row.name == *name && matches!(row.kind.as_str(), "named" | "default" | "namespace")
-            })
-        }) {
+        if dest.is_some_and(|facts| facts.specifiers.iter().any(|row| row.name == *name && matches!(row.kind.as_str(), "named" | "default" | "namespace"))) {
             continue;
         }
-        let binding = source.specifiers.iter().find(|row| row.name == *name);
+        let row = source.specifiers.iter().find(|row| row.name == *name && matches!(row.kind.as_str(), "named" | "default" | "namespace"));
+        rows.push(row.cloned().unwrap_or_else(|| SpecifierRow {
+            name: name.clone(),
+            module: module.to_string(),
+            span: hafley_scm::span::Span::anchor(0),
+            glob: false,
+            kind: "named".to_string(),
+            imported: None,
+            type_only: source.decls.iter().any(|row| row.name == *name && row.type_only),
+        }));
+    }
+    if !rows.is_empty() {
         if !out.is_empty() && !out.ends_with('\n') {
             out.push('\n');
         }
-        if let Some(binding) = binding {
-            out.push_str(&line(binding, module));
-        } else {
-            let type_head = if source
-                .decls
-                .iter()
-                .any(|row| row.name == *name && row.type_only)
-            {
-                " type"
-            } else {
-                ""
-            };
-            out.push_str(&format!(
-                "import{type_head} {{ {name} }} from \"{module}\";\n"
-            ));
-        }
+        out.push_str(&lines(&rows, module, &style.text));
     }
     out
 }

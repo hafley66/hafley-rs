@@ -90,7 +90,7 @@ impl Cleave for TsSource {
                 .unwrap_or(0);
             return Some(Edit {
                 span: Span::anchor(at),
-                text: import_line(names, module, quote),
+                text: import_line(names, module, quote, import_style(text).1),
             });
         };
         if names.is_empty() {
@@ -113,19 +113,46 @@ impl Cleave for TsSource {
             return spec;
         }
         let relative = relative_between(dirname(from_path), &drop_extension(to_path));
-        match relative.is_empty() {
+        let relative = match relative.is_empty() {
             true => ".".to_string(),
             false if relative.starts_with("..") => relative,
             false => format!("./{relative}"),
-        }
+        };
+        let text = cx.text(from_path).unwrap_or_default();
+        let (_, _, suffix) = import_style(&text);
+        format!("{relative}{suffix}")
     }
 }
 
-fn import_line(names: &[String], module: &str, quote: char) -> String {
+fn import_line(names: &[String], module: &str, quote: char, semicolon: bool) -> String {
+    let end = if semicolon { ";" } else { "" };
     format!(
-        "import {{ {} }} from {quote}{module}{quote};\n",
+        "import {{ {} }} from {quote}{module}{quote}{end}\n",
         names.join(", ")
     )
+}
+
+pub fn import_style(text: &str) -> (char, bool, String) {
+    let statements = imports(&TsSource, text);
+    let specifiers = crate::lang::ts::ts_specifiers(PARSE_AS, text).unwrap_or_default();
+    let quote = statements.first().map(|row| row.quote).or_else(|| specifiers.first().map(|row| row.quote)).unwrap_or('"');
+    let semicolon = statements.first().map(|row| slice(text, row.span).trim_end().ends_with(';'))
+        .or_else(|| specifiers.first().map(|row| text[row.module_span.end() as usize..].trim_start_matches([' ', '\t']).starts_with(';')))
+        .unwrap_or(true);
+    let suffix = specifiers.iter().find(|row| row.module.starts_with('.'))
+        .and_then(|row| [".js", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"].into_iter().find(|suffix| row.module.ends_with(suffix)))
+        .unwrap_or("");
+    (quote, semicolon, suffix.to_string())
+}
+
+pub fn styled_module(module: &str, written: &str) -> String {
+    if !module.starts_with('.') {
+        return module.to_string();
+    }
+    let extensions = [".js", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"];
+    let suffix = extensions.iter().find(|suffix| written.ends_with(**suffix)).copied().unwrap_or("");
+    let stem = extensions.iter().find_map(|suffix| module.strip_suffix(suffix)).unwrap_or(module);
+    format!("{stem}{suffix}")
 }
 
 /// One `import` statement as written. `span` is line aligned, so deleting it
