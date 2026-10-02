@@ -100,3 +100,40 @@ fn written_calls_and_nested_jsx_match_jsonl_and_sqlite_goldens() {
         .join("\n");
     assert_eq!(syntax_rows(&direct), expected);
 }
+
+#[test]
+fn written_tsx_calls_are_additive_to_the_original_resolved_site() {
+    let scratch = tempfile::tempdir().unwrap();
+    let caller = scratch.path().join("0_caller.tsx");
+    let callee = scratch.path().join("1_callee.ts");
+    std::fs::write(&caller, include_str!("fixtures/resolve/0_caller.ts")).unwrap();
+    std::fs::write(&callee, include_str!("fixtures/resolve/1_callee.ts")).unwrap();
+    let caller = caller.to_str().unwrap();
+    let callee = callee.to_str().unwrap();
+    let rows: Vec<Value> = run(&["--resolve", caller, callee])
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    let sites: Vec<_> = rows
+        .iter()
+        .map(|row| {
+            if row["record"] == "resolved_edge" {
+                serde_json::json!([
+                    row["record"], row["caller_name"], row["callee_name"],
+                    row["caller_site_start"], row["caller_site_end"]
+                ])
+            } else {
+                serde_json::json!([
+                    row["record"], row["fn"], row["callee"], row["start"], row["end"]
+                ])
+            }
+        })
+        .collect();
+    assert_eq!(
+        Value::from(sites),
+        serde_json::json!([
+            ["resolved_edge", "run", "helper", 33, 39],
+            ["call_site", "run", "helper", 33, 41]
+        ])
+    );
+}

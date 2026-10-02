@@ -269,6 +269,9 @@ pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
 fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
     inputs
         .iter()
+        // The JSX increment adds written syntax to TSX resolve output. Plain
+        // TypeScript retains the existing edge-only resolve contract.
+        .filter(|input| input.path.ends_with(".tsx"))
         .filter_map(|input| {
             Some(
                 input
