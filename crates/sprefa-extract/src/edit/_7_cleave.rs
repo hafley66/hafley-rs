@@ -1067,9 +1067,11 @@ impl Plan {
 
         let mut callers = imports.callers(&src, &item);
         let mut keep_source_export = false;
-        if arm.name() == "ts" {
-            let resolver = sprefa_extract::lang::ts_resolve::TsResolver::new(&root)?;
-            for rel in cx.files().iter().filter(|rel| cleave_for(rel).is_some_and(|arm| arm.name() == "ts")) {
+        if let (true, Some(resolver)) = (arm.name() == "ts", imports.ts_resolver.as_ref()) {
+            let barrels: Vec<String> = imports.modules.iter()
+                .filter(|(importer, target)| *target == src && cleave_for(importer).is_some_and(|arm| arm.name() == "ts"))
+                .map(|(importer, _)| importer.clone()).collect();
+            for rel in &barrels {
                 if rel == &src || rel == &dest {
                     continue;
                 }
@@ -2083,6 +2085,10 @@ struct Imports {
     /// Resolved call sites `(caller file, site span, callee file, callee name)`.
     calls: Vec<(String, Span, String, String)>,
     rust_routes: hafley_scm::read::lang::rust_modules::RustModuleIndex,
+    /// `(importer, target)` for every resolved module specifier: the barrels a
+    /// cleave must re-read are the importers whose target is SRC.
+    modules: BTreeSet<(String, String)>,
+    ts_resolver: Option<sprefa_extract::lang::ts_resolve::TsResolver>,
 }
 
 impl Imports {
@@ -2123,7 +2129,16 @@ impl Imports {
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
         let mut names = Vec::new();
         let mut calls = Vec::new();
+        let mut modules = BTreeSet::new();
         for fact in &facts {
+            if let FlatFact::ResolvedImportRow { src_path, target_path, target_name: None, kind, .. } = fact {
+                if kind == "module" {
+                    if let (Some(importer), Some(target)) = (rel_of(root, src_path), rel_of(root, target_path)) {
+                        modules.insert((importer, target));
+                    }
+                }
+                continue;
+            }
             if let FlatFact::ResolvedEdge {
                 caller_path,
                 callee_path,
@@ -2165,10 +2180,17 @@ impl Imports {
             names.push((importer, name.clone(), target, declared.clone(), relayed));
         }
         let rust_routes = rust_route_index(cx)?;
+        let ts_resolver = if paths.iter().any(|path| cleave_for(&path.to_string_lossy()).is_some_and(|arm| arm.name() == "ts")) {
+            Some(sprefa_extract::lang::ts_resolve::TsResolver::new(root)?)
+        } else {
+            None
+        };
         Ok(Self {
             names,
             calls,
             rust_routes,
+            modules,
+            ts_resolver,
         })
     }
 
@@ -2199,6 +2221,12 @@ impl Imports {
             }
         }
         self.names.extend(added);
+        let relayed: Vec<String> = self.modules.iter()
+            .filter(|(_, target)| target == src).map(|(importer, _)| importer.clone()).collect();
+        self.modules.insert((src.clone(), dest.clone()));
+        for importer in relayed {
+            self.modules.insert((importer, dest.clone()));
+        }
         self.names
             .push((src.clone(), item.clone(), dest.clone(), item.clone(), false));
         self.calls.retain_mut(|(caller, span, target, callee)| {
