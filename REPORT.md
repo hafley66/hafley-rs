@@ -335,4 +335,69 @@ from `crates/sprefa-extract`:
 CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo build --release --bin ryii --features cli,ts-checker,typespec
 CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo test --lib --features cli,ts-checker,typespec flat_symbols_select_props_member -- --test-threads=1
 RYII=/Users/chrishafley/.cache/boop/lanes/_shared/release/ryii CORPUS=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow STATE=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow.J01-fix.state bash dogfood/ts/run.sh J01
+## D12: stratify stem preservation and collision filtering (2026-10-02)
+
+Failure: the coordinator observed 40 `stratify_move` records, including
+`4_jsxAuto.test.ts -> 4_jsxAuto.ts` and repeated source paths for `0_log.ts`,
+`2_Signal.ts`, `3_Endpoint.ts`, `8_sync.ts`, and `9_history.ts`.
+
+Cause: before this change, `crates/sprefa-extract/src/0_stratify.rs:188`
+emitted depth-prefix moves and `:242` independently emitted locality candidates
+under the same `stratify_move` record. A locality candidate could point to a
+neighbor with a different stem or to its own source. The existing `prefixed`
+helper preserves the entire filename after `^[0-9]+[A-Za-z]*_`; it did not
+truncate `.test`. Depth proposals also had no destination collision check.
+
+Change: `crates/sprefa-extract/src/0_stratify.rs:174` collects one numbering
+proposal per source; `:194` filters them before emission. The helper at `:594`
+rejects every proposal sharing a destination and rejects occupied destinations
+whose source will remain unmoved, including filesystem entries outside the
+source set. Rejection repeats until dependent proposals are also removed.
+Permutations of vacated source paths remain available. Identity proposals are
+retained to satisfy D12.sh's three-row repro, including its already-numbered
+`0_log.ts`. Collision filtering can leave reached strata without move proposals.
+At `:247`, locality candidate reason, neighbor, cut lines and shared-edge count
+are carried on the existing `locality` row. Only numbering proposals emit
+`stratify_move`, and their full stems are preserved.
+
+Coverage written: `tests/156_stratify.rs` asserts exact proposals for `.test`,
+`.browser.test`, `.memory`, `.tsx`, insertion prefixes and identity proposals;
+it rejects duplicate destinations, an unreached occupied source and an occupied
+directory outside the file set, and compares repeated output. Existing locality
+checks now read candidate metadata from `locality`. The source module test covers
+cascading rejection and permutations. D12.sh is unchanged and agrees with the
+plan row's prefix replacement rule.
+
+Validation: `git diff --check` passes. No builds, tests, installs, node/npm or
+dogfood scripts were run. Compilation and runtime behavior remain unverified.
+The crate guidance's historical `v6/plans/2026-07-24-extract-go-closeout-and-resolve4.md`
+is absent in this checkout; the supplied D12 plan and case were read.
+
+Coordinator commands, run individually from `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --bin ryii stratify::tests::collision_rejections_propagate_and_permutations_remain_available
+cargo test --features cli --test all t_156_stratify
+cargo build --release --bin ryii --features cli,ts-checker,typespec
+RYII="${CARGO_TARGET_DIR:-$PWD/target}/release/ryii" CORPUS="${CORPUS:?set the coordinator corpus path}" dogfood/ts/run.sh D12
+```
+
+For the stronger corpus invariants, set RYII to that rebuilt binary's absolute
+path and CORPUS to the coordinator corpus, then run:
+
+```sh
+(cd "$CORPUS" && "$RYII" stratify packages/signals/src --from packages/signals/src/index.ts) | jq -se '
+  . as $facts |
+  [.[] | select(.record == "stratify_move")] as $moves |
+  ($moves | map(.from_path)) as $from |
+  ($moves | map(.to_path)) as $to |
+  ([$facts[] | select(.record == "stratum" or .record == "unreached") | .path] - $from) as $unmoved |
+  ($moves | length) > 0 and
+  ($from | length) == ($from | unique | length) and
+  ($to | length) == ($to | unique | length) and
+  ($to - $unmoved | length) == ($to | length) and
+  all($moves[];
+    (.from_path | split("/")[-1] | sub("^[0-9]+[A-Za-z]*_"; "")) as $stem |
+    (.to_path | split("/")[-1] | sub("^[0-9]+_"; "")) == $stem
+  )'
 ```
