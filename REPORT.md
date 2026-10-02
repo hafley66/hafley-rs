@@ -400,4 +400,43 @@ path and CORPUS to the coordinator corpus, then run:
     (.from_path | split("/")[-1] | sub("^[0-9]+[A-Za-z]*_"; "")) as $stem |
     (.to_path | split("/")[-1] | sub("^[0-9]+_"; "")) == $stem
   )'
+## D25 flow-path local df edges (2026-10-02)
+
+Failure: `graph --flow-path packages/md/src/lib/1_tableModel.ts@3621:3640 packages/md`
+returned empty stdout despite a `children` df parameter and outgoing local df
+edges. The tagged BLAKE3 digest seed returned the same empty output. D25.sh
+failed at `[ -s path.jsonl ]`; its expectation agrees with plan row D25.
+
+Cause: `crates/sprefa-extract/src/0_graph.rs:75` previously obtained only the
+resolved/TSI output, without a raw-fact sink. The insert filter also excluded
+phase-one df rows. The flow arm in `plane_edges`
+(`crates/sprefa-extract/src/0_graph.rs:270`) read only `flow_edge`, which holds
+interprocedural edges. The local parameter's outgoing `edge` rows were absent
+from the existing traversal's input.
+
+Change: flow-path uses the existing raw+TSI resolve entry point, or the existing
+raw slow entry point for --slow. Its sink retains file rows, df nodes and df
+edges with `_input_path` and `_content_id`, then clears source metadata before
+inserting resolved facts. The existing flow edge projection includes df edges
+keyed by their stored content ID and endpoint spans. The existing
+first-discovery traversal emits the existing graph_path records and witnesses
+using the actual edge-table row IDs, including paths crossing local and
+interprocedural edges. PATH/digest normalization is unchanged.
+
+Added unrun regression coverage for a TS parameter's nonempty local paths,
+byte-identical PATH/digest output, direct destinations and stored witnesses;
+a unit fixture checks the complete three-hop local/interprocedural/local
+record sequence and exclusion of call-family edges. D25.sh is unchanged.
+
+Status: code complete, compilation and runtime behavior unverified. Only
+static diff review and `git diff --check` were performed. No builds, tests,
+installs, node processes or dogfood scripts were run.
+
+Coordinator commands, run serially from `crates/sprefa-extract`:
+
+```sh
+CARGO_BUILD_JOBS=4 cargo test --features cli --bin ryii flow_paths_join_local_and_interprocedural_edges_with_stored_witnesses -- --test-threads=1
+CARGO_BUILD_JOBS=4 cargo test --features cli --test all t_167_graph_paths:: -- --test-threads=1
+CARGO_BUILD_JOBS=4 cargo build --release --bin ryii --features cli,ts-checker,typespec
+RYII="${CARGO_TARGET_DIR:-$PWD/target}/release/ryii" CORPUS="$HOME/projects/rxjs-corpus-feature-ryi-ts-graph" dogfood/ts/run.sh D25
 ```

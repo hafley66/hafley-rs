@@ -12,9 +12,10 @@ use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 #[cfg(feature = "graph")]
-use sprefa_extract::{cfg_facts, FamilyTag};
+use sprefa_extract::cfg_facts;
 use sprefa_extract::{
-    newline_offsets, resolve_project_with_tsi_tiers, slow_project, FlatFact, ResolveArms,
+    newline_offsets, resolve_project_with_raw_tsi, resolve_project_with_tsi_tiers,
+    slow_project, slow_project_with_raw, FamilyTag, FlatFact, ResolveArms,
     ResolveRequest, ScipMode, ScipRecords,
 };
 
@@ -67,7 +68,41 @@ fn load_store(
         go_checker: (!cli.slow && cli.go_checker).then_some(root.as_path()),
         witness: true,
     };
-    let facts = if cli.slow {
+    let mut database = match sqlite {
+        Some(path) => Database::create(path)?,
+        None => Database::memory()?,
+    };
+    let facts = if matches!(arm, Arm::FlowPath(_)) {
+        let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
+            if matches!(
+                &raw.fact,
+                FlatFact::FileRow { .. }
+                    | FlatFact::Node { family: FamilyTag::Df, .. }
+                    | FlatFact::Edge { family: FamilyTag::Df, .. }
+            ) {
+                database
+                    .source(raw.path, raw.content_id.to_string())
+                    .map_err(|error| std::io::Error::other(error.to_string()))?;
+                database
+                    .bind_row(&raw.fact)
+                    .map_err(|error| std::io::Error::other(error.to_string()))?;
+            }
+            Ok::<(), std::io::Error>(())
+        };
+        let facts = if cli.slow {
+            slow_project_with_raw(
+                paths,
+                &root,
+                cli.scip_index.as_deref(),
+                cli.scip_index.is_none(),
+                &mut push_raw,
+            )?
+        } else {
+            resolve_project_with_raw_tsi(&request, &mut push_raw)?
+        };
+        database.clear_source()?;
+        facts
+    } else if cli.slow {
         if let Some(index) = cli.scip_index.as_deref() {
             slow_project(paths, &root, Some(index), false)?
         } else if matches!(arm, Arm::Callers(_) | Arm::Uses(_)) {
@@ -77,10 +112,6 @@ fn load_store(
         }
     } else {
         resolve_project_with_tsi_tiers(&request)?
-    };
-    let mut database = match sqlite {
-        Some(path) => Database::create(path)?,
-        None => Database::memory()?,
     };
     let _store_span = tracing::info_span!("store.write").entered();
     for fact in &facts {
@@ -237,7 +268,11 @@ fn plane_edges(
         "flow" => {
             "SELECT \"_row\", \"from_blob\", printf('%d:%d', \"from__start\", \"from__end\"), \
                    \"to_blob\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
-                   FROM \"flow_edge\""
+                   FROM \"flow_edge\" \
+             UNION ALL \
+             SELECT \"_row\", \"_content_id\", printf('%d:%d', \"from__start\", \"from__end\"), \
+                    \"_content_id\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
+                    FROM \"edge\" WHERE \"family\" = 'df' AND \"_content_id\" IS NOT NULL"
                 .to_string()
         }
         _ => unreachable!("only fixed graph planes reach this query"),
@@ -957,5 +992,46 @@ mod tests {
         let edges = [edge(1, "a", "b")];
         let past = Deadline { at: Instant::now() };
         assert!(first_discovery(&edges, named_starts(&edges, "a"), &past).is_err());
+    }
+
+    #[test]
+    fn flow_paths_join_local_and_interprocedural_edges_with_stored_witnesses() {
+        let mut database = Database::memory().unwrap();
+        for (path, blob, family, from, to) in [
+            ("a.ts", "blake3:a", "df", 1, 3),
+            ("a.ts", "blake3:a", "call", 1, 9),
+            ("b.ts", "blake3:b", "df", 5, 7),
+        ] {
+            database.source(path, blob.to_string()).unwrap();
+            database.insert(serde_json::json!({
+                "record": "edge", "family": family, "kind": "use",
+                "from": {"start": from, "end": from + 1},
+                "to": {"start": to, "end": to + 1}
+            })).unwrap();
+        }
+        database.clear_source().unwrap();
+        database.insert(serde_json::json!({
+            "record": "flow_edge", "family": "flow", "kind": "arg_to_param",
+            "from_blob": "blake3:a", "from": {"start": 3, "end": 4},
+            "to_blob": "blake3:b", "to": {"start": 5, "end": 6}
+        })).unwrap();
+        database.flush().unwrap();
+        let rows = paths(
+            database.connection(),
+            "flow",
+            |_| Ok(BTreeSet::from([("blake3:a".to_string(), Some("1:2".to_string()))])),
+            &Deadline { at: Instant::now() + Duration::from_secs(60) },
+        ).unwrap();
+        assert_eq!(
+            serde_json::to_value(rows).unwrap(),
+            serde_json::json!([
+                {"record": "graph_path", "plane": "flow", "from_path": "blake3:a", "from_name": "1:2",
+                 "to_path": "blake3:a", "to_name": "3:4", "depth": 1, "witness": [1]},
+                {"record": "graph_path", "plane": "flow", "from_path": "blake3:a", "from_name": "1:2",
+                 "to_path": "blake3:b", "to_name": "5:6", "depth": 2, "witness": [1, 4]},
+                {"record": "graph_path", "plane": "flow", "from_path": "blake3:a", "from_name": "1:2",
+                 "to_path": "blake3:b", "to_name": "7:8", "depth": 3, "witness": [1, 4, 3]}
+            ])
+        );
     }
 }
