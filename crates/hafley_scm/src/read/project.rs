@@ -1485,7 +1485,19 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
         .iter_mut()
         .filter_map(|input| input.size_skip.take())
         .collect();
+    // A declaration-only module can contribute no symbol or occurrence rows.
+    // Its file row still records that fast included it, as SQLite already does.
+    let declarations: Vec<_> = inputs
+        .iter_mut()
+        .filter(|input| {
+            input.path.ends_with(".d.ts")
+                || input.path.ends_with(".d.mts")
+                || input.path.ends_with(".d.cts")
+        })
+        .filter_map(|input| input.file.take())
+        .collect();
     let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
+    facts.extend(declarations);
     facts.extend(skips);
     facts.extend(scm?);
     Ok(facts)
