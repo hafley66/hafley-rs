@@ -298,6 +298,10 @@ fn allowed(row: &serde_json::Value) -> bool {
         || file == "crates/boop-acp/src/channel/claude.rs"
         || file == "crates/boop-acp/src/channel/1_acpx.rs"
         || (file == "crates/boop-store/src/harness_id.rs" && row["symbol"] == "HarnessId::as_str")
+        // Favorite source kinds and legacy provenance spellings are stored
+        // data. These functions neither select adapters nor invoke harnesses.
+        || (file == "crates/boop-store/src/1_user_slice.rs"
+            && matches!(row["symbol"].as_str(), Some("FavoriteSourceKind::as_str" | "FavoriteSource::parse")))
 }
 
 #[test]
