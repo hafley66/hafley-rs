@@ -166,6 +166,8 @@ pub mod typespec;
 #[cfg(any(feature = "typescript", feature = "go-checker"))]
 pub mod ts_checker;
 #[cfg(feature = "typescript")]
+pub mod ts_lib;
+#[cfg(feature = "typescript")]
 pub mod ts_paths;
 #[cfg(feature = "typescript")]
 pub mod ts_receivers;

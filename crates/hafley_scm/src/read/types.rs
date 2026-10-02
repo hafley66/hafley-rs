@@ -1861,6 +1861,9 @@ pub struct IndexBag {
     pub kinds: std::sync::OnceLock<KindIndex>,
     #[cfg(feature = "typescript")]
     pub ts_modules: std::sync::OnceLock<crate::read::lang::ts_resolve::TsModuleIndex>,
+    /// The value names TypeScript's lib declarations declare; None without an install.
+    #[cfg(feature = "typescript")]
+    pub ts_globals: std::sync::OnceLock<Option<std::collections::HashSet<String>>>,
     /// the rust module plane, same discipline as `ts_modules`.
     #[cfg(feature = "rust")]
     pub rust_modules: std::sync::OnceLock<crate::read::lang::rust_modules::RustModuleIndex>,

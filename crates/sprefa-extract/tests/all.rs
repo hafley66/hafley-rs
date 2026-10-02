@@ -480,6 +480,8 @@ mod t_snapshot;
 
 #[path = "193_ts_rtkq_jsx.rs"]
 mod t_193_ts_rtkq_jsx;
+#[path = "195_ts_lib_globals.rs"]
+mod t_195_ts_lib_globals;
 
 #[test]
 fn every_test_file_is_a_module_here() {
