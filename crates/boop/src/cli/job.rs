@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
+use boop::gc::{reclaim_merged_worktree, worktree_branch};
 
 use boop::bus::Route;
 use boop::harness::{HarnessId, VariantSupport};
@@ -2690,7 +2691,7 @@ pub(crate) fn run_lane_list(
     let mut rows: Vec<LaneListRow> = Vec::new();
     for (name, route) in &routes {
         let state = if route.kind == "coordinator" {
-            if crate::cli::control::live_session_owner(registry, &dir, name, route)?.is_some() {
+            if boop::gc::coordinator_live(registry, &dir, name, route)? {
                 "live"
             } else {
                 "dead"
@@ -3426,63 +3427,6 @@ pub(crate) fn run_lane_get(mail_dir_arg: Option<&Path>, lane: &str, touched: boo
         }
     }
     Ok(())
-}
-
-/// The branch a lane delete checks merge against: `--merged-into`, else the
-/// branch whose tip is the lane's base sha, else `main`.
-fn merged_base_branch(repo: &Path, base_sha: Option<&str>, merged_into: Option<&str>) -> String {
-    if let Some(branch) = merged_into {
-        return branch.to_owned();
-    }
-    if let Some(sha) = base_sha {
-        let branches = git_lines(
-            repo,
-            &["branch", "--format=%(refname:short)", "--points-at", sha],
-        );
-        if let Some(main) = branches.iter().find(|branch| branch.as_str() == "main") {
-            return main.clone();
-        }
-        if let Some(first) = branches.first() {
-            return first.clone();
-        }
-    }
-    "main".to_owned()
-}
-
-/// `git branch --merged <base>` lists `branch`.
-fn branch_merged(repo: &Path, branch: &str, base: &str) -> bool {
-    git_lines(
-        repo,
-        &["branch", "--merged", base, "--format=%(refname:short)"],
-    )
-    .iter()
-    .any(|listed| listed == branch)
-}
-
-/// The branch checked out in a worktree, for a delete that only has the path.
-fn worktree_branch(worktree: &Path) -> Option<String> {
-    git_lines(worktree, &["symbolic-ref", "--short", "HEAD"])
-        .into_iter()
-        .next()
-}
-
-/// Remove one worktree and its branch when the branch is merged into the base;
-/// otherwise keep the worktree and say so. Returns one line per outcome.
-fn reclaim_merged_worktree(
-    repo: &Path,
-    worktree: &Path,
-    branch: &str,
-    base_sha: Option<&str>,
-    merged_into: Option<&str>,
-) -> Vec<String> {
-    let base = merged_base_branch(repo, base_sha, merged_into);
-    if !branch_merged(repo, branch, &base) {
-        return vec![format!("kept worktree {} (unmerged)", worktree.display())];
-    }
-    match boop::worktree::reclaim_carcass(repo, branch, worktree) {
-        Ok(removed) => removed.lines(),
-        Err(error) => vec![format!("kept worktree {} ({error})", worktree.display())],
-    }
 }
 
 /// Stop one lane and drop its route. Refuses when tmux is unreachable. `--route-only`

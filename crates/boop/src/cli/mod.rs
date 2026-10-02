@@ -1,8 +1,11 @@
 pub(crate) mod _2_wait_target;
+pub(crate) mod _3_gc;
 pub(crate) mod acpx;
 pub(crate) mod control;
 pub(crate) mod db;
 pub(crate) mod debug;
+pub(crate) use _3_gc as gc;
+pub(crate) mod _1_target_root;
 pub(crate) mod job;
 pub(crate) mod mail;
 pub(crate) mod me;
@@ -15,8 +18,7 @@ pub(crate) mod selection;
 pub(crate) mod shout;
 pub(crate) mod subscribe;
 pub(crate) mod tag;
-#[path = "1_target_root.rs"]
-pub(crate) mod target_root;
+pub(crate) use _1_target_root as target_root;
 
 use std::path::{Path, PathBuf};
 

@@ -69,6 +69,13 @@ struct Cli {
 #[allow(clippy::large_enum_variant)]
 #[derive(Subcommand)]
 enum SubCmd {
+    /// List owned disk candidates; --apply reclaims them.
+    Gc {
+        #[arg(long)]
+        apply: bool,
+        #[arg(long)]
+        mail_dir: Option<PathBuf>,
+    },
     /// Print shell functions that route interactive harnesses through Boop.
     /// Folded (one-pane-register-path): `boop tui <harness>` is the spelling.
     #[command(hide = true)]
@@ -488,6 +495,7 @@ fn run_cli(cli: Cli) -> Result<()> {
         needs_startup_sync,
         || sync_before_local_command(&registry, drain_held_mail),
         || match command {
+            SubCmd::Gc { apply, mail_dir } => cli::gc::run(mail_dir.as_deref(), apply),
             SubCmd::ShellInit { shell } => {
                 print_shell_init(shell);
                 Ok(())
@@ -2792,7 +2800,10 @@ mod tests {
             .filter(|command| !command.is_hide_set())
             .map(|command| command.get_name().to_owned())
             .collect::<Vec<_>>();
-        assert_eq!(visible, ["job", "mail", "db", "debug", "me", "config"]);
+        assert_eq!(
+            visible,
+            ["gc", "job", "mail", "db", "debug", "me", "config"]
+        );
     }
 
     /// RECEIPT. `beep agent subscribe` defaults to the door, takes a mailbox

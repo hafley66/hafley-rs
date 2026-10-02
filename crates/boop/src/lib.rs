@@ -49,7 +49,7 @@ pub mod ident {
 
 pub use boop_acp::channel;
 pub use boop_harness::{click, door, harness, identity, live, registry, worktree};
-pub use boop_proc::{config, inbox, lane, mailwait, supervise};
+pub use boop_proc::{config, gc, inbox, lane, mailwait, supervise};
 pub mod debug;
 /// The lane screen: snapshot plus navigator squares, for an overlay renderer.
 /// The delivery ladder, at the path every send path already spells.

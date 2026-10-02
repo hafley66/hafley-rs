@@ -920,35 +920,7 @@ pub(crate) fn live_session_owner(
     name: &str,
     route: &Route,
 ) -> Result<Option<String>> {
-    let db = boop::bus::db_path(dir)?;
-    if boop::bus::try_route_lock(&db, name, "native-tui")?.is_none() {
-        return Ok(Some("native TUI wrapper holds the route lock".into()));
-    }
-    // A conversation may have been resumed under another route name.
-    for (other_name, other) in boop::bus::read_routes(dir)? {
-        if other_name != name
-            && route.session_id.is_some()
-            && other.harness == route.harness
-            && other.session_id == route.session_id
-            && boop::bus::try_route_lock(&db, &other_name, "native-tui")?.is_none()
-        {
-            return Ok(Some(format!("native TUI wrapper holds route {other_name}")));
-        }
-    }
-    let (Some(harness), Some(session)) = (route.harness, route.session_id.as_deref()) else {
-        return Ok(None);
-    };
-    // Native registries that supply a process can also own a conversation
-    // outside boop. Codex's historical thread rows have no pid and do not
-    // establish ownership merely by existing.
-    Ok(registry
-        .get(harness)
-        .live()
-        .live_sessions()?
-        .into_iter()
-        .find(|live| live.session_id == session && live.pid.is_some_and(boop::live::pid_alive))
-        .and_then(|live| live.pid)
-        .map(|pid| format!("harness session runs as process {pid}")))
+    boop::gc::live_session_owner(registry, dir, name, route)
 }
 
 /// Width of every message cell in the `--dead` table.

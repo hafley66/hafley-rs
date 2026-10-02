@@ -8,6 +8,7 @@
 
 #[cfg(feature = "agent-read")]
 pub mod _0_session_graph;
+pub mod _0_target_root;
 #[path = "0_trace_identity.rs"]
 pub mod _0_trace_identity;
 #[cfg(feature = "agent-read")]
@@ -30,8 +31,7 @@ pub mod session;
 pub mod summary;
 pub mod tags;
 pub mod tail;
-#[path = "0_target_root.rs"]
-pub mod target_root;
+pub use _0_target_root as target_root;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod tmux;

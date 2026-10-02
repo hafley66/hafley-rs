@@ -481,21 +481,38 @@ fn remove_target_under(root: &Path, target: &Path, lane: &str) -> Option<PathBuf
 /// The lane targets whose lane is retired or dead: no route, or a route whose
 /// pane is not live. `keep` (the current lane) is never a candidate.
 pub fn evictable_targets(mail_dir: &Path, root: &Path, keep: Option<&str>) -> Vec<LaneTarget> {
-    let routes = bus::read_routes(mail_dir).unwrap_or_default();
-    let mut out: Vec<LaneTarget> = lane_targets(root)
-        .into_iter()
-        .filter(|candidate| Some(candidate.lane.as_str()) != keep)
-        .filter(|candidate| match routes.get(&candidate.lane) {
-            None => true,
-            Some(route) => {
-                let live = route
-                    .tmux
-                    .as_deref()
-                    .is_some_and(|target| boop_store::tmux::mux().target_alive(None, target));
-                !live
-            }
-        })
-        .collect();
+    let Ok(routes) = bus::read_routes(mail_dir) else {
+        return Vec::new();
+    };
+    let Ok(live) = crate::gc::protected(mail_dir, &routes, keep) else {
+        return Vec::new();
+    };
+    let Ok(activity) = crate::gc::activity(mail_dir, &routes) else {
+        return Vec::new();
+    };
+    let Ok(trails) = boop_store::trail::lanes_root() else {
+        return Vec::new();
+    };
+    let mut out: Vec<LaneTarget> = crate::gc::collect(
+        root,
+        &trails,
+        &routes,
+        &live,
+        &activity,
+        std::time::SystemTime::now(),
+    )
+    .unwrap_or_default()
+    .into_iter()
+    .filter(|candidate| candidate.kind == crate::gc::Kind::Target)
+    .map(|candidate| LaneTarget {
+        lane: candidate.lane,
+        modified: std::fs::metadata(&candidate.path)
+            .and_then(|meta| meta.modified())
+            .unwrap_or(std::time::SystemTime::now()),
+        target: candidate.path,
+    })
+    .collect();
+
     out.sort_by_key(|candidate| candidate.modified);
     out
 }
@@ -509,38 +526,7 @@ pub fn evict_targets_until_above_floor(
     floor_gb: f64,
     keep: Option<&str>,
 ) -> Option<f64> {
-    let mut free = free_disk_gb(root)?;
-    while free < floor_gb {
-        let Some(victim) = evictable_targets(mail_dir, root, keep).into_iter().next() else {
-            break;
-        };
-        match std::fs::remove_dir_all(&victim.target) {
-            Ok(()) => {
-                info!(
-                    lane = victim.lane,
-                    target = %victim.target.display(),
-                    "evicted lane target below the disk floor"
-                );
-                println!(
-                    "[boop] evicted {} target {} (free {:.1}G)",
-                    victim.lane,
-                    victim.target.display(),
-                    free
-                );
-            }
-            Err(error) => {
-                warn!(
-                    lane = victim.lane,
-                    target = %victim.target.display(),
-                    error = %error,
-                    "lane target eviction failed"
-                );
-                break;
-            }
-        }
-        free = free_disk_gb(root)?;
-    }
-    Some(free)
+    crate::gc::reclaim_until_floor(mail_dir, root, floor_gb, keep)
 }
 
 /// The `limit` largest lane target dirs under `root`, largest first, one
@@ -550,6 +536,10 @@ pub fn biggest_targets(root: &Path, limit: usize) -> Vec<String> {
         .into_iter()
         .map(|candidate| (dir_size(&candidate.target), candidate.target))
         .collect();
+    let shared = root.join("_shared");
+    if shared.is_dir() {
+        sized.push((dir_size(&shared), shared));
+    }
     sized.sort_by(|a, b| b.0.cmp(&a.0));
     sized
         .into_iter()

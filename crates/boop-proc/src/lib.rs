@@ -18,3 +18,6 @@ pub mod supervise;
 
 pub use lane::{Effort, LaneIdentity, ModelSpec};
 pub use supervise::ParentDeathPolicy;
+
+pub mod _2_gc;
+pub use _2_gc as gc;
