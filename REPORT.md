@@ -53,3 +53,72 @@ Supplemental evidence runs used a scratch Node HTTP relay forwarding exclusively
 `cargo test -p boop-store -p boop-proc -p boop-harness --lib`: boop-store 247 passed / 1 ignored; boop-proc 189 passed; boop-harness 251 passed / 2 ignored. `cargo test -p boop --bin boop`: 170 passed. Formatting and `git diff --check` passed.
 
 `cd /Users/chrishafley/projects/boop2-harmonize && BOOP_BIN=/Users/chrishafley/.cache/boop/lanes/_shared/debug/boop bash tests/run.sh`: exit 0, 83 TAP cases, **0 not-ok**, two existing v1 capability skips. The added parentless case passed.
+
+## scm++ relational predicates, burndown row 9
+
+Code complete on `feature/scmpp-relational`. No cargo build, check, or test was run.
+No installs, dependency changes, ast-grep imports, vendored code, or pushes were
+performed. Scoped rustfmt and `git diff --check` completed. Coordinator gates are
+pending; the inline expected match lists have been authored without execution.
+
+The entry-point seam in `crates/hafley_scm/src/lib.rs` now invokes the predicate
+stage's query preparation before compiling the outer query. The rest of the
+implementation is in the assigned types, walks, predicate pipeline, match
+pipeline, tests, and relations docs. Other lanes' language readers are untouched.
+
+| Relation | Syntax, with negated form available | Semantics | CSS equivalent | Test row names |
+| --- | --- | --- | --- | --- |
+| has | `(#has? @c kind+ [neighbor\|end])` or `(#has? @c (pattern) [options])` | Strict descendants; direct children with neighbor; preorder with end; named and anonymous nodes | `A:has(B)` / `A:has(> B)` | `has_pattern`, `has_neighbor`, `has_field`, `has_stop_inclusive`, `has_pattern_neighbor_miss`, `has_stop_before`, `not_has_pattern`, `has_left`, `has_right` |
+| has-ancestor | `(#has-ancestor? @c kind+ [neighbor\|end])` or `(#has-ancestor? @c (pattern) [options])` | Strict ancestors, nearest first; direct parent with neighbor | `B A` / `B > A` | `ancestor_pattern`, `ancestor_neighbor`, `ancestor_neighbor_miss`, `ancestor_field`, `ancestor_stop_before`, `ancestor_stop_inclusive`, `not_ancestor_pattern`, `ancestor_value` |
+| has-parent | `(#has-parent? @c kind+)` or `(#has-parent? @c (pattern) [options])` | Direct parent for all stop modes | `B > A` | `parent_pattern`, `parent_neighbor`, `parent_end`, `parent_end_strict`, `parent_field`, `parent_stop_inclusive`, `not_parent_pattern`, `parent_value` |
+| precedes | `(#precedes? @c kind+ [neighbor\|end])` or `(#precedes? @c (pattern) [options])` | Later named siblings; adjacent with neighbor; search to sibling-list end with end | `A:has(+ B)` / `A:has(~ B)` | `precedes_neighbor`, `precedes_end`, `not_precedes_neighbor`, `not_precedes_end`, `precedes_pattern_neighbor`, `precedes_pattern_end`, `not_precedes_pattern`, `precedes_stop`, `precedes_stop_inclusive`, `precedes_right`, `not_precedes_right` |
+| follows | `(#follows? @c kind+ [neighbor\|end])` or `(#follows? @c (pattern) [options])` | Earlier named siblings; adjacent with neighbor; search to sibling-list beginning with end | `B + A` / `B ~ A` | `follows_neighbor`, `follows_end`, `not_follows_neighbor`, `not_follows_end`, `follows_pattern_neighbor`, `follows_pattern_end`, `not_follows_pattern`, `follows_stop`, `follows_stop_inclusive`, `follows_left`, `not_follows_left` |
+| nth-child | `(#nth-child? @c N [of kind\|(pattern)])` | Positive 1-based index among named siblings, optionally filtered before counting; captured node must pass filter; root has no index | `A:nth-child(N)` / `A:nth-child(N of B)` | `nth_child`, `nth_child_of`, `not_nth_child`, `not_nth_child_of`, `nth_child_pattern`, `not_nth_child_pattern`, `named_nth`; root case in `relational_query_syntax_and_root_capture` |
+
+Options on directional relations: `stopBy: neighbor`, `stopBy: end`,
+`stopBy: (pattern)`, and `field: name`. Legacy trailing stop words remain valid.
+Pattern stops are inclusive and end the walk at the first matching visited node,
+including the whole descendant preorder walk. Field tests refer to the related
+node's own position in its parent. Default reach remains end. Parent reach stays
+direct. Duplicate stop/field options, malformed positions, unknown grammar kinds,
+and unknown grammar fields produce errors.
+
+Tree-sitter `Query::new` determines argument boundaries through parser error
+positions and acceptance of candidate replacements, then compiles each related
+pattern against the language grammar. The preparation step keeps no nesting
+counter or s-expression parser. Comments, native predicates, alternation, and
+root captures have dedicated syntax rows. Related patterns are anchored to the
+visited node by a reserved root capture and a cursor start-depth limit.
+
+Positive relations bind captures from the first matching related node in walk
+order. Bindings are appended to the candidate's capture list only after predicate
+acceptance, mapped to global capture-name IDs, and exported to arena spans and
+emissions. Negated relations export no bindings. Extension predicates consuming
+related captures must follow the binding predicate. Native outer-query text
+predicates execute before relation evaluation; native related-text filters belong
+inside the nested pattern. Stop patterns do not export bindings.
+
+All tests reside in `crates/hafley_scm/tests/_0_relational_predicates.rs`, using
+Rust and TypeScript fixtures and literal inline snapshots with `assert_eq!`.
+Relation rows carry CSS comments for the later servo oracle lane. Bounded-walk
+comments apply to their fixtures; arbitrary stop patterns have no single general
+CSS combinator translation. No servo oracle has been implemented.
+
+Coordinator commands, run serially:
+
+```sh
+CARGO_BUILD_JOBS=4 cargo test -p hafley_scm --test _0_relational_predicates relational_
+CARGO_BUILD_JOBS=4 cargo test -p hafley_scm --test neovim_predicates
+CARGO_BUILD_JOBS=4 cargo test -p hafley_scm --test 0_emit
+```
+
+The first filter covers every relation. Narrow filters are `relational_siblings`
+for precedes/follows, `relational_nth_child` for positions,
+`relational_patterns_and_options` for has/ancestor/parent and pattern options,
+`relational_fields_and_anonymous_siblings` for fields,
+`relational_bindings_emit_and_filter` for exported captures,
+`relational_argument_errors` for validation, and
+`relational_query_syntax_and_root_capture` for native query syntax.
+
+The updated user documentation is
+`crates/sprefa-extract/docs/2_scm-with-ast-grep-relations-20260920.md`.

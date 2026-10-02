@@ -1,498 +1,219 @@
-# `.scm` queries with ast-grep relations
+# `.scm` relational predicates
 
-Tree-sitter queries (`.scm` files) can describe a node and its children. They cannot look upward, sideways, or count siblings. ast-grep's rule language can. This guide shows how to write ast-grep's relational rules inside an ordinary `.scm` file.
+Use relational predicates to select a captured node by its ancestors, descendants,
+or named siblings. A nested tree-sitter pattern can also bind a related node into
+the result. The query surface extends tree-sitter `.scm`; ast-grep and CSS supply
+reference semantics.
 
-Every example below runs against this file, `x.rs`:
-
-```rust
-fn plain(name: &str) -> bool {
-    let a = 1;
-    drop(a);
-    name.contains("ab")
-}
-
-fn wrapped(n: &str) -> bool {
-    let f = || n.contains("cd");
-    f()
-}
-
-impl Widget {
-    fn is_empty(&self) -> bool { self.items.is_empty() }
-    fn render(&self) { self.items.first(); draw(self.items.len(), 1, 2) }
-}
-```
-
-## The problem
-
-Find every `.contains(...)` call that is not inside a closure. The answer is `name.contains("ab")`, and only that.
-
-A plain `.scm` query gets as far as the calls:
+For example, select calls and capture their enclosing function names:
 
 ```scheme
-((call_expression) @c
- (#match? @c "contains"))
+((call_expression) @call
+ (#has-ancestor? @call (function_item name: (identifier) @fn)))
 ```
 
-```
-name.contains("ab")
-n.contains("cd")
-```
-
-Both calls match. `n.contains("cd")` is inside the closure `|| n.contains("cd")`, and nothing in the query can say "and no closure above this". A pattern describes a node and what is inside it. There is no syntax for what is around it.
-
-ast-grep has that syntax. Its YAML rule for the same question:
-
-```yaml
-rule:
-  all:
-    - kind: call_expression
-    - regex: contains
-    - not:
-        inside:
-          kind: closure_expression
-          stopBy: end
-```
-
-```
-name.contains("ab")
-```
-
-`inside` walks up through the ancestors. `not` inverts it. `stopBy: end` means walk all the way to the root.
-
-## The solution
-
-The same rule, written in `.scm`:
+The same query for TypeScript uses `function_declaration`:
 
 ```scheme
-[(closure_expression)] @closure
-
-((call_expression) @c
- (#match? @c "contains")
- (#not-inside? @c closure))
+((call_expression) @call
+ (#has-ancestor? @call (function_declaration name: (identifier) @fn)))
 ```
 
-```
-name.contains("ab")
-```
+Each kept match contains `@call` and `@fn`. Ancestors are searched from the direct
+parent toward the root, so the first matching function supplies the capture.
 
-Two things are new. A top-level pattern with a capture on it, `[(closure_expression)] @closure`, defines a name. A predicate, `#not-inside?`, refers to that name. Everything else is the `.scm` you already write.
+## Relation arguments
 
-## How it works
-
-Tree-sitter's query parser accepts any predicate spelled `(#anything? ...)` and leaves its meaning to the program running the query. This crate defines ast-grep's operators as predicates, translates the query into ast-grep's rule tree, and lets ast-grep run it. The translation is one-to-one, so anything ast-grep can match, the `.scm` file can ask for.
-
-| `.scm` | ast-grep YAML |
-| --- | --- |
-| `(function_item)` | `kind: function_item` |
-| `[(function_item) (impl_item)]` | `any: [{kind: function_item}, {kind: impl_item}]` |
-| `[(closure_expression)] @closure` at top level | `utils: {closure: {kind: closure_expression}}` |
-| `(#inside? @c closure)` | `inside: {matches: closure, stopBy: end}` |
-| `(#has? @c x)`, `(#follows? @c x)`, `(#precedes? @c x)` | `has:`, `follows:`, `precedes:` |
-| `(#match? @c "^is_")` | `regex: ^is_` |
-| `(#pattern? @c "$A.len()")` | `pattern: $A.len()` |
-| `(#not-inside? @c closure)`, any `not-` form | `not: {inside: ...}` |
-| several predicates on `@c` | `all: [...]` |
-| `(#nth-child? @c "2")` | `nthChild: 2` |
-| `(#range? @c "3:4" "3:23")` | `range: {start: {line: 3, column: 4}, end: {line: 3, column: 23}}` |
-| `(#pattern? @c "$A.len()" A ident)` | `pattern: $A.len()` plus `constraints: {A: {matches: ident}}` |
-
-## Naming a pattern
-
-A top-level pattern with a capture directly on it defines a name. It reports nothing by itself.
+Every directional relation accepts either a list of grammar kind names or one
+nested tree-sitter pattern:
 
 ```scheme
-[(function_item) (impl_item)] @scope
-[(closure_expression)] @closure
-[(let_declaration)] @let
+(#has? @body return_expression try_expression)
+(#has? @body (return_expression))
+(#has-ancestor? @call (function_item name: (identifier) @fn))
+(#has-parent? @call (expression_statement) @statement)
 ```
 
-Any pattern without a top-level capture is a query, and the file reports its matches. A file with several such patterns reports all of them. A file with only named patterns reports every named one.
+Kind names can be bare symbols or quoted strings. A kind list means that any one
+listed kind can satisfy the relation. A nested pattern uses tree-sitter's query
+syntax, including fields, alternation, anchors, quantifiers, captures, and native
+text predicates. Kind names and nested patterns are validated against the selected
+grammar. Unknown kinds, unknown fields, and malformed patterns are errors.
 
-The capture has to sit directly on the top-level node. This defines `closure`:
-
-```scheme
-(closure_expression) @closure
-```
-
-This does not; `@body` is inside the pattern and names a child:
-
-```scheme
-(closure_expression body: (_) @body)
-```
-
-Each name can be defined once. Defining `@scope` twice is an error.
-
-## Looking up: `#inside?`
-
-Calls inside an `impl` block:
+Native text predicates inside a related pattern need a grouping expression:
 
 ```scheme
-[(impl_item)] @imp
-
-((call_expression) @c (#inside? @c imp))
+((call_expression) @call
+ (#has-ancestor? @call
+   ((function_item name: (identifier) @fn)
+    (#eq? @fn "host"))))
 ```
 
-```
-self.items.is_empty()
-self.items.first()
-draw(self.items.len(), 1, 2)
-self.items.len()
-```
+## Descendants, ancestors, and parents
 
-The walk goes all the way up by default. `self.items.len()` is three levels below the `impl_item` and still matches.
-
-## Looking down: `#has?`
-
-Calls that have a field access as a direct child, which is what a method call looks like in the Rust grammar:
+`#has?` tests strict descendants. `end`, the default, searches in preorder;
+`neighbor` tests direct children. These walks visit named and anonymous children.
+The captured node itself is excluded.
 
 ```scheme
-[(field_expression)] @recv
+((function_item body: (block) @body) @function
+ (#has? @body return_expression end))
 
-((call_expression) @c (#has? @c recv "neighbor"))
+((function_item body: (block) @body) @function
+ (#has? @body (expression_statement) neighbor))
 ```
 
-```
-name.contains("ab")
-n.contains("cd")
-self.items.is_empty()
-self.items.first()
-self.items.len()
-```
+The CSS forms are `block:has(return_expression)` and
+`block:has(> expression_statement)`.
 
-`"neighbor"` restricts the walk to direct children. Without it, `#has?` would also match `draw(self.items.len(), 1, 2)`, because a field access sits somewhere below it.
-
-## Looking sideways: `#follows?` and `#precedes?`
-
-Calls that come after a `let` in the same block:
+`#has-ancestor?` tests strict ancestors, nearest first. `neighbor` limits it to the
+direct parent. `#has-parent?` always tests only the direct parent, including when
+an explicit `stopBy: end` option is supplied.
 
 ```scheme
-[(let_declaration)] @let
+((call_expression) @call
+ (#has-ancestor? @call function_item end))
 
-((call_expression) @c (#follows? @c let))
+((call_expression) @call
+ (#has-parent? @call expression_statement))
 ```
 
-```
-name.contains("ab")
-f()
-```
+The CSS forms are `function_item call_expression` and
+`expression_statement > call_expression`.
 
-`drop(a)` is not in the list. In the Rust grammar `drop(a);` is wrapped in an `expression_statement`, so the sibling of the `let` is the statement, not the call.
+## Later and earlier siblings
 
-Calls that come before a `let`:
+`#precedes?` searches later named siblings. `#follows?` searches earlier named
+siblings. `neighbor` tests exactly the adjacent named sibling; `end` searches to
+the end of that sibling list. Punctuation tokens are skipped, while named
+comments participate in the list. Searches never cross the parent boundary.
 
 ```scheme
-[(let_declaration)] @let
+((expression_statement) @statement
+ (#precedes? @statement expression_statement neighbor))
 
-((call_expression) @c (#precedes? @c let))
+((expression_statement) @statement
+ (#follows? @statement expression_statement end))
 ```
 
-```
-(no matches)
-```
+The CSS forms are `expression_statement:has(+ expression_statement)` and
+`expression_statement ~ expression_statement`. Direction refers to the captured
+node: a node that precedes another node searches forward; one that follows
+another node searches backward.
 
-## How far to walk
-
-Every relation takes an optional third argument.
+A nested pattern can capture a later sibling's call name:
 
 ```scheme
-[(function_item)] @fn
-[(block)] @block
-[(closure_expression)] @closure
+((expression_statement) @statement
+ (#precedes? @statement
+   (expression_statement
+     (call_expression function: (identifier) @next))
+   stopBy: neighbor))
 ```
 
-Walk all the way (the default, also spelled `"end"`):
+## Named sibling positions
+
+`#nth-child?` takes a positive 1-based position among named siblings. The captured
+node must be named and have a parent. A root node has no sibling position.
 
 ```scheme
-((call_expression) @c (#inside? @c fn))
+((expression_statement) @statement
+ (#nth-child? @statement 3))
+
+((expression_statement) @statement
+ (#nth-child? @statement 2 of expression_statement))
 ```
 
-```
-drop(a)
-name.contains("ab")
-n.contains("cd")
-f()
-self.items.is_empty()
-self.items.first()
-draw(self.items.len(), 1, 2)
-self.items.len()
-```
+The CSS forms are `expression_statement:nth-child(3)` and
+`expression_statement:nth-child(2 of expression_statement)`.
 
-Check only the direct parent:
+The optional `of` argument filters the named sibling list before counting. It can
+be a kind name or a nested pattern. The captured node must pass that filter.
+Captures from the selected node's `of` pattern are included in the result:
 
 ```scheme
-((call_expression) @c (#inside? @c block "neighbor"))
+((expression_statement) @statement
+ (#nth-child? @statement 2 of
+   (expression_statement
+     (call_expression function: (identifier) @callee))))
 ```
 
-```
-name.contains("ab")
-f()
-self.items.is_empty()
-draw(self.items.len(), 1, 2)
-```
+## Stopping and fields
 
-These are the calls that sit directly in a block: tail expressions and the ones not wrapped in a statement.
-
-Walk up until a node matching another name is reached:
+Directional relations accept `stopBy: neighbor`, `stopBy: end`, or a nested stop
+pattern. The legacy trailing `neighbor` and `end` arguments remain supported.
+A stop pattern is inclusive: test a visited node for the relation first, then stop
+if it matches the stop pattern. The stop pattern exports no captures.
 
 ```scheme
-((call_expression) @c (#inside? @c closure block))
+((call_expression) @call
+ (#has-ancestor? @call
+   (function_item name: (identifier) @fn)
+   stopBy: (closure_expression)))
 ```
 
-```
-n.contains("cd")
-```
+This searches toward the enclosing function and stops if a closure is reached
+first. For descendants, a matching stop node ends the whole preorder walk. For
+siblings, it ends the walk in the selected direction. Parents remain direct.
+A bounded walk has no general translation using only a single CSS combinator.
 
-Only one call reaches a closure before it reaches a block. The others hit their enclosing block first and stop.
-
-If you have written ast-grep YAML before: there, an absent `stopBy` means `neighbor`. Here, an absent third argument means `"end"`, because "anywhere above" is the question people ask most.
-
-## Text and shape
-
-`#match?` tests the node's source text against a regular expression:
+`field: name` requires the related node to occupy that field in its own parent.
+The field must exist in the grammar. It applies to all directional relations.
 
 ```scheme
-((identifier) @i (#match? @i "^is_"))
+((expression_statement) @statement
+ (#has? @statement (identifier) field: function))
+
+((call_expression) @call
+ (#has-ancestor? @call (block) field: body))
 ```
 
-```
-is_empty
-```
+Their CSS forms are `expression_statement:has(identifier[field="function"])`
+and `block[field="body"] call_expression`.
 
-`#pattern?` tests the node against a code snippet. `$A` stands for any one subtree, `$$$` for any sequence:
+## Negation and related captures
+
+Every relation has a `not-` form: `#not-has?`, `#not-has-ancestor?`,
+`#not-has-parent?`, `#not-precedes?`, `#not-follows?`, and `#not-nth-child?`.
+Negation complements the relation and exports no related captures.
 
 ```scheme
-((call_expression) @c (#pattern? @c "$A.len()"))
+((call_expression) @call
+ (#not-has-ancestor? @call closure_expression end))
 ```
 
-```
-self.items.len()
-```
+A positive relation exports captures from the first matching related node in its
+walk order, without creating additional result rows. Later extension predicates
+can inspect those captures, and `#emit!` can use them:
 
 ```scheme
-((call_expression) @c (#pattern? @c "$R.contains($A)"))
+((call_expression) @call
+ (#has-ancestor? @call (function_item name: (identifier) @fn))
+ (#contains? @fn "host")
+ (#emit! "enclosing" "call" @call "function" @fn))
 ```
 
-```
-name.contains("ab")
-n.contains("cd")
-```
-
-## Negation
-
-Prefix any predicate with `not-`:
-
-```scheme
-((call_expression) @c (#not-match? @c "contains|is_empty"))
-```
-
-```
-drop(a)
-f()
-self.items.first()
-draw(self.items.len(), 1, 2)
-self.items.len()
-```
-
-## Which node is reported
-
-A pattern can have several captures. The predicates decide which one is reported: the node carrying the capture that the predicates name.
-
-```scheme
-((function_item name: (identifier) @n)
- (#match? @n "^is_"))
-```
-
-```
-is_empty
-```
-
-The reported node is the identifier, because `@n` is what the predicate constrains. The surrounding `function_item` still has to be there; an `is_empty` identifier elsewhere would not match.
-
-All predicates in one pattern must name the same capture. A pattern with no predicate reports the whole thing.
-
-## Putting it together
-
-Method calls named `contains`, `first` or `len`, on a field, inside a function or impl block, outside any closure:
-
-```scheme
-[(function_item) (impl_item)] @scope
-[(closure_expression)] @closure
-[(field_expression)] @receiver
-
-((call_expression
-   function: (field_expression field: (field_identifier) @name)) @m
- (#inside? @m scope)
- (#not-inside? @m closure)
- (#has? @m receiver "neighbor")
- (#match? @m "contains|first|len")
- (#not-match? @m "^is_"))
-```
-
-```
-name.contains("ab")
-self.items.first()
-self.items.len()
-```
-
-## Position among siblings: `#nth-child?`
-
-Positions count from 1. The first call in each block:
-
-```scheme
-((call_expression) @c (#nth-child? @c "1"))
-```
-
-```
-drop(a)
-self.items.is_empty()
-self.items.first()
-self.items.len()
-```
-
-`self.items.len()` is first among the children of its argument list. `drop(a)` is first among the children of its statement.
-
-`"reverse"` counts from the end:
-
-```scheme
-((call_expression) @c (#nth-child? @c "1" "reverse"))
-```
-
-```
-drop(a)
-name.contains("ab")
-n.contains("cd")
-f()
-self.items.is_empty()
-self.items.first()
-draw(self.items.len(), 1, 2)
-```
-
-The CSS `An+B` form works. Every odd-positioned integer literal:
-
-```scheme
-((integer_literal) @n (#nth-child? @n "2n+1"))
-```
-
-```
-2
-```
-
-A name as the third argument counts only siblings matching that name:
-
-```scheme
-[(integer_literal)] @int
-
-((integer_literal) @n (#nth-child? @n "2" int))
-```
-
-This selects the second integer among the integer siblings, ignoring anything else in between.
-
-## Exact position in the file: `#range?`
-
-Two `"line:column"` points, both zero-based. The node must start and end at exactly those points:
-
-```scheme
-((call_expression) @c (#range? @c "3:4" "3:23"))
-```
-
-```
-name.contains("ab")
-```
-
-This is not a window. Asking for `"0:0"` to `"20:0"` returns nothing, because no call starts at the very beginning of the file and ends on line 20. Use `#range?` to name one specific node, for example the one under a cursor.
-
-## Constraining a placeholder
-
-After the pattern string, `#pattern?` accepts pairs of `PLACEHOLDER name`. Each placeholder must then match the named pattern.
-
-Require the receiver of `.len()` to be a bare identifier:
-
-```scheme
-[(identifier)] @ident
-
-((call_expression) @c (#pattern? @c "$A.len()" A ident))
-```
-
-```
-(no matches)
-```
-
-The only `.len()` call is on `self.items`, which is a field access, not an identifier. Require a field access instead:
-
-```scheme
-[(field_expression)] @field
-
-((call_expression) @c (#pattern? @c "$A.len()" A field))
-```
-
-```
-self.items.len()
-```
-
-Constraints are shared across the whole file. Binding `$A` to `ident` in one pattern and to `field` in another is an error.
-
-## Syntax that is accepted but not enforced
-
-Some `.scm` syntax has no equivalent in ast-grep. It is read and the node constraint underneath is kept.
-
-| written | translated as |
-| --- | --- |
-| `function: (identifier)` | a direct child of kind `identifier`; the field name is not checked |
-| `(identifier)+`, `(identifier)?` | a single child of kind `identifier` |
-| `expression/identifier` | kind `identifier` |
-| `(call_expression !arguments)` | no direct child of kind `arguments` |
-
-The last row works only when a grammar spells the field and the node type the same way. It does for `arguments` in Rust. Check the grammar's `node-types.json` for others.
-
-The wildcard `(_)` and `(MISSING x)` are refused.
-
-## Errors
-
-These are caught when the query is read:
-
-| query | error |
-| --- | --- |
-| `(identifier` | `Syntax { row: 0, message: "unparsed .scm text: (identifier" }` |
-| `(_) @m` | `Syntax { row: 0, message: "a wildcard node _ has no AstRule" }` |
-| `((identifier) @m (#frob? @m "x"))` | `UnknownPredicate("frob?")` |
-| `((identifier) @m (#inside? @m))` | `PredicateArity { operator: "inside?", got: 1 }` |
-| `((identifier) @m (#inside? @m nowhere))` | `UnboundReference("nowhere")` |
-| `((identifier) (#inside? @m scope))` | `UnboundReference("m")` |
-| `[(a)] @s` and `[(b)] @s` | `DuplicateLabel("s")` |
-| `(#inside? @m scope "sideways")` | `UnknownStopBy("sideways")` |
-| `(#match? @a "x")` and `(#match? @b "y")` in one pattern | `FocusConflict { first: "a", second: "b" }` |
-| `(#nth-child? @a "x")` | `BadPosition("x")` |
-| `(#range? @c "1:0" "nope")` | `BadPosition("nope")` |
-| `$A` bound to `s` in one pattern and `i` in another | `ConstraintConflict { metavariable: "A", first: "s", second: "i" }` |
-
-This one is caught when the query runs, because only then is the target language known:
-
-| query | error |
-| --- | --- |
-| `(function_itm)` over a Rust file | `UnknownKind { kind: "function_itm", language: "Rust" }` |
-
-ast-grep itself matches nothing for a misspelled kind and says nothing. The check exists so a typo is an error instead of an empty result.
-
-## Languages
-
-The language comes from the target file's extension. Twenty-eight are available: Bash, C, C++, C#, CSS, Elixir, Go, Haskell, HTML, Java, JavaScript, JSON, Kotlin, Lua, PHP, Python, Ruby, Rust, Scala, Swift, TSX, TypeScript, YAML, and, added by this crate, Prolog, Markdown, Markdown inline, GDScript and Common Lisp. When naming a language directly, `md`, `md_inline`, `gd`, `lisp` and `cl` are accepted as aliases.
-
-## Checking it yourself
-
-`ryi query` runs a `.scm` query through the real binary, the real grammar, and
-the crate's `.scm` engine, streaming one JSONL row per match:
-
-```bash
-cd crates/sprefa-extract
-cargo run --features cli --bin ryi -- query --lang rust \
-  --query '(call_expression function: (identifier) @call)' -- src/project.rs
-```
-
-```
-{"call":"read_inputs_with_modules","end_line":240,"line":240}
-{"call":"resolve_project_inputs","end_line":241,"line":241}
-{"call":"read_inputs_with_modules","end_line":280,"line":280}
-{"call":"push_raw","end_line":282,"line":282}
-...
-```
-
+Place predicates that consume related captures after the relation that binds
+them. Native outer-query text predicates run before relation evaluation; use
+native text predicates inside the nested pattern when filtering related text.
+
+## Reference
+
+| Predicate | Default reach | CSS form for target `A` and related node `B` |
+| --- | --- | --- |
+| `#has? @a B` | Strict descendants | `A:has(B)` |
+| `#has? @a B neighbor` | Direct children | `A:has(> B)` |
+| `#has-ancestor? @a B` | Strict ancestors | `B A` |
+| `#has-ancestor? @a B neighbor` | Direct parent | `B > A` |
+| `#has-parent? @a B` | Direct parent | `B > A` |
+| `#precedes? @a B neighbor` | Next named sibling | `A:has(+ B)` |
+| `#precedes? @a B end` | Later named siblings | `A:has(~ B)` |
+| `#follows? @a B neighbor` | Previous named sibling | `B + A` |
+| `#follows? @a B end` | Earlier named siblings | `B ~ A` |
+| `#nth-child? @a N` | Named sibling position | `A:nth-child(N)` |
+| `#nth-child? @a N of B` | Position after filtering | `A:nth-child(N of B)` |
+
+CSS comparisons apply to named nodes. Descendant and ancestor predicates retain
+support for anonymous nodes in tree-sitter patterns. See the
+[ast-grep relation reference](https://ast-grep.github.io/reference/rule) for the
+sibling directions and inclusive stop semantics.
