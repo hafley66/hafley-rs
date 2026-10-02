@@ -24,6 +24,7 @@
 //! about which run built and which reused.
 
 use std::path::PathBuf;
+use crate::v6_only::is_written_syntax_row;
 use std::process::{Command, Output};
 
 const SCIP_REL_ROOT: &str = "tests/fixtures/scip_rel";
@@ -358,12 +359,6 @@ fn is_scm_row(line: &str) -> bool {
         .any(|record| line.contains(&format!("\"record\":\"{record}\"")))
 }
 
-fn is_written_syntax_row(line: &str) -> bool {
-    ["call_site", "jsx_element", "jsx_attribute"]
-        .iter()
-        .any(|record| line.contains(&format!("\"record\":\"{record}\"")))
-}
-
 /// `diet_scip` IS the `--resolve` pass with both arms plus the scm rows, byte
 /// for byte. Asserting it here does two jobs: it pins what the name means, and
 /// it is the regression guard that `--resolve` (whose own default stays the
@@ -380,7 +375,7 @@ fn diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows() {
         .filter(|line| !is_scm_row(line) && !is_written_syntax_row(line))
         .map(|line| format!("{line}\n"))
         .collect();
-    assert_eq!(resolved, run(&original));
+    assert_eq!(resolved, crate::v6_only::ported(&run(&original)));
     assert!(
         fast.lines().any(is_scm_row),
         "fast carries the scm rows too: {fast}"

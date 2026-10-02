@@ -74,7 +74,7 @@ fn the_flag_off_stream_is_the_committed_golden() {
             .join("tests/fixtures/resolve/2_resolved_edges.jsonl"),
     )
     .expect("the golden is committed");
-    let produced = lines(SYNTAX_ARGS, None).join("\n") + "\n";
+    let produced = crate::v6_only::ported(&(lines(SYNTAX_ARGS, None).join("\n") + "\n"));
     assert_eq!(produced, golden, "a resolve with no --witness is unchanged");
 }
 

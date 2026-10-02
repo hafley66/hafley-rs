@@ -260,18 +260,13 @@ pub struct ProjectInput {
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    let syntax = syntax_facts(&inputs);
+    let syntax = if request.arms.call { syntax_facts(&inputs) } else { Vec::new() };
     let mut facts = resolve_project_inputs(request, inputs, false)?;
     facts.extend(syntax);
     Ok(facts)
 }
 
 pub(crate) fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
-    // A TSX project retains written calls in its companion TS modules too.
-    // Pure TypeScript resolve keeps the existing edge-only stream.
-    if !inputs.iter().any(|input| input.path.ends_with(".tsx")) {
-        return Vec::new();
-    }
     inputs
         .iter()
         .filter(|input| source_for(&input.path).is_some_and(|source| source.name() == "ts"))
@@ -447,7 +442,7 @@ fn resolve_pushed<E>(
     scm_paths: Option<&[PathBuf]>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
-    let syntax = if scm.is_none() {
+    let syntax = if scm.is_none() && request.arms.call {
         syntax_facts(&inputs)
     } else {
         Vec::new()

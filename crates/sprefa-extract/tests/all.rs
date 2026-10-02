@@ -4,6 +4,8 @@
 #[cfg(feature = "cli")]
 #[path = "support/0_daemon_guard.rs"]
 mod daemon_guard;
+#[path = "support/1_v6_only.rs"]
+mod v6_only;
 
 #[path = "0_prolog.rs"]
 mod t_0_prolog;

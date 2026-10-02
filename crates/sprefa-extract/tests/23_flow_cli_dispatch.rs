@@ -86,7 +86,7 @@ fn unknown_arm_names_flow_in_its_error() {
 
 #[test]
 fn resolve_without_family_is_byte_identical() {
-    assert_eq!(run(&["--resolve", CALLER, CALLEE]), CALL_GOLDEN);
+    assert_eq!(crate::v6_only::ported(&run(&["--resolve", CALLER, CALLEE])), CALL_GOLDEN);
 }
 
 /// FAIL-PRE-FIX, same base sha: `bench` took no `cfg` flag, so

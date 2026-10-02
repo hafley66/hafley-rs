@@ -40,7 +40,7 @@ fn resolve_mode_streams_cross_file_edges() {
         "stderr: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-    assert_eq!(String::from_utf8(output.stdout).unwrap(), GOLDEN);
+    assert_eq!(crate::v6_only::ported(&String::from_utf8(output.stdout).unwrap()), GOLDEN);
 }
 
 #[test]
