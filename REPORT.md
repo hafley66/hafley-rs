@@ -822,3 +822,81 @@ No integration commits were merged into this lane.
 `t_186_quality_gate::repository_quality_gate_matches_its_allowlists` remain
 unrun and require coordinator execution. No cargo, npm, node, Python, quality
 gate, or dogfood script was run. Help captures and allowlists were not edited.
+## ryi TS resolve tier-decline repair (2026-10-02)
+
+Code complete only. No cargo, npm, node, dogfood scripts, installs, or builds ran.
+Existing test assertions and goldens are unchanged.
+
+Test 104's shared arguments at
+`crates/sprefa-extract/tests/104_tier_decline_diagnostic.rs:70` are
+`--witness --resolve --arms type --root tests/fixtures/tsi --ts-checker tests/fixtures/tsi/probe.ts`.
+These are TypeScript syntax-resolution requests with an optional checker tier.
+They never invoke `slow` or `graph --slow`. The no-witness case removes only
+`--witness`. Main's test is identical; `git log main..HEAD --` for this test
+returns no commits. Main's CLI calls the base project resolver directly.
+
+D15 (`plans/2026-10-01-ryi-ts-utility.md:109`) requires edges or a non-zero exit
+for `graph --slow`; its feature refusal remains in
+`crates/hafley_scm/src/read/2_slow.rs:43` and
+`crates/sprefa-extract/src/0a_graph_target.rs:14`.
+D14 commit `1fab89cb4eceeec05b4a2c49ae0739ce548670d6` redirected CLI resolve
+imports at `crates/sprefa-extract/src/bin/ryi.rs:28` to the new tsgo adapter.
+It also called D15's `require_ts_checker` helper from the optional resolve
+adapter at `crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:245` (pre-fix).
+The helper's error text originates in D15 commit `71669f2f`, but that commit
+alone did not add the refusing resolve call site. No plan/test contradiction
+was found: the entry points have separate contracts.
+
+Change: missing-ts-checker builds delegate the resolve adapter directly to the
+base project resolver at `crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:241`.
+The adapter's slow preflight call is removed from resolve. Builds containing
+ts-checker continue through tsgo supplementation. D15 slow refusal is retained.
+
+### t_104_tier_decline_diagnostic::no_witness_emits_no_diagnostic
+
+Cause: D14 `1fab89cb`, adapter `1g_ts7_resolve.rs:245` (pre-fix), rejects the
+optional missing checker after base syntax resolution, so test helper line 41
+receives a failing exit.
+Change: base resolver returns its syntax stream without a witness envelope or
+diagnostic record when the feature is absent.
+Coordinator, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --test all t_104_tier_decline_diagnostic::no_witness_emits_no_diagnostic -- --exact
+```
+
+### t_104_tier_decline_diagnostic::the_declined_stream_survives_the_reverse_door
+
+Cause: D14 `1fab89cb`, adapter `1g_ts7_resolve.rs:245` (pre-fix), refuses the
+first resolve invocation before the test can ingest its decline stream.
+Change: base resolver returns the existing witness decline stream; ingest
+retains the `tier.tsc` diagnostic using its existing decoder.
+Coordinator, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --test all t_104_tier_decline_diagnostic::the_declined_stream_survives_the_reverse_door -- --exact
+```
+
+### t_104_tier_decline_diagnostic::ts_tier_off_path_is_a_diagnostic
+
+Cause: D14 `1fab89cb`, adapter `1g_ts7_resolve.rs:245` (pre-fix), turns the
+optional missing feature into a failing exit instead of retaining the base
+resolver's `tier.tsc` diagnostic.
+Change: delegate missing-feature resolve to the base resolver, retaining one
+syntax-run diagnostic naming `--features ts-checker` and no semantic run.
+Coordinator, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --test all t_104_tier_decline_diagnostic::ts_tier_off_path_is_a_diagnostic -- --exact
+```
+
+### D15 refusal preservation
+
+Coordinator, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --test all t_172_graph_slow::slow_typescript_requires_the_checker_feature_before_index_discovery -- --exact
+```
+
+Static validation: `git diff --check`. Compilation and runtime verification
+remain coordinator work, with each gate run separately.

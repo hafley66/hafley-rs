@@ -229,13 +229,17 @@ pub fn resolve_project_with_raw<E>(
     request: &ResolveRequest<'_>,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
+    // Resolve reports an unavailable optional tier through its decline stream.
+    // Slow entry points enforce their checker requirement separately.
+    if !cfg!(feature = "ts-checker") {
+        return crate::resolve_project_with_raw(request, push_raw);
+    }
     let mut references = References::default();
     let mut facts = crate::resolve_project_with_raw(request, &mut |raw| {
         if request.ts_checker.is_some() { references.capture(&raw); }
         push_raw(raw)
     })?;
     if let Some(root) = request.ts_checker {
-        crate::slow::require_ts_checker(request.paths).map_err(ResolveWithRawError::Project)?;
         references.append(root, request.arms.call, &mut facts)
             .map_err(|error| ResolveWithRawError::Project(checker_error(error)))?;
     }
