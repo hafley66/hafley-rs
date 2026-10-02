@@ -1,12 +1,24 @@
-use tree_sitter::{Language, QueryPredicate, QueryPredicateArg};
+use tree_sitter::{Language, Query, QueryPredicate, QueryPredicateArg};
 
+use super::_0_ts_nested_arguments::{pattern_query, PATTERN_PREFIX};
 use crate::types::{Predicate, PredicateKind, QueryExtError, Stop, Walk};
 
-/// One `QueryPredicate` -> one `Predicate`, appending its kind string to `kinds`
-/// when that string is new. `kinds` is the deduped kind table the stage returns.
-/// `#has?` / `#not-has?`: `@capture kind+ [neighbor|end]`.
-/// `#has-ancestor?` / `#not-has-ancestor?`: `@capture kind+ [neighbor|end]`.
-/// `#has-parent?` / `#not-has-parent?`: `@capture kind+`.
+fn nested(
+    language: &Language,
+    value: &str,
+    patterns: &[String],
+) -> Result<Option<Query>, QueryExtError> {
+    let Some(index) = value.strip_prefix(PATTERN_PREFIX) else {
+        return Ok(None);
+    };
+    let text = index
+        .parse::<usize>()
+        .ok()
+        .and_then(|index| patterns.get(index))
+        .ok_or_else(|| QueryExtError::UnknownOperator(value.to_owned()))?;
+    pattern_query(language, text).map(Some)
+}
+
 pub fn parse_into_predicate(
     language: &Language,
     pattern: u16,
@@ -14,131 +26,181 @@ pub fn parse_into_predicate(
     kinds: &mut Vec<Box<str>>,
     predicate_kinds: &mut Vec<u16>,
     literals: &mut Vec<Box<[u8]>>,
+    patterns: &[String],
+    names: &[Box<str>],
 ) -> Result<Predicate, QueryExtError> {
     let operator = found.operator.as_ref();
-    let (negated, bare) = match operator.strip_prefix("not-") {
-        Some(rest) => (true, rest),
-        None => (false, operator),
-    };
-    let arity = |got: usize| QueryExtError::Arity {
-        operator: operator.to_string(),
-        got,
+    let (negated, bare) = operator
+        .strip_prefix("not-")
+        .map_or((false, operator), |rest| (true, rest));
+    let arity = || QueryExtError::Arity {
+        operator: operator.to_owned(),
+        got: found.args.len(),
     };
     let capture = match found.args.first() {
         Some(QueryPredicateArg::Capture(capture)) => *capture as u16,
-        _ => return Err(arity(found.args.len())),
-    };
-    let args = &found.args[1..];
-    match bare {
-        "nth-child?" => {
-            let Some(QueryPredicateArg::String(index)) = args.first() else {
-                return Err(arity(found.args.len()));
-            };
-            let index = index.parse::<u32>().ok().filter(|index| *index > 0)
-                .ok_or_else(|| arity(found.args.len()))?;
-            let kind = if args.len() == 1 {
-                None
-            } else if let [_, QueryPredicateArg::String(of), QueryPredicateArg::String(kind)] = args {
-                if of.as_ref() != "of" || language.id_for_node_kind(kind, true) == 0 {
-                    return Err(QueryExtError::UnknownOperator(format!("{operator} (unknown of kind '{kind}' in pattern {pattern})")));
-                }
-                Some(language.id_for_node_kind(kind, true))
-            } else {
-                return Err(arity(found.args.len()));
-            };
-            Ok(Predicate { pattern, capture, kind: PredicateKind::NthChild { index, kind }, negated })
+        Some(QueryPredicateArg::String(name))
+            if name.starts_with(super::_0_ts_nested_arguments::CAPTURE_PREFIX) =>
+        {
+            let name = name
+                .strip_prefix(super::_0_ts_nested_arguments::CAPTURE_PREFIX)
+                .unwrap();
+            names
+                .iter()
+                .position(|seen| seen.as_ref() == name)
+                .ok_or_else(arity)? as u16
         }
-        "contains?" => {
+        _ => return Err(arity()),
+    };
 
-            if args.is_empty()
-                || args
-                    .iter()
-                    .any(|arg| !matches!(arg, QueryPredicateArg::String(_)))
-            {
-                return Err(arity(found.args.len()));
+    let args = &found.args[1..];
+    let strings = args
+        .iter()
+        .map(|arg| match arg {
+            QueryPredicateArg::String(value) => Ok(value.as_ref()),
+            _ => Err(arity()),
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let kind = match bare {
+        "contains?" => {
+            if strings.is_empty() {
+                return Err(arity());
             }
             let start = literals.len() as u16;
-            for arg in args {
-                let QueryPredicateArg::String(literal) = arg else {
-                    unreachable!()
-                };
-                literals.push(literal.as_bytes().into());
+            literals.extend(strings.iter().map(|value| value.as_bytes().into()));
+            PredicateKind::Contains {
+                literals: start..literals.len() as u16,
             }
-            Ok(Predicate {
-                pattern,
-                capture,
-                kind: PredicateKind::Contains {
-                    literals: start..literals.len() as u16,
-                },
-                negated,
-            })
+        }
+        "nth-child?" => {
+            let index = strings
+                .first()
+                .and_then(|index| index.parse::<u32>().ok())
+                .filter(|index| *index > 0)
+                .ok_or_else(arity)?;
+            let mut kind = None;
+            let mut query = None;
+            if strings.len() != 1 {
+                if strings.len() != 3 || strings[1] != "of" {
+                    return Err(arity());
+                }
+                query = nested(language, strings[2], patterns)?;
+                if query.is_none() {
+                    let id = language.id_for_node_kind(strings[2], true);
+                    if id == 0 {
+                        return Err(QueryExtError::UnknownOperator(format!(
+                            "{operator} (unknown of kind '{}' in pattern {pattern})",
+                            strings[2]
+                        )));
+                    }
+                    kind = Some(id);
+                }
+            }
+            PredicateKind::NthChild { index, kind, query }
         }
         "has?" | "has-ancestor?" | "has-parent?" | "precedes?" | "follows?" => {
-            if args.is_empty()
-                || args
-                    .iter()
-                    .any(|arg| !matches!(arg, QueryPredicateArg::String(_)))
-            {
-                return Err(arity(found.args.len()));
-            }
             let mut stop = Stop::End;
-            let mut kind_args = args;
-            if bare != "has-parent?" && kind_args.len() > 1 {
-                if let QueryPredicateArg::String(last) = &kind_args[kind_args.len() - 1] {
-                    if last.as_ref() == "neighbor" || last.as_ref() == "end" {
-                        stop = if last.as_ref() == "neighbor" {
+            let mut field = None;
+            let mut query = None;
+            let start = predicate_kinds.len() as u16;
+            let mut i = 0;
+            let mut stop_seen = false;
+            while i < strings.len() {
+                let value = strings[i];
+                match value {
+                    "stopBy" => {
+                        if stop_seen {
+                            return Err(arity());
+                        }
+                        i += 1;
+                        let value = *strings.get(i).ok_or_else(arity)?;
+                        stop = match value {
+                            "neighbor" => Stop::Neighbor,
+                            "end" => Stop::End,
+                            _ => Stop::Rule(nested(language, value, patterns)?.ok_or_else(arity)?),
+                        };
+                        stop_seen = true;
+                    }
+                    "field" => {
+                        if field.is_some() {
+                            return Err(arity());
+                        }
+                        i += 1;
+                        let name = *strings.get(i).ok_or_else(arity)?;
+                        field = Some(
+                            language
+                                .field_id_for_name(name)
+                                .ok_or_else(|| {
+                                    QueryExtError::UnknownOperator(format!(
+                                        "{operator} (unknown field '{name}' in pattern {pattern})"
+                                    ))
+                                })?
+                                .get(),
+                        );
+                    }
+                    "neighbor" | "end" if i + 1 == strings.len() => {
+                        if stop_seen {
+                            return Err(arity());
+                        }
+                        stop = if value == "neighbor" {
                             Stop::Neighbor
                         } else {
                             Stop::End
                         };
-                        kind_args = &kind_args[..kind_args.len() - 1];
+                        stop_seen = true;
+                    }
+                    _ => {
+                        if let Some(found) = nested(language, value, patterns)? {
+                            if query.is_some() || predicate_kinds.len() as u16 != start {
+                                return Err(arity());
+                            }
+                            query = Some(found);
+                        } else {
+                            if query.is_some() {
+                                return Err(arity());
+                            }
+                            if language.id_for_node_kind(value, true) == 0 {
+                                return Err(QueryExtError::UnknownOperator(format!(
+                                    "{operator} (unknown kind '{value}' in pattern {pattern})"
+                                )));
+                            }
+                            let index = kinds
+                                .iter()
+                                .position(|seen| seen.as_ref() == value)
+                                .unwrap_or_else(|| {
+                                    kinds.push(value.into());
+                                    kinds.len() - 1
+                                });
+                            predicate_kinds.push(index as u16);
+                        }
                     }
                 }
+                i += 1;
             }
-            if kind_args.is_empty() {
-                return Err(arity(found.args.len()));
+            if query.is_none() && predicate_kinds.len() as u16 == start {
+                return Err(arity());
             }
-            let start = predicate_kinds.len() as u16;
-            for arg in kind_args {
-                let QueryPredicateArg::String(kind) = arg else {
-                    unreachable!()
-                };
-                if language.id_for_node_kind(kind, true) == 0 {
-                    return Err(QueryExtError::UnknownOperator(format!(
-                        "{operator} (unknown kind '{kind}' in pattern {pattern})"
-                    )));
-                }
-                let index = match kinds.iter().position(|seen| seen.as_ref() == kind.as_ref()) {
-                    Some(index) => index,
-                    None => {
-                        kinds.push(kind.clone());
-                        kinds.len() - 1
-                    }
-                };
-                predicate_kinds.push(index as u16);
-            }
-            let walk = if bare == "has-parent?" {
-                Walk::Parent
-            } else if bare == "has?" {
-                Walk::Descendant
-            } else if bare == "precedes?" {
-                Walk::Precedes
-            } else if bare == "follows?" {
-                Walk::Follows
-            } else {
-                Walk::Ancestor
+            let walk = match bare {
+                "has?" => Walk::Descendant,
+                "has-parent?" => Walk::Parent,
+                "precedes?" => Walk::Precedes,
+                "follows?" => Walk::Follows,
+                _ => Walk::Ancestor,
             };
-            Ok(Predicate {
-                pattern,
-                capture,
-                kind: PredicateKind::Node {
-                    kinds: start..predicate_kinds.len() as u16,
-                    walk,
-                    stop,
-                },
-                negated,
-            })
+            PredicateKind::Node {
+                kinds: start..predicate_kinds.len() as u16,
+                walk,
+                stop,
+                query,
+                field,
+            }
         }
-        _ => Err(QueryExtError::UnknownOperator(operator.to_string())),
-    }
+        _ => return Err(QueryExtError::UnknownOperator(operator.to_owned())),
+    };
+    Ok(Predicate {
+        pattern,
+        capture,
+        kind,
+        negated,
+    })
 }

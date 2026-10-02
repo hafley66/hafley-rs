@@ -2,17 +2,20 @@ use tree_sitter::Node;
 
 use super::ts_ancestor_holds::ancestor_holds;
 use super::ts_descendant_holds::descendant_holds;
-use crate::types::{Predicate, Walk};
+use crate::types::{PredicateKind, Walk};
 
-pub fn holds(p: &Predicate, node: Node, kind_ids: &[u32]) -> bool {
-    match &p.kind {
+pub fn holds(kind: &PredicateKind, node: Node, kind_ids: &[u32]) -> bool {
+    match kind {
         crate::types::PredicateKind::Node { walk, stop, .. } => match walk {
             Walk::Ancestor => ancestor_holds(node, stop, kind_ids),
             Walk::Parent => ancestor_holds(node, &crate::types::Stop::Neighbor, kind_ids),
             Walk::Descendant => descendant_holds(node, stop, kind_ids),
-            Walk::Precedes | Walk::Follows => super::_0_ts_sibling_holds::sibling_holds(node, walk, stop, kind_ids),
+            Walk::Precedes | Walk::Follows => {
+                super::_0_ts_sibling_holds::sibling_holds(node, walk, stop, kind_ids)
+            }
         },
-        crate::types::PredicateKind::Contains { .. } | crate::types::PredicateKind::NthChild { .. } => false,
+        crate::types::PredicateKind::Contains { .. }
+        | crate::types::PredicateKind::NthChild { .. } => false,
     }
 }
 

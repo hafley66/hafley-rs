@@ -1,43 +1,62 @@
-use tree_sitter::QueryMatch;
+use tree_sitter::{QueryCapture, QueryMatch};
 
 use crate::types::{PredicateKind, QueryExt};
-use crate::walk;
+use crate::walk::_2_ts_related_captures::{nth_captures, related_captures};
 
-/// Every predicate of the match's own pattern holds. A predicate whose capture is
-/// absent from the match constrains nothing, so it folds to true.
-pub fn holds_for_candidate(
+// Related bindings remain local until all predicates accept the candidate.
+// Negated relations never export captures from the excluded node.
+pub fn captures_for_candidate<'tree>(
     q: &QueryExt,
-    found: &QueryMatch,
+    found: &QueryMatch<'_, 'tree>,
     src: &[u8],
     kind_ids: &[Vec<u32>],
-) -> bool {
-    q.predicates
+) -> Option<Vec<QueryCapture<'tree>>> {
+    let mut captures = found.captures().to_vec();
+    for predicate in q
+        .predicates
         .iter()
         .filter(|p| p.pattern as usize == found.pattern_index)
-        .all(|p| {
-            found
-                .captures()
-                .iter()
-                .filter(|capture| capture.index as u16 == p.capture)
-                .all(|capture| {
-                    let result = match &p.kind {
-                        PredicateKind::Node { kinds, .. } => q.predicate_kinds
-                            [kinds.start as usize..kinds.end as usize]
+    {
+        let targets = captures
+            .iter()
+            .filter(|capture| capture.index as u16 == predicate.capture)
+            .map(|capture| capture.node)
+            .collect::<Vec<_>>();
+        for node in targets {
+            let result = match &predicate.kind {
+                PredicateKind::Node { .. } => {
+                    related_captures(&predicate.kind, node, q, src, kind_ids)
+                }
+                PredicateKind::NthChild { index, kind, query } => {
+                    nth_captures(node, *index, *kind, query.as_ref(), q, src)
+                }
+                PredicateKind::Contains { literals } => src
+                    .get(node.byte_range())
+                    .filter(|text| {
+                        q.literals[literals.start as usize..literals.end as usize]
                             .iter()
-                            .any(|kind| walk::holds(p, capture.node, &kind_ids[*kind as usize])),
-                        PredicateKind::NthChild { index, kind } => crate::walk::_1_ts_nth_child::holds(capture.node, *index, *kind),
-                        PredicateKind::Contains { literals } => {
-                            src.get(capture.node.byte_range()).is_some_and(|text| {
-                                q.literals[literals.start as usize..literals.end as usize]
-                                    .iter()
-                                    .all(|literal| {
-                                        text.windows(literal.len())
-                                            .any(|part| part == literal.as_ref())
-                                    })
+                            .all(|literal| {
+                                literal.is_empty()
+                                    || text
+                                        .windows(literal.len())
+                                        .any(|part| part == literal.as_ref())
                             })
-                        }
-                    };
-                    result != p.negated
-                })
-        })
+                    })
+                    .map(|_| Vec::new()),
+            };
+            if result.is_some() == predicate.negated {
+                return None;
+            }
+            if !predicate.negated {
+                for capture in result.unwrap() {
+                    if !captures.iter().any(|seen| {
+                        seen.index == capture.index && seen.node.id() == capture.node.id()
+                    }) {
+                        captures.push(capture);
+                    }
+                }
+            }
+        }
+    }
+    Some(captures)
 }

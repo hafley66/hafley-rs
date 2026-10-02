@@ -1,7 +1,7 @@
 use tree_sitter::{QueryCursor, StreamingIterator, Tree};
 
 use super::append_to_match_arena::append_match;
-use super::test_predicates_per_candidate::holds_for_candidate;
+use super::test_predicates_per_candidate::captures_for_candidate;
 use super::ts_match_limit_check::match_limit_check;
 use crate::types::{MatchArena, QueryExt, QueryExtError};
 
@@ -19,8 +19,8 @@ pub fn user_cursor_into_arena(
     cursor.set_match_limit(limit);
     let mut found = cursor.matches(&q.user, tree.root_node(), src);
     while let Some(one) = found.next() {
-        if holds_for_candidate(q, one, src, kind_ids) {
-            append_match(q, one, file, arena);
+        if let Some(captures) = captures_for_candidate(q, one, src, kind_ids) {
+            append_match(q, one, &captures, file, arena);
         }
     }
     drop(found);

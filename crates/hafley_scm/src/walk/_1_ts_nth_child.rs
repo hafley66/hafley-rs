@@ -1,7 +1,10 @@
 use tree_sitter::Node;
 
 pub fn holds(node: Node, index: u32, kind: Option<u16>) -> bool {
-    if !node.is_named() || node.parent().is_none() || kind.is_some_and(|kind| node.kind_id() != kind) {
+    if !node.is_named()
+        || node.parent().is_none()
+        || kind.is_some_and(|kind| node.kind_id() != kind)
+    {
         return false;
     }
     let mut position = 1;
