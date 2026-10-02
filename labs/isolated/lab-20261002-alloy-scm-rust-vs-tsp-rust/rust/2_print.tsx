@@ -7,12 +7,14 @@ const TIGHT = new Set(["attribute_item", "token_tree", "type_arguments", "type_p
 export const RUST_POLICY: Policy = {
   space(kind, prev, tok) {
     if (TIGHT.has(kind)) return isLit(prev, ",");
+    if (kind === "line_comment" && isLit(prev, "//")) return false;
+    if ("val" in tok && tok.src === "bounds") return false;
     if (kind === "reference_type") return !isLit(prev, "&");
     if (["parameters", "arguments", "ordered_field_declaration_list", "tuple_type"].includes(kind)) return isLit(prev, ",") || isLit(prev, ";");
     if ([";", ",", ")", "]", ">", ":", "::"].some(s => isLit(tok, s))) return false;
     if (["(", "[", "<", "::"].some(s => isLit(prev, s))) return false;
     if (["parameters", "type_parameters"].some(s => "val" in tok && tok.src === s)) return false;
-    if (kind === "trait_bounds") return !isLit(prev, ":");
+    if (kind === "trait_bounds") return true;
     return true;
   },
   lines: new Set(["source_file"]),

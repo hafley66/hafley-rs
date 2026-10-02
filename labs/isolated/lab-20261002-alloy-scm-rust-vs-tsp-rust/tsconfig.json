@@ -10,7 +10,12 @@
     "skipLibCheck": true,
     "noEmit": true,
     "jsx": "preserve",
-    "jsxImportSource": "@alloy-js/core"
+    "jsxImportSource": "@alloy-js/core",
+    "typeRoots": [
+      "./node_modules/@types",
+      "./.types"
+    ],
+    "resolveJsonModule": true
   },
   "include": [
     "core/**/*",
