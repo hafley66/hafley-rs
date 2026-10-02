@@ -1,102 +1,28 @@
-# beep fork join and diff bring a fork back
+# ryi TS slow lane, 2026-10-02
 
-`boop beep fork <comment>` spawned a lane and recorded the link; nothing brought it home. This
-change adds the return trip:
+All code and dogfood cases are committed. Build, test, and runtime results are unverified. The user's later instruction stopped parallel builds/tests and deferred gates to the coordinator. No cargo, ryii, tsc, vitest, or dogfood execution was started in this lane; no installs or pushes were performed.
 
-```
-boop beep fork join  <comment> [--lane <lane>] [--no-merge] [--no-reply] [--dry-run] [--mail-dir <d>]
-boop beep fork diff  <comment> [--lane <lane>] [--stat] [--mail-dir <d>]
-```
+Corpus prepared outside the repository at `/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow`, detached at d0802620. The protected corpus directories were read only.
 
-`join` merges `git -C <repo> merge --no-ff <branch>` (refusing a dirty index or a branch with no
-commits past the route's `base_sha`), writes the lane's last assistant turn under
-`<mail_dir>/forks/comment-<id>.reply.md`, and delivers it to the fork's parent (the route's
-`parent`, else the one registered coordinator, else an error). `diff` prints
-`git -C <repo> diff <base>..<branch>`.
+| Case | Before (plan measurement) | After (implemented, unverified) | Commits |
+|---|---|---|---|
+| D14 | Slow misses the 12 cache.render sites at lines 7,8,10,11,12,14,15,28,29,30,31,33. | Checker execution survives missing SCIP indexes. Targeted references open all supplied TS files and seed from extracted declarations. Existing `slow` and `--resolve --ts-checker` CLI outputs append tsgo destinations joined to raw call/type spans. D14.sh asserts all 12 checker-bound sites in graph, resolve, and slow SQLite facts. | 1fab89cb |
+| D15 | Missing ts-checker can exit 0 with no slow edges, including an early no-index return. | Slow TS validates the feature before index discovery or targeted resolution, then exits non-zero naming ts-checker. D15.sh checks package/corpus roots and existing from/call-path/callers commands using a cli-only binary. Added missing-feature CLI regression test; corrected the case to the existing single-seed call-path syntax. | 71669f2f, a1d1da29 |
+| D17 | Fast method rename exits 6 with 286 runtime-seat lines. | Typed method plans retain their existing behavior. Unresolved method receivers produce one Refused diagnostic naming --slow. Property declarations retain their existing dynamic-seat behavior. D17.sh asserts non-zero exit, one stderr line, no stdout plan, and unchanged source. | bc016456 |
+| J01 | No tested slow JSX attribute-to-props declaration binding. | Existing resolved_edge binds the component. CST attribute identifier spans feed tsgo definition requests; symbol and occurrence def/ref rows bind a qualified FooProps.bar declaration. J01.sh asserts Foo, bar, exact UTF-8 source offsets, and the props member declaration in resolve and slow SQLite outputs. | 4718ffbb |
 
-## clap spelling decision
+D14 changes facts and existing command behavior. No SQL analyses or graph walkers were added. No CLI commands, flags, or output variants were added.
 
-`boop beep fork <id>` still spawns; no separate `spawn` verb was needed. The `Fork` variant keeps
-its existing fields and gains `#[command(subcommand)] cmd: Option<ForkCmd>`, mirroring the `Beep`
-variant's exact shape at main.rs:97:
+J01 depends on the fast `jsx_element` and `jsx_attribute` record contract from `feature-ryi-ts-rtkq-jsx`, commit 826a1a05. That commit was not cherry-picked into this lane. Slow code reads existing CST facts and emits existing symbol/occurrence/resolved_edge variants; no fast JSX files were edited. A props reference uses a shared symbol of the form `tsgo <declaration-path>#FooProps.bar@<start>:<end>`; its source span covers the JSX attribute name, and the same symbol's def row identifies the member declaration.
 
-```rust
-#[command(args_conflicts_with_subcommands = true, subcommand_negates_reqs = true)]
-Fork {
-    comment: Option<i64>,          // was i64; required by the bare spawn spelling only
-    #[command(subcommand)]
-    cmd: Option<ForkCmd>,          // None => today's spawn path
-    ... existing fields ...
-}
-```
+The tsgo session first uses the crate's existing ts7 compiler installation, then a project/ancestor `node_modules/typescript/bin/tsc`. This worktree's ts7/node_modules is absent. No installation was attempted; the corpus links the already-installed project dependencies.
 
-`comment` had to become `Option<i64>`: clap cannot keep a required positional next to an optional
-subcommand. The `Beep` variant already carries the same comment on its `route`/`body` positionals
-(main.rs:99-104), so this follows the in-repo precedent. Both spellings parse (`beep fork 7` and
-`beep fork join 7`), covered by `beep_fork_bare_spelling_still_parses`.
+Coordinator gates still required, serialized with CARGO_BUILD_JOBS=4:
 
-## Changed files
+1. Merge the fast JSX record contract before J01.
+2. In crates/sprefa-extract, run `cargo test --features cli`. Known pre-existing exceptions are `golden_parity::ported_facets_match_v5` and `golden_parity::rust_doc_parity`; no new-failure claim is made here.
+3. Preserve the cli-only debug ryii path as RYII_NO_TS_CHECKER for D15.
+4. Run `cargo build --release --bin ryii --features cli,ts-checker,typespec`.
+5. Run `RYII=<release ryii> RYII_NO_TS_CHECKER=<cli-only ryii> CORPUS=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow dogfood/ts/run.sh D14 D15 D17 J01`.
 
-| File | Change |
-|---|---|
-| `crates/boop/src/main.rs` | `Fork` variant gains `cmd: Option<ForkCmd>` + the two `#[command]` attrs; `comment` becomes `Option<i64>`; new `ForkCmd` enum (`Join`, `Diff`); Fork primer names join and diff. |
-| `crates/boop/src/cli/job.rs` | `run_fork_join`, `run_fork_diff`, `pick_fork`, `fork_parent`, `repo_root`, `ensure_clean`, `ensure_ahead`, `merge_branch`, `git_diff`; `Fork` dispatch arms; nine tests. |
-| `crates/boop-store/src/ident.rs` | `Store::last_assistant_turn`. |
-| `crates/boop-harness/src/worktree.rs` | `run_git` made `pub`. |
-
-`repo_root` delegates to `lane::repo_root` (boop-proc/lane.rs:158), the same rule `run_fork` uses
-for `--cwd`. The reply send reuses `crate::cli::mail::run_send` with `wait: false` and
-`as_name: Some(&fork.lane)`, the `boop beep <parent> <body> --no-wait` path.
-
-## Tests
-
-Ten tests in `crates/boop/src/cli/job.rs` `mod tests`: pick one/many/named, join clean, join dirty,
-join nothing-past-base, dry run, diff contains the changed path, and the bare-spelling parse test.
-
-## Validation
-
-```
-CARGO_TARGET_DIR=$PWD/target cargo test -p boop -p boop-store
-```
-
-Unit tests pass: the ten fork tests, `boop-store` (all pass), and the `boop` lib unit tests pass.
-Five pre-existing tmux/claude-door integration tests fail in this worktree
-(`tell::*` parent-edge, `lane_carcass::*` reclaim, `deliver_door::*` paste rung) with "tmux
-new-session reported success but the session is not live" and "no answer from claude-534" — they
-require a live claude coordinator door and are unrelated to this change (they fail on the base
-commit too).
-
-```
-CARGO_TARGET_DIR=$PWD/target cargo clippy -p boop -p boop-store -- -D warnings
-```
-
-Fails on two pre-existing diagnostics, both present on the clean base commit and untouched here:
-
-- `debug.rs:186` `run_host` never used (dead code when `dl6` is off).
-- `job.rs:1305` `harness.unwrap()` after `harness.is_some()` (`run_agent`, pre-existing).
-
-The fork/join/diff code introduced no new clippy diagnostics (verified by grepping the clippy output
-for the new identifiers; none appear).
-
-```
-CARGO_TARGET_DIR=$PWD/target cargo run -p boop -- beep fork --help
-```
-
-```
-Fork a lane off a stored terminal comment: the quoted turns and the note become the brief, the
-lane runs on `--preset` from the caller's repo, and the link is kept in `agent_turn_comment_fork`.
-The `join` and `diff` verbs bring the fork back
-
-Usage: boop beep fork [OPTIONS] [COMMENT]
-       boop beep fork <COMMAND>
-
-Commands:
-  join  Merge the fork's branch into the caller's repo and deliver the lane's last assistant turn
-        to the fork's parent
-  diff  Print `git diff <base>..<branch>` for the fork
-  help  Print this message or the help of the given subcommand(s)
-
-Arguments:
-  [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
-             fork <id>`; `join` and `diff` take their own
-```
+The scripts and Rust changes remain unrun. Runtime checker behavior, compilation, crate parity, and all four expected case outcomes require these gates.
