@@ -121,3 +121,4 @@ fixtures that expected such resolutions. No frozen snapshots were regenerated.
 | Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
 |---|---|---|---|
 | D12 | 0_log → 0_0_log and 10_slice → 2_10_slice | Existing stratify proposals replace numeric/insertion prefixes before adding the depth prefix; D12.sh checks corpus and synthetic proposals | Existing command path proposal |
+| D13 | Existing callers command emits 11 rows for 6 sites | Existing callers query chooses one row per full site/target span using SQLite row_number; closure/enclosing mirror facts remain available; D13.sh compares fast/slow rows to six fact sites | Existing callers output shape; facts retained |

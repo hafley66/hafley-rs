@@ -22,9 +22,18 @@ use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
 #[path = "0a_graph_target.rs"]
 mod target;
 
-const CALLERS_SQL: &str = "SELECT \"caller_path\", \"caller_name\", \"callee_path\", \
-                           \"callee_name\", \"grade\", \"kind\", \"caller_site_start\", \
-                           \"callee_start\" FROM \"callers\" WHERE \"callee_name\" IS ?1";
+const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_name, \
+                         grade, kind, caller_site_start, callee_start FROM ( \
+                         SELECT e.*, ROW_NUMBER() OVER ( \
+                         PARTITION BY caller_path, caller_site_start, caller_site_end, \
+                                      callee_path, callee_start, callee_end \
+                         ORDER BY caller_name LIKE 'closure@%' DESC, \
+                                  resolution_origin IN ('checker', 'scip') DESC, \
+                                  caller_name, kind, resolution_origin) AS site_rank, \
+                         CASE WHEN resolution_origin IN ('module_plane', 'checker', 'scip') \
+                              THEN '+' ELSE '~' END AS grade \
+                         FROM resolved_edge AS e WHERE callee_name IS ?1) \
+                         WHERE site_rank = 1";
 
 const USES_SQL: &str = "SELECT \"user_path\", \"user_name\", \"type_path\", \"type_name\", \
                         \"grade\", \"kind\", \"user_start\", NULL FROM \"uses\" \
