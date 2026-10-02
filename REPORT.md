@@ -1015,3 +1015,73 @@ Coordinator filter (crate `crates/sprefa-extract`, target `all`):
 ```sh
 cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports -- --exact
 ```
+
+## ryi TS cleave destination imports: D8 assertions, round 2 (2026-10-02)
+
+This section supersedes the preceding round's stop decision. The user's
+2026-10-02 round-2 decision authorizes D8 output in the 155a assertions:
+source quote style and grouped bindings where the fixture groups them.
+Plan row: `plans/2026-10-01-ryi-ts-utility.md:102` (D8).
+
+Before editing, read `7b_cleave_ts_imports.rs`: `add` includes default rows
+at lines 81-82; `lines` emits the default binding's name at lines 15-16 and
+renders its import at line 27. For the import-kind fixture's `fs` binding,
+this produces `import fs from 'node:fs';`. The destination has no existing
+imports, so line 76 selects source style. No product-code change is needed
+for that binding. This is static inspection; no runtime result is claimed.
+
+Compared the test and fixtures with `git show main:<path>` and read
+`git log main..HEAD -- <path>`. The test and fixture paths have no commits
+in that range. Main already has single quotes in import-kind/source.ts and
+`import { Code, code } from "./lib";` in overload/source.ts. The emitter's
+history identifies `6c16c9f6967e1c6448f34b48f3b650cdbedde24d` as the D8
+quote/grouping change.
+
+### t_155a_cleave_ts_oracle::destination_keeps_default_namespace_alias_and_type_imports
+
+Cause: D8 commit `6c16c9f6`,
+`crates/sprefa-extract/src/edit/7b_cleave_ts_imports.rs:76,96`, selects and
+renders source quote style; the assertion at
+`crates/sprefa-extract/tests/155a_cleave_ts_oracle.rs:180` expected double
+quotes. Default emission remains at emitter lines 15-16.
+Change: require single-quoted, semicolon-terminated default, namespace,
+and aliased type imports, matching the source fixture under D8.
+Coordinator filter, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::destination_keeps_default_namespace_alias_and_type_imports -- --exact
+```
+
+### t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports
+
+Cause: D8 commit `6c16c9f6`,
+`crates/sprefa-extract/src/edit/7b_cleave_ts_imports.rs:76,96`, uses the same
+source-style rendering; the assertion at
+`crates/sprefa-extract/tests/155a_cleave_ts_oracle.rs:88` expected double
+quotes for the same fixture.
+Change: require single-quoted, semicolon-terminated default, namespace,
+and aliased type imports under D8.
+Coordinator filter, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports -- --exact
+```
+
+### t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports
+
+Cause: D8 commit `6c16c9f6`,
+`crates/sprefa-extract/src/edit/7b_cleave_ts_imports.rs:18-23,96`, groups
+named bindings; the destination assertion at
+`crates/sprefa-extract/tests/155a_cleave_ts_oracle.rs:140` split the fixture's
+existing `Code, code` group into separate statements.
+Change: destination expectation retains `import { Code, code } from "./lib";`
+under D8. The source expectation still requires the separate `export { Code }`
+re-export and the retained `Code` import.
+Coordinator filter, target `all`, crate `crates/sprefa-extract`:
+
+```sh
+cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports -- --exact
+```
+
+Code complete only. No cargo, npm, node, dogfood, install, or build commands
+ran. Runtime verification is deferred to the coordinator, one gate at a time.
