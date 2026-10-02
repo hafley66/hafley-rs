@@ -37,18 +37,14 @@ fn write(path: &Path, text: &str) {
     std::fs::write(path, text).unwrap();
 }
 
-/// `n` workspace packages `@w/p<i>`, each built `src` -> `dist` by its tsconfig.
+/// `n` workspace packages `@w/p<i>`, each exporting `src` under the `source` condition.
 fn workspace(n: usize) -> PathBuf {
     let root = stage("workspace");
     for i in 0..n {
         let package = root.join(format!("packages/p{i}"));
         write(
             &package.join("package.json"),
-            &format!(r#"{{"name":"@w/p{i}","exports":{{".":{{"types":"./dist/index.d.ts"}},"./*":{{"types":"./dist/*.d.ts"}}}}}}"#),
-        );
-        write(
-            &package.join("tsconfig.json"),
-            "{\n  // JSONC, as tsc reads it\n  \"compilerOptions\": {\"rootDir\": \"src\", \"outDir\": \"dist\",},\n}\n",
+            &format!(r#"{{"name":"@w/p{i}","exports":{{".":{{"source":"./src/index.ts","types":"./dist/index.d.ts"}},"./*":{{"source":"./src/*.ts","types":"./dist/*.d.ts"}}}}}}"#),
         );
         write(&package.join("src/index.ts"), &format!("export const value{i} = {i};\n"));
         write(&package.join("src/leaf.ts"), "export const leaf = 1;\n");
@@ -70,7 +66,7 @@ fn package_discovery_and_workspace_resolve_grow_linearly_in_packages() {
         let last = rows.last().cloned().flatten().unwrap();
         assert_eq!(
             (last.0.strip_prefix(&root).unwrap().to_path_buf(), last.1),
-            (PathBuf::from(format!("packages/p{}/src/index.ts", n - 1)), "out_dir_map")
+            (PathBuf::from(format!("packages/p{}/src/index.ts", n - 1)), "workspace_package")
         );
         std::fs::remove_dir_all(&root).unwrap();
         (discovery, resolve)
@@ -78,20 +74,11 @@ fn package_discovery_and_workspace_resolve_grow_linearly_in_packages() {
     let ((small_discovery, small_resolve), (large_discovery, large_resolve)) = (run(10), run(1000));
     assert_growth_sized(&small_discovery, &large_discovery, "ts.packages.directory", 10, 1000, Growth::Linear);
     assert_growth_sized(&small_resolve, &large_resolve, "ts.resolve.specifier", 10, 1000, Growth::Linear);
-    assert_growth_sized(&small_resolve, &large_resolve, "ts.packages.layout", 10, 1000, Growth::Linear);
 }
 
 #[test]
-fn one_package_reads_its_layout_once_and_one_directory_resolves_a_specifier_once() {
+fn one_directory_resolves_a_specifier_once() {
     let root = workspace(1);
-    let resolver = TsResolver::new(&root).unwrap();
-    let from = root.join("packages/p0/src/index.ts");
-    let layouts = |n: usize| {
-        let resolver = TsResolver::new(&root).unwrap();
-        counted(|| (0..n).for_each(|_| assert!(resolver.resolve(&from, "@w/p0/leaf").is_some()))).1
-    };
-    assert_growth_sized(&layouts(10), &layouts(1000), "ts.packages.layout", 10, 1000, Growth::Constant);
-    drop(resolver);
     let index = |n: usize| {
         let files: Vec<(String, _)> = (0..n)
             .map(|i| {

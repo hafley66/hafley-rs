@@ -22,5 +22,5 @@ for (const {path, module} of pairs) {
   }
 }
 if (!pairs.length || missing) throw new Error(`D2: ${missing}/${pairs.length} unresolved pairs`);
-console.log(`D2: ${pairs.length}/${pairs.length} pairs resolved in fast and SQLite; source fallback rungs covered by workspace_exports_resolve_to_sources_in_rung_order`);
+console.log(`D2: ${pairs.length}/${pairs.length} pairs resolved in fast and SQLite; source condition covered by workspace_exports_resolve_to_sources_through_the_source_condition`);
 JS
