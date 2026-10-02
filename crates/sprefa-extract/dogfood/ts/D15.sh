@@ -9,7 +9,7 @@ for root in packages/md packages; do
     args=(graph --slow)
     case "$query" in
       from) args+=(--from markdownTableModel) ;;
-      call-path) args+=(--call-path markdownTableModel textOf) ;;
+      call-path) args+=(--call-path markdownTableModel) ;;
       callers) args+=(--callers render) ;;
     esac
     if RUST_LOG=off "$binary" "${args[@]}" "$root" >"$STATE/D15.out" 2>"$STATE/D15.err"; then

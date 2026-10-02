@@ -65,7 +65,7 @@ fn a_zero_second_timeout_is_refused() {
 fn slow_typescript_requires_the_checker_feature_before_index_discovery() {
     for query in [
         vec!["--from", "chainC"],
-        vec!["--call-path", "chainC", "chainD"],
+        vec!["--call-path", "chainC"],
         vec!["--callers", "chainD"],
         vec!["--uses", "Widget"],
     ] {
