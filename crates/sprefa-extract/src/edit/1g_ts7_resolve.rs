@@ -1,13 +1,13 @@
 //! Compiler destinations joined to the existing extraction spans and fact rows.
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
 use super::ts7_cleave_facts::with_session;
 use super::ts7_lsp_session::file_uri;
-use super::ts7_symbol_seed::byte_at_lsp_position;
+use super::ts7_symbol_seed::{byte_at_lsp_position, qualified_declaration};
 use crate::{FamilyTag, FlatFact, ProjectError, RawProjectFact, ResolveRequest, ResolveWithRawError};
 
 #[derive(Default)]
@@ -15,6 +15,7 @@ struct File {
     text: String,
     definitions: Vec<(u32, u32, Option<String>, bool)>,
     sites: Vec<(u32, u32, String)>,
+    attributes: Vec<(u32, u32)>,
 }
 
 #[derive(Default)]
@@ -56,6 +57,19 @@ impl References {
             ..File::default()
         });
         match &raw.fact {
+            FlatFact::Node { family: FamilyTag::Cst, span, kind, .. }
+                if kind == "jsx_attribute" =>
+            {
+                // The CST span already marks this attribute. Its first token
+                // is the name; the expression/string value stays outside it.
+                if let Some(attribute) = file.text.get(span.start as usize..span.end as usize) {
+                    let name = attribute.split(|ch: char| ch.is_whitespace() || ch == '=')
+                        .next().unwrap_or("");
+                    if !name.is_empty() {
+                        file.attributes.push((span.start, span.start + name.len() as u32));
+                    }
+                }
+            }
             FlatFact::Node { family, span, name, .. }
                 if matches!(family, FamilyTag::Call | FamilyTag::Type) =>
             {
@@ -77,6 +91,8 @@ impl References {
             (canonical(&crate::io_path(Path::new(path))), path.as_str())
         }).collect();
         with_session(&root, |session| {
+            let mut declarations = BTreeSet::new();
+            let mut qualified_names = BTreeMap::new();
             for (absolute, supplied) in &supplied {
                 let file = &self.files[*supplied];
                 session.sync_document(&file_uri(absolute)?, supplied, &file.text)?;
@@ -153,6 +169,57 @@ impl References {
                             });
                         }
                         break;
+                    }
+                }
+                for (start, end) in &file.attributes {
+                    let reply = session.lsp.request("textDocument/definition", &json!({
+                        "textDocument": {"uri": uri.as_str()},
+                        "position": position(&file.text, *start as usize)?,
+                    }))?;
+                    if let Some(error) = reply.error {
+                        return Err(format!("JSX attribute {source}:{start}: {}", error.message));
+                    }
+                    for location in locations(reply.result.unwrap_or(Value::Null)) {
+                        let target_uri = location["uri"].as_str().or_else(|| location["targetUri"].as_str());
+                        let Some(absolute) = target_uri.and_then(|uri| url::Url::parse(uri).ok())
+                            .and_then(|uri| uri.to_file_path().ok()) else { continue };
+                        let absolute = canonical(&absolute);
+                        let Some(target) = supplied.get(&absolute) else { continue };
+                        let target_file = &self.files[*target];
+                        let range = if location.get("range").is_some() {
+                            &location["range"]
+                        } else {
+                            &location["targetSelectionRange"]
+                        };
+                        let lo = serde_json::from_value(range["start"].clone())
+                            .map_err(|error| format!("JSX declaration start: {error}"))?;
+                        let hi = serde_json::from_value(range["end"].clone())
+                            .map_err(|error| format!("JSX declaration end: {error}"))?;
+                        let lo = byte_at_lsp_position(&target_file.text, lo)? as u32;
+                        let hi = byte_at_lsp_position(&target_file.text, hi)? as u32;
+                        let key = ((*target).to_string(), lo, hi);
+                        if !qualified_names.contains_key(&key) {
+                            let name = qualified_declaration(
+                                &mut session.lsp, &file_uri(&absolute)?, &target_file.text, lo,
+                            )?;
+                            qualified_names.insert(key.clone(), name);
+                        }
+                        let Some(name) = &qualified_names[&key] else { continue };
+                        let symbol = format!("tsgo {target}#{name}@{lo}:{hi}");
+                        if declarations.insert(key) {
+                            facts.push(FlatFact::SymbolRow {
+                                symbol: symbol.clone(), path: (*target).to_string(), kind: "property".to_string(),
+                            });
+                            facts.push(FlatFact::OccurrenceRow {
+                                symbol: symbol.clone(), path: (*target).to_string(),
+                                start: lo, end: hi, role: "def".to_string(), exported: false,
+                                decl_start: lo, decl_end: hi,
+                            });
+                        }
+                        facts.push(FlatFact::OccurrenceRow {
+                            symbol, path: source.clone(), start: *start, end: *end,
+                            role: "ref".to_string(), exported: false, decl_start: *start, decl_end: *end,
+                        });
                     }
                 }
             }
