@@ -168,6 +168,8 @@ pub mod ts_checker;
 #[cfg(feature = "typescript")]
 pub mod ts_lib;
 #[cfg(feature = "typescript")]
+mod ts_packages;
+#[cfg(feature = "typescript")]
 pub mod ts_paths;
 #[cfg(feature = "typescript")]
 pub mod ts_receivers;
