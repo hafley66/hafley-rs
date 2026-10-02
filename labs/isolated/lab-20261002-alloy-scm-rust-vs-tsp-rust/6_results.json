@@ -1,41 +1,41 @@
 {
   "primary": {
     "assertions": 137,
-    "PASS": 30,
-    "DIFF": 5,
-    "GAP": 102
+    "PASS": 41,
+    "DIFF": 0,
+    "GAP": 96
   },
   "all": {
     "assertions": 239,
-    "PASS": 97,
-    "DIFF": 20,
-    "GAP": 122
+    "PASS": 111,
+    "DIFF": 15,
+    "GAP": 113
   },
   "whitespace": {
     "primary": {
       "assertions": 137,
-      "PASS": 30,
-      "DIFF": 5,
-      "GAP": 102
+      "PASS": 41,
+      "DIFF": 0,
+      "GAP": 96
     },
     "all": {
       "assertions": 239,
-      "PASS": 108,
-      "DIFF": 9,
-      "GAP": 122
+      "PASS": 122,
+      "DIFF": 4,
+      "GAP": 113
     }
   },
   "syntax": {
-    "outputs": 114,
-    "parseClean": 114,
+    "outputs": 120,
+    "parseClean": 120,
     "parseFailed": 0,
-    "rustfmtClean": 63,
-    "rustfmtFailed": 51
+    "rustfmtClean": 66,
+    "rustfmtFailed": 54
   },
   "fileSyntax": {
-    "outputs": 14,
-    "parseClean": 14,
-    "rustfmtClean": 5
+    "outputs": 28,
+    "parseClean": 28,
+    "rustfmtClean": 9
   },
   "perFile": [
     {
@@ -167,13 +167,13 @@
     {
       "file": "components/2_references/0_Reference.test.tsx",
       "assertions": 4,
-      "PASS": 1,
-      "DIFF": 3,
+      "PASS": 4,
+      "DIFF": 0,
       "GAP": 0,
       "primary": {
         "assertions": 4,
-        "PASS": 1,
-        "DIFF": 3,
+        "PASS": 4,
+        "DIFF": 0,
         "GAP": 0
       },
       "topGap": "none"
@@ -181,13 +181,13 @@
     {
       "file": "components/3_files/0_SourceFile.test.tsx",
       "assertions": 5,
-      "PASS": 4,
-      "DIFF": 1,
+      "PASS": 5,
+      "DIFF": 0,
       "GAP": 0,
       "primary": {
         "assertions": 4,
-        "PASS": 3,
-        "DIFF": 1,
+        "PASS": 4,
+        "DIFF": 0,
         "GAP": 0
       },
       "topGap": "none"
@@ -195,16 +195,16 @@
     {
       "file": "components/3_files/2_ModDirectory.test.tsx",
       "assertions": 10,
-      "PASS": 0,
-      "DIFF": 1,
-      "GAP": 9,
+      "PASS": 10,
+      "DIFF": 0,
+      "GAP": 0,
       "primary": {
         "assertions": 7,
-        "PASS": 0,
-        "DIFF": 1,
-        "GAP": 6
+        "PASS": 7,
+        "DIFF": 0,
+        "GAP": 0
       },
-      "topGap": "refkey/import resolution"
+      "topGap": "none"
     },
     {
       "file": "components/4_codegen/1_CodegenPair.test.tsx",
@@ -4612,20 +4612,18 @@
       "testTitle": "\"cross-file ref emits use statement\"",
       "testInput": "{\n    const fooKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <SourceFile path=\"models.rs\">\n            <StructDeclaration name=\"Foo\" refkey={fooKey} pub braced />\n          </SourceFile>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"make_foo\" pub returns={fooKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod models;\n\n      use crate::models::Foo;\n\n      pub fn make_foo() -> Foo {\n        todo!()\n      }\"\n    `);\n  }",
       "sourceHash": "37ed2b450bd61479691a934e1a1f866061dccd987088c4f1cf403ac96af97744",
-      "status": "DIFF",
-      "reason": "refkey/import resolution",
+      "status": "PASS",
       "expected": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}",
-      "actual": "pub fn make_foo() -> Foo {\n  todo!()\n}",
-      "detail": "expected 'pub fn make_foo() -> Foo {\\n  todo!()…' to be 'pub mod models;\\n\\nuse crate::models:…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "pub fn make_foo() -> Foo {\n  todo!()\n}\n",
+        "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/110c8e7bd37f33a8-B.rs:1:\n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/110c8e7bd37f33a8-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n",
@@ -4649,20 +4647,18 @@
       "testTitle": "\"duplicate refs produce single use statement\"",
       "testInput": "{\n    const fooKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <SourceFile path=\"models.rs\">\n            <StructDeclaration name=\"Foo\" refkey={fooKey} pub braced />\n          </SourceFile>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"make_foo\" pub returns={fooKey}>\n              todo!()\n            </FunctionDeclaration>\n            <hbr />\n            <hbr />\n            <FunctionDeclaration name=\"another\" pub returns={fooKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod models;\n\n      use crate::models::Foo;\n\n      pub fn make_foo() -> Foo {\n        todo!()\n      }\n\n      pub fn another() -> Foo {\n        todo!()\n      }\"\n    `);\n  }",
       "sourceHash": "37ed2b450bd61479691a934e1a1f866061dccd987088c4f1cf403ac96af97744",
-      "status": "DIFF",
-      "reason": "refkey/import resolution",
+      "status": "PASS",
       "expected": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}",
-      "actual": "pub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}",
-      "detail": "expected 'pub fn make_foo() -> Foo {\\n  todo!()…' to be 'pub mod models;\\n\\nuse crate::models:…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "pub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
+        "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:1:\n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:6:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:10:\n-  todo!()\n+    todo!()\n }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
@@ -4686,20 +4682,18 @@
       "testTitle": "\"multiple cross-file refs produce sorted use statements\"",
       "testInput": "{\n    const fooKey = refkey();\n    const barKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <SourceFile path=\"models.rs\">\n            <StructDeclaration name=\"Foo\" refkey={fooKey} pub braced />\n          </SourceFile>\n          <SourceFile path=\"errors.rs\">\n            <EnumDeclaration name=\"AppError\" refkey={barKey} pub>\n              <List hardline>\n                <UnitVariant name=\"NotFound\" />\n              </List>\n            </EnumDeclaration>\n          </SourceFile>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_foo\" pub returns={fooKey}>\n              todo!()\n            </FunctionDeclaration>\n            <hbr />\n            <hbr />\n            <FunctionDeclaration name=\"fail\" pub returns={barKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod errors;\n      pub mod models;\n\n      use crate::errors::AppError;\n      use crate::models::Foo;\n\n      pub fn get_foo() -> Foo {\n        todo!()\n      }\n\n      pub fn fail() -> AppError {\n        todo!()\n      }\"\n    `);\n  }",
       "sourceHash": "37ed2b450bd61479691a934e1a1f866061dccd987088c4f1cf403ac96af97744",
-      "status": "DIFF",
-      "reason": "refkey/import resolution",
+      "status": "PASS",
       "expected": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}",
-      "actual": "pub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}",
-      "detail": "expected 'pub fn get_foo() -> Foo {\\n  todo!()\\…' to be 'pub mod errors;\\npub mod models;\\n\\nu…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "pub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
+        "context": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:1:\n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:6:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:12:\n-  todo!()\n+    todo!()\n }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
@@ -4849,20 +4843,18 @@
       "testTitle": "\"renders two source files in the same crate\"",
       "testInput": "{\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <SourceFile path=\"models.rs\">\n            <StructDeclaration name=\"User\" pub braced />\n          </SourceFile>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"main\">\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const models = findFile(res, \"models.rs\");\n    expect(models.contents.trim()).toMatchInlineSnapshot(`\"pub struct User {}\"`);\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod models;\n\n      fn main() {\n        todo!()\n      }\"\n    `);\n  }",
       "sourceHash": "e76f610b4b6873a276c1d860219d32412850f43d8ad4bcfd856a54079a974249",
-      "status": "DIFF",
-      "reason": "refkey/import resolution",
+      "status": "PASS",
       "expected": "pub mod models;\n\nfn main() {\n  todo!()\n}",
-      "actual": "fn main() {\n  todo!()\n}",
-      "detail": "expected 'fn main() {\\n  todo!()\\n}' to be 'pub mod models;\\n\\nfn main() {\\n  tod…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "pub mod models;\n\nfn main() {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "fn main() {\n  todo!()\n}\n",
+        "context": "pub mod models;\n\nfn main() {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c54a875baa649c3c-B.rs:1:\n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c54a875baa649c3c-B.rs:1:\n pub mod models;\n \n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nfn main() {\n  todo!()\n}\n",
@@ -4886,11 +4878,13 @@
       "testTitle": "\"generates mod.rs with child module declarations\"",
       "testInput": "{\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"models\">\n            <SourceFile path=\"user.rs\">\n              <StructDeclaration name=\"User\" pub braced />\n            </SourceFile>\n            <SourceFile path=\"order.rs\">\n              <StructDeclaration name=\"Order\" pub braced />\n            </SourceFile>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\" />\n        </CrateDirectory>\n      </Output>\n    );\n\n    const modRs = findFile(res, \"models/mod.rs\");\n    expect(modRs).not.toBeNull();\n    expect(modRs.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod order;\n      pub mod user;\"\n    `);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "status": "PASS",
+      "expected": null,
+      "actual": true,
       "byteEqual": null,
-      "whitespaceEqual": null
+      "whitespaceEqual": null,
+      "syntax": null,
+      "oracleSyntax": null
     },
     {
       "id": "e9a3f730030af960",
@@ -4905,11 +4899,27 @@
       "testTitle": "\"generates mod.rs with child module declarations\"",
       "testInput": "{\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"models\">\n            <SourceFile path=\"user.rs\">\n              <StructDeclaration name=\"User\" pub braced />\n            </SourceFile>\n            <SourceFile path=\"order.rs\">\n              <StructDeclaration name=\"Order\" pub braced />\n            </SourceFile>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\" />\n        </CrateDirectory>\n      </Output>\n    );\n\n    const modRs = findFile(res, \"models/mod.rs\");\n    expect(modRs).not.toBeNull();\n    expect(modRs.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod order;\n      pub mod user;\"\n    `);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
-      "byteEqual": null,
-      "whitespaceEqual": null
+      "status": "PASS",
+      "expected": "pub mod order;\npub mod user;",
+      "actual": "pub mod order;\npub mod user;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
+      "syntax": {
+        "context": "pub mod order;\npub mod user;\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      },
+      "oracleSyntax": {
+        "context": "pub mod order;\npub mod user;\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
     },
     {
       "id": "40e06abe8f3645b1",
@@ -4924,11 +4934,27 @@
       "testTitle": "\"lib.rs declares top-level modules\"",
       "testInput": "{\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"models\">\n            <SourceFile path=\"user.rs\">\n              <StructDeclaration name=\"User\" pub braced />\n            </SourceFile>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"run\" pub>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod models;\n\n      pub fn run() {\n        todo!()\n      }\"\n    `);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
-      "byteEqual": null,
-      "whitespaceEqual": null
+      "status": "PASS",
+      "expected": "pub mod models;\n\npub fn run() {\n  todo!()\n}",
+      "actual": "pub mod models;\n\npub fn run() {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
+      "syntax": {
+        "context": "pub mod models;\n\npub fn run() {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/40e06abe8f3645b1-B.rs:1:\n pub mod models;\n \n pub fn run() {\n-  todo!()\n+    todo!()\n }\n \n"
+      },
+      "oracleSyntax": {
+        "context": "pub mod models;\n\npub fn run() {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/40e06abe8f3645b1-A.rs:1:\n pub mod models;\n \n pub fn run() {\n-  todo!()\n+    todo!()\n }\n \n"
+      }
     },
     {
       "id": "679aabc06da58d41",
@@ -4943,11 +4969,27 @@
       "testTitle": "\"cross-file ref through nested module generates correct use path\"",
       "testInput": "{\n    const userKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"models\">\n            <SourceFile path=\"user.rs\">\n              <StructDeclaration name=\"User\" refkey={userKey} pub braced />\n            </SourceFile>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_user\" pub returns={userKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod models;\n\n      use crate::models::user::User;\n\n      pub fn get_user() -> User {\n        todo!()\n      }\"\n    `);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
-      "byteEqual": null,
-      "whitespaceEqual": null
+      "status": "PASS",
+      "expected": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}",
+      "actual": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
+      "syntax": {
+        "context": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/679aabc06da58d41-B.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n-  todo!()\n+    todo!()\n }\n \n"
+      },
+      "oracleSyntax": {
+        "context": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/679aabc06da58d41-A.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n-  todo!()\n+    todo!()\n }\n \n"
+      }
     },
     {
       "id": "7196197f6ae131e2",
@@ -4962,11 +5004,27 @@
       "testTitle": "\"nested mod directories produce deep use paths\"",
       "testInput": "{\n    const thingKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"a\">\n            <ModDirectory name=\"b\">\n              <SourceFile path=\"thing.rs\">\n                <StructDeclaration name=\"Thing\" refkey={thingKey} pub braced />\n              </SourceFile>\n            </ModDirectory>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_thing\" pub returns={thingKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod a;\n\n      use crate::a::b::thing::Thing;\n\n      pub fn get_thing() -> Thing {\n        todo!()\n      }\"\n    `);\n\n    const aMod = findFile(res, \"a/mod.rs\");\n    expect(aMod).not.toBeNull();\n    expect(aMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod b;\"`);\n\n    const bMod = findFile(res, \"a/b/mod.rs\");\n    expect(bMod).not.toBeNull();\n    expect(bMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod thing;\"`);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
-      "byteEqual": null,
-      "whitespaceEqual": null
+      "status": "PASS",
+      "expected": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}",
+      "actual": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
+      "syntax": {
+        "context": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/7196197f6ae131e2-B.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n-  todo!()\n+    todo!()\n }\n \n"
+      },
+      "oracleSyntax": {
+        "context": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/7196197f6ae131e2-A.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n-  todo!()\n+    todo!()\n }\n \n"
+      }
     },
     {
       "id": "ec47ade7ed27b46b",
@@ -4981,11 +5039,13 @@
       "testTitle": "\"nested mod directories produce deep use paths\"",
       "testInput": "{\n    const thingKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"a\">\n            <ModDirectory name=\"b\">\n              <SourceFile path=\"thing.rs\">\n                <StructDeclaration name=\"Thing\" refkey={thingKey} pub braced />\n              </SourceFile>\n            </ModDirectory>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_thing\" pub returns={thingKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod a;\n\n      use crate::a::b::thing::Thing;\n\n      pub fn get_thing() -> Thing {\n        todo!()\n      }\"\n    `);\n\n    const aMod = findFile(res, \"a/mod.rs\");\n    expect(aMod).not.toBeNull();\n    expect(aMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod b;\"`);\n\n    const bMod = findFile(res, \"a/b/mod.rs\");\n    expect(bMod).not.toBeNull();\n    expect(bMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod thing;\"`);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "status": "PASS",
+      "expected": null,
+      "actual": true,
       "byteEqual": null,
-      "whitespaceEqual": null
+      "whitespaceEqual": null,
+      "syntax": null,
+      "oracleSyntax": null
     },
     {
       "id": "eb5427deb7d1ff63",
@@ -5000,11 +5060,27 @@
       "testTitle": "\"nested mod directories produce deep use paths\"",
       "testInput": "{\n    const thingKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"a\">\n            <ModDirectory name=\"b\">\n              <SourceFile path=\"thing.rs\">\n                <StructDeclaration name=\"Thing\" refkey={thingKey} pub braced />\n              </SourceFile>\n            </ModDirectory>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_thing\" pub returns={thingKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod a;\n\n      use crate::a::b::thing::Thing;\n\n      pub fn get_thing() -> Thing {\n        todo!()\n      }\"\n    `);\n\n    const aMod = findFile(res, \"a/mod.rs\");\n    expect(aMod).not.toBeNull();\n    expect(aMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod b;\"`);\n\n    const bMod = findFile(res, \"a/b/mod.rs\");\n    expect(bMod).not.toBeNull();\n    expect(bMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod thing;\"`);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
-      "byteEqual": null,
-      "whitespaceEqual": null
+      "status": "PASS",
+      "expected": "pub mod b;",
+      "actual": "pub mod b;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
+      "syntax": {
+        "context": "pub mod b;\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      },
+      "oracleSyntax": {
+        "context": "pub mod b;\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
     },
     {
       "id": "c455311b9cbfbb49",
@@ -5019,11 +5095,13 @@
       "testTitle": "\"nested mod directories produce deep use paths\"",
       "testInput": "{\n    const thingKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"a\">\n            <ModDirectory name=\"b\">\n              <SourceFile path=\"thing.rs\">\n                <StructDeclaration name=\"Thing\" refkey={thingKey} pub braced />\n              </SourceFile>\n            </ModDirectory>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_thing\" pub returns={thingKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod a;\n\n      use crate::a::b::thing::Thing;\n\n      pub fn get_thing() -> Thing {\n        todo!()\n      }\"\n    `);\n\n    const aMod = findFile(res, \"a/mod.rs\");\n    expect(aMod).not.toBeNull();\n    expect(aMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod b;\"`);\n\n    const bMod = findFile(res, \"a/b/mod.rs\");\n    expect(bMod).not.toBeNull();\n    expect(bMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod thing;\"`);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "status": "PASS",
+      "expected": null,
+      "actual": true,
       "byteEqual": null,
-      "whitespaceEqual": null
+      "whitespaceEqual": null,
+      "syntax": null,
+      "oracleSyntax": null
     },
     {
       "id": "34b3ca405bad50fa",
@@ -5038,11 +5116,27 @@
       "testTitle": "\"nested mod directories produce deep use paths\"",
       "testInput": "{\n    const thingKey = refkey();\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <ModDirectory name=\"a\">\n            <ModDirectory name=\"b\">\n              <SourceFile path=\"thing.rs\">\n                <StructDeclaration name=\"Thing\" refkey={thingKey} pub braced />\n              </SourceFile>\n            </ModDirectory>\n          </ModDirectory>\n          <SourceFile path=\"lib.rs\">\n            <FunctionDeclaration name=\"get_thing\" pub returns={thingKey}>\n              todo!()\n            </FunctionDeclaration>\n          </SourceFile>\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\n      \"pub mod a;\n\n      use crate::a::b::thing::Thing;\n\n      pub fn get_thing() -> Thing {\n        todo!()\n      }\"\n    `);\n\n    const aMod = findFile(res, \"a/mod.rs\");\n    expect(aMod).not.toBeNull();\n    expect(aMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod b;\"`);\n\n    const bMod = findFile(res, \"a/b/mod.rs\");\n    expect(bMod).not.toBeNull();\n    expect(bMod.contents.trim()).toMatchInlineSnapshot(`\"pub mod thing;\"`);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "GAP",
-      "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy",
-      "byteEqual": null,
-      "whitespaceEqual": null
+      "status": "PASS",
+      "expected": "pub mod thing;",
+      "actual": "pub mod thing;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
+      "syntax": {
+        "context": "pub mod thing;\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      },
+      "oracleSyntax": {
+        "context": "pub mod thing;\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
     },
     {
       "id": "e11da2044d586e68",
@@ -5057,15 +5151,13 @@
       "testTitle": "\"flat sibling files register as modules in lib.rs\"",
       "testInput": "{\n    const res = render(\n      <Output>\n        <CrateDirectory>\n          <SourceFile path=\"utils.rs\">\n            <FunctionDeclaration name=\"helper\" pub>\n              42\n            </FunctionDeclaration>\n          </SourceFile>\n          <SourceFile path=\"lib.rs\" />\n        </CrateDirectory>\n      </Output>\n    );\n\n    const lib = findFile(res, \"lib.rs\");\n    expect(lib.contents.trim()).toMatchInlineSnapshot(`\"pub mod utils;\"`);\n  }",
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
-      "status": "DIFF",
-      "reason": "refkey/import resolution",
+      "status": "PASS",
       "expected": "pub mod utils;",
-      "actual": "",
-      "detail": "expected '' to be 'pub mod utils;' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "pub mod utils;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "\n",
+        "context": "pub mod utils;\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
@@ -6849,16 +6941,16 @@
     {
       "testId": "110c8e7bd37f33a8",
       "path": "lib.rs",
-      "text": "pub fn make_foo() -> Foo {\n  todo!()\n}\n",
+      "text": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n",
       "referenceFile": "components/2_references/0_Reference.test.tsx",
       "referenceLine": 66,
       "syntax": {
-        "context": "pub fn make_foo() -> Foo {\n  todo!()\n}\n",
+        "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-1-B.rs:1:\n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-1-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
       }
     },
     {
@@ -6909,16 +7001,61 @@
     {
       "testId": "391cec6700bc605f",
       "path": "lib.rs",
-      "text": "pub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
+      "text": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
       "referenceFile": "components/2_references/0_Reference.test.tsx",
       "referenceLine": 146,
       "syntax": {
-        "context": "pub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
+        "context": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:1:\n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:6:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:12:\n-  todo!()\n+    todo!()\n }\n \n"
+      }
+    },
+    {
+      "testId": "40e06abe8f3645b1",
+      "path": "models/mod.rs",
+      "text": "pub mod user;\n\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 66,
+      "syntax": {
+        "context": "pub mod user;\n\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-6-B.rs:1:\n pub mod user;\n-\n \n"
+      }
+    },
+    {
+      "testId": "40e06abe8f3645b1",
+      "path": "models/user.rs",
+      "text": "pub struct User {}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 66,
+      "syntax": {
+        "context": "pub struct User {}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
+    },
+    {
+      "testId": "40e06abe8f3645b1",
+      "path": "lib.rs",
+      "text": "pub mod models;\n\npub fn run() {\n  todo!()\n}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 66,
+      "syntax": {
+        "context": "pub mod models;\n\npub fn run() {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-8-B.rs:1:\n pub mod models;\n \n pub fn run() {\n-  todo!()\n+    todo!()\n }\n \n"
       }
     },
     {
@@ -6933,7 +7070,172 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-6-B.rs:1:\n #[derive(Debug)]\n pub struct Point {\n-  pub x: f64,\n-  pub y: f64,\n+    pub x: f64,\n+    pub y: f64,\n }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-6-B.rs:8:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-9-B.rs:1:\n #[derive(Debug)]\n pub struct Point {\n-  pub x: f64,\n-  pub y: f64,\n+    pub x: f64,\n+    pub y: f64,\n }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-9-B.rs:8:\n-  todo!()\n+    todo!()\n }\n \n"
+      }
+    },
+    {
+      "testId": "679aabc06da58d41",
+      "path": "models/mod.rs",
+      "text": "pub mod user;\n\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 95,
+      "syntax": {
+        "context": "pub mod user;\n\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-10-B.rs:1:\n pub mod user;\n-\n \n"
+      }
+    },
+    {
+      "testId": "679aabc06da58d41",
+      "path": "models/user.rs",
+      "text": "pub struct User {}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 95,
+      "syntax": {
+        "context": "pub struct User {}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
+    },
+    {
+      "testId": "679aabc06da58d41",
+      "path": "lib.rs",
+      "text": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 95,
+      "syntax": {
+        "context": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-12-B.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n-  todo!()\n+    todo!()\n }\n \n"
+      }
+    },
+    {
+      "testId": "7196197f6ae131e2",
+      "path": "a/mod.rs",
+      "text": "pub mod b;\n\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 128,
+      "syntax": {
+        "context": "pub mod b;\n\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-13-B.rs:1:\n pub mod b;\n-\n \n"
+      }
+    },
+    {
+      "testId": "7196197f6ae131e2",
+      "path": "a/b/mod.rs",
+      "text": "pub mod thing;\n\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 128,
+      "syntax": {
+        "context": "pub mod thing;\n\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-14-B.rs:1:\n pub mod thing;\n-\n \n"
+      }
+    },
+    {
+      "testId": "7196197f6ae131e2",
+      "path": "a/b/thing.rs",
+      "text": "pub struct Thing {}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 128,
+      "syntax": {
+        "context": "pub struct Thing {}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
+    },
+    {
+      "testId": "7196197f6ae131e2",
+      "path": "lib.rs",
+      "text": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 128,
+      "syntax": {
+        "context": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-16-B.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n-  todo!()\n+    todo!()\n }\n \n"
+      }
+    },
+    {
+      "testId": "c44ac5aa2e22f495",
+      "path": "models/mod.rs",
+      "text": "pub mod order;\npub mod user;\n\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 40,
+      "syntax": {
+        "context": "pub mod order;\npub mod user;\n\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-17-B.rs:1:\n pub mod order;\n pub mod user;\n-\n \n"
+      }
+    },
+    {
+      "testId": "c44ac5aa2e22f495",
+      "path": "models/user.rs",
+      "text": "pub struct User {}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 40,
+      "syntax": {
+        "context": "pub struct User {}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
+    },
+    {
+      "testId": "c44ac5aa2e22f495",
+      "path": "models/order.rs",
+      "text": "pub struct Order {}\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 40,
+      "syntax": {
+        "context": "pub struct Order {}\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
+      }
+    },
+    {
+      "testId": "c44ac5aa2e22f495",
+      "path": "lib.rs",
+      "text": "pub mod models;\n\n",
+      "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
+      "referenceLine": 40,
+      "syntax": {
+        "context": "pub mod models;\n\n",
+        "ERROR": 0,
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-20-B.rs:1:\n pub mod models;\n-\n \n"
       }
     },
     {
@@ -6948,7 +7250,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-7-B.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-21-B.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
       }
     },
     {
@@ -6963,22 +7265,22 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-8-B.rs:1:\n pub fn helper() {\n-  42\n+    42\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-22-B.rs:1:\n pub fn helper() {\n-  42\n+    42\n }\n \n"
       }
     },
     {
       "testId": "e11da2044d586e68",
       "path": "lib.rs",
-      "text": "\n",
+      "text": "pub mod utils;\n\n",
       "referenceFile": "components/3_files/2_ModDirectory.test.tsx",
       "referenceLine": 162,
       "syntax": {
-        "context": "\n",
+        "context": "pub mod utils;\n\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-23-B.rs:1:\n pub mod utils;\n-\n \n"
       }
     },
     {
@@ -6999,16 +7301,16 @@
     {
       "testId": "e340fe9415eb8c3f",
       "path": "lib.rs",
-      "text": "fn main() {\n  todo!()\n}\n",
+      "text": "pub mod models;\n\nfn main() {\n  todo!()\n}\n",
       "referenceFile": "components/3_files/0_SourceFile.test.tsx",
       "referenceLine": 97,
       "syntax": {
-        "context": "fn main() {\n  todo!()\n}\n",
+        "context": "pub mod models;\n\nfn main() {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-11-B.rs:1:\n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-25-B.rs:1:\n pub mod models;\n \n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
       }
     },
     {
@@ -7029,16 +7331,16 @@
     {
       "testId": "e36c4527727d41a2",
       "path": "lib.rs",
-      "text": "pub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
+      "text": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
       "referenceFile": "components/2_references/0_Reference.test.tsx",
       "referenceLine": 100,
       "syntax": {
-        "context": "pub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
+        "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-13-B.rs:1:\n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-13-B.rs:6:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-27-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-27-B.rs:10:\n-  todo!()\n+    todo!()\n }\n \n"
       }
     }
   ]

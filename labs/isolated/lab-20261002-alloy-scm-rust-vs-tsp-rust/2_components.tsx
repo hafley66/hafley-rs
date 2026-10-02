@@ -1,12 +1,10 @@
 // Twin-only intent adapters. Generated nodes print item/type syntax; opaque caller text and
 // field/variant trailing commas are supplied here and included in the hand-written line count.
 // Attributes are siblings of items in the grammar. High-level emitter APIs remain GAPs.
-import { type Children, createScope, NamePolicyContext, Output, printTree, renderTree, Scope } from "@alloy-js/core";
+import { type Children, Output, printTree, renderTree } from "@alloy-js/core";
 import * as G from "./gen/rust/0_nodes.js";
-import { createRustNamePolicy } from "./rust/0_name-policy.js";
-import { RustScope } from "./rust/1_scope.js";
 import { Gap } from "./1_gap.js";
-export { SourceFile } from "./rust/3_SourceFile.js";
+export { SourceFile, CrateDirectory, ModDirectory } from "./rust/3_SourceFile.js";
 export { RustScope as RustLexicalScope } from "./rust/1_scope.js";
 export { createRustNamePolicy, type RustElements } from "./rust/0_name-policy.js";
 type Props = Record<string, any>;
@@ -30,10 +28,6 @@ function attrs(p: Props): Children {
   }
   return xs.map((x: string) => <><G.AttributeItem><G.Attribute>{x}</G.Attribute></G.AttributeItem><hbr /></>);
 }
-export function CrateDirectory(p: Props) {
-  return <NamePolicyContext.Provider value={createRustNamePolicy()}><Scope value={createScope(RustScope, "crate", undefined)}>{p.children}</Scope></NamePolicyContext.Provider>;
-}
-export function ModDirectory(_p: Props): Children { throw new Gap("refkey/import resolution", "No module registration or nested directory synthesis in the grammar policy"); }
 export function StructDeclaration(p: Props) {
   return <>{attrs(p)}<G.StructItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} where_clause={whereClause(p)} body={p.braced || p.children ? <G.FieldDeclarationList>{p.children}</G.FieldDeclarationList> : undefined}>{visibility(p)}</G.StructItem></>;
 }

@@ -2,7 +2,7 @@ import { isComponentCreator, createScope, createSymbol, Declaration, Name, type 
 import { isLit, makeNode, type Policy } from "../core/0_print.js";
 import { useRustNamePolicy } from "./0_name-policy.js";
 import { OrderedFieldDeclarationList } from "../gen/rust/0_nodes.js";
-import { RustScope, RustSymbol, SPACE_OF } from "./1_scope.js";
+import { RustScope, RustSymbol, sourceFileOf, SPACE_OF } from "./1_scope.js";
 export { Leaf } from "../core/0_print.js";
 const TIGHT = new Set(["attribute_item", "token_tree", "type_arguments", "type_parameters", "lifetime", "generic_type", "scoped_type_identifier", "scoped_identifier"]);
 export const RUST_POLICY: Policy = {
@@ -31,6 +31,7 @@ export const RUST_POLICY: Policy = {
     const symbol = createSymbol(RustSymbol, name, scope.spaceFor(SPACE_OF[kind] ?? "values")!, {
       refkeys: refkey as Refkey | undefined, namePolicy: useRustNamePolicy().for(kind), binder: scope.binder,
     });
+    sourceFileOf(scope)?.declarations.add(symbol);
     return <Declaration symbol={symbol}><Name /></Declaration>;
   },
   scope: (kind, body) => <Scope value={createScope(RustScope, kind, useScope() as RustScope | undefined)}>{body}</Scope>,

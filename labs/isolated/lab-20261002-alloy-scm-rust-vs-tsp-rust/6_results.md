@@ -1,8 +1,8 @@
 # Assertion measurements
 
-Primary: 30 PASS, 5 DIFF, 102 GAP, 137/137 inventoried.
+Primary: 41 PASS, 0 DIFF, 96 GAP, 137/137 inventoried.
 
-All matchers: 97 PASS, 20 DIFF, 122 GAP, 239/239 inventoried.
+All matchers: 111 PASS, 15 DIFF, 113 GAP, 239/239 inventoried.
 
 Each row names the original A line. B is evaluated only from the original input. GAP rows have no candidate output. `6_results.json` retains oracle literals, input expressions, enclosing test bodies, parser contexts, and rustfmt output.
 
@@ -137,24 +137,24 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/6_ImplBlock.test.tsx:92 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:122 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/2_references/0_Reference.test.tsx:39 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
-| components/2_references/0_Reference.test.tsx:66 | toMatchInlineSnapshot | primary | DIFF | false | false | refkey/import resolution | 0/0 | 1 |
-| components/2_references/0_Reference.test.tsx:100 | toMatchInlineSnapshot | primary | DIFF | false | false | refkey/import resolution | 0/0 | 1 |
-| components/2_references/0_Reference.test.tsx:146 | toMatchInlineSnapshot | primary | DIFF | false | false | refkey/import resolution | 0/0 | 1 |
+| components/2_references/0_Reference.test.tsx:66 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
+| components/2_references/0_Reference.test.tsx:100 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
+| components/2_references/0_Reference.test.tsx:146 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
 | components/3_files/0_SourceFile.test.tsx:37 | toBeNull | supplemental | PASS | n/a | n/a | none | n/a | n/a |
 | components/3_files/0_SourceFile.test.tsx:38 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
 | components/3_files/0_SourceFile.test.tsx:67 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
 | components/3_files/0_SourceFile.test.tsx:97 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 0 |
-| components/3_files/0_SourceFile.test.tsx:100 | toMatchInlineSnapshot | primary | DIFF | false | false | refkey/import resolution | 0/0 | 1 |
-| components/3_files/2_ModDirectory.test.tsx:40 | toBeNull | supplemental | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:41 | toMatchInlineSnapshot | primary | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:66 | toMatchInlineSnapshot | primary | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:95 | toMatchInlineSnapshot | primary | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:128 | toMatchInlineSnapshot | primary | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:139 | toBeNull | supplemental | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:140 | toMatchInlineSnapshot | primary | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:143 | toBeNull | supplemental | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:144 | toMatchInlineSnapshot | primary | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
-| components/3_files/2_ModDirectory.test.tsx:162 | toMatchInlineSnapshot | primary | DIFF | false | false | refkey/import resolution | 0/0 | 0 |
+| components/3_files/0_SourceFile.test.tsx:100 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:40 | toBeNull | supplemental | PASS | n/a | n/a | none | n/a | n/a |
+| components/3_files/2_ModDirectory.test.tsx:41 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:66 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:95 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:128 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:139 | toBeNull | supplemental | PASS | n/a | n/a | none | n/a | n/a |
+| components/3_files/2_ModDirectory.test.tsx:140 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:143 | toBeNull | supplemental | PASS | n/a | n/a | none | n/a | n/a |
+| components/3_files/2_ModDirectory.test.tsx:144 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:162 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 0 |
 | components/4_codegen/1_CodegenPair.test.tsx:54 | toBeNull | supplemental | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
 | components/4_codegen/1_CodegenPair.test.tsx:55 | toContain | supplemental | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
 | components/4_codegen/1_CodegenPair.test.tsx:58 | toBeNull | supplemental | GAP | n/a | n/a | refkey/import resolution | n/a | n/a |
@@ -559,126 +559,6 @@ generics: expected 'impl<T> Foo<T> where T: Clone {}' to be 'impl<T> Foo<T>\nwhe
 \ No newline at end of file
 ```
 
-## components/2_references/0_Reference.test.tsx:66 (DIFF)
-
-refkey/import resolution: expected 'pub fn make_foo() -> Foo {\n  todo!()…' to be 'pub mod models;\n\nuse crate::models:…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,7 +1,3 @@
--pub mod models;
--
--use crate::models::Foo;
--
- pub fn make_foo() -> Foo {
-   todo!()
- }
-\ No newline at end of file
-```
-
-## components/2_references/0_Reference.test.tsx:100 (DIFF)
-
-refkey/import resolution: expected 'pub fn make_foo() -> Foo {\n  todo!()…' to be 'pub mod models;\n\nuse crate::models:…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,7 +1,3 @@
--pub mod models;
--
--use crate::models::Foo;
--
- pub fn make_foo() -> Foo {
-   todo!()
- }
-\ No newline at end of file
-```
-
-## components/2_references/0_Reference.test.tsx:146 (DIFF)
-
-refkey/import resolution: expected 'pub fn get_foo() -> Foo {\n  todo!()\…' to be 'pub mod errors;\npub mod models;\n\nu…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,9 +1,3 @@
--pub mod errors;
--pub mod models;
--
--use crate::errors::AppError;
--use crate::models::Foo;
--
- pub fn get_foo() -> Foo {
-   todo!()
- }
-\ No newline at end of file
-```
-
-## components/3_files/0_SourceFile.test.tsx:100 (DIFF)
-
-refkey/import resolution: expected 'fn main() {\n  todo!()\n}' to be 'pub mod models;\n\nfn main() {\n  tod…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,5 +1,3 @@
--pub mod models;
--
- fn main() {
-   todo!()
- }
-\ No newline at end of file
-```
-
-## components/3_files/2_ModDirectory.test.tsx:40 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:41 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:66 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:95 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:128 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:139 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:140 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:143 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:144 (GAP)
-
-refkey/import resolution: No module registration or nested directory synthesis in the grammar policy
-
-## components/3_files/2_ModDirectory.test.tsx:162 (DIFF)
-
-refkey/import resolution: expected '' to be 'pub mod utils;' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1 +0,0 @@
--pub mod utils;
-\ No newline at end of file
-```
-
 ## components/4_codegen/1_CodegenPair.test.tsx:54 (GAP)
 
 refkey/import resolution: The candidate has no paired-file context, impl delegation, or module synthesis
@@ -1059,10 +939,24 @@ These checks also cover files with no A content assertion. Repeated file paths b
 | components/2_references/0_Reference.test.tsx:146 | models.rs | 0/0 | 0 |
 | components/2_references/0_Reference.test.tsx:146 | errors.rs | 0/0 | 1 |
 | components/2_references/0_Reference.test.tsx:146 | lib.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:66 | models/mod.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:66 | models/user.rs | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:66 | lib.rs | 0/0 | 1 |
 | components/3_files/0_SourceFile.test.tsx:67 | lib.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:95 | models/mod.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:95 | models/user.rs | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:95 | lib.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:128 | a/mod.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:128 | a/b/mod.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:128 | a/b/thing.rs | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:128 | lib.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:40 | models/mod.rs | 0/0 | 1 |
+| components/3_files/2_ModDirectory.test.tsx:40 | models/user.rs | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:40 | models/order.rs | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:40 | lib.rs | 0/0 | 1 |
 | components/2_references/0_Reference.test.tsx:39 | lib.rs | 0/0 | 1 |
 | components/3_files/2_ModDirectory.test.tsx:162 | utils.rs | 0/0 | 1 |
-| components/3_files/2_ModDirectory.test.tsx:162 | lib.rs | 0/0 | 0 |
+| components/3_files/2_ModDirectory.test.tsx:162 | lib.rs | 0/0 | 1 |
 | components/3_files/0_SourceFile.test.tsx:97 | models.rs | 0/0 | 0 |
 | components/3_files/0_SourceFile.test.tsx:97 | lib.rs | 0/0 | 1 |
 | components/2_references/0_Reference.test.tsx:100 | models.rs | 0/0 | 0 |

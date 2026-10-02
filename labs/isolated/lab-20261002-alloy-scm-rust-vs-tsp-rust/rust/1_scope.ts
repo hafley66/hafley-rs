@@ -1,6 +1,22 @@
-import { createSymbol, OutputScope, OutputSymbol } from "@alloy-js/core";
+import { createSymbol, OutputScope, OutputSymbol, shallowReactive } from "@alloy-js/core";
 export class RustScope extends OutputScope {
   static readonly declarationSpaces = ["types", "values", "members"];
+}
+export class RustModuleScope extends RustScope {
+  modulePath: string[] = [];
+  mods = shallowReactive(new Set<string>());
+}
+export class RustSourceFileScope extends RustScope {
+  modulePath: string[] = [];
+  declarations = shallowReactive(new Set<RustSymbol>());
+  uses = shallowReactive(new Map<string, RustSymbol>());
+}
+export function sourceFileOf(scope: OutputScope | undefined): RustSourceFileScope | undefined {
+  while (scope) {
+    if (scope instanceof RustSourceFileScope) return scope;
+    scope = scope.parent;
+  }
+  return undefined;
 }
 export class RustSymbol extends OutputSymbol {
   copy(): OutputSymbol {
