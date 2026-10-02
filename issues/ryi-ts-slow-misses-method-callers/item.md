@@ -1,6 +1,6 @@
 ---
 created: 2026-10-01
-updated: 2026-10-01
+updated: 2026-10-02
 type: bug
 status: open
 priority: normal
@@ -21,3 +21,9 @@ The file is inside tsconfig `include` (`src/**/*`). `--callers trim` (same class
 
 ## Second defect
 Every `graph_edge` row is printed twice in both tiers (e.g. `0_diagramRenderCache.ts:21 -> :37` twice for `--callers trim`).
+
+## Comments
+
+### 2026-10-02T14:51:41Z · @feature-ryi-ts-slow
+
+1fab89cb: D14 checker-bound method facts and D14.sh committed. Gate UNRUN by user instruction stopping parallel builds/tests; coordinator must run release build, D14 dogfood case, and cli crate tests (known golden_parity exceptions only).

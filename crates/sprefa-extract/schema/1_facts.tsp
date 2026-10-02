@@ -90,6 +90,9 @@ model Capture { ...ExportRow; record: "capture"; query: string; capture: string;
 model Symbol { ...ExportRow; record: "symbol"; symbol: string; path: string; kind: string; }
 model Occurrence { ...ExportRow; record: "occurrence"; symbol: string; path: string; start: uint32; end: uint32; role: string; exported: boolean; decl_start: uint32; decl_end: uint32; }
 model FreeName { ...ExportRow; record: "free_name"; path: string; owner_start: uint32; owner_end: uint32; name: string; start: uint32; end: uint32; }
+model CallSite { ...ExportRow; record: "call_site"; callee: string; path: string; line: uint32; `fn`: string; start: uint32; end: uint32; }
+model JsxElement { ...ExportRow; record: "jsx_element"; name: string; path: string; line: uint32; `fn`: string; start: uint32; end: uint32; parent_start: uint32 | null; }
+model JsxAttribute { ...ExportRow; record: "jsx_attribute"; path: string; element_start: uint32; name: string; value: string | null; start: uint32; end: uint32; }
 model Local { ...ExportRow; record: "local"; `fn`: string; name: string; path: string; start: uint32; end: uint32; }
 
 model ScipDef { ...ExportRow; record: "scip_def"; symbol: string; file: string; repo: string; }

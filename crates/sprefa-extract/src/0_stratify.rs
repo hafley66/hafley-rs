@@ -171,6 +171,7 @@ pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiE
         .unwrap_or_else(|| median(line_counts.values().copied()));
     let locality = localities(&files, &edges, &line_counts, median);
     let mut rows = Vec::new();
+    let mut moves = BTreeMap::new();
     for (path, reach) in &ranks {
         if let Some(reach) = reach {
             if is_index(path) {
@@ -185,10 +186,14 @@ pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiE
             );
             let destination = prefixed(path, &prefix);
             rows.push(serde_json::json!({"record":"stratum","depth":depths[&reached_components[path]],"entry_depth":reach.depth,"path":path,"prefix":prefix,"scc":components[path],"via":reach.via}));
-            rows.push(serde_json::json!({"record":"stratify_move","from_path":path,"to_path":destination,"reason":"depth_prefix","move_tsv":format!("{path}\t{destination}")}));
+            moves.insert(path.clone(), destination);
         } else {
             rows.push(serde_json::json!({"record":"unreached","path":path,"scc":components[path]}));
         }
+    }
+    retain_noncolliding_moves(&mut moves, &files, &root);
+    for (path, destination) in moves {
+        rows.push(serde_json::json!({"record":"stratify_move","from_path":path,"to_path":destination,"reason":"depth_prefix","move_tsv":format!("{path}\t{destination}")}));
     }
     let mut cycles: BTreeMap<usize, Vec<String>> = BTreeMap::new();
     for path in &files {
@@ -203,7 +208,7 @@ pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiE
         }
     }
     for (path, internal, touching, score, lines, target) in locality {
-        rows.push(serde_json::json!({"record":"locality","path":path,"internal":internal,"touching":touching,"score":score,"lines":lines,"target_lines":target}));
+        let mut row = serde_json::json!({"record":"locality","path":path,"internal":internal,"touching":touching,"score":score,"lines":lines,"target_lines":target});
         let outgoing = edges
             .iter()
             .filter(|edge| edge.from == path && edge.to != path)
@@ -239,8 +244,12 @@ pub fn run_to(args: StratifyArgs, out: &mut dyn Write) -> Result<(), crate::RyiE
                         || (edge.from == to_path && edge.to == path)
                 })
                 .count();
-            rows.push(serde_json::json!({"record":"stratify_move","from_path":path,"to_path":to_path,"reason":reason,"cut_lines":cut_lines,"shared_edges":shared_edges.max(incoming)}));
+            row["reason"] = serde_json::json!(reason);
+            row["to_path"] = serde_json::json!(to_path);
+            row["cut_lines"] = serde_json::json!(cut_lines);
+            row["shared_edges"] = serde_json::json!(shared_edges.max(incoming));
         }
+        rows.push(row);
     }
     rows.sort_by_key(|row| {
         (
@@ -571,10 +580,48 @@ fn prefixed(path: &str, prefix: &str) -> String {
     let path = Path::new(path);
     let parent = path.parent().unwrap_or_else(|| Path::new(""));
     let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let stem = name.split_once('_').and_then(|(number, stem)| {
+        let digits = number.bytes().take_while(u8::is_ascii_digit).count();
+        (digits > 0 && number[digits..].bytes().all(|byte| byte.is_ascii_alphabetic()))
+            .then_some(stem)
+    }).unwrap_or(&name);
     parent
-        .join(format!("{prefix}{name}"))
+        .join(format!("{prefix}{stem}"))
         .to_string_lossy()
         .replace('\\', "/")
+}
+
+fn retain_noncolliding_moves(
+    moves: &mut BTreeMap<String, String>,
+    files: &[String],
+    root: &Path,
+) {
+    let mut destinations = BTreeMap::<String, usize>::new();
+    for destination in moves.values() {
+        *destinations.entry(destination.clone()).or_default() += 1;
+    }
+    moves.retain(|_, destination| destinations[destination.as_str()] == 1);
+    let files: BTreeSet<&str> = files.iter().map(String::as_str).collect();
+    loop {
+        // Rejected moves leave their source occupied. Repeat until no remaining
+        // proposal depends on a source being vacated by a rejected proposal.
+        let blocked: Vec<String> = moves
+            .iter()
+            .filter(|(_, destination)| {
+                !moves.contains_key(*destination)
+                    && (files.contains(destination.as_str())
+                        || std::fs::symlink_metadata(destination.as_str()).is_ok()
+                        || std::fs::symlink_metadata(root.join(destination)).is_ok())
+            })
+            .map(|(path, _)| path.clone())
+            .collect();
+        if blocked.is_empty() {
+            break;
+        }
+        for path in blocked {
+            moves.remove(&path);
+        }
+    }
 }
 
 fn symbol_cut_lines(edges: &[Edge], path: &str, root: &Path) -> Vec<u32> {
@@ -614,4 +661,66 @@ fn symbol_cut_lines(edges: &[Edge], path: &str, root: &Path) -> Vec<u32> {
         .collect::<BTreeSet<_>>()
         .into_iter()
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collision_rejections_propagate_and_permutations_remain_available() {
+        let root = std::env::temp_dir().join(format!(
+            "stratify_collision_proposals_{}",
+            std::process::id()
+        ));
+        let cases = [
+            // The unmoved 0_item blocks 1_item, which then blocks 2_item.
+            (
+                vec![("2_item.ts", "1_item.ts"), ("1_item.ts", "0_item.ts")],
+                vec![],
+            ),
+            // A duplicate destination rejects both proposals and blocks 3_item.
+            (
+                vec![
+                    ("2_item.ts", "0_item.ts"),
+                    ("1_item.ts", "0_item.ts"),
+                    ("3_item.ts", "2_item.ts"),
+                ],
+                vec![],
+            ),
+            // Every occupied destination in a permutation is vacated.
+            (
+                vec![("0_item.ts", "1_item.ts"), ("1_item.ts", "0_item.ts")],
+                vec![("0_item.ts", "1_item.ts"), ("1_item.ts", "0_item.ts")],
+            ),
+            // Identity proposals remain for D12's dependency already at depth 0.
+            (
+                vec![("0_item.ts", "0_item.ts")],
+                vec![("0_item.ts", "0_item.ts")],
+            ),
+        ];
+        let files: Vec<String> = (0..4)
+            .map(|number| {
+                root.join(format!("{number}_item.ts"))
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        for (proposals, expected) in cases {
+            let absolute = |pairs: Vec<(&str, &str)>| -> BTreeMap<String, String> {
+                pairs
+                    .into_iter()
+                    .map(|(from, to)| {
+                        (
+                            root.join(from).to_string_lossy().into_owned(),
+                            root.join(to).to_string_lossy().into_owned(),
+                        )
+                    })
+                    .collect()
+            };
+            let mut moves = absolute(proposals);
+            retain_noncolliding_moves(&mut moves, &files, &root);
+            assert_eq!(moves, absolute(expected));
+        }
+    }
 }

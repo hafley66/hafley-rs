@@ -3269,6 +3269,40 @@ pub enum FlatFact {
         start: u32,
         end: u32,
     },
+    /// Written callee text and its innermost callable, without resolution.
+    #[serde(rename = "call_site")]
+    CallSiteRow {
+        callee: String,
+        path: String,
+        line: u32,
+        #[serde(rename = "fn")]
+        enclosing_fn: String,
+        start: u32,
+        end: u32,
+    },
+    /// Element identity is (path, start); fragments use `<fragment>`.
+    #[serde(rename = "jsx_element")]
+    JsxElementRow {
+        name: String,
+        path: String,
+        line: u32,
+        #[serde(rename = "fn")]
+        enclosing_fn: String,
+        start: u32,
+        end: u32,
+        parent_start: Option<u32>,
+    },
+    /// Attributes join their element by (path, element_start). A boolean
+    /// attribute has no value; a spread uses name `..` and its written text.
+    #[serde(rename = "jsx_attribute")]
+    JsxAttributeRow {
+        path: String,
+        element_start: u32,
+        name: String,
+        value: Option<String>,
+        start: u32,
+        end: u32,
+    },
     /// `local(fn, name, path, start, end)`: a binding the document does not
     /// export, attributed to its enclosing callable. File-private fns too.
     #[serde(rename = "local")]

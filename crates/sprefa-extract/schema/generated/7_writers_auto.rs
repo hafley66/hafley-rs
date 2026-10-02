@@ -829,6 +829,42 @@ pub mod models {
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
     #[serde(deny_unknown_fields)]
+    pub struct CallSite {
+        pub callee: String,
+        pub path: String,
+        pub line: u32,
+        pub r#fn: String,
+        pub start: u32,
+        pub end: u32,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct JsxElement {
+        pub name: String,
+        pub path: String,
+        pub line: u32,
+        pub r#fn: String,
+        pub start: u32,
+        pub end: u32,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub parent_start: Option<u32>,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
+    pub struct JsxAttribute {
+        pub path: String,
+        pub element_start: u32,
+        pub name: String,
+        #[serde(deserialize_with = "super::required_nullable")]
+        pub value: Option<String>,
+        pub start: u32,
+        pub end: u32,
+    }
+
+    #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+    #[serde(deny_unknown_fields)]
     pub struct Local {
         pub r#fn: String,
         pub name: String,
@@ -1201,6 +1237,15 @@ pub enum Fact {
     #[serde(rename = "free_name")]
     FreeName(models::FreeName),
 
+    #[serde(rename = "call_site")]
+    CallSite(models::CallSite),
+
+    #[serde(rename = "jsx_element")]
+    JsxElement(models::JsxElement),
+
+    #[serde(rename = "jsx_attribute")]
+    JsxAttribute(models::JsxAttribute),
+
     #[serde(rename = "local")]
     Local(models::Local),
 
@@ -1376,6 +1421,12 @@ impl Fact {
 
             Self::FreeName(row) => row.insert(conn, source),
 
+            Self::CallSite(row) => row.insert(conn, source),
+
+            Self::JsxElement(row) => row.insert(conn, source),
+
+            Self::JsxAttribute(row) => row.insert(conn, source),
+
             Self::Local(row) => row.insert(conn, source),
 
             Self::ScipDef(row) => row.insert(conn, source),
@@ -1426,7 +1477,7 @@ impl Fact {
 
 }
 
-pub const TABLE_COUNT: usize = 72;
+pub const TABLE_COUNT: usize = 75;
 
 fn statement_capacity(conn: &rusqlite::Connection, columns: usize, prefix: &str, tuple: &str) -> Result<usize, InsertError> {
 
@@ -1573,6 +1624,12 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let mut occurrence: Vec<(usize, &models::Occurrence)> = Vec::new();
 
     let mut free_name: Vec<(usize, &models::FreeName)> = Vec::new();
+
+    let mut call_site: Vec<(usize, &models::CallSite)> = Vec::new();
+
+    let mut jsx_element: Vec<(usize, &models::JsxElement)> = Vec::new();
+
+    let mut jsx_attribute: Vec<(usize, &models::JsxAttribute)> = Vec::new();
 
     let mut local: Vec<(usize, &models::Local)> = Vec::new();
 
@@ -1722,6 +1779,12 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
             Fact::FreeName(value) => free_name.push((index, value)),
 
+            Fact::CallSite(value) => call_site.push((index, value)),
+
+            Fact::JsxElement(value) => jsx_element.push((index, value)),
+
+            Fact::JsxAttribute(value) => jsx_attribute.push((index, value)),
+
             Fact::Local(value) => local.push((index, value)),
 
             Fact::ScipDef(value) => scip_def.push((index, value)),
@@ -1869,6 +1932,12 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     let occurrence_capacity = if occurrence.is_empty() { 1 } else { statement_capacity(conn, 12, "INSERT INTO \"occurrence\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"start\", \"end\", \"role\", \"exported\", \"decl_start\", \"decl_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let free_name_capacity = if free_name.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let call_site_capacity = if call_site.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"call_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let jsx_element_capacity = if jsx_element.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"jsx_element\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+
+    let jsx_attribute_capacity = if jsx_attribute.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"jsx_attribute\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let local_capacity = if local.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"local\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fn\", \"name\", \"path\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2457,6 +2526,39 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     for chunk in free_name.chunks(free_name_capacity) {
         let sql = multi_row_sql("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in call_site.chunks(call_site_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"call_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in jsx_element.chunks(jsx_element_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"jsx_element\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let mut statement = conn.prepare_cached(&sql)?;
+        let mut parameter = 1;
+        for (index, row) in chunk {
+            let row_source = Source { row: source.row + *index as i64, input_path: source.input_path, content_id: source.content_id };
+            parameter = row.bind(&mut statement, parameter, &row_source)?;
+        }
+        inserted += statement.raw_execute()?;
+    }
+
+    for chunk in jsx_attribute.chunks(jsx_attribute_capacity) {
+        let sql = multi_row_sql("INSERT INTO \"jsx_attribute\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -4314,6 +4416,104 @@ impl models::FreeName {
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
         let mut statement = conn.prepare_cached("INSERT INTO \"free_name\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"owner_start\", \"owner_end\", \"name\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::CallSite {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "call_site")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.callee.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.line)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.r#fn.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.end)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    #[cfg(test)]
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"call_site\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"callee\", \"path\", \"line\", \"fn\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::JsxElement {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "jsx_element")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.line)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.r#fn.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.end)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.parent_start)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    #[cfg(test)]
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"jsx_element\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"name\", \"path\", \"line\", \"fn\", \"start\", \"end\", \"parent_start\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        self.bind(&mut statement, 1, source)?;
+        Ok(statement.raw_execute()?)
+    }
+}
+
+impl models::JsxAttribute {
+    fn bind(&self, statement: &mut rusqlite::Statement<'_>, mut parameter: usize, source: &Source<'_>) -> Result<usize, InsertError> {
+        statement.raw_bind_parameter(parameter, source.row)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.input_path)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, source.content_id)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, "jsx_attribute")?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.path.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.element_start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.name.as_str())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.value.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.start)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.end)?;
+        parameter += 1;
+        Ok(parameter)
+    }
+    #[cfg(test)]
+    pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
+        let mut statement = conn.prepare_cached("INSERT INTO \"jsx_attribute\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"element_start\", \"name\", \"value\", \"start\", \"end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }

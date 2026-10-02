@@ -18,6 +18,6 @@ pub(super) fn type_import(source: &TsSource, text: &str, module: &str, item: &st
         .unwrap_or(0);
     Some(Edit {
         span: Span::anchor(at),
-        text: format!("import type {{ {item} }} from {quote}{module}{quote};\n"),
+        text: format!("import type {{ {item} }} from {quote}{module}{quote}{}\n", if super::import_style(text).1 { ";" } else { "" }),
     })
 }

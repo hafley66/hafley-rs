@@ -157,11 +157,14 @@ pub enum ProjectError {
     CargoMetadataFailed(PathBuf, String),
     /// A bundled `.scm` query refused one of fast's files.
     Scm(String),
+    /// A requested slow TypeScript run has no compiled checker.
+    CheckerUnavailable(String),
 }
 
 impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::CheckerUnavailable(detail) => f.write_str(detail),
             Self::Read(path, err) => write!(f, "read {}: {err}", path.display()),
             Self::Scip(err) => write!(f, "scip: {err:?}"),
             Self::ScipNeedsRoot => {
@@ -257,7 +260,32 @@ pub struct ProjectInput {
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    resolve_project_inputs(request, inputs, false)
+    let syntax = syntax_facts(&inputs);
+    let mut facts = resolve_project_inputs(request, inputs, false)?;
+    facts.extend(syntax);
+    Ok(facts)
+}
+
+pub(crate) fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
+    // A TSX project retains written calls in its companion TS modules too.
+    // Pure TypeScript resolve keeps the existing edge-only stream.
+    if !inputs.iter().any(|input| input.path.ends_with(".tsx")) {
+        return Vec::new();
+    }
+    inputs
+        .iter()
+        .filter(|input| source_for(&input.path).is_some_and(|source| source.name() == "ts"))
+        .filter_map(|input| {
+            Some(
+                input
+                    .output
+                    .scm_captures
+                    .as_ref()?
+                    .syntax_facts(&input.path),
+            )
+        })
+        .flatten()
+        .collect()
 }
 
 /// Keep syntax type rows alongside checker rows in one witnessed project run.
@@ -306,7 +334,31 @@ pub fn resolve_project_with_raw<E>(
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input, content| {
-        push_input_raw(input, content, push_raw)
+        push_input_raw(input, content, push_raw)?;
+        // D21 retains TypeScript's fast occurrence plane in SQLite through
+        // the source sink, leaving the resolved answer identical to JSONL.
+        if source_for(&input.path).is_some_and(|source| source.name() == "ts") {
+            if let Some(captures) = &input.output.scm_captures {
+                for fact in captures.facts(&input.path) {
+                    if matches!(
+                        fact,
+                        FlatFact::CallSiteRow { .. }
+                            | FlatFact::JsxElementRow { .. }
+                            | FlatFact::JsxAttributeRow { .. }
+                    ) {
+                        continue;
+                    }
+                    push_raw(RawProjectFact {
+                        path: &input.path,
+                        content_id: &input.blob,
+                        content,
+                        fact,
+                    })
+                    .map_err(ResolveWithRawError::RawSink)?;
+                }
+            }
+        }
+        Ok(())
     })?;
     resolve_pushed(request, inputs, None)
 }
@@ -395,11 +447,17 @@ fn resolve_pushed<E>(
     scm_paths: Option<&[PathBuf]>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
+    let syntax = if scm.is_none() {
+        syntax_facts(&inputs)
+    } else {
+        Vec::new()
+    };
     let mut facts =
         resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
         facts.extend(scm.map_err(ResolveWithRawError::Project)?);
     }
+    facts.extend(syntax);
     Ok(facts)
 }
 
@@ -1270,7 +1328,12 @@ pub fn resolve_project_jsonl(request: &ResolveRequest) -> Result<Vec<String>, Pr
         .iter()
         .map(|fact| serde_json::to_string(fact).expect("flat fact is serializable"))
         .collect();
-    lines.extend(sorted_lines(body));
+    let (syntax, resolved): (Vec<_>, Vec<_>) = body.into_iter().partition(|fact| {
+        matches!(fact, FlatFact::CallSiteRow { .. }
+            | FlatFact::JsxElementRow { .. } | FlatFact::JsxAttributeRow { .. })
+    });
+    lines.extend(sorted_lines(resolved));
+    lines.extend(sorted_lines(syntax));
     Ok(lines)
 }
 
@@ -1485,7 +1548,19 @@ pub fn diet_scip(paths: &[PathBuf]) -> Result<Vec<FlatFact>, ProjectError> {
         .iter_mut()
         .filter_map(|input| input.size_skip.take())
         .collect();
+    // A declaration-only module can contribute no symbol or occurrence rows.
+    // Its file row still records that fast included it, as SQLite already does.
+    let declarations: Vec<_> = inputs
+        .iter_mut()
+        .filter(|input| {
+            input.path.ends_with(".d.ts")
+                || input.path.ends_with(".d.mts")
+                || input.path.ends_with(".d.cts")
+        })
+        .filter_map(|input| input.file.take())
+        .collect();
     let mut facts = resolve_project_inputs(&diet_scip_request(paths), inputs, false)?;
+    facts.extend(declarations);
     facts.extend(skips);
     facts.extend(scm?);
     Ok(facts)
@@ -2588,7 +2663,7 @@ fn call_facts(
         facts.push(FlatFact::ResolvedEdge {
             fact: None,
             caller_path,
-            caller_name: caller_name(call, &input.output, edge.src),
+            caller_name: caller_name(call, input, edge.src),
             callee_path,
             callee_name: callee_name(targets, target, edge.dst_span),
             caller_site_start,
@@ -3194,9 +3269,9 @@ fn conformance_tsi_rows(
 
 /// A closure def carries no name, and `resolve_at` types caller_name `text`:
 /// a null drops the whole row.
-fn caller_name(
+pub(super) fn caller_name(
     bundle: &FamilyBundle<crate::read::types::CallF>,
-    output: &RyiOutput,
+    input: &ProjectInput,
     src: crate::read::shape::NodeRef,
 ) -> Option<String> {
     let node = bundle.node(src);
@@ -3206,8 +3281,16 @@ fn caller_name(
         return None;
     }
     Some(match node.name {
-        Some(name) => output.strings.lookup(name).to_string(),
-        None => format!("closure@{}", node.span.start),
+        Some(name) => input.output.strings.lookup(name).to_string(),
+        None => {
+            #[cfg(feature = "typescript")]
+            if let Some(name) = crate::read::lang::ts_receivers::facts_of(&input.blob, None)
+                .and_then(|facts| facts.closure_names.get(&node.span.start).cloned())
+            {
+                return Some(name);
+            }
+            format!("closure@{}", node.span.start)
+        }
     })
 }
 

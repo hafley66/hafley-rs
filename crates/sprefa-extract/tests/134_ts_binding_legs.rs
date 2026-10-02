@@ -192,7 +192,7 @@ fn a_param_shadow_kills_the_name_match() {
     );
 }
 
-/// A `const` binding owns its name for the rest of its callable.
+/// D9: a callable `const` resolves to its same-file lexical definition.
 #[test]
 fn a_const_binding_shadow_kills_the_name_match() {
     let (edges, drops) = shadow_run();
@@ -204,11 +204,14 @@ fn a_const_binding_shadow_kills_the_name_match() {
                 && path.ends_with("free.ts")),
         "{edges:?}"
     );
-    assert_eq!(
-        drops_of(&drops, "constCase"),
-        vec![("project".to_string(), "inferred".to_string())],
-        "{drops:?}"
+    assert!(
+        edges.iter().any(|(caller, callee, path, origin)| caller == "constCase"
+            && callee == "project"
+            && path.ends_with("shadow.ts")
+            && origin == "same_file"),
+        "{edges:?}"
     );
+    assert_eq!(drops_of(&drops, "constCase"), Vec::new(), "{drops:?}");
 }
 
 /// A closure param owns the name inside the arrow body only.

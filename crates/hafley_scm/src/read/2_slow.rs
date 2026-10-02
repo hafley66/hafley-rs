@@ -39,6 +39,9 @@ pub fn slow_project_with_raw<E>(
     checkers: bool,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
+    if checkers {
+        require_ts_checker(files).map_err(ResolveWithRawError::Project)?;
+    }
     let io_root = crate::read::io_path(root);
     let inputs = crate::read::project::read_inputs_streamed(
         files,
@@ -46,7 +49,9 @@ pub fn slow_project_with_raw<E>(
         crate::read::project::Planes::All,
         &mut |input, content| push_phase_one(input, content, push_raw),
     )?;
-    let mut facts = Vec::new();
+    // Written JSX/call syntax shares the retained parse with fast and resolve;
+    // retain it even when SCIP discovery has no index to return.
+    let mut facts = crate::read::project::syntax_facts(&inputs);
     let _scip_span = crate::read::trace::tracked(tracing::info_span!("slow.scip.load_build")).entered();
     let index = match index {
         Some(path) => crate::read::scip_decode::load_index(&crate::read::io_path(path))
@@ -65,6 +70,11 @@ pub fn slow_project_with_raw<E>(
                 detail: skip.reason.detail(),
             }));
             let Some(path) = report.index else {
+                if checkers {
+                    facts.extend(
+                        checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?,
+                    );
+                }
                 return Ok(facts);
             };
             crate::read::scip_decode::load_index(&path)
@@ -79,6 +89,22 @@ pub fn slow_project_with_raw<E>(
         facts.extend(checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?);
     }
     Ok(facts)
+}
+
+/// Check before SCIP discovery: an unavailable index must not hide a missing
+/// TypeScript checker behind a successful empty slow result.
+pub fn require_ts_checker(files: &[PathBuf]) -> Result<(), ProjectError> {
+    if !cfg!(feature = "ts-checker")
+        && files.iter().any(|path| {
+            crate::read::lang::source_for(&path.to_string_lossy())
+                .is_some_and(|source| source.name() == "ts")
+        })
+    {
+        return Err(ProjectError::CheckerUnavailable(
+            "ryi slow: TypeScript requires cargo feature ts-checker".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn push_phase_one<E>(
@@ -559,11 +585,7 @@ fn owner_name(
 /// The tightest def around `site` in the parse, named the way fast names it.
 fn caller_name(input: &ProjectInput, site: Span) -> Option<String> {
     let call = input.output.call.as_ref()?;
-    let node = call.node(covering_def(call, site)?);
-    Some(match node.name {
-        Some(name) => input.output.strings.lookup(name).to_string(),
-        None => format!("closure@{}", node.span.start),
-    })
+    crate::read::project::caller_name(call, input, covering_def(call, site)?)
 }
 
 /// `resolved_import` from specifier spans: one `module` row per target file,

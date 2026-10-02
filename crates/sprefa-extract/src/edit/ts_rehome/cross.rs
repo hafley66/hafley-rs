@@ -231,6 +231,13 @@ fn build_dep_plan(cx: &MoveCx, specifier_refs: &[ImportRef]) -> DepPlan {
         if from.dir == to.dir || from.deps.contains(&to.name) {
             continue;
         }
+        let from_before = package_of(packages, &reference.importer);
+        let to_before = package_of(packages, &reference.target);
+        if from_before.map(|package| &package.dir) == Some(&from.dir)
+            && to_before.map(|package| &package.dir) == Some(&to.dir)
+        {
+            continue;
+        }
         needs
             .entry(from.manifest.clone())
             .or_default()
