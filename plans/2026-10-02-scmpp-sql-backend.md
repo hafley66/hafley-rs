@@ -123,6 +123,6 @@ Schema changes go through `crates/sprefa-extract/schema/1_facts.tsp` and regener
 - Growth (hafley-observe `assert_growth_sized`): compile count Constant in query length per level;
   capture/CST row writes Linear in file size.
 
-## Open
+## Decided
 
-- CST rows for every queried file vs only files with at least one level-0 match (smaller DB, two passes).
+- CST rows for every queried file (user, 2026-10-02: keep the most data), not only files with a level-0 match.
