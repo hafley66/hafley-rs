@@ -7,8 +7,8 @@
   },
   "all": {
     "assertions": 239,
-    "PASS": 111,
-    "DIFF": 15,
+    "PASS": 126,
+    "DIFF": 0,
     "GAP": 113
   },
   "whitespace": {
@@ -20,8 +20,8 @@
     },
     "all": {
       "assertions": 239,
-      "PASS": 122,
-      "DIFF": 4,
+      "PASS": 126,
+      "DIFF": 0,
       "GAP": 113
     }
   },
@@ -29,8 +29,8 @@
     "outputs": 120,
     "parseClean": 120,
     "parseFailed": 0,
-    "rustfmtClean": 66,
-    "rustfmtFailed": 54
+    "rustfmtClean": 55,
+    "rustfmtFailed": 65
   },
   "fileSyntax": {
     "outputs": 28,
@@ -97,8 +97,8 @@
     {
       "file": "components/1_declarations/0_StructDeclaration.test.tsx",
       "assertions": 13,
-      "PASS": 12,
-      "DIFF": 1,
+      "PASS": 13,
+      "DIFF": 0,
       "GAP": 0,
       "primary": {
         "assertions": 0,
@@ -125,8 +125,8 @@
     {
       "file": "components/1_declarations/2_parity.test.tsx",
       "assertions": 35,
-      "PASS": 31,
-      "DIFF": 2,
+      "PASS": 33,
+      "DIFF": 0,
       "GAP": 2,
       "primary": {
         "assertions": 0,
@@ -139,8 +139,8 @@
     {
       "file": "components/1_declarations/4_FunctionDeclaration.test.tsx",
       "assertions": 11,
-      "PASS": 2,
-      "DIFF": 9,
+      "PASS": 11,
+      "DIFF": 0,
       "GAP": 0,
       "primary": {
         "assertions": 0,
@@ -153,8 +153,8 @@
     {
       "file": "components/1_declarations/6_ImplBlock.test.tsx",
       "assertions": 7,
-      "PASS": 4,
-      "DIFF": 3,
+      "PASS": 7,
+      "DIFF": 0,
       "GAP": 0,
       "primary": {
         "assertions": 0,
@@ -477,7 +477,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/18fa59686dd364b9-B.rs:1:\n-fn probe() { let first_name = (); }\n+fn probe() {\n+    let first_name = ();\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/18fa59686dd364b9-B.rs:1:\n\u001b[31m-fn probe() { let first_name = (); }\n\u001b[m\u000f\u001b[32m+fn probe() {\n\u001b[m\u000f\u001b[32m+    let first_name = ();\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn probe() { let first_name = (); }\n",
@@ -485,7 +485,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/18fa59686dd364b9-A.rs:1:\n-fn probe() { let first_name = (); }\n+fn probe() {\n+    let first_name = ();\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/18fa59686dd364b9-A.rs:1:\n\u001b[31m-fn probe() { let first_name = (); }\n\u001b[m\u000f\u001b[32m+fn probe() {\n\u001b[m\u000f\u001b[32m+    let first_name = ();\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -512,7 +512,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a50ddd96d6f4c6ca-B.rs:1:\n-fn probe() { let firstName = (); }\n+fn probe() {\n+    let firstName = ();\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a50ddd96d6f4c6ca-B.rs:1:\n\u001b[31m-fn probe() { let firstName = (); }\n\u001b[m\u000f\u001b[32m+fn probe() {\n\u001b[m\u000f\u001b[32m+    let firstName = ();\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn probe() { let firstName = (); }\n",
@@ -520,7 +520,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a50ddd96d6f4c6ca-A.rs:1:\n-fn probe() { let firstName = (); }\n+fn probe() {\n+    let firstName = ();\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a50ddd96d6f4c6ca-A.rs:1:\n\u001b[31m-fn probe() { let firstName = (); }\n\u001b[m\u000f\u001b[32m+fn probe() {\n\u001b[m\u000f\u001b[32m+    let firstName = ();\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -687,7 +687,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95b69fb0891c9b27-B.rs:1:\n-fn probe() { let r#match = (); }\n+fn probe() {\n+    let r#match = ();\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95b69fb0891c9b27-B.rs:1:\n\u001b[31m-fn probe() { let r#match = (); }\n\u001b[m\u000f\u001b[32m+fn probe() {\n\u001b[m\u000f\u001b[32m+    let r#match = ();\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn probe() { let r#match = (); }\n",
@@ -695,7 +695,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95b69fb0891c9b27-A.rs:1:\n-fn probe() { let r#match = (); }\n+fn probe() {\n+    let r#match = ();\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95b69fb0891c9b27-A.rs:1:\n\u001b[31m-fn probe() { let r#match = (); }\n\u001b[m\u000f\u001b[32m+fn probe() {\n\u001b[m\u000f\u001b[32m+    let r#match = ();\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -722,7 +722,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "error: `self` cannot be a raw identifier\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2c1f8313e839e3dc-B.rs:1:18\n  |\n1 | fn probe() { let r#self = (); }\n  |                  ^^^^^^\n\n"
+        "rustfmt": "error: `self` cannot be a raw identifier\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2c1f8313e839e3dc-B.rs:1:18\n  |\n1 | fn probe() { let r#self = (); }\n  |                  ^^^^^^\n\n"
       },
       "oracleSyntax": {
         "context": "fn probe() { let r#self = (); }\n",
@@ -730,7 +730,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "error: `self` cannot be a raw identifier\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2c1f8313e839e3dc-A.rs:1:18\n  |\n1 | fn probe() { let r#self = (); }\n  |                  ^^^^^^\n\n"
+        "rustfmt": "error: `self` cannot be a raw identifier\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2c1f8313e839e3dc-A.rs:1:18\n  |\n1 | fn probe() { let r#self = (); }\n  |                  ^^^^^^\n\n"
       }
     },
     {
@@ -1755,7 +1755,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8c058d3f48e3d7e7-B.rs:1:\n #[derive(Deserialize)]\n #[serde(deny_unknown_fields)]\n struct Config {\n-  port: u16,\n+    port: u16,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8c058d3f48e3d7e7-B.rs:1:\n #[derive(Deserialize)]\n #[serde(deny_unknown_fields)]\n struct Config {\n\u001b[31m-  port: u16,\n\u001b[m\u000f\u001b[32m+    port: u16,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\nstruct Config {\n  port: u16,\n}\n",
@@ -1763,7 +1763,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8c058d3f48e3d7e7-A.rs:1:\n #[derive(Deserialize)]\n #[serde(deny_unknown_fields)]\n struct Config {\n-  port: u16,\n+    port: u16,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8c058d3f48e3d7e7-A.rs:1:\n #[derive(Deserialize)]\n #[serde(deny_unknown_fields)]\n struct Config {\n\u001b[31m-  port: u16,\n\u001b[m\u000f\u001b[32m+    port: u16,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -1790,7 +1790,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/371e384068d3af43-B.rs:1:\n #[derive(Deserialize)]\n #[serde(default)]\n struct Settings {\n-  port: u16,\n-  host: String,\n+    port: u16,\n+    host: String,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/371e384068d3af43-B.rs:1:\n #[derive(Deserialize)]\n #[serde(default)]\n struct Settings {\n\u001b[31m-  port: u16,\n\u001b[m\u000f\u001b[31m-  host: String,\n\u001b[m\u000f\u001b[32m+    port: u16,\n\u001b[m\u000f\u001b[32m+    host: String,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Deserialize)]\n#[serde(default)]\nstruct Settings {\n  port: u16,\n  host: String,\n}\n",
@@ -1798,7 +1798,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/371e384068d3af43-A.rs:1:\n #[derive(Deserialize)]\n #[serde(default)]\n struct Settings {\n-  port: u16,\n-  host: String,\n+    port: u16,\n+    host: String,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/371e384068d3af43-A.rs:1:\n #[derive(Deserialize)]\n #[serde(default)]\n struct Settings {\n\u001b[31m-  port: u16,\n\u001b[m\u000f\u001b[31m-  host: String,\n\u001b[m\u000f\u001b[32m+    port: u16,\n\u001b[m\u000f\u001b[32m+    host: String,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -1825,7 +1825,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/88db30449168afb7-B.rs:1:\n struct Foo {\n-  visible: i32,\n-  #[serde(skip)]\n-  hidden: String,\n+    visible: i32,\n+    #[serde(skip)]\n+    hidden: String,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/88db30449168afb7-B.rs:1:\n struct Foo {\n\u001b[31m-  visible: i32,\n\u001b[m\u000f\u001b[31m-  #[serde(skip)]\n\u001b[m\u000f\u001b[31m-  hidden: String,\n\u001b[m\u000f\u001b[32m+    visible: i32,\n\u001b[m\u000f\u001b[32m+    #[serde(skip)]\n\u001b[m\u000f\u001b[32m+    hidden: String,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo {\n  visible: i32,\n  #[serde(skip)]\n  hidden: String,\n}\n",
@@ -1833,7 +1833,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/88db30449168afb7-A.rs:1:\n struct Foo {\n-  visible: i32,\n-  #[serde(skip)]\n-  hidden: String,\n+    visible: i32,\n+    #[serde(skip)]\n+    hidden: String,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/88db30449168afb7-A.rs:1:\n struct Foo {\n\u001b[31m-  visible: i32,\n\u001b[m\u000f\u001b[31m-  #[serde(skip)]\n\u001b[m\u000f\u001b[31m-  hidden: String,\n\u001b[m\u000f\u001b[32m+    visible: i32,\n\u001b[m\u000f\u001b[32m+    #[serde(skip)]\n\u001b[m\u000f\u001b[32m+    hidden: String,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -1860,7 +1860,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b21a82a575282f63-B.rs:1:\n struct Foo {\n-  #[serde(default)]\n-  id: u64,\n+    #[serde(default)]\n+    id: u64,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b21a82a575282f63-B.rs:1:\n struct Foo {\n\u001b[31m-  #[serde(default)]\n\u001b[m\u000f\u001b[31m-  id: u64,\n\u001b[m\u000f\u001b[32m+    #[serde(default)]\n\u001b[m\u000f\u001b[32m+    id: u64,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo {\n  #[serde(default)]\n  id: u64,\n}\n",
@@ -1868,7 +1868,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b21a82a575282f63-A.rs:1:\n struct Foo {\n-  #[serde(default)]\n-  id: u64,\n+    #[serde(default)]\n+    id: u64,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b21a82a575282f63-A.rs:1:\n struct Foo {\n\u001b[31m-  #[serde(default)]\n\u001b[m\u000f\u001b[31m-  id: u64,\n\u001b[m\u000f\u001b[32m+    #[serde(default)]\n\u001b[m\u000f\u001b[32m+    id: u64,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -1895,7 +1895,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8646c02792e8c67b-B.rs:1:\n struct Outer {\n-  #[serde(flatten)]\n-  inner: Inner,\n+    #[serde(flatten)]\n+    inner: Inner,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8646c02792e8c67b-B.rs:1:\n struct Outer {\n\u001b[31m-  #[serde(flatten)]\n\u001b[m\u000f\u001b[31m-  inner: Inner,\n\u001b[m\u000f\u001b[32m+    #[serde(flatten)]\n\u001b[m\u000f\u001b[32m+    inner: Inner,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Outer {\n  #[serde(flatten)]\n  inner: Inner,\n}\n",
@@ -1903,7 +1903,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8646c02792e8c67b-A.rs:1:\n struct Outer {\n-  #[serde(flatten)]\n-  inner: Inner,\n+    #[serde(flatten)]\n+    inner: Inner,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8646c02792e8c67b-A.rs:1:\n struct Outer {\n\u001b[31m-  #[serde(flatten)]\n\u001b[m\u000f\u001b[31m-  inner: Inner,\n\u001b[m\u000f\u001b[32m+    #[serde(flatten)]\n\u001b[m\u000f\u001b[32m+    inner: Inner,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -1930,7 +1930,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4dbb01c798f20bac-B.rs:1:\n struct Foo {\n-  #[serde(skip_serializing_if = \"Option::is_none\")]\n-  maybe: Option<String>,\n+    #[serde(skip_serializing_if = \"Option::is_none\")]\n+    maybe: Option<String>,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4dbb01c798f20bac-B.rs:1:\n struct Foo {\n\u001b[31m-  #[serde(skip_serializing_if = \"Option::is_none\")]\n\u001b[m\u000f\u001b[31m-  maybe: Option<String>,\n\u001b[m\u000f\u001b[32m+    #[serde(skip_serializing_if = \"Option::is_none\")]\n\u001b[m\u000f\u001b[32m+    maybe: Option<String>,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo {\n  #[serde(skip_serializing_if = \"Option::is_none\")]\n  maybe: Option<String>,\n}\n",
@@ -1938,7 +1938,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4dbb01c798f20bac-A.rs:1:\n struct Foo {\n-  #[serde(skip_serializing_if = \"Option::is_none\")]\n-  maybe: Option<String>,\n+    #[serde(skip_serializing_if = \"Option::is_none\")]\n+    maybe: Option<String>,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4dbb01c798f20bac-A.rs:1:\n struct Foo {\n\u001b[31m-  #[serde(skip_serializing_if = \"Option::is_none\")]\n\u001b[m\u000f\u001b[31m-  maybe: Option<String>,\n\u001b[m\u000f\u001b[32m+    #[serde(skip_serializing_if = \"Option::is_none\")]\n\u001b[m\u000f\u001b[32m+    maybe: Option<String>,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -1965,7 +1965,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/644f7c41b0c89129-B.rs:1:\n #[derive(Serialize, Deserialize)]\n #[serde(tag = \"type\", content = \"data\")]\n enum Event {\n-  Click,\n-  Scroll,\n+    Click,\n+    Scroll,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/644f7c41b0c89129-B.rs:1:\n #[derive(Serialize, Deserialize)]\n #[serde(tag = \"type\", content = \"data\")]\n enum Event {\n\u001b[31m-  Click,\n\u001b[m\u000f\u001b[31m-  Scroll,\n\u001b[m\u000f\u001b[32m+    Click,\n\u001b[m\u000f\u001b[32m+    Scroll,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Serialize, Deserialize)]\n#[serde(tag = \"type\", content = \"data\")]\nenum Event {\n  Click,\n  Scroll,\n}\n",
@@ -1973,7 +1973,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/644f7c41b0c89129-A.rs:1:\n #[derive(Serialize, Deserialize)]\n #[serde(tag = \"type\", content = \"data\")]\n enum Event {\n-  Click,\n-  Scroll,\n+    Click,\n+    Scroll,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/644f7c41b0c89129-A.rs:1:\n #[derive(Serialize, Deserialize)]\n #[serde(tag = \"type\", content = \"data\")]\n enum Event {\n\u001b[31m-  Click,\n\u001b[m\u000f\u001b[31m-  Scroll,\n\u001b[m\u000f\u001b[32m+    Click,\n\u001b[m\u000f\u001b[32m+    Scroll,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2000,7 +2000,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/811a37f6fc8e2c06-B.rs:1:\n #[derive(Deserialize)]\n #[serde(untagged)]\n enum Value {\n-  Str,\n-  Num,\n+    Str,\n+    Num,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/811a37f6fc8e2c06-B.rs:1:\n #[derive(Deserialize)]\n #[serde(untagged)]\n enum Value {\n\u001b[31m-  Str,\n\u001b[m\u000f\u001b[31m-  Num,\n\u001b[m\u000f\u001b[32m+    Str,\n\u001b[m\u000f\u001b[32m+    Num,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Deserialize)]\n#[serde(untagged)]\nenum Value {\n  Str,\n  Num,\n}\n",
@@ -2008,7 +2008,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/811a37f6fc8e2c06-A.rs:1:\n #[derive(Deserialize)]\n #[serde(untagged)]\n enum Value {\n-  Str,\n-  Num,\n+    Str,\n+    Num,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/811a37f6fc8e2c06-A.rs:1:\n #[derive(Deserialize)]\n #[serde(untagged)]\n enum Value {\n\u001b[31m-  Str,\n\u001b[m\u000f\u001b[31m-  Num,\n\u001b[m\u000f\u001b[32m+    Str,\n\u001b[m\u000f\u001b[32m+    Num,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2105,7 +2105,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e679f902837cf26f-B.rs:1:\n struct Foo {\n-  bar: i32,\n-  baz: String,\n+    bar: i32,\n+    baz: String,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e679f902837cf26f-B.rs:1:\n struct Foo {\n\u001b[31m-  bar: i32,\n\u001b[m\u000f\u001b[31m-  baz: String,\n\u001b[m\u000f\u001b[32m+    bar: i32,\n\u001b[m\u000f\u001b[32m+    baz: String,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo {\n  bar: i32,\n  baz: String,\n}\n",
@@ -2113,7 +2113,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e679f902837cf26f-A.rs:1:\n struct Foo {\n-  bar: i32,\n-  baz: String,\n+    bar: i32,\n+    baz: String,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e679f902837cf26f-A.rs:1:\n struct Foo {\n\u001b[31m-  bar: i32,\n\u001b[m\u000f\u001b[31m-  baz: String,\n\u001b[m\u000f\u001b[32m+    bar: i32,\n\u001b[m\u000f\u001b[32m+    baz: String,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2140,7 +2140,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95829ce940db0807-B.rs:1:\n struct Foo {\n-  pub bar: i32,\n+    pub bar: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95829ce940db0807-B.rs:1:\n struct Foo {\n\u001b[31m-  pub bar: i32,\n\u001b[m\u000f\u001b[32m+    pub bar: i32,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo {\n  pub bar: i32,\n}\n",
@@ -2148,7 +2148,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95829ce940db0807-A.rs:1:\n struct Foo {\n-  pub bar: i32,\n+    pub bar: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/95829ce940db0807-A.rs:1:\n struct Foo {\n\u001b[31m-  pub bar: i32,\n\u001b[m\u000f\u001b[32m+    pub bar: i32,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2210,7 +2210,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5a72fa15d5d39cef-B.rs:1:\n #[derive(Debug, Clone)]\n struct Foo {\n-  x: i32,\n+    x: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5a72fa15d5d39cef-B.rs:1:\n #[derive(Debug, Clone)]\n struct Foo {\n\u001b[31m-  x: i32,\n\u001b[m\u000f\u001b[32m+    x: i32,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Debug, Clone)]\nstruct Foo {\n  x: i32,\n}\n",
@@ -2218,7 +2218,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5a72fa15d5d39cef-A.rs:1:\n #[derive(Debug, Clone)]\n struct Foo {\n-  x: i32,\n+    x: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5a72fa15d5d39cef-A.rs:1:\n #[derive(Debug, Clone)]\n struct Foo {\n\u001b[31m-  x: i32,\n\u001b[m\u000f\u001b[32m+    x: i32,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2245,7 +2245,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c7dbc74971958f27-B.rs:1:\n struct Foo<T> {\n-  bar: T,\n+    bar: T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c7dbc74971958f27-B.rs:1:\n struct Foo<T> {\n\u001b[31m-  bar: T,\n\u001b[m\u000f\u001b[32m+    bar: T,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<T> {\n  bar: T,\n}\n",
@@ -2253,7 +2253,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c7dbc74971958f27-A.rs:1:\n struct Foo<T> {\n-  bar: T,\n+    bar: T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c7dbc74971958f27-A.rs:1:\n struct Foo<T> {\n\u001b[31m-  bar: T,\n\u001b[m\u000f\u001b[32m+    bar: T,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2280,7 +2280,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4195a5e07d0a5715-B.rs:1:\n struct Foo<T: Display + Clone> {\n-  bar: T,\n+    bar: T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4195a5e07d0a5715-B.rs:1:\n struct Foo<T: Display + Clone> {\n\u001b[31m-  bar: T,\n\u001b[m\u000f\u001b[32m+    bar: T,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<T: Display + Clone> {\n  bar: T,\n}\n",
@@ -2288,7 +2288,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4195a5e07d0a5715-A.rs:1:\n struct Foo<T: Display + Clone> {\n-  bar: T,\n+    bar: T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4195a5e07d0a5715-A.rs:1:\n struct Foo<T: Display + Clone> {\n\u001b[31m-  bar: T,\n\u001b[m\u000f\u001b[32m+    bar: T,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2315,7 +2315,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ea1b7fcf364690b9-B.rs:1:\n struct Foo<'a> {\n-  bar: &'a str,\n+    bar: &'a str,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ea1b7fcf364690b9-B.rs:1:\n struct Foo<'a> {\n\u001b[31m-  bar: &'a str,\n\u001b[m\u000f\u001b[32m+    bar: &'a str,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<'a> {\n  bar: &'a str,\n}\n",
@@ -2323,7 +2323,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ea1b7fcf364690b9-A.rs:1:\n struct Foo<'a> {\n-  bar: &'a str,\n+    bar: &'a str,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ea1b7fcf364690b9-A.rs:1:\n struct Foo<'a> {\n\u001b[31m-  bar: &'a str,\n\u001b[m\u000f\u001b[32m+    bar: &'a str,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2350,7 +2350,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2459d838a186cecd-B.rs:1:\n struct Foo<'a, T: 'a> {\n-  bar: &'a T,\n+    bar: &'a T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2459d838a186cecd-B.rs:1:\n struct Foo<'a, T: 'a> {\n\u001b[31m-  bar: &'a T,\n\u001b[m\u000f\u001b[32m+    bar: &'a T,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<'a, T: 'a> {\n  bar: &'a T,\n}\n",
@@ -2358,7 +2358,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2459d838a186cecd-A.rs:1:\n struct Foo<'a, T: 'a> {\n-  bar: &'a T,\n+    bar: &'a T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2459d838a186cecd-A.rs:1:\n struct Foo<'a, T: 'a> {\n\u001b[31m-  bar: &'a T,\n\u001b[m\u000f\u001b[32m+    bar: &'a T,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2374,20 +2374,18 @@
       "testTitle": "\"where clause\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <StructDeclaration\n          name=\"Foo\"\n          typeParams={[{ name: \"T\" }]}\n          where={[{ target: \"T\", bounds: [\"Serialize\"] }]}\n        >\n          <List hardline>\n            <StructField name=\"bar\" type=\"T\" />\n          </List>\n        </StructDeclaration>\n      </RustRoot>\n    ).toRenderTo(`\n      struct Foo<T>\n      where\n          T: Serialize,\n       {\n        bar: T,\n      }\n    `);\n  }",
       "sourceHash": "dd1517be4d1e17e182b8bbf4c25d3ba48c7698e01fa4abc8c2bda9a2e9cb8bb2",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}",
-      "actual": "struct Foo<T> where T: Serialize {\n  bar: T,\n}",
-      "detail": "expected 'struct Foo<T> where T: Serialize {\\n …' to be 'struct Foo<T>\\nwhere\\n    T: Serializ…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "struct Foo<T> where T: Serialize {\n  bar: T,\n}\n",
+        "context": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/956e24906361d245-B.rs:1:\n-struct Foo<T> where T: Serialize {\n-  bar: T,\n+struct Foo<T>\n+where\n+    T: Serialize,\n+{\n+    bar: T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/956e24906361d245-B.rs:1:\n struct Foo<T>\n where\n     T: Serialize,\n\u001b[31m- {\n\u001b[m\u000f\u001b[31m-  bar: T,\n\u001b[m\u000f\u001b[32m+{\n\u001b[m\u000f\u001b[32m+    bar: T,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}\n",
@@ -2395,7 +2393,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/956e24906361d245-A.rs:1:\n struct Foo<T>\n where\n     T: Serialize,\n- {\n-  bar: T,\n+{\n+    bar: T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/956e24906361d245-A.rs:1:\n struct Foo<T>\n where\n     T: Serialize,\n\u001b[31m- {\n\u001b[m\u000f\u001b[31m-  bar: T,\n\u001b[m\u000f\u001b[32m+{\n\u001b[m\u000f\u001b[32m+    bar: T,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2492,7 +2490,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4b9ffa183e24d104-B.rs:1:\n enum Color {\n-  Red,\n-  Green,\n-  Blue,\n+    Red,\n+    Green,\n+    Blue,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4b9ffa183e24d104-B.rs:1:\n enum Color {\n\u001b[31m-  Red,\n\u001b[m\u000f\u001b[31m-  Green,\n\u001b[m\u000f\u001b[31m-  Blue,\n\u001b[m\u000f\u001b[32m+    Red,\n\u001b[m\u000f\u001b[32m+    Green,\n\u001b[m\u000f\u001b[32m+    Blue,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Color {\n  Red,\n  Green,\n  Blue,\n}\n",
@@ -2500,7 +2498,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4b9ffa183e24d104-A.rs:1:\n enum Color {\n-  Red,\n-  Green,\n-  Blue,\n+    Red,\n+    Green,\n+    Blue,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4b9ffa183e24d104-A.rs:1:\n enum Color {\n\u001b[31m-  Red,\n\u001b[m\u000f\u001b[31m-  Green,\n\u001b[m\u000f\u001b[31m-  Blue,\n\u001b[m\u000f\u001b[32m+    Red,\n\u001b[m\u000f\u001b[32m+    Green,\n\u001b[m\u000f\u001b[32m+    Blue,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2527,7 +2525,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a2d19f4d7a6c2628-B.rs:1:\n enum Shape {\n-  Circle(f64),\n-  Rect(f64, f64),\n+    Circle(f64),\n+    Rect(f64, f64),\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a2d19f4d7a6c2628-B.rs:1:\n enum Shape {\n\u001b[31m-  Circle(f64),\n\u001b[m\u000f\u001b[31m-  Rect(f64, f64),\n\u001b[m\u000f\u001b[32m+    Circle(f64),\n\u001b[m\u000f\u001b[32m+    Rect(f64, f64),\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Shape {\n  Circle(f64),\n  Rect(f64, f64),\n}\n",
@@ -2535,7 +2533,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a2d19f4d7a6c2628-A.rs:1:\n enum Shape {\n-  Circle(f64),\n-  Rect(f64, f64),\n+    Circle(f64),\n+    Rect(f64, f64),\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a2d19f4d7a6c2628-A.rs:1:\n enum Shape {\n\u001b[31m-  Circle(f64),\n\u001b[m\u000f\u001b[31m-  Rect(f64, f64),\n\u001b[m\u000f\u001b[32m+    Circle(f64),\n\u001b[m\u000f\u001b[32m+    Rect(f64, f64),\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2562,7 +2560,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4ea6eb9d047435f9-B.rs:1:\n enum Message {\n-  Quit,\n-  Move {\n-    x: i32,\n-    y: i32,\n-  },\n+    Quit,\n+    Move { x: i32, y: i32 },\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4ea6eb9d047435f9-B.rs:1:\n enum Message {\n\u001b[31m-  Quit,\n\u001b[m\u000f\u001b[31m-  Move {\n\u001b[m\u000f\u001b[31m-    x: i32,\n\u001b[m\u000f\u001b[31m-    y: i32,\n\u001b[m\u000f\u001b[31m-  },\n\u001b[m\u000f\u001b[32m+    Quit,\n\u001b[m\u000f\u001b[32m+    Move { x: i32, y: i32 },\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Message {\n  Quit,\n  Move {\n    x: i32,\n    y: i32,\n  },\n}\n",
@@ -2570,7 +2568,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4ea6eb9d047435f9-A.rs:1:\n enum Message {\n-  Quit,\n-  Move {\n-    x: i32,\n-    y: i32,\n-  },\n+    Quit,\n+    Move { x: i32, y: i32 },\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4ea6eb9d047435f9-A.rs:1:\n enum Message {\n\u001b[31m-  Quit,\n\u001b[m\u000f\u001b[31m-  Move {\n\u001b[m\u000f\u001b[31m-    x: i32,\n\u001b[m\u000f\u001b[31m-    y: i32,\n\u001b[m\u000f\u001b[31m-  },\n\u001b[m\u000f\u001b[32m+    Quit,\n\u001b[m\u000f\u001b[32m+    Move { x: i32, y: i32 },\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2597,7 +2595,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c2abbb2e49c0bd78-B.rs:1:\n enum Event {\n-  None,\n-  Click(i32, i32),\n-  KeyPress {\n-    key: char,\n-    ctrl: bool,\n-  },\n+    None,\n+    Click(i32, i32),\n+    KeyPress { key: char, ctrl: bool },\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c2abbb2e49c0bd78-B.rs:1:\n enum Event {\n\u001b[31m-  None,\n\u001b[m\u000f\u001b[31m-  Click(i32, i32),\n\u001b[m\u000f\u001b[31m-  KeyPress {\n\u001b[m\u000f\u001b[31m-    key: char,\n\u001b[m\u000f\u001b[31m-    ctrl: bool,\n\u001b[m\u000f\u001b[31m-  },\n\u001b[m\u000f\u001b[32m+    None,\n\u001b[m\u000f\u001b[32m+    Click(i32, i32),\n\u001b[m\u000f\u001b[32m+    KeyPress { key: char, ctrl: bool },\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Event {\n  None,\n  Click(i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}\n",
@@ -2605,7 +2603,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c2abbb2e49c0bd78-A.rs:1:\n enum Event {\n-  None,\n-  Click(i32, i32),\n-  KeyPress {\n-    key: char,\n-    ctrl: bool,\n-  },\n+    None,\n+    Click(i32, i32),\n+    KeyPress { key: char, ctrl: bool },\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c2abbb2e49c0bd78-A.rs:1:\n enum Event {\n\u001b[31m-  None,\n\u001b[m\u000f\u001b[31m-  Click(i32, i32),\n\u001b[m\u000f\u001b[31m-  KeyPress {\n\u001b[m\u000f\u001b[31m-    key: char,\n\u001b[m\u000f\u001b[31m-    ctrl: bool,\n\u001b[m\u000f\u001b[31m-  },\n\u001b[m\u000f\u001b[32m+    None,\n\u001b[m\u000f\u001b[32m+    Click(i32, i32),\n\u001b[m\u000f\u001b[32m+    KeyPress { key: char, ctrl: bool },\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2632,7 +2630,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d48cea47d1947295-B.rs:1:\n #[derive(Debug, PartialEq)]\n enum Color {\n-  Red,\n+    Red,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d48cea47d1947295-B.rs:1:\n #[derive(Debug, PartialEq)]\n enum Color {\n\u001b[31m-  Red,\n\u001b[m\u000f\u001b[32m+    Red,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Debug, PartialEq)]\nenum Color {\n  Red,\n}\n",
@@ -2640,7 +2638,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d48cea47d1947295-A.rs:1:\n #[derive(Debug, PartialEq)]\n enum Color {\n-  Red,\n+    Red,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d48cea47d1947295-A.rs:1:\n #[derive(Debug, PartialEq)]\n enum Color {\n\u001b[31m-  Red,\n\u001b[m\u000f\u001b[32m+    Red,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2667,7 +2665,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/be264f149cb2c0ec-B.rs:1:\n enum Option<T> {\n-  Some(T),\n-  None,\n+    Some(T),\n+    None,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/be264f149cb2c0ec-B.rs:1:\n enum Option<T> {\n\u001b[31m-  Some(T),\n\u001b[m\u000f\u001b[31m-  None,\n\u001b[m\u000f\u001b[32m+    Some(T),\n\u001b[m\u000f\u001b[32m+    None,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Option<T> {\n  Some(T),\n  None,\n}\n",
@@ -2675,7 +2673,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/be264f149cb2c0ec-A.rs:1:\n enum Option<T> {\n-  Some(T),\n-  None,\n+    Some(T),\n+    None,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/be264f149cb2c0ec-A.rs:1:\n enum Option<T> {\n\u001b[31m-  Some(T),\n\u001b[m\u000f\u001b[31m-  None,\n\u001b[m\u000f\u001b[32m+    Some(T),\n\u001b[m\u000f\u001b[32m+    None,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -2702,7 +2700,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/23ab8d3d2622a202-B.rs:1:\n pub enum Color {\n-  Red,\n+    Red,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/23ab8d3d2622a202-B.rs:1:\n pub enum Color {\n\u001b[31m-  Red,\n\u001b[m\u000f\u001b[32m+    Red,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub enum Color {\n  Red,\n}\n",
@@ -2710,7 +2708,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/23ab8d3d2622a202-A.rs:1:\n pub enum Color {\n-  Red,\n+    Red,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/23ab8d3d2622a202-A.rs:1:\n pub enum Color {\n\u001b[31m-  Red,\n\u001b[m\u000f\u001b[32m+    Red,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3405,7 +3403,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/43d51813deddcb90-B.rs:1:\n trait Greeter {\n-  fn greet(&self) -> String;\n+    fn greet(&self) -> String;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/43d51813deddcb90-B.rs:1:\n trait Greeter {\n\u001b[31m-  fn greet(&self) -> String;\n\u001b[m\u000f\u001b[32m+    fn greet(&self) -> String;\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "trait Greeter {\n  fn greet(&self) -> String;\n}\n",
@@ -3413,7 +3411,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/43d51813deddcb90-A.rs:1:\n trait Greeter {\n-  fn greet(&self) -> String;\n+    fn greet(&self) -> String;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/43d51813deddcb90-A.rs:1:\n trait Greeter {\n\u001b[31m-  fn greet(&self) -> String;\n\u001b[m\u000f\u001b[32m+    fn greet(&self) -> String;\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3429,20 +3427,18 @@
       "testTitle": "\"renders trait with associated type\"",
       "testInput": "{\n    expect(<RustRoot>\n      <TraitDeclaration name=\"Iterator\">\n        <AssociatedType name=\"Item\" />\n        {\"\\n\"}\n        <TraitMethod name=\"next\" selfParam=\"&mut\" returns={<>Option&lt;Self::Item&gt;</>} />\n      </TraitDeclaration>\n    </RustRoot>).toRenderTo(`\n      trait Iterator {\n        type Item;\n        fn next(&mut self) -> Option<Self::Item>;\n      }\n    `);\n  }",
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "trait Iterator {\n  type Item;\n  fn next(&mut self) -> Option<Self::Item>;\n}",
-      "actual": "trait Iterator {\n  type Item;\n\n\n  fn next(&mut self) -> Option<Self::Item>;\n}",
-      "detail": "expected 'trait Iterator {\\n  type Item;\\n\\n\\n …' to be 'trait Iterator {\\n  type Item;\\n  fn …' // Object.is equality",
-      "byteEqual": false,
+      "actual": "trait Iterator {\n  type Item;\n  fn next(&mut self) -> Option<Self::Item>;\n}",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "trait Iterator {\n  type Item;\n\n\n  fn next(&mut self) -> Option<Self::Item>;\n}\n",
+        "context": "trait Iterator {\n  type Item;\n  fn next(&mut self) -> Option<Self::Item>;\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d32a38b303baeb36-B.rs:1:\n trait Iterator {\n-  type Item;\n+    type Item;\n \n-\n-  fn next(&mut self) -> Option<Self::Item>;\n+    fn next(&mut self) -> Option<Self::Item>;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d32a38b303baeb36-B.rs:1:\n trait Iterator {\n\u001b[31m-  type Item;\n\u001b[m\u000f\u001b[31m-  fn next(&mut self) -> Option<Self::Item>;\n\u001b[m\u000f\u001b[32m+    type Item;\n\u001b[m\u000f\u001b[32m+    fn next(&mut self) -> Option<Self::Item>;\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "trait Iterator {\n  type Item;\n  fn next(&mut self) -> Option<Self::Item>;\n}\n",
@@ -3450,7 +3446,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d32a38b303baeb36-A.rs:1:\n trait Iterator {\n-  type Item;\n-  fn next(&mut self) -> Option<Self::Item>;\n+    type Item;\n+    fn next(&mut self) -> Option<Self::Item>;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d32a38b303baeb36-A.rs:1:\n trait Iterator {\n\u001b[31m-  type Item;\n\u001b[m\u000f\u001b[31m-  fn next(&mut self) -> Option<Self::Item>;\n\u001b[m\u000f\u001b[32m+    type Item;\n\u001b[m\u000f\u001b[32m+    fn next(&mut self) -> Option<Self::Item>;\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3477,7 +3473,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ae7043ba34c714c1-B.rs:1:\n trait Container {\n-  type Item: Clone + Send;\n+    type Item: Clone + Send;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ae7043ba34c714c1-B.rs:1:\n trait Container {\n\u001b[31m-  type Item: Clone + Send;\n\u001b[m\u000f\u001b[32m+    type Item: Clone + Send;\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "trait Container {\n  type Item: Clone + Send;\n}\n",
@@ -3485,7 +3481,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ae7043ba34c714c1-A.rs:1:\n trait Container {\n-  type Item: Clone + Send;\n+    type Item: Clone + Send;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/ae7043ba34c714c1-A.rs:1:\n trait Container {\n\u001b[31m-  type Item: Clone + Send;\n\u001b[m\u000f\u001b[32m+    type Item: Clone + Send;\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3501,20 +3497,18 @@
       "testTitle": "\"renders generic trait with where clause\"",
       "testInput": "{\n    expect(<RustRoot>\n      <TraitDeclaration\n        name=\"Store\"\n        typeParams={[{ name: \"T\" }]}\n        where={[{ target: \"T\", bounds: [\"Serialize\", \"Send\"] }]}\n      >\n        <TraitMethod name=\"save\" selfParam=\"&\" params={[{ name: \"item\", type: <>&amp;T</> }]} />\n      </TraitDeclaration>\n    </RustRoot>).toRenderTo(`\n      trait Store<T>\n      where\n          T: Serialize + Send,\n       {\n        fn save(&self, item: &T);\n      }\n    `);\n  }",
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}",
-      "actual": "trait Store<T> where T: Serialize + Send {\n  fn save(&self, item: &T);\n}",
-      "detail": "expected 'trait Store<T> where T: Serialize + S…' to be 'trait Store<T>\\nwhere\\n    T: Seriali…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "trait Store<T> where T: Serialize + Send {\n  fn save(&self, item: &T);\n}\n",
+        "context": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/af72cd30fcd898d9-B.rs:1:\n-trait Store<T> where T: Serialize + Send {\n-  fn save(&self, item: &T);\n+trait Store<T>\n+where\n+    T: Serialize + Send,\n+{\n+    fn save(&self, item: &T);\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/af72cd30fcd898d9-B.rs:1:\n trait Store<T>\n where\n     T: Serialize + Send,\n\u001b[31m- {\n\u001b[m\u000f\u001b[31m-  fn save(&self, item: &T);\n\u001b[m\u000f\u001b[32m+{\n\u001b[m\u000f\u001b[32m+    fn save(&self, item: &T);\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}\n",
@@ -3522,7 +3516,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/af72cd30fcd898d9-A.rs:1:\n trait Store<T>\n where\n     T: Serialize + Send,\n- {\n-  fn save(&self, item: &T);\n+{\n+    fn save(&self, item: &T);\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/af72cd30fcd898d9-A.rs:1:\n trait Store<T>\n where\n     T: Serialize + Send,\n\u001b[31m- {\n\u001b[m\u000f\u001b[31m-  fn save(&self, item: &T);\n\u001b[m\u000f\u001b[32m+{\n\u001b[m\u000f\u001b[32m+    fn save(&self, item: &T);\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3549,7 +3543,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/3cb7a67db418bc5c-B.rs:1:\n pub trait ReadWrite {\n-  fn read(&self) -> Vec<u8>;\n-  fn write(&mut self, data: &[u8]);\n+    fn read(&self) -> Vec<u8>;\n+    fn write(&mut self, data: &[u8]);\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/3cb7a67db418bc5c-B.rs:1:\n pub trait ReadWrite {\n\u001b[31m-  fn read(&self) -> Vec<u8>;\n\u001b[m\u000f\u001b[31m-  fn write(&mut self, data: &[u8]);\n\u001b[m\u000f\u001b[32m+    fn read(&self) -> Vec<u8>;\n\u001b[m\u000f\u001b[32m+    fn write(&mut self, data: &[u8]);\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut self, data: &[u8]);\n}\n",
@@ -3557,7 +3551,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/3cb7a67db418bc5c-A.rs:1:\n pub trait ReadWrite {\n-  fn read(&self) -> Vec<u8>;\n-  fn write(&mut self, data: &[u8]);\n+    fn read(&self) -> Vec<u8>;\n+    fn write(&mut self, data: &[u8]);\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/3cb7a67db418bc5c-A.rs:1:\n pub trait ReadWrite {\n\u001b[31m-  fn read(&self) -> Vec<u8>;\n\u001b[m\u000f\u001b[31m-  fn write(&mut self, data: &[u8]);\n\u001b[m\u000f\u001b[32m+    fn read(&self) -> Vec<u8>;\n\u001b[m\u000f\u001b[32m+    fn write(&mut self, data: &[u8]);\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3759,7 +3753,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/782501a372ca9065-B.rs:1:\n fn probe() {\n-let x: i32 = 42;\n+    let x: i32 = 42;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/782501a372ca9065-B.rs:1:\n fn probe() {\n\u001b[31m-let x: i32 = 42;\n\u001b[m\u000f\u001b[32m+    let x: i32 = 42;\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "fn probe() {\nlet x: i32 = 42;\n}\n",
@@ -3767,7 +3761,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/782501a372ca9065-A.rs:1:\n fn probe() {\n-let x: i32 = 42;\n+    let x: i32 = 42;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/782501a372ca9065-A.rs:1:\n fn probe() {\n\u001b[31m-let x: i32 = 42;\n\u001b[m\u000f\u001b[32m+    let x: i32 = 42;\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3794,7 +3788,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/fe04f08caf565f86-B.rs:1:\n fn probe() {\n-let mut buf: Vec<u8> = Vec::new();\n+    let mut buf: Vec<u8> = Vec::new();\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/fe04f08caf565f86-B.rs:1:\n fn probe() {\n\u001b[31m-let mut buf: Vec<u8> = Vec::new();\n\u001b[m\u000f\u001b[32m+    let mut buf: Vec<u8> = Vec::new();\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "fn probe() {\nlet mut buf: Vec<u8> = Vec::new();\n}\n",
@@ -3802,7 +3796,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/fe04f08caf565f86-A.rs:1:\n fn probe() {\n-let mut buf: Vec<u8> = Vec::new();\n+    let mut buf: Vec<u8> = Vec::new();\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/fe04f08caf565f86-A.rs:1:\n fn probe() {\n\u001b[31m-let mut buf: Vec<u8> = Vec::new();\n\u001b[m\u000f\u001b[32m+    let mut buf: Vec<u8> = Vec::new();\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3829,7 +3823,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2706fec5b975bef4-B.rs:1:\n fn probe() {\n-let items = vec![1, 2, 3];\n+    let items = vec![1, 2, 3];\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2706fec5b975bef4-B.rs:1:\n fn probe() {\n\u001b[31m-let items = vec![1, 2, 3];\n\u001b[m\u000f\u001b[32m+    let items = vec![1, 2, 3];\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "fn probe() {\nlet items = vec![1, 2, 3];\n}\n",
@@ -3837,7 +3831,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2706fec5b975bef4-A.rs:1:\n fn probe() {\n-let items = vec![1, 2, 3];\n+    let items = vec![1, 2, 3];\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2706fec5b975bef4-A.rs:1:\n fn probe() {\n\u001b[31m-let items = vec![1, 2, 3];\n\u001b[m\u000f\u001b[32m+    let items = vec![1, 2, 3];\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3864,7 +3858,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a955433e2aede4ce-B.rs:1:\n fn probe() {\n-let result: Option<String>;\n+    let result: Option<String>;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a955433e2aede4ce-B.rs:1:\n fn probe() {\n\u001b[31m-let result: Option<String>;\n\u001b[m\u000f\u001b[32m+    let result: Option<String>;\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "fn probe() {\nlet result: Option<String>;\n}\n",
@@ -3872,7 +3866,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a955433e2aede4ce-A.rs:1:\n fn probe() {\n-let result: Option<String>;\n+    let result: Option<String>;\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a955433e2aede4ce-A.rs:1:\n fn probe() {\n\u001b[31m-let result: Option<String>;\n\u001b[m\u000f\u001b[32m+    let result: Option<String>;\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3899,7 +3893,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-B.rs:1:\n pub trait Greet {\n-  fn hello(&self) -> String;\n+    fn hello(&self) -> String;\n }\n \n #[derive(Debug)]\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-B.rs:6:\n struct Bot;\n \n impl Greet for Bot {\n-  fn hello(&self) -> String {\n-    String::from(\"beep boop\")\n-  }\n+    fn hello(&self) -> String {\n+        String::from(\"beep boop\")\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-B.rs:1:\n pub trait Greet {\n\u001b[31m-  fn hello(&self) -> String;\n\u001b[m\u000f\u001b[32m+    fn hello(&self) -> String;\n\u001b[m\u000f }\n \n #[derive(Debug)]\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-B.rs:6:\n struct Bot;\n \n impl Greet for Bot {\n\u001b[31m-  fn hello(&self) -> String {\n\u001b[m\u000f\u001b[31m-    String::from(\"beep boop\")\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn hello(&self) -> String {\n\u001b[m\u000f\u001b[32m+        String::from(\"beep boop\")\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub trait Greet {\n  fn hello(&self) -> String;\n}\n\n#[derive(Debug)]\nstruct Bot;\n\nimpl Greet for Bot {\n  fn hello(&self) -> String {\n    String::from(\"beep boop\")\n  }\n}\n",
@@ -3907,7 +3901,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-A.rs:1:\n pub trait Greet {\n-  fn hello(&self) -> String;\n+    fn hello(&self) -> String;\n }\n \n #[derive(Debug)]\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-A.rs:6:\n struct Bot;\n \n impl Greet for Bot {\n-  fn hello(&self) -> String {\n-    String::from(\"beep boop\")\n-  }\n+    fn hello(&self) -> String {\n+        String::from(\"beep boop\")\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-A.rs:1:\n pub trait Greet {\n\u001b[31m-  fn hello(&self) -> String;\n\u001b[m\u000f\u001b[32m+    fn hello(&self) -> String;\n\u001b[m\u000f }\n \n #[derive(Debug)]\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/48ed451e9d842357-A.rs:6:\n struct Bot;\n \n impl Greet for Bot {\n\u001b[31m-  fn hello(&self) -> String {\n\u001b[m\u000f\u001b[31m-    String::from(\"beep boop\")\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn hello(&self) -> String {\n\u001b[m\u000f\u001b[32m+        String::from(\"beep boop\")\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -3923,20 +3917,18 @@
       "testTitle": "\"no params, no return\"",
       "testInput": "{\n    expect(\n      <RustRoot><FunctionDeclaration name=\"foo\" /></RustRoot>\n    ).toRenderTo(\"fn foo() { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "fn foo() { }",
-      "actual": "fn foo() {}",
-      "detail": "expected 'fn foo() {}' to be 'fn foo() { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "fn foo() { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo() {}\n",
+        "context": "fn foo() { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c117dbd32f6caac4-B.rs:1:\n\u001b[31m-fn foo() { }\n\u001b[m\u000f\u001b[32m+fn foo() {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo() { }\n",
@@ -3944,7 +3936,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c117dbd32f6caac4-A.rs:1:\n-fn foo() { }\n+fn foo() {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c117dbd32f6caac4-A.rs:1:\n\u001b[31m-fn foo() { }\n\u001b[m\u000f\u001b[32m+fn foo() {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -3960,20 +3952,18 @@
       "testTitle": "\"params with types\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <FunctionDeclaration\n          name=\"foo\"\n          params={[\n            { name: \"bar\", type: \"i32\" },\n            { name: \"baz\", type: \"String\" },\n          ]}\n        />\n      </RustRoot>\n    ).toRenderTo(\"fn foo(bar: i32, baz: String) { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "fn foo(bar: i32, baz: String) { }",
-      "actual": "fn foo(bar: i32, baz: String) {}",
-      "detail": "expected 'fn foo(bar: i32, baz: String) {}' to be 'fn foo(bar: i32, baz: String) { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "fn foo(bar: i32, baz: String) { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo(bar: i32, baz: String) {}\n",
+        "context": "fn foo(bar: i32, baz: String) { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/16aeff7380c58c9d-B.rs:1:\n\u001b[31m-fn foo(bar: i32, baz: String) { }\n\u001b[m\u000f\u001b[32m+fn foo(bar: i32, baz: String) {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo(bar: i32, baz: String) { }\n",
@@ -3981,7 +3971,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/16aeff7380c58c9d-A.rs:1:\n-fn foo(bar: i32, baz: String) { }\n+fn foo(bar: i32, baz: String) {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/16aeff7380c58c9d-A.rs:1:\n\u001b[31m-fn foo(bar: i32, baz: String) { }\n\u001b[m\u000f\u001b[32m+fn foo(bar: i32, baz: String) {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -3997,20 +3987,18 @@
       "testTitle": "\"return type\"",
       "testInput": "{\n    expect(\n      <RustRoot><FunctionDeclaration name=\"foo\" returns=\"i32\" /></RustRoot>\n    ).toRenderTo(\"fn foo() -> i32 { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "fn foo() -> i32 { }",
-      "actual": "fn foo() -> i32 {}",
-      "detail": "expected 'fn foo() -> i32 {}' to be 'fn foo() -> i32 { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "fn foo() -> i32 { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo() -> i32 {}\n",
+        "context": "fn foo() -> i32 { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8542a69c294fd15f-B.rs:1:\n\u001b[31m-fn foo() -> i32 { }\n\u001b[m\u000f\u001b[32m+fn foo() -> i32 {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo() -> i32 { }\n",
@@ -4018,7 +4006,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8542a69c294fd15f-A.rs:1:\n-fn foo() -> i32 { }\n+fn foo() -> i32 {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8542a69c294fd15f-A.rs:1:\n\u001b[31m-fn foo() -> i32 { }\n\u001b[m\u000f\u001b[32m+fn foo() -> i32 {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4045,7 +4033,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8ce1ef6d3c6a8103-B.rs:1:\n fn foo() -> i32 {\n-  42\n+    42\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8ce1ef6d3c6a8103-B.rs:1:\n fn foo() -> i32 {\n\u001b[31m-  42\n\u001b[m\u000f\u001b[32m+    42\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "fn foo() -> i32 {\n  42\n}\n",
@@ -4053,7 +4041,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8ce1ef6d3c6a8103-A.rs:1:\n fn foo() -> i32 {\n-  42\n+    42\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/8ce1ef6d3c6a8103-A.rs:1:\n fn foo() -> i32 {\n\u001b[31m-  42\n\u001b[m\u000f\u001b[32m+    42\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4069,20 +4057,18 @@
       "testTitle": "\"generic\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <FunctionDeclaration\n          name=\"foo\"\n          typeParams={[{ name: \"T\" }]}\n          params={[{ name: \"bar\", type: \"T\" }]}\n          returns=\"T\"\n        />\n      </RustRoot>\n    ).toRenderTo(\"fn foo<T>(bar: T) -> T { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "fn foo<T>(bar: T) -> T { }",
-      "actual": "fn foo<T>(bar: T) -> T {}",
-      "detail": "expected 'fn foo<T>(bar: T) -> T {}' to be 'fn foo<T>(bar: T) -> T { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "fn foo<T>(bar: T) -> T { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo<T>(bar: T) -> T {}\n",
+        "context": "fn foo<T>(bar: T) -> T { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/656a08a3c2a2fea0-B.rs:1:\n\u001b[31m-fn foo<T>(bar: T) -> T { }\n\u001b[m\u000f\u001b[32m+fn foo<T>(bar: T) -> T {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo<T>(bar: T) -> T { }\n",
@@ -4090,7 +4076,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/656a08a3c2a2fea0-A.rs:1:\n-fn foo<T>(bar: T) -> T { }\n+fn foo<T>(bar: T) -> T {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/656a08a3c2a2fea0-A.rs:1:\n\u001b[31m-fn foo<T>(bar: T) -> T { }\n\u001b[m\u000f\u001b[32m+fn foo<T>(bar: T) -> T {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4106,20 +4092,18 @@
       "testTitle": "\"trait bounds\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <FunctionDeclaration\n          name=\"foo\"\n          typeParams={[{ name: \"T\", bounds: [\"Display\"] }]}\n          params={[{ name: \"bar\", type: \"T\" }]}\n        />\n      </RustRoot>\n    ).toRenderTo(\"fn foo<T: Display>(bar: T) { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "fn foo<T: Display>(bar: T) { }",
-      "actual": "fn foo<T: Display>(bar: T) {}",
-      "detail": "expected 'fn foo<T: Display>(bar: T) {}' to be 'fn foo<T: Display>(bar: T) { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "fn foo<T: Display>(bar: T) { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo<T: Display>(bar: T) {}\n",
+        "context": "fn foo<T: Display>(bar: T) { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/432849ff6b3675d6-B.rs:1:\n\u001b[31m-fn foo<T: Display>(bar: T) { }\n\u001b[m\u000f\u001b[32m+fn foo<T: Display>(bar: T) {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo<T: Display>(bar: T) { }\n",
@@ -4127,7 +4111,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/432849ff6b3675d6-A.rs:1:\n-fn foo<T: Display>(bar: T) { }\n+fn foo<T: Display>(bar: T) {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/432849ff6b3675d6-A.rs:1:\n\u001b[31m-fn foo<T: Display>(bar: T) { }\n\u001b[m\u000f\u001b[32m+fn foo<T: Display>(bar: T) {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4143,20 +4127,18 @@
       "testTitle": "\"where clause\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <FunctionDeclaration\n          name=\"foo\"\n          typeParams={[{ name: \"T\" }]}\n          params={[{ name: \"bar\", type: \"T\" }]}\n          where={[{ target: \"T\", bounds: [\"Serialize\"] }]}\n        />\n      </RustRoot>\n    ).toRenderTo(`\n      fn foo<T>(bar: T)\n      where\n          T: Serialize,\n       { }\n    `);\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }",
-      "actual": "fn foo<T>(bar: T) where T: Serialize {}",
-      "detail": "expected 'fn foo<T>(bar: T) where T: Serialize …' to be 'fn foo<T>(bar: T)\\nwhere\\n    T: Seri…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo<T>(bar: T) where T: Serialize {}\n",
+        "context": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/55c8b17a90b727a2-B.rs:1:\n-fn foo<T>(bar: T) where T: Serialize {}\n+fn foo<T>(bar: T)\n+where\n+    T: Serialize,\n+{\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/55c8b17a90b727a2-B.rs:1:\n fn foo<T>(bar: T)\n where\n     T: Serialize,\n\u001b[31m- { }\n\u001b[m\u000f\u001b[32m+{\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }\n",
@@ -4164,7 +4146,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/55c8b17a90b727a2-A.rs:1:\n fn foo<T>(bar: T)\n where\n     T: Serialize,\n- { }\n+{\n+}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/55c8b17a90b727a2-A.rs:1:\n fn foo<T>(bar: T)\n where\n     T: Serialize,\n\u001b[31m- { }\n\u001b[m\u000f\u001b[32m+{\n\u001b[m\u000f\u001b[32m+}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4180,20 +4162,18 @@
       "testTitle": "\"lifetime params\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <FunctionDeclaration\n          name=\"foo\"\n          lifetimes={[{ name: \"a\" }]}\n          params={[{ name: \"bar\", type: \"&'a str\" }]}\n          returns=\"&'a str\"\n        />\n      </RustRoot>\n    ).toRenderTo(\"fn foo<'a>(bar: &'a str) -> &'a str { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "fn foo<'a>(bar: &'a str) -> &'a str { }",
-      "actual": "fn foo<'a>(bar: &'a str) -> &'a str {}",
-      "detail": "expected 'fn foo<\\'a>(bar: &\\'a str) -> &\\'a st…' to be 'fn foo<\\'a>(bar: &\\'a str) -> &\\'a st…' // Object.is equality",
-      "byteEqual": false,
+      "actual": "fn foo<'a>(bar: &'a str) -> &'a str { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo<'a>(bar: &'a str) -> &'a str {}\n",
+        "context": "fn foo<'a>(bar: &'a str) -> &'a str { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5f18efb60701dbae-B.rs:1:\n\u001b[31m-fn foo<'a>(bar: &'a str) -> &'a str { }\n\u001b[m\u000f\u001b[32m+fn foo<'a>(bar: &'a str) -> &'a str {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "fn foo<'a>(bar: &'a str) -> &'a str { }\n",
@@ -4201,7 +4181,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5f18efb60701dbae-A.rs:1:\n-fn foo<'a>(bar: &'a str) -> &'a str { }\n+fn foo<'a>(bar: &'a str) -> &'a str {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5f18efb60701dbae-A.rs:1:\n\u001b[31m-fn foo<'a>(bar: &'a str) -> &'a str { }\n\u001b[m\u000f\u001b[32m+fn foo<'a>(bar: &'a str) -> &'a str {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4217,20 +4197,18 @@
       "testTitle": "\"pub visibility\"",
       "testInput": "{\n    expect(\n      <RustRoot><FunctionDeclaration name=\"foo\" pub /></RustRoot>\n    ).toRenderTo(\"pub fn foo() { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "pub fn foo() { }",
-      "actual": "pub fn foo() {}",
-      "detail": "expected 'pub fn foo() {}' to be 'pub fn foo() { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "pub fn foo() { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "pub fn foo() {}\n",
+        "context": "pub fn foo() { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/050db53debf58f21-B.rs:1:\n\u001b[31m-pub fn foo() { }\n\u001b[m\u000f\u001b[32m+pub fn foo() {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "pub fn foo() { }\n",
@@ -4238,7 +4216,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/050db53debf58f21-A.rs:1:\n-pub fn foo() { }\n+pub fn foo() {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/050db53debf58f21-A.rs:1:\n\u001b[31m-pub fn foo() { }\n\u001b[m\u000f\u001b[32m+pub fn foo() {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4254,20 +4232,18 @@
       "testTitle": "\"async\"",
       "testInput": "{\n    expect(\n      <RustRoot><FunctionDeclaration name=\"foo\" async /></RustRoot>\n    ).toRenderTo(\"async fn foo() { }\");\n  }",
       "sourceHash": "031977744c545c49a806ed2ec5bd95f66f37023fd509f94e9c14eb0b92732f18",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "async fn foo() { }",
-      "actual": "async fn foo() {}",
-      "detail": "expected 'async fn foo() {}' to be 'async fn foo() { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "async fn foo() { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "async fn foo() {}\n",
+        "context": "async fn foo() { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/6c90ec995799bb24-B.rs:1:\n\u001b[31m-async fn foo() { }\n\u001b[m\u000f\u001b[32m+async fn foo() {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "async fn foo() { }\n",
@@ -4275,7 +4251,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/6c90ec995799bb24-A.rs:1:\n-async fn foo() { }\n+async fn foo() {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/6c90ec995799bb24-A.rs:1:\n\u001b[31m-async fn foo() { }\n\u001b[m\u000f\u001b[32m+async fn foo() {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4302,7 +4278,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/99554895de81abd1-B.rs:1:\n pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/99554895de81abd1-B.rs:1:\n pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n  todo!()\n}\n",
@@ -4310,7 +4286,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/99554895de81abd1-A.rs:1:\n pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/99554895de81abd1-A.rs:1:\n pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4326,20 +4302,18 @@
       "testTitle": "\"inherent impl, empty\"",
       "testInput": "{\n    expect(\n      <RustRoot><ImplBlock target=\"Foo\" /></RustRoot>\n    ).toRenderTo(\"impl Foo { }\");\n  }",
       "sourceHash": "0905494ef7da97f11115a57985921856bf4fd3f2c8092af1136648e921728d6a",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "impl Foo { }",
-      "actual": "impl Foo {}",
-      "detail": "expected 'impl Foo {}' to be 'impl Foo { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "impl Foo { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "impl Foo {}\n",
+        "context": "impl Foo { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/67c3cad083c1e2ba-B.rs:1:\n\u001b[31m-impl Foo { }\n\u001b[m\u000f\u001b[32m+impl Foo {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "impl Foo { }\n",
@@ -4347,7 +4321,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/67c3cad083c1e2ba-A.rs:1:\n-impl Foo { }\n+impl Foo {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/67c3cad083c1e2ba-A.rs:1:\n\u001b[31m-impl Foo { }\n\u001b[m\u000f\u001b[32m+impl Foo {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4374,7 +4348,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e5f9a939718893c5-B.rs:1:\n impl Foo {\n-  pub fn bar() {\n-    42\n-  }\n+    pub fn bar() {\n+        42\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e5f9a939718893c5-B.rs:1:\n impl Foo {\n\u001b[31m-  pub fn bar() {\n\u001b[m\u000f\u001b[31m-    42\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    pub fn bar() {\n\u001b[m\u000f\u001b[32m+        42\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "impl Foo {\n  pub fn bar() {\n    42\n  }\n}\n",
@@ -4382,7 +4356,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e5f9a939718893c5-A.rs:1:\n impl Foo {\n-  pub fn bar() {\n-    42\n-  }\n+    pub fn bar() {\n+        42\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e5f9a939718893c5-A.rs:1:\n impl Foo {\n\u001b[31m-  pub fn bar() {\n\u001b[m\u000f\u001b[31m-    42\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    pub fn bar() {\n\u001b[m\u000f\u001b[32m+        42\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4409,7 +4383,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/297b66bf43e3f366-B.rs:1:\n impl Display for Foo {\n-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n-    write!(f, \"Foo\")\n-  }\n+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n+        write!(f, \"Foo\")\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/297b66bf43e3f366-B.rs:1:\n impl Display for Foo {\n\u001b[31m-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n\u001b[m\u000f\u001b[31m-    write!(f, \"Foo\")\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n\u001b[m\u000f\u001b[32m+        write!(f, \"Foo\")\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "impl Display for Foo {\n  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}\n",
@@ -4417,7 +4391,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/297b66bf43e3f366-A.rs:1:\n impl Display for Foo {\n-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n-    write!(f, \"Foo\")\n-  }\n+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n+        write!(f, \"Foo\")\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/297b66bf43e3f366-A.rs:1:\n impl Display for Foo {\n\u001b[31m-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n\u001b[m\u000f\u001b[31m-    write!(f, \"Foo\")\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n\u001b[m\u000f\u001b[32m+        write!(f, \"Foo\")\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4433,20 +4407,18 @@
       "testTitle": "\"generic impl\"",
       "testInput": "{\n    expect(\n      <RustRoot><ImplBlock target=\"Foo<T>\" typeParams={[{ name: \"T\" }]} /></RustRoot>\n    ).toRenderTo(\"impl<T> Foo<T> { }\");\n  }",
       "sourceHash": "0905494ef7da97f11115a57985921856bf4fd3f2c8092af1136648e921728d6a",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "impl<T> Foo<T> { }",
-      "actual": "impl<T> Foo<T> {}",
-      "detail": "expected 'impl<T> Foo<T> {}' to be 'impl<T> Foo<T> { }' // Object.is equality",
-      "byteEqual": false,
+      "actual": "impl<T> Foo<T> { }",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "impl<T> Foo<T> {}\n",
+        "context": "impl<T> Foo<T> { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a9b60b9f0e189101-B.rs:1:\n\u001b[31m-impl<T> Foo<T> { }\n\u001b[m\u000f\u001b[32m+impl<T> Foo<T> {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "impl<T> Foo<T> { }\n",
@@ -4454,7 +4426,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a9b60b9f0e189101-A.rs:1:\n-impl<T> Foo<T> { }\n+impl<T> Foo<T> {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a9b60b9f0e189101-A.rs:1:\n\u001b[31m-impl<T> Foo<T> { }\n\u001b[m\u000f\u001b[32m+impl<T> Foo<T> {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4470,20 +4442,18 @@
       "testTitle": "\"impl with where clause\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <ImplBlock\n          target=\"Foo<T>\"\n          typeParams={[{ name: \"T\" }]}\n          where={[{ target: \"T\", bounds: [\"Clone\"] }]}\n        />\n      </RustRoot>\n    ).toRenderTo(`\n      impl<T> Foo<T>\n      where\n          T: Clone,\n       { }\n    `);\n  }",
       "sourceHash": "0905494ef7da97f11115a57985921856bf4fd3f2c8092af1136648e921728d6a",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }",
-      "actual": "impl<T> Foo<T> where T: Clone {}",
-      "detail": "expected 'impl<T> Foo<T> where T: Clone {}' to be 'impl<T> Foo<T>\\nwhere\\n    T: Clone,\\…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "impl<T> Foo<T> where T: Clone {}\n",
+        "context": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 0,
-        "rustfmt": ""
+        "rustfmtExit": 1,
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5db4d5b937eccde3-B.rs:1:\n\u001b[31m-impl<T> Foo<T>\n\u001b[m\u000f\u001b[31m-where\n\u001b[m\u000f\u001b[31m-    T: Clone,\n\u001b[m\u000f\u001b[31m- { }\n\u001b[m\u000f\u001b[32m+impl<T> Foo<T> where T: Clone {}\n\u001b[m\u000f \n"
       },
       "oracleSyntax": {
         "context": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }\n",
@@ -4491,7 +4461,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5db4d5b937eccde3-A.rs:1:\n-impl<T> Foo<T>\n-where\n-    T: Clone,\n- { }\n+impl<T> Foo<T> where T: Clone {}\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5db4d5b937eccde3-A.rs:1:\n\u001b[31m-impl<T> Foo<T>\n\u001b[m\u000f\u001b[31m-where\n\u001b[m\u000f\u001b[31m-    T: Clone,\n\u001b[m\u000f\u001b[31m- { }\n\u001b[m\u000f\u001b[32m+impl<T> Foo<T> where T: Clone {}\n\u001b[m\u000f \n"
       }
     },
     {
@@ -4518,7 +4488,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-B.rs:1:\n impl Foo {\n-  fn new() -> Self {\n-    todo!()\n-  }\n+    fn new() -> Self {\n+        todo!()\n+    }\n }\n \n impl Default for Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-B.rs:8:\n-  fn default() -> Self {\n-    todo!()\n-  }\n+    fn default() -> Self {\n+        todo!()\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-B.rs:1:\n impl Foo {\n\u001b[31m-  fn new() -> Self {\n\u001b[m\u000f\u001b[31m-    todo!()\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn new() -> Self {\n\u001b[m\u000f\u001b[32m+        todo!()\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n impl Default for Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-B.rs:8:\n\u001b[31m-  fn default() -> Self {\n\u001b[m\u000f\u001b[31m-    todo!()\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn default() -> Self {\n\u001b[m\u000f\u001b[32m+        todo!()\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "impl Foo {\n  fn new() -> Self {\n    todo!()\n  }\n}\n\nimpl Default for Foo {\n  fn default() -> Self {\n    todo!()\n  }\n}\n",
@@ -4526,7 +4496,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-A.rs:1:\n impl Foo {\n-  fn new() -> Self {\n-    todo!()\n-  }\n+    fn new() -> Self {\n+        todo!()\n+    }\n }\n \n impl Default for Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-A.rs:8:\n-  fn default() -> Self {\n-    todo!()\n-  }\n+    fn default() -> Self {\n+        todo!()\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-A.rs:1:\n impl Foo {\n\u001b[31m-  fn new() -> Self {\n\u001b[m\u000f\u001b[31m-    todo!()\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn new() -> Self {\n\u001b[m\u000f\u001b[32m+        todo!()\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n impl Default for Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e19bdf1c03009c8f-A.rs:8:\n\u001b[31m-  fn default() -> Self {\n\u001b[m\u000f\u001b[31m-    todo!()\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn default() -> Self {\n\u001b[m\u000f\u001b[32m+        todo!()\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4553,7 +4523,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b2507f6055aa6683-B.rs:1:\n impl<T> From<T> for Vec<T> {\n-  fn from(item: T) -> Self {\n-    vec![item]\n-  }\n+    fn from(item: T) -> Self {\n+        vec![item]\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b2507f6055aa6683-B.rs:1:\n impl<T> From<T> for Vec<T> {\n\u001b[31m-  fn from(item: T) -> Self {\n\u001b[m\u000f\u001b[31m-    vec![item]\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn from(item: T) -> Self {\n\u001b[m\u000f\u001b[32m+        vec![item]\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "impl<T> From<T> for Vec<T> {\n  fn from(item: T) -> Self {\n    vec![item]\n  }\n}\n",
@@ -4561,7 +4531,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b2507f6055aa6683-A.rs:1:\n impl<T> From<T> for Vec<T> {\n-  fn from(item: T) -> Self {\n-    vec![item]\n-  }\n+    fn from(item: T) -> Self {\n+        vec![item]\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/b2507f6055aa6683-A.rs:1:\n impl<T> From<T> for Vec<T> {\n\u001b[31m-  fn from(item: T) -> Self {\n\u001b[m\u000f\u001b[31m-    vec![item]\n\u001b[m\u000f\u001b[31m-  }\n\u001b[m\u000f\u001b[32m+    fn from(item: T) -> Self {\n\u001b[m\u000f\u001b[32m+        vec![item]\n\u001b[m\u000f\u001b[32m+    }\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4588,7 +4558,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d18b0ef1db802c7d-B.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d18b0ef1db802c7d-B.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo {}\n\nfn make_foo() -> Foo {\n  todo!()\n}\n",
@@ -4596,7 +4566,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d18b0ef1db802c7d-A.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/d18b0ef1db802c7d-A.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4623,7 +4593,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/110c8e7bd37f33a8-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/110c8e7bd37f33a8-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n",
@@ -4631,7 +4601,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/110c8e7bd37f33a8-A.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/110c8e7bd37f33a8-A.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4658,7 +4628,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:10:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-B.rs:10:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
@@ -4666,7 +4636,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-A.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-A.rs:10:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-A.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e36c4527727d41a2-A.rs:10:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4693,7 +4663,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:12:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-B.rs:12:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
@@ -4701,7 +4671,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-A.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-A.rs:12:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-A.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/391cec6700bc605f-A.rs:12:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4749,7 +4719,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/31b371ea6a954181-B.rs:1:\n pub struct Foo {\n-  pub x: i32,\n+    pub x: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/31b371ea6a954181-B.rs:1:\n pub struct Foo {\n\u001b[31m-  pub x: i32,\n\u001b[m\u000f\u001b[32m+    pub x: i32,\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub struct Foo {\n  pub x: i32,\n}\n",
@@ -4757,7 +4727,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/31b371ea6a954181-A.rs:1:\n pub struct Foo {\n-  pub x: i32,\n+    pub x: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/31b371ea6a954181-A.rs:1:\n pub struct Foo {\n\u001b[31m-  pub x: i32,\n\u001b[m\u000f\u001b[32m+    pub x: i32,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4784,7 +4754,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-B.rs:1:\n #[derive(Debug)]\n pub struct Point {\n-  pub x: f64,\n-  pub y: f64,\n+    pub x: f64,\n+    pub y: f64,\n }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-B.rs:8:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-B.rs:1:\n #[derive(Debug)]\n pub struct Point {\n\u001b[31m-  pub x: f64,\n\u001b[m\u000f\u001b[31m-  pub y: f64,\n\u001b[m\u000f\u001b[32m+    pub x: f64,\n\u001b[m\u000f\u001b[32m+    pub y: f64,\n\u001b[m\u000f }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-B.rs:8:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "#[derive(Debug)]\npub struct Point {\n  pub x: f64,\n  pub y: f64,\n}\n\npub fn origin() -> Point {\n  todo!()\n}\n",
@@ -4792,7 +4762,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-A.rs:1:\n #[derive(Debug)]\n pub struct Point {\n-  pub x: f64,\n-  pub y: f64,\n+    pub x: f64,\n+    pub y: f64,\n }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-A.rs:8:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-A.rs:1:\n #[derive(Debug)]\n pub struct Point {\n\u001b[31m-  pub x: f64,\n\u001b[m\u000f\u001b[31m-  pub y: f64,\n\u001b[m\u000f\u001b[32m+    pub x: f64,\n\u001b[m\u000f\u001b[32m+    pub y: f64,\n\u001b[m\u000f }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/4d8ee70912291f25-A.rs:8:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4854,7 +4824,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c54a875baa649c3c-B.rs:1:\n pub mod models;\n \n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c54a875baa649c3c-B.rs:1:\n pub mod models;\n \n fn main() {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nfn main() {\n  todo!()\n}\n",
@@ -4862,7 +4832,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c54a875baa649c3c-A.rs:1:\n pub mod models;\n \n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c54a875baa649c3c-A.rs:1:\n pub mod models;\n \n fn main() {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4945,7 +4915,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/40e06abe8f3645b1-B.rs:1:\n pub mod models;\n \n pub fn run() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/40e06abe8f3645b1-B.rs:1:\n pub mod models;\n \n pub fn run() {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\npub fn run() {\n  todo!()\n}\n",
@@ -4953,7 +4923,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/40e06abe8f3645b1-A.rs:1:\n pub mod models;\n \n pub fn run() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/40e06abe8f3645b1-A.rs:1:\n pub mod models;\n \n pub fn run() {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -4980,7 +4950,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/679aabc06da58d41-B.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/679aabc06da58d41-B.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod models;\n\nuse crate::models::user::User;\n\npub fn get_user() -> User {\n  todo!()\n}\n",
@@ -4988,7 +4958,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/679aabc06da58d41-A.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/679aabc06da58d41-A.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -5015,7 +4985,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/7196197f6ae131e2-B.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/7196197f6ae131e2-B.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       },
       "oracleSyntax": {
         "context": "pub mod a;\n\nuse crate::a::b::thing::Thing;\n\npub fn get_thing() -> Thing {\n  todo!()\n}\n",
@@ -5023,7 +4993,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/7196197f6ae131e2-A.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/7196197f6ae131e2-A.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -6950,7 +6920,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-1-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-1-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -6965,7 +6935,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-2-B.rs:1:\n pub struct Foo {\n-  pub x: i32,\n+    pub x: i32,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-2-B.rs:1:\n pub struct Foo {\n\u001b[31m-  pub x: i32,\n\u001b[m\u000f\u001b[32m+    pub x: i32,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -6995,7 +6965,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-4-B.rs:1:\n pub enum AppError {\n-  NotFound,\n+    NotFound,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-4-B.rs:1:\n pub enum AppError {\n\u001b[31m-  NotFound,\n\u001b[m\u000f\u001b[32m+    NotFound,\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7010,7 +6980,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:12:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:5:\n use crate::models::Foo;\n \n pub fn get_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n pub fn fail() -> AppError {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-5-B.rs:12:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7025,7 +6995,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-6-B.rs:1:\n pub mod user;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-6-B.rs:1:\n pub mod user;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7055,7 +7025,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-8-B.rs:1:\n pub mod models;\n \n pub fn run() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-8-B.rs:1:\n pub mod models;\n \n pub fn run() {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7070,7 +7040,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-9-B.rs:1:\n #[derive(Debug)]\n pub struct Point {\n-  pub x: f64,\n-  pub y: f64,\n+    pub x: f64,\n+    pub y: f64,\n }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-9-B.rs:8:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-9-B.rs:1:\n #[derive(Debug)]\n pub struct Point {\n\u001b[31m-  pub x: f64,\n\u001b[m\u000f\u001b[31m-  pub y: f64,\n\u001b[m\u000f\u001b[32m+    pub x: f64,\n\u001b[m\u000f\u001b[32m+    pub y: f64,\n\u001b[m\u000f }\n \n pub fn origin() -> Point {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-9-B.rs:8:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7085,7 +7055,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-10-B.rs:1:\n pub mod user;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-10-B.rs:1:\n pub mod user;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7115,7 +7085,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-12-B.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-12-B.rs:3:\n use crate::models::user::User;\n \n pub fn get_user() -> User {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7130,7 +7100,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-13-B.rs:1:\n pub mod b;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-13-B.rs:1:\n pub mod b;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7145,7 +7115,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-14-B.rs:1:\n pub mod thing;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-14-B.rs:1:\n pub mod thing;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7175,7 +7145,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-16-B.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-16-B.rs:3:\n use crate::a::b::thing::Thing;\n \n pub fn get_thing() -> Thing {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7190,7 +7160,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-17-B.rs:1:\n pub mod order;\n pub mod user;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-17-B.rs:1:\n pub mod order;\n pub mod user;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7235,7 +7205,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-20-B.rs:1:\n pub mod models;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-20-B.rs:1:\n pub mod models;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7250,7 +7220,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-21-B.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-21-B.rs:1:\n struct Foo {}\n \n fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7265,7 +7235,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-22-B.rs:1:\n pub fn helper() {\n-  42\n+    42\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-22-B.rs:1:\n pub fn helper() {\n\u001b[31m-  42\n\u001b[m\u000f\u001b[32m+    42\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7280,7 +7250,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-23-B.rs:1:\n pub mod utils;\n-\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-23-B.rs:1:\n pub mod utils;\n\u001b[31m-\n\u001b[m\u000f \n"
       }
     },
     {
@@ -7310,7 +7280,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-25-B.rs:1:\n pub mod models;\n \n fn main() {\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-25-B.rs:1:\n pub mod models;\n \n fn main() {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     },
     {
@@ -7340,7 +7310,7 @@
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-27-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n-  todo!()\n+    todo!()\n }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-27-B.rs:10:\n-  todo!()\n+    todo!()\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-27-B.rs:3:\n use crate::models::Foo;\n \n pub fn make_foo() -> Foo {\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n pub fn another() -> Foo {\nDiff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-printer-2/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/file-27-B.rs:10:\n\u001b[31m-  todo!()\n\u001b[m\u000f\u001b[32m+    todo!()\n\u001b[m\u000f }\n \n"
       }
     }
   ]
