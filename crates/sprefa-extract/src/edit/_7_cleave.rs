@@ -678,6 +678,8 @@ struct Plan {
     callers: Vec<FileFacts>,
     /// Each caller's module spelling for SRC, beside its own facts.
     caller_modules: Vec<String>,
+    /// A star barrel still reads the moved export through SRC.
+    keep_source_export: bool,
     /// Call sites naming the item through a module path, as (file, span).
     qualified: Vec<(String, Span)>,
     /// `pub use DEST::ITEM;` lines landing after each `pub use SRC::*;`.
@@ -1014,6 +1016,7 @@ impl Plan {
                 dest_imports: Vec::new(),
                 callers: Vec::new(),
                 caller_modules: Vec::new(),
+                keep_source_export: false,
                 qualified: Vec::new(),
                 reexports: Vec::new(),
             });
@@ -1063,6 +1066,7 @@ impl Plan {
         }
 
         let mut callers = imports.callers(&src, &item);
+        let mut keep_source_export = false;
         if arm.name() == "ts" {
             let resolver = sprefa_extract::lang::ts_resolve::TsResolver::new(&root)?;
             for rel in cx.files().iter().filter(|rel| cleave_for(rel).is_some_and(|arm| arm.name() == "ts")) {
@@ -1070,6 +1074,13 @@ impl Plan {
                     continue;
                 }
                 let facts = FileFacts::open(&cx, rel, false)?;
+                // Named consumers are repointed below. A star barrel keeps
+                // its module route and therefore still needs SRC's export.
+                if let Some(modules) = sprefa_extract::lang::ts_resolve::module_facts(rel, facts.text.as_bytes()) {
+                    keep_source_export |= modules.star_exports.iter().any(|module| {
+                        resolver.resolve(&cx.abs(rel), module).is_some_and(|path| path == cx.abs(&src))
+                    });
+                }
                 if facts.specifiers.iter().any(|row| {
                     row.kind == "reexport"
                         && row.imported.as_deref().unwrap_or(&row.name) == item
@@ -1172,6 +1183,7 @@ impl Plan {
             dest_imports,
             callers: views,
             caller_modules,
+            keep_source_export,
             qualified,
             reexports,
         })
@@ -1330,6 +1342,7 @@ impl Plan {
         };
         let mut edits: Vec<Respell> = Vec::new();
         if self.arm.name() == "ts"
+            && self.keep_source_export
             && self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.exported)
         {
             let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);

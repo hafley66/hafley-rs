@@ -226,6 +226,42 @@ fn commit_moves_the_item_and_its_imports() {
 }
 
 #[test]
+fn source_exports_follow_retained_barrel_routes() {
+    for (label, barrel, expected_barrel, source_export) in [
+        (
+            "star_barrel",
+            "export * from \"./util\";\n",
+            "export * from \"./util\";\n",
+            "export { loadConfig } from \"./config\";\n",
+        ),
+        (
+            "named_barrel",
+            "export { loadConfig as load, slug } from \"./util\";\n",
+            "export { slug } from \"./util\";\nexport { loadConfig as load } from \"./config\";\n",
+            "",
+        ),
+    ] {
+        let fixture = fixture("basic", label);
+        std::fs::write(fixture.root.join("src/index.ts"), barrel).unwrap();
+        cleave(
+            &fixture,
+            &["src/util.ts#loadConfig", "src/config.ts", "--commit"],
+        );
+        assert_eq!(
+            (
+                std::fs::read_to_string(fixture.root.join("src/util.ts")).unwrap(),
+                std::fs::read_to_string(fixture.root.join("src/index.ts")).unwrap(),
+            ),
+            (
+                format!("export function slug(raw: string): string {{ return raw.toLowerCase(); }}\n{source_export}"),
+                expected_barrel.to_string(),
+            ),
+            "{label}",
+        );
+    }
+}
+
+#[test]
 fn a_missing_destination_is_created_with_every_specifier() {
     let fixture = fixture("basic", "create");
     cleave(

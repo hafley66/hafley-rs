@@ -298,3 +298,58 @@ Coordinator gates still required, serialized with CARGO_BUILD_JOBS=4:
 5. Run `RYII=<release ryii> RYII_NO_TS_CHECKER=<cli-only ryii> CORPUS=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow dogfood/ts/run.sh D14 D15 D17 J01`.
 
 The scripts and Rust changes remain unrun. Runtime checker behavior, compilation, crate parity, and all four expected case outcomes require these gates.
+
+## ryi TS cleave re-export regression (2026-10-02)
+
+### t_156_cleave_play::the_demo_plays_four_cleaves_and_ends_green
+
+Cause: commit `ce8a23bef8d414a1c72169b8a90800b0239a0a31` introduced an
+unconditional source re-export for each exported TS declaration at
+`crates/sprefa-extract/src/edit/_7_cleave.rs:1322` in that commit (current
+condition at line 1344). Main's implementation contains no such insertion.
+The demo's imports in `src/app.ts` and `src/report.ts` are direct named imports
+that cleave repoints; no star barrel retains a route through `src/utils.ts`.
+The inserted re-export also triggers the existing declaration-only fallback
+at `crates/hafley_scm/src/read/lang/7_scm_rows.rs:809`: an export capture with
+no contained definition marks root definitions exported at line 822. Thus
+`tidy` is considered exported on the subsequent slug cleave, and
+`crates/sprefa-extract/src/edit/_7_cleave.rs:2628` leaves it behind under
+`--drag`. The fallback is present on main and was not changed here.
+
+Change: the plan records whether another TS module has a star export that
+resolves to SRC, using the existing module facts and TS resolver. Only that
+retained barrel route enables the source re-export. Direct named imports
+continue to move, and D6's named re-export splitting remains intact. D5's
+`packages/signals/src/index.ts` contains `export * from "./2_Signal.js"`, so
+D05.sh still requires and receives the source re-export; D06.sh still
+repoints the moved named export and retains the remaining names. No
+contradiction was found between these case contracts and the demo.
+No extraction facts, existing assertions, goldens, dogfood scripts, SQL,
+CLI commands, or flags were changed.
+
+Coordinator filter, from `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --test all t_156_cleave_play::the_demo_plays_four_cleaves_and_ends_green -- --exact
+```
+
+### t_155_cleave_ts::source_exports_follow_retained_barrel_routes (new coverage)
+
+The same cause is covered with two fixture variants: a star barrel retains
+its source route and requires a source re-export; a named barrel moves an
+aliased export and preserves its remaining export without adding a source
+re-export. The test compares the complete source and barrel texts. Existing
+`t_155_cleave_ts::commit_moves_the_item_and_its_imports` already covers direct
+named import repair with an exact source-file assertion.
+
+Coordinator filters, from `crates/sprefa-extract`:
+
+```sh
+cargo test --features cli --test all t_155_cleave_ts::source_exports_follow_retained_barrel_routes -- --exact
+cargo test --features cli --test all t_155_cleave_ts::commit_moves_the_item_and_its_imports -- --exact
+```
+
+Verification: `git diff --check` passed. Compilation and runtime results are
+unverified. No installs, builds, cargo tests/checks, npm, node, or dogfood
+scripts ran. The coordinator must also run D05.sh and D06.sh through the
+existing serialized dogfood runner.
