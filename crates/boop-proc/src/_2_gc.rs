@@ -518,11 +518,28 @@ pub fn reclaim_until_floor(
         let routes = bus::read_routes(mail).ok()?;
         let live = protected(mail, &routes, keep).ok()?;
         let activity = activity(mail, &routes).ok()?;
-        let candidates = exclude_store(
+        let mut candidates = exclude_store(
             mail,
             collect(root, &trails, &routes, &live, &activity, SystemTime::now()).ok()?,
         )
         .ok()?;
+        // Collection keeps command output stable by path. Disk admission
+        // reclaims target caches by their age, with the same removal checks.
+        candidates.sort_by_key(|candidate| {
+            let priority = match candidate.kind {
+                Kind::Worktree { .. } => 0,
+                Kind::Target => 1,
+                Kind::Trail => 2,
+            };
+            let modified = if candidate.kind == Kind::Target {
+                fs::metadata(&candidate.path)
+                    .and_then(|meta| meta.modified())
+                    .unwrap_or(SystemTime::now())
+            } else {
+                SystemTime::UNIX_EPOCH
+            };
+            (priority, modified)
+        });
         let Some(candidate) = candidates.first() else {
             break;
         };

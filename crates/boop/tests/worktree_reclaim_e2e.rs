@@ -710,6 +710,7 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     let launch = lane_recipe(scratch, case, &worktree);
     let output = lane_create(scratch, case, &launch, &branch, &lane, base_sha, &[], &[])
         .env("BOOP_DISK_FLOOR_GB", huge)
+        .env("RUST_LOG", "boop_proc=info")
         .output()
         .expect("run lane create");
     assert!(
@@ -720,6 +721,13 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout}{stderr}");
+    eprintln!(
+        "evidence {}: db={} socket={} target ages > {:?}\n{combined}",
+        case.entry,
+        scratch.mail.join("boop.db").display(),
+        scratch.socket,
+        boop::gc::TARGET_AGE
+    );
     assert!(
         combined.contains("free disk") || combined.contains("floor"),
         "{} case 3: refusal did not name the floor\n{combined}",
@@ -727,15 +735,15 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     );
     assert!(
         !old_target.exists() && !new_target.exists(),
-        "{} case 3: both retired targets evicted",
+        "{} case 3: both retired targets evicted\n{combined}",
         case.entry
     );
     // Oldest-first: the older dir's eviction line comes first.
-    let old_at = stdout.find(&old_target.display().to_string());
-    let new_at = stdout.find(&new_target.display().to_string());
+    let old_at = stderr.find(&old_target.display().to_string());
+    let new_at = stderr.find(&new_target.display().to_string());
     assert!(
         old_at.is_some() && new_at.is_some() && old_at < new_at,
-        "{} case 3: eviction not oldest-first\n{stdout}",
+        "{} case 3: eviction not oldest-first\n{combined}",
         case.entry
     );
     // No route and no screen row for the refused lane.
