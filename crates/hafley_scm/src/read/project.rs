@@ -266,12 +266,15 @@ pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
     Ok(facts)
 }
 
-fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
+pub(crate) fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
+    // A TSX project retains written calls in its companion TS modules too.
+    // Pure TypeScript resolve keeps the existing edge-only stream.
+    if !inputs.iter().any(|input| input.path.ends_with(".tsx")) {
+        return Vec::new();
+    }
     inputs
         .iter()
-        // The JSX increment adds written syntax to TSX resolve output. Plain
-        // TypeScript retains the existing edge-only resolve contract.
-        .filter(|input| input.path.ends_with(".tsx"))
+        .filter(|input| source_for(&input.path).is_some_and(|source| source.name() == "ts"))
         .filter_map(|input| {
             Some(
                 input

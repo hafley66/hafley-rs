@@ -1066,3 +1066,16 @@ exclude this file's nested free definitions from name fallback, while D9
 lexical callable targets still resolve them within scope. Keep the assertion
 that selfInitCase binds free.ts and has zero drops.
 Coordinator: `cargo test --features cli --test all t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn -- --exact --test-threads=1`
+
+### t_193_ts_rtkq_jsx::written_calls_and_nested_jsx_match_jsonl_and_sqlite_goldens
+
+Cause: `62fd3c09`, `crates/hafley_scm/src/read/project.rs:269`, filters each
+input to TSX, removing the two hooks.ts written call rows from this mixed
+TSX/TS project's resolve stream. `9401921a` introduced this test on integrate;
+`git show main:<test path>` reports the path absent. Its history includes
+`62fd3c09`; the syntax golden remains the one introduced by `9401921a`.
+Change: enable the written-syntax projection for a project containing TSX,
+including companion TypeScript modules. Pure TypeScript projects retain their
+prior resolve contract. Keep the existing JSONL/SQLite/direct-SCM golden and
+assertions byte-for-byte; no plan-authorized golden change is needed.
+Coordinator: `cargo test --features cli --test all t_193_ts_rtkq_jsx::written_calls_and_nested_jsx_match_jsonl_and_sqlite_goldens -- --exact --test-threads=1`
