@@ -273,6 +273,7 @@ pub(crate) fn spawn_env_stamp(
 /// the value is never duplicated in the spawn env.
 fn supplied_target(env: &[(String, String)]) -> Option<String> {
     env.iter()
+        .rev()
         .find(|(key, _)| key == "CARGO_TARGET_DIR")
         .map(|(_, value)| value.clone())
 }
@@ -1510,6 +1511,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
     // Before the spawn, and written even when empty: a previous spawn's file
     // would fail this run on a subject the brief never asked for.
     boop::trail::write_expect(&lane_id, &expect)?;
+    boop::gc::record_target(&lane_id, target.as_deref())?;
     let trace = args
         .trace
         .clone()

@@ -164,6 +164,11 @@ fn collection_and_application_preserve_live_fresh_shared_outside_mail_and_store(
     assert!(outside.exists());
     assert!(!under(&root, &root));
     assert!(!under(&root, &root.join("escape/new-target")));
+    std::os::unix::fs::symlink(f.0.join("missing-outside"), root.join("dangling")).unwrap();
+    assert!(!under(&root, &root.join("dangling/new-target")));
+    std::os::unix::fs::symlink("cycle-b", root.join("cycle-a")).unwrap();
+    std::os::unix::fs::symlink("cycle-a", root.join("cycle-b")).unwrap();
+    assert!(!under(&root, &root.join("cycle-a/new-target")));
     assert!(!under(&root, &root.join("../outside/target")));
     assert!(under(&root, &root.join("new/target")));
 }
@@ -377,4 +382,53 @@ fn a_retired_worktree_is_collected_before_its_ownership_trail() {
     }
     assert!(!repo.worktree.exists());
     assert!(!trail.exists());
+}
+
+#[test]
+fn advertised_targets_retain_the_owner_and_protect_live_overrides() {
+    let f = Fixture::new();
+    let root = f.dir("targets");
+    let trails = f.dir("trails");
+    let now = SystemTime::now();
+    let old = now - TARGET_AGE - Duration::from_secs(60);
+    for (lane, relative) in [
+        ("live-owner", "unregistered-name/target"),
+        ("dead-owner", "custom/build-output"),
+    ] {
+        let target = f.dir(&format!("targets/{relative}"));
+        fs::write(target.join("object"), lane).unwrap();
+        age(&target, old);
+        let trail = f.dir(&format!("trails/{lane}"));
+        fs::write(
+            trail.join("target.json"),
+            serde_json::to_vec(&target).unwrap(),
+        )
+        .unwrap();
+    }
+    let routes = BTreeMap::from([
+        ("live-owner".into(), Route::default()),
+        ("dead-owner".into(), Route::default()),
+    ]);
+    let candidates = collect(
+        &root,
+        &trails,
+        &routes,
+        &BTreeSet::from(["live-owner".into()]),
+        &BTreeMap::new(),
+        now,
+    )
+    .unwrap();
+    assert_eq!(
+        candidates
+            .iter()
+            .map(|c| (
+                c.lane.as_str(),
+                c.path.strip_prefix(&root).unwrap().to_str().unwrap()
+            ))
+            .collect::<Vec<_>>(),
+        [("dead-owner", "custom/build-output")]
+    );
+    remove(&candidates[0], &root, &trails).unwrap();
+    assert!(root.join("unregistered-name/target/object").exists());
+    assert!(!root.join("custom/build-output").exists());
 }

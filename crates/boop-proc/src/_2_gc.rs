@@ -58,6 +58,9 @@ pub fn tree(path: &Path) -> Result<(u64, SystemTime)> {
             let entry = entry?;
             // A link itself is never traversed, including links to mail or the store.
             if entry.file_type()?.is_symlink() {
+                let meta = fs::symlink_metadata(entry.path())?;
+                bytes += meta.len();
+                newest = newest.max(meta.modified()?);
                 continue;
             }
             let (size, touched) = tree(&entry.path())?;
@@ -110,7 +113,7 @@ pub fn expired_coordinator(
     route.kind == "coordinator" && !live && last.is_some_and(|at| old(now, at, DEAD_AGE))
 }
 
-/// A pane-less native route is protected unless the CLI supplies session-owner evidence.
+/// Native routes, live process observations, pane owners and the current lane are protected.
 pub fn protected(
     mail: &Path,
     routes: &BTreeMap<String, Route>,
@@ -178,6 +181,13 @@ pub fn collect(
     now: SystemTime,
 ) -> Result<Vec<Candidate>> {
     let mut out = Vec::new();
+    let targets = owned_targets(trails)?;
+    let shared = fs::canonicalize(root.join("_shared")).ok();
+    let live_targets: Vec<_> = targets
+        .iter()
+        .filter(|(name, _)| live.contains(*name))
+        .filter_map(|(_, path)| fs::canonicalize(path).ok())
+        .collect();
     for (base, kind, age, reason) in [
         (root, Kind::Target, TARGET_AGE, "target untouched 24h"),
         (trails, Kind::Trail, DEAD_AGE, "lane dead 7d"),
@@ -185,20 +195,52 @@ pub fn collect(
         if !base.exists() {
             continue;
         }
+        let mut paths = Vec::new();
         for entry in fs::read_dir(base)? {
             let entry = entry?;
             if !entry.file_type()?.is_dir() {
                 continue;
             }
             let name = entry.file_name().to_string_lossy().into_owned();
-            if name == "_shared" || live.contains(&name) {
-                continue;
-            }
             let path = if kind == Kind::Target {
                 entry.path().join("target")
             } else {
                 entry.path()
             };
+            paths.push((name, path));
+        }
+        if kind == Kind::Target {
+            paths.extend(
+                targets
+                    .iter()
+                    .map(|(name, path)| (name.clone(), path.clone())),
+            );
+        }
+        for (mut name, path) in paths {
+            if kind == Kind::Target {
+                if let Ok(canonical) = fs::canonicalize(&path) {
+                    if shared
+                        .as_ref()
+                        .is_some_and(|shared| canonical.starts_with(shared))
+                    {
+                        continue;
+                    }
+                    if live_targets
+                        .iter()
+                        .any(|live| canonical.starts_with(live) || live.starts_with(&canonical))
+                    {
+                        continue;
+                    }
+                    if let Some((owner, _)) = targets.iter().find(|(_, target)| {
+                        fs::canonicalize(target).is_ok_and(|target| target == canonical)
+                    }) {
+                        name = owner.clone();
+                    }
+                }
+            }
+            if name == "_shared" || live.contains(&name) || path.starts_with(root.join("_shared")) {
+                continue;
+            }
             if !path.is_dir() || !under(base, &path) {
                 continue;
             }
@@ -286,6 +328,7 @@ pub fn collect(
         fs::canonicalize(&candidate.path).is_ok_and(|path| {
             !live_worktrees
                 .iter()
+                .chain(live_targets.iter())
                 .any(|live| path.starts_with(live) || live.starts_with(&path))
         })
     });
@@ -560,4 +603,102 @@ pub fn coordinator_live(
             .as_deref()
             .and_then(|pane| boop_store::tmux::mux().pane_pid(route.socket.as_deref(), pane))
             .is_some_and(boop_harness::live::pid_alive))
+}
+
+pub fn evictable_targets(
+    mail_dir: &Path,
+    root: &Path,
+    keep: Option<&str>,
+) -> Vec<crate::supervise::LaneTarget> {
+    let Ok(routes) = bus::read_routes(mail_dir) else {
+        return Vec::new();
+    };
+    let Ok(live) = crate::gc::protected(mail_dir, &routes, keep) else {
+        return Vec::new();
+    };
+    let Ok(activity) = crate::gc::activity(mail_dir, &routes) else {
+        return Vec::new();
+    };
+    let Ok(trails) = boop_store::trail::lanes_root() else {
+        return Vec::new();
+    };
+    let mut out: Vec<crate::supervise::LaneTarget> = crate::gc::collect(
+        root,
+        &trails,
+        &routes,
+        &live,
+        &activity,
+        std::time::SystemTime::now(),
+    )
+    .unwrap_or_default()
+    .into_iter()
+    .filter(|candidate| candidate.kind == crate::gc::Kind::Target)
+    .map(|candidate| crate::supervise::LaneTarget {
+        lane: candidate.lane,
+        modified: std::fs::metadata(&candidate.path)
+            .and_then(|meta| meta.modified())
+            .unwrap_or(std::time::SystemTime::now()),
+        target: candidate.path,
+    })
+    .collect();
+
+    out.sort_by_key(|candidate| candidate.modified);
+    out
+}
+
+/// Include the reserved warmup cache when reporting the disk floor's largest consumers.
+pub fn biggest_targets(root: &Path, limit: usize) -> Vec<String> {
+    let mut paths: Vec<_> = crate::supervise::lane_targets(root)
+        .into_iter()
+        .map(|candidate| candidate.target)
+        .collect();
+    let shared = root.join("_shared");
+    if shared.is_dir() {
+        paths.push(shared);
+    }
+    let mut sized: Vec<_> = paths
+        .into_iter()
+        .map(|path| (tree(&path).map(|(bytes, _)| bytes).unwrap_or(0), path))
+        .collect();
+    sized.sort_by(|a, b| b.0.cmp(&a.0));
+    sized
+        .into_iter()
+        .take(limit)
+        .map(|(bytes, path)| format!("{:.1}G {}", bytes as f64 / 1_000_000_000.0, path.display()))
+        .collect()
+}
+
+/// Persist the advertised target, including an override, beside its owning lane's spawn record.
+pub fn record_target(lane: &str, target: Option<&Path>) -> Result<()> {
+    if let Some(target) = target {
+        let dir = boop_store::trail::lane_dir(lane)?;
+        fs::create_dir_all(&dir)?;
+        fs::write(dir.join("target.json"), serde_json::to_vec(target)?)?;
+    }
+    Ok(())
+}
+
+fn owned_targets(trails: &Path) -> Result<BTreeMap<String, PathBuf>> {
+    let mut targets = BTreeMap::new();
+    if !trails.exists() {
+        return Ok(targets);
+    }
+    for entry in fs::read_dir(trails)? {
+        let entry = entry?;
+        if !entry.file_type()?.is_dir() {
+            continue;
+        }
+        let path = entry.path().join("target.json");
+        if !fs::symlink_metadata(&path).is_ok_and(|meta| meta.file_type().is_file()) {
+            continue;
+        }
+        let Ok(raw) = fs::read(path) else {
+            continue;
+        };
+        let Ok(target) = serde_json::from_slice::<PathBuf>(&raw) else {
+            continue;
+        };
+        targets.insert(entry.file_name().to_string_lossy().into_owned(), target);
+    }
+    Ok(targets)
 }

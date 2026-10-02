@@ -481,40 +481,7 @@ fn remove_target_under(root: &Path, target: &Path, lane: &str) -> Option<PathBuf
 /// The lane targets whose lane is retired or dead: no route, or a route whose
 /// pane is not live. `keep` (the current lane) is never a candidate.
 pub fn evictable_targets(mail_dir: &Path, root: &Path, keep: Option<&str>) -> Vec<LaneTarget> {
-    let Ok(routes) = bus::read_routes(mail_dir) else {
-        return Vec::new();
-    };
-    let Ok(live) = crate::gc::protected(mail_dir, &routes, keep) else {
-        return Vec::new();
-    };
-    let Ok(activity) = crate::gc::activity(mail_dir, &routes) else {
-        return Vec::new();
-    };
-    let Ok(trails) = boop_store::trail::lanes_root() else {
-        return Vec::new();
-    };
-    let mut out: Vec<LaneTarget> = crate::gc::collect(
-        root,
-        &trails,
-        &routes,
-        &live,
-        &activity,
-        std::time::SystemTime::now(),
-    )
-    .unwrap_or_default()
-    .into_iter()
-    .filter(|candidate| candidate.kind == crate::gc::Kind::Target)
-    .map(|candidate| LaneTarget {
-        lane: candidate.lane,
-        modified: std::fs::metadata(&candidate.path)
-            .and_then(|meta| meta.modified())
-            .unwrap_or(std::time::SystemTime::now()),
-        target: candidate.path,
-    })
-    .collect();
-
-    out.sort_by_key(|candidate| candidate.modified);
-    out
+    crate::gc::evictable_targets(mail_dir, root, keep)
 }
 
 /// Evict retired or dead lane targets oldest-first until the free space on
@@ -532,34 +499,7 @@ pub fn evict_targets_until_above_floor(
 /// The `limit` largest lane target dirs under `root`, largest first, one
 /// `"<n.n>G <path>"` line each. Read only when a create is refused.
 pub fn biggest_targets(root: &Path, limit: usize) -> Vec<String> {
-    let mut sized: Vec<(u64, PathBuf)> = lane_targets(root)
-        .into_iter()
-        .map(|candidate| (dir_size(&candidate.target), candidate.target))
-        .collect();
-    let shared = root.join("_shared");
-    if shared.is_dir() {
-        sized.push((dir_size(&shared), shared));
-    }
-    sized.sort_by(|a, b| b.0.cmp(&a.0));
-    sized
-        .into_iter()
-        .take(limit)
-        .map(|(bytes, path)| format!("{:.1}G {}", bytes as f64 / 1_000_000_000.0, path.display()))
-        .collect()
-}
-
-fn dir_size(path: &Path) -> u64 {
-    let Ok(entries) = std::fs::read_dir(path) else {
-        return 0;
-    };
-    entries
-        .flatten()
-        .map(|entry| match entry.file_type() {
-            Ok(kind) if kind.is_dir() => dir_size(&entry.path()),
-            Ok(_) => entry.metadata().map(|meta| meta.len()).unwrap_or(0),
-            Err(_) => 0,
-        })
-        .sum()
+    crate::gc::biggest_targets(root, limit)
 }
 
 /// The parked lane's disk tick: at most one free-disk read a minute, evicting
