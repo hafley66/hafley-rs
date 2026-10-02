@@ -4,7 +4,7 @@ set -euo pipefail
 for tier in fast slow; do
   flags=(); [ "$tier" != slow ] || flags=(--slow)
   for symbol in toSignal GraphId; do
-    git reset -q --hard d0802620
+    git reset -q --hard 2145cb14
     rm -rf "$STATE"; mkdir -p "$STATE"
     if [ "$symbol" = toSignal ]; then
       anchor=packages/signals/src/2_Signal.ts
@@ -40,5 +40,5 @@ JS
     echo "D1: $tier $symbol files=$count; zero new tsc diagnostics"
   done
 done
-git reset -q --hard d0802620
+git reset -q --hard 2145cb14
 echo 'D1: fast and slow cover toSignal >=22, GraphId >=31; zero new tsc diagnostics'

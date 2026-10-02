@@ -22,7 +22,7 @@ use oxc_ast::ast as ts;
 use oxc_ast_visit::Visit;
 use oxc_resolver::{ResolveOptions, Resolver, TsconfigDiscovery};
 
-use super::ts_packages::{discover, package_name, WorkspacePackage};
+use super::ts_packages::{discover, package_name};
 use crate::read::seams::DefIndex;
 use crate::read::shape::{ContentId, FamilyTag, Span};
 
@@ -46,7 +46,7 @@ const EXTENSION_ALIAS: [(&str, &[&str]); 4] = [
 pub struct TsResolver {
     inner: Resolver,
     root: PathBuf,
-    packages: BTreeMap<String, WorkspacePackage>,
+    packages: BTreeMap<String, PathBuf>,
 }
 
 impl TsResolver {
@@ -68,7 +68,7 @@ impl TsResolver {
         Ok(Self::with_packages(root, packages.by_name))
     }
 
-    fn with_packages(root: PathBuf, packages: BTreeMap<String, WorkspacePackage>) -> Self {
+    fn with_packages(root: PathBuf, packages: BTreeMap<String, PathBuf>) -> Self {
         Self {
             inner: Resolver::new(options()),
             root,
@@ -86,83 +86,18 @@ impl TsResolver {
         self.resolve_with_rung(from, module).map(|(path, _)| path)
     }
 
-    /// The source target and the rung that selected it. A workspace package maps
-    /// its export through a declaration map or its tsconfig `outDir` -> `rootDir`.
+    /// The target and how it was reached. A workspace package of the run is
+    /// resolved as a self-reference from its own directory, so its manifest's
+    /// `exports` and the configured conditions (`source` first) pick the file;
+    /// every other specifier resolves from the importing file.
     pub fn resolve_with_rung(&self, from: &Path, module: &str) -> Option<(PathBuf, &'static str)> {
         let _span = tracing::trace_span!("ts.resolve.specifier").entered();
-        let Some((name, package)) = package_name(module).and_then(|name| self.packages.get_key_value(name)) else {
+        let resolution = match package_name(module).and_then(|name| self.packages.get(name)) {
+            Some(directory) => self.inner.resolve(directory, module).map(|found| (found, "workspace_package")),
             // Auto tsconfig discovery takes the importing file, including its name.
-            return self
-                .inner
-                .resolve_file(from, module)
-                .ok()
-                .map(|resolution| (resolution.path().to_path_buf(), "resolver"));
+            None => self.inner.resolve_file(from, module).map(|found| (found, "resolver")),
         };
-        let subpath = &module[name.len()..];
-        let key = if subpath.is_empty() {
-            ".".to_string()
-        } else {
-            format!(".{subpath}")
-        };
-        let layout = package.layout(&self.inner);
-        // Assets use the runtime export, even when a types condition names
-        // a declaration for that asset.
-        if key.ends_with(".css") {
-            let target = match package.manifest.get("exports") {
-                Some(exports) => export_target_with_conditions(
-                    exports,
-                    &key,
-                    &["import", "node", "default", "require"],
-                ),
-                None => Some(format!(".{subpath}")),
-            }?;
-            let emitted = package.directory.join(target.trim_start_matches("./"));
-            if emitted.extension().is_none_or(|extension| extension != "css") {
-                return None;
-            }
-            if let Some(source) = layout.source_of(&emitted).and_then(|source| source.canonicalize().ok()) {
-                if source.is_file() {
-                    return Some((source, "out_dir_map"));
-                }
-            }
-            let asset = emitted.canonicalize().ok()?;
-            return asset.is_file().then_some((asset, "exports"));
-        }
-        let target = match package.manifest.get("exports") {
-            Some(exports) => export_target(exports, &key),
-            None if subpath.is_empty() => package
-                .manifest
-                .get("types")
-                .or_else(|| package.manifest.get("module"))
-                .or_else(|| package.manifest.get("main"))
-                .and_then(serde_json::Value::as_str)
-                .map(str::to_string),
-            None => Some(format!(".{subpath}")),
-        }?;
-        let emitted = package.directory.join(target.trim_start_matches("./"));
-        if emitted.to_string_lossy().ends_with(".d.ts") {
-            if let Some(source) = declaration_source(&emitted, &self.root) {
-                return Some((source, "declaration_map"));
-            }
-        } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
-            return Some((resolution.path().to_path_buf(), "exports"));
-        }
-        // tsconfig `paths` may name the source; a path into compiler output does not.
-        if let Ok(resolution) = self.inner.resolve_file(from, module) {
-            let path = resolution.path();
-            if path.starts_with(&self.root) && !layout.emits(path) {
-                return Some((path.to_path_buf(), "tsconfig_paths"));
-            }
-        }
-        if let Some(source) = layout.source_of(&emitted) {
-            if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
-                return Some((resolution.path().to_path_buf(), "out_dir_map"));
-            }
-        }
-        if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
-            return Some((resolution.path().to_path_buf(), "exports_declaration"));
-        }
-        None
+        resolution.ok().map(|(found, rung)| (found.path().to_path_buf(), rung))
     }
 
     /// The same answer, kept only when it lands inside the root: a package in
@@ -173,72 +108,10 @@ impl TsResolver {
     }
 }
 
-fn export_target(value: &serde_json::Value, key: &str) -> Option<String> {
-    export_target_with_conditions(
-        value,
-        key,
-        &["types", "import", "node", "default", "require"],
-    )
-}
-
-fn export_target_with_conditions(
-    value: &serde_json::Value,
-    key: &str,
-    conditions: &[&str],
-) -> Option<String> {
-    match value {
-        serde_json::Value::String(target) => Some(target.clone()),
-        serde_json::Value::Array(values) => values
-            .iter()
-            .find_map(|value| export_target_with_conditions(value, key, conditions)),
-        serde_json::Value::Object(values) => {
-            if values.keys().any(|name| name.starts_with('.')) {
-                if let Some(value) = values.get(key) {
-                    return export_target_with_conditions(value, key, conditions);
-                }
-                let mut patterns: Vec<_> = values
-                    .iter()
-                    .filter_map(|(pattern, value)| {
-                        let (prefix, suffix) = pattern.split_once('*')?;
-                        let middle = key.strip_prefix(prefix)?.strip_suffix(suffix)?;
-                        Some((prefix.len(), suffix.len(), middle, value))
-                    })
-                    .collect();
-                patterns
-                    .sort_by_key(|(prefix, suffix, _, _)| std::cmp::Reverse((*prefix, *suffix)));
-                let (_, _, middle, value) = patterns.first()?;
-                return export_target_with_conditions(value, key, conditions)
-                    .map(|target| target.replace('*', middle));
-            }
-            conditions.iter().find_map(|condition| {
-                values
-                    .get(*condition)
-                    .and_then(|value| export_target_with_conditions(value, key, conditions))
-            })
-        }
-        _ => None,
-    }
-}
-
-fn declaration_source(path: &Path, root: &Path) -> Option<PathBuf> {
-    let map_path = PathBuf::from(format!("{}.map", path.display()));
-    let map: serde_json::Value = serde_json::from_reader(std::fs::File::open(crate::read::io_path(&map_path)).ok()?).ok()?;
-    let sources = map.get("sources")?.as_array()?;
-    // A declaration map with multiple source files does not identify one module.
-    let [source] = sources.as_slice() else {
-        return None;
-    };
-    let base = map_path.parent()?.join(
-        map.get("sourceRoot")
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or(""),
-    );
-    let source = base.join(source.as_str()?).canonicalize().ok()?;
-    (source.starts_with(root) && source.is_file()).then_some(source)
-}
-
 /// The ESM-style TS options. Every value is a stated policy; the defaults this
 /// leaves alone are `symlinks` (true) and `exports_fields` (`[["exports"]]`).
+/// `source` is the Node custom condition a package's `exports` uses to name
+/// its unbuilt entry; it ranks before the runtime conditions.
 fn options() -> ResolveOptions {
     ResolveOptions {
         extensions: EXTENSIONS.iter().map(|ext| (*ext).to_string()).collect(),
@@ -253,7 +126,7 @@ fn options() -> ResolveOptions {
             .collect(),
         main_files: vec!["index".to_string()],
         main_fields: vec!["module".to_string(), "main".to_string()],
-        condition_names: vec!["node".to_string(), "import".to_string()],
+        condition_names: ["source", "node", "import"].map(str::to_string).to_vec(),
         tsconfig: Some(TsconfigDiscovery::Auto),
         ..ResolveOptions::default()
     }
@@ -1553,7 +1426,7 @@ mod workspace_import_tests {
             ("rxjs/packages/app/src/main.ts", ""),
             (
                 "rxjs/packages/renderer/package.json",
-                r#"{"name":"@fixture/renderer","exports":{".":{"types":"./dist/index.d.ts","import":"./dist/index.js"}}}"#,
+                r#"{"name":"@fixture/renderer","exports":{".":{"source":"./index.ts","types":"./dist/index.d.ts","import":"./dist/index.js"}}}"#,
             ),
             (
                 "rxjs/packages/renderer/index.ts",
@@ -1561,14 +1434,14 @@ mod workspace_import_tests {
             ),
             (
                 "rxjs/packages/assets/package.json",
-                r#"{"name":"@fixture/assets","exports":{"./theme.css":"./dist/theme.css","./style.css":{"types":"./dist/style.css.d.ts","default":"./dist/style.css"},"./blocked.css":null}}"#,
+                r#"{"name":"@fixture/assets","exports":{"./theme.css":{"source":"./src/theme.css","default":"./dist/theme.css"},"./style.css":{"source":"./src/style.css","types":"./dist/style.css.d.ts","default":"./dist/style.css"},"./blocked.css":null}}"#,
             ),
             ("rxjs/packages/assets/src/index.ts", ""),
             ("rxjs/packages/assets/src/theme.css", "body {}"),
             ("rxjs/packages/assets/src/style.css", "body {}"),
             (
                 "rxjs.tsp/packages/rust/package.json",
-                r#"{"name":"@fixture/alloy-rs","exports":{"./adapters":{"types":"./dist/adapters/index.d.ts","default":"./dist/adapters/index.js"},"./emitter":{"types":"./dist/emitter/index.d.ts","default":"./dist/emitter/index.js"}}}"#,
+                r#"{"name":"@fixture/alloy-rs","exports":{"./adapters":{"source":"./src/adapters/index.ts","types":"./dist/adapters/index.d.ts","default":"./dist/adapters/index.js"},"./emitter":{"source":"./src/emitter/index.ts","types":"./dist/emitter/index.d.ts","default":"./dist/emitter/index.js"}}}"#,
             ),
             (
                 "rxjs.tsp/packages/rust/src/adapters/index.ts",

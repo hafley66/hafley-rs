@@ -866,13 +866,7 @@ fn class_method_renames_and_ignored_output_stays_out() {
 #[test]
 fn exported_symbol_reaches_workspace_consumers_without_dist_or_links() {
     let fixture = fixture(EXPORTS, "workspace-dist");
-    std::fs::write(fixture.root.join("package.json"), r#"{"name":"@fixture/foo","exports":{".":{"types":"./dist/lib.d.ts","import":"./dist/lib.js"}}}"#).unwrap();
-    // The package tsconfig is what maps the unbuilt `dist` export back to `src`.
-    std::fs::write(
-        fixture.root.join("tsconfig.json"),
-        r#"{"compilerOptions":{"target":"ES2020","module":"ESNext","moduleResolution":"bundler","strict":true,"rootDir":"src","outDir":"dist"},"include":["src"]}"#,
-    )
-    .unwrap();
+    std::fs::write(fixture.root.join("package.json"), r#"{"name":"@fixture/foo","exports":{".":{"source":"./src/lib.ts","types":"./dist/lib.d.ts","import":"./dist/lib.js"}}}"#).unwrap();
     std::fs::write(
         fixture.root.join("src/workspace.ts"),
         "import { Foo } from '@fixture/foo';\nexport const value: Foo = new Foo();\n",
