@@ -256,7 +256,12 @@ pub fn resolve_project_jsonl(request: &ResolveRequest<'_>) -> Result<Vec<String>
     let (header, body): (Vec<_>, Vec<_>) = facts.into_iter()
         .partition(|fact| matches!(fact, FlatFact::Protocol { .. } | FlatFact::Run(_)));
     let mut lines: Vec<_> = header.iter().map(|fact| serde_json::to_string(fact).unwrap()).collect();
-    lines.extend(crate::sorted_lines(body));
+    let (syntax, resolved): (Vec<_>, Vec<_>) = body.into_iter().partition(|fact| {
+        matches!(fact, FlatFact::CallSiteRow { .. }
+            | FlatFact::JsxElementRow { .. } | FlatFact::JsxAttributeRow { .. })
+    });
+    lines.extend(crate::sorted_lines(resolved));
+    lines.extend(crate::sorted_lines(syntax));
     Ok(lines)
 }
 

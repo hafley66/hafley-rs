@@ -1328,7 +1328,12 @@ pub fn resolve_project_jsonl(request: &ResolveRequest) -> Result<Vec<String>, Pr
         .iter()
         .map(|fact| serde_json::to_string(fact).expect("flat fact is serializable"))
         .collect();
-    lines.extend(sorted_lines(body));
+    let (syntax, resolved): (Vec<_>, Vec<_>) = body.into_iter().partition(|fact| {
+        matches!(fact, FlatFact::CallSiteRow { .. }
+            | FlatFact::JsxElementRow { .. } | FlatFact::JsxAttributeRow { .. })
+    });
+    lines.extend(sorted_lines(resolved));
+    lines.extend(sorted_lines(syntax));
     Ok(lines)
 }
 

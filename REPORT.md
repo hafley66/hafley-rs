@@ -1079,3 +1079,18 @@ including companion TypeScript modules. Pure TypeScript projects retain their
 prior resolve contract. Keep the existing JSONL/SQLite/direct-SCM golden and
 assertions byte-for-byte; no plan-authorized golden change is needed.
 Coordinator: `cargo test --features cli --test all t_193_ts_rtkq_jsx::written_calls_and_nested_jsx_match_jsonl_and_sqlite_goldens -- --exact --test-threads=1`
+
+### t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site
+
+Cause: `62fd3c09` adds this assertion at
+`crates/sprefa-extract/tests/193_ts_rtkq_jsx.rs:132`. The pre-existing serializer
+at `crates/hafley_scm/src/read/project.rs:1328` sorts additive written rows
+into the same body as resolved rows, so call_site precedes resolved_edge.
+The checker adapter does the same at
+`crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:259`. Main lacks this test;
+`git log main..HEAD -- <test path>` identifies `62fd3c09` and `9401921a`.
+Change: sort the legacy resolve body first and append sorted written syntax
+in both serializers. Preserve protocol/run headers and the existing assertion:
+resolved helper callee span 33..39, then written helper() span 33..41. No
+assertion or golden changes.
+Coordinator: `cargo test --features cli --test all t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site -- --exact --test-threads=1`
