@@ -5205,6 +5205,9 @@ impl Resolve<CallF> for TsSource {
                     })
             };
             let local_t = own_facts.as_ref()
+                // A member and its receiver's inner call can share a start
+                // byte (`mk().push`). Only the plain callee owns this target.
+                .filter(|_| !member)
                 .and_then(|facts| facts.local_calls.get(&site.span.start))
                 .and_then(|(start, end)| {
                     call.nodes.iter().find(|node| node.span.start == *start && node.span.end() == *end)

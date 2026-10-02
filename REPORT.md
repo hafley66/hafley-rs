@@ -1033,3 +1033,22 @@ Change: implement the explicit round-2 D9 decision with a `same_file` edge
 from constCase to shadow.ts's project and zero drops. Retain the prohibition
 on any project edge into free.ts. No golden changes.
 Coordinator: `cargo test --features cli --test all t_134_ts_binding_legs::a_const_binding_shadow_kills_the_name_match -- --exact --test-threads=1`
+
+### t_136_untyped_receiver_ts::free_call_keeps_name_match
+
+Cause: D9 `82cb92e4`, `crates/hafley_scm/src/read/lang/ts.rs:5209`, joins
+local_calls by start byte alone. `mk().push` shares its start with the inner
+mk callee and receives a third mk edge. Main has the same two-edge assertion;
+`git log main..HEAD -- tests/136_untyped_receiver_ts.rs` has no changes.
+Change: restrict lexical callable targets to free callee spellings. Keep the
+existing assertion and the two actual mk calls.
+Coordinator: `cargo test --features cli --test all t_136_untyped_receiver_ts::free_call_keeps_name_match -- --exact --test-threads=1`
+
+### t_136_untyped_receiver_ts::untyped_receiver_member_call_drops_inferred
+
+Cause: the same D9 start-byte collision at `ts.rs:5209` makes mk().push a
+resolved mk edge instead of the third inferred member drop. Main and HEAD
+assertions agree.
+Change: member calls continue through receiver/import resolution without
+borrowing the inner free call's lexical target. Assertions remain unchanged.
+Coordinator: `cargo test --features cli --test all t_136_untyped_receiver_ts::untyped_receiver_member_call_drops_inferred -- --exact --test-threads=1`
