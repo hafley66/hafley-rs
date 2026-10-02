@@ -119,6 +119,7 @@ pub struct VerifyJournal {
     moves: Vec<(String, String)>,
     shims: Vec<String>,
     existing: BTreeMap<String, Vec<u8>>,
+    new_directories: Vec<PathBuf>,
 }
 
 impl VerifyJournal {
@@ -148,10 +149,24 @@ impl VerifyJournal {
             let bytes = std::fs::read(&path).map_err(|error| format!("read {rel}: {error}"))?;
             existing.insert(rel.clone(), bytes);
         }
+        let mut new_directories = BTreeSet::new();
+        for rel in moves.iter().map(|(_, new)| new).chain(shims.iter()) {
+            let mut parent = Path::new(rel).parent();
+            while let Some(directory) = parent.filter(|directory| !directory.as_os_str().is_empty()) {
+                if root.join(directory).exists() {
+                    break;
+                }
+                new_directories.insert(directory.to_path_buf());
+                parent = directory.parent();
+            }
+        }
+        let mut new_directories: Vec<_> = new_directories.into_iter().collect();
+        new_directories.sort_by(|left, right| right.components().count().cmp(&left.components().count()).then(left.cmp(right)));
         Ok(Self {
             moves: moves.to_vec(),
             shims: shims.to_vec(),
             existing,
+            new_directories,
         })
     }
 
@@ -230,6 +245,13 @@ impl VerifyJournal {
         }
         for stage in &undo {
             stage_and_commit(root, state, stage, soopy::Durability::Durable)?;
+        }
+        for directory in &self.new_directories {
+            match std::fs::remove_dir(root.join(directory)) {
+                Ok(()) => {}
+                Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty) => {}
+                Err(error) => return Err(format!("remove rollback directory {}: {error}", directory.display())),
+            }
         }
         Ok(self.existing.len())
     }
