@@ -117,3 +117,7 @@ Corpus: `~/projects/rxjs-corpus-feature-ryi-ts-graph`, detached at d0802620.
 D10 compatibility risk: previous name-only cross-file TypeScript resolutions
 without imports are deliberately declined. Serialized gates must check legacy
 fixtures that expected such resolutions. No frozen snapshots were regenerated.
+
+| Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
+|---|---|---|---|
+| D12 | 0_log → 0_0_log and 10_slice → 2_10_slice | Existing stratify proposals replace numeric/insertion prefixes before adding the depth prefix; D12.sh checks corpus and synthetic proposals | Existing command path proposal |
