@@ -730,3 +730,13 @@ fn relational_nth_child_named_comment() {
         );
     }
 }
+
+#[test]
+fn relational_parser_context_comments_and_spacing() {
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    // expression_statement:has(> call_expression)
+    let query = r#"((expression_statement) @c (#has?@c
+        ; Predicate-shaped comment: (#unknown? "field:")
+        (call_expression)stopBy:neighbor))"#;
+    assert_eq!(matches(&language, RUST, query), "c=a(); | c=b(); | c=c();");
+}

@@ -137,3 +137,9 @@ Final relation-specific edge rows and coordinator filters:
 Use each filter with `CARGO_BUILD_JOBS=4 cargo test -p hafley_scm --test
 _0_relational_predicates FILTER`. The earlier `relational_` filter includes all
 these cases. Relation-specific test changes were committed separately.
+
+Parser-context review added `relational_parser_context_comments_and_spacing`:
+predicate-shaped comments and omitted whitespace use tree-sitter query metadata
+to identify the relation at the parser's error position. Prefix completion is
+bounded by source length. Argument extraction still uses Query::new acceptance
+for boundaries. The coordinator's `relational_` filter includes this snapshot.

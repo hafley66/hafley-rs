@@ -1,4 +1,4 @@
-use tree_sitter::{Language, Query, QueryErrorKind};
+use tree_sitter::{Language, Query, QueryErrorKind, QueryPredicateArg};
 
 use crate::types::QueryExtError;
 
@@ -34,6 +34,41 @@ pub fn pattern_query(language: &Language, text: &str) -> Result<Query, QueryExtE
 // No s-expression lexer or nesting counter is maintained here.
 pub fn user_query(language: &Language, text: &str) -> Result<(Query, Vec<String>), QueryExtError> {
     normalize(language, text.to_owned(), Vec::new())
+}
+
+fn argument_operator(language: &Language, prefix: &str) -> Option<(String, Option<String>)> {
+    const PROBE: &str = "__scm_argument_probe";
+    let mut text = format!("{prefix} \"{PROBE}\")");
+    for _ in 0..=prefix.len() {
+        match Query::new(language, &text) {
+            Ok(query) => {
+                for pattern in (0..query.pattern_count()).rev() {
+                    for predicate in query.general_predicates(pattern).iter().rev() {
+                        if matches!(predicate.args.last(), Some(QueryPredicateArg::String(value)) if value.as_ref() == PROBE)
+                        {
+                            let option =
+                                predicate
+                                    .args
+                                    .iter()
+                                    .rev()
+                                    .nth(1)
+                                    .and_then(|arg| match arg {
+                                        QueryPredicateArg::String(value) => Some(value.to_string()),
+                                        _ => None,
+                                    });
+                            return Some((predicate.operator.to_string(), option));
+                        }
+                    }
+                }
+                return None;
+            }
+            Err(error) if error.kind == QueryErrorKind::Syntax && error.offset == text.len() => {
+                text.push(')');
+            }
+            _ => return None,
+        }
+    }
+    None
 }
 
 fn normalize(
@@ -77,14 +112,10 @@ fn normalize(
     if error.kind != QueryErrorKind::Syntax {
         return Err(QueryExtError::Parse(error));
     }
-    let Some(start) = text[..offset].rfind("(#") else {
+    let Some((operator, option)) = argument_operator(language, &text[..offset]) else {
         return Err(QueryExtError::Parse(error));
     };
-    let operator = text[start + 2..]
-        .split_whitespace()
-        .next()
-        .unwrap_or_default();
-    let bare = operator.strip_prefix("not-").unwrap_or(operator);
+    let bare = operator.strip_prefix("not-").unwrap_or(&operator);
     if !matches!(
         bare,
         "has?" | "has-ancestor?" | "has-parent?" | "precedes?" | "follows?" | "nth-child?"
@@ -92,8 +123,7 @@ fn normalize(
         return Err(QueryExtError::Parse(error));
     }
     if text.as_bytes().get(offset) == Some(&b':') {
-        let option = text[..offset].split_whitespace().last().unwrap_or_default();
-        if matches!(option, "stopBy" | "field") {
+        if matches!(option.as_deref(), Some("stopBy" | "field")) {
             let mut replacement = text.clone();
             replacement.replace_range(offset..offset + 1, " ");
             return normalize(language, replacement, patterns);
