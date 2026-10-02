@@ -10,7 +10,8 @@ fn line(row: &SpecifierRow, module: &str) -> String {
         _ => format!("{{ {imported} as {} }}", row.name),
     };
     let type_head = if row.type_only { " type" } else { "" };
-    format!("import{type_head} {clause} from \"{module}\";\n")
+    let keyword = if row.kind == "reexport" { "export" } else { "import" };
+    format!("{keyword}{type_head} {clause} from \"{module}\";\n")
 }
 
 pub(super) fn caller(
@@ -25,7 +26,7 @@ pub(super) fn caller(
     let mut moved = None;
     for statement in &facts.import_statements {
         let old = facts.specifiers.iter().find(|row| {
-            row.name == item && row.module == old_module && inside(row.span, *statement)
+            row.imported.as_deref().unwrap_or(&row.name) == item && row.module == old_module && inside(row.span, *statement)
         });
         let Some(old) = old else { continue };
         moved = Some(old);
@@ -34,8 +35,8 @@ pub(super) fn caller(
             .iter()
             .filter(|row| {
                 inside(row.span, *statement)
-                    && row.name != item
-                    && matches!(row.kind.as_str(), "named" | "default" | "namespace")
+                    && row.span != old.span
+                    && matches!(row.kind.as_str(), "named" | "default" | "namespace" | "reexport")
             })
             .map(|row| line(row, &row.module))
             .collect();
@@ -48,8 +49,10 @@ pub(super) fn caller(
     }
     if let Some(old) = moved {
         let mut landed = old.clone();
-        landed.kind = "named".to_string();
-        landed.imported = None;
+        if old.kind != "reexport" {
+            landed.kind = "named".to_string();
+            landed.imported = None;
+        }
         landed.type_only |= type_only;
         out.push(Respell {
             file: rel.to_string(),

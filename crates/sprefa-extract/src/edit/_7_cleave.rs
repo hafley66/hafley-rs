@@ -1053,8 +1053,25 @@ impl Plan {
         }
 
         let mut callers = imports.callers(&src, &item);
+        if arm.name() == "ts" {
+            let resolver = sprefa_extract::lang::ts_resolve::TsResolver::new(&root)?;
+            for rel in cx.files().iter().filter(|rel| cleave_for(rel).is_some_and(|arm| arm.name() == "ts")) {
+                if rel == &src || rel == &dest {
+                    continue;
+                }
+                let facts = FileFacts::open(&cx, rel, false)?;
+                if facts.specifiers.iter().any(|row| {
+                    row.kind == "reexport"
+                        && row.imported.as_deref().unwrap_or(&row.name) == item
+                        && resolver.resolve(&cx.abs(rel), &row.module).is_some_and(|path| path == cx.abs(&src))
+                }) {
+                    callers.push(rel.clone());
+                }
+            }
+        }
         callers.extend(package_callers(&cx, arm, &src, &item, &callers)?);
         callers.sort();
+        callers.dedup();
         let mut views = Vec::with_capacity(callers.len());
         let mut caller_modules = Vec::with_capacity(callers.len());
         for caller in &callers {
@@ -1065,9 +1082,9 @@ impl Plan {
                 facts
                     .specifiers
                     .iter()
-                    .filter(|row| row.name == item)
+                    .filter(|row| row.name == item || row.imported.as_deref() == Some(item.as_str()))
                     .find(|row| module_key(&item, &row.module) == direct)
-                    .or_else(|| facts.specifiers.iter().find(|row| row.name == item))
+                    .or_else(|| facts.specifiers.iter().find(|row| row.name == item || row.imported.as_deref() == Some(item.as_str())))
                     .map_or_else(String::new, |row| row.module.clone()),
             );
             views.push(facts);
@@ -1302,6 +1319,18 @@ impl Plan {
                 .collect()
         };
         let mut edits: Vec<Respell> = Vec::new();
+        if self.arm.name() == "ts"
+            && self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.exported)
+        {
+            let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);
+            let type_head = if self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.type_only) { " type" } else { "" };
+            edits.push(Respell {
+                file: self.rows.src.clone(),
+                span: Span::anchor(self.rows.item_span.start),
+                text: format!("export{type_head} {{ {} }} from \"{module}\";\n", self.rows.item),
+                receipt: Some(format!("public API {} keeps {}", self.rows.src, self.rows.item)),
+            });
+        }
         for row in self
             .rows
             .dragged
@@ -2328,6 +2357,14 @@ impl FileFacts {
                     ..
                 } if kind == "import_statement" => {
                     import_end = import_end.max(line_end(&text, span.end));
+                    import_statements.push(span_of(span.start, span.end));
+                }
+                FlatFact::Node {
+                    family: sprefa_extract::FamilyTag::Cst,
+                    kind,
+                    span,
+                    ..
+                } if kind == "export_statement" => {
                     import_statements.push(span_of(span.start, span.end));
                 }
                 FlatFact::Specifier {
