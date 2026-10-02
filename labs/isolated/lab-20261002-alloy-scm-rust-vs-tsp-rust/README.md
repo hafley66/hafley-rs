@@ -2,7 +2,16 @@
 
 A: read-only /Users/chrishafley/projects/hafley-tsp/packages/rust, hand-written Alloy Rust on @alloy-js/core 0.23.0-dev.12. B: this isolated lab, generated from hafley_scm's tree-sitter-rust 0.24.2 grammar.json and node-types.json plus hand Rust locals.scm and policy.
 
-Requested denominator: **30 PASS, 5 DIFF, 102 GAP; 137/137 inventoried**. Including declaration renders and other matchers: **87 PASS, 30 DIFF, 122 GAP; 239/239 inventoried**. All 27 A test files have B twins. A has 101 inline snapshots and 36 toBe assertions (137), plus 85 toRenderTo, 9 toBeNull, 6 toContain, and 2 toEqual assertions (102).
+Requested denominator: **30 PASS, 5 DIFF, 102 GAP; 137/137 inventoried**. Including declaration renders and other matchers: **87 PASS, 30 DIFF, 122 GAP; 239/239 inventoried**. Strip-whitespace comparison (remove every `\s` character from measured strings): **30 PASS, 5 DIFF, 102 GAP** primary; **101 PASS, 16 DIFF, 122 GAP** all matchers. Scalar and presence matchers retain their measured status.
+
+Before/after totals (239 matchers):
+
+| step | byte PASS/DIFF/GAP | strip-whitespace PASS/DIFF/GAP |
+|---|---|---|
+| Before | 87/30/122 | 101/16/122 |
+| 1. Comparison columns | 87/30/122 | 101/16/122 |
+
+All 27 A test files have B twins. A has 101 inline snapshots and 36 toBe assertions (137), plus 85 toRenderTo, 9 toBeNull, 6 toContain, and 2 toEqual assertions (102).
 
 ## Run
 

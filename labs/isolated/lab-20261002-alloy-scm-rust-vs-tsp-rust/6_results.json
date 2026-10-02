@@ -11,6 +11,20 @@
     "DIFF": 30,
     "GAP": 122
   },
+  "whitespace": {
+    "primary": {
+      "assertions": 137,
+      "PASS": 30,
+      "DIFF": 5,
+      "GAP": 102
+    },
+    "all": {
+      "assertions": 239,
+      "PASS": 101,
+      "DIFF": 16,
+      "GAP": 122
+    }
+  },
   "syntax": {
     "outputs": 114,
     "parseClean": 107,
@@ -420,6 +434,8 @@
       "status": "PASS",
       "expected": "MyCoolStruct",
       "actual": "MyCoolStruct",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct MyCoolStruct;\n",
         "ERROR": 0,
@@ -453,6 +469,8 @@
       "status": "PASS",
       "expected": "first_name",
       "actual": "first_name",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() { let first_name = (); }\n",
         "ERROR": 0,
@@ -486,6 +504,8 @@
       "status": "PASS",
       "expected": "firstName",
       "actual": "firstName",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() { let firstName = (); }\n",
         "ERROR": 0,
@@ -519,6 +539,8 @@
       "status": "PASS",
       "expected": "get_user_by_id",
       "actual": "get_user_by_id",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn get_user_by_id() {}\n",
         "ERROR": 0,
@@ -552,6 +574,8 @@
       "status": "PASS",
       "expected": "MAX_CONNECTIONS",
       "actual": "MAX_CONNECTIONS",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "const MAX_CONNECTIONS: usize = 0;\n",
         "ERROR": 0,
@@ -585,6 +609,8 @@
       "status": "PASS",
       "expected": "my_module",
       "actual": "my_module",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "mod my_module {}\n",
         "ERROR": 0,
@@ -618,6 +644,8 @@
       "status": "PASS",
       "expected": "r#type",
       "actual": "r#type",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn r#type() {}\n",
         "ERROR": 0,
@@ -651,6 +679,8 @@
       "status": "PASS",
       "expected": "r#match",
       "actual": "r#match",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() { let r#match = (); }\n",
         "ERROR": 0,
@@ -684,6 +714,8 @@
       "status": "PASS",
       "expected": "r#self",
       "actual": "r#self",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() { let r#self = (); }\n",
         "ERROR": 0,
@@ -717,6 +749,8 @@
       "status": "PASS",
       "expected": "r#struct",
       "actual": "r#struct",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "mod r#struct {}\n",
         "ERROR": 0,
@@ -750,6 +784,8 @@
       "status": "PASS",
       "expected": "r#try",
       "actual": "r#try",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn r#try() {}\n",
         "ERROR": 0,
@@ -783,6 +819,8 @@
       "status": "PASS",
       "expected": "r#yield",
       "actual": "r#yield",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn r#yield() {}\n",
         "ERROR": 0,
@@ -816,6 +854,8 @@
       "status": "PASS",
       "expected": "a",
       "actual": "a",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = &'a ();\n",
         "ERROR": 0,
@@ -849,6 +889,8 @@
       "status": "PASS",
       "expected": "static",
       "actual": "static",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = &'static ();\n",
         "ERROR": 0,
@@ -882,6 +924,8 @@
       "status": "PASS",
       "expected": "foo",
       "actual": "foo",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo() {}\n",
         "ERROR": 0,
@@ -915,6 +959,8 @@
       "status": "PASS",
       "expected": "MyStruct",
       "actual": "MyStruct",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct MyStruct;\n",
         "ERROR": 0,
@@ -947,7 +993,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c40d72e77b171b55",
@@ -964,7 +1012,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "5ecd95149727b255",
@@ -981,7 +1031,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "eb08194b25e4d15c",
@@ -998,7 +1050,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "2770dec56fd47d85",
@@ -1015,7 +1069,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "9e0ffc70fd41e767",
@@ -1032,7 +1088,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4563a72bfead3f7d",
@@ -1049,7 +1107,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "d2e3ea8fed84de3c",
@@ -1066,7 +1126,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "aca4205bdaf23dee",
@@ -1083,7 +1145,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "41b22ec0316c3b68",
@@ -1100,7 +1164,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "df9bdf1f63c16a13",
@@ -1117,7 +1183,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "da09e1a327793e55",
@@ -1134,7 +1202,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c74c8d2399a819b4",
@@ -1151,7 +1221,9 @@
       "sourceHash": "ff4404323e2f2a2dd454f3a84f2866d6d8b1d7b253d0cbda08f3d0b34aaba797",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "98718a8a05716a85",
@@ -1168,7 +1240,9 @@
       "sourceHash": "2ce11fb596b3a8b3d0e821ccc4d1ebb3846f57b499de120cc74dab71f0436aea",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "f0d73112e10b9c36",
@@ -1185,7 +1259,9 @@
       "sourceHash": "2ce11fb596b3a8b3d0e821ccc4d1ebb3846f57b499de120cc74dab71f0436aea",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "621453809df70342",
@@ -1202,7 +1278,9 @@
       "sourceHash": "2ce11fb596b3a8b3d0e821ccc4d1ebb3846f57b499de120cc74dab71f0436aea",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "cedfa7ede1bfb8fc",
@@ -1219,7 +1297,9 @@
       "sourceHash": "2ce11fb596b3a8b3d0e821ccc4d1ebb3846f57b499de120cc74dab71f0436aea",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "3febb38c4894efbb",
@@ -1236,7 +1316,9 @@
       "sourceHash": "2ce11fb596b3a8b3d0e821ccc4d1ebb3846f57b499de120cc74dab71f0436aea",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "1edf66bdf0b29cda",
@@ -1253,7 +1335,9 @@
       "sourceHash": "2ce11fb596b3a8b3d0e821ccc4d1ebb3846f57b499de120cc74dab71f0436aea",
       "status": "GAP",
       "reason": "other",
-      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B"
+      "detail": "No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "d80832a451f433ad",
@@ -1271,6 +1355,8 @@
       "status": "PASS",
       "expected": "serde(tag = \"type\", content = \"data\")",
       "actual": "serde(tag = \"type\", content = \"data\")",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(tag = \"type\", content = \"data\")]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1304,6 +1390,8 @@
       "status": "PASS",
       "expected": "serde(untagged)",
       "actual": "serde(untagged)",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(untagged)]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1337,6 +1425,8 @@
       "status": "PASS",
       "expected": "serde(deny_unknown_fields, default)",
       "actual": "serde(deny_unknown_fields, default)",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(deny_unknown_fields, default)]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1370,6 +1460,8 @@
       "status": "PASS",
       "expected": null,
       "actual": false,
+      "byteEqual": null,
+      "whitespaceEqual": null,
       "syntax": null,
       "oracleSyntax": null
     },
@@ -1389,6 +1481,8 @@
       "status": "PASS",
       "expected": "serde(transparent)",
       "actual": "serde(transparent)",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(transparent)]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1422,6 +1516,8 @@
       "status": "PASS",
       "expected": "serde(skip)",
       "actual": "serde(skip)",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(skip)]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1455,6 +1551,8 @@
       "status": "PASS",
       "expected": "serde(default)",
       "actual": "serde(default)",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(default)]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1488,6 +1586,8 @@
       "status": "PASS",
       "expected": "serde(default = \"default_port\")",
       "actual": "serde(default = \"default_port\")",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(default = \"default_port\")]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1521,6 +1621,8 @@
       "status": "PASS",
       "expected": "serde(flatten)",
       "actual": "serde(flatten)",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(flatten)]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1554,6 +1656,8 @@
       "status": "PASS",
       "expected": "serde(skip_serializing_if = \"Option::is_none\")",
       "actual": "serde(skip_serializing_if = \"Option::is_none\")",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(skip_serializing_if = \"Option::is_none\")]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1587,6 +1691,8 @@
       "status": "PASS",
       "expected": "serde(alias = \"id\")",
       "actual": "serde(alias = \"id\")",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[serde(alias = \"id\")]\nstruct Probe;\n",
         "ERROR": 0,
@@ -1620,6 +1726,8 @@
       "status": "PASS",
       "expected": null,
       "actual": false,
+      "byteEqual": null,
+      "whitespaceEqual": null,
       "syntax": null,
       "oracleSyntax": null
     },
@@ -1639,6 +1747,8 @@
       "status": "PASS",
       "expected": "#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\nstruct Config {\n  port: u16,\n}",
       "actual": "#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\nstruct Config {\n  port: u16,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Deserialize)]\n#[serde(deny_unknown_fields)]\nstruct Config {\n  port: u16,\n}\n",
         "ERROR": 0,
@@ -1672,6 +1782,8 @@
       "status": "PASS",
       "expected": "#[derive(Deserialize)]\n#[serde(default)]\nstruct Settings {\n  port: u16,\n  host: String,\n}",
       "actual": "#[derive(Deserialize)]\n#[serde(default)]\nstruct Settings {\n  port: u16,\n  host: String,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Deserialize)]\n#[serde(default)]\nstruct Settings {\n  port: u16,\n  host: String,\n}\n",
         "ERROR": 0,
@@ -1705,6 +1817,8 @@
       "status": "PASS",
       "expected": "struct Foo {\n  visible: i32,\n  #[serde(skip)]\n  hidden: String,\n}",
       "actual": "struct Foo {\n  visible: i32,\n  #[serde(skip)]\n  hidden: String,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {\n  visible: i32,\n  #[serde(skip)]\n  hidden: String,\n}\n",
         "ERROR": 0,
@@ -1738,6 +1852,8 @@
       "status": "PASS",
       "expected": "struct Foo {\n  #[serde(default)]\n  id: u64,\n}",
       "actual": "struct Foo {\n  #[serde(default)]\n  id: u64,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {\n  #[serde(default)]\n  id: u64,\n}\n",
         "ERROR": 0,
@@ -1771,6 +1887,8 @@
       "status": "PASS",
       "expected": "struct Outer {\n  #[serde(flatten)]\n  inner: Inner,\n}",
       "actual": "struct Outer {\n  #[serde(flatten)]\n  inner: Inner,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Outer {\n  #[serde(flatten)]\n  inner: Inner,\n}\n",
         "ERROR": 0,
@@ -1804,6 +1922,8 @@
       "status": "PASS",
       "expected": "struct Foo {\n  #[serde(skip_serializing_if = \"Option::is_none\")]\n  maybe: Option<String>,\n}",
       "actual": "struct Foo {\n  #[serde(skip_serializing_if = \"Option::is_none\")]\n  maybe: Option<String>,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {\n  #[serde(skip_serializing_if = \"Option::is_none\")]\n  maybe: Option<String>,\n}\n",
         "ERROR": 0,
@@ -1837,6 +1957,8 @@
       "status": "PASS",
       "expected": "#[derive(Serialize, Deserialize)]\n#[serde(tag = \"type\", content = \"data\")]\nenum Event {\n  Click,\n  Scroll,\n}",
       "actual": "#[derive(Serialize, Deserialize)]\n#[serde(tag = \"type\", content = \"data\")]\nenum Event {\n  Click,\n  Scroll,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Serialize, Deserialize)]\n#[serde(tag = \"type\", content = \"data\")]\nenum Event {\n  Click,\n  Scroll,\n}\n",
         "ERROR": 0,
@@ -1870,6 +1992,8 @@
       "status": "PASS",
       "expected": "#[derive(Deserialize)]\n#[serde(untagged)]\nenum Value {\n  Str,\n  Num,\n}",
       "actual": "#[derive(Deserialize)]\n#[serde(untagged)]\nenum Value {\n  Str,\n  Num,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Deserialize)]\n#[serde(untagged)]\nenum Value {\n  Str,\n  Num,\n}\n",
         "ERROR": 0,
@@ -1903,6 +2027,8 @@
       "status": "PASS",
       "expected": "struct Foo;",
       "actual": "struct Foo;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo;\n",
         "ERROR": 0,
@@ -1936,6 +2062,8 @@
       "status": "PASS",
       "expected": "struct Foo {}",
       "actual": "struct Foo {}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {}\n",
         "ERROR": 0,
@@ -1969,6 +2097,8 @@
       "status": "PASS",
       "expected": "struct Foo {\n  bar: i32,\n  baz: String,\n}",
       "actual": "struct Foo {\n  bar: i32,\n  baz: String,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {\n  bar: i32,\n  baz: String,\n}\n",
         "ERROR": 0,
@@ -2002,6 +2132,8 @@
       "status": "PASS",
       "expected": "struct Foo {\n  pub bar: i32,\n}",
       "actual": "struct Foo {\n  pub bar: i32,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {\n  pub bar: i32,\n}\n",
         "ERROR": 0,
@@ -2035,6 +2167,8 @@
       "status": "PASS",
       "expected": "pub struct Foo;",
       "actual": "pub struct Foo;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub struct Foo;\n",
         "ERROR": 0,
@@ -2068,6 +2202,8 @@
       "status": "PASS",
       "expected": "#[derive(Debug, Clone)]\nstruct Foo {\n  x: i32,\n}",
       "actual": "#[derive(Debug, Clone)]\nstruct Foo {\n  x: i32,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Debug, Clone)]\nstruct Foo {\n  x: i32,\n}\n",
         "ERROR": 0,
@@ -2101,6 +2237,8 @@
       "status": "PASS",
       "expected": "struct Foo<T> {\n  bar: T,\n}",
       "actual": "struct Foo<T> {\n  bar: T,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo<T> {\n  bar: T,\n}\n",
         "ERROR": 0,
@@ -2134,6 +2272,8 @@
       "status": "PASS",
       "expected": "struct Foo<T: Display + Clone> {\n  bar: T,\n}",
       "actual": "struct Foo<T: Display + Clone> {\n  bar: T,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo<T: Display + Clone> {\n  bar: T,\n}\n",
         "ERROR": 0,
@@ -2167,6 +2307,8 @@
       "status": "PASS",
       "expected": "struct Foo<'a> {\n  bar: &'a str,\n}",
       "actual": "struct Foo<'a> {\n  bar: &'a str,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo<'a> {\n  bar: &'a str,\n}\n",
         "ERROR": 0,
@@ -2202,6 +2344,8 @@
       "expected": "struct Foo<'a, T: 'a> {\n  bar: &'a T,\n}",
       "actual": "struct Foo<'aT: 'a> {\n  bar: &'a T,\n}",
       "detail": "expected 'struct Foo<\\'aT: \\'a> {\\n  bar: &\\'a …' to be 'struct Foo<\\'a, T: \\'a> {\\n  bar: &\\'…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "struct Foo<'aT: 'a> {\n  bar: &'a T,\n}\n",
         "ERROR": 0,
@@ -2237,6 +2381,8 @@
       "expected": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}",
       "actual": "where T: Serialize, struct Foo<T> {\n  bar: T,\n}",
       "detail": "expected 'where T: Serialize, struct Foo<T> {\\n…' to be 'struct Foo<T>\\nwhere\\n    T: Serializ…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "where T: Serialize, struct Foo<T> {\n  bar: T,\n}\n",
         "ERROR": 1,
@@ -2272,6 +2418,8 @@
       "expected": "struct Point(f64, f64);",
       "actual": "struct Point (f64, f64)",
       "detail": "expected 'struct Point (f64, f64)' to be 'struct Point(f64, f64);' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "struct Point (f64, f64)\n",
         "ERROR": 0,
@@ -2307,6 +2455,8 @@
       "expected": "#[derive(Debug)]\nstruct Point(f64, f64);",
       "actual": "#[derive(Debug)]\nstruct Point (f64, f64)",
       "detail": "expected '#[derive(Debug)]\\nstruct Point (f64, …' to be '#[derive(Debug)]\\nstruct Point(f64, f…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "#[derive(Debug)]\nstruct Point (f64, f64)\n",
         "ERROR": 0,
@@ -2340,6 +2490,8 @@
       "status": "PASS",
       "expected": "enum Color {\n  Red,\n  Green,\n  Blue,\n}",
       "actual": "enum Color {\n  Red,\n  Green,\n  Blue,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "enum Color {\n  Red,\n  Green,\n  Blue,\n}\n",
         "ERROR": 0,
@@ -2375,6 +2527,8 @@
       "expected": "enum Shape {\n  Circle(f64),\n  Rect(f64, f64),\n}",
       "actual": "enum Shape {\n  Circle (f64),\n  Rect (f64, f64),\n}",
       "detail": "expected 'enum Shape {\\n  Circle (f64),\\n  Rect…' to be 'enum Shape {\\n  Circle(f64),\\n  Rect(…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "enum Shape {\n  Circle (f64),\n  Rect (f64, f64),\n}\n",
         "ERROR": 0,
@@ -2408,6 +2562,8 @@
       "status": "PASS",
       "expected": "enum Message {\n  Quit,\n  Move {\n    x: i32,\n    y: i32,\n  },\n}",
       "actual": "enum Message {\n  Quit,\n  Move {\n    x: i32,\n    y: i32,\n  },\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "enum Message {\n  Quit,\n  Move {\n    x: i32,\n    y: i32,\n  },\n}\n",
         "ERROR": 0,
@@ -2443,6 +2599,8 @@
       "expected": "enum Event {\n  None,\n  Click(i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}",
       "actual": "enum Event {\n  None,\n  Click (i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}",
       "detail": "expected 'enum Event {\\n  None,\\n  Click (i32, …' to be 'enum Event {\\n  None,\\n  Click(i32, i…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "enum Event {\n  None,\n  Click (i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}\n",
         "ERROR": 0,
@@ -2476,6 +2634,8 @@
       "status": "PASS",
       "expected": "#[derive(Debug, PartialEq)]\nenum Color {\n  Red,\n}",
       "actual": "#[derive(Debug, PartialEq)]\nenum Color {\n  Red,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Debug, PartialEq)]\nenum Color {\n  Red,\n}\n",
         "ERROR": 0,
@@ -2511,6 +2671,8 @@
       "expected": "enum Option<T> {\n  Some(T),\n  None,\n}",
       "actual": "enum Option<T> {\n  Some (T),\n  None,\n}",
       "detail": "expected 'enum Option<T> {\\n  Some (T),\\n  None…' to be 'enum Option<T> {\\n  Some(T),\\n  None,…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "enum Option<T> {\n  Some (T),\n  None,\n}\n",
         "ERROR": 0,
@@ -2544,6 +2706,8 @@
       "status": "PASS",
       "expected": "pub enum Color {\n  Red,\n}",
       "actual": "pub enum Color {\n  Red,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub enum Color {\n  Red,\n}\n",
         "ERROR": 0,
@@ -2576,7 +2740,9 @@
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
       "status": "GAP",
       "reason": "doc comments",
-      "detail": "Generated line_comment only exposes doc-marker fields; ordinary comment body is a pruned PATTERN"
+      "detail": "Generated line_comment only exposes doc-marker fields; ordinary comment body is a pruned PATTERN",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "daf7762fcb5e2abc",
@@ -2593,7 +2759,9 @@
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
       "status": "GAP",
       "reason": "doc comments",
-      "detail": "Generated block_comment has no ordinary body prop"
+      "detail": "Generated block_comment has no ordinary body prop",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "497927f9e80b16cd",
@@ -2611,6 +2779,8 @@
       "status": "PASS",
       "expected": "/// Documentation for this item",
       "actual": "/// Documentation for this item",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "/// Documentation for this item\nstruct Probe;\n",
         "ERROR": 0,
@@ -2644,6 +2814,8 @@
       "status": "PASS",
       "expected": "&String",
       "actual": "&String",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = &String;\n",
         "ERROR": 0,
@@ -2677,6 +2849,8 @@
       "status": "PASS",
       "expected": "&mut Vec<u8>",
       "actual": "&mut Vec<u8>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = &mut Vec<u8>;\n",
         "ERROR": 0,
@@ -2710,6 +2884,8 @@
       "status": "PASS",
       "expected": "&'a str",
       "actual": "&'a str",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = &'a str;\n",
         "ERROR": 0,
@@ -2743,6 +2919,8 @@
       "status": "PASS",
       "expected": "&'a mut str",
       "actual": "&'a mut str",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = &'a mut str;\n",
         "ERROR": 0,
@@ -2776,6 +2954,8 @@
       "status": "PASS",
       "expected": "Box<dyn Error>",
       "actual": "Box<dyn Error>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = Box<dyn Error>;\n",
         "ERROR": 0,
@@ -2809,6 +2989,8 @@
       "status": "PASS",
       "expected": "Rc<RefCell<State>>",
       "actual": "Rc<RefCell<State>>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = Rc<RefCell<State>>;\n",
         "ERROR": 0,
@@ -2842,6 +3024,8 @@
       "status": "PASS",
       "expected": "Arc<Mutex<Data>>",
       "actual": "Arc<Mutex<Data>>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = Arc<Mutex<Data>>;\n",
         "ERROR": 0,
@@ -2875,6 +3059,8 @@
       "status": "PASS",
       "expected": "Option<String>",
       "actual": "Option<String>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = Option<String>;\n",
         "ERROR": 0,
@@ -2908,6 +3094,8 @@
       "status": "PASS",
       "expected": "Vec<u8>",
       "actual": "Vec<u8>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Probe = Vec<u8>;\n",
         "ERROR": 0,
@@ -2943,6 +3131,8 @@
       "expected": "Result<User, AppError>",
       "actual": "Result<UserAppError>",
       "detail": "expected 'Result<UserAppError>' to be 'Result<User, AppError>' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "type Probe = Result<UserAppError>;\n",
         "ERROR": 0,
@@ -2976,6 +3166,8 @@
       "status": "PASS",
       "expected": "type UserId = i64;",
       "actual": "type UserId = i64;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type UserId = i64;\n",
         "ERROR": 0,
@@ -3009,6 +3201,8 @@
       "status": "PASS",
       "expected": "pub type Name = String;",
       "actual": "pub type Name = String;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub type Name = String;\n",
         "ERROR": 0,
@@ -3042,6 +3236,8 @@
       "status": "PASS",
       "expected": "type Pair<T> = (T, T);",
       "actual": "type Pair<T> = (T, T);",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "type Pair<T> = (T, T);\n",
         "ERROR": 0,
@@ -3075,6 +3271,8 @@
       "status": "PASS",
       "expected": "#[allow(dead_code)]\ntype Handler = Box<dyn Fn()>;",
       "actual": "#[allow(dead_code)]\ntype Handler = Box<dyn Fn()>;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[allow(dead_code)]\ntype Handler = Box<dyn Fn()>;\n",
         "ERROR": 0,
@@ -3108,6 +3306,8 @@
       "status": "PASS",
       "expected": "trait Marker {}",
       "actual": "trait Marker {}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "trait Marker {}\n",
         "ERROR": 0,
@@ -3141,6 +3341,8 @@
       "status": "PASS",
       "expected": "pub trait Service {}",
       "actual": "pub trait Service {}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub trait Service {}\n",
         "ERROR": 0,
@@ -3174,6 +3376,8 @@
       "status": "PASS",
       "expected": "trait Animal: Clone + Debug {}",
       "actual": "trait Animal: Clone + Debug {}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "trait Animal: Clone + Debug {}\n",
         "ERROR": 0,
@@ -3207,6 +3411,8 @@
       "status": "PASS",
       "expected": "trait Greeter {\n  fn greet(&self) -> String;\n}",
       "actual": "trait Greeter {\n  fn greet(&self) -> String;\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "trait Greeter {\n  fn greet(&self) -> String;\n}\n",
         "ERROR": 0,
@@ -3242,6 +3448,8 @@
       "expected": "trait Iterator {\n  type Item;\n  fn next(&mut self) -> Option<Self::Item>;\n}",
       "actual": "trait Iterator {\n  type Item;\n\n\n  fn next(&mut self) -> Option<Self::Item>;\n}",
       "detail": "expected 'trait Iterator {\\n  type Item;\\n\\n\\n …' to be 'trait Iterator {\\n  type Item;\\n  fn …' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "trait Iterator {\n  type Item;\n\n\n  fn next(&mut self) -> Option<Self::Item>;\n}\n",
         "ERROR": 0,
@@ -3275,6 +3483,8 @@
       "status": "PASS",
       "expected": "trait Container {\n  type Item: Clone + Send;\n}",
       "actual": "trait Container {\n  type Item: Clone + Send;\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "trait Container {\n  type Item: Clone + Send;\n}\n",
         "ERROR": 0,
@@ -3310,6 +3520,8 @@
       "expected": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}",
       "actual": "where T: Serialize + Send, trait Store<T> {\n  fn save(&selfitem: &T);\n}",
       "detail": "expected 'where T: Serialize + Send, trait Stor…' to be 'trait Store<T>\\nwhere\\n    T: Seriali…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "where T: Serialize + Send, trait Store<T> {\n  fn save(&selfitem: &T);\n}\n",
         "ERROR": 1,
@@ -3345,6 +3557,8 @@
       "expected": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut self, data: &[u8]);\n}",
       "actual": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut selfdata: &[u8]);\n}",
       "detail": "expected 'pub trait ReadWrite {\\n  fn read(&sel…' to be 'pub trait ReadWrite {\\n  fn read(&sel…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut selfdata: &[u8]);\n}\n",
         "ERROR": 0,
@@ -3378,6 +3592,8 @@
       "status": "PASS",
       "expected": "const MAX_SIZE: usize = 1024;",
       "actual": "const MAX_SIZE: usize = 1024;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "const MAX_SIZE: usize = 1024;\n",
         "ERROR": 0,
@@ -3411,6 +3627,8 @@
       "status": "PASS",
       "expected": "pub const VERSION: &str = \"1.0.0\";",
       "actual": "pub const VERSION: &str = \"1.0.0\";",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub const VERSION: &str = \"1.0.0\";\n",
         "ERROR": 0,
@@ -3444,6 +3662,8 @@
       "status": "PASS",
       "expected": "#[allow(clippy::approx_constant)]\nconst PI: f64 = 3.14159;",
       "actual": "#[allow(clippy::approx_constant)]\nconst PI: f64 = 3.14159;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[allow(clippy::approx_constant)]\nconst PI: f64 = 3.14159;\n",
         "ERROR": 0,
@@ -3477,6 +3697,8 @@
       "status": "PASS",
       "expected": "static COUNTER: AtomicUsize = AtomicUsize::new(0);",
       "actual": "static COUNTER: AtomicUsize = AtomicUsize::new(0);",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "static COUNTER: AtomicUsize = AtomicUsize::new(0);\n",
         "ERROR": 0,
@@ -3512,6 +3734,8 @@
       "expected": "static mut BUFFER: [u8; 1024] = [0u8; 1024];",
       "actual": "mut static BUFFER: [u8; 1024] = [0u8; 1024];",
       "detail": "expected 'mut static BUFFER: [u8; 1024] = [0u8;…' to be 'static mut BUFFER: [u8; 1024] = [0u8;…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "mut static BUFFER: [u8; 1024] = [0u8; 1024];\n",
         "ERROR": 1,
@@ -3545,6 +3769,8 @@
       "status": "PASS",
       "expected": "let x: i32 = 42;",
       "actual": "let x: i32 = 42;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() {\nlet x: i32 = 42;\n}\n",
         "ERROR": 0,
@@ -3578,6 +3804,8 @@
       "status": "PASS",
       "expected": "let mut buf: Vec<u8> = Vec::new();",
       "actual": "let mut buf: Vec<u8> = Vec::new();",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() {\nlet mut buf: Vec<u8> = Vec::new();\n}\n",
         "ERROR": 0,
@@ -3611,6 +3839,8 @@
       "status": "PASS",
       "expected": "let items = vec![1, 2, 3];",
       "actual": "let items = vec![1, 2, 3];",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() {\nlet items = vec![1, 2, 3];\n}\n",
         "ERROR": 0,
@@ -3644,6 +3874,8 @@
       "status": "PASS",
       "expected": "let result: Option<String>;",
       "actual": "let result: Option<String>;",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn probe() {\nlet result: Option<String>;\n}\n",
         "ERROR": 0,
@@ -3677,6 +3909,8 @@
       "status": "PASS",
       "expected": "pub trait Greet {\n  fn hello(&self) -> String;\n}\n\n#[derive(Debug)]\nstruct Bot;\n\nimpl Greet for Bot {\n  fn hello(&self) -> String {\n    String::from(\"beep boop\")\n  }\n}",
       "actual": "pub trait Greet {\n  fn hello(&self) -> String;\n}\n\n#[derive(Debug)]\nstruct Bot;\n\nimpl Greet for Bot {\n  fn hello(&self) -> String {\n    String::from(\"beep boop\")\n  }\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub trait Greet {\n  fn hello(&self) -> String;\n}\n\n#[derive(Debug)]\nstruct Bot;\n\nimpl Greet for Bot {\n  fn hello(&self) -> String {\n    String::from(\"beep boop\")\n  }\n}\n",
         "ERROR": 0,
@@ -3712,6 +3946,8 @@
       "expected": "fn foo() { }",
       "actual": "fn foo() {}",
       "detail": "expected 'fn foo() {}' to be 'fn foo() { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo() {}\n",
         "ERROR": 0,
@@ -3747,6 +3983,8 @@
       "expected": "fn foo(bar: i32, baz: String) { }",
       "actual": "fn foo(bar: i32baz: String) {}",
       "detail": "expected 'fn foo(bar: i32baz: String) {}' to be 'fn foo(bar: i32, baz: String) { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "fn foo(bar: i32baz: String) {}\n",
         "ERROR": 1,
@@ -3782,6 +4020,8 @@
       "expected": "fn foo() -> i32 { }",
       "actual": "fn foo() -> i32 {}",
       "detail": "expected 'fn foo() -> i32 {}' to be 'fn foo() -> i32 { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo() -> i32 {}\n",
         "ERROR": 0,
@@ -3815,6 +4055,8 @@
       "status": "PASS",
       "expected": "fn foo() -> i32 {\n  42\n}",
       "actual": "fn foo() -> i32 {\n  42\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo() -> i32 {\n  42\n}\n",
         "ERROR": 0,
@@ -3850,6 +4092,8 @@
       "expected": "fn foo<T>(bar: T) -> T { }",
       "actual": "fn foo<T>(bar: T) -> T {}",
       "detail": "expected 'fn foo<T>(bar: T) -> T {}' to be 'fn foo<T>(bar: T) -> T { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo<T>(bar: T) -> T {}\n",
         "ERROR": 0,
@@ -3885,6 +4129,8 @@
       "expected": "fn foo<T: Display>(bar: T) { }",
       "actual": "fn foo<T: Display>(bar: T) {}",
       "detail": "expected 'fn foo<T: Display>(bar: T) {}' to be 'fn foo<T: Display>(bar: T) { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo<T: Display>(bar: T) {}\n",
         "ERROR": 0,
@@ -3920,6 +4166,8 @@
       "expected": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }",
       "actual": "where T: Serialize, fn foo<T>(bar: T) {}",
       "detail": "expected 'where T: Serialize, fn foo<T>(bar: T)…' to be 'fn foo<T>(bar: T)\\nwhere\\n    T: Seri…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "where T: Serialize, fn foo<T>(bar: T) {}\n",
         "ERROR": 1,
@@ -3955,6 +4203,8 @@
       "expected": "fn foo<'a>(bar: &'a str) -> &'a str { }",
       "actual": "fn foo<'a>(bar: &'a str) -> &'a str {}",
       "detail": "expected 'fn foo<\\'a>(bar: &\\'a str) -> &\\'a st…' to be 'fn foo<\\'a>(bar: &\\'a str) -> &\\'a st…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "fn foo<'a>(bar: &'a str) -> &'a str {}\n",
         "ERROR": 0,
@@ -3990,6 +4240,8 @@
       "expected": "pub fn foo() { }",
       "actual": "pub fn foo() {}",
       "detail": "expected 'pub fn foo() {}' to be 'pub fn foo() { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub fn foo() {}\n",
         "ERROR": 0,
@@ -4025,6 +4277,8 @@
       "expected": "async fn foo() { }",
       "actual": "async fn foo() {}",
       "detail": "expected 'async fn foo() {}' to be 'async fn foo() { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "async fn foo() {}\n",
         "ERROR": 0,
@@ -4058,6 +4312,8 @@
       "status": "PASS",
       "expected": "pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n  todo!()\n}",
       "actual": "pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub async fn fetch<T: DeserializeOwned>(url: &str) -> Result<T> {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4093,6 +4349,8 @@
       "expected": "impl Foo { }",
       "actual": "impl Foo {}",
       "detail": "expected 'impl Foo {}' to be 'impl Foo { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "impl Foo {}\n",
         "ERROR": 0,
@@ -4126,6 +4384,8 @@
       "status": "PASS",
       "expected": "impl Foo {\n  pub fn bar() {\n    42\n  }\n}",
       "actual": "impl Foo {\n  pub fn bar() {\n    42\n  }\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "impl Foo {\n  pub fn bar() {\n    42\n  }\n}\n",
         "ERROR": 0,
@@ -4161,6 +4421,8 @@
       "expected": "impl Display for Foo {\n  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}",
       "actual": "impl Display for Foo {\n  fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}",
       "detail": "expected 'impl Display for Foo {\\n  fn fmt(&sel…' to be 'impl Display for Foo {\\n  fn fmt(&sel…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "impl Display for Foo {\n  fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}\n",
         "ERROR": 0,
@@ -4196,6 +4458,8 @@
       "expected": "impl<T> Foo<T> { }",
       "actual": "impl<T> Foo<T> {}",
       "detail": "expected 'impl<T> Foo<T> {}' to be 'impl<T> Foo<T> { }' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "impl<T> Foo<T> {}\n",
         "ERROR": 0,
@@ -4231,6 +4495,8 @@
       "expected": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }",
       "actual": "impl<T> Foo<T> where T: Clone, {}",
       "detail": "expected 'impl<T> Foo<T> where T: Clone, {}' to be 'impl<T> Foo<T>\\nwhere\\n    T: Clone,\\…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "impl<T> Foo<T> where T: Clone, {}\n",
         "ERROR": 0,
@@ -4264,6 +4530,8 @@
       "status": "PASS",
       "expected": "impl Foo {\n  fn new() -> Self {\n    todo!()\n  }\n}\n\nimpl Default for Foo {\n  fn default() -> Self {\n    todo!()\n  }\n}",
       "actual": "impl Foo {\n  fn new() -> Self {\n    todo!()\n  }\n}\n\nimpl Default for Foo {\n  fn default() -> Self {\n    todo!()\n  }\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "impl Foo {\n  fn new() -> Self {\n    todo!()\n  }\n}\n\nimpl Default for Foo {\n  fn default() -> Self {\n    todo!()\n  }\n}\n",
         "ERROR": 0,
@@ -4297,6 +4565,8 @@
       "status": "PASS",
       "expected": "impl<T> From<T> for Vec<T> {\n  fn from(item: T) -> Self {\n    vec![item]\n  }\n}",
       "actual": "impl<T> From<T> for Vec<T> {\n  fn from(item: T) -> Self {\n    vec![item]\n  }\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "impl<T> From<T> for Vec<T> {\n  fn from(item: T) -> Self {\n    vec![item]\n  }\n}\n",
         "ERROR": 0,
@@ -4330,6 +4600,8 @@
       "status": "PASS",
       "expected": "struct Foo {}\n\nfn make_foo() -> Foo {\n  todo!()\n}",
       "actual": "struct Foo {}\n\nfn make_foo() -> Foo {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "struct Foo {}\n\nfn make_foo() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4365,6 +4637,8 @@
       "expected": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}",
       "actual": "pub fn make_foo() -> Foo {\n  todo!()\n}",
       "detail": "expected 'pub fn make_foo() -> Foo {\\n  todo!()…' to be 'pub mod models;\\n\\nuse crate::models:…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "pub fn make_foo() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4400,6 +4674,8 @@
       "expected": "pub mod models;\n\nuse crate::models::Foo;\n\npub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}",
       "actual": "pub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}",
       "detail": "expected 'pub fn make_foo() -> Foo {\\n  todo!()…' to be 'pub mod models;\\n\\nuse crate::models:…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "pub fn make_foo() -> Foo {\n  todo!()\n}\n\npub fn another() -> Foo {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4435,6 +4711,8 @@
       "expected": "pub mod errors;\npub mod models;\n\nuse crate::errors::AppError;\nuse crate::models::Foo;\n\npub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}",
       "actual": "pub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}",
       "detail": "expected 'pub fn get_foo() -> Foo {\\n  todo!()\\…' to be 'pub mod errors;\\npub mod models;\\n\\nu…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "pub fn get_foo() -> Foo {\n  todo!()\n}\n\npub fn fail() -> AppError {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4468,6 +4746,8 @@
       "status": "PASS",
       "expected": null,
       "actual": true,
+      "byteEqual": null,
+      "whitespaceEqual": null,
       "syntax": null,
       "oracleSyntax": null
     },
@@ -4487,6 +4767,8 @@
       "status": "PASS",
       "expected": "pub struct Foo {\n  pub x: i32,\n}",
       "actual": "pub struct Foo {\n  pub x: i32,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub struct Foo {\n  pub x: i32,\n}\n",
         "ERROR": 0,
@@ -4520,6 +4802,8 @@
       "status": "PASS",
       "expected": "#[derive(Debug)]\npub struct Point {\n  pub x: f64,\n  pub y: f64,\n}\n\npub fn origin() -> Point {\n  todo!()\n}",
       "actual": "#[derive(Debug)]\npub struct Point {\n  pub x: f64,\n  pub y: f64,\n}\n\npub fn origin() -> Point {\n  todo!()\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "#[derive(Debug)]\npub struct Point {\n  pub x: f64,\n  pub y: f64,\n}\n\npub fn origin() -> Point {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4553,6 +4837,8 @@
       "status": "PASS",
       "expected": "pub struct User {}",
       "actual": "pub struct User {}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
         "context": "pub struct User {}\n",
         "ERROR": 0,
@@ -4588,6 +4874,8 @@
       "expected": "pub mod models;\n\nfn main() {\n  todo!()\n}",
       "actual": "fn main() {\n  todo!()\n}",
       "detail": "expected 'fn main() {\\n  todo!()\\n}' to be 'pub mod models;\\n\\nfn main() {\\n  tod…' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "fn main() {\n  todo!()\n}\n",
         "ERROR": 0,
@@ -4620,7 +4908,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "e9a3f730030af960",
@@ -4637,7 +4927,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "40e06abe8f3645b1",
@@ -4654,7 +4946,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "679aabc06da58d41",
@@ -4671,7 +4965,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "7196197f6ae131e2",
@@ -4688,7 +4984,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "ec47ade7ed27b46b",
@@ -4705,7 +5003,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "eb5427deb7d1ff63",
@@ -4722,7 +5022,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c455311b9cbfbb49",
@@ -4739,7 +5041,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "34b3ca405bad50fa",
@@ -4756,7 +5060,9 @@
       "sourceHash": "f850fc2d52ec9190edc912546813c270c4f6b7e93d4e6037064b0fef087d4e09",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "No module registration or nested directory synthesis in the grammar policy"
+      "detail": "No module registration or nested directory synthesis in the grammar policy",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "e11da2044d586e68",
@@ -4776,6 +5082,8 @@
       "expected": "pub mod utils;",
       "actual": "",
       "detail": "expected '' to be 'pub mod utils;' // Object.is equality",
+      "byteEqual": false,
+      "whitespaceEqual": false,
       "syntax": {
         "context": "\n",
         "ERROR": 0,
@@ -4808,7 +5116,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "6a0dda1ed8ec0653",
@@ -4825,7 +5135,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "28e67f1d4a8be7f4",
@@ -4842,7 +5154,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c072de8d560da04e",
@@ -4859,7 +5173,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "a0ae29fb94605b0c",
@@ -4876,7 +5192,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "06182c838e921839",
@@ -4893,7 +5211,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "01abbd3ea9a873fb",
@@ -4910,7 +5230,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "b894ae9a3d5b890d",
@@ -4927,7 +5249,9 @@
       "sourceHash": "971fafe56ca95733c6cc1dd6b2794e74b022e3c1e61071830bf72b9bfe9a27e5",
       "status": "GAP",
       "reason": "refkey/import resolution",
-      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis"
+      "detail": "The candidate has no paired-file context, impl delegation, or module synthesis",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "905b2bc1da68dc45",
@@ -4944,7 +5268,9 @@
       "sourceHash": "adf34642c95808cf6106b24d09881380b82011597534faa05e8992e9ea9dbc5b",
       "status": "GAP",
       "reason": "other",
-      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API"
+      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "0ca385312982ad83",
@@ -4961,7 +5287,9 @@
       "sourceHash": "adf34642c95808cf6106b24d09881380b82011597534faa05e8992e9ea9dbc5b",
       "status": "GAP",
       "reason": "other",
-      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API"
+      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "5cdac7fa2c2ec7a0",
@@ -4978,7 +5306,9 @@
       "sourceHash": "adf34642c95808cf6106b24d09881380b82011597534faa05e8992e9ea9dbc5b",
       "status": "GAP",
       "reason": "other",
-      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API"
+      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "dedf65a0eec2c128",
@@ -4995,7 +5325,9 @@
       "sourceHash": "adf34642c95808cf6106b24d09881380b82011597534faa05e8992e9ea9dbc5b",
       "status": "GAP",
       "reason": "other",
-      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API"
+      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "58315087e49b8740",
@@ -5012,7 +5344,9 @@
       "sourceHash": "adf34642c95808cf6106b24d09881380b82011597534faa05e8992e9ea9dbc5b",
       "status": "GAP",
       "reason": "other",
-      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API"
+      "detail": "The grammar printer has no existing-file zone splice or manual-content preservation API",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "5d9016d35453e281",
@@ -5029,7 +5363,9 @@
       "sourceHash": "336b17cc5fb49b531e981f3c634598daf7eaa2bee7e44d002fae75004924f61f",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4a91696fc37098f1",
@@ -5046,7 +5382,9 @@
       "sourceHash": "336b17cc5fb49b531e981f3c634598daf7eaa2bee7e44d002fae75004924f61f",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "f4c8a71cdf96358a",
@@ -5063,7 +5401,9 @@
       "sourceHash": "336b17cc5fb49b531e981f3c634598daf7eaa2bee7e44d002fae75004924f61f",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "d5afe4322bc28ef0",
@@ -5080,7 +5420,9 @@
       "sourceHash": "90f14fae6176e3cdeb2dd8db93e4bbf04060549d5db90cd3db89468d10742df1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "e523805afb8c3f1f",
@@ -5097,7 +5439,9 @@
       "sourceHash": "90f14fae6176e3cdeb2dd8db93e4bbf04060549d5db90cd3db89468d10742df1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "3851d1aa388e19dd",
@@ -5114,7 +5458,9 @@
       "sourceHash": "90f14fae6176e3cdeb2dd8db93e4bbf04060549d5db90cd3db89468d10742df1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "6a266770c61d77fc",
@@ -5131,7 +5477,9 @@
       "sourceHash": "90f14fae6176e3cdeb2dd8db93e4bbf04060549d5db90cd3db89468d10742df1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "e52daa144e65c08b",
@@ -5148,7 +5496,9 @@
       "sourceHash": "90f14fae6176e3cdeb2dd8db93e4bbf04060549d5db90cd3db89468d10742df1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "db8d398c006b2960",
@@ -5165,7 +5515,9 @@
       "sourceHash": "90f14fae6176e3cdeb2dd8db93e4bbf04060549d5db90cd3db89468d10742df1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "f72c47df5b6be86b",
@@ -5182,7 +5534,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c44538c40a8e5248",
@@ -5199,7 +5553,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "9e6de7bfec15df76",
@@ -5216,7 +5572,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "f0b60d1de02e6fd0",
@@ -5233,7 +5591,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4381774fcd92dce9",
@@ -5250,7 +5610,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "22bc2f982883ee80",
@@ -5267,7 +5629,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "a0c5f5e38e9214ef",
@@ -5284,7 +5648,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "ea05310eae3cb6f7",
@@ -5301,7 +5667,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8c41ceae049dc21d",
@@ -5318,7 +5686,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "b8d596eff9f28a32",
@@ -5335,7 +5705,9 @@
       "sourceHash": "d68fd90306fce281fb09c40066fb99dd7a82289492bb9ce74c808afcf0e1a7b1",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "3f26422c17bf982b",
@@ -5352,7 +5724,9 @@
       "sourceHash": "62514ea286dd4bf2f2ccdef385718090374ed29dcb666c5b320a084de310b0cf",
       "status": "GAP",
       "reason": "other",
-      "detail": "The A assertion depends on a whole generated scratch crate and Cargo check; B has no crate emitter"
+      "detail": "The A assertion depends on a whole generated scratch crate and Cargo check; B has no crate emitter",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "0235dc5574640846",
@@ -5369,7 +5743,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "df7d06c36823250f",
@@ -5386,7 +5762,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "099775422ded0626",
@@ -5403,7 +5781,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "06ff931f6ab70235",
@@ -5420,7 +5800,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4cf7e9e231545182",
@@ -5437,7 +5819,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "04852f2b4230ba58",
@@ -5454,7 +5838,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "349ce520a10a2c95",
@@ -5471,7 +5857,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "85eb00244516b38f",
@@ -5488,7 +5876,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "333a0606c5e79b85",
@@ -5505,7 +5895,9 @@
       "sourceHash": "bbfc9d406980027386d3cc09da8c3c0bb2b0696284c3605033153cd69f7e091b",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "aab4aae73bb2712a",
@@ -5522,7 +5914,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "5eedfd8d22dce7a8",
@@ -5539,7 +5933,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "7ffa39b1969d4316",
@@ -5556,7 +5952,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4520c432f549102e",
@@ -5573,7 +5971,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "f0335dbe3f2b7a8a",
@@ -5590,7 +5990,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8f8b2f99b6202700",
@@ -5607,7 +6009,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "6b76cf20ab0a6a78",
@@ -5624,7 +6028,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "6de3a47e0c415b73",
@@ -5641,7 +6047,9 @@
       "sourceHash": "dc316495b83cd3ddf83f1d22bf92a51b3b8c389d7bf993f8ec46c62d42d85769",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "41f97f99bb73b63e",
@@ -5658,7 +6066,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "14e2c8db16f51adb",
@@ -5675,7 +6085,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "ad051130188ad1f9",
@@ -5692,7 +6104,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "778a7c9be8b49e53",
@@ -5709,7 +6123,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "df1826f75e5438de",
@@ -5726,7 +6142,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "091bd76faac67d99",
@@ -5743,7 +6161,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c6c3bc327c3fd003",
@@ -5760,7 +6180,9 @@
       "sourceHash": "8f9e1389494ab1a26372bb1ca194bfbf1983535a5050db9f2ed4b07e946240e9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "15ccf1ff5fc29838",
@@ -5777,7 +6199,9 @@
       "sourceHash": "2728d061326962d0a3e42ff0476580efb4c2a410860d132c5cba4055121699b9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "54e61f0104e4aace",
@@ -5794,7 +6218,9 @@
       "sourceHash": "2728d061326962d0a3e42ff0476580efb4c2a410860d132c5cba4055121699b9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "825cb2d11917ed45",
@@ -5811,7 +6237,9 @@
       "sourceHash": "2728d061326962d0a3e42ff0476580efb4c2a410860d132c5cba4055121699b9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "29b2caa110e6f159",
@@ -5828,7 +6256,9 @@
       "sourceHash": "2728d061326962d0a3e42ff0476580efb4c2a410860d132c5cba4055121699b9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "6afdf6f2cb7ae221",
@@ -5845,7 +6275,9 @@
       "sourceHash": "2728d061326962d0a3e42ff0476580efb4c2a410860d132c5cba4055121699b9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "5c496ef103c91888",
@@ -5862,7 +6294,9 @@
       "sourceHash": "2728d061326962d0a3e42ff0476580efb4c2a410860d132c5cba4055121699b9",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "aec90d71d6e898aa",
@@ -5879,7 +6313,9 @@
       "sourceHash": "acc1b56cbd25084309812674a6b0c6bc29843679f58bbf1fdebde03a3638a4df",
       "status": "GAP",
       "reason": "other",
-      "detail": "No operation planning model or TypeSpec decorator registry in candidate B"
+      "detail": "No operation planning model or TypeSpec decorator registry in candidate B",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "b3111d7b8ce039af",
@@ -5896,7 +6332,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "06f92197ae3461cf",
@@ -5913,7 +6351,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8a64f4429e37f9c9",
@@ -5930,7 +6370,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8e34b591af66133c",
@@ -5947,7 +6389,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "15c8b4dc977aa405",
@@ -5964,7 +6408,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "66baa32eadb57dce",
@@ -5981,7 +6427,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "376802d9acfed87b",
@@ -5998,7 +6446,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "c72e6ea8f948e277",
@@ -6015,7 +6465,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8ab99c2f5686e3c6",
@@ -6032,7 +6484,9 @@
       "sourceHash": "16e47b8e27d6bbe2711b88da2fb01fe6c372d08237355e44b35b7312356cac38",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "1bb53f8562d9157d",
@@ -6049,7 +6503,9 @@
       "sourceHash": "0ffe20dfafe2921aadb8832751329750d3879fa015a7e8a91ef920949a6bfabe",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "e5789e6c8baa6317",
@@ -6066,7 +6522,9 @@
       "sourceHash": "0ffe20dfafe2921aadb8832751329750d3879fa015a7e8a91ef920949a6bfabe",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8892698145b2f955",
@@ -6083,7 +6541,9 @@
       "sourceHash": "0ffe20dfafe2921aadb8832751329750d3879fa015a7e8a91ef920949a6bfabe",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "2ac7a131d86a1ba3",
@@ -6100,7 +6560,9 @@
       "sourceHash": "0ffe20dfafe2921aadb8832751329750d3879fa015a7e8a91ef920949a6bfabe",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "b0ea9aff343eabae",
@@ -6117,7 +6579,9 @@
       "sourceHash": "0ffe20dfafe2921aadb8832751329750d3879fa015a7e8a91ef920949a6bfabe",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "480de3a64e1a3dac",
@@ -6134,7 +6598,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4ee7810180cbfbf3",
@@ -6151,7 +6617,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "6c8f4856714f1d86",
@@ -6168,7 +6636,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "55fb6f5dd294aec3",
@@ -6185,7 +6655,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "26775397c92de198",
@@ -6202,7 +6674,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "8a30659213b366ef",
@@ -6219,7 +6693,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "b60e838d54cf2690",
@@ -6236,7 +6712,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4a0b6899a094c781",
@@ -6253,7 +6731,9 @@
       "sourceHash": "ad9968a4e5abecf0fae252247307a21a2b63d5e5bdb6b43afd3415a2fea93cbc",
       "status": "GAP",
       "reason": "other",
-      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props"
+      "detail": "No endpoint/routing/model/daemon emitter pipeline in candidate B; grammar nodes accept explicit syntax props",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "efe044e5a1ecd22f",
@@ -6270,7 +6750,9 @@
       "sourceHash": "cf18e275bd120ad6a5d34a26d6cafd093ecb38c6a63103fe7d3dfee7efe52f1c",
       "status": "GAP",
       "reason": "scopes/symbol tables",
-      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata"
+      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "aaf273af7a7bda4c",
@@ -6287,7 +6769,9 @@
       "sourceHash": "cf18e275bd120ad6a5d34a26d6cafd093ecb38c6a63103fe7d3dfee7efe52f1c",
       "status": "GAP",
       "reason": "scopes/symbol tables",
-      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata"
+      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "045c7e38f46011f3",
@@ -6304,7 +6788,9 @@
       "sourceHash": "cf18e275bd120ad6a5d34a26d6cafd093ecb38c6a63103fe7d3dfee7efe52f1c",
       "status": "GAP",
       "reason": "scopes/symbol tables",
-      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata"
+      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "4794d3da29706e99",
@@ -6321,7 +6807,9 @@
       "sourceHash": "cf18e275bd120ad6a5d34a26d6cafd093ecb38c6a63103fe7d3dfee7efe52f1c",
       "status": "GAP",
       "reason": "scopes/symbol tables",
-      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata"
+      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "a61b8a39cd1ede5a",
@@ -6338,7 +6826,9 @@
       "sourceHash": "cf18e275bd120ad6a5d34a26d6cafd093ecb38c6a63103fe7d3dfee7efe52f1c",
       "status": "GAP",
       "reason": "scopes/symbol tables",
-      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata"
+      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata",
+      "byteEqual": null,
+      "whitespaceEqual": null
     },
     {
       "id": "824c6a0e0f351346",
@@ -6355,7 +6845,9 @@
       "sourceHash": "cf18e275bd120ad6a5d34a26d6cafd093ecb38c6a63103fe7d3dfee7efe52f1c",
       "status": "GAP",
       "reason": "scopes/symbol tables",
-      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata"
+      "detail": "The candidate has OutputSymbol declarations; no named-type/function symbol factories or reactive typeKind metadata",
+      "byteEqual": null,
+      "whitespaceEqual": null
     }
   ],
   "renderedFiles": [
