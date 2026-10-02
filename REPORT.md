@@ -1015,3 +1015,21 @@ Coordinator filter (crate `crates/sprefa-extract`, target `all`):
 ```sh
 cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports -- --exact
 ```
+
+## ryi TS resolve follow-ups, round 2 (2026-10-02)
+
+Code complete only. No cargo, npm, node, install, build, or dogfood command
+runs in this lane. Coordinator gates below use crate `crates/sprefa-extract`,
+target `all`, and run separately. The user decision supersedes the prior
+D9 contradiction stop.
+
+### t_134_ts_binding_legs::a_const_binding_shadow_kills_the_name_match
+
+Cause: D9 commit `82cb92e4` adds nested callable const definitions at
+`crates/hafley_scm/src/read/lang/ts.rs:2783` and lexical targets at `:5209`.
+The unchanged main assertion at `tests/134_ts_binding_legs.rs:207` expects an
+inferred drop. History for that test has no main..HEAD changes.
+Change: implement the explicit round-2 D9 decision with a `same_file` edge
+from constCase to shadow.ts's project and zero drops. Retain the prohibition
+on any project edge into free.ts. No golden changes.
+Coordinator: `cargo test --features cli --test all t_134_ts_binding_legs::a_const_binding_shadow_kills_the_name_match -- --exact --test-threads=1`
