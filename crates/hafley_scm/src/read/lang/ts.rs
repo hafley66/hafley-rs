@@ -2723,6 +2723,18 @@ struct CallWalker<'c> {
 }
 
 impl<'a> OxcVisit<'a> for CallWalker<'_> {
+    fn visit_variable_declarator(&mut self, var: &ts::VariableDeclarator<'a>) {
+        if self.depth > 0 {
+            if let ts::BindingPattern::BindingIdentifier(id) = &var.id {
+                if var.init.as_ref().is_some_and(|init| matches!(init,
+                    ts::Expression::ArrowFunctionExpression(_)
+                    | ts::Expression::FunctionExpression(_))) {
+                    self.nested_defs.push((var.span, id.name.to_string()));
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, var);
+    }
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         // Only named DECLARATIONS below the top level (function expressions and
         // method values are already Methods; top-level decls are call_defs').
@@ -5111,7 +5123,14 @@ impl Resolve<CallF> for TsSource {
                         (blob, span, origin)
                     })
             };
-            let own_t = match (&import_t, &seat_t) {
+            let local_t = own_facts.as_ref()
+                .and_then(|facts| facts.local_calls.get(&site.span.start))
+                .and_then(|(start, end)| {
+                    call.nodes.iter().find(|node| node.span.start == *start && node.span.end() == *end)
+                })
+                .zip(own.as_ref())
+                .map(|(node, blob)| (blob.clone(), node.span, ResolutionOrigin::SameFile));
+            let own_t = local_t.or_else(|| match (&import_t, &seat_t) {
                 (Some(found), _) => Some((
                     found.target_blob.clone(),
                     found.target_span,
@@ -5136,7 +5155,7 @@ impl Resolve<CallF> for TsSource {
                 // binding is untyped: the name match answers free calls only.
                 (None, None) if member && !imported_receiver => None,
                 (None, None) => name_match(),
-            };
+            });
             let own_kind = match (&import_t, &seat_t) {
                 (Some(_), _) | (None, Some(_)) => CallEdgeKind::ImportResolve,
                 (None, None) => CallEdgeKind::NameResolve,

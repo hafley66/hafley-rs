@@ -26,6 +26,8 @@ use crate::read::types::PathIndex;
 /// the declaring node's byte span start; every map is one file only.
 #[derive(Default)]
 pub struct TsFileTypes {
+    /// Plain-call callee start -> lexical callable declaration span.
+    pub local_calls: HashMap<u32, (u32, u32)>,
     /// fn-like span start -> declared return type name (a plain
     /// `TSTypeReference` only; unions, primitives, aliases record nothing).
     pub ret_of: HashMap<u32, String>,
@@ -609,6 +611,30 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 pub fn collect(program: &Program<'_>) -> TsFileTypes {
     let mut walker = ReceiverWalker::default();
     walker.visit_program(program);
+    let semantic = oxc_semantic::SemanticBuilder::new().build(program).semantic;
+    for node in semantic.nodes().iter() {
+        let oxc_ast::AstKind::CallExpression(call) = node.kind() else {
+            continue;
+        };
+        let ts::Expression::Identifier(id) = &call.callee else {
+            continue;
+        };
+        let Some(symbol) = id.reference_id.get().and_then(|reference| {
+            semantic.scoping().get_reference(reference).symbol_id()
+        }) else {
+            continue;
+        };
+        let declaration = semantic.symbol_declaration(symbol);
+        let span = match declaration.kind() {
+            oxc_ast::AstKind::VariableDeclarator(var)
+                if var.init.as_ref().is_some_and(|init| matches!(init,
+                    ts::Expression::ArrowFunctionExpression(_)
+                    | ts::Expression::FunctionExpression(_))) => var.span,
+            oxc_ast::AstKind::Function(function) => function.span,
+            _ => continue,
+        };
+        walker.facts.local_calls.insert(id.span.start, (span.start, span.end));
+    }
     walker.facts
 }
 

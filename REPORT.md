@@ -100,3 +100,14 @@ Arguments:
   [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
              fork <id>`; `join` and `diff` take their own
 ```
+
+# ryi TS graph lane, 2026-10-02
+
+Coordinator instruction suspended builds and all runtime gates. The initial
+release build was terminated locally and remotely before completion. Cases below
+are written but unrun; release build, dogfood and crate tests remain unverified.
+Corpus: `~/projects/rxjs-corpus-feature-ryi-ts-graph`, detached at d0802620.
+
+| Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
+|---|---|---|---|
+| D9 | No callers for same-file arrow/function-expression consts | Lexical callable spans resolve g, k and nested inner; D09.sh checks those rows and corpus sectionsOf | Extraction/resolution facts |
