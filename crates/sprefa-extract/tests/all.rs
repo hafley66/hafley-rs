@@ -480,6 +480,9 @@ mod t_snapshot;
 
 #[path = "193_ts_rtkq_jsx.rs"]
 mod t_193_ts_rtkq_jsx;
+
+#[path = "194_ts_resolve_growth.rs"]
+mod t_194_ts_resolve_growth;
 #[path = "195_ts_lib_globals.rs"]
 mod t_195_ts_lib_globals;
 

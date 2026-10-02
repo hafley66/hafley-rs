@@ -2085,8 +2085,10 @@ impl Project<CallF> for CallProjector<'_> {
         let mut named: Vec<(u32, NameId)> = Vec::new();
         let mut copies = BTreeMap::<(String, ContentId), u32>::new();
         for node in order {
+            let _visit = tracing::trace_span!("ts.closure_owner.visit").entered();
             while named.last().is_some_and(|(end, _)| *end < node.span.end()) {
                 named.pop();
+                let _pop = tracing::trace_span!("ts.closure_owner.pop").entered();
             }
             if let Some(name) = node.name {
                 named.push((node.span.end(), name));
@@ -4766,8 +4768,10 @@ impl TsSource {
         let mut open: Vec<(Span, bool)> = Vec::new();
         let mut nested = HashSet::new();
         for node in order {
+            let _visit = tracing::trace_span!("ts.nested_callables.visit").entered();
             while open.last().is_some_and(|(span, _)| span.end() < node.span.end()) {
                 open.pop();
+                let _pop = tracing::trace_span!("ts.nested_callables.pop").entered();
             }
             if node.kind == CallKind::Free
                 && node.name.is_some()
