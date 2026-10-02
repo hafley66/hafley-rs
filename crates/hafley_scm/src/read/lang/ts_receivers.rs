@@ -611,7 +611,10 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 pub fn collect(program: &Program<'_>) -> TsFileTypes {
     let mut walker = ReceiverWalker::default();
     walker.visit_program(program);
-    let semantic = oxc_semantic::SemanticBuilder::new().build(program).semantic;
+    let semantic = oxc_semantic::SemanticBuilder::new()
+        .with_build_nodes(true)
+        .build(program)
+        .semantic;
     for node in semantic.nodes().iter() {
         let oxc_ast::AstKind::CallExpression(call) = node.kind() else {
             continue;
