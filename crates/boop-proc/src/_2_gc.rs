@@ -594,10 +594,18 @@ pub fn coordinator_live(
     name: &str,
     route: &Route,
 ) -> Result<bool> {
-    Ok(live_session_owner(registry, mail, name, route)?.is_some()
-        || route.tmux.as_deref().is_some_and(|pane| {
-            boop_store::tmux::mux().target_alive(route.socket.as_deref(), pane)
-        })
+    if live_session_owner(registry, mail, name, route)?.is_some() {
+        return Ok(true);
+    }
+    // A bound conversation must still have an owner. Pane ids survive in
+    // routes and repeat when a tmux server restarts with unrelated shells.
+    if route.session_id.is_some() {
+        return Ok(false);
+    }
+    Ok(route
+        .tmux
+        .as_deref()
+        .is_some_and(|pane| boop_store::tmux::mux().target_alive(route.socket.as_deref(), pane))
         || route
             .tmux
             .as_deref()
