@@ -1,5 +1,3 @@
-mod _0_ts_nested_arguments;
-pub use _0_ts_nested_arguments::user_query;
 mod mint_kind_query_text;
 mod parse_into_predicate;
 mod ts_read_general_predicates;

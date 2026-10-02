@@ -41,48 +41,80 @@ pub fn kind_id(language: &tree_sitter::Language, kind: &str) -> u16 {
     language.id_for_node_kind(kind, true)
 }
 
-/// Pre-order named-node walk with nearest-named-ancestor links, handed to
-/// `sink` row by row: `(ordinal, parent ordinal, kind id, start, end, name
-/// span, named-children count)`. Ordinals are assigned in emission order and
-/// `parent` indexes the nearest NAMED ancestor (`None` at roots); unnamed
-/// nodes emit nothing but hand their named descendants to that ancestor.
-/// Streaming keeps the caller from materializing the whole walk beside its
-/// own rows. Iterative on an explicit stack — recursion would die on deep
-/// trees. Children are pushed in reverse so they pop in source order.
+/// Where a node sits under its parent: grammar field id, child position, position among named children.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Slot {
+    pub field: Option<u16>,
+    pub index: u32,
+    pub named_index: Option<u32>,
+}
+
+/// Pre-order over every node, named and anonymous, on one `TreeCursor`. `visit` gets the node,
+/// the value it returned for the parent (`None` at the root) and the node's slot.
+pub fn walk_streaming<'t, T: Copy>(
+    tree: &'t Tree,
+    mut visit: impl FnMut(tree_sitter::Node<'t>, Option<T>, Slot) -> T,
+) {
+    let mut cursor = tree.walk();
+    let root = visit(cursor.node(), None, Slot { field: None, index: 0, named_index: None });
+    // (parent value, next child index, next named index), one frame per open ancestor.
+    let mut stack = vec![(root, 0u32, 0u32)];
+    if !cursor.goto_first_child() {
+        return;
+    }
+    loop {
+        let node = cursor.node();
+        let frame = stack.last_mut().expect("an open parent");
+        let index = frame.1;
+        frame.1 += 1;
+        let named_index = node.is_named().then(|| {
+            frame.2 += 1;
+            frame.2 - 1
+        });
+        let field = cursor.field_id().map(|id| id.get());
+        let slot = Slot { field, index, named_index };
+        let value = visit(node, Some(frame.0), slot);
+        if cursor.goto_first_child() {
+            stack.push((value, 0, 0));
+            continue;
+        }
+        while !cursor.goto_next_sibling() {
+            if !cursor.goto_parent() {
+                return;
+            }
+            stack.pop();
+        }
+    }
+}
+
+/// Named nodes only, handed to `sink` as `(ordinal, parent ordinal, kind id, start, end, name
+/// span, named-children count)`; unnamed nodes reparent their named descendants upward.
 pub fn walk_named_streaming(
     tree: &Tree,
     mut sink: impl FnMut(u32, Option<u32>, u16, u32, u32, Option<(u32, u32)>, u16),
 ) {
-    let root = tree.root_node();
-    let mut cursor = tree.walk();
-    let mut stack: Vec<(tree_sitter::Node<'_>, Option<u32>)> = vec![(root, None)];
     let mut ordinal: u32 = 0;
-    while let Some((node, nearest_named)) = stack.pop() {
-        let my_ix = if node.is_named() {
-            let ix = ordinal;
-            ordinal += 1;
-            let name = node
-                .child_by_field_name("name")
-                .map(|field| (field.start_byte() as u32, field.end_byte() as u32));
-            sink(
-                ix,
-                nearest_named,
-                node.kind_id(),
-                node.start_byte() as u32,
-                node.end_byte() as u32,
-                name,
-                node.named_child_count() as u16,
-            );
-            Some(ix)
-        } else {
-            nearest_named
-        };
-        let mark = stack.len();
-        for child in node.children(&mut cursor) {
-            stack.push((child, my_ix));
+    walk_streaming(tree, |node, parent: Option<Option<u32>>, _slot| {
+        let nearest_named = parent.flatten();
+        if !node.is_named() {
+            return nearest_named;
         }
-        stack[mark..].reverse();
-    }
+        let ix = ordinal;
+        ordinal += 1;
+        let name = node
+            .child_by_field_name("name")
+            .map(|field| (field.start_byte() as u32, field.end_byte() as u32));
+        sink(
+            ix,
+            nearest_named,
+            node.kind_id(),
+            node.start_byte() as u32,
+            node.end_byte() as u32,
+            name,
+            node.named_child_count() as u16,
+        );
+        Some(ix)
+    });
 }
 
 /// The whole walk as a `Vec` — the convenience shape. Production callers
@@ -110,6 +142,24 @@ pub fn walk_named(tree: &Tree) -> Vec<CstRow> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn walk_streaming_visits_every_node_with_its_slot() {
+        let rust: tree_sitter::Language = tree_sitter_rust::LANGUAGE.into();
+        let tree = parse(&rust, b"fn main() { spark(); }").expect("parses");
+        let mut rows = Vec::new();
+        walk_streaming(&tree, |node, depth: Option<usize>, slot| {
+            let depth = depth.map_or(0, |depth| depth + 1);
+            let field = slot.field.and_then(|id| rust.field_name_for_id(id)).unwrap_or("-");
+            let named = slot.named_index.map_or("-".to_string(), |n| n.to_string());
+            rows.push(format!("{}{} {field} {} {named}", "  ".repeat(depth), node.kind(), slot.index));
+            depth
+        });
+        assert_eq!(
+            rows.join("\n"),
+            "source_file - 0 -\n  function_item - 0 0\n    fn - 0 -\n    identifier name 1 0\n    parameters parameters 2 1\n      ( - 0 -\n      ) - 1 -\n    block body 3 2\n      { - 0 -\n      expression_statement - 1 0\n        call_expression - 0 0\n          identifier function 0 0\n          arguments arguments 1 1\n            ( - 0 -\n            ) - 1 -\n        ; - 1 -\n      } - 2 -"
+        );
+    }
 
     #[test]
     fn walk_names_anchors_and_reparents_through_unnamed() {

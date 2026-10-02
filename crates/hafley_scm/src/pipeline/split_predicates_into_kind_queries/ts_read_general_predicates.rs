@@ -18,8 +18,6 @@ type ParsedPredicates = (
 pub fn read_and_parse_predicates(
     language: &Language,
     user: &Query,
-    patterns: &[String],
-    names: &mut Vec<Box<str>>,
 ) -> Result<ParsedPredicates, QueryExtError> {
     let mut predicates = Vec::new();
     let mut kinds = Vec::new();
@@ -29,33 +27,6 @@ pub fn read_and_parse_predicates(
     let mut relations = Vec::new();
     let mut fields = Vec::new();
     let mut emit_literals = Vec::new();
-    for text in patterns {
-        let query = super::_0_ts_nested_arguments::pattern_query(language, text)?;
-        for name in query
-            .capture_names()
-            .iter()
-            .filter(|name| **name != super::_0_ts_nested_arguments::ROOT_CAPTURE)
-        {
-            intern(name, names);
-        }
-    }
-    for pattern in 0..user.pattern_count() {
-        for found in user.general_predicates(pattern) {
-            if found.operator.as_ref() == "emit!" {
-                continue;
-            }
-            predicates.push(parse_into_predicate(
-                language,
-                pattern as u16,
-                found,
-                &mut kinds,
-                &mut predicate_kinds,
-                &mut literals,
-                patterns,
-                names,
-            )?);
-        }
-    }
     for pattern in 0..user.pattern_count() {
         for found in user.general_predicates(pattern) {
             if found.operator.as_ref() == "emit!" {
@@ -65,9 +36,17 @@ pub fn read_and_parse_predicates(
                     &mut relations,
                     &mut fields,
                     &mut emit_literals,
-                    names,
                 )?);
+                continue;
             }
+            predicates.push(parse_into_predicate(
+                language,
+                pattern as u16,
+                found,
+                &mut kinds,
+                &mut predicate_kinds,
+                &mut literals,
+            )?);
         }
     }
     Ok((
@@ -97,7 +76,6 @@ fn parse_emit(
     relations: &mut Vec<Box<str>>,
     fields: &mut Vec<Box<str>>,
     literals: &mut Vec<Box<str>>,
-    names: &[Box<str>],
 ) -> Result<EmitSpec, QueryExtError> {
     let bad_args = || QueryExtError::Arity {
         operator: found.operator.to_string(),
@@ -116,18 +94,6 @@ fn parse_emit(
         };
         let source = match &pair[1] {
             QueryPredicateArg::Capture(capture) => EmitSource::Capture(*capture as u16),
-            QueryPredicateArg::String(text)
-                if text.starts_with(super::_0_ts_nested_arguments::CAPTURE_PREFIX) =>
-            {
-                let name = text
-                    .strip_prefix(super::_0_ts_nested_arguments::CAPTURE_PREFIX)
-                    .unwrap();
-                let index = names
-                    .iter()
-                    .position(|seen| seen.as_ref() == name)
-                    .ok_or_else(bad_args)?;
-                EmitSource::Capture(index as u16)
-            }
             QueryPredicateArg::String(text) => {
                 let index = intern(text, literals);
                 EmitSource::Literal(index)

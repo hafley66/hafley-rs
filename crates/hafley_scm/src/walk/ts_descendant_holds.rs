@@ -5,7 +5,7 @@ use crate::types::Stop;
 
 /// ts: a `TreeCursor` over all children for `Stop::Neighbor`, an iterative preorder
 /// over every strict descendant for `Stop::End`. Named and anonymous alike; self skipped.
-pub fn descendant_holds(node: Node, stop: &Stop, kind_ids: &[u32]) -> bool {
+pub fn descendant_holds(node: Node, stop: &Stop, kind_ids: &[usize]) -> bool {
     let mut cursor = node.walk();
     if !cursor.goto_first_child() {
         return false;

@@ -3,7 +3,7 @@ use tree_sitter::Node;
 use super::dispatch_by_direction::is_hit;
 use crate::types::{Stop, Walk};
 
-pub fn sibling_holds(node: Node, walk: &Walk, stop: &Stop, kind_ids: &[u32]) -> bool {
+pub fn sibling_holds(node: Node, walk: &Walk, stop: &Stop, kind_ids: &[usize]) -> bool {
     let mut sibling = match walk {
         Walk::Precedes => node.next_named_sibling(),
         _ => node.prev_named_sibling(),

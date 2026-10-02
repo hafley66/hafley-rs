@@ -4,5 +4,5 @@ pub enum Walk {
     Descendant,
     Precedes,
     Follows,
-    // TODO ByteRange(u32, u32).
+    // NthChild(u32) over named siblings, ByteRange(u32, u32), Parent (Ancestor with Stop::Neighbor)
 }
