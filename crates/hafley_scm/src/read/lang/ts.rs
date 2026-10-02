@@ -4789,6 +4789,33 @@ impl TsSource {
         }
         unique_blob(sites.into_iter(), FamilyTag::Call)
     }
+
+    /// The lexical leg the arm runs before name-match (D9): the plain callee's
+    /// own-file callable declaration. Pub so the scip ratchet re-runs it.
+    pub fn call_lexical_match(
+        output: &RyiOutput,
+        site: &CallSite,
+        own: &ContentId,
+        paths: Option<&crate::read::types::PathIndex>,
+    ) -> Option<(ContentId, Span)> {
+        // A member and its receiver's inner call can share a start byte
+        // (`mk().push`). Only the plain callee owns this target.
+        if site
+            .callee_path
+            .is_some_and(|path| output.strings.lookup(path).contains('.'))
+        {
+            return None;
+        }
+        let facts = ts_receivers::facts_of(own, paths)?;
+        let (start, end) = facts.local_calls.get(&site.span.start)?;
+        output
+            .call
+            .as_ref()?
+            .nodes
+            .iter()
+            .find(|node| node.span.start == *start && node.span.end() == *end)
+            .map(|node| (own.clone(), node.span))
+    }
 }
 
 /// The scip-resolved corpus target of one call site: the site's occurrence
@@ -5225,16 +5252,10 @@ impl Resolve<CallF> for TsSource {
                         (blob, span, origin)
                     })
             };
-            let local_t = own_facts.as_ref()
-                // A member and its receiver's inner call can share a start
-                // byte (`mk().push`). Only the plain callee owns this target.
-                .filter(|_| !member)
-                .and_then(|facts| facts.local_calls.get(&site.span.start))
-                .and_then(|(start, end)| {
-                    call.nodes.iter().find(|node| node.span.start == *start && node.span.end() == *end)
-                })
-                .zip(own.as_ref())
-                .map(|(node, blob)| (blob.clone(), node.span, ResolutionOrigin::SameFile));
+            let local_t = own
+                .as_ref()
+                .and_then(|blob| Self::call_lexical_match(output, site, blob, paths))
+                .map(|(blob, span)| (blob, span, ResolutionOrigin::SameFile));
             let own_t = local_t.or_else(|| match (&import_t, &seat_t) {
                 (Some(found), _) => Some((
                     found.target_blob.clone(),
