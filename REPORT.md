@@ -440,6 +440,43 @@ CARGO_BUILD_JOBS=4 cargo test --features cli --test all t_167_graph_paths:: -- -
 CARGO_BUILD_JOBS=4 cargo build --release --bin ryii --features cli,ts-checker,typespec
 RYII="${CARGO_TARGET_DIR:-$PWD/target}/release/ryii" CORPUS="$HOME/projects/rxjs-corpus-feature-ryi-ts-graph" dogfood/ts/run.sh D25
 ```
+## ryi TS resolve output follow-ups: contradiction stop (2026-10-02)
+
+Status: stopped under the task's explicit rule, "If a plan row and an
+existing test contradict, write the contradiction in REPORT.md and stop."
+No source, test assertion, or golden changes were made. No cargo, npm, node,
+build, install, or dogfood commands were run.
+
+### t_134_ts_binding_legs::a_const_binding_shadow_kills_the_name_match
+
+Cause: commit `82cb92e4` (D9) added lexical callable resolution ahead of
+receiver shadowing, now at `crates/hafley_scm/src/read/lang/ts.rs:5209-5216`.
+It also extracts nested callable const definitions at `ts.rs:2783`.
+The fixture `tests/fixtures/ts_binding_legs/shadow.ts:6-7` declares
+`const project = (): void => {};` and calls `project()` in the same function.
+The new local leg resolves that call to its local arrow definition and emits
+no unresolved row.
+
+Contradiction: plan row **D9**, `plans/2026-10-01-ryi-ts-utility.md`, expects
+an edge for same-file callable consts (`const g=()=>2` and
+`const k=function(){}`), while this test at
+`crates/sprefa-extract/tests/134_ts_binding_legs.rs:207-209` requires
+`[("project", "inferred")]` for that same callable-const case. The test's
+separate prohibition on an edge into `free.ts` remains compatible with D9.
+`git show main:crates/sprefa-extract/tests/134_ts_binding_legs.rs` confirms
+the existing assertion; `git log main..HEAD -- crates/hafley_scm/src/read/lang/ts.rs`
+and `git show 82cb92e4` identify the behavior-changing commit.
+
+Change: document the contradiction only. Coordinator direction is required
+to reconcile D9 with the existing unresolved-row assertion before continuing.
+Coordinator gate, crate `crates/sprefa-extract`, target `all`:
+`cargo test --features cli --test all t_134_ts_binding_legs::a_const_binding_shadow_kills_the_name_match -- --exact --test-threads=1`
+
+The self-initializer, untyped-receiver, TSX golden/order, and J01 follow-ups
+remain pending because the contradiction requires stopping this task.
+The `193_ts_rtkq_jsx.rs` test and `dogfood/ts/J01.sh` do not exist on the
+local `main` ref; their integration history was read instead.
+
 ## ryi TS resolve regression repair (2026-10-02)
 
 Code complete only. No cargo build/test/check, npm, node, installs, or dogfood
