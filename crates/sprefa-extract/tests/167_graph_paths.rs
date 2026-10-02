@@ -134,7 +134,7 @@ fn flow_paths_from_a_parameter_match_path_and_digest_seeds() {
     ).unwrap();
     let mut direct: Vec<(String, u64)> = statement.query_map(
         rusqlite::params![digest, start as u32, end as u32],
-        |row| Ok((format!("{}:{}", row.get::<_, u32>(0)?, row.get::<_, u32>(1)?), row.get(2)?)),
+        |row| Ok((format!("{}:{}", row.get::<_, u32>(0)?, row.get::<_, u32>(1)?), row.get::<_, i64>(2)? as u64)),
     ).unwrap().collect::<rusqlite::Result<_>>().unwrap();
     assert!(!direct.is_empty());
     direct.sort();
