@@ -502,3 +502,52 @@ fn relational_parent_reused_capture() {
         "c=a(), c=a(); | c=b(), c=b(); | c=c(), c=c();"
     );
 }
+
+#[test]
+fn relational_has_strict_and_rejected_bindings() {
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    let rows = [
+        // call_expression:has(call_expression); the target is excluded.
+        Row {
+            name: "strict_descendant",
+            args: "#has? @c (call_expression)",
+        },
+        // call_expression:has(> identifier[field="function"])
+        Row {
+            name: "direct_capture",
+            args: "#has? @c (identifier) @callee neighbor",
+        },
+        // call_expression:not(:has(identifier))
+        Row {
+            name: "negated_binding",
+            args: "#not-has? @c (identifier) @callee",
+        },
+    ];
+    let actual = rows
+        .iter()
+        .map(|row| {
+            let scm = format!("((call_expression) @c ({}))", row.args);
+            format!("{}: {}", row.name, matches(&language, RUST, &scm))
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert_eq!(actual, "strict_descendant: \ndirect_capture: c=a(), callee=a | c=b(), callee=b | c=c(), callee=c\nnegated_binding: ");
+    let scm =
+        "((call_expression) @c (#has? @c (identifier) @callee) (#contains? @callee \"missing\"))";
+    let query = hafley_scm::build(&language, scm).unwrap();
+    let tree = hafley_scm::cst::parse(&language, RUST.as_bytes()).unwrap();
+    let mut arena = MatchArena::default();
+    hafley_scm::run(
+        &query,
+        "fixture",
+        RUST.as_bytes(),
+        &tree,
+        u32::MAX,
+        &mut arena,
+    )
+    .unwrap();
+    assert_eq!(
+        format!("rows={} spans={}", arena.rows.len(), arena.spans.len()),
+        "rows=0 spans=0"
+    );
+}
