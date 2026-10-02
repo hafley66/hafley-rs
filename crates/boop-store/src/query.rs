@@ -511,7 +511,7 @@ LEFT JOIN dict_record ON dict_record.id = cursor.record_id_id
         let mut values: Vec<rusqlite::types::Value> =
             vec![needle.to_string().into(), (since_ts as i64).into()];
         if let Some(harness) = harness {
-            sql.push_str(" AND dict_harness.value = ?3");
+            sql.push_str(" AND agent_session.harness = ?3");
             values.push(harness.to_string().into());
         }
         if human_only {
@@ -544,7 +544,7 @@ LEFT JOIN dict_cwd ON dict_cwd.id = agent_session.cwd_id
         );
         let mut values: Vec<rusqlite::types::Value> = Vec::new();
         if let Some(harness) = harness {
-            sql.push_str(" AND dict_harness.value = ?");
+            sql.push_str(" AND agent_session.harness = ?");
             values.push(harness.to_string().into());
         }
         sql.push_str(&format!(
