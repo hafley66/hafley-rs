@@ -105,7 +105,8 @@ function layout(policy: Policy, kind: string, toks: Tok[]): Children {
   if (policy.lines.has(kind)) return toks.map((t, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, [t])]);
   if (policy.list.has(kind)) return groups(toks).map((g, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, g)]);
   if (!policy.block.has(kind)) return inline(policy, kind, toks);
-  const gs = groups(toks.slice(1, -1));
+  // whitespace-only text children are caller line breaks; block layout already puts one item per line
+  const gs = groups(toks.slice(1, -1).filter((t) => !("val" in t && typeof t.val === "string" && !t.val.trim())));
   if (gs.length === 0) return policy.empty?.(kind) ?? "{}";
   return ["{", <Indent hardline trailingBreak>{gs.map((g, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, g)])}</Indent>, "}"];
 }
