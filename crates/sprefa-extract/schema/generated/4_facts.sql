@@ -650,6 +650,46 @@ CREATE TABLE IF NOT EXISTS "free_name" (
     "end" INTEGER NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "call_site" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "callee" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "line" INTEGER NOT NULL,
+    "fn" TEXT NOT NULL,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "jsx_element" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "line" INTEGER NOT NULL,
+    "fn" TEXT NOT NULL,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL,
+    "parent_start" INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS "jsx_attribute" (
+    "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
+    "_input_path" TEXT,
+    "_content_id" TEXT,
+    "record" TEXT NOT NULL,
+    "path" TEXT NOT NULL,
+    "element_start" INTEGER NOT NULL,
+    "name" TEXT NOT NULL,
+    "value" TEXT,
+    "start" INTEGER NOT NULL,
+    "end" INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "local" (
     "_row" INTEGER PRIMARY KEY AUTOINCREMENT,
     "_input_path" TEXT,

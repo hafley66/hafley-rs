@@ -57,6 +57,21 @@ use super::ts_receivers;
 /// TypeScript's own `.scm`: the scope/definition/call captures fast lowers
 /// through L1. Owned here, read through `Source::scm_query`.
 const TYPESCRIPT_SCM: &str = include_str!("../../../../sprefa-extract/queries/typescript/scip.scm");
+static TSX_SCM: OnceLock<String> = OnceLock::new();
+
+fn typescript_scm(path: &str) -> &'static str {
+    if RyiLang::from_path(path) == Some(RyiLang::Tsx) {
+        TSX_SCM.get_or_init(|| {
+            format!(
+                "{}\n{}",
+                TYPESCRIPT_SCM,
+                include_str!("../../../../sprefa-extract/queries/typescript/0_jsx.scm")
+            )
+        })
+    } else {
+        TYPESCRIPT_SCM
+    }
+}
 
 thread_local! {
     static TS_CST_PARSER: RefCell<(Option<RyiLang>, tree_sitter::Parser)> =
@@ -72,7 +87,8 @@ fn cst_and_scm(
     path: &str,
     content: &[u8],
     strings: &mut Strings,
-) -> Option<(FamilyBundle<CstF>, Option<ScmCaptures>)> {
+    want_cst: bool,
+) -> Option<(Option<FamilyBundle<CstF>>, Option<ScmCaptures>)> {
     std::str::from_utf8(content).ok()?;
     let lang = RyiLang::from_path(path)?;
     let language = lang.tree_sitter_language();
@@ -84,7 +100,11 @@ fn cst_and_scm(
         }
         state.1.parse(content, None)
     })?;
-    let cst = cst_bundle_from_tree(path, content, &tree, strings)?;
+    let cst = if want_cst {
+        Some(cst_bundle_from_tree(path, content, &tree, strings)?)
+    } else {
+        None
+    };
     let query_slot = match lang {
         RyiLang::TypeScript => Some(&TS_SCM_QUERY),
         RyiLang::Tsx => Some(&TSX_SCM_QUERY),
@@ -92,7 +112,7 @@ fn cst_and_scm(
     };
     let captures = query_slot.and_then(|slot| {
         let query = slot.get_or_init(|| {
-            hafley_scm::build(&language, TYPESCRIPT_SCM)
+            hafley_scm::build(&language, typescript_scm(path))
                 .expect("the bundled TypeScript query compiles")
         });
         let mut arena = hafley_scm::MatchArena::default();
@@ -4188,7 +4208,7 @@ impl Source for TsSource {
     fn scm_query(&self, path: &str) -> Option<&'static str> {
         source_type_for(path)
             .filter(|source_type| source_type.is_typescript())
-            .map(|_| TYPESCRIPT_SCM)
+            .map(|_| typescript_scm(path))
     }
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
@@ -4197,13 +4217,13 @@ impl Source for TsSource {
 
         // cst via the shared walk (masked). Owns its () arena; dropped at block
         // end. A failed parse leaves cst None (no panic).
-        let cst = if mask.cst {
+        let cst = if mask.cst || mask.call {
             let parse_span = trace::parse_span("ts", "tree-sitter");
             let _parse_guard = parse_span.enter();
             let span = trace::family_span("ts", "cst");
             let _entered = span.enter();
-            let bundle = if mask == FamilyMask::ALL {
-                cst_and_scm(path, content, &mut strings).map(|(bundle, captures)| {
+            let bundle = if mask.call {
+                cst_and_scm(path, content, &mut strings, mask.cst).and_then(|(bundle, captures)| {
                     scm_captures = captures;
                     bundle
                 })

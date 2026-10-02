@@ -5291,6 +5291,306 @@
     ]
   },
   {
+    "record": "call_site",
+    "table": "call_site",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "call_site"
+      },
+      {
+        "name": "callee",
+        "path": [
+          "callee"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "line",
+        "path": [
+          "line"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "fn",
+        "path": [
+          "fn"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "start",
+        "path": [
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "end",
+        "path": [
+          "end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
+    "record": "jsx_element",
+    "table": "jsx_element",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "jsx_element"
+      },
+      {
+        "name": "name",
+        "path": [
+          "name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "line",
+        "path": [
+          "line"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "fn",
+        "path": [
+          "fn"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "start",
+        "path": [
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "end",
+        "path": [
+          "end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "parent_start",
+        "path": [
+          "parent_start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": true
+      }
+    ]
+  },
+  {
+    "record": "jsx_attribute",
+    "table": "jsx_attribute",
+    "columns": [
+      {
+        "name": "_row",
+        "path": [
+          "_row"
+        ],
+        "kind": "int64",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "_input_path",
+        "path": [
+          "_input_path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "_content_id",
+        "path": [
+          "_content_id"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "record",
+        "path": [
+          "record"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false,
+        "literal": "jsx_attribute"
+      },
+      {
+        "name": "path",
+        "path": [
+          "path"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "element_start",
+        "path": [
+          "element_start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "name",
+        "path": [
+          "name"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "value",
+        "path": [
+          "value"
+        ],
+        "kind": "string",
+        "optional": false,
+        "nullable": true
+      },
+      {
+        "name": "start",
+        "path": [
+          "start"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "end",
+        "path": [
+          "end"
+        ],
+        "kind": "uint32",
+        "optional": false,
+        "nullable": false
+      }
+    ]
+  },
+  {
     "record": "local",
     "table": "local",
     "columns": [

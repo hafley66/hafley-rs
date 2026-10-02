@@ -257,7 +257,26 @@ pub struct ProjectInput {
 /// facts, sorted by their serialized form so callers get a byte-stable stream.
 pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, ProjectError> {
     let inputs = read_inputs_with_modules(request.paths, request.planes())?;
-    resolve_project_inputs(request, inputs, false)
+    let syntax = syntax_facts(&inputs);
+    let mut facts = resolve_project_inputs(request, inputs, false)?;
+    facts.extend(syntax);
+    Ok(facts)
+}
+
+fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
+    inputs
+        .iter()
+        .filter_map(|input| {
+            Some(
+                input
+                    .output
+                    .scm_captures
+                    .as_ref()?
+                    .syntax_facts(&input.path),
+            )
+        })
+        .flatten()
+        .collect()
 }
 
 /// Keep syntax type rows alongside checker rows in one witnessed project run.
@@ -395,11 +414,17 @@ fn resolve_pushed<E>(
     scm_paths: Option<&[PathBuf]>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let scm = scm_paths.map(|paths| scm_rows(paths, &inputs));
+    let syntax = if scm.is_none() {
+        syntax_facts(&inputs)
+    } else {
+        Vec::new()
+    };
     let mut facts =
         resolve_project_inputs(request, inputs, false).map_err(ResolveWithRawError::Project)?;
     if let Some(scm) = scm {
         facts.extend(scm.map_err(ResolveWithRawError::Project)?);
     }
+    facts.extend(syntax);
     Ok(facts)
 }
 
