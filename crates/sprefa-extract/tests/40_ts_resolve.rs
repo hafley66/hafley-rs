@@ -256,19 +256,19 @@ fn workspace_exports_resolve_to_sources_in_rung_order() {
         vec![
             (
                 "@fixture/lib",
-                Some(("packages/lib/src/index.ts".into(), "src_convention"))
+                Some(("packages/lib/src/index.ts".to_string(), "src_convention"))
             ),
             (
                 "@fixture/lib/mapped",
-                Some(("packages/lib/src/actual.ts".into(), "declaration_map"))
+                Some(("packages/lib/src/actual.ts".to_string(), "declaration_map"))
             ),
             (
                 "@fixture/lib/aliased",
-                Some(("packages/lib/src/path-target.ts".into(), "tsconfig_paths"))
+                Some(("packages/lib/src/path-target.ts".to_string(), "tsconfig_paths"))
             ),
             (
                 "@fixture/lib/wild/leaf",
-                Some(("packages/lib/src/leaf.ts".into(), "src_convention"))
+                Some(("packages/lib/src/leaf.ts".to_string(), "src_convention"))
             ),
             ("@fixture/lib/blocked", None),
         ]
