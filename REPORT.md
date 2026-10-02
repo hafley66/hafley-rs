@@ -1052,3 +1052,17 @@ assertions agree.
 Change: member calls continue through receiver/import resolution without
 borrowing the inner free call's lexical target. Assertions remain unchanged.
 Coordinator: `cargo test --features cli --test all t_136_untyped_receiver_ts::untyped_receiver_member_call_drops_inferred -- --exact --test-threads=1`
+
+### t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn
+
+Cause: D9 `82cb92e4` exposes constCase's nested project at
+`crates/hafley_scm/src/read/lang/ts.rs:2783`; the same-file fallback restored
+by `011bfc60` at `ts.rs:4753` can select it outside its lexical scope.
+`011bfc60` also marks the self initializer's non-callable local as bound at
+`crates/hafley_scm/src/read/lang/ts_receivers.rs:660`, overriding the receiver
+walk's historical initializer exemption. Main and HEAD test assertions agree.
+Change: retain self-initializer exemptions in the semantic bound-call set;
+exclude this file's nested free definitions from name fallback, while D9
+lexical callable targets still resolve them within scope. Keep the assertion
+that selfInitCase binds free.ts and has zero drops.
+Coordinator: `cargo test --features cli --test all t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn -- --exact --test-threads=1`

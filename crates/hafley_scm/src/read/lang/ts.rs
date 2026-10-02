@@ -38,7 +38,7 @@ use crate::read::family::{
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
-    containing_def_site_in, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite,
+    containing_def_site_in, corpus_defs, covering_def, own_blob, DefIndex, DefSite,
     ParseError, Parser, Project, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
@@ -4750,11 +4750,32 @@ impl TsSource {
         callee: &str,
         own: Option<&ContentId>,
     ) -> Option<(ContentId, Span)> {
-        let sites = corpus_defs(index, callee);
+        // Nested declarations require a lexical target. A same-name def in
+        // another function cannot supply this file's unbound-name fallback.
+        let nested: Vec<Span> = output.call.as_ref().map(|call| {
+            call.nodes.iter().filter(|node| {
+                node.kind == CallKind::Free
+                    && node.name.is_some_and(|name| output.strings.lookup(name) == callee)
+                    && call.nodes.iter().any(|parent| {
+                        parent.span != node.span
+                            && parent.span.start <= node.span.start
+                            && node.span.end() <= parent.span.end()
+                            && parent.name.is_some_and(|name| {
+                                output.strings.lookup(name) != MODULE_DEF_NAME
+                            })
+                    })
+            }).map(|node| node.span).collect()
+        }).unwrap_or_default();
+        let sites: Vec<&DefSite> = corpus_defs(index, callee).iter()
+            .filter(|site| own != Some(&site.blob) || !nested.contains(&site.span))
+            .collect();
         // A same-file declaration names this call before the unique-blob leg.
         if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
-            if let Some(node) = def_named(call, &output.strings, callee) {
-                let span = call.node(node).span;
+            if let Some(node) = call.nodes.iter().find(|node| {
+                node.name.is_some_and(|name| output.strings.lookup(name) == callee)
+                    && !nested.contains(&node.span)
+            }) {
+                let span = node.span;
                 if sites
                     .iter()
                     .any(|site| site.blob == *own_blob && site.span == span)
@@ -4766,7 +4787,7 @@ impl TsSource {
         if BUILTIN_GLOBALS.contains(&callee) {
             return None;
         }
-        unique_blob(sites.iter(), FamilyTag::Call)
+        unique_blob(sites.into_iter(), FamilyTag::Call)
     }
 }
 

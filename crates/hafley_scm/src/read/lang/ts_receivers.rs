@@ -30,6 +30,8 @@ pub struct TsFileTypes {
     pub plain_calls: BTreeSet<u32>,
     /// Plain-call callee starts bound to local non-callable values.
     pub bound_calls: BTreeSet<u32>,
+    /// Self-named initializer calls retain the outer-name fallback policy.
+    pub self_initializers: BTreeSet<u32>,
     /// Anonymous callable start -> content identity within its named owner.
     pub closure_names: HashMap<u32, String>,
     /// Plain-call callee start -> lexical callable declaration span.
@@ -600,6 +602,9 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
                     .iter()
                     .any(|(name, at)| name == id.name.as_str() && *at == frame)
             });
+            if in_own_init {
+                self.facts.self_initializers.insert(id.span.start);
+            }
             if bound.is_some() && !in_own_init {
                 self.facts.rows.push((
                     call.callee.span().start,
@@ -657,7 +662,9 @@ pub fn collect(program: &Program<'_>) -> TsFileTypes {
                 span
             }
             _ => {
-                if !semantic.scoping().symbol_flags(symbol).is_import() {
+                if !semantic.scoping().symbol_flags(symbol).is_import()
+                    && !walker.facts.self_initializers.contains(&id.span.start)
+                {
                     walker.facts.bound_calls.insert(id.span.start);
                 }
                 continue;
