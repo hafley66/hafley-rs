@@ -48,7 +48,7 @@ use crate::read::tsi::Arg;
 use crate::read::types::LangKind;
 use crate::read::types::TsiNames;
 use crate::read::types::{content_id_of, RefPosition, Reference, Unresolved, UnresolvedReason};
-use crate::read::types::{span_arg, unique_blob};
+use crate::read::types::span_arg;
 use crate::read::types::{KindIndex, ScipIndex};
 
 use super::ts_checker::TsCheckerAnswer;
@@ -4687,8 +4687,8 @@ impl TsSource {
     /// The name-match target of one callee (the NameResolve leg). Pub so the
     /// scip ratchet re-runs it to classify overrides — same discipline as
     /// `type_edge_candidates`. Same-file wins via the span-join;
-    /// cross-file a unique corpus blob (the CallF facet's site preferred);
-    /// ambiguous/absent -> None.
+    /// Cross-file binding belongs to the module and checker legs.
+    /// Absent same-file declarations return None.
     pub fn call_name_match(
         output: &RyiOutput,
         index: &DefIndex,
@@ -4708,7 +4708,9 @@ impl TsSource {
                 }
             }
         }
-        unique_blob(sites.iter(), FamilyTag::Call)
+        // Cross-file TypeScript calls require an import or checker binding.
+        // Corpus spelling uniqueness does not establish lexical visibility.
+        None
     }
 }
 
@@ -5110,6 +5112,14 @@ impl Resolve<CallF> for TsSource {
                             .is_some_and(|(receiver, _)| modules.import(path, receiver).is_some())
                 });
                 if imported {
+                    return None;
+                }
+                // Every plain call's lexical callable target was recorded by
+                // OXC. A missing target names a local value or global, never
+                // an unrelated same-spelled declaration in this file.
+                if own_facts.as_ref().is_some_and(|facts| {
+                    facts.plain_calls.contains(&site.span.start)
+                }) {
                     return None;
                 }
                 Self::call_name_match(output, def_index, callee, own.as_ref())

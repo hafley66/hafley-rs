@@ -26,6 +26,8 @@ use crate::read::types::PathIndex;
 /// the declaring node's byte span start; every map is one file only.
 #[derive(Default)]
 pub struct TsFileTypes {
+    /// Callee starts whose spelling is a lexical identifier, including globals.
+    pub plain_calls: BTreeSet<u32>,
     /// Plain-call callee start -> lexical callable declaration span.
     pub local_calls: HashMap<u32, (u32, u32)>,
     /// fn-like span start -> declared return type name (a plain
@@ -622,6 +624,7 @@ pub fn collect(program: &Program<'_>) -> TsFileTypes {
         let ts::Expression::Identifier(id) = &call.callee else {
             continue;
         };
+        walker.facts.plain_calls.insert(id.span.start);
         let Some(symbol) = id.reference_id.get().and_then(|reference| {
             semantic.scoping().get_reference(reference).symbol_id()
         }) else {

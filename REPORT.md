@@ -111,3 +111,9 @@ Corpus: `~/projects/rxjs-corpus-feature-ryi-ts-graph`, detached at d0802620.
 | Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
 |---|---|---|---|
 | D9 | No callers for same-file arrow/function-expression consts | Lexical callable spans resolve g, k and nested inner; D09.sh checks those rows and corpus sectionsOf | Extraction/resolution facts |
+| D10 | DOM globals and unrelated declarations bind through corpus_unique | TypeScript call-name fallback has no cross-file corpus-unique leg; plain calls require a lexical callable target or import/checker binding; D10.sh asserts globals, local forward const and parameter shadow | Resolution facts |
+| D11 | invalidate binds SignalCreator to Query and enlarges the cycle | Local forward callable is extracted/resolved; phantom edge is absent; D11.sh asserts facts and existing stratify cycle output | Resolution facts |
+
+D10 compatibility risk: previous name-only cross-file TypeScript resolutions
+without imports are deliberately declined. Serialized gates must check legacy
+fixtures that expected such resolutions. No frozen snapshots were regenerated.
