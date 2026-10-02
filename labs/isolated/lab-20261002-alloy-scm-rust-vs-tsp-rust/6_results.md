@@ -2,7 +2,7 @@
 
 Primary: 30 PASS, 5 DIFF, 102 GAP, 137/137 inventoried.
 
-All matchers: 87 PASS, 30 DIFF, 122 GAP, 239/239 inventoried.
+All matchers: 96 PASS, 21 DIFF, 122 GAP, 239/239 inventoried.
 
 Each row names the original A line. B is evaluated only from the original input. GAP rows have no candidate output. `6_results.json` retains oracle literals, input expressions, enclosing test bodies, parser contexts, and rustfmt output.
 
@@ -72,16 +72,16 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/0_StructDeclaration.test.tsx:88 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/0_StructDeclaration.test.tsx:104 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/0_StructDeclaration.test.tsx:120 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/0_StructDeclaration.test.tsx:136 | toRenderTo | supplemental | DIFF | false | false | generics | 0/0 | 1 |
+| components/1_declarations/0_StructDeclaration.test.tsx:136 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/0_StructDeclaration.test.tsx:156 | toRenderTo | supplemental | DIFF | false | false | generics | 1/0 | 1 |
-| components/1_declarations/0_StructDeclaration.test.tsx:181 | toRenderTo | supplemental | DIFF | false | false | other | 0/1 | 1 |
-| components/1_declarations/0_StructDeclaration.test.tsx:187 | toRenderTo | supplemental | DIFF | false | false | other | 0/1 | 1 |
+| components/1_declarations/0_StructDeclaration.test.tsx:181 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
+| components/1_declarations/0_StructDeclaration.test.tsx:187 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/1_EnumDeclaration.test.tsx:25 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/1_EnumDeclaration.test.tsx:45 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 1 |
+| components/1_declarations/1_EnumDeclaration.test.tsx:45 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/1_EnumDeclaration.test.tsx:63 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/1_EnumDeclaration.test.tsx:89 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 1 |
+| components/1_declarations/1_EnumDeclaration.test.tsx:89 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/1_EnumDeclaration.test.tsx:117 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/1_EnumDeclaration.test.tsx:134 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 1 |
+| components/1_declarations/1_EnumDeclaration.test.tsx:134 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/1_EnumDeclaration.test.tsx:152 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:21 | toRenderTo | supplemental | GAP | n/a | n/a | doc comments | n/a | n/a |
 | components/1_declarations/2_parity.test.tsx:26 | toRenderTo | supplemental | GAP | n/a | n/a | doc comments | n/a | n/a |
@@ -95,7 +95,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/2_parity.test.tsx:68 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:73 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:78 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
-| components/1_declarations/2_parity.test.tsx:83 | toRenderTo | supplemental | DIFF | false | false | generics | 0/0 | 0 |
+| components/1_declarations/2_parity.test.tsx:83 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:90 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:95 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:100 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
@@ -107,7 +107,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/2_parity.test.tsx:149 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:164 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:176 | toRenderTo | supplemental | DIFF | false | false | generics | 1/0 | 1 |
-| components/1_declarations/2_parity.test.tsx:195 | toRenderTo | supplemental | DIFF | false | false | whitespace/blank-line policy | 0/0 | 1 |
+| components/1_declarations/2_parity.test.tsx:195 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:213 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:219 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:225 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
@@ -119,7 +119,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/2_parity.test.tsx:270 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:278 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:19 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 0 |
-| components/1_declarations/4_FunctionDeclaration.test.tsx:25 | toRenderTo | supplemental | DIFF | false | false | whitespace/blank-line policy | 1/0 | 1 |
+| components/1_declarations/4_FunctionDeclaration.test.tsx:25 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 0 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:39 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 0 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:45 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:59 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 0 |
@@ -131,7 +131,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/4_FunctionDeclaration.test.tsx:127 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:20 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 0 |
 | components/1_declarations/6_ImplBlock.test.tsx:26 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/6_ImplBlock.test.tsx:44 | toRenderTo | supplemental | DIFF | false | false | whitespace/blank-line policy | 0/0 | 1 |
+| components/1_declarations/6_ImplBlock.test.tsx:44 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:69 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 0 |
 | components/1_declarations/6_ImplBlock.test.tsx:75 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:92 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
@@ -324,21 +324,6 @@ other: No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in cand
 
 other: No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in candidate B
 
-## components/1_declarations/0_StructDeclaration.test.tsx:136 (DIFF)
-
-generics: expected 'struct Foo<\'aT: \'a> {\n  bar: &\'a …' to be 'struct Foo<\'a, T: \'a> {\n  bar: &\'…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,3 +1,3 @@
--struct Foo<'a, T: 'a> {
-+struct Foo<'aT: 'a> {
-   bar: &'a T,
- }
-\ No newline at end of file
-```
-
 ## components/1_declarations/0_StructDeclaration.test.tsx:156 (DIFF)
 
 generics: expected 'where T: Serialize, struct Foo<T> {\n…' to be 'struct Foo<T>\nwhere\n    T: Serializ…' // Object.is equality
@@ -357,86 +342,6 @@ generics: expected 'where T: Serialize, struct Foo<T> {\n…' to be 'struct Foo<
 \ No newline at end of file
 ```
 
-## components/1_declarations/0_StructDeclaration.test.tsx:181 (DIFF)
-
-other: expected 'struct Point (f64, f64)' to be 'struct Point(f64, f64);' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1 +1 @@
--struct Point(f64, f64);
-\ No newline at end of file
-+struct Point (f64, f64)
-\ No newline at end of file
-```
-
-## components/1_declarations/0_StructDeclaration.test.tsx:187 (DIFF)
-
-other: expected '#[derive(Debug)]\nstruct Point (f64, …' to be '#[derive(Debug)]\nstruct Point(f64, f…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,2 +1,2 @@
- #[derive(Debug)]
--struct Point(f64, f64);
-\ No newline at end of file
-+struct Point (f64, f64)
-\ No newline at end of file
-```
-
-## components/1_declarations/1_EnumDeclaration.test.tsx:45 (DIFF)
-
-whitespace/blank-line policy: expected 'enum Shape {\n  Circle (f64),\n  Rect…' to be 'enum Shape {\n  Circle(f64),\n  Rect(…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,4 +1,4 @@
- enum Shape {
--  Circle(f64),
--  Rect(f64, f64),
-+  Circle (f64),
-+  Rect (f64, f64),
- }
-\ No newline at end of file
-```
-
-## components/1_declarations/1_EnumDeclaration.test.tsx:89 (DIFF)
-
-whitespace/blank-line policy: expected 'enum Event {\n  None,\n  Click (i32, …' to be 'enum Event {\n  None,\n  Click(i32, i…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,6 +1,6 @@
- enum Event {
-   None,
--  Click(i32, i32),
-+  Click (i32, i32),
-   KeyPress {
-     key: char,
-     ctrl: bool,
-\ No newline at end of file
-```
-
-## components/1_declarations/1_EnumDeclaration.test.tsx:134 (DIFF)
-
-generics: expected 'enum Option<T> {\n  Some (T),\n  None…' to be 'enum Option<T> {\n  Some(T),\n  None,…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,4 +1,4 @@
- enum Option<T> {
--  Some(T),
-+  Some (T),
-   None,
- }
-\ No newline at end of file
-```
-
 ## components/1_declarations/2_parity.test.tsx:21 (GAP)
 
 doc comments: Generated line_comment only exposes doc-marker fields; ordinary comment body is a pruned PATTERN
@@ -444,20 +349,6 @@ doc comments: Generated line_comment only exposes doc-marker fields; ordinary co
 ## components/1_declarations/2_parity.test.tsx:26 (GAP)
 
 doc comments: Generated block_comment has no ordinary body prop
-
-## components/1_declarations/2_parity.test.tsx:83 (DIFF)
-
-generics: expected 'Result<UserAppError>' to be 'Result<User, AppError>' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1 +1 @@
--Result<User, AppError>
-\ No newline at end of file
-+Result<UserAppError>
-\ No newline at end of file
-```
 
 ## components/1_declarations/2_parity.test.tsx:149 (DIFF)
 
@@ -488,25 +379,8 @@ generics: expected 'where T: Serialize + Send, trait Stor…' to be 'trait Store
 -where
 -    T: Serialize + Send,
 - {
--  fn save(&self, item: &T);
 +where T: Serialize + Send, trait Store<T> {
-+  fn save(&selfitem: &T);
- }
-\ No newline at end of file
-```
-
-## components/1_declarations/2_parity.test.tsx:195 (DIFF)
-
-whitespace/blank-line policy: expected 'pub trait ReadWrite {\n  fn read(&sel…' to be 'pub trait ReadWrite {\n  fn read(&sel…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,4 +1,4 @@
- pub trait ReadWrite {
-   fn read(&self) -> Vec<u8>;
--  fn write(&mut self, data: &[u8]);
-+  fn write(&mut selfdata: &[u8]);
+   fn save(&self, item: &T);
  }
 \ No newline at end of file
 ```
@@ -541,7 +415,7 @@ whitespace/blank-line policy: expected 'fn foo() {}' to be 'fn foo() { }' // Obj
 
 ## components/1_declarations/4_FunctionDeclaration.test.tsx:25 (DIFF)
 
-whitespace/blank-line policy: expected 'fn foo(bar: i32baz: String) {}' to be 'fn foo(bar: i32, baz: String) { }' // Object.is equality
+whitespace/blank-line policy: expected 'fn foo(bar: i32, baz: String) {}' to be 'fn foo(bar: i32, baz: String) { }' // Object.is equality
 
 ```diff
 --- A expected
@@ -549,7 +423,7 @@ whitespace/blank-line policy: expected 'fn foo(bar: i32baz: String) {}' to be 'f
 @@ -1 +1 @@
 -fn foo(bar: i32, baz: String) { }
 \ No newline at end of file
-+fn foo(bar: i32baz: String) {}
++fn foo(bar: i32, baz: String) {}
 \ No newline at end of file
 ```
 
@@ -665,23 +539,6 @@ whitespace/blank-line policy: expected 'impl Foo {}' to be 'impl Foo { }' // Obj
 -impl Foo { }
 \ No newline at end of file
 +impl Foo {}
-\ No newline at end of file
-```
-
-## components/1_declarations/6_ImplBlock.test.tsx:44 (DIFF)
-
-whitespace/blank-line policy: expected 'impl Display for Foo {\n  fn fmt(&sel…' to be 'impl Display for Foo {\n  fn fmt(&sel…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1,5 +1,5 @@
- impl Display for Foo {
--  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-+  fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {
-     write!(f, "Foo")
-   }
- }
 \ No newline at end of file
 ```
 

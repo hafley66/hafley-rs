@@ -7,8 +7,8 @@
   },
   "all": {
     "assertions": 239,
-    "PASS": 87,
-    "DIFF": 30,
+    "PASS": 96,
+    "DIFF": 21,
     "GAP": 122
   },
   "whitespace": {
@@ -20,17 +20,17 @@
     },
     "all": {
       "assertions": 239,
-      "PASS": 101,
-      "DIFF": 16,
+      "PASS": 108,
+      "DIFF": 9,
       "GAP": 122
     }
   },
   "syntax": {
     "outputs": 114,
-    "parseClean": 107,
-    "parseFailed": 7,
-    "rustfmtClean": 58,
-    "rustfmtFailed": 56
+    "parseClean": 110,
+    "parseFailed": 4,
+    "rustfmtClean": 61,
+    "rustfmtFailed": 53
   },
   "fileSyntax": {
     "outputs": 14,
@@ -97,8 +97,8 @@
     {
       "file": "components/1_declarations/0_StructDeclaration.test.tsx",
       "assertions": 13,
-      "PASS": 9,
-      "DIFF": 4,
+      "PASS": 12,
+      "DIFF": 1,
       "GAP": 0,
       "primary": {
         "assertions": 0,
@@ -111,8 +111,8 @@
     {
       "file": "components/1_declarations/1_EnumDeclaration.test.tsx",
       "assertions": 7,
-      "PASS": 4,
-      "DIFF": 3,
+      "PASS": 7,
+      "DIFF": 0,
       "GAP": 0,
       "primary": {
         "assertions": 0,
@@ -125,8 +125,8 @@
     {
       "file": "components/1_declarations/2_parity.test.tsx",
       "assertions": 35,
-      "PASS": 28,
-      "DIFF": 5,
+      "PASS": 30,
+      "DIFF": 3,
       "GAP": 2,
       "primary": {
         "assertions": 0,
@@ -153,8 +153,8 @@
     {
       "file": "components/1_declarations/6_ImplBlock.test.tsx",
       "assertions": 7,
-      "PASS": 3,
-      "DIFF": 4,
+      "PASS": 4,
+      "DIFF": 3,
       "GAP": 0,
       "primary": {
         "assertions": 0,
@@ -2339,20 +2339,18 @@
       "testTitle": "\"mixed lifetime + generic\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <StructDeclaration\n          name=\"Foo\"\n          lifetimes={[{ name: \"a\" }]}\n          typeParams={[{ name: \"T\", bounds: [\"'a\"] }]}\n        >\n          <List hardline>\n            <StructField name=\"bar\" type=\"&'a T\" />\n          </List>\n        </StructDeclaration>\n      </RustRoot>\n    ).toRenderTo(`\n      struct Foo<'a, T: 'a> {\n        bar: &'a T,\n      }\n    `);\n  }",
       "sourceHash": "dd1517be4d1e17e182b8bbf4c25d3ba48c7698e01fa4abc8c2bda9a2e9cb8bb2",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "struct Foo<'a, T: 'a> {\n  bar: &'a T,\n}",
-      "actual": "struct Foo<'aT: 'a> {\n  bar: &'a T,\n}",
-      "detail": "expected 'struct Foo<\\'aT: \\'a> {\\n  bar: &\\'a …' to be 'struct Foo<\\'a, T: \\'a> {\\n  bar: &\\'…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "struct Foo<'a, T: 'a> {\n  bar: &'a T,\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "struct Foo<'aT: 'a> {\n  bar: &'a T,\n}\n",
+        "context": "struct Foo<'a, T: 'a> {\n  bar: &'a T,\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2459d838a186cecd-B.rs:1:\n struct Foo<'aT: 'a> {\n-  bar: &'a T,\n+    bar: &'a T,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/2459d838a186cecd-B.rs:1:\n struct Foo<'a, T: 'a> {\n-  bar: &'a T,\n+    bar: &'a T,\n }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<'a, T: 'a> {\n  bar: &'a T,\n}\n",
@@ -2413,20 +2411,18 @@
       "testTitle": "\"basic tuple struct\"",
       "testInput": "{\n    expect(\n      <RustRoot><TupleStructDeclaration name=\"Point\" fields={[\"f64\", \"f64\"]} /></RustRoot>\n    ).toRenderTo(\"struct Point(f64, f64);\");\n  }",
       "sourceHash": "dd1517be4d1e17e182b8bbf4c25d3ba48c7698e01fa4abc8c2bda9a2e9cb8bb2",
-      "status": "DIFF",
-      "reason": "other",
+      "status": "PASS",
       "expected": "struct Point(f64, f64);",
-      "actual": "struct Point (f64, f64)",
-      "detail": "expected 'struct Point (f64, f64)' to be 'struct Point(f64, f64);' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "struct Point(f64, f64);",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "struct Point (f64, f64)\n",
+        "context": "struct Point(f64, f64);\n",
         "ERROR": 0,
-        "MISSING": 1,
-        "parseClean": false,
-        "rustfmtExit": 1,
-        "rustfmt": "error: expected one of `;` or `where`, found `<eof>`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/dec4e68ff5f7acde-B.rs:1:23\n  |\n1 | struct Point (f64, f64)\n  |                       ^ expected one of `;` or `where`\n\n"
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
       },
       "oracleSyntax": {
         "context": "struct Point(f64, f64);\n",
@@ -2450,20 +2446,18 @@
       "testTitle": "\"with derive\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <TupleStructDeclaration name=\"Point\" derive={[\"Debug\"]} fields={[\"f64\", \"f64\"]} />\n      </RustRoot>\n    ).toRenderTo(`\n      #[derive(Debug)]\n      struct Point(f64, f64);\n    `);\n  }",
       "sourceHash": "dd1517be4d1e17e182b8bbf4c25d3ba48c7698e01fa4abc8c2bda9a2e9cb8bb2",
-      "status": "DIFF",
-      "reason": "other",
+      "status": "PASS",
       "expected": "#[derive(Debug)]\nstruct Point(f64, f64);",
-      "actual": "#[derive(Debug)]\nstruct Point (f64, f64)",
-      "detail": "expected '#[derive(Debug)]\\nstruct Point (f64, …' to be '#[derive(Debug)]\\nstruct Point(f64, f…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "#[derive(Debug)]\nstruct Point(f64, f64);",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "#[derive(Debug)]\nstruct Point (f64, f64)\n",
+        "context": "#[derive(Debug)]\nstruct Point(f64, f64);\n",
         "ERROR": 0,
-        "MISSING": 1,
-        "parseClean": false,
-        "rustfmtExit": 1,
-        "rustfmt": "error: expected one of `;` or `where`, found `<eof>`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/6f04d7539896e5ec-B.rs:2:23\n  |\n2 | struct Point (f64, f64)\n  |                       ^ expected one of `;` or `where`\n\n"
+        "MISSING": 0,
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
       },
       "oracleSyntax": {
         "context": "#[derive(Debug)]\nstruct Point(f64, f64);\n",
@@ -2522,20 +2516,18 @@
       "testTitle": "\"tuple variants\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <EnumDeclaration name=\"Shape\">\n          <List hardline>\n            <TupleVariant name=\"Circle\" fields={[\"f64\"]} />\n            <TupleVariant name=\"Rect\" fields={[\"f64\", \"f64\"]} />\n          </List>\n        </EnumDeclaration>\n      </RustRoot>\n    ).toRenderTo(`\n      enum Shape {\n        Circle(f64),\n        Rect(f64, f64),\n      }\n    `);\n  }",
       "sourceHash": "517347c12e8210655989ee74974cc4ed81902dbca79a738be7c806b33547d8f9",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "enum Shape {\n  Circle(f64),\n  Rect(f64, f64),\n}",
-      "actual": "enum Shape {\n  Circle (f64),\n  Rect (f64, f64),\n}",
-      "detail": "expected 'enum Shape {\\n  Circle (f64),\\n  Rect…' to be 'enum Shape {\\n  Circle(f64),\\n  Rect(…' // Object.is equality",
-      "byteEqual": false,
+      "actual": "enum Shape {\n  Circle(f64),\n  Rect(f64, f64),\n}",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "enum Shape {\n  Circle (f64),\n  Rect (f64, f64),\n}\n",
+        "context": "enum Shape {\n  Circle(f64),\n  Rect(f64, f64),\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a2d19f4d7a6c2628-B.rs:1:\n enum Shape {\n-  Circle (f64),\n-  Rect (f64, f64),\n+    Circle(f64),\n+    Rect(f64, f64),\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/a2d19f4d7a6c2628-B.rs:1:\n enum Shape {\n-  Circle(f64),\n-  Rect(f64, f64),\n+    Circle(f64),\n+    Rect(f64, f64),\n }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Shape {\n  Circle(f64),\n  Rect(f64, f64),\n}\n",
@@ -2594,20 +2586,18 @@
       "testTitle": "\"mixed variant types\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <EnumDeclaration name=\"Event\">\n          <List hardline>\n            <UnitVariant name=\"None\" />\n            <TupleVariant name=\"Click\" fields={[\"i32\", \"i32\"]} />\n            <StructVariant name=\"KeyPress\">\n              <List hardline>\n                <StructField name=\"key\" type=\"char\" />\n                <StructField name=\"ctrl\" type=\"bool\" />\n              </List>\n            </StructVariant>\n          </List>\n        </EnumDeclaration>\n      </RustRoot>\n    ).toRenderTo(`\n      enum Event {\n        None,\n        Click(i32, i32),\n        KeyPress {\n          key: char,\n          ctrl: bool,\n        },\n      }\n    `);\n  }",
       "sourceHash": "517347c12e8210655989ee74974cc4ed81902dbca79a738be7c806b33547d8f9",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "enum Event {\n  None,\n  Click(i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}",
-      "actual": "enum Event {\n  None,\n  Click (i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}",
-      "detail": "expected 'enum Event {\\n  None,\\n  Click (i32, …' to be 'enum Event {\\n  None,\\n  Click(i32, i…' // Object.is equality",
-      "byteEqual": false,
+      "actual": "enum Event {\n  None,\n  Click(i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "enum Event {\n  None,\n  Click (i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}\n",
+        "context": "enum Event {\n  None,\n  Click(i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c2abbb2e49c0bd78-B.rs:1:\n enum Event {\n-  None,\n-  Click (i32, i32),\n-  KeyPress {\n-    key: char,\n-    ctrl: bool,\n-  },\n+    None,\n+    Click(i32, i32),\n+    KeyPress { key: char, ctrl: bool },\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/c2abbb2e49c0bd78-B.rs:1:\n enum Event {\n-  None,\n-  Click(i32, i32),\n-  KeyPress {\n-    key: char,\n-    ctrl: bool,\n-  },\n+    None,\n+    Click(i32, i32),\n+    KeyPress { key: char, ctrl: bool },\n }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Event {\n  None,\n  Click(i32, i32),\n  KeyPress {\n    key: char,\n    ctrl: bool,\n  },\n}\n",
@@ -2666,20 +2656,18 @@
       "testTitle": "\"generic enum\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <EnumDeclaration name=\"Option\" typeParams={[{ name: \"T\" }]}>\n          <List hardline>\n            <TupleVariant name=\"Some\" fields={[\"T\"]} />\n            <UnitVariant name=\"None\" />\n          </List>\n        </EnumDeclaration>\n      </RustRoot>\n    ).toRenderTo(`\n      enum Option<T> {\n        Some(T),\n        None,\n      }\n    `);\n  }",
       "sourceHash": "517347c12e8210655989ee74974cc4ed81902dbca79a738be7c806b33547d8f9",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "enum Option<T> {\n  Some(T),\n  None,\n}",
-      "actual": "enum Option<T> {\n  Some (T),\n  None,\n}",
-      "detail": "expected 'enum Option<T> {\\n  Some (T),\\n  None…' to be 'enum Option<T> {\\n  Some(T),\\n  None,…' // Object.is equality",
-      "byteEqual": false,
+      "actual": "enum Option<T> {\n  Some(T),\n  None,\n}",
+      "byteEqual": true,
       "whitespaceEqual": true,
       "syntax": {
-        "context": "enum Option<T> {\n  Some (T),\n  None,\n}\n",
+        "context": "enum Option<T> {\n  Some(T),\n  None,\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/be264f149cb2c0ec-B.rs:1:\n enum Option<T> {\n-  Some (T),\n-  None,\n+    Some(T),\n+    None,\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/be264f149cb2c0ec-B.rs:1:\n enum Option<T> {\n-  Some(T),\n-  None,\n+    Some(T),\n+    None,\n }\n \n"
       },
       "oracleSyntax": {
         "context": "enum Option<T> {\n  Some(T),\n  None,\n}\n",
@@ -3126,15 +3114,13 @@
       "testTitle": "\"renders Result<T, E>\"",
       "testInput": "{\n    expect(<RustRoot><ResultType ok=\"User\" err=\"AppError\" /></RustRoot>)\n      .toRenderTo(\"Result<User, AppError>\");\n  }",
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
-      "status": "DIFF",
-      "reason": "generics",
+      "status": "PASS",
       "expected": "Result<User, AppError>",
-      "actual": "Result<UserAppError>",
-      "detail": "expected 'Result<UserAppError>' to be 'Result<User, AppError>' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "Result<User, AppError>",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "type Probe = Result<UserAppError>;\n",
+        "context": "type Probe = Result<User, AppError>;\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
@@ -3518,12 +3504,12 @@
       "status": "DIFF",
       "reason": "generics",
       "expected": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}",
-      "actual": "where T: Serialize + Send, trait Store<T> {\n  fn save(&selfitem: &T);\n}",
+      "actual": "where T: Serialize + Send, trait Store<T> {\n  fn save(&self, item: &T);\n}",
       "detail": "expected 'where T: Serialize + Send, trait Stor…' to be 'trait Store<T>\\nwhere\\n    T: Seriali…' // Object.is equality",
       "byteEqual": false,
       "whitespaceEqual": false,
       "syntax": {
-        "context": "where T: Serialize + Send, trait Store<T> {\n  fn save(&selfitem: &T);\n}\n",
+        "context": "where T: Serialize + Send, trait Store<T> {\n  fn save(&self, item: &T);\n}\n",
         "ERROR": 1,
         "MISSING": 0,
         "parseClean": false,
@@ -3552,20 +3538,18 @@
       "testTitle": "\"renders trait with multiple methods\"",
       "testInput": "{\n    expect(<RustRoot>\n      <TraitDeclaration name=\"ReadWrite\" pub>\n        <List hardline>\n          <TraitMethod name=\"read\" selfParam=\"&\" returns={<>Vec&lt;u8&gt;</>} />\n          <TraitMethod name=\"write\" selfParam=\"&mut\" params={[{ name: \"data\", type: <>&amp;[u8]</> }]} />\n        </List>\n      </TraitDeclaration>\n    </RustRoot>).toRenderTo(`\n      pub trait ReadWrite {\n        fn read(&self) -> Vec<u8>;\n        fn write(&mut self, data: &[u8]);\n      }\n    `);\n  }",
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut self, data: &[u8]);\n}",
-      "actual": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut selfdata: &[u8]);\n}",
-      "detail": "expected 'pub trait ReadWrite {\\n  fn read(&sel…' to be 'pub trait ReadWrite {\\n  fn read(&sel…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut self, data: &[u8]);\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut selfdata: &[u8]);\n}\n",
+        "context": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut self, data: &[u8]);\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/3cb7a67db418bc5c-B.rs:1:\n pub trait ReadWrite {\n-  fn read(&self) -> Vec<u8>;\n-  fn write(&mut selfdata: &[u8]);\n+    fn read(&self) -> Vec<u8>;\n+    fn write(&mut selfdata: &[u8]);\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/3cb7a67db418bc5c-B.rs:1:\n pub trait ReadWrite {\n-  fn read(&self) -> Vec<u8>;\n-  fn write(&mut self, data: &[u8]);\n+    fn read(&self) -> Vec<u8>;\n+    fn write(&mut self, data: &[u8]);\n }\n \n"
       },
       "oracleSyntax": {
         "context": "pub trait ReadWrite {\n  fn read(&self) -> Vec<u8>;\n  fn write(&mut self, data: &[u8]);\n}\n",
@@ -3981,17 +3965,17 @@
       "status": "DIFF",
       "reason": "whitespace/blank-line policy",
       "expected": "fn foo(bar: i32, baz: String) { }",
-      "actual": "fn foo(bar: i32baz: String) {}",
-      "detail": "expected 'fn foo(bar: i32baz: String) {}' to be 'fn foo(bar: i32, baz: String) { }' // Object.is equality",
+      "actual": "fn foo(bar: i32, baz: String) {}",
+      "detail": "expected 'fn foo(bar: i32, baz: String) {}' to be 'fn foo(bar: i32, baz: String) { }' // Object.is equality",
       "byteEqual": false,
-      "whitespaceEqual": false,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "fn foo(bar: i32baz: String) {}\n",
-        "ERROR": 1,
+        "context": "fn foo(bar: i32, baz: String) {}\n",
+        "ERROR": 0,
         "MISSING": 0,
-        "parseClean": false,
-        "rustfmtExit": 1,
-        "rustfmt": "error: expected parameter name, found `:`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/16aeff7380c58c9d-B.rs:1:19\n  |\n1 | fn foo(bar: i32baz: String) {}\n  |                   ^ expected parameter name\n\nerror: expected one of `!`, `(`, `)`, `+`, `,`, `::`, or `<`, found `:`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/16aeff7380c58c9d-B.rs:1:19\n  |\n1 | fn foo(bar: i32baz: String) {}\n  |                   ^\n  |                   |\n  |                   expected one of 7 possible tokens\n  |                   help: missing `,`\n\n"
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
       },
       "oracleSyntax": {
         "context": "fn foo(bar: i32, baz: String) { }\n",
@@ -4416,20 +4400,18 @@
       "testTitle": "\"trait impl\"",
       "testInput": "{\n    expect(\n      <RustRoot>\n        <ImplBlock target=\"Foo\" trait=\"Display\">\n          <FunctionDeclaration\n            name=\"fmt\"\n            selfParam=\"&\"\n            params={[\n              { name: \"f\", type: \"&mut fmt::Formatter<'_>\" },\n            ]}\n            returns=\"fmt::Result\"\n          >\n            write!(f, \"Foo\")\n          </FunctionDeclaration>\n        </ImplBlock>\n      </RustRoot>\n    ).toRenderTo(`\n      impl Display for Foo {\n        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n          write!(f, \"Foo\")\n        }\n      }\n    `);\n  }",
       "sourceHash": "0905494ef7da97f11115a57985921856bf4fd3f2c8092af1136648e921728d6a",
-      "status": "DIFF",
-      "reason": "whitespace/blank-line policy",
+      "status": "PASS",
       "expected": "impl Display for Foo {\n  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}",
-      "actual": "impl Display for Foo {\n  fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}",
-      "detail": "expected 'impl Display for Foo {\\n  fn fmt(&sel…' to be 'impl Display for Foo {\\n  fn fmt(&sel…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "impl Display for Foo {\n  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "impl Display for Foo {\n  fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}\n",
+        "context": "impl Display for Foo {\n  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/297b66bf43e3f366-B.rs:1:\n impl Display for Foo {\n-  fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {\n-    write!(f, \"Foo\")\n-  }\n+    fn fmt(&selff: &mut fmt::Formatter<'_>) -> fmt::Result {\n+        write!(f, \"Foo\")\n+    }\n }\n \n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/297b66bf43e3f366-B.rs:1:\n impl Display for Foo {\n-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n-    write!(f, \"Foo\")\n-  }\n+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n+        write!(f, \"Foo\")\n+    }\n }\n \n"
       },
       "oracleSyntax": {
         "context": "impl Display for Foo {\n  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {\n    write!(f, \"Foo\")\n  }\n}\n",

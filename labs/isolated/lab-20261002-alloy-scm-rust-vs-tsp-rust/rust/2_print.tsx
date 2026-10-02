@@ -1,11 +1,17 @@
-import { createScope, createSymbol, Declaration, Name, type Refkey, Scope, useScope } from "@alloy-js/core";
+import { isComponentCreator, createScope, createSymbol, Declaration, Name, type Refkey, Scope, useScope } from "@alloy-js/core";
 import { isLit, makeNode, type Policy } from "../core/0_print.js";
 import { useRustNamePolicy } from "./0_name-policy.js";
+import { OrderedFieldDeclarationList } from "../gen/rust/0_nodes.js";
 import { RustScope, RustSymbol, SPACE_OF } from "./1_scope.js";
 export { Leaf } from "../core/0_print.js";
 const TIGHT = new Set(["attribute_item", "token_tree", "type_arguments", "type_parameters", "lifetime", "generic_type", "scoped_type_identifier", "scoped_identifier"]);
 export const RUST_POLICY: Policy = {
+  accept(kind, props, toks) {
+    if (kind !== "struct_item" || !props.body) return true;
+    return isLit(toks.at(-1), ";") === isComponentCreator(props.body, OrderedFieldDeclarationList);
+  },
   space(kind, prev, tok) {
+    if ((kind === "struct_item" || kind === "enum_variant") && "val" in tok && tok.src === "body" && isComponentCreator(tok.val, OrderedFieldDeclarationList)) return false;
     if (TIGHT.has(kind)) return isLit(prev, ",");
     if (kind === "line_comment" && isLit(prev, "//")) return false;
     if ("val" in tok && tok.src === "bounds") return false;

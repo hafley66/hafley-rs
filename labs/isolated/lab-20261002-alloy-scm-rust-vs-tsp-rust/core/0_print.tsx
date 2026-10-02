@@ -75,6 +75,7 @@ export interface Policy {
   lines: Set<string>; // one token per line, no braces
   block: Set<string>; // `{`, indented item per line, `}`
   list: Set<string>; // item per line, no braces
+  accept?(kind: string, props: Record<string, any>, toks: Tok[]): boolean;
   declare?(kind: string, name: string, refkey: Refkey | undefined): Children;
   scope?(kind: string, body: Children): Children;
 }
@@ -126,11 +127,17 @@ export function makeNode(policy: Policy) {
       q[p.def][0] = policy.declare(p.kind, q[p.def][0] as string, p.props.refkey as Refkey | undefined);
     }
     let best: Tok[] | undefined;
+    let bestSeparators = -1;
     let bestLits = Infinity;
     for (const [pos, toks] of run(p.rule, q, {}, new Set())) {
       if (Object.keys(q).some((k) => (pos[k] ?? 0) !== q[k].length)) continue;
+      if (policy.accept && !policy.accept(p.kind, p.props, toks)) continue;
       const lits = toks.filter((t) => "lit" in t).length;
-      if (lits < bestLits) [best, bestLits] = [toks, lits];
+      // Preserve list separators and item terminators before minimizing other literals.
+      const separators = toks.filter((t, i) => "lit" in t && (t.lit === ";" || (t.lit === "," && "val" in (toks[i - 1] ?? {}) && "val" in (toks[i + 1] ?? {})))).length;
+      if (separators > bestSeparators || (separators === bestSeparators && lits < bestLits)) {
+        [best, bestSeparators, bestLits] = [toks, separators, lits];
+      }
     }
     if (!best) throw new Error(`${p.kind}: props ${Object.keys(q)} do not fit the grammar rule`);
     const body = layout(policy, p.kind, best);
