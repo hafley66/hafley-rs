@@ -22,6 +22,7 @@ use oxc_ast::ast as ts;
 use oxc_ast_visit::Visit;
 use oxc_resolver::{ResolveOptions, Resolver, TsconfigDiscovery};
 
+use super::ts_packages::{discover, package_name, WorkspacePackage};
 use crate::read::seams::DefIndex;
 use crate::read::shape::{ContentId, FamilyTag, Span};
 
@@ -55,11 +56,24 @@ impl TsResolver {
         let root = root
             .canonicalize()
             .map_err(|error| format!("canonicalize root {}: {error}", root.display()))?;
-        Ok(Self {
+        let manifests: Vec<PathBuf> = ignore::WalkBuilder::new(&root)
+            .hidden(false)
+            .filter_entry(|entry| !matches!(entry.file_name().to_str(), Some(".git" | "node_modules")))
+            .build()
+            .filter_map(Result::ok)
+            .filter(|entry| entry.file_name() == "package.json")
+            .map(ignore::DirEntry::into_path)
+            .collect();
+        let packages = discover(manifests.iter().map(|path| (path.as_path(), path.as_path())));
+        Ok(Self::with_packages(root, packages.by_name))
+    }
+
+    fn with_packages(root: PathBuf, packages: BTreeMap<String, WorkspacePackage>) -> Self {
+        Self {
             inner: Resolver::new(options()),
-            packages: workspace_packages(&root),
             root,
-        })
+            packages,
+        }
     }
 
     pub fn root(&self) -> &Path {
@@ -72,106 +86,83 @@ impl TsResolver {
         self.resolve_with_rung(from, module).map(|(path, _)| path)
     }
 
-    /// The source target and the workspace fallback rung that selected it.
+    /// The source target and the rung that selected it. A workspace package maps
+    /// its export through a declaration map or its tsconfig `outDir` -> `rootDir`.
     pub fn resolve_with_rung(&self, from: &Path, module: &str) -> Option<(PathBuf, &'static str)> {
-        let package = self.packages.iter().find_map(|(name, package)| {
-            (module == name
-                || module
-                    .strip_prefix(name.as_str())
-                    .is_some_and(|rest| rest.starts_with('/')))
-            .then_some((name, package))
-        });
-        if let Some((name, package)) = package {
-            let subpath = module.strip_prefix(name.as_str())?;
-            let key = if subpath.is_empty() {
-                ".".to_string()
-            } else {
-                format!(".{subpath}")
-            };
-            // Assets use the runtime export, even when a types condition names
-            // a declaration for that asset.
-            if key.ends_with(".css") {
-                let target = match package.manifest.get("exports") {
-                    Some(exports) => export_target_with_conditions(
-                        exports,
-                        &key,
-                        &["import", "node", "default", "require"],
-                    ),
-                    None => Some(format!(".{subpath}")),
-                }?;
-                let emitted = package.directory.join(target.trim_start_matches("./"));
-                if emitted
-                    .extension()
-                    .is_some_and(|extension| extension == "css")
-                {
-                    if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
-                        let source = package.directory.join("src").join(relative);
-                        if let Ok(source) = source.canonicalize() {
-                            if source.is_file() {
-                                return Some((source, "src_convention"));
-                            }
-                        }
-                    }
-                    if let Ok(asset) = emitted.canonicalize() {
-                        if asset.is_file() {
-                            return Some((asset, "exports"));
-                        }
-                    }
-                }
-                return None;
-            }
+        let _span = tracing::trace_span!("ts.resolve.specifier").entered();
+        let Some((name, package)) = package_name(module).and_then(|name| self.packages.get_key_value(name)) else {
+            // Auto tsconfig discovery takes the importing file, including its name.
+            return self
+                .inner
+                .resolve_file(from, module)
+                .ok()
+                .map(|resolution| (resolution.path().to_path_buf(), "resolver"));
+        };
+        let subpath = &module[name.len()..];
+        let key = if subpath.is_empty() {
+            ".".to_string()
+        } else {
+            format!(".{subpath}")
+        };
+        let layout = package.layout(&self.inner);
+        // Assets use the runtime export, even when a types condition names
+        // a declaration for that asset.
+        if key.ends_with(".css") {
             let target = match package.manifest.get("exports") {
-                Some(exports) => export_target(exports, &key),
-                None if subpath.is_empty() => package
-                    .manifest
-                    .get("types")
-                    .or_else(|| package.manifest.get("module"))
-                    .or_else(|| package.manifest.get("main"))
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string),
+                Some(exports) => export_target_with_conditions(
+                    exports,
+                    &key,
+                    &["import", "node", "default", "require"],
+                ),
                 None => Some(format!(".{subpath}")),
             }?;
             let emitted = package.directory.join(target.trim_start_matches("./"));
-            if emitted.to_string_lossy().ends_with(".d.ts") {
-                if let Some(source) = declaration_source(&emitted, &self.root) {
-                    return Some((source, "declaration_map"));
-                }
-            } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
-                return Some((resolution.path().to_path_buf(), "exports"));
+            if emitted.extension().is_none_or(|extension| extension != "css") {
+                return None;
             }
-            if let Ok(resolution) = self.inner.resolve_file(from, module) {
-                let path = resolution.path();
-                if path.starts_with(&self.root) && !path.to_string_lossy().contains("/dist/") {
-                    return Some((path.to_path_buf(), "tsconfig_paths"));
+            if let Some(source) = layout.source_of(&emitted).and_then(|source| source.canonicalize().ok()) {
+                if source.is_file() {
+                    return Some((source, "out_dir_map"));
                 }
             }
-            if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
-                let relative = relative.to_string_lossy();
-                let stem = relative
-                    .strip_suffix(".d.ts")
-                    .or_else(|| relative.strip_suffix(".js"))
-                    .unwrap_or(&relative);
-                let source = package.directory.join("src").join(stem);
-                if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
-                    return Some((resolution.path().to_path_buf(), "src_convention"));
-                }
-                if !package.directory.join("src").is_dir() {
-                    let source = package.directory.join(stem);
-                    if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
-                        return Some((resolution.path().to_path_buf(), "package_convention"));
-                    }
-                }
-            }
-            if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
-                return Some((resolution.path().to_path_buf(), "exports_declaration"));
-            }
-            return None;
+            let asset = emitted.canonicalize().ok()?;
+            return asset.is_file().then_some((asset, "exports"));
         }
-        // Auto tsconfig discovery takes the importing file, including its name.
-        self.inner
-            .resolve_file(from, module)
-            .ok()
-            .map(|resolution| (resolution.path().to_path_buf(), "resolver"))
+        let target = match package.manifest.get("exports") {
+            Some(exports) => export_target(exports, &key),
+            None if subpath.is_empty() => package
+                .manifest
+                .get("types")
+                .or_else(|| package.manifest.get("module"))
+                .or_else(|| package.manifest.get("main"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+            None => Some(format!(".{subpath}")),
+        }?;
+        let emitted = package.directory.join(target.trim_start_matches("./"));
+        if emitted.to_string_lossy().ends_with(".d.ts") {
+            if let Some(source) = declaration_source(&emitted, &self.root) {
+                return Some((source, "declaration_map"));
+            }
+        } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+            return Some((resolution.path().to_path_buf(), "exports"));
+        }
+        // tsconfig `paths` may name the source; a path into compiler output does not.
+        if let Ok(resolution) = self.inner.resolve_file(from, module) {
+            let path = resolution.path();
+            if path.starts_with(&self.root) && !layout.emits(path) {
+                return Some((path.to_path_buf(), "tsconfig_paths"));
+            }
+        }
+        if let Some(source) = layout.source_of(&emitted) {
+            if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
+                return Some((resolution.path().to_path_buf(), "out_dir_map"));
+            }
+        }
+        if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+            return Some((resolution.path().to_path_buf(), "exports_declaration"));
+        }
+        None
     }
 
     /// The same answer, kept only when it lands inside the root: a package in
@@ -180,48 +171,6 @@ impl TsResolver {
         let path = self.resolve(from, module)?;
         path.starts_with(&self.root).then_some(path)
     }
-}
-
-/// A package manifest in the source workspace, independent of installed links.
-struct WorkspacePackage {
-    directory: PathBuf,
-    manifest: serde_json::Value,
-}
-
-fn workspace_packages(root: &Path) -> BTreeMap<String, WorkspacePackage> {
-    let mut packages = BTreeMap::new();
-    for entry in ignore::WalkBuilder::new(root)
-        .hidden(false)
-        .filter_entry(|entry| {
-            !matches!(
-                entry.file_name().to_str(),
-                Some(".git" | "node_modules" | "target" | "dist")
-            )
-        })
-        .build()
-        .filter_map(Result::ok)
-    {
-        if entry.file_name() != "package.json" {
-            continue;
-        }
-        let Some(manifest) = std::fs::File::open(crate::read::io_path(entry.path()))
-            .ok()
-            .and_then(|file| serde_json::from_reader::<_, serde_json::Value>(file).ok())
-        else {
-            continue;
-        };
-        let Some(name) = manifest.get("name").and_then(serde_json::Value::as_str) else {
-            continue;
-        };
-        packages.insert(
-            name.to_string(),
-            WorkspacePackage {
-                directory: entry.path().parent().unwrap().to_path_buf(),
-                manifest,
-            },
-        );
-    }
-    packages
 }
 
 fn export_target(value: &serde_json::Value, key: &str) -> Option<String> {
@@ -1118,44 +1067,9 @@ impl TsModuleIndex {
             }
         }
         // Package identity comes from the supplied inputs' ancestor manifests.
-        // Multiple input roots may share only a broad filesystem ancestor;
-        // scanning that ancestor would admit packages outside this run.
-        let mut packages = BTreeMap::new();
-        let mut package_paths = HashMap::new();
-        let mut visited = HashSet::new();
-        for (real, path) in &by_real_path {
-            for (directory, written) in real
-                .ancestors()
-                .skip(1)
-                .zip(Path::new(path).ancestors().skip(1))
-            {
-                if !visited.insert(directory.to_path_buf()) {
-                    continue;
-                }
-                let Some(manifest) = std::fs::File::open(crate::read::io_path(&directory.join("package.json")))
-                    .ok()
-                    .and_then(|file| serde_json::from_reader::<_, serde_json::Value>(file).ok())
-                else {
-                    continue;
-                };
-                let Some(name) = manifest.get("name").and_then(serde_json::Value::as_str) else {
-                    continue;
-                };
-                package_paths.insert(directory.to_path_buf(), written.to_path_buf());
-                packages.insert(
-                    name.to_string(),
-                    WorkspacePackage {
-                        directory: directory.to_path_buf(),
-                        manifest,
-                    },
-                );
-            }
-        }
-        let workspace = root.map(|root| TsResolver {
-            inner: Resolver::new(options()),
-            root,
-            packages,
-        });
+        let packages = discover(by_real_path.iter().map(|(real, path)| (real.as_path(), Path::new(path))));
+        let package_paths = packages.written;
+        let workspace = root.map(|root| TsResolver::with_packages(root, packages.by_name));
         let resolver = Resolver::new(options());
         // A staged source snapshot carries package manifests but normally not
         // node_modules symlinks. Local `link:` dependencies still name corpus

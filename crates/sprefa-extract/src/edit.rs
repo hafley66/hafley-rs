@@ -11,6 +11,10 @@ pub mod ts7_cleave_diagnostics;
 pub mod ts7_cleave_facts;
 #[path = "edit/1e_ts7_graph_target.rs"]
 pub mod ts7_graph_target;
+#[path = "edit/1fa_checker_edges.rs"]
+pub mod checker_edges;
+#[path = "edit/1fb_ts_cst_tokens.rs"]
+pub mod ts_cst_tokens;
 #[path = "edit/1g_ts7_resolve.rs"]
 pub mod ts7_resolve;
 #[cfg(feature = "rust-checker")]

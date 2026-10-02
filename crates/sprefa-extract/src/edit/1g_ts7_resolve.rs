@@ -1,28 +1,32 @@
 //! Compiler destinations joined to the existing extraction spans and fact rows.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::{Path, PathBuf};
 
 use serde_json::{json, Value};
 
+use super::checker_edges::{CheckerDefs, CheckerEdge};
+use super::ts_cst_tokens::CstTokens;
 use super::ts7_cleave_facts::with_session;
 use super::ts7_lsp_session::file_uri;
 use super::ts7_graph_target::position;
 use super::ts7_symbol_seed::{byte_at_lsp_position, qualified_declaration};
-use crate::{closure_name, ContentId, FamilyTag, FlatFact, ProjectError, RawProjectFact, ResolveRequest, ResolveWithRawError};
+use crate::{FamilyTag, FlatFact, ProjectError, RawProjectFact, ResolveRequest, ResolveWithRawError};
 
 #[derive(Default)]
 struct File {
-    blob: Option<ContentId>,
     text: String,
-    definitions: Vec<(u32, u32, Option<String>, bool)>,
-    sites: Vec<(u32, u32, String)>,
+    /// `(site start, site end, callee token start)` per call site.
+    calls: Vec<(u32, u32, u32)>,
     attributes: Vec<(u32, u32)>,
 }
 
 #[derive(Default)]
 struct References {
     files: BTreeMap<String, File>,
+    defs: CheckerDefs,
+    /// The file whose facts are arriving: its CST and its call sites.
+    open: Option<(String, CstTokens, Vec<(u32, u32, String)>)>,
 }
 
 fn typescript(path: &str) -> bool {
@@ -42,42 +46,44 @@ fn locations(result: Value) -> Vec<Value> {
 }
 
 impl References {
+    /// A file's raw facts arrive together; its CST lives until the next file starts.
     fn capture(&mut self, raw: &RawProjectFact<'_>) {
         if !typescript(raw.path) {
             return;
         }
-        let file = self.files.entry(raw.path.to_string()).or_insert_with(|| File {
-            blob: Some(raw.content_id.clone()),
-            text: String::from_utf8_lossy(raw.content).into_owned(),
-            ..File::default()
-        });
-        match &raw.fact {
-            FlatFact::Node { family: FamilyTag::Cst, span, kind, .. }
-                if kind == "jsx_attribute" =>
-            {
-                // The CST span already marks this attribute. Its first token
-                // is the name; the expression/string value stays outside it.
-                if let Some(attribute) = file.text.get(span.start as usize..span.end as usize) {
-                    let name = attribute.split(|ch: char| ch.is_whitespace() || ch == '=')
-                        .next().unwrap_or("");
-                    if !name.is_empty() {
-                        file.attributes.push((span.start, span.start + name.len() as u32));
-                    }
-                }
-            }
-            FlatFact::Node { family, span, name, .. }
-                if matches!(family, FamilyTag::Call | FamilyTag::Type) =>
-            {
-                file.definitions.push((span.start, span.end, name.clone(), *family == FamilyTag::Call));
-            }
-            FlatFact::Site { family: FamilyTag::Call, span, callee, .. } => {
-                file.sites.push((span.start, span.end, callee.clone()));
-            }
-            _ => {}
+        self.defs.capture(raw);
+        if self.open.as_ref().is_none_or(|(path, ..)| path != raw.path) {
+            self.close();
+            self.files.entry(raw.path.to_string()).or_insert_with(|| File {
+                text: String::from_utf8_lossy(raw.content).into_owned(),
+                ..File::default()
+            });
+            self.open = Some((raw.path.to_string(), CstTokens::default(), Vec::new()));
+        }
+        let Some((_, cst, sites)) = self.open.as_mut() else { return };
+        cst.push(&raw.fact);
+        if let FlatFact::Site { family: FamilyTag::Call, span, callee, .. } = &raw.fact {
+            sites.push((span.start, span.end, callee.clone()));
         }
     }
 
-    fn append(&self, root: &Path, calls: bool, facts: &mut Vec<FlatFact>) -> Result<(), String> {
+    /// The open file's callee and attribute tokens; its CST is dropped.
+    fn close(&mut self) {
+        let Some((path, mut cst, sites)) = self.open.take() else { return };
+        cst.seal();
+        let Some(file) = self.files.get_mut(&path) else { return };
+        for (start, end, name) in sites {
+            // A site with no CST callee token is not asked about.
+            if let Some((token, _)) = cst.callee(&file.text, start, end, &name) {
+                file.calls.push((start, end, token));
+            }
+        }
+        file.attributes.extend(cst.attribute_names());
+    }
+
+    fn append(&mut self, root: &Path, calls: bool, facts: &mut Vec<FlatFact>) -> Result<(), String> {
+        self.close();
+        self.defs.seal();
         if self.files.is_empty() || !calls {
             return Ok(());
         }
@@ -85,12 +91,7 @@ impl References {
         let supplied: BTreeMap<_, _> = self.files.keys().map(|path| {
             (canonical(&crate::io_path(Path::new(path))), path.as_str())
         }).collect();
-        let mut by_site: HashMap<(String, u32, u32), Vec<usize>> = HashMap::new();
-        for (row, fact) in facts.iter().enumerate() {
-            if let FlatFact::ResolvedEdge { caller_path, caller_site_start, caller_site_end, .. } = fact {
-                by_site.entry((caller_path.clone(), *caller_site_start, *caller_site_end)).or_default().push(row);
-            }
-        }
+        let mut edges = Vec::new();
         with_session(&root, |session| {
             let mut declarations = BTreeSet::new();
             let mut qualified_names = BTreeMap::new();
@@ -100,21 +101,10 @@ impl References {
             }
             for (source, file) in &self.files {
                 let uri = file_uri(&canonical(&crate::io_path(Path::new(source))))?;
-                for (start, end, name) in &file.sites {
-                    let Some(written) = file.text.get(*start as usize..*end as usize) else { continue };
-                    // Callee spans cover a member expression, a constructor call,
-                    // or a JSX opening element. Probe only the callee token.
-                    let callee = if let Some(tag) = written.strip_prefix('<') {
-                        tag.split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '>')
-                            .next().unwrap_or(tag)
-                    } else {
-                        written.split('(').next().unwrap_or(written)
-                    };
-                    let Some(relative) = callee.rfind(name) else { continue };
-                    let offset = *start as usize + relative + usize::from(written.starts_with('<'));
+                for &(start, end, offset) in &file.calls {
                     let reply = session.lsp.request("textDocument/definition", &json!({
                         "textDocument": {"uri": uri.as_str()},
-                        "position": position(&file.text, offset)?,
+                        "position": position(&file.text, offset as usize)?,
                     }))?;
                     if let Some(error) = reply.error {
                         return Err(format!("definition {source}:{offset}: {}", error.message));
@@ -134,42 +124,8 @@ impl References {
                         let at = serde_json::from_value(range["start"].clone())
                             .map_err(|error| format!("definition range: {error}"))?;
                         let at = byte_at_lsp_position(&target_file.text, at)? as u32;
-                        let definition = target_file.definitions.iter()
-                            .filter(|(lo, hi, name, _)| *lo <= at && at < *hi && name.is_some())
-                            .min_by_key(|(lo, hi, _, is_call)| (!is_call, hi - lo));
-                        let Some((lo, hi, target_name, _)) = definition else { continue };
-                        let key = (source.clone(), *start, *end);
-                        let present = by_site.get(&key).is_some_and(|rows| !rows.is_empty());
-                        for &row in by_site.get(&key).into_iter().flatten() {
-                            if let FlatFact::ResolvedEdge {
-                                callee_path, callee_name, callee_start, callee_end, kind,
-                                resolution_origin, ..
-                            } = &mut facts[row] {
-                                *callee_path = (*target).to_string();
-                                *callee_name = target_name.clone();
-                                *callee_start = *lo;
-                                *callee_end = *hi;
-                                *kind = "checker_resolve".to_string();
-                                *resolution_origin = "checker".to_string();
-                            }
-                        }
-                        if !present {
-                            let caller = file.definitions.iter()
-                                .filter(|(lo, hi, _, is_call)| *is_call && *lo <= *start && *end <= *hi)
-                                .min_by_key(|(lo, hi, _, _)| hi - lo)
-                                .map(|(lo, _, name, _)| name.clone().unwrap_or_else(|| {
-                                    file.blob.as_ref().map_or_else(|| format!("closure@{lo}"), |blob| closure_name(blob, *lo))
-                                }));
-                            by_site.entry(key).or_default().push(facts.len());
-                            facts.push(FlatFact::ResolvedEdge {
-                                fact: None,
-                                caller_path: source.clone(), caller_name: caller,
-                                caller_site_start: *start, caller_site_end: *end,
-                                callee_path: (*target).to_string(), callee_name: target_name.clone(),
-                                callee_start: *lo, callee_end: *hi,
-                                kind: "checker_resolve".to_string(), resolution_origin: "checker".to_string(),
-                            });
-                        }
+                        let Some(target) = self.defs.target(target, at, None) else { continue };
+                        edges.push(CheckerEdge { source: source.clone(), site_start: start, site_end: end, target });
                         break;
                     }
                 }
@@ -226,7 +182,9 @@ impl References {
                 }
             }
             Ok(())
-        })
+        })?;
+        self.defs.write(facts, edges);
+        Ok(())
     }
 }
 

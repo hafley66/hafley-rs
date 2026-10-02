@@ -949,6 +949,7 @@ fn deferred_and_v6_only_ledger() {
 /// never a skipped green.
 #[test]
 fn call_resolve_scip_ratchet_ts() {
+    let globals = sprefa_extract::lang::ts_lib::globals(None);
     let fixture_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/ts");
     // Every .ts under the fixture root, recursively (the scip/ trio included).
     let mut rels: Vec<String> = Vec::new();
@@ -1078,7 +1079,7 @@ fn call_resolve_scip_ratchet_ts() {
                 });
             // The arm runs the D9 lexical leg before name-match; the twin does too.
             let name_t = TsSource::call_lexical_match(out, site, blob, None)
-                .or_else(|| TsSource::call_name_match(out, def_index, callee, Some(blob)));
+                .or_else(|| TsSource::call_name_match(out, def_index, callee, Some(blob), globals.as_ref()));
             // The twin outcome (the same legs the arm runs; the multiset
             // comparison below is the orchestration check). Clones name_t/scip_t
             // into the closure so both stay owned for the scip-side match below.

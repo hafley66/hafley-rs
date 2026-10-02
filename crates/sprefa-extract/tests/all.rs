@@ -485,6 +485,11 @@ mod t_194_scmpp_rows;
 #[path = "195_scmpp_growth.rs"]
 mod t_195_scmpp_growth;
 
+#[path = "194_ts_resolve_growth.rs"]
+mod t_194_ts_resolve_growth;
+#[path = "195_ts_lib_globals.rs"]
+mod t_195_ts_lib_globals;
+
 #[test]
 fn every_test_file_is_a_module_here() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");

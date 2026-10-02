@@ -1068,10 +1068,7 @@ impl Plan {
         let mut callers = imports.callers(&src, &item);
         let mut keep_source_export = false;
         if let (true, Some(resolver)) = (arm.name() == "ts", imports.ts_resolver.as_ref()) {
-            let barrels: Vec<String> = imports.modules.iter()
-                .filter(|(importer, target)| *target == src && cleave_for(importer).is_some_and(|arm| arm.name() == "ts"))
-                .map(|(importer, _)| importer.clone()).collect();
-            for rel in &barrels {
+            for rel in &imports.barrels(&src) {
                 if rel == &src || rel == &dest {
                     continue;
                 }
@@ -2085,13 +2082,22 @@ struct Imports {
     /// Resolved call sites `(caller file, site span, callee file, callee name)`.
     calls: Vec<(String, Span, String, String)>,
     rust_routes: hafley_scm::read::lang::rust_modules::RustModuleIndex,
-    /// `(importer, target)` for every resolved module specifier: the barrels a
-    /// cleave must re-read are the importers whose target is SRC.
-    modules: BTreeSet<(String, String)>,
+    /// Target -> importers over every resolved module specifier: the barrels a
+    /// cleave must re-read are the importers of SRC.
+    importers: BTreeMap<String, BTreeSet<String>>,
     ts_resolver: Option<sprefa_extract::lang::ts_resolve::TsResolver>,
 }
 
 impl Imports {
+    /// The TS importers of `src`, the only files a TS row re-reads.
+    fn barrels(&self, src: &str) -> Vec<String> {
+        self.importers.get(src).into_iter().flatten()
+            .filter(|importer| cleave_for(importer).is_some_and(|arm| arm.name() == "ts"))
+            .inspect(|_| drop(tracing::trace_span!("cleave.ts.barrel").entered()))
+            .cloned()
+            .collect()
+    }
+
     fn route_reaches(&self, from: &str, module: &str, bound: &str, target: &str) -> bool {
         use hafley_scm::read::lang::rust_modules::ModuleCallTarget;
         let asked = module.rsplit("::").next().unwrap_or(bound);
@@ -2129,12 +2135,12 @@ impl Imports {
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
         let mut names = Vec::new();
         let mut calls = Vec::new();
-        let mut modules = BTreeSet::new();
+        let mut importers: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
         for fact in &facts {
             if let FlatFact::ResolvedImportRow { src_path, target_path, target_name: None, kind, .. } = fact {
                 if kind == "module" {
                     if let (Some(importer), Some(target)) = (rel_of(root, src_path), rel_of(root, target_path)) {
-                        modules.insert((importer, target));
+                        importers.entry(target).or_default().insert(importer);
                     }
                 }
                 continue;
@@ -2189,7 +2195,7 @@ impl Imports {
             names,
             calls,
             rust_routes,
-            modules,
+            importers,
             ts_resolver,
         })
     }
@@ -2221,12 +2227,10 @@ impl Imports {
             }
         }
         self.names.extend(added);
-        let relayed: Vec<String> = self.modules.iter()
-            .filter(|(_, target)| target == src).map(|(importer, _)| importer.clone()).collect();
-        self.modules.insert((src.clone(), dest.clone()));
-        for importer in relayed {
-            self.modules.insert((importer, dest.clone()));
-        }
+        let relayed = self.importers.get(src).cloned().unwrap_or_default();
+        let dest_importers = self.importers.entry(dest.clone()).or_default();
+        dest_importers.insert(src.clone());
+        dest_importers.extend(relayed);
         self.names
             .push((src.clone(), item.clone(), dest.clone(), item.clone(), false));
         self.calls.retain_mut(|(caller, span, target, callee)| {
@@ -3125,5 +3129,50 @@ mod batch_row_tests {
         }
         assert_eq!(text, "pub struct Pattern;");
         hafley_scm::lang::rust::parse_rust_file(&text).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod barrel_growth_tests {
+    use super::*;
+    use hafley_observe::{assert_growth_sized, CountRecorder, Growth, SpanCounts};
+    use tracing_subscriber::prelude::*;
+
+    /// `files` TS files, the first `barrels` of them importing SRC.
+    fn imports(files: usize, barrels: usize) -> Imports {
+        let mut importers: BTreeMap<String, BTreeSet<String>> = BTreeMap::new();
+        for file in 0..files {
+            let target = if file < barrels { "src/item.ts".to_string() } else { format!("src/other_{file}.ts") };
+            importers.entry(target).or_default().insert(format!("src/file_{file}.ts"));
+        }
+        Imports {
+            names: Vec::new(),
+            calls: Vec::new(),
+            rust_routes: Default::default(),
+            importers,
+            ts_resolver: None,
+        }
+    }
+
+    fn barrel_reads(files: usize, barrels: usize, rows: usize) -> SpanCounts {
+        let imports = imports(files, barrels);
+        let (recorder, layer) = CountRecorder::new();
+        tracing::subscriber::with_default(tracing_subscriber::registry().with(layer), || {
+            for _ in 0..rows {
+                assert_eq!(imports.barrels("src/item.ts").len(), barrels);
+            }
+        });
+        recorder.counts()
+    }
+
+    #[test]
+    fn barrel_reads_grow_with_rows_and_src_barrels_never_with_corpus_files() {
+        let span = "cleave.ts.barrel";
+        let (small, large) = (barrel_reads(20, 5, 4), barrel_reads(2000, 5, 4));
+        assert_growth_sized(&small, &large, span, 20, 2000, Growth::Constant);
+        let (small, large) = (barrel_reads(2000, 5, 4), barrel_reads(2000, 500, 4));
+        assert_growth_sized(&small, &large, span, 5, 500, Growth::Linear);
+        let (small, large) = (barrel_reads(2000, 5, 2), barrel_reads(2000, 5, 200));
+        assert_growth_sized(&small, &large, span, 2, 200, Growth::Linear);
     }
 }

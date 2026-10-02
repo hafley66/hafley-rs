@@ -2085,8 +2085,10 @@ impl Project<CallF> for CallProjector<'_> {
         let mut named: Vec<(u32, NameId)> = Vec::new();
         let mut copies = BTreeMap::<(String, ContentId), u32>::new();
         for node in order {
+            let _visit = tracing::trace_span!("ts.closure_owner.visit").entered();
             while named.last().is_some_and(|(end, _)| *end < node.span.end()) {
                 named.pop();
+                let _pop = tracing::trace_span!("ts.closure_owner.pop").entered();
             }
             if let Some(name) = node.name {
                 named.push((node.span.end(), name));
@@ -4743,16 +4745,16 @@ fn module_target(
 impl TsSource {
     /// The name-match target of one callee (the NameResolve leg). Pub so the
     /// scip ratchet re-runs it to classify overrides — same discipline as
-    /// `type_edge_candidates`. Same-file wins via the span-join;
-    /// Cross-file a unique corpus blob supplies the heuristic fallback;
-    /// standard global names remain external without a lexical binding.
+    /// `type_edge_candidates`. Same-file wins via the span-join; cross-file a unique
+    /// corpus blob is the heuristic, never for a global TypeScript's lib declares.
     pub fn call_name_match(
         output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
         own: Option<&ContentId>,
+        globals: Option<&HashSet<String>>,
     ) -> Option<(ContentId, Span)> {
-        Self::call_name_match_in(output, index, callee, own, &Self::nested_callables(output))
+        Self::call_name_match_in(output, index, callee, own, &Self::nested_callables(output), globals)
     }
 
     /// Free defs inside another named, non-module def: these need a lexical
@@ -4766,8 +4768,10 @@ impl TsSource {
         let mut open: Vec<(Span, bool)> = Vec::new();
         let mut nested = HashSet::new();
         for node in order {
+            let _visit = tracing::trace_span!("ts.nested_callables.visit").entered();
             while open.last().is_some_and(|(span, _)| span.end() < node.span.end()) {
                 open.pop();
+                let _pop = tracing::trace_span!("ts.nested_callables.pop").entered();
             }
             if node.kind == CallKind::Free
                 && node.name.is_some()
@@ -4789,6 +4793,7 @@ impl TsSource {
         callee: &str,
         own: Option<&ContentId>,
         nested: &HashSet<Span>,
+        globals: Option<&HashSet<String>>,
     ) -> Option<(ContentId, Span)> {
         let sites: Vec<&DefSite> = corpus_defs(index, callee).iter()
             .filter(|site| own != Some(&site.blob) || !nested.contains(&site.span))
@@ -4808,7 +4813,8 @@ impl TsSource {
                 }
             }
         }
-        if BUILTIN_GLOBALS.contains(&callee) {
+        // Without the lib declarations a global and a corpus lookalike are one spelling.
+        if globals.map_or(true, |globals| globals.contains(callee)) {
             return None;
         }
         unique_blob(sites.into_iter(), FamilyTag::Call)
@@ -5005,22 +5011,6 @@ const BUILTIN_MEMBERS: &[&str] = &[
     "valueOf",
 ];
 
-/// Global runtime names excluded from the corpus spelling heuristic. Local
-/// declarations and imports still bind through their own resolution legs.
-const BUILTIN_GLOBALS: &[&str] = &[
-    "Array", "ArrayBuffer", "BigInt", "Boolean", "Date", "Error", "EvalError",
-    "Function", "Map", "Number", "Object", "Promise", "Proxy", "RangeError",
-    "ReferenceError", "RegExp", "Set", "String", "Symbol", "SyntaxError",
-    "TypeError", "URIError", "WeakMap", "WeakRef", "WeakSet", "URL",
-    "URLSearchParams", "AbortController", "AbortSignal", "Blob", "Event",
-    "EventTarget", "File", "FormData", "Headers", "Request", "Response",
-    "WebSocket", "Worker", "atob", "btoa", "cancelAnimationFrame",
-    "clearInterval", "clearTimeout", "decodeURI", "decodeURIComponent",
-    "encodeURI", "encodeURIComponent", "eval", "fetch", "isFinite", "isNaN",
-    "parseFloat", "parseInt", "queueMicrotask", "requestAnimationFrame",
-    "setInterval", "setTimeout", "structuredClone",
-];
-
 /// Whether the name match at `target` is a receiver-blind mismatch: a member
 /// call whose receiver names no scope this file can see, spelling a builtin
 /// member name, bound to something that is not a class member.
@@ -5108,6 +5098,9 @@ impl Resolve<CallF> for TsSource {
             .as_ref()
             .and_then(|blob| ts_receivers::facts_of(blob, paths));
         let nested = Self::nested_callables(output);
+        let globals = cx.indexes.ts_globals
+            .get_or_init(|| crate::read::lang::ts_lib::globals(source_path.as_deref().map(std::path::Path::new)))
+            .as_ref();
         let recv_map: HashMap<(u32, u32), &ts_receivers::TypeBinding> = own_facts
             .as_ref()
             .map(|facts| {
@@ -5266,7 +5259,7 @@ impl Resolve<CallF> for TsSource {
                 }) {
                     return None;
                 }
-                Self::call_name_match_in(output, def_index, callee, own.as_ref(), &nested)
+                Self::call_name_match_in(output, def_index, callee, own.as_ref(), &nested, globals)
                     .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                     .map(|(blob, span)| {
                         let origin = if own.as_ref() == Some(&blob) {
@@ -5440,7 +5433,7 @@ impl Resolve<CallF> for TsSource {
                 if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
                     return None;
                 }
-                Self::call_name_match_in(output, def_index, named, own.as_ref(), &nested).map(|(blob, span)| {
+                Self::call_name_match_in(output, def_index, named, own.as_ref(), &nested, globals).map(|(blob, span)| {
                     let origin = if own.as_ref() == Some(&blob) {
                         ResolutionOrigin::SameFile
                     } else {

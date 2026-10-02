@@ -179,7 +179,7 @@ fn the_resolver_crosses_threads() {
 }
 
 /// Workspace manifests resolve without node_modules links or built dist files.
-/// A declaration map wins over paths; paths win over the src convention.
+/// A declaration map wins over paths; paths win over the tsconfig outDir -> rootDir map.
 #[test]
 fn workspace_exports_resolve_to_sources_in_rung_order() {
     let root = stage("workspace-exports");
@@ -215,6 +215,16 @@ fn workspace_exports_resolve_to_sources_in_rung_order() {
         .unwrap();
     }
     std::fs::write(
+        package.join("tsconfig.json"),
+        r#"{"compilerOptions":{"rootDir":"./src","outDir":"./dist"}}"#,
+    )
+    .unwrap();
+    // No tsconfig declares where this package builds from: its export abstains.
+    let bare = root.join("packages/bare");
+    std::fs::create_dir_all(bare.join("src")).unwrap();
+    std::fs::write(bare.join("package.json"), r#"{"name":"@fixture/bare","exports":{".":{"types":"./dist/index.d.ts"}}}"#).unwrap();
+    std::fs::write(bare.join("src/index.ts"), "export const value = 1;\n").unwrap();
+    std::fs::write(
         package.join("dist/mapped.d.ts"),
         "export declare const value: number;\n",
     )
@@ -240,6 +250,7 @@ fn workspace_exports_resolve_to_sources_in_rung_order() {
         "@fixture/lib/aliased",
         "@fixture/lib/wild/leaf",
         "@fixture/lib/blocked",
+        "@fixture/bare",
     ]
     .into_iter()
     .map(|module| {
@@ -256,7 +267,7 @@ fn workspace_exports_resolve_to_sources_in_rung_order() {
         vec![
             (
                 "@fixture/lib",
-                Some(("packages/lib/src/index.ts".to_string(), "src_convention"))
+                Some(("packages/lib/src/index.ts".to_string(), "out_dir_map"))
             ),
             (
                 "@fixture/lib/mapped",
@@ -268,9 +279,10 @@ fn workspace_exports_resolve_to_sources_in_rung_order() {
             ),
             (
                 "@fixture/lib/wild/leaf",
-                Some(("packages/lib/src/leaf.ts".to_string(), "src_convention"))
+                Some(("packages/lib/src/leaf.ts".to_string(), "out_dir_map"))
             ),
             ("@fixture/lib/blocked", None),
+            ("@fixture/bare", None),
         ]
     );
     std::fs::remove_dir_all(root).unwrap();

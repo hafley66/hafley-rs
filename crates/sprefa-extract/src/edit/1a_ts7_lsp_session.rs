@@ -110,21 +110,14 @@ pub(super) struct Ts7Lsp {
 
 impl Ts7Lsp {
     fn open(root: &Path) -> Result<Self, String> {
-        let bundled = Path::new(env!("CARGO_MANIFEST_DIR")).join("ts7/node_modules/typescript/bin/tsc");
-        let tsc = if bundled.is_file() {
-            bundled
-        } else {
-            root.ancestors()
-                .map(|root| root.join("node_modules/typescript/bin/tsc"))
-                .find(|path| path.is_file())
-                .unwrap_or(bundled)
-        };
-        if !tsc.is_file() {
+        // The fast tier reads its lib globals from this same install.
+        let Some(package) = crate::lang::ts_lib::typescript_package(Some(root)) else {
             return Err(format!(
                 "TypeScript LSP executable missing: {}",
-                tsc.display()
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("ts7/node_modules/typescript/bin/tsc").display()
             ));
-        }
+        };
+        let tsc = package.join("bin/tsc");
         let mut child = Command::new(&tsc)
             .args(["--lsp", "--stdio"])
             .current_dir(root)
