@@ -327,7 +327,7 @@ pub fn resolve_project_with_raw<E>(
     let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input, content| {
         push_input_raw(input, content, push_raw)
     })?;
-    resolve_pushed(request, inputs, None)
+    resolve_pushed(request, inputs, Some(request.paths))
 }
 
 /// Stream the call and type rows used by a targeted resolve, leaving out the
