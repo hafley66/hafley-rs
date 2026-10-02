@@ -27,7 +27,7 @@ use sprefa_extract::edit_seams::CleavePlan;
 use sprefa_extract::edit_seams::CleaveSpecifier;
 use sprefa_extract::move_stage::{
     content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit,
-    state_root, Mirror, VerifyJournal,
+    state_root_for, Mirror, VerifyJournal,
 };
 use sprefa_extract::{
     cleave_for, directory_path, directory_source, dispatch, flatten_each, replace_action,
@@ -67,7 +67,7 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
         return run_list(&cli, list);
     }
     let plan = Plan::build(&cli)?;
-    let state = state_root(cli.state.as_deref())?;
+    let state = state_root_for(cli.state.as_deref(), &[plan.root.as_path()])?;
 
     crate::outln!("root {}", plan.root.display());
     crate::outln!(
@@ -166,7 +166,7 @@ fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
     let rows = read_cleave_list(list)?;
     let (first, _) = split_target(&rows[0].0)?;
     let root = plan_root(cli.root.as_ref(), &first)?;
-    let state = state_root(cli.state.as_deref())?;
+    let state = state_root_for(cli.state.as_deref(), &[root.as_path()])?;
     let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
     let mut imports = Imports::read(&cx, &root)?;
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();

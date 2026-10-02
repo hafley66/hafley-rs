@@ -9,7 +9,7 @@ use std::path::{Path, PathBuf};
 
 use sprefa_extract::move_stage::{
     content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit,
-    state_root, Mirror, VerifyJournal,
+    state_root_for, Mirror, VerifyJournal,
 };
 use sprefa_extract::{
     directory_path, directory_source, dirname, drain::source_rel, normalize, rehome_for, rehomes,
@@ -32,7 +32,8 @@ pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
         return Err("--verify needs --commit".to_string().into());
     }
     let plan = plan_of(&cli)?;
-    let state = state_root(cli.state.as_deref())?;
+    let roots: Vec<_> = plan.iter().map(|plan| plan.root.as_path()).collect();
+    let state = state_root_for(cli.state.as_deref(), &roots)?;
     let multi = plan.len() > 1;
     let prefix = |plan: &Plan| root_prefix(multi, &plan.root);
     let mut swept_per_root: Vec<Vec<String>> = Vec::with_capacity(plan.len());
