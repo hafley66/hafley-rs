@@ -479,8 +479,8 @@ enum Arm<'a> {
 impl Arm<'_> {
     fn name(&self) -> &str {
         match self {
-            Arm::Callers(name)
-            | Arm::Uses(name)
+            Arm::Callers(name) => name.rsplit_once('#').map_or(name, |(_, name)| name),
+            Arm::Uses(name)
             | Arm::From(name)
             | Arm::CallPath(name)
             | Arm::TypePath(name)
@@ -513,7 +513,25 @@ impl Arm<'_> {
         lines: &mut Lines,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
         match self {
-            Arm::Callers(name) => edges(connection, CALLERS_SQL, name, lines),
+            Arm::Callers(anchor) => {
+                let (path, name) = match anchor.split_once('#') {
+                    Some((path, name)) => (Some(path), name),
+                    None => (None, *anchor),
+                };
+                let mut rows = edges(connection, CALLERS_SQL, name, lines)?;
+                if let Some(path) = path {
+                    let target = fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
+                    rows.retain(|row| {
+                        let FlatFact::GraphEdge { to_path, .. } = row else {
+                            return false;
+                        };
+                        let candidate = fs::canonicalize(to_path)
+                            .unwrap_or_else(|_| PathBuf::from(to_path));
+                        candidate == target
+                    });
+                }
+                Ok(rows)
+            }
             Arm::Uses(name) => {
                 let mut rows = edges(connection, USES_SQL, name, lines)?;
                 let table_exists: bool = connection.query_row(
@@ -678,6 +696,17 @@ pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(anchor) = cli.callers.as_deref() {
+        match anchor.split_once('#') {
+            Some((path, name)) if path.is_empty() || name.is_empty() || name.contains('#') => {
+                return Err("--callers requires NAME or FILE#NAME".into());
+            }
+            None if anchor.contains('.') => {
+                return Err("--callers Class.method is unsupported; use FILE#method".into());
+            }
+            _ => {}
+        }
+    }
     #[cfg(feature = "graph")]
     if let Some(seed) = cli.slice.as_deref() {
         emit_rows(&slice_at(seed)?, output)?;
