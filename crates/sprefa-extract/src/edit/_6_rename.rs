@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 
 use sprefa_extract::edit_seams::RenameAbstain;
 use sprefa_extract::move_stage::{
-    content_id, print_previews_with as print_previews, stage_and_commit, state_root, Mirror,
+    content_id, print_previews_with as print_previews, stage_and_commit, state_root_for, Mirror,
 };
 use sprefa_extract::{
     directory_source, rename_for, renames, replace_action, RenameCx, RenameRequest, RenameStop,
@@ -63,7 +63,7 @@ fn stop_error(stop: RenameStop) -> RenameError {
 
 pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
     let plan = Plan::build(&cli)?;
-    let state = state_root(cli.state.as_deref()).map_err(plan_error)?;
+    let state = state_root_for(cli.state.as_deref(), &[plan.root.as_path()]).map_err(plan_error)?;
 
     crate::outln!("root {}", plan.root.display());
     for (request, refs) in plan.cx.batch().iter().zip(&plan.refs) {

@@ -11,19 +11,48 @@ use crate::drain::{bind_action, directory_path, directory_source, source_rel};
 
 /// `--state` as asked, else `$HOME/.agent/soopy-state`.
 pub fn state_root(requested: Option<&Path>) -> Result<PathBuf, String> {
-    let root = match requested {
+    let root = requested_state_root(requested)?;
+    let root = hafley_scm::read::io_path(&root);
+    std::fs::create_dir_all(&root)
+        .map_err(|error| format!("create state root {}: {error}", root.display()))?;
+    root.canonicalize()
+        .map_err(|error| format!("canonicalize state root {}: {error}", root.display()))
+}
+
+fn requested_state_root(requested: Option<&Path>) -> Result<PathBuf, String> {
+    Ok(match requested {
         Some(path) => path.to_path_buf(),
         None => {
             let home = std::env::var_os("HOME")
                 .ok_or_else(|| "HOME is unset and --state was not supplied".to_string())?;
             PathBuf::from(home).join(".agent").join("soopy-state")
         }
+    })
+}
+
+pub fn state_root_for(requested: Option<&Path>, targets: &[&Path]) -> Result<PathBuf, String> {
+    let candidate = requested_state_root(requested)?;
+    let candidate = hafley_scm::read::io_path(&candidate);
+    let candidate = if candidate.is_absolute() { candidate } else {
+        std::env::current_dir().map_err(|error| format!("read cwd: {error}"))?.join(candidate)
     };
-    let root = hafley_scm::read::io_path(&root);
-    std::fs::create_dir_all(&root)
-        .map_err(|error| format!("create state root {}: {error}", root.display()))?;
-    root.canonicalize()
-        .map_err(|error| format!("canonicalize state root {}: {error}", root.display()))
+    let mut ancestor = candidate.as_path();
+    let mut suffix = Vec::new();
+    while !ancestor.exists() {
+        suffix.push(ancestor.file_name().ok_or_else(|| format!("invalid state root {}", candidate.display()))?.to_os_string());
+        ancestor = ancestor.parent().ok_or_else(|| format!("invalid state root {}", candidate.display()))?;
+    }
+    let mut resolved = ancestor.canonicalize().map_err(|error| format!("canonicalize state root {}: {error}", candidate.display()))?;
+    for component in suffix.into_iter().rev() {
+        resolved.push(component);
+    }
+    for target in targets {
+        let target = hafley_scm::read::io_path(target).canonicalize().map_err(|error| format!("canonicalize target root {}: {error}", target.display()))?;
+        if resolved.starts_with(&target) {
+            return Err("commit state root must be outside target root (applies to dry run and commit)".to_string());
+        }
+    }
+    state_root(Some(&resolved))
 }
 
 fn stage_into<S: soopy::StageStore>(
@@ -119,6 +148,7 @@ pub struct VerifyJournal {
     moves: Vec<(String, String)>,
     shims: Vec<String>,
     existing: BTreeMap<String, Vec<u8>>,
+    new_directories: Vec<PathBuf>,
 }
 
 impl VerifyJournal {
@@ -148,10 +178,24 @@ impl VerifyJournal {
             let bytes = std::fs::read(&path).map_err(|error| format!("read {rel}: {error}"))?;
             existing.insert(rel.clone(), bytes);
         }
+        let mut new_directories = BTreeSet::new();
+        for rel in moves.iter().map(|(_, new)| new).chain(shims.iter()) {
+            let mut parent = Path::new(rel).parent();
+            while let Some(directory) = parent.filter(|directory| !directory.as_os_str().is_empty()) {
+                if root.join(directory).exists() {
+                    break;
+                }
+                new_directories.insert(directory.to_path_buf());
+                parent = directory.parent();
+            }
+        }
+        let mut new_directories: Vec<_> = new_directories.into_iter().collect();
+        new_directories.sort_by(|left, right| right.components().count().cmp(&left.components().count()).then(left.cmp(right)));
         Ok(Self {
             moves: moves.to_vec(),
             shims: shims.to_vec(),
             existing,
+            new_directories,
         })
     }
 
@@ -230,6 +274,13 @@ impl VerifyJournal {
         }
         for stage in &undo {
             stage_and_commit(root, state, stage, soopy::Durability::Durable)?;
+        }
+        for directory in &self.new_directories {
+            match std::fs::remove_dir(root.join(directory)) {
+                Ok(()) => {}
+                Err(error) if matches!(error.kind(), std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty) => {}
+                Err(error) => return Err(format!("remove rollback directory {}: {error}", directory.display())),
+            }
         }
         Ok(self.existing.len())
     }
