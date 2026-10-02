@@ -455,7 +455,7 @@ ORDER BY dict_model.value",
     /// Write one rate row, replacing whatever was there.
     pub fn price_set(&self, price: &ModelPrice) -> Result<()> {
         let model_id = self.intern_public("dict_model", price.model)?;
-        let source_id = crate::closed_sets::value("dict_price_source", price.source)?;
+        let source_id = price.source;
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|d| d.as_millis() as i64)

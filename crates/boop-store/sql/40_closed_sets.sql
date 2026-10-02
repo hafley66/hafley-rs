@@ -50,7 +50,7 @@ ALTER TABLE agent_session_attr_v40 RENAME TO agent_session_attr;
 CREATE TABLE agent_edge_v40 (
   parent_session_id INTEGER NOT NULL,
   child_session_id INTEGER NOT NULL,
-  edge_kind TEXT NOT NULL CHECK (edge_kind IN ('spawned','result','deliver-nextturn','hail','deliver-midturn','completed','completion-mailed','completion-delivered','cancel')),
+  edge_kind TEXT NOT NULL CHECK (edge_kind IN ('spawned','result','deliver-nextturn','hail','deliver-midturn','completed','completion-mailed','completion-delivered','cancel','retry','resume')),
   agent_type_id INTEGER,
   model_id INTEGER,
   first_ts INTEGER,
@@ -90,7 +90,7 @@ CREATE TABLE agent_turn_v40 (
   session_id INTEGER NOT NULL,
   turn INTEGER NOT NULL,
   ts INTEGER,
-  role TEXT NOT NULL CHECK (role IN ('user','assistant','tool','system','developer','meta')),
+  role TEXT NOT NULL,
   said TEXT,
   cwd_id INTEGER,
   source_class TEXT NOT NULL DEFAULT 'unknown',
@@ -110,8 +110,8 @@ CREATE TABLE agent_touch_v40 (
   turn INTEGER NOT NULL,
   ts INTEGER,
   path_id INTEGER NOT NULL,
-  verb TEXT NOT NULL CHECK (verb IN ('read','Read','edit','Edit','write','Write','grep','Grep','glob','Glob')),
-  raw_verb TEXT CHECK (raw_verb IN ('read','Read','edit','Edit','write','Write','grep','Grep','glob','Glob')),
+  verb TEXT NOT NULL CHECK (verb IN ('read','Read','edit','Edit','write','Write','grep','Grep','glob','Glob','list','multiedit')),
+  raw_verb TEXT,
   PRIMARY KEY (session_id, turn, path_id, verb)
 ) WITHOUT ROWID;
 
@@ -129,7 +129,7 @@ CREATE TABLE agent_session_relation_v40 (
   from_session INTEGER NOT NULL REFERENCES dict_session(id),
   to_session INTEGER NOT NULL REFERENCES dict_session(id),
   kind TEXT NOT NULL CHECK (kind IN ('continued-in','same-process','parent-child','same-pane','same-tui')),
-  source TEXT NOT NULL CHECK (source IN ('legacy-agent-trace-span','trace-event','transcript-sync','trace-attach','live-status','transcript-session-metadata')),
+  source TEXT NOT NULL CHECK (source IN ('legacy-agent-trace-span','trace-event','transcript-sync','trace-attach','live-status','transcript-session-metadata','claude-transcript')),
   observed_ts INTEGER NOT NULL,
   matched_identity_key TEXT
 );
@@ -158,7 +158,7 @@ CREATE TABLE agent_session_observation_v40 (
   parent_pid INTEGER,
   pane_id INTEGER REFERENCES dict_pane(id),
   tui_session_id INTEGER REFERENCES dict_tui_session(id),
-  source TEXT NOT NULL CHECK (source IN ('legacy-agent-trace-span','trace-event','transcript-sync','trace-attach','live-status','transcript-session-metadata'))
+  source TEXT NOT NULL CHECK (source IN ('legacy-agent-trace-span','trace-event','transcript-sync','trace-attach','live-status','transcript-session-metadata','claude-transcript'))
 );
 
 INSERT INTO agent_session_observation_v40 SELECT old.observation_id, old.observation_key, old.session_id, old.observed_ts, (SELECT value FROM dict_harness WHERE id = old.harness_id), old.cwd_id, old.pid, old.parent_pid, old.pane_id, old.tui_session_id, (SELECT value FROM dict_observation_source WHERE id = old.source_id) FROM agent_session_observation old;
@@ -180,7 +180,7 @@ CREATE TABLE model_price_v40 (
   cache_write_5m_per_mtok REAL NOT NULL,
   cache_write_1h_per_mtok REAL NOT NULL,
   cache_read_per_mtok REAL NOT NULL,
-  source TEXT NOT NULL CHECK (source IN ('litellm','openrouter')),
+  source TEXT NOT NULL,
   fetched_ts INTEGER NOT NULL
 );
 
@@ -198,11 +198,11 @@ CREATE TABLE agent_trace_event_v40 (
   session_id INTEGER REFERENCES dict_session(id),
   from_lane_id INTEGER REFERENCES dict_session(id),
   to_lane_id INTEGER REFERENCES dict_session(id),
-  kind TEXT NOT NULL CHECK (kind IN ('supervisor-start','channel-open','turn-start','error','supervisor-exit','turn-finish','delivery','idle-shutdown','cli-invocation','harness-quiet','harness-active','session-boundary')),
+  kind TEXT NOT NULL CHECK (kind IN ('supervisor-start','channel-open','turn-start','error','supervisor-exit','turn-finish','delivery','idle-shutdown','cli-invocation','harness-quiet','harness-active','session-boundary','resource-sample','resource-interrupt','resource-pause','resource-resume','parent-death','stale')),
   started_ts INTEGER,
   finished_ts INTEGER,
   delivery_state TEXT CHECK (delivery_state IN ('midturn','nextturn','started','ok','version','help','parse-error','error')),
-  classification TEXT CHECK (classification IN ('starting','opened','started','failed','completed','retryable','delivered','queued','retired','quiet','active','same-process')),
+  classification TEXT CHECK (classification IN ('starting','opened','started','failed','completed','retryable','delivered','queued','retired','quiet','active','same-process','over-limit','within-limit','accepted','paused','resumed','stale')),
   detail TEXT NOT NULL DEFAULT '',
   created_ts INTEGER NOT NULL
 );
@@ -336,7 +336,7 @@ CREATE INDEX IF NOT EXISTS idx_delivery_transition_route
   ON agent_delivery_transition(message_id, route);
 
 CREATE TABLE sync_root_stamp_v40 (
-  harness TEXT NOT NULL CHECK (harness IN ('claude','codex','kimi','opencode','gemini','omp')),
+  harness TEXT NOT NULL,
   root_path_id INTEGER NOT NULL,
   mtime_ms INTEGER NOT NULL,
   PRIMARY KEY (harness, root_path_id)

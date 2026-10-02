@@ -1,6 +1,6 @@
    Compiling boop-store v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-store)
+   Compiling boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop)
    Compiling boop-acp v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-acp)
    Compiling boop-harness v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-harness)
    Compiling boop-proc v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-proc)
-   Compiling boop v0.0.10 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop)
-    Finished `dev` profile [optimized + debuginfo] target(s) in 32.73s
+    Finished `dev` profile [optimized + debuginfo] target(s) in 29.66s

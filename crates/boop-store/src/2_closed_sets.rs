@@ -49,6 +49,8 @@ pub(crate) const REFERENCES: &[(&str, &str, &str)] = &[
     ("sync_root_stamp", "harness_id", "dict_harness"),
 ];
 
+// Validates only closed columns. Open role, raw tool, price source and legacy
+// root-stamp columns bypass this helper; known labels remain for fixtures.
 pub fn value(domain: &str, value: &str) -> Result<&'static str> {
     let allowed: &'static [&'static str] = match domain {
         "dict_attr_key" => &[
@@ -67,6 +69,7 @@ pub fn value(domain: &str, value: &str) -> Result<&'static str> {
             "trace-attach",
             "live-status",
             "transcript-session-metadata",
+            "claude-transcript",
         ],
         "dict_role" => &["user", "assistant", "tool", "system", "developer", "meta"],
         "dict_session_relation_kind" => &[
@@ -96,6 +99,8 @@ pub fn value(domain: &str, value: &str) -> Result<&'static str> {
             "completion-mailed",
             "completion-delivered",
             "cancel",
+            "retry",
+            "resume",
         ],
         "dict_netkind" => &["fetch", "search"],
         "dict_trace_classification" => &[
@@ -111,6 +116,12 @@ pub fn value(domain: &str, value: &str) -> Result<&'static str> {
             "quiet",
             "active",
             "same-process",
+            "over-limit",
+            "within-limit",
+            "accepted",
+            "paused",
+            "resumed",
+            "stale",
         ],
         "dict_trace_delivery" => &[
             "midturn",
@@ -135,9 +146,26 @@ pub fn value(domain: &str, value: &str) -> Result<&'static str> {
             "harness-quiet",
             "harness-active",
             "session-boundary",
+            "resource-sample",
+            "resource-interrupt",
+            "resource-pause",
+            "resource-resume",
+            "parent-death",
+            "stale",
         ],
         "dict_verb" => &[
-            "read", "Read", "edit", "Edit", "write", "Write", "grep", "Grep", "glob", "Glob",
+            "read",
+            "Read",
+            "edit",
+            "Edit",
+            "write",
+            "Write",
+            "grep",
+            "Grep",
+            "glob",
+            "Glob",
+            "list",
+            "multiedit",
         ],
         _ => anyhow::bail!("unknown enum domain {domain}"),
     };

@@ -27,8 +27,16 @@ fn enum_checks_and_open_dictionaries_survive_reopen_and_rebuild() {
             sql.contains(&format!("{column} TEXT")),
             "{table}.{column}: {sql}"
         );
-        assert!(
+        let closed = !matches!(
+            (table, column),
+            ("agent_touch", "raw_verb")
+                | ("agent_turn", "role")
+                | ("model_price", "source")
+                | ("sync_root_stamp", "harness")
+        );
+        assert_eq!(
             sql.contains(&format!("CHECK ({column} IN (")),
+            closed,
             "{table}.{column}: {sql}"
         );
         let remaining: i64 = store
@@ -45,7 +53,7 @@ fn enum_checks_and_open_dictionaries_survive_reopen_and_rebuild() {
     assert!(store
         .connection()
         .execute(
-            "INSERT INTO agent_turn(session_id,turn,role) VALUES (1,2,'unknown-role')",
+            "INSERT INTO agent_touch(session_id,turn,path_id,verb) VALUES (1,2,1,'unknown-verb')",
             []
         )
         .is_err());
@@ -88,12 +96,12 @@ fn failed_migration_rolls_back_nullable_orphans_and_invalid_values() {
         ),
         (
             "unknown",
-            "UPDATE dict_role SET value='unknown-role' WHERE value='assistant'",
+            "UPDATE dict_netkind SET value='unknown-kind' WHERE value='fetch'",
         ),
     ] {
         let path = database(label);
         let store = Store::open(path.clone()).unwrap();
-        store.connection().execute_batch("INSERT INTO dict_session(value) VALUES ('enum-test'); INSERT INTO agent_turn(session_id,turn,role) VALUES (1,1,'assistant'); INSERT INTO agent_session_observation(observation_key,session_id,observed_ts,harness,source) VALUES ('observation',1,10,'codex','trace-event');").unwrap();
+        store.connection().execute_batch("INSERT INTO dict_session(value) VALUES ('enum-test'); INSERT INTO agent_turn(session_id,turn,role) VALUES (1,1,'assistant'); INSERT INTO agent_session_observation(observation_key,session_id,observed_ts,harness,source) VALUES ('observation',1,10,'codex','trace-event'); INSERT INTO agent_fetch(session_id,turn,kind) VALUES (1,1,'fetch');").unwrap();
         crate::legacy_tests::restore(store.connection());
         store
             .connection()
@@ -117,6 +125,94 @@ fn failed_migration_rolls_back_nullable_orphans_and_invalid_values() {
         drop(raw);
         std::fs::remove_file(path).unwrap();
     }
+}
+
+#[test]
+fn open_harness_values_survive_writes_migration_and_rebuild() {
+    let path = database("open-inputs");
+    let store = Store::open(path.clone()).unwrap();
+    store
+        .write_tool_fact(
+            "external",
+            1,
+            10,
+            "MultiEdit",
+            Some(&serde_json::json!({"file_path": "/work/file.rs"})),
+        )
+        .unwrap();
+    store
+        .write_turn("external", 1, 10, "future-harness-role", "text", None)
+        .unwrap();
+    store.connection().execute_batch("INSERT INTO agent_session(session_id,harness) SELECT id,'codex' FROM dict_session WHERE value='external'").unwrap();
+    store
+        .price_set(&crate::usage::ModelPrice {
+            model: "external-model",
+            source: "custom-price-provider",
+            input_per_mtok: 1.0,
+            output_per_mtok: 2.0,
+            cache_write_5m_per_mtok: 0.0,
+            cache_write_1h_per_mtok: 0.0,
+            cache_read_per_mtok: 0.0,
+        })
+        .unwrap();
+    store.connection().execute_batch("INSERT INTO sync_root_stamp(harness,root_path_id,mtime_ms) VALUES ('legacy-external-harness',1,10)").unwrap();
+    crate::legacy_tests::restore(store.connection());
+    store
+        .connection()
+        .execute_batch("PRAGMA user_version=39")
+        .unwrap();
+    drop(store);
+    let store = Store::open(path.clone()).unwrap();
+    let touch: (String, String) = store
+        .connection()
+        .query_row("SELECT verb,raw_verb FROM agent_touch", [], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })
+        .unwrap();
+    assert_eq!(touch, ("multiedit".into(), "MultiEdit".into()));
+    assert_eq!(
+        store.turn_rows(&Default::default()).unwrap()[0].role,
+        "future-harness-role"
+    );
+    assert_eq!(
+        store
+            .connection()
+            .query_row("SELECT source FROM model_price", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "custom-price-provider"
+    );
+    assert_eq!(
+        store
+            .connection()
+            .query_row("SELECT harness FROM sync_root_stamp", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "legacy-external-harness"
+    );
+    store.rebuild().unwrap();
+    store
+        .write_tool_fact(
+            "external",
+            1,
+            10,
+            "MultiEdit",
+            Some(&serde_json::json!({"file_path": "/work/file.rs"})),
+        )
+        .unwrap();
+    store
+        .write_turn("external", 1, 10, "future-harness-role", "text", None)
+        .unwrap();
+    assert_eq!(
+        store
+            .connection()
+            .query_row("SELECT raw_verb FROM agent_touch", [], |row| row
+                .get::<_, String>(0))
+            .unwrap(),
+        "MultiEdit"
+    );
+    drop(store);
+    std::fs::remove_file(path).unwrap();
 }
 
 /// Explicit scratch-only stage 39 driver used by plans/dict-closed-sets/0_rehearse.sh.

@@ -1,0 +1,28 @@
+column	producer_file_line	closed	value_source
+agent_trace_span.attach	crates/boop-proc/src/supervise.rs:2976	yes	Internal attachment rule literals; legacy rule labels retained
+agent_session_attr.key	crates/boop/src/cli/control.rs:248	yes	Internal attribute key literals; attribute values remain open
+agent_edge.edge_kind	crates/boop/src/cli/mail.rs:995	yes	Control-edge match admits hail result retry resume cancel
+agent_fetch.kind	crates/boop-store/src/ident.rs:1844	yes	Dedicated fetch/search writers bind literals
+agent_turn.role	crates/boop-harness/src/harness/opencode.rs:1258	no	Harness JSON role is copied without a finite role match
+agent_touch.verb	crates/boop-store/src/ident.rs:4692	yes	Lowercase tool name passes a finite match before insertion
+agent_touch.raw_verb	crates/boop-harness/src/harness/claude.rs:1113	no	Original external tool name; MultiEdit and future names are accepted
+agent_session_relation.kind	crates/boop-store/src/0_trace_identity.rs:38	yes	SessionRelationKind enum as_str match
+agent_session_relation.source	crates/boop-harness/src/harness/claude.rs:353	yes	Internal relation provenance literal; transcript-sync adds another literal
+agent_session_observation.harness	crates/boop-store/src/ident.rs:4182	yes	SessionRef HarnessId as_str; other current observation writers supply None
+agent_session_observation.source	crates/boop-store/src/ident.rs:4188	yes	Internal observation provenance literals
+model_price.source	crates/boop/src/main.rs:2098	no	Unrestricted CLI source String is forwarded to price_set
+agent_trace_event.kind	crates/boop-proc/src/supervise.rs:1379	yes	Recorder callers bind internal event kind literals
+agent_trace_event.delivery_state	crates/boop-acp/src/channel.rs:59	yes	Delivery enum as_str plus CLI outcome matches
+agent_trace_event.classification	crates/boop-proc/src/supervise.rs:1754	yes	Internal branch results and classification literals
+agent_live.status	crates/boop-store/src/ident.rs:4204	yes	Process/pane state branches emit internal status literals
+agent_live_span.status	crates/boop-store/src/ident.rs:4204	yes	Same normalized observation as agent_live
+agent_session.harness	crates/boop-store/src/ident.rs:2095	yes	SessionRef HarnessId as_str
+agent_lane.harness	crates/boop/src/cli/job.rs:1518	yes	Parsed HarnessId as_str is passed to lane-purpose writer
+agent_delivery.harness	crates/boop-store/src/ident.rs:3629	yes	Writer parameter is Option<HarnessId>
+agent_delivery_transition.harness	crates/boop-store/src/ident.rs:3629	yes	Writer parameter is Option<HarnessId>
+sync_root_stamp.harness	crates/boop-store/src/ident.rs:5618	no	Historical DDL only; no current writer proves a finite source
+agent_commit_subscription.mode	crates/boop/src/cli/subscribe.rs:22	yes	Boundary match admits door and mailbox
+agent_favorite.source_kind	crates/boop-store/src/1_user_slice.rs:25	yes	FavoriteSourceKind enum as_str match
+agent_mood.name	crates/boop-store/src/ident.rs:109	yes	Three static mood seeds and MoodName enum
+agent_route_selection.selected	crates/boop/src/cli/selection.rs:34	yes	Boolean input encoded as zero or one
+agent_reminder.every_ms	crates/boop-store/src/1_reminder.rs:48	no	Typed integer interval; positive range CHECK retained

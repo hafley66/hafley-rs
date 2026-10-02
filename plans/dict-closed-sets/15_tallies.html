@@ -62,6 +62,35 @@
 <tr><td>dict_trace_kind</td><td>12</td></tr>
 <tr><td>dict_verb</td><td>10</td></tr>
 </tbody></table>
+<h2>18_check_audit.tsv</h2><table class="tallies"><thead><tr><th>column</th><th>producer_file_line</th><th>closed</th><th>value_source</th></tr></thead><tbody>
+<tr><td>agent_trace_span.attach</td><td>crates/boop-proc/src/supervise.rs:2976</td><td>yes</td><td>Internal attachment rule literals; legacy rule labels retained</td></tr>
+<tr><td>agent_session_attr.key</td><td>crates/boop/src/cli/control.rs:248</td><td>yes</td><td>Internal attribute key literals; attribute values remain open</td></tr>
+<tr><td>agent_edge.edge_kind</td><td>crates/boop/src/cli/mail.rs:995</td><td>yes</td><td>Control-edge match admits hail result retry resume cancel</td></tr>
+<tr><td>agent_fetch.kind</td><td>crates/boop-store/src/ident.rs:1844</td><td>yes</td><td>Dedicated fetch/search writers bind literals</td></tr>
+<tr><td>agent_turn.role</td><td>crates/boop-harness/src/harness/opencode.rs:1258</td><td>no</td><td>Harness JSON role is copied without a finite role match</td></tr>
+<tr><td>agent_touch.verb</td><td>crates/boop-store/src/ident.rs:4692</td><td>yes</td><td>Lowercase tool name passes a finite match before insertion</td></tr>
+<tr><td>agent_touch.raw_verb</td><td>crates/boop-harness/src/harness/claude.rs:1113</td><td>no</td><td>Original external tool name; MultiEdit and future names are accepted</td></tr>
+<tr><td>agent_session_relation.kind</td><td>crates/boop-store/src/0_trace_identity.rs:38</td><td>yes</td><td>SessionRelationKind enum as_str match</td></tr>
+<tr><td>agent_session_relation.source</td><td>crates/boop-harness/src/harness/claude.rs:353</td><td>yes</td><td>Internal relation provenance literal; transcript-sync adds another literal</td></tr>
+<tr><td>agent_session_observation.harness</td><td>crates/boop-store/src/ident.rs:4182</td><td>yes</td><td>SessionRef HarnessId as_str; other current observation writers supply None</td></tr>
+<tr><td>agent_session_observation.source</td><td>crates/boop-store/src/ident.rs:4188</td><td>yes</td><td>Internal observation provenance literals</td></tr>
+<tr><td>model_price.source</td><td>crates/boop/src/main.rs:2098</td><td>no</td><td>Unrestricted CLI source String is forwarded to price_set</td></tr>
+<tr><td>agent_trace_event.kind</td><td>crates/boop-proc/src/supervise.rs:1379</td><td>yes</td><td>Recorder callers bind internal event kind literals</td></tr>
+<tr><td>agent_trace_event.delivery_state</td><td>crates/boop-acp/src/channel.rs:59</td><td>yes</td><td>Delivery enum as_str plus CLI outcome matches</td></tr>
+<tr><td>agent_trace_event.classification</td><td>crates/boop-proc/src/supervise.rs:1754</td><td>yes</td><td>Internal branch results and classification literals</td></tr>
+<tr><td>agent_live.status</td><td>crates/boop-store/src/ident.rs:4204</td><td>yes</td><td>Process/pane state branches emit internal status literals</td></tr>
+<tr><td>agent_live_span.status</td><td>crates/boop-store/src/ident.rs:4204</td><td>yes</td><td>Same normalized observation as agent_live</td></tr>
+<tr><td>agent_session.harness</td><td>crates/boop-store/src/ident.rs:2095</td><td>yes</td><td>SessionRef HarnessId as_str</td></tr>
+<tr><td>agent_lane.harness</td><td>crates/boop/src/cli/job.rs:1518</td><td>yes</td><td>Parsed HarnessId as_str is passed to lane-purpose writer</td></tr>
+<tr><td>agent_delivery.harness</td><td>crates/boop-store/src/ident.rs:3629</td><td>yes</td><td>Writer parameter is Option<HarnessId></td></tr>
+<tr><td>agent_delivery_transition.harness</td><td>crates/boop-store/src/ident.rs:3629</td><td>yes</td><td>Writer parameter is Option<HarnessId></td></tr>
+<tr><td>sync_root_stamp.harness</td><td>crates/boop-store/src/ident.rs:5618</td><td>no</td><td>Historical DDL only; no current writer proves a finite source</td></tr>
+<tr><td>agent_commit_subscription.mode</td><td>crates/boop/src/cli/subscribe.rs:22</td><td>yes</td><td>Boundary match admits door and mailbox</td></tr>
+<tr><td>agent_favorite.source_kind</td><td>crates/boop-store/src/1_user_slice.rs:25</td><td>yes</td><td>FavoriteSourceKind enum as_str match</td></tr>
+<tr><td>agent_mood.name</td><td>crates/boop-store/src/ident.rs:109</td><td>yes</td><td>Three static mood seeds and MoodName enum</td></tr>
+<tr><td>agent_route_selection.selected</td><td>crates/boop/src/cli/selection.rs:34</td><td>yes</td><td>Boolean input encoded as zero or one</td></tr>
+<tr><td>agent_reminder.every_ms</td><td>crates/boop-store/src/1_reminder.rs:48</td><td>no</td><td>Typed integer interval; positive range CHECK retained</td></tr>
+</tbody></table>
 <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
 <script src="https://cdn.datatables.net/2.1.8/js/dataTables.min.js"></script>
 <script>$('.tallies').DataTable({paging:false,initComplete:function(){this.api().columns().every(function(){const column=this;const input=document.createElement('input');input.placeholder='Filter';input.style.width='100%';column.header().appendChild(input);input.addEventListener('input',()=>column.search(input.value).draw());});}});</script>

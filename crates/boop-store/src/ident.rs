@@ -1607,7 +1607,7 @@ impl Store {
         source_class: &str,
     ) -> Result<usize> {
         let sid = self.session_id(session)?;
-        let role_id = crate::closed_sets::value("dict_role", role)?;
+        let role_id = role;
         let cwd_id = cwd.map(|c| self.intern("dict_cwd", c)).transpose()?;
         Ok(self.connection.execute(
             "INSERT OR IGNORE INTO agent_turn (session_id, turn, ts, role, said, cwd_id, source_class)
@@ -1809,10 +1809,9 @@ impl Store {
     ) -> Result<()> {
         let sid = self.session_id(session)?;
         let path_id = self.intern("dict_path", path)?;
-        // verb_id is the canonical lowercase spelling; raw_verb_id keeps the
-        // harness's own casing on disk so a consumer never re-normalizes.
+        // The normalized verb is closed; the original harness tool name is open.
         let verb_id = crate::closed_sets::value("dict_verb", verb)?;
-        let raw_verb_id = crate::closed_sets::value("dict_verb", raw_verb)?;
+        let raw_verb_id = raw_verb;
         self.connection.execute(
             "INSERT OR IGNORE INTO agent_touch
                (session_id, turn, ts, path_id, verb, raw_verb)

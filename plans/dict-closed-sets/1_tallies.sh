@@ -38,7 +38,7 @@ cat <<'HTML'
 <h1>Schema 38 → 39 → 40 migration tallies</h1>
 <p>Rows and decoded value multisets compare the backup copy before and after migration. Value bins include NULL. Dictionary tallies count referenced non-NULL values.</p>
 HTML
-for file in 13_table_tallies.tsv 12_column_tallies.tsv 14_dictionary_tallies.tsv; do
+for file in 13_table_tallies.tsv 12_column_tallies.tsv 14_dictionary_tallies.tsv 18_check_audit.tsv; do
   printf '<h2>%s</h2><table class="tallies"><thead><tr>' "$file"
   IFS=$'\t' read -r -a headings < "$file"
   for field in "${headings[@]}"; do printf '<th>%s</th>' "$field"; done

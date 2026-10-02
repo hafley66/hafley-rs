@@ -1,206 +1,208 @@
-    Finished `test` profile [optimized + debuginfo] target(s) in 0.26s
+   Compiling boop-store v0.0.2 (/Users/chrishafley/projects/hafley-rs/.boop-worktrees/burndown/dict/crates/boop-store)
+    Finished `test` profile [optimized + debuginfo] target(s) in 3.40s
      Running unittests src/lib.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-store/69554a39271a8b17/out/boop_store-69554a39271a8b17)
 
-running 242 tests
+running 243 tests
 test _0_session_graph::tests::schema_version_one_legacy_graph_defaults_trace_events ... ok
-test _0_session_graph::tests::public_graph_projects_a_live_harness_coordinator_without_a_transcript ... ok
-test _0_session_graph::tests::graph_projects_sessions_edges_and_shells_from_setwise_relations ... ok
-test _0_session_graph::tests::graph_json_contains_trace_event_fixture_and_applies_cwd_and_history_filters ... ok
+test _0_session_graph::tests::qualified_identity_preserves_harness_for_distinct_native_rows ... ok
+test _0_session_graph::tests::current_graph_keeps_discovered_native_sessions_with_idle_status ... ok
+test _0_session_graph::tests::graph_read_uses_sqlite_without_runtime_calls ... ok
 test _0_session_graph::tests::tmux_session_window_and_pane_evidence_select_the_same_shell ... ok
 test _0_session_graph::tests::unmatched_harness_routes_project_as_shell_nodes ... ok
+test _0_session_graph::tests::pane_residue_reads_dead_and_a_fresh_tree_reads_live ... ok
 test _0_session_graph::tests::default_keeps_trace_events_and_explicit_opt_out_skips ... ok
-test _0_session_graph::tests::current_graph_keeps_discovered_native_sessions_with_idle_status ... ok
 test _0_session_graph::tests::scoped_activity_uses_the_latest_turn_or_usage_timestamp ... ok
-test _0_session_graph::tests::graph_read_uses_sqlite_without_runtime_calls ... ok
+test _0_session_graph::tests::public_graph_projects_a_live_harness_coordinator_without_a_transcript ... ok
 test _0_trace_identity::tests::join_limits_name_the_exceeded_input ... ok
 test _0_trace_identity::tests::repeated_continuation_endpoints_return_ambiguity ... ok
 test _0_trace_identity::tests::six_session_continuation_chain_ignores_cwd_proximity ... ok
-test _0_session_graph::tests::qualified_identity_preserves_harness_for_distinct_native_rows ... ok
+test _0_session_graph::tests::focused_runtime_route_seeds_its_native_session_component ... ok
 test _0_session_graph::tests::durable_live_sessions_without_fresh_corroboration_read_idle ... ok
 test _0_session_graph::tests::focused_tmux_shell_serializes_its_rooted_family_without_cwd_inference ... ok
-test _0_session_graph::tests::pane_residue_reads_dead_and_a_fresh_tree_reads_live ... ok
-test _0_session_graph::tests::focused_runtime_route_seeds_its_native_session_component ... ok
+test _0_session_graph::tests::graph_projects_sessions_edges_and_shells_from_setwise_relations ... ok
+test _0_session_graph::tests::graph_json_contains_trace_event_fixture_and_applies_cwd_and_history_filters ... ok
 test _0_session_graph::tests::scoped_graph_activity_plan_avoids_whole_corpus_aggregates ... ok
+test bus::tests::a_mail_row_without_a_transition_is_refused ... ok
 test _0_session_graph::tests::waterfall_plan_seeks_the_lane_and_trace_event_indexes ... ok
 test _0_session_graph::tests::waterfall_query_returns_one_versioned_row_set_for_all_four_kinds ... ok
-test _0_session_graph::tests::unresolved_live_lane_appears_as_shell_then_merges_into_sessions ... ok
-test activity::tests::scoped_trace_counts_seek_selected_sessions_only ... ok
 test _0_session_graph::tests::session_graph_reader_returns_none_until_store_changes ... ok
+test activity::tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes ... ok
 test bus::tests::a_row_written_before_the_typed_columns_still_carries_its_code ... ok
 test bus::tests::a_supervisor_kind_is_an_end_row_or_a_progress_row_and_never_both ... ok
 test bus::tests::a_typed_result_row_round_trips_and_a_plain_row_grows_no_keys ... ok
-test activity::tests::aggregation_query_has_no_per_identity_subquery ... ok
+test _0_session_graph::tests::unresolved_live_lane_appears_as_shell_then_merges_into_sessions ... ok
 test bus::tests::an_unknown_message_kind_round_trips_through_other ... ok
-test bus::tests::a_partial_last_line_is_left_for_the_next_open ... ok
+test activity::tests::aggregation_query_has_no_per_identity_subquery ... ok
 test bus::tests::commit_is_the_commit_row_and_round_trips_its_wire_string ... ok
-test bus::tests::a_mail_row_without_a_transition_is_refused ... ok
+test activity::tests::scoped_trace_counts_seek_selected_sessions_only ... ok
 test bus::tests::fold_keeps_the_ack_across_a_resend ... ok
 test bus::tests::incremental_mailbox_skips_unchanged_files_and_reads_only_appends ... ok
-test activity::tests::projects_claude_codex_opencode_kimi_resume_replacement_and_shell_lanes ... ok
+test bus::tests::a_partial_last_line_is_left_for_the_next_open ... ok
 test bus::tests::only_a_result_row_takes_a_code_from_its_body ... ok
 test bus::tests::pr_is_a_typed_row_that_takes_the_door ... ok
 test bus::tests::a_newer_registered_route_outranks_the_file ... ok
 test bus::tests::route_lock_release_is_explicit_even_with_an_inherited_descriptor ... ok
 test _0_session_graph::tests::wide_turn_bodies_do_not_change_scoped_activity_and_index_covers ... ok
 test bus::tests::the_file_is_a_log_of_send_then_ack_rows ... ok
-test bus::tests::a_registry_without_the_goal_field_still_loads ... ok
+test bus::tests::a_registry_without_the_parent_field_still_loads ... ok
 test bus::tests::the_supervisor_kinds_are_the_ones_a_lane_run_mints_about_itself ... ok
 test bus::tests::unacked_drops_rows_with_a_timestamp ... ok
-test bus::tests::a_registry_without_the_parent_field_still_loads ... ok
-test bus::tests::a_route_round_trips_its_parent_field ... ok
+test bus::tests::a_route_with_an_unknown_kind_still_loads ... ok
+test bus::tests::a_route_round_trips_its_goal_field ... ok
+test bus::tests::a_registry_without_the_goal_field_still_loads ... ok
 test closed_sets_tests::rehearsal_schema39 ... ignored, requires an explicit backup copy under this lane's scratch directory
 test harness_id::tests::every_variant_round_trips_through_its_short_id ... ok
 test harness_id::tests::serde_is_the_lowercase_short_id ... ok
 test ident::delivery_state_tests::codex_steering_receipts_are_distinct_and_parseable ... ok
-test bus::tests::a_route_round_trips_its_goal_field ... ok
-test bus::tests::captured_legacy_registry_row_migrates_into_the_canonical_route_shape ... ok
-test bus::tests::a_route_with_an_unknown_kind_still_loads ... ok
 test bus::tests::an_append_carries_its_first_transition ... ok
+test bus::tests::a_route_round_trips_its_parent_field ... ok
 test bus::tests::lane_subscribers_is_the_parent_plus_explicit_rows ... ok
+test bus::tests::captured_legacy_registry_row_migrates_into_the_canonical_route_shape ... ok
 test bus::tests::each_open_imports_only_the_ndjson_tail ... ok
 test bus::tests::route_rewrite_keeps_selection_and_route_delete_cascades_it ... ok
 test bus::tests::the_files_beside_the_database_are_read_in_place ... ok
 test ident::tests::a_comment_reads_by_id_and_keeps_the_lanes_forked_off_it ... ok
-test ident::tests::a_cursor_is_per_transcript_not_per_session ... ok
-test ident::tests::a_current_store_missing_a_user_table_heals_on_open ... ok
-test ident::tests::a_cycle_in_the_lane_tree_still_answers ... ok
 test ident::tests::a_favorite_is_edited_in_place_and_deleted_by_id ... ok
+test ident::tests::a_cycle_in_the_lane_tree_still_answers ... ok
+test ident::tests::a_cursor_is_per_transcript_not_per_session ... ok
 test ident::tests::a_favorite_note_is_null_when_omitted ... ok
+test ident::tests::a_current_store_missing_a_user_table_heals_on_open ... ok
 test closed_sets_tests::enum_checks_and_open_dictionaries_survive_reopen_and_rebuild ... ok
 test ident::tests::a_favorite_survives_rebuild ... ok
 test ident::tests::a_fresh_store_carries_the_schema_version ... ok
-test ident::tests::a_lane_spawn_keeps_the_goal_the_path_and_the_brief_bytes ... ok
 test ident::tests::a_fresh_store_carries_the_seed_moods ... ok
-test ident::tests::a_lane_takes_the_nearest_ancestor_mood ... ok
+test ident::tests::a_lane_spawn_keeps_the_goal_the_path_and_the_brief_bytes ... ok
 test ident::tests::a_lane_reported_head_round_trips_and_updates_in_place ... ok
 test ident::tests::a_lower_output_snapshot_never_wins ... ok
+test ident::tests::a_lane_takes_the_nearest_ancestor_mood ... ok
 test ident::tests::a_missing_request_id_still_dedups ... ok
-test ident::tests::a_pr_notice_is_claimed_once ... ok
 test ident::tests::a_foreign_dict_harness_value_reads_back_without_error ... ok
+test ident::tests::a_pr_notice_is_claimed_once ... ok
 test ident::tests::a_second_commit_push_for_the_same_head_is_a_noop ... ok
 test ident::tests::a_second_delivery_of_one_message_appends_a_transition ... ok
+test ident::tests::a_session_mood_round_trips_and_clears ... ok
 test ident::tests::a_sent_comment_reads_the_assistant_turn_that_answered_it ... ok
 test ident::tests::a_session_never_moves_to_a_second_trace ... ok
-test ident::tests::a_session_mood_round_trips_and_clears ... ok
 test ident::tests::a_session_with_no_attr_row_anywhere_takes_the_default ... ok
+test closed_sets_tests::open_harness_values_survive_writes_migration_and_rebuild ... ok
 test ident::tests::a_thinking_block_burns_no_ordinal ... ok
 test ident::tests::a_thinking_only_response_still_gets_a_usage_row ... ok
-test ident::tests::ambiguous_continuation_is_stored_without_merging_trace_spans ... ok
-test ident::tests::a_v13_store_gains_the_door_columns_and_the_delivery_ledger ... ok
-test ident::tests::a_v7_store_migrates_agent_pr_onto_the_three_column_key ... ok
-test ident::tests::an_observed_live_lane_row_carries_its_pid ... ok
 test ident::tests::an_exact_commit_subscription_beats_the_wildcard ... ok
 test ident::tests::an_unknown_mood_name_names_the_known_ones ... ok
+test ident::tests::ambiguous_continuation_is_stored_without_merging_trace_spans ... ok
+test ident::tests::a_v13_store_gains_the_door_columns_and_the_delivery_ledger ... ok
+test ident::tests::an_observed_live_lane_row_carries_its_pid ... ok
 test ident::tests::assistant_line_ingests_as_assistant ... ok
+test closed_sets_tests::failed_migration_rolls_back_nullable_orphans_and_invalid_values ... ok
+test ident::tests::a_v7_store_migrates_agent_pr_onto_the_three_column_key ... ok
 test bus::tests::recipient_reads_use_the_covering_mail_index ... ok
 test ident::tests::backfill_traces_one_component_and_skips_the_edgeless ... ok
-test closed_sets_tests::failed_migration_rolls_back_nullable_orphans_and_invalid_values ... ok
 test ident::tests::both_open_paths_carry_a_busy_timeout ... ok
-test ident::tests::bounded_write_open_fails_fast_under_a_held_writer_lock ... ok
-test ident::tests::cost_views_compute_rates_coalesce_and_window ... ok
-test ident::tests::claude_cursor_metadata_is_two_statements_per_line_and_resumes ... ok
-test ident::tests::concurrent_first_open_converges_on_one_current_schema ... ok
 test ident::tests::a_store_stamped_28_without_the_tag_tables_gets_them_on_open ... ok
-test ident::tests::continued_in_relation_preserves_trace_after_writer_exit ... ok
+test ident::tests::bounded_write_open_fails_fast_under_a_held_writer_lock ... ok
+test ident::tests::concurrent_first_open_converges_on_one_current_schema ... ok
+test ident::tests::cost_views_compute_rates_coalesce_and_window ... ok
 test ident::tests::current_schema_open_and_readonly_query_do_not_wait_for_a_wal_writer ... ok
+test ident::tests::claude_cursor_metadata_is_two_statements_per_line_and_resumes ... ok
 test ident::tests::dict_model_exists ... ok
+test ident::tests::continued_in_relation_preserves_trace_after_writer_exit ... ok
 test ident::tests::discovery_projects_empty_unchanged_session_and_parent_edge ... ok
 test ident::tests::bounded_write_open_leaves_a_stale_schema_untouched ... ok
 test ident::tests::drop_lane_commit_state_removes_only_that_lane ... ok
 test ident::tests::fresh_store_carries_covering_turn_activity_index ... ok
 test ident::tests::interrupted_line_ingests_as_user ... ok
 test ident::tests::known_sessions_restore_candidate_metadata_and_cursor ... ok
+test ident::tests::liveness_intervals_fold_adjacent_and_ignore_repeats ... ok
 test ident::tests::liveness_coalesces_same_timestamp_and_rejects_older_observations ... ok
 test ident::tests::mixed_case_verbs_land_one_canonical_with_raw_retained ... ok
-test ident::tests::liveness_intervals_fold_adjacent_and_ignore_repeats ... ok
 test ident::tests::notify_pr_appends_one_row_per_subscriber_once ... ok
 test ident::tests::one_trace_holds_every_session_id_a_lane_wears ... ok
 test ident::tests::ordinals_continue_across_an_incremental_sync ... ok
 test ident::tests::pane_death_flips_the_stored_runtime_liveness_row ... ok
-test ident::tests::context_views_keep_source_ordinals_and_project_evidence ... ok
+test ident::tests::cost_views_exist_after_fresh_open_migration_and_rebuild ... ok
 test ident::tests::pane_occupant_nickname_is_mutable_without_changing_session_identity ... ok
 test ident::tests::passthrough_select_returns_rows ... ok
+test ident::tests::context_views_keep_source_ordinals_and_project_evidence ... ok
 test ident::tests::passthrough_update_is_refused_read_only ... ok
-test ident::tests::cost_views_exist_after_fresh_open_migration_and_rebuild ... ok
 test ident::tests::peer_message_ingests_as_meta ... ok
 test ident::tests::query_cursors_expose_transcript_identity ... ok
 test ident::tests::recent_trace_events_are_bounded_and_returned_oldest_first ... ok
 test ident::tests::repeated_hails_accumulate_on_one_edge ... ok
 test ident::tests::resolving_the_effective_mood_is_one_statement ... ok
 test ident::tests::the_user_authored_inventory_matches_the_schema ... ok
+test ident::tests::sync_projects_facts_and_cursor_is_incremental ... ok
 test ident::tests::schema_rows_lists_views_and_join_keys ... ok
+test ident::tests::surrogate_ids_intern_once ... ok
 test ident::tests::slash_command_body_ingests_as_meta ... ok
 test ident::tests::schema_v20_adds_projection_version_to_existing_cursors ... ok
-test ident::tests::surrogate_ids_intern_once ... ok
-test ident::tests::sync_projects_facts_and_cursor_is_incremental ... ok
-test ident::tests::known_sessions_stays_under_budget ... ok
 test ident::tests::sync_writes_the_spawn_edge ... ok
+test ident::tests::known_sessions_stays_under_budget ... ok
 test ident::tests::the_ingest_producer_appends_a_held_pr_row_per_subscriber ... ok
 test ident::tests::the_same_brief_interns_once_however_often_it_is_spawned ... ok
 test ident::tests::the_usage_time_range_query_seeks_an_index ... ok
 test ident::tests::peer_fixup_flips_legacy_user_rows_once ... ok
-test ident::tests::trace_event_retention_is_deterministic_and_preserves_newest_rows ... ok
 test ident::tests::trace_event_diagnostic_is_redacted_and_bounded ... ok
-test ident::tests::trace_events_round_trip_stable_identity_endpoints_and_absent_times ... ok
-test ident::tests::trace_and_transcript_style_writers_complete_with_all_rows ... ok
-test ident::tests::two_prs_in_one_turn_survive_and_resync_dedups ... ok
+test ident::tests::trace_event_retention_is_deterministic_and_preserves_newest_rows ... ok
 test ident::tests::turn_comment_round_trip ... ok
-test ident::tests::typed_line_ingests_as_user ... ok
+test ident::tests::trace_and_transcript_style_writers_complete_with_all_rows ... ok
+test ident::tests::trace_events_round_trip_stable_identity_endpoints_and_absent_times ... ok
+test ident::tests::two_prs_in_one_turn_survive_and_resync_dedups ... ok
 test ident::tests::usage_dedups_to_one_row_and_the_last_output_wins ... ok
-test ident::tests::v27_view_falls_back_to_session_cwd_for_null_turn ... ok
+test ident::tests::typed_line_ingests_as_user ... ok
 test ident::tests::v27_claude_fixture_projects_two_distinct_turn_cwds ... ok
+test ident::tests::v27_view_falls_back_to_session_cwd_for_null_turn ... ok
 test proc::tests::tree_sum_exceeds_pane_only_on_a_fixture_tree ... ok
 test proc::tests::uptime_is_a_duration_not_an_epoch_stamp ... ok
-test ident::tests::writable_store_persists_wal_mode ... ok
 test query::tests::a_path_filter_is_a_bound_prefix ... ok
+test ident::tests::writable_store_persists_wal_mode ... ok
 test ident::tests::v11_open_keeps_existing_rows_when_migration_is_reentered ... ok
 test ident::tests::v13_open_seeds_moods_once_and_keeps_an_edited_template ... ok
-test ident::tests::v18_favorite_migration_preserves_rows_and_ids ... ok
-test ident::tests::v26_stamps_the_rows_a_door_already_took ... ok
 test ident::tests::v30_migrates_a_v29_store_keeps_rows_and_creates_the_commit_tables ... ok
-test ident::tests::v32_migrates_previous_schema_and_adds_activity_index ... ok
+test ident::tests::v26_stamps_the_rows_a_door_already_took ... ok
+test ident::tests::v18_favorite_migration_preserves_rows_and_ids ... ok
 test ident::tests::v31_migrates_a_v30_store_and_creates_the_pr_notice_table ... ok
-test ident::tests::v37_migration_seeds_observations_from_legacy_trace_spans ... ok
 test query::tests::edge_rows_typed_receipt ... ok
-test query::tests::every_fact_list_runs_on_an_empty_store ... ok
+test ident::tests::v37_migration_seeds_observations_from_legacy_trace_spans ... ok
 test ident::tests::v27_migrates_live_db_in_place_without_backfill ... ok
+test query::tests::every_fact_list_runs_on_an_empty_store ... ok
+test ident::tests::v32_migrates_previous_schema_and_adds_activity_index ... ok
 test ident::tests::v34_adds_unknown_source_class_to_existing_turns ... ok
 test query::tests::live_pid_status_row_carries_nonzero_rss ... ok
 test query::tests::recent_turn_rows_bounds_before_materializing_and_restores_chronology ... ok
+test query::tests::window_sql_partitions_runs_and_binds_params ... ok
 test query::tests::session_turn_read_uses_primary_key_not_scan ... ok
 test query::tests::typed_rows_populate_for_a_real_session ... ok
-test query::tests::window_sql_partitions_runs_and_binds_params ... ok
-test reminder::tests::admission_does_not_release_overlap_but_turn_end_does ... ok
-test runtime::tests::diagnostics_are_typed_and_serializable ... ok
-test reminder::tests::due_expiry_and_missed_intervals ... ok
 test reminder::tests::cancellation_and_replacement_do_not_overlap_accepted_work ... ok
-test reminder::tests::cancellation_hides_held_mail_without_deleting_history ... ok
+test runtime::tests::diagnostics_are_typed_and_serializable ... ok
+test reminder::tests::admission_does_not_release_overlap_but_turn_end_does ... ok
+test reminder::tests::due_expiry_and_missed_intervals ... ok
 test reminder::tests::explicit_threaded_reply_releases_occurrence ... ok
-test reminder::tests::one_active_schedule_per_route_and_missing_route_validation ... ok
+test reminder::tests::cancellation_hides_held_mail_without_deleting_history ... ok
 test reminder::tests::known_refusal_retries_same_envelope_but_crashed_retry_does_not ... ok
 test reminder::tests::restart_and_other_connections_do_not_repeat_uncertain_delivery ... ok
-test runtime::tests::a_target_missing_from_the_batch_falls_back_to_the_per_target_probe ... ok
+test reminder::tests::one_active_schedule_per_route_and_missing_route_validation ... ok
 test runtime::tests::an_unreachable_batch_falls_back_per_target ... ok
+test runtime::tests::a_target_missing_from_the_batch_falls_back_to_the_per_target_probe ... ok
 test runtime::tests::attached_session_activity_seeks_each_session_instead_of_materializing_the_corpus ... ok
 test session::tests::copied_session_id_retains_each_path_and_session_lookup_uses_newest ... ok
-test runtime::tests::equal_activity_is_an_ambiguous_current_session ... ok
-test runtime::tests::runtime_trace_span_query_seeks_only_candidate_lane_ids ... ok
-test runtime::tests::missing_lane_and_trace_are_reported_as_typed_diagnostics ... ok
 test runtime::tests::inaccessible_tmux_and_stale_live_report_do_not_prove_liveness ... ok
-test runtime::tests::pane_less_routes_fall_back_to_the_stored_pid_probe ... ok
+test runtime::tests::equal_activity_is_an_ambiguous_current_session ... ok
 test runtime::tests::resolves_placeholder_to_latest_attached_session_and_completion ... ok
+test runtime::tests::missing_lane_and_trace_are_reported_as_typed_diagnostics ... ok
+test runtime::tests::pane_less_routes_fall_back_to_the_stored_pid_probe ... ok
+test runtime::tests::runtime_trace_span_query_seeks_only_candidate_lane_ids ... ok
 test tags::tests::a_link_source_follows_a_moved_favorite ... ok
-test runtime::tests::snapshot_joins_live_dead_and_shell_only_routes_from_one_tmux_observation ... ok
+test runtime::tests::snapshot_preserves_an_orphan_lane_trace_diagnostic ... ok
 test tags::tests::a_note_splits_into_tags_on_commas_only ... ok
 test tags::tests::a_tag_has_one_spelling ... ok
-test runtime::tests::snapshot_preserves_an_orphan_lane_trace_diagnostic ... ok
+test runtime::tests::snapshot_joins_live_dead_and_shell_only_routes_from_one_tmux_observation ... ok
 test runtime::tests::snapshot_resolves_many_lanes_from_one_pane_pid_batch ... ok
 test summary::tests::multiple_lanes_share_one_tmux_observation_and_process_snapshot ... ok
 test summary::tests::reused_lane_with_ambiguous_traces_has_non_combined_activity ... ok
-test tags::tests::a_tag_reads_both_directions ... ok
 test summary::tests::schema_fixture_joins_activity_runtime_mailbox_and_completion ... ok
 test tags::tests::a_batch_read_answers_every_source_asked_about ... ok
 test runtime::tests::snapshot_uses_fixed_durable_query_count_for_many_lanes ... ok
+test tags::tests::a_note_applies_every_tag_it_holds ... ok
 test tail::tests::completes_a_partial_line ... ok
 test tail::tests::first_line_reader_does_not_consume_the_transcript_tail ... ok
 test tail::tests::first_line_reader_requires_a_newline_and_ignores_the_tail ... ok
@@ -210,20 +212,20 @@ test tail::tests::resets_when_truncated_below_offset ... ok
 test tail::tests::tails_three_lines_from_zero ... ok
 test testing::tests::boop_test_root_pins_the_omp_session_directory ... ok
 test testing::tests::boop_test_root_preserves_an_explicit_omp_session_directory ... ok
-test tags::tests::a_note_applies_every_tag_it_holds ... ok
+test tags::tests::a_tag_reads_both_directions ... ok
 test trail::tests::a_child_s_stderr_lands_in_the_lane_trail ... ok
-test tags::tests::applying_the_same_tag_twice_counts_two_uses_and_keeps_one_link ... ok
+test tags::tests::a_favorite_survives_a_rebuild_whole ... ok
 test trail::tests::a_lane_name_with_a_separator_stays_under_the_root ... ok
 test trail::tests::a_legacy_plain_text_pin_belongs_to_no_spawn ... ok
-test tags::tests::a_comment_its_targets_and_its_fork_survive_a_rebuild ... ok
+test tags::tests::applying_the_same_tag_twice_counts_two_uses_and_keeps_one_link ... ok
 test trail::tests::a_pin_answers_only_the_cwd_it_was_written_for ... ok
 test trail::tests::a_second_open_appends_instead_of_truncating ... ok
 test trail::tests::a_spawn_record_carries_the_id_that_minted_it ... ok
-test tags::tests::a_favorite_survives_a_rebuild_whole ... ok
+test tags::tests::a_comment_its_targets_and_its_fork_survive_a_rebuild ... ok
 test trail::tests::clearing_a_pin_leaves_nothing_for_the_next_spawn ... ok
 test trail::tests::configured_store_and_trails_are_isolated ... ok
 test trail::tests::expect_round_trips_through_the_lane_trail ... ok
-2026-10-01T23:51:22.774200Z  INFO boop_store::trail::tests: lane trail armed marker="trail-receipt"
+2026-10-02T00:03:31.317464Z  INFO boop_store::trail::tests: lane trail armed marker="trail-receipt"
 test trail::tests::the_lane_writer_tees_every_event_into_supervise_log ... ok
 test reminder::tests::schema_36_upgrade_creates_the_reminder_tables ... ok
 test tags::tests::backfill_turns_favorite_notes_into_tags_once ... ok
@@ -233,20 +235,20 @@ test usage::tests::a_steady_stream_stays_in_one_window_until_the_window_length .
 test usage::tests::an_empty_timeline_has_no_windows ... ok
 test usage::tests::the_ceiling_is_the_ninth_decile_of_closed_windows ... ok
 test usage::tests::the_fold_matches_the_window_rule ... ok
-test tags::tests::search_matches_the_tag_column_most_used_first ... ok
 test tags::tests::recent_stops_at_the_limit ... ok
+test tags::tests::search_matches_the_tag_column_most_used_first ... ok
 test tags::tests::search_never_reads_a_note_body ... ok
 test touched::tests::touched_paths_and_cwds_come_newest_first_with_subagents ... ok
-test usage::cte_equality::fold_and_cte_agree_across_a_gap ... ok
 test tags::tests::tags_and_their_links_survive_a_rebuild ... ok
-test trail::tests::a_parent_death_and_a_rewritten_edge_are_typed_reasons_of_their_own ... ok
 test trail::tests::an_ordinary_detail_stays_a_reported_rc ... ok
-test trail::tests::a_dead_lane_always_carries_a_typed_reason ... ok
+test usage::cte_equality::fold_and_cte_agree_across_a_gap ... ok
 test usage::cte_equality::fold_and_cte_agree_on_one_busy_window ... ok
-test usage::cte_equality::fold_and_cte_agree_when_a_window_times_out_from_its_start ... ok
+test trail::tests::a_parent_death_and_a_rewritten_edge_are_typed_reasons_of_their_own ... ok
+test trail::tests::a_dead_lane_always_carries_a_typed_reason ... ok
 test usage::tests::typed_usage_rows_carry_bucket_and_calls ... ok
+test usage::cte_equality::fold_and_cte_agree_when_a_window_times_out_from_its_start ... ok
 
-test result: ok. 241 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 12.54s
+test result: ok. 242 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out; finished in 11.39s
 
      Running tests/2_user_slice.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-store/a606fffaad23186a/out/2_user_slice-a606fffaad23186a)
 
@@ -254,21 +256,21 @@ running 2 tests
 test favorite_edits_replace_references_and_preserve_omitted_metadata ... ok
 test v38_migration_preserves_every_kind_body_and_user_row ... ok
 
-test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.14s
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.12s
 
      Running tests/mail_contention.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-store/96cae21c9558ef18/out/mail_contention-96cae21c9558ef18)
 
 running 1 test
 test twelve_processes_share_one_mailbox_without_a_storm ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.16s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.31s
 
      Running tests/wal_three_writers.rs (/Users/chrishafley/.cache/boop/cargo-target/debug/build/boop-store/627eedb5308fa66c/out/wal_three_writers-627eedb5308fa66c)
 
 running 1 test
 test three_concurrent_writers_all_land ... ok
 
-test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.04s
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.05s
 
    Doc-tests boop_store
 
