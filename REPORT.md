@@ -114,3 +114,13 @@ Verification deferred by the user's stop instruction: release build and crate te
 - D20 before: verification rollback restored files but left newly created destination directories. After: the journal records absent destination ancestors and removes them deepest first after restoration, retaining pre-existing directories and nonempty directories. Case: `D20.sh`, unrun.
 - D22 before: dry-run accepted internal state roots that commit rejected. After: rename/move/cleave validate state location against the real target root before creating state, in both modes; symlinks are resolved through the nearest existing ancestor. Internal state is consistently refused because the commit engine requires external state. Case: `D22.sh`, unrun.
 - ryi-move-stale-plan before: the reported repro replayed relocate edits after flags and source offsets changed. The current move runner rebuilds plans on each invocation. After: staged/commit state is additionally namespaced by a hash of every MoveArgs field, move-list bytes, canonical roots, and complete generated actions (including expected content hashes and replacement bytes). Case: `0_move_stale_plan.sh`, unrun; pass its full basename explicitly to run.sh.
+
+Deferred case invocation (after the coordinator's serialized release build):
+
+```sh
+RYII="$CARGO_TARGET_DIR/release/ryii" CORPUS="$HOME/projects/rxjs-corpus-feature-ryi-ts-refactor" dogfood/ts/run.sh D03 D04 D05 D06 D07 D08 D20 D22 0_move_stale_plan
+```
+
+D03/D04/D05/D06/D08 additionally compare type diagnostics against fresh pre-edit baselines through `1_type_errors.sh` (default `node_modules/.bin/tsc`, overridable with `TSC`). D05 checks signals, signal-grid, and docs-kit. All checker calls are deferred. D06/D08 explicitly include their untracked probe files through the existing `--root` option. No analysis SQL, graph walkers, CLI commands, or flags were added.
+
+Implementation commits: D3 `02f62a25`; D4 `5a740949`; D5/D6 `ce8a23be`; D7 `935acfb7`; D8 `6c16c9f6`; D20 `1fe6434d`; D22 `29a2c385`; stale request identity `20e3476b`. Later commits adjust unrun cases and D8 suffix typing. None has passed a build or runtime gate in this lane.
