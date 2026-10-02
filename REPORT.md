@@ -758,3 +758,12 @@ rejects state inside each target before `state_root` creates directories
 `crates/sprefa-extract/src/bin/ryi.rs:552,715`.
 
 Code reading only. Coordinator validation pending; no allowlist changes.
+
+## ryi TS quality gate: shared LSP position (2026-10-02)
+
+Change: the existing byte-offset to UTF-16 LSP-position helper is visible to
+sibling edit modules (`crates/sprefa-extract/src/edit/1e_ts7_graph_target.rs:22`).
+Resolve imports that helper (`crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:10`)
+and removes its duplicate. Graph references, call definitions, and JSX attribute
+definitions use the same conversion and character-boundary check. The Rust shim
+is unchanged. Code reading only; coordinator validation pending.

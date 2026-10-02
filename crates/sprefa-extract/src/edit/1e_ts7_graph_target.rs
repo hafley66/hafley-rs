@@ -19,7 +19,7 @@ pub struct TargetReference {
     pub target_end: u32,
 }
 
-fn position(text: &str, offset: usize) -> Result<Value, String> {
+pub(super) fn position(text: &str, offset: usize) -> Result<Value, String> {
     let before = text.get(..offset).ok_or("position splits a character")?;
     Ok(json!({
         "line": before.bytes().filter(|byte| *byte == b'\n').count(),
