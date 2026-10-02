@@ -298,3 +298,41 @@ Coordinator gates still required, serialized with CARGO_BUILD_JOBS=4:
 5. Run `RYII=<release ryii> RYII_NO_TS_CHECKER=<cli-only ryii> CORPUS=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow dogfood/ts/run.sh D14 D15 D17 J01`.
 
 The scripts and Rust changes remain unrun. Runtime checker behavior, compilation, crate parity, and all four expected case outcomes require these gates.
+
+## J01: slow JSX props member symbol fix (2026-10-02)
+
+Failure: the coordinator's integrated J01 run failed
+`assert.ok(refs[0].symbol.includes('#FooProps.bar@'))`. The JSX attribute
+reference existed but its symbol named the enclosing props interface.
+
+Cause: `crates/sprefa-extract/src/edit/1b_ts7_symbol_seed.rs:108` in
+4718ffbb returned the first flat document symbol whose declaration range
+contained the definition offset. The LSP session uses default client
+capabilities, so tsgo supplies flat symbols. tsgo's
+`internal/ls/symbols.go:65-90` flattens parents before children and uses
+whole declaration ranges. `FooProps` therefore matched the offset of
+`bar` before the `bar` row with `containerName: FooProps` was considered.
+The replacement selection is at `1b_ts7_symbol_seed.rs:108-126`.
+
+Change: select the smallest containing flat symbol range in the target
+URI and retain its compiler-provided container name. The existing JSX fact
+emitter at `crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:208` receives
+`FooProps.bar` and emits the shared def/ref symbol
+`tsgo <declaration-path>#FooProps.bar@<start>:<end>`. Definition and reference
+spans retain their existing byte coordinates. The regression test
+`flat_symbols_select_props_member` covers parent-first and reversed order,
+unrelated same-named members, foreign URIs, excluded end offsets, and a
+Unicode prefix requiring UTF-16-to-byte conversion.
+
+The cited utility plan contains no J01 row; its JSX coverage rows do not
+contradict the fixture. `dogfood/ts/J01.sh` is unchanged.
+
+Verification: `git diff --check` passed. No build, test, checker, install,
+or dogfood script ran in this lane. Coordinator commands, run serially
+from `crates/sprefa-extract`:
+
+```sh
+CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo build --release --bin ryii --features cli,ts-checker,typespec
+CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo test --lib --features cli,ts-checker,typespec flat_symbols_select_props_member -- --test-threads=1
+RYII=/Users/chrishafley/.cache/boop/lanes/_shared/release/ryii CORPUS=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow STATE=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-slow.J01-fix.state bash dogfood/ts/run.sh J01
+```
