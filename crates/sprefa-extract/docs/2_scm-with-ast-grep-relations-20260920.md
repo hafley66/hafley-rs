@@ -1,219 +1,407 @@
-# `.scm` relational predicates
+# `.scm` relational predicates (scm++)
 
-Use relational predicates to select a captured node by its ancestors, descendants,
-or named siblings. A nested tree-sitter pattern can also bind a related node into
-the result. The query surface extends tree-sitter `.scm`; ast-grep and CSS supply
-reference semantics.
+Relational predicates select a captured node by its ancestors, descendants, or
+named siblings. A relation names its related node either by grammar kind or by a
+nested tree-sitter pattern. The query surface is tree-sitter `.scm` plus these
+predicates, called scm++; ast-grep and CSS supply the reference semantics.
 
-For example, select calls and capture their enclosing function names:
+scm++ compiles one query into plain tree-sitter patterns, one per nesting level,
+and one SQL statement. `ryii query --scmpp` runs each pattern, writes `capture`
+rows and CST `node`/`edge` rows, and runs the SQL over them. The same compiler
+and SQL evaluate relation predicates in `ryii query --query` and in every `.scm`
+the crate runs through `hafley_scm::build`.
+
+Every example below runs against this file, `x.rs`:
+
+```rust
+fn host(items: &[u32]) -> usize {
+    let n = items.len();
+    log(n);
+    let f = |x: u32| x.count_ones();
+    f(1);
+    n
+}
+
+fn other() -> u32 {
+    host(&[1, 2]);
+    log(0);
+    return 7;
+}
+```
+
+Each query is saved as `q.scm` and run with:
+
+```sh
+ryii query --scmpp q.scm x.rs
+```
+
+## Calls and their enclosing function
 
 ```scheme
 ((call_expression) @call
- (#has-ancestor? @call (function_item name: (identifier) @fn)))
+ (#has-ancestor? @call (function_item name: (identifier) @fn) rows: each))
 ```
 
-The same query for TypeScript uses `function_declaration`:
-
-```scheme
-((call_expression) @call
- (#has-ancestor? @call (function_declaration name: (identifier) @fn)))
+```
+{"path":"x.rs","call__start":46,"call__end":57,"call__text":"items.len()","fn__start":3,"fn__end":7,"fn__text":"host"}
+{"path":"x.rs","call__start":63,"call__end":69,"call__text":"log(n)","fn__start":3,"fn__end":7,"fn__text":"host"}
+{"path":"x.rs","call__start":92,"call__end":106,"call__text":"x.count_ones()","fn__start":3,"fn__end":7,"fn__text":"host"}
+{"path":"x.rs","call__start":112,"call__end":116,"call__text":"f(1)","fn__start":3,"fn__end":7,"fn__text":"host"}
+{"path":"x.rs","call__start":151,"call__end":164,"call__text":"host(&[1, 2])","fn__start":130,"fn__end":135,"fn__text":"other"}
+{"path":"x.rs","call__start":170,"call__end":176,"call__text":"log(0)","fn__start":130,"fn__end":135,"fn__text":"other"}
 ```
 
-Each kept match contains `@call` and `@fn`. Ancestors are searched from the direct
-parent toward the root, so the first matching function supplies the capture.
+Each row is one JSON object: `path`, then `NAME__start`, `NAME__end` and
+`NAME__text` for every exported capture. `start` and `end` are byte offsets,
+end exclusive. Level-0 captures are always exported; `rows: each` also exports
+the captures of the nested pattern.
+
+The remaining examples show only the `__text` columns:
+
+```sh
+ryii query --scmpp q.scm x.rs | jq -c 'with_entries(select(.key | endswith("__text")))'
+```
 
 ## Relation arguments
 
-Every directional relation accepts either a list of grammar kind names or one
-nested tree-sitter pattern:
+A relation is `(#RELATION? @capture TARGET OPTIONS...)`. `@capture` is the node
+the relation starts at. `TARGET` is a list of grammar kind names or one nested
+pattern. Kind names can be bare symbols or quoted strings; any listed kind
+satisfies the relation.
 
 ```scheme
-(#has? @body return_expression try_expression)
-(#has? @body (return_expression))
-(#has-ancestor? @call (function_item name: (identifier) @fn))
-(#has-parent? @call (expression_statement) @statement)
+((function_item name: (identifier) @name body: (block) @body)
+ (#has? @body return_expression))
 ```
 
-Kind names can be bare symbols or quoted strings. A kind list means that any one
-listed kind can satisfy the relation. A nested pattern uses tree-sitter's query
-syntax, including fields, alternation, anchors, quantifiers, captures, and native
-text predicates. Kind names and nested patterns are validated against the selected
-grammar. Unknown kinds, unknown fields, and malformed patterns are errors.
+```
+{"name__text":"other","body__text":"{\n    host(&[1, 2]);\n    log(0);\n    return 7;\n}"}
+```
 
-Native text predicates inside a related pattern need a grouping expression:
+A nested pattern uses tree-sitter's query syntax, including fields,
+alternation, anchors, quantifiers, captures, and native text predicates:
 
 ```scheme
-((call_expression) @call
- (#has-ancestor? @call
-   ((function_item name: (identifier) @fn)
-    (#eq? @fn "host"))))
+((function_item name: (identifier) @name body: (block) @body)
+ (#has? @body (call_expression function: (identifier) @callee (#eq? @callee "log"))))
 ```
+
+```
+{"name__text":"host","body__text":"{\n    let n = items.len();\n    log(n);\n    let f = |x: u32| x.count_ones();\n    f(1);\n    n\n}"}
+{"name__text":"other","body__text":"{\n    host(&[1, 2]);\n    log(0);\n    return 7;\n}"}
+```
+
+Kinds, fields and nested patterns are validated against the grammar of each
+input's language. A query naming a kind the grammar lacks skips that
+language's files with a diagnostic; malformed patterns and unknown options are
+errors.
 
 ## Descendants, ancestors, and parents
 
-`#has?` tests strict descendants. `end`, the default, searches in preorder;
-`neighbor` tests direct children. These walks visit named and anonymous children.
-The captured node itself is excluded.
+`#has?` tests strict descendants, named and anonymous. The default
+`stopBy: end` searches the whole subtree; `stopBy: neighbor` tests direct
+children only.
 
 ```scheme
-((function_item body: (block) @body) @function
- (#has? @body return_expression end))
+((function_item name: (identifier) @name body: (block) @body)
+ (#has? @body let_declaration stopBy: neighbor))
+```
 
-((function_item body: (block) @body) @function
- (#has? @body (expression_statement) neighbor))
+```
+{"name__text":"host","body__text":"{\n    let n = items.len();\n    log(n);\n    let f = |x: u32| x.count_ones();\n    f(1);\n    n\n}"}
 ```
 
 The CSS forms are `block:has(return_expression)` and
-`block:has(> expression_statement)`.
+`block:has(> let_declaration)`.
 
-`#has-ancestor?` tests strict ancestors, nearest first. `neighbor` limits it to the
-direct parent. `#has-parent?` always tests only the direct parent, including when
-an explicit `stopBy: end` option is supplied.
+`#has-ancestor?` tests strict ancestors up to the root; `stopBy: neighbor`
+limits it to the direct parent.
 
 ```scheme
-((call_expression) @call
- (#has-ancestor? @call function_item end))
-
-((call_expression) @call
- (#has-parent? @call expression_statement))
+((call_expression) @call (#has-ancestor? @call closure_expression))
 ```
 
-The CSS forms are `function_item call_expression` and
+```
+{"call__text":"x.count_ones()"}
+```
+
+`#has-parent?` tests only the direct parent and takes no `stopBy`.
+
+```scheme
+((call_expression) @call (#has-parent? @call expression_statement))
+```
+
+```
+{"call__text":"log(n)"}
+{"call__text":"f(1)"}
+{"call__text":"host(&[1, 2])"}
+{"call__text":"log(0)"}
+```
+
+The CSS forms are `closure_expression call_expression` and
 `expression_statement > call_expression`.
 
 ## Later and earlier siblings
 
-`#precedes?` searches later named siblings. `#follows?` searches earlier named
-siblings. `neighbor` tests exactly the adjacent named sibling; `end` searches to
-the end of that sibling list. Punctuation tokens are skipped, while named
-comments participate in the list. Searches never cross the parent boundary.
+`#precedes?` searches later named siblings; `#follows?` searches earlier named
+siblings. `stopBy: neighbor` tests exactly the adjacent named sibling; the
+default searches to the end of the sibling list. Anonymous tokens are skipped;
+named comments count. Searches never leave the parent.
 
 ```scheme
-((expression_statement) @statement
- (#precedes? @statement expression_statement neighbor))
-
-((expression_statement) @statement
- (#follows? @statement expression_statement end))
+((let_declaration) @let (#precedes? @let expression_statement stopBy: neighbor))
 ```
 
-The CSS forms are `expression_statement:has(+ expression_statement)` and
-`expression_statement ~ expression_statement`. Direction refers to the captured
-node: a node that precedes another node searches forward; one that follows
-another node searches backward.
-
-A nested pattern can capture a later sibling's call name:
+```
+{"let__text":"let n = items.len();"}
+{"let__text":"let f = |x: u32| x.count_ones();"}
+```
 
 ```scheme
-((expression_statement) @statement
- (#precedes? @statement
-   (expression_statement
-     (call_expression function: (identifier) @next))
-   stopBy: neighbor))
+((expression_statement) @stmt
+ (#follows? @stmt (let_declaration pattern: (identifier) @var (#eq? @var "f"))))
 ```
+
+```
+{"stmt__text":"f(1);"}
+```
+
+The CSS forms are `let_declaration:has(+ expression_statement)` and
+`let_declaration ~ expression_statement`. Direction refers to the captured
+node: a node that precedes another searches forward.
 
 ## Named sibling positions
 
-`#nth-child?` takes a positive 1-based position among named siblings. The captured
-node must be named and have a parent. A root node has no sibling position.
+`#nth-child? @capture N` holds when the node is the Nth named child of its
+parent, counting from 1. A root node has no position.
 
 ```scheme
-((expression_statement) @statement
- (#nth-child? @statement 3))
-
-((expression_statement) @statement
- (#nth-child? @statement 2 of expression_statement))
+((expression_statement) @stmt (#nth-child? @stmt 2))
 ```
 
-The CSS forms are `expression_statement:nth-child(3)` and
-`expression_statement:nth-child(2 of expression_statement)`.
+```
+{"stmt__text":"log(n);"}
+{"stmt__text":"log(0);"}
+```
 
-The optional `of` argument filters the named sibling list before counting. It can
-be a kind name or a nested pattern. The captured node must pass that filter.
-Captures from the selected node's `of` pattern are included in the result:
+`of TARGET` counts only the siblings matching a kind or nested pattern; the
+captured node must match it too. Supertype kinds such as `_expression` expand
+to their subtypes.
 
 ```scheme
-((expression_statement) @statement
- (#nth-child? @statement 2 of
-   (expression_statement
-     (call_expression function: (identifier) @callee))))
+((let_declaration) @let (#nth-child? @let 2 of let_declaration))
 ```
+
+```
+{"let__text":"let f = |x: u32| x.count_ones();"}
+```
+
+The CSS forms are `expression_statement:nth-child(2)` and
+`let_declaration:nth-child(2 of let_declaration)`.
 
 ## Stopping and fields
 
-Directional relations accept `stopBy: neighbor`, `stopBy: end`, or a nested stop
-pattern. The legacy trailing `neighbor` and `end` arguments remain supported.
-A stop pattern is inclusive: test a visited node for the relation first, then stop
-if it matches the stop pattern. The stop pattern exports no captures.
+`stopBy: (PATTERN)` ends a walk at the first node matching the stop pattern.
+The stop is inclusive: a visited node is tested for the relation, then the walk
+ends there if it matches the stop. The stop pattern exports no captures.
 
 ```scheme
 ((call_expression) @call
- (#has-ancestor? @call
-   (function_item name: (identifier) @fn)
-   stopBy: (closure_expression)))
+ (#has-ancestor? @call function_item stopBy: (closure_expression)))
 ```
 
-This searches toward the enclosing function and stops if a closure is reached
-first. For descendants, a matching stop node ends the whole preorder walk. For
-siblings, it ends the walk in the selected direction. Parents remain direct.
-A bounded walk has no general translation using only a single CSS combinator.
+```
+{"call__text":"items.len()"}
+{"call__text":"log(n)"}
+{"call__text":"f(1)"}
+{"call__text":"host(&[1, 2])"}
+{"call__text":"log(0)"}
+```
 
-`field: name` requires the related node to occupy that field in its own parent.
-The field must exist in the grammar. It applies to all directional relations.
+`x.count_ones()` is missing: its walk ends at the closure before it reaches
+`host`. For descendants, a matching stop node ends that branch; for siblings,
+it ends the walk in the selected direction.
+
+`field: NAME` requires the step next to the related node to carry that grammar
+field, as in ast-grep. The field must exist in the grammar.
 
 ```scheme
-((expression_statement) @statement
- (#has? @statement (identifier) field: function))
-
-((call_expression) @call
- (#has-ancestor? @call (block) field: body))
+((call_expression) @call (#has? @call identifier field: function stopBy: neighbor))
 ```
 
-Their CSS forms are `expression_statement:has(identifier[field="function"])`
-and `block[field="body"] call_expression`.
+```
+{"call__text":"log(n)"}
+{"call__text":"f(1)"}
+{"call__text":"host(&[1, 2])"}
+{"call__text":"log(0)"}
+```
 
-## Negation and related captures
+The CSS form is `call_expression:has(> identifier[field="function"])`.
+
+## Negation
 
 Every relation has a `not-` form: `#not-has?`, `#not-has-ancestor?`,
-`#not-has-parent?`, `#not-precedes?`, `#not-follows?`, and `#not-nth-child?`.
-Negation complements the relation and exports no related captures.
+`#not-has-parent?`, `#not-precedes?`, `#not-follows?`, `#not-nth-child?`.
+Negation exports no captures from the target.
+
+```scheme
+((call_expression) @call (#not-has-ancestor? @call closure_expression))
+```
+
+```
+{"call__text":"items.len()"}
+{"call__text":"log(n)"}
+{"call__text":"f(1)"}
+{"call__text":"host(&[1, 2])"}
+{"call__text":"log(0)"}
+```
+
+## Captures across levels
+
+A nested pattern can read captures of the levels around it. `#eq? @inner @outer`
+compares their text, and `#match? @outer "re"` inside the nested pattern tests
+an enclosing capture's text:
+
+```scheme
+((let_declaration pattern: (identifier) @var) @let
+ (#precedes? @let ((expression_statement (call_expression arguments: (arguments (identifier) @arg))) (#eq? @arg @var))))
+```
+
+```
+{"var__text":"n","let__text":"let n = items.len();"}
+```
 
 ```scheme
 ((call_expression) @call
- (#not-has-ancestor? @call closure_expression end))
+ (#has-ancestor? @call ((function_item) (#match? @call "^log"))))
 ```
 
-A positive relation exports captures from the first matching related node in its
-walk order, without creating additional result rows. Later extension predicates
-can inspect those captures, and `#emit!` can use them:
+```
+{"call__text":"log(n)"}
+{"call__text":"log(0)"}
+```
+
+A capture name used both inside and outside names the same node:
+
+```scheme
+((identifier) @id (#has-parent? @id (call_expression function: (identifier) @id)))
+```
+
+```
+{"id__text":"log"}
+{"id__text":"f"}
+{"id__text":"host"}
+{"id__text":"log"}
+```
+
+`#contains? @capture "literal"+` holds when the capture's text contains every
+literal; `#not-contains?` is its complement.
+
+```scheme
+((call_expression) @call (#contains? @call "log"))
+```
+
+```
+{"call__text":"log(n)"}
+{"call__text":"log(0)"}
+```
+
+## Result rows: `rows: first` and `rows: each`
+
+`rows: first`, the default, keeps a match when any related node exists and
+exports nothing from the target, so each outer match appears once:
 
 ```scheme
 ((call_expression) @call
- (#has-ancestor? @call (function_item name: (identifier) @fn))
- (#contains? @fn "host")
- (#emit! "enclosing" "call" @call "function" @fn))
+ (#has-ancestor? @call (function_item name: (identifier) @fn) rows: first))
 ```
 
-Place predicates that consume related captures after the relation that binds
-them. Native outer-query text predicates run before relation evaluation; use
-native text predicates inside the nested pattern when filtering related text.
+```
+{"call__text":"items.len()"}
+{"call__text":"log(n)"}
+{"call__text":"x.count_ones()"}
+{"call__text":"f(1)"}
+{"call__text":"host(&[1, 2])"}
+{"call__text":"log(0)"}
+```
+
+`rows: each` emits one row per related node and exports its captures. Levels
+nest to any depth:
+
+```scheme
+((identifier) @id
+ (#has-ancestor? @id
+   ((closure_expression) @closure
+    (#has-ancestor? @closure (function_item name: (identifier) @fn) rows: each))
+   rows: each))
+```
+
+```
+{"id__text":"x","closure__text":"|x: u32| x.count_ones()","fn__text":"host"}
+{"id__text":"x","closure__text":"|x: u32| x.count_ones()","fn__text":"host"}
+```
+
+A capture name bound by two exported levels is an error; use two names and
+`#eq?`.
+
+## `--query`, bundled queries, and `--sqlite`
+
+`ryii query --query TEXT` and the `.scm` files the crate runs through
+`hafley_scm::build` accept the same relation predicates. A top-level pattern
+with a relation compiles through scm++ and keeps a tree-sitter match when the
+SQL accepts it; `#emit!` and the native predicates stay with the pattern.
+Output is the plain query output:
+
+```sh
+ryii query --query '((call_expression) @call (#not-has-ancestor? @call closure_expression))' x.rs
+```
+
+```
+{"call":"items.len()","end_line":2,"line":2,"path":"x.rs"}
+{"call":"log(n)","end_line":3,"line":3,"path":"x.rs"}
+{"call":"f(1)","end_line":5,"line":5,"path":"x.rs"}
+{"call":"host(&[1, 2])","end_line":10,"line":10,"path":"x.rs"}
+{"call":"log(0)","end_line":11,"line":11,"path":"x.rs"}
+```
+
+That path exports only level-0 captures, so `rows: each` is rejected there:
+
+```sh
+ryii query --query '((call_expression) @call (#has-ancestor? @call (function_item name: (identifier) @fn) rows: each))' x.rs
+```
+
+```
+query (rust): Scmpp(Unsupported("@fn is a rows: each capture; query --scmpp returns those rows"))
+```
+
+`ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run: the result
+rows in `scmpp_row`, the per-level `capture` rows (columns `pattern` and
+`match` name the level and match), and the CST `node` and `edge` rows (family
+`cst`, with `field`, `index` and `named_index` on each edge). Without
+`--sqlite` the rows live in an in-memory database for the run.
 
 ## Reference
 
-| Predicate | Default reach | CSS form for target `A` and related node `B` |
+| Predicate | Reach | CSS form for target `A` and related node `B` |
 | --- | --- | --- |
 | `#has? @a B` | Strict descendants | `A:has(B)` |
-| `#has? @a B neighbor` | Direct children | `A:has(> B)` |
+| `#has? @a B stopBy: neighbor` | Direct children | `A:has(> B)` |
 | `#has-ancestor? @a B` | Strict ancestors | `B A` |
-| `#has-ancestor? @a B neighbor` | Direct parent | `B > A` |
+| `#has-ancestor? @a B stopBy: neighbor` | Direct parent | `B > A` |
 | `#has-parent? @a B` | Direct parent | `B > A` |
-| `#precedes? @a B neighbor` | Next named sibling | `A:has(+ B)` |
-| `#precedes? @a B end` | Later named siblings | `A:has(~ B)` |
-| `#follows? @a B neighbor` | Previous named sibling | `B + A` |
-| `#follows? @a B end` | Earlier named siblings | `B ~ A` |
+| `#precedes? @a B stopBy: neighbor` | Next named sibling | `A:has(+ B)` |
+| `#precedes? @a B` | Later named siblings | `A:has(~ B)` |
+| `#follows? @a B stopBy: neighbor` | Previous named sibling | `B + A` |
+| `#follows? @a B` | Earlier named siblings | `B ~ A` |
 | `#nth-child? @a N` | Named sibling position | `A:nth-child(N)` |
 | `#nth-child? @a N of B` | Position after filtering | `A:nth-child(N of B)` |
 
-CSS comparisons apply to named nodes. Descendant and ancestor predicates retain
-support for anonymous nodes in tree-sitter patterns. See the
-[ast-grep relation reference](https://ast-grep.github.io/reference/rule) for the
-sibling directions and inclusive stop semantics.
+| Option | Values | Applies to |
+| --- | --- | --- |
+| `stopBy:` | `end` (default), `neighbor`, `(PATTERN)` | has, has-ancestor, precedes, follows |
+| `field:` | a grammar field name | has, has-ancestor, has-parent, precedes, follows |
+| `rows:` | `first` (default), `each` | has, has-ancestor, has-parent, precedes, follows |
+
+CSS comparisons apply to named nodes. See the
+[ast-grep relation reference](https://ast-grep.github.io/reference/rule) for
+the sibling directions and inclusive stop semantics.
