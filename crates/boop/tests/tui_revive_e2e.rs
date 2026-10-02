@@ -133,10 +133,12 @@ impl Scratch {
     /// column header above it, so the value is the last line.
     fn scalar(&self, sql: &str) -> String {
         let out = self.boop(&["db", "--format", "text", sql]);
+        assert!(out.status.success(), "scratch query failed: {out:?}");
         String::from_utf8_lossy(&out.stdout)
             .lines()
+            .skip(1)
             .filter(|line| !line.trim().is_empty())
-            .next_back()
+            .last()
             .unwrap_or_default()
             .trim()
             .to_owned()
@@ -250,7 +252,7 @@ fn wait_for_recorded_turn(scratch: &Scratch, case: &Case, session: &str) {
              JOIN dict_session s ON s.id = t.session_id \
              WHERE s.value = '{session}' AND t.role = 'assistant' AND t.said <> ''"
         ));
-        if with_text != "0" {
+        if with_text.parse::<u64>().is_ok_and(|count| count > 0) {
             return;
         }
         assert!(
@@ -341,11 +343,14 @@ fn wait_for<T, F: FnMut() -> Option<T>>(case: &Case, label: &str, mut probe: F) 
 /// `tui_sigint_e2e` spells it.
 fn run_tui_in_pane(scratch: &Scratch, case: &Case, launch: &MockTuiLaunch, workspace: &PathBuf) {
     let mut command = String::from("exec env");
+    for (key, value) in boop_store::testing::boop_test_env(&scratch.root.join("home")) {
+        command.push_str(&format!(" {key}={}", shell_quote(&value)));
+    }
     for (key, value) in &launch.env {
         command.push_str(&format!(" {}={}", key, shell_quote(value)));
     }
     command.push_str(&format!(
-        " BOOP_DB={} BOOP_NO_SYNC={}",
+        " TMUX=\"$TMUX\" TMUX_PANE=\"$TMUX_PANE\" BOOP_DB={} BOOP_NO_SYNC={}",
         shell_quote(&scratch.mail().join("boop.db").display().to_string()),
         shell_quote("1"),
     ));
@@ -474,6 +479,14 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
     // The harness writes its own store after the screen shows the reply. A pane
     // killed before that flush has no turn to quote, which is a setup race.
     wait_for_recorded_turn(&scratch, case, &session_id);
+    eprintln!(
+        "evidence {}: db={} session={} pane={} reply={}",
+        case.entry,
+        scratch.mail().join("boop.db").display(),
+        session_id,
+        pane,
+        screen(&server, &scratch.session).contains(mock_tui::MOCK_REPLY_MARKER)
+    );
 
     // Step 2: the incident. The whole tmux server dies mid-conversation, and
     // the harness processes under it die with it.
@@ -507,6 +520,10 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         .find(|line| line.contains(&scratch.route))
         .unwrap_or_else(|| panic!("{}: no row for {}\n{listed}", case.entry, scratch.route))
         .to_owned();
+    eprintln!(
+        "evidence {}: restored pane %0 runs sleep; row={row}",
+        case.entry
+    );
     assert!(
         row.starts_with("dead") && row.contains("REVIVABLE"),
         "{}: row is not a revivable dead row: {row}",
@@ -637,13 +654,13 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         "{}: the revived pane rebound a different session",
         case.entry
     );
-    // The resumed conversation, on screen: its opening user turn is drawn by
-    // the revived TUI itself, from the transcript the old pane wrote.
+    // The resumed conversation renders its persisted reply. Codex's resume
+    // viewport omits the opening user turn, which the store check above owns.
     wait_for_screen(
         &server,
         case,
         &format!("{}-revived-1", scratch.route),
-        mock_tui::MOCK_PROMPT,
+        mock_tui::MOCK_REPLY_MARKER,
         "revived screen",
     );
 

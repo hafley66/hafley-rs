@@ -25,6 +25,7 @@ use std::time::{Duration, Instant};
 use boop::harness::mock_tui::{self, MockTuiLaunch, MockTuiReplay};
 use boop::harness::{shell_quote, HarnessId};
 use boop::Registry;
+use boop_store::testing::BoopCommandExt;
 
 const BOOP: &str = env!("CARGO_BIN_EXE_boop");
 
@@ -80,6 +81,7 @@ const CASES: &[Case] = &[
 /// One harness's scratch world.
 struct Scratch {
     root: PathBuf,
+    socket: String,
     mail: PathBuf,
     repo: PathBuf,
     target_root: PathBuf,
@@ -103,6 +105,7 @@ impl Scratch {
         Command::new(BOOP)
             .args(args)
             .boop_test_root(&self.root)
+            .env("PATH", gui_safe_path(self))
             .env("BOOP_DB", self.mail.join("boop.db"))
             .env("BOOP_NO_SYNC", "1")
             .env("BOOP_LANE_TARGET_ROOT", &self.target_root)
@@ -112,6 +115,7 @@ impl Scratch {
 
     fn scalar(&self, sql: &str) -> i64 {
         let out = self.boop(&["db", "--format", "text", sql]);
+        assert!(out.status.success(), "scratch query failed: {out:?}");
         String::from_utf8_lossy(&out.stdout)
             .lines()
             .filter_map(|line| line.trim().parse::<i64>().ok())
@@ -121,6 +125,7 @@ impl Scratch {
 
     fn query(&self, sql: &str) -> String {
         let out = self.boop(&["db", "--format", "text", sql]);
+        assert!(out.status.success(), "scratch query failed: {out:?}");
         String::from_utf8_lossy(&out.stdout).into_owned()
     }
 
@@ -136,17 +141,21 @@ impl Drop for Scratch {
         let _ = self.boop(&["beep", "lane", "prune", "--mail-dir", &mail]);
         if let Ok(lanes) = self.lanes.lock() {
             for lane in lanes.iter() {
-                let _ = tmux(&["kill-session", "-t", lane]);
+                let _ = tmux(&self.socket, &["kill-session", "-t", lane]);
             }
         }
-        let _ = tmux(&["kill-session", "-t", &self.coordinator_session]);
+        let _ = tmux(&self.socket, &["kill-server"]);
         let _ = std::fs::remove_dir_all(&root);
         let _ = std::fs::remove_dir_all(&self.root);
     }
 }
 
-fn tmux(args: &[&str]) -> std::process::Output {
-    Command::new("tmux").args(args).output().expect("run tmux")
+fn tmux(socket: &str, args: &[&str]) -> std::process::Output {
+    Command::new("tmux")
+        .args(["-f", "/dev/null", "-L", socket])
+        .args(args)
+        .output()
+        .expect("run tmux")
 }
 
 /// A scratch bin dir whose no-op `open` shadows the real launcher, so a harness
@@ -169,8 +178,8 @@ fn gui_safe_path(scratch: &Scratch) -> String {
     format!("{}:{path}", scratch.gui_bin.display())
 }
 
-fn screen(session: &str) -> String {
-    let output = tmux(&["capture-pane", "-p", "-t", session, "-S", "-300"]);
+fn screen(socket: &str, session: &str) -> String {
+    let output = tmux(socket, &["capture-pane", "-p", "-t", session, "-S", "-300"]);
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
@@ -215,10 +224,10 @@ fn wait_for<F: FnMut() -> bool>(case: &Case, what: &str, mut probe: F) {
     }
 }
 
-fn wait_for_screen(case: &Case, session: &str, wanted: &str, label: &str) {
+fn wait_for_screen(socket: &str, case: &Case, session: &str, wanted: &str, label: &str) {
     let deadline = Instant::now() + Duration::from_secs(60);
     loop {
-        let text = screen(session);
+        let text = screen(socket, session);
         if text.contains(wanted) {
             return;
         }
@@ -235,9 +244,13 @@ fn wait_for_screen(case: &Case, session: &str, wanted: &str, label: &str) {
 fn run_coordinator_tui(scratch: &Scratch, case: &Case, launch: &MockTuiLaunch) {
     let tag = &scratch.coordinator_session;
     let mut command = String::from("exec env");
+    for (key, value) in boop_store::testing::boop_test_env(&scratch.root.join("home")) {
+        command.push_str(&format!(" {key}={}", shell_quote(&value)));
+    }
     for (key, value) in &launch.env {
         command.push_str(&format!(" {}={}", key, shell_quote(value)));
     }
+    command.push_str(" TMUX=\"$TMUX\" TMUX_PANE=\"$TMUX_PANE\"");
     // Last assignment wins: the gui-safe PATH shadows the recipe's, so no
     // harness attempt can launch a real desktop app.
     command.push_str(&format!(
@@ -271,17 +284,20 @@ fn run_coordinator_tui(scratch: &Scratch, case: &Case, launch: &MockTuiLaunch) {
         command.push(' ');
         command.push_str(&shell_quote(arg));
     }
-    let output = tmux(&[
-        "new-session",
-        "-d",
-        "-x",
-        "120",
-        "-y",
-        "35",
-        "-s",
-        tag,
-        &command,
-    ]);
+    let output = tmux(
+        &scratch.socket,
+        &[
+            "new-session",
+            "-d",
+            "-x",
+            "120",
+            "-y",
+            "35",
+            "-s",
+            tag,
+            &command,
+        ],
+    );
     assert!(
         output.status.success(),
         "{} coordinator tmux new-session failed: {}",
@@ -357,6 +373,7 @@ fn lane_create(
     let mut command = Command::new(BOOP);
     command
         .boop_test_root(&scratch.root)
+        .env("PATH", gui_safe_path(scratch))
         .env("BOOP_DB", scratch.mail.join("boop.db"))
         .env("BOOP_NO_SYNC", "1")
         .env("BOOP_LANE_TARGET_ROOT", &scratch.target_root)
@@ -545,6 +562,8 @@ fn case_merged_delete(scratch: &Scratch, case: &Case, base_sha: &str) {
             &scratch.mail.display().to_string(),
         ])
         .current_dir(&scratch.repo)
+        .boop_test_root(&scratch.root)
+        .env("PATH", gui_safe_path(scratch))
         .env("BOOP_LANE_TARGET_ROOT", &scratch.target_root)
         .env("BOOP_DB", scratch.mail.join("boop.db"))
         .env("BOOP_NO_SYNC", "1")
@@ -625,6 +644,8 @@ fn case_merged_delete(scratch: &Scratch, case: &Case, base_sha: &str) {
             &scratch.mail.display().to_string(),
         ])
         .current_dir(&scratch.repo)
+        .boop_test_root(&scratch.root)
+        .env("PATH", gui_safe_path(scratch))
         .env("BOOP_LANE_TARGET_ROOT", &scratch.target_root)
         .env("BOOP_DB", scratch.mail.join("boop.db"))
         .env("BOOP_NO_SYNC", "1")
@@ -656,10 +677,28 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     let new_target = scratch.lane_target(&new_lane);
     std::fs::create_dir_all(old_target.join("debug")).unwrap();
     std::fs::write(old_target.join("debug/old"), b"x").unwrap();
-    std::thread::sleep(Duration::from_millis(50));
+
     std::fs::create_dir_all(new_target.join("debug")).unwrap();
     std::fs::write(new_target.join("debug/new"), b"x").unwrap();
 
+    let now = std::time::SystemTime::now();
+    let old = now - boop::gc::TARGET_AGE - Duration::from_secs(120);
+    let new = old + Duration::from_secs(60);
+    for (target, at) in [(&old_target, old), (&new_target, new)] {
+        for path in [
+            target.join("debug/old"),
+            target.join("debug/new"),
+            target.join("debug"),
+            target.clone(),
+        ] {
+            if path.exists() {
+                std::fs::File::open(path)
+                    .unwrap()
+                    .set_times(std::fs::FileTimes::new().set_modified(at))
+                    .unwrap();
+            }
+        }
+    }
     let stem = uniq(case, "floor");
     let branch = format!("feature/{stem}");
     let lane = format!("feature-{stem}");
@@ -671,6 +710,7 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     let launch = lane_recipe(scratch, case, &worktree);
     let output = lane_create(scratch, case, &launch, &branch, &lane, base_sha, &[], &[])
         .env("BOOP_DISK_FLOOR_GB", huge)
+        .env("RUST_LOG", "boop_proc=info")
         .output()
         .expect("run lane create");
     assert!(
@@ -681,6 +721,13 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let stderr = String::from_utf8_lossy(&output.stderr);
     let combined = format!("{stdout}{stderr}");
+    eprintln!(
+        "evidence {}: db={} socket={} target ages > {:?}\n{combined}",
+        case.entry,
+        scratch.mail.join("boop.db").display(),
+        scratch.socket,
+        boop::gc::TARGET_AGE
+    );
     assert!(
         combined.contains("free disk") || combined.contains("floor"),
         "{} case 3: refusal did not name the floor\n{combined}",
@@ -688,15 +735,15 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     );
     assert!(
         !old_target.exists() && !new_target.exists(),
-        "{} case 3: both retired targets evicted",
+        "{} case 3: both retired targets evicted\n{combined}",
         case.entry
     );
     // Oldest-first: the older dir's eviction line comes first.
-    let old_at = stdout.find(&old_target.display().to_string());
-    let new_at = stdout.find(&new_target.display().to_string());
+    let old_at = stderr.find(&old_target.display().to_string());
+    let new_at = stderr.find(&new_target.display().to_string());
     assert!(
         old_at.is_some() && new_at.is_some() && old_at < new_at,
-        "{} case 3: eviction not oldest-first\n{stdout}",
+        "{} case 3: eviction not oldest-first\n{combined}",
         case.entry
     );
     // No route and no screen row for the refused lane.
@@ -709,7 +756,7 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
         case.entry
     );
     assert!(
-        !screen(&scratch.coordinator_session).contains(&lane),
+        !screen(&scratch.socket, &scratch.coordinator_session).contains(&lane),
         "{} case 3: coordinator screen shows a spawn",
         case.entry
     );
@@ -756,11 +803,17 @@ fn case_running_lane_alarm(scratch: &Scratch, case: &Case, base_sha: &str) {
     let target = scratch.lane_target(&lane);
     std::fs::create_dir_all(&target).expect("create lane target");
 
-    wait_for_screen(case, &scratch.coordinator_session, "disk-low", "case 4");
-    let seen = screen(&scratch.coordinator_session);
+    wait_for_screen(
+        &scratch.socket,
+        case,
+        &scratch.coordinator_session,
+        "disk-low",
+        "case 4",
+    );
+    let seen = screen(&scratch.socket, &scratch.coordinator_session);
     let count = seen.matches("disk-low").count();
     std::thread::sleep(Duration::from_secs(5));
-    let after = screen(&scratch.coordinator_session)
+    let after = screen(&scratch.socket, &scratch.coordinator_session)
         .matches("disk-low")
         .count();
     assert_eq!(
@@ -779,13 +832,29 @@ fn run_case(case: &Case, llmock: &Path) -> Result<(), String> {
     ));
     let _ = std::fs::remove_dir_all(&root);
     let session = format!("boop-reclaim-{}-{}", case.entry, std::process::id());
-    let _ = tmux(&["kill-session", "-t", &session]);
+    let socket = session.clone();
+    let _ = tmux(&socket, &["kill-server"]);
     std::fs::create_dir_all(root.join("mail")).unwrap();
     std::fs::create_dir_all(root.join("home")).unwrap();
     std::fs::create_dir_all(root.join("lane-home")).unwrap();
     std::fs::create_dir_all(root.join("workspace")).unwrap();
     std::fs::create_dir_all(root.join("repo")).unwrap();
     let gui_bin = install_gui_bin(&root);
+    // Every descendant uses the same private server, even a command whose
+    // subprocess sandbox deliberately removes inherited TMUX identity.
+    let tmux_bin = mock_tui::resolve_executable("tmux", "BOOP_TMUX_BIN").expect("tmux executable");
+    let wrapper = gui_bin.join("tmux");
+    std::fs::write(
+        &wrapper,
+        format!(
+            "#!/bin/sh\nexec {} -f /dev/null -L {} \"$@\"\n",
+            shell_quote(&tmux_bin.display().to_string()),
+            shell_quote(&socket)
+        ),
+    )
+    .unwrap();
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755)).unwrap();
 
     let repo = root.join("repo");
     git(&repo, &["init", "-q", "-b", "main"]);
@@ -822,6 +891,7 @@ fn run_case(case: &Case, llmock: &Path) -> Result<(), String> {
 
     let scratch = Scratch {
         root: root.clone(),
+        socket: socket.clone(),
         mail: root.join("mail"),
         repo: repo.clone(),
         target_root: root.join("targets"),
@@ -835,12 +905,22 @@ fn run_case(case: &Case, llmock: &Path) -> Result<(), String> {
 
     run_coordinator_tui(&scratch, case, &launch);
     if let MockTuiReplay::TypePrompt { readiness } = launch.replay {
-        wait_for_screen(case, &session, readiness, "coordinator ready");
-        let _ = tmux(&["send-keys", "-t", &session, "-l", mock_tui::MOCK_PROMPT]);
+        wait_for_screen(
+            &scratch.socket,
+            case,
+            &session,
+            readiness,
+            "coordinator ready",
+        );
+        let _ = tmux(
+            &scratch.socket,
+            &["send-keys", "-t", &session, "-l", mock_tui::MOCK_PROMPT],
+        );
         std::thread::sleep(Duration::from_millis(250));
-        let _ = tmux(&["send-keys", "-t", &session, "Enter"]);
+        let _ = tmux(&scratch.socket, &["send-keys", "-t", &session, "Enter"]);
     }
     wait_for_screen(
+        &scratch.socket,
         case,
         &session,
         mock_tui::MOCK_REPLY_MARKER,

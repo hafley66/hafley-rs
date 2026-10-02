@@ -2319,13 +2319,18 @@ fn result_verify_detail(receipt: Option<&VerifyReceipt>) -> String {
 /// Write the lane's result row before the pane can evaporate: a killed pane
 /// never runs its epilogue, and the waiter reads only this mailbox.
 fn record_result(lane: &LaneRun, exit_code: i32, detail: Option<&str>) {
-    let Some(parent) = registered_parent(&lane.mail_dir, &lane.lane) else {
-        debug!(
-            lane = lane.lane,
-            exit_code, "lane has no registered parent; no result row written"
-        );
-        return;
-    };
+    let parent = registered_parent(&lane.mail_dir, &lane.lane)
+        .or_else(|| {
+            bus::messages_for_route(&lane.mail_dir, &lane.lane)
+                .ok()?
+                .into_iter()
+                .rev()
+                .find(|row| row.kind == "dispatch")
+                .map(|row| row.from)
+        })
+        // A direct run or an early spawn failure can precede dispatch storage.
+        // Retain its receipt in the lane's own mailbox for `boop wait`.
+        .unwrap_or_else(|| lane.lane.clone());
     let (expected_exit_code, detail) = apply_expectations(lane, exit_code, detail);
     let verification = lane
         .verify
@@ -3824,6 +3829,41 @@ mod tests {
         assert!(rows[0].body.contains("verified: none"), "{}", rows[0].body);
     }
 
+    #[test]
+    fn parentless_results_answer_the_latest_dispatch_sender_with_the_real_exit() {
+        let dir = tempdir();
+        let lane = parented_lane(&dir, "mine", "parent");
+        let mut route = bus::read_routes(&dir).unwrap().remove("mine").unwrap();
+        route.parent = None;
+        bus::write_route(&dir, "mine", &route).unwrap();
+        for (id, from, to, kind) in [
+            ("old-dispatch", "old-sender", "mine", "dispatch"),
+            ("latest-dispatch", "dispatcher", "mine", "dispatch"),
+            ("other-lane", "stranger", "other", "dispatch"),
+            ("incoming-note", "stranger", "mine", "request"),
+        ] {
+            let mut row = message(id, to, kind);
+            row.from = from.into();
+            append_row(&dir, &row).unwrap();
+        }
+        for rc in [0, 7, 129] {
+            record_result(&lane, rc, None);
+        }
+        let rows: Vec<_> = result_rows(&dir)
+            .into_iter()
+            .map(|row| (row.from, row.to, row.rc))
+            .collect();
+        assert_eq!(
+            rows,
+            [
+                ("mine".into(), "dispatcher".into(), Some(0)),
+                ("mine".into(), "dispatcher".into(), Some(7)),
+                ("mine".into(), "dispatcher".into(), Some(129)),
+            ]
+        );
+        assert_eq!(bus::read_routes(&dir).unwrap()["mine"].parent, None);
+    }
+
     fn rows_of_kind(dir: &Path, kind: &str) -> Vec<bus::Message> {
         let mut rows = Vec::new();
         for path in bus::read_boxes(dir).unwrap_or_default() {
@@ -3880,15 +3920,18 @@ mod tests {
         );
     }
 
-    /// A lane spawned without `--parent` has nobody to report to, and a row
-    /// addressed to the empty string would never match a wait.
+    /// A run that fails before dispatch storage still retains its exit receipt.
     #[test]
-    fn a_parentless_lane_writes_no_result_row() {
+    fn a_parentless_lane_without_dispatch_retains_its_failure_receipt() {
         let dir = tempdir();
         let lane = parented_lane(&dir, "mine", "coordinator");
         std::fs::write(dir.join("registry.json"), r#"{"mine":{"kind":"lane"}}"#).unwrap();
         assert!(run(lane, &mut DeadChannel).is_err());
-        assert!(result_rows(&dir).is_empty());
+        let rows: Vec<_> = result_rows(&dir)
+            .into_iter()
+            .map(|row| (row.from, row.to, row.rc))
+            .collect();
+        assert_eq!(rows, [("mine".into(), "mine".into(), Some(1))]);
     }
 
     /// The flake reason rides behind the `rc=` token the waiter parses, so a

@@ -1461,7 +1461,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             None if args.wait => {
                 println!("parent: - (foreground wait owns the completion receipt)")
             }
-            None => println!("parent: - (no completion hail; pass --parent <lane>)"),
+            None => println!("parent: - (result addressed to dispatch sender)"),
         }
         if let Some(mode) = &commit_push {
             println!("commit-push: {mode}");
@@ -1537,7 +1537,7 @@ pub(crate) fn run_lane(registry: &Registry, args: LaneArgs) -> Result<()> {
             lane: Some(identity.lane),
             repo: repo.clone(),
             prompt,
-            from: None,
+            from: caller_lane,
             harness: Some(harness_id),
             session_id: None,
             model,
