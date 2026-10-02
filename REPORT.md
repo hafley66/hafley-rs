@@ -667,3 +667,81 @@ Verification: `git diff --check` passed. Compilation and runtime results are
 unverified. No installs, builds, cargo tests/checks, npm, node, or dogfood
 scripts ran. The coordinator must also run D05.sh and D06.sh through the
 existing serialized dogfood runner.
+
+## D2 workspace imports: code complete after workspace-source decision (2026-10-02)
+
+Supersedes the stop recorded in `e165815a` on
+`feature/ryi-ts-fix-workspace-imports`. The user classified `@hafley66/alloy-rs`
+as a workspace package supplied by hafley-tsp at `8f679b1`. Its installed
+copy's empty source maps are no longer the source route for D02. The supplied
+failure remains `12/557 unresolved pairs`; no new result or count is claimed.
+
+Resolver commit: `b56fdc64`. Dogfood commit: `c38fcb9b`.
+
+`TsModuleIndex::build` discovers package identity from ancestor package.json
+manifests of extracted inputs, including the separate TypeSpec input root.
+It does not recursively scan the common ancestor of separate input roots.
+The shared source resolver applies each matched package's export map,
+declaration-map and tsconfig rungs, and dist-to-src fallback. Packages lacking
+a src directory also try their package-root source stem. CSS uses runtime
+conditions (`import`, `node`, `default`, `require`), then dist-to-src mapping.
+Existing CSS files retain module facts when they are absent from extracted
+inputs; those facts have source paths without invented blobs or definitions.
+
+Every previously unresolved pair and its implemented route follows. Importers
+and rxjs targets are relative to the rxjs corpus; TypeSpec targets are relative
+to its sibling `<CORPUS>.tsp` checkout.
+
+| Importer | Specifier | Change and target |
+| --- | --- | --- |
+| packages/json-rx/examples/4_cross_process_frame/1_generate.ts:4 | @hafley66/alloy-rs/adapters | Extra input root package name matches; exports and dist-to-src select `packages/rust/src/adapters/index.ts` in TypeSpec |
+| packages/json-rx/examples/4_cross_process_frame/1_generate.ts:5 | @hafley66/alloy-rs/emitter | Extra input root package name matches; exports and dist-to-src select `packages/rust/src/emitter/index.ts` in TypeSpec |
+| packages/grapht-golden/src/1_app.ts:15 | @hafley66/grapht-render-cytoscape | Package-root fallback selects `packages/grapht/adapters/2_render_cytoscape/index.ts` |
+| packages/md/src/0b_SequenceDiagram.tsx:4 | @hafley66/grapht-render-cytoscape | Package-root fallback selects `packages/grapht/adapters/2_render_cytoscape/index.ts` |
+| packages/md/src/2_MarkdownTable.tsx:6 | @hafley66/signal-grid/theme.css | Runtime export maps to `packages/signal-grid/src/theme.css`; module fact survives TS-only inputs |
+| packages/md/src/plugins/1_FsTreeFence.tsx:3 | @hafley66/signal-grid/theme.css | Runtime export maps to `packages/signal-grid/src/theme.css`; module fact survives TS-only inputs |
+| packages/md/src/plugins/1_FsTreeFence.tsx:4 | @hafley66/signal-grid/tree.css | Runtime export maps to `packages/signal-grid/src/tree.css`; module fact survives TS-only inputs |
+| packages/md/src/plugins/1_MarblesFence.tsx:4 | @hafley66/signal-marbles/marbles.css | Runtime default selected over types; maps to `packages/signal-marbles/src/marbles.css`; module fact survives TS-only inputs |
+| packages/boop-adapters/src/report-app/main.tsx:3 | @hafley66/report-shell/style.css | Runtime default selected over types; maps to `packages/report-shell/src/style.css`; module fact survives TS-only inputs |
+| packages/boop-adapters/src/report-app/main.tsx:4 | @hafley66/report-shell/marbler.css | Runtime default selected over types; maps to `packages/report-shell/src/marbler.css`; module fact survives TS-only inputs |
+| packages/vitest-telemetry/src/report-app/main.tsx:3 | @hafley66/report-shell/style.css | Runtime default selected over types; maps to `packages/report-shell/src/style.css`; module fact survives TS-only inputs |
+| packages/vitest-telemetry/src/report-app/main.tsx:4 | @hafley66/report-shell/marbler.css | Runtime default selected over types; maps to `packages/report-shell/src/marbler.css`; module fact survives TS-only inputs |
+
+`0_corpus.sh` creates the detached TypeSpec checkout beside the disposable
+rxjs corpus, removes its write permissions, and checks its pinned HEAD and
+clean status on reuse. It never resets or cleans that TypeSpec checkout.
+D02 adds only `"$CORPUS.tsp/packages/rust"` to both input lists. Its SQL and
+required-resolution assertions remain unchanged: every `@hafley66/` pair
+must have both fast and SQLite module facts. No analysis, command, flag,
+dependency, generated file, or exemption was added.
+
+Added an unrun unit regression in ts_resolve.rs:
+`workspace_inputs_resolve_root_sources_assets_and_extra_packages`. It checks
+package-root TS, unconditional and conditional CSS, both TypeSpec subpaths,
+blocked CSS exports, exclusion of an unsupplied neighbor, and exact module rows.
+The fixture excludes CSS and manifests from its extracted corpus.
+
+Only rustfmt and `git diff --check` ran. No build, cargo test/check, npm, node,
+dogfood execution, install, push, or source worktree creation ran in this lane.
+Code is complete; runtime verification is reserved for the coordinator.
+
+Coordinator commands, run separately and sequentially from the repository root
+using the prepared shared target directory:
+
+```sh
+CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo test -p hafley_scm --features read --lib workspace_inputs_resolve_root_sources_assets_and_extra_packages
+CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test 40_ts_resolve workspace_exports_resolve_to_sources_in_rung_order
+CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo build --manifest-path crates/sprefa-extract/Cargo.toml --release --bin ryii --features cli,ts-checker,typespec
+CARGO_BUILD_JOBS=4 CARGO_TARGET_DIR=/Users/chrishafley/.cache/boop/lanes/_shared cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli
+```
+
+Exact D02 command verifying all pairs above, from `crates/sprefa-extract`:
+
+```sh
+RYII=/Users/chrishafley/.cache/boop/lanes/_shared/release/ryii CORPUS=/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-workspace-imports-2 dogfood/ts/run.sh D02
+```
+
+The runner creates the sibling read-only checkout at
+`/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-workspace-imports-2.tsp`.
+The established golden_parity root-prefix failures remain coordinator context,
+not results from this lane.
