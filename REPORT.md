@@ -799,3 +799,26 @@ and JSX query (`crates/hafley_scm/src/read/lang/ts.rs:60`).
 is removed; the existing two compiled-query caches remain. Query text and
 &'static str lifetime are preserved. Code reading only; coordinator validation
 pending. No allowlist changes.
+
+### Merged-file rule review receipt
+
+Reviewed scripts/quality-gate.sh and all 11 rule definitions. The initial
+main...integrate/ryi-ts file set at 9b100d15 contained 121 files: 33 Rust source
+files under the four source rule roots, 11 Rust files under test roots, and
+77 files outside the rules' roots/extensions. Review checked matching constructs
+and enclosing functions against the existing allowances, and checked newly
+introduced free-function names against definitions in the source roots.
+Further findings repaired above: file reads, the cross-crate JSX include,
+and the extra TypeScript string cache. No further unallowlisted match was
+identified by this source review.
+
+The integration branch advanced during this lane to 06d24aca. Its additional
+changes are three task briefs and a SQLite integer conversion at
+`crates/sprefa-extract/tests/167_graph_paths.rs:137`; that conversion introduces
+no gate-rule match. The reviewed merged file set is therefore 124 files.
+No integration commits were merged into this lane.
+
+`git diff --check 9b100d15..HEAD` passed. Compilation and
+`t_186_quality_gate::repository_quality_gate_matches_its_allowlists` remain
+unrun and require coordinator execution. No cargo, npm, node, Python, quality
+gate, or dogfood script was run. Help captures and allowlists were not edited.
