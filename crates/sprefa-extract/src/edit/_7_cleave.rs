@@ -783,6 +783,16 @@ impl Plan {
         let cfg_prefix = item_cfg_prefix(&src, &source.text, &item_decl)?;
 
         let (mut dragged, drag_iterations) = source.drag_fixpoint(&item_decl, drag);
+        if arm.name() == "ts" {
+            for row in dragged.iter().filter(|row| row.action == "exported") {
+                if source.mutable_bindings.iter().any(|span| inside(*span, row.span)) {
+                    return Err(format!(
+                        "cleave refuses mutable binding {} left in {src}; moving {item} would import that binding into {dest}",
+                        row.name
+                    ));
+                }
+            }
+        }
         let travelling_types: BTreeSet<String> = std::iter::once(item.clone())
             .chain(
                 dragged
@@ -2319,6 +2329,7 @@ struct FileFacts {
     specifiers: Vec<SpecifierRow>,
     import_statements: Vec<Span>,
     import_end: u32,
+    mutable_bindings: Vec<Span>,
     /// The callee, its span, and whether it was reached through a receiver.
     sites: Vec<(String, Span, bool)>,
     decls: Vec<Decl>,
@@ -2347,6 +2358,7 @@ impl FileFacts {
         let mut specifiers = Vec::new();
         let mut import_statements = Vec::new();
         let mut import_end = 0;
+        let mut mutable_bindings = Vec::new();
         let mut sites = Vec::new();
         flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
             match fact {
@@ -2366,6 +2378,16 @@ impl FileFacts {
                     ..
                 } if kind == "export_statement" => {
                     import_statements.push(span_of(span.start, span.end));
+                }
+                FlatFact::Node {
+                    family: sprefa_extract::FamilyTag::Cst,
+                    kind,
+                    span,
+                    ..
+                } if matches!(kind.as_str(), "lexical_declaration" | "variable_declaration") => {
+                    if matches!(text[span.start as usize..span.end as usize].split_whitespace().next(), Some("let" | "var")) {
+                        mutable_bindings.push(span_of(span.start, span.end));
+                    }
                 }
                 FlatFact::Specifier {
                     span,
@@ -2429,6 +2451,7 @@ impl FileFacts {
             specifiers,
             import_statements,
             import_end,
+            mutable_bindings,
             sites,
             decls,
             free,
