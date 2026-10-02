@@ -15,7 +15,7 @@
 //! `Resolve<TypeF>`; phase 1 stays pure-content.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
 
 use oxc_allocator::Allocator;
@@ -2079,18 +2079,20 @@ impl Project<CallF> for CallProjector<'_> {
         let blob = crate::read::dispatch::extracting_blob(self.content.as_bytes())
             .unwrap_or_else(|| content_id_of(self.content.as_bytes()));
         let mut facts = ts_receivers::collect(program);
-        let mut anonymous: Vec<_> = sink.nodes.iter().filter(|node| node.name.is_none()).collect();
-        anonymous.sort_by_key(|node| node.span.start);
+        // Outer spans first; a named node precedes an unnamed one on the same span.
+        let mut order: Vec<_> = sink.nodes.iter().collect();
+        order.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end()), node.name.is_none()));
+        let mut named: Vec<(u32, NameId)> = Vec::new();
         let mut copies = BTreeMap::<(String, ContentId), u32>::new();
-        for node in anonymous {
-            let owner = sink.nodes.iter()
-                .filter(|parent| parent.name.is_some()
-                    && parent.span.start <= node.span.start
-                    && node.span.end() <= parent.span.end())
-                .min_by_key(|parent| parent.span.len)
-                .and_then(|parent| parent.name)
-                .map(|name| strings.lookup(name))
-                .unwrap_or(MODULE_DEF_NAME);
+        for node in order {
+            while named.last().is_some_and(|(end, _)| *end < node.span.end()) {
+                named.pop();
+            }
+            if let Some(name) = node.name {
+                named.push((node.span.end(), name));
+                continue;
+            }
+            let owner = named.last().map_or(MODULE_DEF_NAME, |(_, name)| strings.lookup(*name));
             let Some(body) = self.content.as_bytes()
                 .get(node.span.start as usize..node.span.end() as usize) else {
                     continue;
@@ -4750,22 +4752,44 @@ impl TsSource {
         callee: &str,
         own: Option<&ContentId>,
     ) -> Option<(ContentId, Span)> {
-        // Nested declarations require a lexical target. A same-name def in
-        // another function cannot supply this file's unbound-name fallback.
-        let nested: Vec<Span> = output.call.as_ref().map(|call| {
-            call.nodes.iter().filter(|node| {
-                node.kind == CallKind::Free
-                    && node.name.is_some_and(|name| output.strings.lookup(name) == callee)
-                    && call.nodes.iter().any(|parent| {
-                        parent.span != node.span
-                            && parent.span.start <= node.span.start
-                            && node.span.end() <= parent.span.end()
-                            && parent.name.is_some_and(|name| {
-                                output.strings.lookup(name) != MODULE_DEF_NAME
-                            })
-                    })
-            }).map(|node| node.span).collect()
-        }).unwrap_or_default();
+        Self::call_name_match_in(output, index, callee, own, &Self::nested_callables(output))
+    }
+
+    /// Free defs inside another named, non-module def: these need a lexical
+    /// target, never the file's unbound-name fallback.
+    pub fn nested_callables(output: &RyiOutput) -> HashSet<Span> {
+        let Some(call) = output.call.as_ref() else {
+            return HashSet::new();
+        };
+        let mut order: Vec<_> = call.nodes.iter().collect();
+        order.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end())));
+        let mut open: Vec<(Span, bool)> = Vec::new();
+        let mut nested = HashSet::new();
+        for node in order {
+            while open.last().is_some_and(|(span, _)| span.end() < node.span.end()) {
+                open.pop();
+            }
+            if node.kind == CallKind::Free
+                && node.name.is_some()
+                && open.iter().any(|(span, owner)| *owner && *span != node.span)
+            {
+                nested.insert(node.span);
+            }
+            let owner = node
+                .name
+                .is_some_and(|name| output.strings.lookup(name) != MODULE_DEF_NAME);
+            open.push((node.span, owner));
+        }
+        nested
+    }
+
+    fn call_name_match_in(
+        output: &RyiOutput,
+        index: &DefIndex,
+        callee: &str,
+        own: Option<&ContentId>,
+        nested: &HashSet<Span>,
+    ) -> Option<(ContentId, Span)> {
         let sites: Vec<&DefSite> = corpus_defs(index, callee).iter()
             .filter(|site| own != Some(&site.blob) || !nested.contains(&site.span))
             .collect();
@@ -5083,6 +5107,7 @@ impl Resolve<CallF> for TsSource {
         let own_facts = own
             .as_ref()
             .and_then(|blob| ts_receivers::facts_of(blob, paths));
+        let nested = Self::nested_callables(output);
         let recv_map: HashMap<(u32, u32), &ts_receivers::TypeBinding> = own_facts
             .as_ref()
             .map(|facts| {
@@ -5241,7 +5266,7 @@ impl Resolve<CallF> for TsSource {
                 }) {
                     return None;
                 }
-                Self::call_name_match(output, def_index, callee, own.as_ref())
+                Self::call_name_match_in(output, def_index, callee, own.as_ref(), &nested)
                     .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                     .map(|(blob, span)| {
                         let origin = if own.as_ref() == Some(&blob) {
@@ -5415,7 +5440,7 @@ impl Resolve<CallF> for TsSource {
                 if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
                     return None;
                 }
-                Self::call_name_match(output, def_index, named, own.as_ref()).map(|(blob, span)| {
+                Self::call_name_match_in(output, def_index, named, own.as_ref(), &nested).map(|(blob, span)| {
                     let origin = if own.as_ref() == Some(&blob) {
                         ResolutionOrigin::SameFile
                     } else {
