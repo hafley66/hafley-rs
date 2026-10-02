@@ -151,7 +151,7 @@ pub fn styled_module(module: &str, written: &str) -> String {
     }
     let extensions = [".js", ".mjs", ".cjs", ".ts", ".tsx", ".mts", ".cts"];
     let suffix = extensions.iter().find(|suffix| written.ends_with(**suffix)).copied().unwrap_or("");
-    let stem = extensions.iter().find_map(|suffix| module.strip_suffix(suffix)).unwrap_or(module);
+    let stem = extensions.iter().find_map(|suffix| module.strip_suffix(*suffix)).unwrap_or(module);
     format!("{stem}{suffix}")
 }
 
