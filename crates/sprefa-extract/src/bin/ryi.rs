@@ -25,14 +25,17 @@ use std::time::Instant;
 use clap::{CommandFactory as _, FromArgMatches as _};
 
 use sprefa_extract::schema::schema_text;
+use sprefa_extract::edit::ts7_resolve::{
+    resolve_project_jsonl, resolve_project_with_raw, slow_project, slow_project_with_raw,
+};
 use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, dispatch,
     file_fact_with_content_id, flatten_cfg_each, flatten_each, line_start_fact_with_content_id,
-    newline_offsets, package_edges_jsonl, resolve_project_jsonl, resolve_project_with_raw,
+    newline_offsets, package_edges_jsonl,
     scip_facts_jsonl, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
-    scip_index_location, size_skip_fact, slow_project, slow_project_with_raw, sorted_lines,
+    scip_index_location, size_skip_fact, sorted_lines,
     source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest, ScipFamilyRequest,
     ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
