@@ -100,3 +100,9 @@ Arguments:
   [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
              fork <id>`; `join` and `diff` take their own
 ```
+
+## ryi TS miscellaneous defects (2026-10-02)
+
+The coordinator superseded the per-commit gate with a stop on builds and executions. All four release builds, dogfood cases, and `cargo test --features cli` gates are pending serialized verification. No cargo/rustc process was started in this lane.
+
+- D18 before: mixed-grammar query aborted on `Invalid node type "call_expression"`. After: query compilation classifies `NodeType` errors per grammar, skips those files, and reports total and per-language skipped counts on stderr. Syntax and other query errors remain failures. `D18.sh` compares mixed-directory output with TS/TSX-only output and checks malformed-query rejection. Code and case are unverified.

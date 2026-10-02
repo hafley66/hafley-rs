@@ -20,6 +20,8 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
     }
     let mut output = crate::sqlite::Output::with_writer(cli.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
+    let mut compatible = std::collections::HashMap::<String, bool>::new();
+    let mut skipped = std::collections::BTreeMap::<String, usize>::new();
     for path in &paths {
         let name = path.to_string_lossy();
         let language = match &cli.lang {
@@ -28,6 +30,22 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
                 .map(|lang| lang.name().to_string())
                 .ok_or_else(|| format!("{name}: no language for this extension; pass --lang"))?,
         };
+        if !compatible.contains_key(&language) {
+            let grammar = RyiLang::parse_name(&language)
+                .ok_or_else(|| format!("unknown lang '{language}'"))?
+                .tree_sitter_language();
+            let supported = match hafley_scm::build(&grammar, &cli.query) {
+                Ok(_) => true,
+                Err(hafley_scm::QueryExtError::Parse(error))
+                    if error.kind == tree_sitter::QueryErrorKind::NodeType => false,
+                Err(error) => return Err(format!("query ({language}): {error:?}")),
+            };
+            compatible.insert(language.clone(), supported);
+        }
+        if !compatible[&language] {
+            *skipped.entry(language).or_default() += 1;
+            continue;
+        }
         let bytes = source_bytes(path, cli.digest.as_deref())?;
         let request = TreeSitterQuery {
             language,
@@ -70,6 +88,14 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
                 )
                 .map_err(|error| error.to_string())?;
         }
+    }
+    if !skipped.is_empty() {
+        crate::ops::print_diagnostic(format_args!(
+            "query: skipped {} files whose grammar lacks a query node type ({})",
+            skipped.values().sum::<usize>(),
+            skipped.iter().map(|(language, count)| format!("{language}: {count}"))
+                .collect::<Vec<_>>().join(", "),
+        ));
     }
     output.finish().map_err(|error| error.to_string())
 }
