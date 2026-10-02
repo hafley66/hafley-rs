@@ -26,6 +26,26 @@ pub(crate) fn run(mail_arg: Option<&Path>, apply: bool) -> Result<()> {
             candidate.reason
         );
     }
+    let expired: Vec<_> = routes
+        .iter()
+        .filter(|(name, route)| {
+            gc::expired_coordinator(
+                route,
+                protected.contains(*name),
+                activity.get(*name).copied(),
+                now,
+            )
+        })
+        .map(|(name, route)| (name.clone(), bus::route_to_value(route)))
+        .collect();
+    for (name, _) in &expired {
+        println!(
+            "{}#{}\t0\t{}\tdead\tcoordinator dead 7d",
+            bus::db_path(&mail)?.display(),
+            name,
+            name
+        );
+    }
     if apply {
         // Recollect between mutations so a revived lane or changed route is protected.
         for candidate in candidates {
@@ -43,7 +63,26 @@ pub(crate) fn run(mail_arg: Option<&Path>, apply: bool) -> Result<()> {
                 gc::remove(candidate, &root, &trails)?;
             }
         }
-
+        let current = bus::read_routes(&mail)?;
+        let active = gc::protected(&mail, &current, None)?;
+        let clock = gc::activity(&mail, &current)?;
+        bus::cas_update_json(&mail.join("registry.json"), |rows| {
+            for (name, expected) in &expired {
+                if rows.get(name) == Some(expected)
+                    && current.get(name).is_some_and(|route| {
+                        gc::expired_coordinator(
+                            route,
+                            active.contains(name),
+                            clock.get(name).copied(),
+                            SystemTime::now(),
+                        )
+                    })
+                {
+                    rows.remove(name);
+                }
+            }
+            Ok(())
+        })?;
     }
     Ok(())
 }

@@ -2670,6 +2670,7 @@ pub(crate) fn run_lane_list(
     let now = epoch_ms();
     let stale_ms = boop::supervise::stale_limit().map(|limit| limit.as_millis() as u64);
     let newest = newest_lane_activity(&bus::read_messages(&dir)?);
+    let gc_activity = boop::gc::activity(&dir, &routes)?;
     // One capture for the whole list: every lane state and parent hop reads the
     // same process snapshot, the pane-truth answer `beep ps` prints. The pane
     // pid batch is captured beside it, one tmux call for all lanes instead of
@@ -2701,6 +2702,14 @@ pub(crate) fn run_lane_list(
                 &dir, name, &live, route, &routes, &snapshot, &pane_pids, socket,
             )
         };
+        if boop::gc::expired_coordinator(
+            route,
+            state != "dead",
+            gc_activity.get(name).copied(),
+            std::time::SystemTime::now(),
+        ) {
+            continue;
+        }
         if let Some(want) = state_filter {
             if state != want {
                 continue;
