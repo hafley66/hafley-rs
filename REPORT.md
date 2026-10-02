@@ -218,3 +218,47 @@ RYII="$CARGO_TARGET_DIR/release/ryii" CORPUS="$HOME/projects/rxjs-corpus-feature
 D03/D04/D05/D06/D08 additionally compare type diagnostics against fresh pre-edit baselines through `1_type_errors.sh` (default `node_modules/.bin/tsc`, overridable with `TSC`). D05 checks signals, signal-grid, and docs-kit. All checker calls are deferred. D06/D08 explicitly include their untracked probe files through the existing `--root` option. No analysis SQL, graph walkers, CLI commands, or flags were added.
 
 Implementation commits: D3 `02f62a25`; D4 `5a740949`; D5/D6 `ce8a23be`; D7 `935acfb7`; D8 `6c16c9f6`; D20 `1fe6434d`; D22 `29a2c385`; stale request identity `20e3476b`. Later commits adjust unrun cases and D8 suffix typing. None has passed a build or runtime gate in this lane.
+# ryi TS graph lane, 2026-10-02
+
+Coordinator instruction suspended builds and all runtime gates. The initial
+release build was terminated locally and remotely before completion. Cases below
+are written but unrun; release build, dogfood and crate tests remain unverified.
+Corpus: `~/projects/rxjs-corpus-feature-ryi-ts-graph`, detached at d0802620.
+
+| Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
+|---|---|---|---|
+| D9 | No callers for same-file arrow/function-expression consts | Lexical callable spans resolve g, k and nested inner; D09.sh checks those rows and corpus sectionsOf | Extraction/resolution facts |
+| D10 | DOM globals and unrelated declarations bind through corpus_unique | TypeScript call-name fallback has no cross-file corpus-unique leg; plain calls require a lexical callable target or import/checker binding; D10.sh asserts globals, local forward const and parameter shadow | Resolution facts |
+| D11 | invalidate binds SignalCreator to Query and enlarges the cycle | Local forward callable is extracted/resolved; phantom edge is absent; D11.sh asserts facts and existing stratify cycle output | Resolution facts |
+
+D10 compatibility risk: previous name-only cross-file TypeScript resolutions
+without imports are deliberately declined. Serialized gates must check legacy
+fixtures that expected such resolutions. No frozen snapshots were regenerated.
+
+| Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
+|---|---|---|---|
+| D12 | 0_log → 0_0_log and 10_slice → 2_10_slice | Existing stratify proposals replace numeric/insertion prefixes before adding the depth prefix; D12.sh checks corpus and synthetic proposals | Existing command path proposal |
+| D13 | Existing callers command emits 11 rows for 6 sites | Existing callers query chooses one row per full site/target span using SQLite row_number; closure/enclosing mirror facts remain available; D13.sh compares fast/slow rows to six fact sites | Existing callers output shape; facts retained |
+| D16 | FILE#render and DiagramRenderCache.render silently return zero | FILE#name filters existing callers rows by canonical file path; Class.method returns an explicit usage error directing FILE#method (allowed by plan expected column); D16.sh asserts both | Existing callers anchor handling |
+
+D16 does not derive class ownership. The callers relation carries callee path,
+name and span. Class.method is explicitly rejected instead of reporting an empty
+success. FILE#name retains all same-named declarations within the selected file.
+
+| Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
+|---|---|---|---|
+| D19 | Offset-only closure names remove/re-add unchanged call edges after earlier edits | Anonymous TS callers use named-owner + BLAKE3 closure bytes + duplicate-body ordinal; fast and SCIP slow share formatting; D19.sh asserts corpus delta and synthetic raw identity/diff invariance | Resolution fact identity, consumed by existing diff |
+
+D19 identity scope: unrelated prefix or different-body sibling insertions preserve
+identity. Edits inside the closure change its digest. Adding an identical closure
+before another identical closure in the same named owner can shift ordinals.
+Two existing TS closure-mirror expectations were updated for the declared identity
+change; frozen extraction snapshots were not regenerated.
+
+Static review: `git diff --check` and `bash -n` on D09, D10, D11, D12, D13,
+D16 and D19 completed. No case bodies were executed. Build, crate test and
+runtime correctness remain unverified. D13 selection prefers verified rows
+and preserves the existing unresolved grade.
+
+D10 lexical identifier coverage includes both calls and `new` expressions;
+explicit local class constructors join their method declaration spans.

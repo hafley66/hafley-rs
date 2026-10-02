@@ -48,7 +48,7 @@ use crate::read::tsi::Arg;
 use crate::read::types::LangKind;
 use crate::read::types::TsiNames;
 use crate::read::types::{content_id_of, RefPosition, Reference, Unresolved, UnresolvedReason};
-use crate::read::types::{span_arg, unique_blob};
+use crate::read::types::span_arg;
 use crate::read::types::{KindIndex, ScipIndex};
 
 use super::ts_checker::TsCheckerAnswer;
@@ -2080,7 +2080,30 @@ impl Project<CallF> for CallProjector<'_> {
         // resolve leg joins them by `CallSite.span`.
         let blob = crate::read::dispatch::extracting_blob(self.content.as_bytes())
             .unwrap_or_else(|| content_id_of(self.content.as_bytes()));
-        ts_receivers::store_facts(blob, ts_receivers::collect(program));
+        let mut facts = ts_receivers::collect(program);
+        let mut anonymous: Vec<_> = sink.nodes.iter().filter(|node| node.name.is_none()).collect();
+        anonymous.sort_by_key(|node| node.span.start);
+        let mut copies = BTreeMap::<(String, ContentId), u32>::new();
+        for node in anonymous {
+            let owner = sink.nodes.iter()
+                .filter(|parent| parent.name.is_some()
+                    && parent.span.start <= node.span.start
+                    && node.span.end() <= parent.span.end())
+                .min_by_key(|parent| parent.span.len)
+                .and_then(|parent| parent.name)
+                .map(|name| strings.lookup(name))
+                .unwrap_or(MODULE_DEF_NAME);
+            let Some(body) = self.content.as_bytes()
+                .get(node.span.start as usize..node.span.end() as usize) else {
+                    continue;
+                };
+            let digest = content_id_of(body);
+            let ordinal = copies.entry((owner.to_string(), digest.clone())).or_default();
+            facts.closure_names.insert(node.span.start,
+                format!("closure@{owner}:{digest}:{ordinal}"));
+            *ordinal += 1;
+        }
+        ts_receivers::store_facts(blob, facts);
     }
 }
 
@@ -2757,6 +2780,18 @@ struct CallWalker<'c> {
 }
 
 impl<'a> OxcVisit<'a> for CallWalker<'_> {
+    fn visit_variable_declarator(&mut self, var: &ts::VariableDeclarator<'a>) {
+        if self.depth > 0 {
+            if let ts::BindingPattern::BindingIdentifier(id) = &var.id {
+                if var.init.as_ref().is_some_and(|init| matches!(init,
+                    ts::Expression::ArrowFunctionExpression(_)
+                    | ts::Expression::FunctionExpression(_))) {
+                    self.nested_defs.push((var.span, id.name.to_string()));
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, var);
+    }
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         // Only named DECLARATIONS below the top level (function expressions and
         // method values are already Methods; top-level decls are call_defs').
@@ -4709,8 +4744,8 @@ impl TsSource {
     /// The name-match target of one callee (the NameResolve leg). Pub so the
     /// scip ratchet re-runs it to classify overrides — same discipline as
     /// `type_edge_candidates`. Same-file wins via the span-join;
-    /// cross-file a unique corpus blob (the CallF facet's site preferred);
-    /// ambiguous/absent -> None.
+    /// Cross-file binding belongs to the module and checker legs.
+    /// Absent same-file declarations return None.
     pub fn call_name_match(
         output: &RyiOutput,
         index: &DefIndex,
@@ -4730,7 +4765,9 @@ impl TsSource {
                 }
             }
         }
-        unique_blob(sites.iter(), FamilyTag::Call)
+        // Cross-file TypeScript calls require an import or checker binding.
+        // Corpus spelling uniqueness does not establish lexical visibility.
+        None
     }
 }
 
@@ -5134,6 +5171,14 @@ impl Resolve<CallF> for TsSource {
                 if imported {
                     return None;
                 }
+                // Every plain call's lexical callable target was recorded by
+                // OXC. A missing target names a local value or global, never
+                // an unrelated same-spelled declaration in this file.
+                if own_facts.as_ref().is_some_and(|facts| {
+                    facts.plain_calls.contains(&site.span.start)
+                }) {
+                    return None;
+                }
                 Self::call_name_match(output, def_index, callee, own.as_ref())
                     .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                     .map(|(blob, span)| {
@@ -5145,7 +5190,14 @@ impl Resolve<CallF> for TsSource {
                         (blob, span, origin)
                     })
             };
-            let own_t = match (&import_t, &seat_t) {
+            let local_t = own_facts.as_ref()
+                .and_then(|facts| facts.local_calls.get(&site.span.start))
+                .and_then(|(start, end)| {
+                    call.nodes.iter().find(|node| node.span.start == *start && node.span.end() == *end)
+                })
+                .zip(own.as_ref())
+                .map(|(node, blob)| (blob.clone(), node.span, ResolutionOrigin::SameFile));
+            let own_t = local_t.or_else(|| match (&import_t, &seat_t) {
                 (Some(found), _) => Some((
                     found.target_blob.clone(),
                     found.target_span,
@@ -5170,7 +5222,7 @@ impl Resolve<CallF> for TsSource {
                 // binding is untyped: the name match answers free calls only.
                 (None, None) if member && !imported_receiver => None,
                 (None, None) => name_match(),
-            };
+            });
             let own_kind = match (&import_t, &seat_t) {
                 (Some(_), _) | (None, Some(_)) => CallEdgeKind::ImportResolve,
                 (None, None) => CallEdgeKind::NameResolve,

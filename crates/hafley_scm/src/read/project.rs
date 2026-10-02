@@ -2625,7 +2625,7 @@ fn call_facts(
         facts.push(FlatFact::ResolvedEdge {
             fact: None,
             caller_path,
-            caller_name: caller_name(call, &input.output, edge.src),
+            caller_name: caller_name(call, input, edge.src),
             callee_path,
             callee_name: callee_name(targets, target, edge.dst_span),
             caller_site_start,
@@ -3231,9 +3231,9 @@ fn conformance_tsi_rows(
 
 /// A closure def carries no name, and `resolve_at` types caller_name `text`:
 /// a null drops the whole row.
-fn caller_name(
+pub(super) fn caller_name(
     bundle: &FamilyBundle<crate::read::types::CallF>,
-    output: &RyiOutput,
+    input: &ProjectInput,
     src: crate::read::shape::NodeRef,
 ) -> Option<String> {
     let node = bundle.node(src);
@@ -3243,8 +3243,16 @@ fn caller_name(
         return None;
     }
     Some(match node.name {
-        Some(name) => output.strings.lookup(name).to_string(),
-        None => format!("closure@{}", node.span.start),
+        Some(name) => input.output.strings.lookup(name).to_string(),
+        None => {
+            #[cfg(feature = "typescript")]
+            if let Some(name) = crate::read::lang::ts_receivers::facts_of(&input.blob, None)
+                .and_then(|facts| facts.closure_names.get(&node.span.start).cloned())
+            {
+                return Some(name);
+            }
+            format!("closure@{}", node.span.start)
+        }
     })
 }
 

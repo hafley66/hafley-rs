@@ -571,8 +571,13 @@ fn prefixed(path: &str, prefix: &str) -> String {
     let path = Path::new(path);
     let parent = path.parent().unwrap_or_else(|| Path::new(""));
     let name = path.file_name().unwrap_or_default().to_string_lossy();
+    let stem = name.split_once('_').and_then(|(number, stem)| {
+        let digits = number.bytes().take_while(u8::is_ascii_digit).count();
+        (digits > 0 && number[digits..].bytes().all(|byte| byte.is_ascii_alphabetic()))
+            .then_some(stem)
+    }).unwrap_or(&name);
     parent
-        .join(format!("{prefix}{name}"))
+        .join(format!("{prefix}{stem}"))
         .to_string_lossy()
         .replace('\\', "/")
 }

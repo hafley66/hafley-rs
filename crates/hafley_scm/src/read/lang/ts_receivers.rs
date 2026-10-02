@@ -26,6 +26,12 @@ use crate::read::types::PathIndex;
 /// the declaring node's byte span start; every map is one file only.
 #[derive(Default)]
 pub struct TsFileTypes {
+    /// Callee starts whose spelling is a lexical identifier, including globals.
+    pub plain_calls: BTreeSet<u32>,
+    /// Anonymous callable start -> content identity within its named owner.
+    pub closure_names: HashMap<u32, String>,
+    /// Plain-call callee start -> lexical callable declaration span.
+    pub local_calls: HashMap<u32, (u32, u32)>,
     /// fn-like span start -> declared return type name (a plain
     /// `TSTypeReference` only; unions, primitives, aliases record nothing).
     pub ret_of: HashMap<u32, String>,
@@ -609,6 +615,49 @@ impl<'a> OxcVisit<'a> for ReceiverWalker {
 pub fn collect(program: &Program<'_>) -> TsFileTypes {
     let mut walker = ReceiverWalker::default();
     walker.visit_program(program);
+    let semantic = oxc_semantic::SemanticBuilder::new()
+        .with_build_nodes(true)
+        .build(program)
+        .semantic;
+    for node in semantic.nodes().iter() {
+        let callee = match node.kind() {
+            oxc_ast::AstKind::CallExpression(call) => &call.callee,
+            oxc_ast::AstKind::NewExpression(call) => &call.callee,
+            _ => continue,
+        };
+        let ts::Expression::Identifier(id) = callee else {
+            continue;
+        };
+        walker.facts.plain_calls.insert(id.span.start);
+        let Some(symbol) = id.reference_id.get().and_then(|reference| {
+            semantic.scoping().get_reference(reference).symbol_id()
+        }) else {
+            continue;
+        };
+        let declaration = semantic.symbol_declaration(symbol);
+        let span = match declaration.kind() {
+            oxc_ast::AstKind::VariableDeclarator(var)
+                if var.init.as_ref().is_some_and(|init| matches!(init,
+                    ts::Expression::ArrowFunctionExpression(_)
+                    | ts::Expression::FunctionExpression(_))) => var.span,
+            oxc_ast::AstKind::Function(function) => function.span,
+            oxc_ast::AstKind::Class(class) => {
+                let Some(span) = class.body.body.iter().find_map(|element| {
+                    match element {
+                        ts::ClassElement::MethodDefinition(method)
+                            if method.kind == ts::MethodDefinitionKind::Constructor
+                                && method.value.body.is_some() => Some(method.span),
+                        _ => None,
+                    }
+                }) else {
+                    continue;
+                };
+                span
+            }
+            _ => continue,
+        };
+        walker.facts.local_calls.insert(id.span.start, (span.start, span.end));
+    }
     walker.facts
 }
 

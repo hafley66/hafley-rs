@@ -559,11 +559,7 @@ fn owner_name(
 /// The tightest def around `site` in the parse, named the way fast names it.
 fn caller_name(input: &ProjectInput, site: Span) -> Option<String> {
     let call = input.output.call.as_ref()?;
-    let node = call.node(covering_def(call, site)?);
-    Some(match node.name {
-        Some(name) => input.output.strings.lookup(name).to_string(),
-        None => format!("closure@{}", node.span.start),
-    })
+    crate::read::project::caller_name(call, input, covering_def(call, site)?)
 }
 
 /// `resolved_import` from specifier spans: one `module` row per target file,
