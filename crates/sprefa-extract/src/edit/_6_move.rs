@@ -34,6 +34,7 @@ pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
     let plan = plan_of(&cli)?;
     let roots: Vec<_> = plan.iter().map(|plan| plan.root.as_path()).collect();
     let state = state_root_for(cli.state.as_deref(), &roots)?;
+    let state = move_request_state(&cli, &plan, &state)?;
     let multi = plan.len() > 1;
     let prefix = |plan: &Plan| root_prefix(multi, &plan.root);
     let mut swept_per_root: Vec<Vec<String>> = Vec::with_capacity(plan.len());
@@ -114,6 +115,18 @@ pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
         }
     }
     Ok(())
+}
+
+fn move_request_state(cli: &MoveArgs, plans: &[Plan], state: &Path) -> Result<PathBuf, String> {
+    let list_bytes = cli.list.as_ref().map(|path| {
+        std::fs::read(sprefa_extract::io_path(path))
+            .map_err(|error| format!("read move list {}: {error}", path.display()))
+    }).transpose()?;
+    let inputs: Vec<_> = plans.iter().map(|plan| (&plan.root, &plan.stages)).collect();
+    let request = serde_json::to_vec(&(cli, list_bytes, inputs))
+        .map_err(|error| format!("encode move request: {error}"))?;
+    let key = soopy::ContentId::blake3(&request).to_string();
+    Ok(state.join("move-requests").join(key))
 }
 
 /// The per-root print tag. A single-root run prints byte-identical to the
