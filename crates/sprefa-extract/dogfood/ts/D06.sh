@@ -5,7 +5,7 @@ set -euo pipefail
 cat > packages/signals/src/2b_isSignalBarrel.ts <<'TS'
 export { isSignal, toSignal } from './2_Signal.js'
 TS
-"$RYII" cleave packages/signals/src/2_Signal.ts#isSignal packages/signals/src/2a_isSignal.ts --state "$STATE" --commit > .dogfood/D06.commit
+"$RYII" cleave packages/signals/src/2_Signal.ts#isSignal packages/signals/src/2a_isSignal.ts --root "$PWD" --state "$STATE" --commit > .dogfood/D06.commit
 rg "export.*isSignal.*2a_isSignal" packages/signals/src/2b_isSignalBarrel.ts
 rg "export.*toSignal.*2_Signal" packages/signals/src/2b_isSignalBarrel.ts
 ! rg "import.*isSignal" packages/signals/src/2b_isSignalBarrel.ts
