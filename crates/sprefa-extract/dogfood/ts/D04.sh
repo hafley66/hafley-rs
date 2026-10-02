@@ -1,5 +1,8 @@
 #!/bin/bash
 set -euo pipefail
+CASE=D04
+source "$(dirname "${BASH_SOURCE[0]}")/1_type_errors.sh"
+type_baseline boop-xterm
 src=packages/boop-xterm/src/8i_turnPanel.ts
 dest=packages/boop-xterm/src/panels/8i_turnPanel.ts
 "$RYII" move "$src" "$dest" --state "$STATE" --commit > .dogfood/D04.commit
@@ -14,4 +17,5 @@ dest=${src%/adapter/navTree.ts}/nav/navTree.ts
 model=${src%/adapter/navTree.ts}/model.test.ts
 rg "typeof import\('./nav/navTree.js'\)" "$model"
 ! rg "typeof import\('./adapter/navTree.js'\)" "$model"
+type_no_new boop-xterm
 echo 'D4: import types and typeof import specifiers follow moved files'
