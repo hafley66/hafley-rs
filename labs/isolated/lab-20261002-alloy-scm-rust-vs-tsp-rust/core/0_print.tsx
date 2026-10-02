@@ -76,6 +76,8 @@ export interface Policy {
   block: Set<string>; // `{`, indented item per line, `}`
   list: Set<string>; // item per line, no braces
   accept?(kind: string, props: Record<string, any>, toks: Tok[]): boolean;
+  // kind-specific layout; undefined falls through to lines/list/block/inline
+  layout?(kind: string, toks: Tok[], inline: (toks: Tok[]) => Children[]): Children | undefined;
   declare?(kind: string, name: string, refkey: Refkey | undefined): Children;
   scope?(kind: string, body: Children): Children;
 }
@@ -97,6 +99,8 @@ function groups(toks: Tok[]): Tok[][] {
 }
 
 function layout(policy: Policy, kind: string, toks: Tok[]): Children {
+  const custom = policy.layout?.(kind, toks, (ts) => inline(policy, kind, ts));
+  if (custom !== undefined) return custom;
   if (policy.lines.has(kind)) return toks.map((t, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, [t])]);
   if (policy.list.has(kind)) return groups(toks).map((g, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, g)]);
   if (!policy.block.has(kind)) return inline(policy, kind, toks);

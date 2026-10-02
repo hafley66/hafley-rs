@@ -17,7 +17,7 @@ function generics(p: Props): Children {
   return xs.length ? <G.TypeParameters>{xs}</G.TypeParameters> : undefined;
 }
 function whereClause(p: Props): Children {
-  return p.where?.length ? <G.WhereClause>{p.where.map((x: Props) => <G.WherePredicate left={x.target} bounds={<G.TraitBounds>{x.bounds}</G.TraitBounds>} />)}</G.WhereClause> : undefined;
+  return p.where?.length ? <G.WhereClause keywords={[","]}>{p.where.map((x: Props) => <G.WherePredicate left={x.target} bounds={<G.TraitBounds>{x.bounds}</G.TraitBounds>} />)}</G.WhereClause> : undefined;
 }
 function attrs(p: Props): Children {
   const xs = [...(p.attrs ?? [])];

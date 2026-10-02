@@ -1,5 +1,5 @@
 import { isComponentCreator, createScope, createSymbol, Declaration, Name, type Refkey, Scope, useScope } from "@alloy-js/core";
-import { isLit, makeNode, type Policy } from "../core/0_print.js";
+import { isLit, makeNode, type Policy, type Tok } from "../core/0_print.js";
 import { useRustNamePolicy } from "./0_name-policy.js";
 import { OrderedFieldDeclarationList } from "../gen/rust/0_nodes.js";
 import { RustScope, RustSymbol, sourceFileOf, SPACE_OF } from "./1_scope.js";
@@ -10,7 +10,15 @@ export const RUST_POLICY: Policy = {
     if (kind !== "struct_item" || !props.body) return true;
     return isLit(toks.at(-1), ";") === isComponentCreator(props.body, OrderedFieldDeclarationList);
   },
+  // A layout: `\nwhere\n    P1,\n    P2,\n` with the body brace after a space on the next line.
+  layout(kind, toks, inline) {
+    if (kind !== "where_clause") return undefined;
+    const preds: Tok[][] = [];
+    for (const t of toks.slice(1)) ("val" in t || preds.length === 0 ? preds.push([t]) : preds.at(-1)!.push(t));
+    return [<hbr />, "where", <hbr />, preds.map((g, i) => [i > 0 ? <hbr /> : "", "    ", inline(g)]), <hbr />];
+  },
   space(kind, prev, tok) {
+    if ("val" in tok && tok.src === "where_clause") return false;
     if ((kind === "struct_item" || kind === "enum_variant") && "val" in tok && tok.src === "body" && isComponentCreator(tok.val, OrderedFieldDeclarationList)) return false;
     if (TIGHT.has(kind)) return isLit(prev, ",");
     if (kind === "line_comment" && isLit(prev, "//")) return false;
