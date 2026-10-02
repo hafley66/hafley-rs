@@ -375,19 +375,40 @@ fn paths(
         .collect())
 }
 
-/// Flow identity is a content digest and byte span. The seed uses the final
-/// @ to separate the digest from START:END.
-fn flow_seed(seed: &str) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
+/// Normalize a path to the content identity used by flow facts. Revision
+/// queries read their scratch tree; digest seeds already name that identity.
+fn flow_seed(seed: &str, root: Option<&Path>) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
     let (blob, span) = seed
         .rsplit_once('@')
-        .ok_or("flow seed must be BLOB@START:END")?;
+        .ok_or("flow seed must be PATH@START:END or BLOB@START:END")?;
     let (start, end) = span
         .split_once(':')
-        .ok_or("flow seed must be BLOB@START:END")?;
+        .ok_or("flow seed must be PATH@START:END or BLOB@START:END")?;
     let start: u32 = start.parse()?;
     let end: u32 = end.parse()?;
+    if start >= end {
+        return Err("flow seed requires START < END (zero-based byte offsets, END exclusive)".into());
+    }
+    let digest = blob.strip_prefix("blake3:").filter(|hex| {
+        hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }).or_else(|| blob.strip_prefix("git:").filter(|hex| {
+        hex.len() == 40 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }));
+    let blob = if digest.is_some() {
+        blob.to_ascii_lowercase()
+    } else {
+        let path = Path::new(blob);
+        let bytes = match root {
+            Some(root) if !path.is_absolute() => fs::read(root.join(path)),
+            _ => fs::read(sprefa_extract::io_path(path)),
+        }.map_err(|error| format!("flow seed input '{blob}': {error}"))?;
+        if end as usize > bytes.len() {
+            return Err(format!("flow seed END {end} exceeds input length {}", bytes.len()).into());
+        }
+        sprefa_extract::content_id_of(&bytes).to_string()
+    };
     Ok(BTreeSet::from([(
-        blob.to_string(),
+        blob,
         Some(format!("{start}:{end}")),
     )]))
 }
@@ -544,7 +565,7 @@ impl Arm<'_> {
                 |edges| Ok(named_starts(edges, name)),
                 deadline,
             ),
-            Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed), deadline),
+            Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline),
         }
     }
 

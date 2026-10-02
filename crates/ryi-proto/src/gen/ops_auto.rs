@@ -130,7 +130,7 @@ pub struct GraphArgs {
   #[doc = "Shortest type-reference paths from NAME"]
   #[arg(long, value_name = "NAME")]
   pub type_path: Option<String>,
-  #[doc = "Flow paths from BLOB@START:END"]
+  #[doc = "Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges."]
   #[arg(long, value_name = "BLOB@START:END")]
   pub flow_path: Option<String>,
   #[doc = "Control-dependence slice at PATH:BYTE"]
