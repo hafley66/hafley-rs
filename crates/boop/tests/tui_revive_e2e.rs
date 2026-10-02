@@ -654,13 +654,13 @@ fn run_case(case: &Case, llmock: &std::path::Path, registry: &Registry) -> Resul
         "{}: the revived pane rebound a different session",
         case.entry
     );
-    // The resumed conversation, on screen: its opening user turn is drawn by
-    // the revived TUI itself, from the transcript the old pane wrote.
+    // The resumed conversation renders its persisted reply. Codex's resume
+    // viewport omits the opening user turn, which the store check above owns.
     wait_for_screen(
         &server,
         case,
         &format!("{}-revived-1", scratch.route),
-        mock_tui::MOCK_PROMPT,
+        mock_tui::MOCK_REPLY_MARKER,
         "revived screen",
     );
 
