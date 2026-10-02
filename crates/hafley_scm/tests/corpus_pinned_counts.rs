@@ -17,16 +17,16 @@
 //! `ryi query` refuses `#inside?` (`2_source_query.rs` `validate_predicates`), so the
 //! two filtered numbers come from the lowering itself through `lower_scm` +
 //! `query_ast_rule`; `3197 + 378 == 3575` partitions the unfiltered count.
-//! `#has-ancestor? @x "function_item" "end"` is this crate's spelling of the same walk:
-//! the kind string replaces the lowering's label indirection.
+//! `#has-ancestor? @x function_item stopBy: end` is the scm++ spelling of the same walk:
+//! the kind name replaces the lowering's label indirection.
 
 use hafley_scm::MatchArena;
 
 const CORPUS: &str = include_str!("corpus/sprefa_extract_project.rs.frozen");
 
 const PLAIN: &str = "(identifier) @x";
-const INSIDE: &str = "((identifier) @x (#has-ancestor? @x \"function_item\" \"end\"))";
-const NOT_INSIDE: &str = "((identifier) @x (#not-has-ancestor? @x \"function_item\" \"end\"))";
+const INSIDE: &str = "((identifier) @x (#has-ancestor? @x function_item stopBy: end))";
+const NOT_INSIDE: &str = "((identifier) @x (#not-has-ancestor? @x function_item stopBy: end))";
 
 #[test]
 fn pinned_counts_match_the_current_lowering() {

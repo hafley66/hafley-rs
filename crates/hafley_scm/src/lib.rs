@@ -2,7 +2,6 @@ extern crate self as hafley_scm;
 
 mod pipeline;
 mod types;
-mod walk;
 
 #[cfg(feature = "rust_syn")]
 pub mod lang;
@@ -11,9 +10,8 @@ pub mod atoms;
 pub mod cst;
 #[cfg(feature = "shared")]
 pub mod read;
-pub mod span;
-#[cfg(feature = "shared")]
 pub mod scmpp;
+pub mod span;
 pub use types::*;
 
 use tree_sitter::{Language, Query, Tree};
@@ -21,27 +19,17 @@ use tree_sitter::{Language, Query, Tree};
 use pipeline::split_predicates_into_kind_queries as split;
 use pipeline::{build_query_ext as build, run_over_file_tree as run};
 
+/// Relation predicates route through `scmpp`: their patterns compile there, the rest is plain tree-sitter.
 pub fn build(language: &Language, scm: &str) -> Result<QueryExt, QueryExtError> {
-    let user = Query::new(language, scm).map_err(QueryExtError::Parse)?;
-    let (
-        predicates,
-        kind_names,
-        predicate_kinds,
-        literals,
-        emits,
-        relations,
-        fields,
-        emit_literals,
-    ) = split::read_and_parse_predicates(language, &user)?;
-    let kinds = build::query_new_per_kind(language, &kind_names)?;
+    let routed = scmpp::route(language, scm).map_err(QueryExtError::Scmpp)?;
+    let user = Query::new(language, &routed.text).map_err(QueryExtError::Parse)?;
+    let scmpp = build::pair_routed_patterns(&user, routed.items);
+    let (emits, relations, fields, emit_literals) = split::read_and_parse_predicates(&user)?;
     let names = build::intern_names(&user);
     Ok(QueryExt {
         user,
-        kinds,
-        predicates,
+        scmpp,
         names,
-        predicate_kinds,
-        literals,
         emits,
         relations,
         fields,
@@ -57,8 +45,7 @@ pub fn run(
     limit: u32,
     arena: &mut MatchArena,
 ) -> Result<(), QueryExtError> {
-    let kind_ids = run::kind_cursors_into_sorted_ids(q, tree, src);
     let file = arena.files.len() as u16;
     arena.files.push(path.into());
-    run::user_cursor_into_arena(q, tree, src, limit, &kind_ids, file, arena)
+    run::user_cursor_into_arena(q, tree, src, limit, file, arena)
 }

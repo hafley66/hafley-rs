@@ -21,10 +21,12 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
     let sql = super::_3_lower::lower(&plan, &ctx.patterns);
+    let match_sql = super::_3_lower::lower_matches(&plan, &ctx.patterns);
     Ok(Compiled {
         patterns: ctx.patterns,
         plan,
         sql,
+        match_sql,
     })
 }
 
@@ -49,7 +51,7 @@ fn resolve(name: &str, mine: &[Box<str>], outer: Scope) -> Option<CapRef> {
         })
 }
 
-const TEXT_BUILTINS: [&str; 13] = [
+pub(super) const TEXT_BUILTINS: [&str; 13] = [
     "eq?",
     "not-eq?",
     "any-eq?",
@@ -167,6 +169,7 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
     let pattern = ctx.patterns.len() as u16;
     let flat = format!("({} @{ROOT}{kept})", split.root);
     let query = {
+        #[cfg(feature = "shared")]
         let _span = tracing::trace_span!("scmpp_query_new").entered();
         Query::new(ctx.lang, &flat)
     }

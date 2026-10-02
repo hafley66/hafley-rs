@@ -89,7 +89,7 @@ fn empty_kind_and_literal_lists_are_arity_errors() {
                 &tree_sitter::Language::new(tree_sitter_rust::LANGUAGE),
                 query
             ),
-            Err(QueryExtError::Arity { .. })
+            Err(QueryExtError::Scmpp(hafley_scm::scmpp::ScmppError::Unsupported(_)))
         ));
     }
 }
@@ -134,7 +134,7 @@ fn not_has_kind_list_excludes_each_descendant_kind() {
 #[test]
 fn not_has_kind_list_neighbor_checks_direct_children() {
     let scm = r#"((function_item name: (identifier) @name body: (block) @b)
-        (#not-has? @b "return_expression" "try_expression" "break_expression" "continue_expression" "neighbor"))"#;
+        (#not-has? @b "return_expression" "try_expression" "break_expression" "continue_expression" stopBy: neighbor))"#;
     assert_eq!(render_has_bodies(scm), "body      | matches\nreturns   | 1\ntries     | 1\nbreaks    | 1\ncontinues | 1\nclean     | 1");
 }
 
@@ -145,17 +145,17 @@ fn unknown_kinds_and_stop_words_name_the_predicate_and_pattern() {
         ("has?", "\"retrun_expression\"", 0),
         ("has-ancestor?", "\"retrun_expression\"", 0),
         ("has-parent?", "\"retrun_expression\"", 0),
-        ("has?", "\"return_expression\" \"neighbour\"", 0),
-        ("has-ancestor?", "\"return_expression\" \"neighbour\"", 0),
+        ("has?", "\"return_expression\" stopBy: neighbour", 0),
+        ("has-ancestor?", "\"return_expression\" stopBy: neighbour", 0),
         ("has?", "\"retrun_expression\"", 1),
     ].map(|(operator, args, pattern)| {
         let prefix = if pattern == 1 { "((identifier) @first)\n" } else { "" };
         let scm = format!("{prefix}((identifier) @x (#{operator} @x {args}))");
         let error = match hafley_scm::build(&language, &scm) {
-            Err(QueryExtError::UnknownOperator(detail)) => detail,
+            Err(QueryExtError::Scmpp(detail)) => detail.to_string(),
             _ => panic!("expected unknown kind for {scm}"),
         };
         format!("{operator:<13} | {error}")
     }).join("\n");
-    assert_eq!(rows, "has?          | has? (unknown kind 'retrun_expression' in pattern 0)\nhas-ancestor? | has-ancestor? (unknown kind 'retrun_expression' in pattern 0)\nhas-parent?   | has-parent? (unknown kind 'retrun_expression' in pattern 0)\nhas?          | has? (unknown kind 'neighbour' in pattern 0)\nhas-ancestor? | has-ancestor? (unknown kind 'neighbour' in pattern 0)\nhas?          | has? (unknown kind 'retrun_expression' in pattern 1)");
+    assert_eq!(rows, "has?          | scm++ level 1 `((retrun_expression) @__root)`: Query error at 1:3. Invalid node type \"retrun_expression\"\nhas-ancestor? | scm++ level 1 `((retrun_expression) @__root)`: Query error at 1:3. Invalid node type \"retrun_expression\"\nhas-parent?   | scm++ level 1 `((retrun_expression) @__root)`: Query error at 1:3. Invalid node type \"retrun_expression\"\nhas?          | scm++: #has? at byte 17: bad option stopBy: Word(\"neighbour\")\nhas-ancestor? | scm++: #has-ancestor? at byte 17: bad option stopBy: Word(\"neighbour\")\nhas?          | scm++ level 1 `((retrun_expression) @__root)`: Query error at 1:3. Invalid node type \"retrun_expression\"");
 }

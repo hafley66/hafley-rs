@@ -169,6 +169,17 @@ fn pred(text: &str, base: usize) -> Result<Pred, ScmppError> {
 
 /// Cuts every `(#...)` predicate out of `text`; nested patterns stay inside their predicate's args.
 pub fn split(text: &str, base: usize) -> Result<LevelText, ScmppError> {
+    let (root, captures, preds) = cut(text, base)?;
+    let root = root_of(root.trim(), base)?;
+    Ok(LevelText {
+        root,
+        captures,
+        preds,
+    })
+}
+
+/// The cut alone: pattern text without predicates, its capture names, the predicates.
+pub fn cut(text: &str, base: usize) -> Result<(String, Vec<Box<str>>, Vec<Pred>), ScmppError> {
     let bytes = text.as_bytes();
     let mut root = String::with_capacity(text.len());
     let mut preds = Vec::new();
@@ -211,12 +222,50 @@ pub fn split(text: &str, base: usize) -> Result<LevelText, ScmppError> {
             }
         }
     }
-    let root = root_of(root.trim(), base)?;
-    Ok(LevelText {
-        root,
-        captures,
-        preds,
-    })
+    Ok((root, captures, preds))
+}
+
+/// Byte ranges of the top-level patterns of a query file; trailing captures and quantifiers attach.
+pub fn top_items(text: &str) -> Result<Vec<std::ops::Range<usize>>, ScmppError> {
+    let bytes = text.as_bytes();
+    let mut found: Vec<std::ops::Range<usize>> = Vec::new();
+    let mut i = 0;
+    let mut attach = false;
+    while i < bytes.len() {
+        let start = i;
+        match bytes[i] {
+            b if b.is_ascii_whitespace() => {
+                i += 1;
+                continue;
+            }
+            b';' => {
+                i = after_comment(bytes, i);
+                continue;
+            }
+            b'*' | b'+' | b'?' if attach => i += 1,
+            b'@' if attach => {
+                i += 1;
+                while i < bytes.len() && name_char(bytes[i]) {
+                    i += 1;
+                }
+            }
+            b'"' => i = after_string(bytes, i, 0)?,
+            b'(' | b'[' => i = after_group(bytes, i, 0)?,
+            b')' | b']' => return Err(syntax(i, "unbalanced close")),
+            _ => {
+                while i < bytes.len() && word_char(bytes[i]) {
+                    i += 1;
+                }
+                i = i.max(start + 1);
+            }
+        }
+        match found.last_mut() {
+            Some(last) if attach && matches!(bytes[start], b'*' | b'+' | b'?' | b'@') => last.end = i,
+            _ => found.push(start..i),
+        }
+        attach = true;
+    }
+    Ok(found)
 }
 
 /// Start offsets of the pattern items at depth 0; captures, quantifiers and anchors attach.

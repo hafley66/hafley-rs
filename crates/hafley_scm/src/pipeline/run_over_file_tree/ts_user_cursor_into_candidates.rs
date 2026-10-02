@@ -11,15 +11,15 @@ pub fn user_cursor_into_arena(
     tree: &Tree,
     src: &[u8],
     limit: u32,
-    kind_ids: &[Vec<usize>],
     file: u16,
     arena: &mut MatchArena,
 ) -> Result<(), QueryExtError> {
+    let mut accepted = vec![None; q.scmpp.len()];
     let mut cursor = QueryCursor::new();
     cursor.set_match_limit(limit);
     let mut found = cursor.matches(&q.user, tree.root_node(), src);
     while let Some(one) = found.next() {
-        if holds_for_candidate(q, one, src, kind_ids) {
+        if holds_for_candidate(q, one, tree, src, &mut accepted)? {
             append_match(q, one, file, arena);
         }
     }

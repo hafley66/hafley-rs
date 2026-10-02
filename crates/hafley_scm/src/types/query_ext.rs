@@ -1,12 +1,9 @@
-/// The user's `.scm` compiled once per language, plus one minted query per node kind
-/// a predicate names. Built once, run over many files.
+/// The user's `.scm` compiled once per language. Built once, run over many files.
 pub struct QueryExt {
     pub user: tree_sitter::Query,
-    pub kinds: Vec<tree_sitter::Query>,
-    pub predicates: Vec<super::Predicate>,
+    /// `(pattern, compiled)` for each user pattern with relation predicates, sorted by pattern.
+    pub scmpp: Vec<(u16, crate::scmpp::Compiled)>,
     pub names: Vec<Box<str>>,
-    pub predicate_kinds: Vec<u16>,
-    pub literals: Vec<Box<[u8]>>,
     pub emits: Vec<super::EmitSpec>,
     pub relations: Vec<Box<str>>,
     pub fields: Vec<Box<str>>,

@@ -24,21 +24,21 @@ fn matches(language: &tree_sitter::Language, source: &str, scm: &str) -> String 
 fn relational_siblings() {
     let rows = [
         // expression_statement:has(+ expression_statement)
-        Row { name: "precedes_neighbor", args: "#precedes? @c expression_statement neighbor" },
+        Row { name: "precedes_neighbor", args: "#precedes? @c expression_statement stopBy: neighbor" },
         // expression_statement:has(~ expression_statement)
-        Row { name: "precedes_end", args: "#precedes? @c expression_statement end" },
+        Row { name: "precedes_end", args: "#precedes? @c expression_statement stopBy: end" },
         // expression_statement + expression_statement
-        Row { name: "follows_neighbor", args: "#follows? @c expression_statement neighbor" },
+        Row { name: "follows_neighbor", args: "#follows? @c expression_statement stopBy: neighbor" },
         // expression_statement ~ expression_statement
-        Row { name: "follows_end", args: "#follows? @c expression_statement end" },
+        Row { name: "follows_end", args: "#follows? @c expression_statement stopBy: end" },
         // expression_statement:not(:has(+ expression_statement))
-        Row { name: "not_precedes_neighbor", args: "#not-precedes? @c expression_statement neighbor" },
+        Row { name: "not_precedes_neighbor", args: "#not-precedes? @c expression_statement stopBy: neighbor" },
         // expression_statement:not(:has(~ expression_statement))
-        Row { name: "not_precedes_end", args: "#not-precedes? @c expression_statement end" },
+        Row { name: "not_precedes_end", args: "#not-precedes? @c expression_statement stopBy: end" },
         // expression_statement:not(expression_statement + expression_statement)
-        Row { name: "not_follows_neighbor", args: "#not-follows? @c expression_statement neighbor" },
+        Row { name: "not_follows_neighbor", args: "#not-follows? @c expression_statement stopBy: neighbor" },
         // expression_statement:not(expression_statement ~ expression_statement)
-        Row { name: "not_follows_end", args: "#not-follows? @c expression_statement end" },
+        Row { name: "not_follows_end", args: "#not-follows? @c expression_statement stopBy: end" },
     ];
     let actual = [
         ("rust", tree_sitter::Language::new(tree_sitter_rust::LANGUAGE), RUST),
@@ -79,3 +79,19 @@ fn nth_child_of_supertype_expands_subtypes() {
     assert_eq!(matches(&language, TS, scm), "c=b();");
 }
 
+
+#[test]
+fn build_routes_nested_patterns_through_scmpp() {
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    let source = "fn host() { a(); }\nfn other() { b(); }";
+    let nested = "((call_expression) @c\n (#has-ancestor? @c (function_item name: (identifier) @fn (#eq? @fn \"host\"))))";
+    let each = "((call_expression) @c (#has-ancestor? @c (function_item name: (identifier) @fn) rows: each))";
+    let error = match hafley_scm::build(&language, each) {
+        Err(error) => format!("{error:?}"),
+        Ok(_) => "built".into(),
+    };
+    assert_eq!(
+        format!("{}\n{error}", matches(&language, source, nested)),
+        "c=a()\nScmpp(Unsupported(\"@fn is a rows: each capture; query --scmpp returns those rows\"))"
+    );
+}

@@ -1,28 +1,12 @@
-use tree_sitter::{Language, Query, QueryPredicate, QueryPredicateArg};
+use tree_sitter::{Query, QueryPredicate, QueryPredicateArg};
 
-use super::parse_into_predicate::parse_into_predicate;
-use crate::types::{EmitFieldSpec, EmitSource, EmitSpec, Predicate, QueryExtError};
+use crate::types::{EmitFieldSpec, EmitSource, EmitSpec, QueryExtError};
 
-type ParsedPredicates = (
-    Vec<Predicate>,
-    Vec<Box<str>>,
-    Vec<u16>,
-    Vec<Box<[u8]>>,
-    Vec<EmitSpec>,
-    Vec<Box<str>>,
-    Vec<Box<str>>,
-    Vec<Box<str>>,
-);
+type ParsedPredicates = (Vec<EmitSpec>, Vec<Box<str>>, Vec<Box<str>>, Vec<Box<str>>);
 
-/// ts: `user.general_predicates(i)` per pattern; unknown operator or bad arity is an error.
-pub fn read_and_parse_predicates(
-    language: &Language,
-    user: &Query,
-) -> Result<ParsedPredicates, QueryExtError> {
-    let mut predicates = Vec::new();
-    let mut kinds = Vec::new();
-    let mut predicate_kinds = Vec::new();
-    let mut literals = Vec::new();
+/// ts: `user.general_predicates(i)` per pattern. `scmpp::route` cut every other general predicate,
+/// so anything but `#emit!` is an error.
+pub fn read_and_parse_predicates(user: &Query) -> Result<ParsedPredicates, QueryExtError> {
     let mut emits = Vec::new();
     let mut relations = Vec::new();
     let mut fields = Vec::new();
@@ -39,26 +23,10 @@ pub fn read_and_parse_predicates(
                 )?);
                 continue;
             }
-            predicates.push(parse_into_predicate(
-                language,
-                pattern as u16,
-                found,
-                &mut kinds,
-                &mut predicate_kinds,
-                &mut literals,
-            )?);
+            return Err(QueryExtError::UnknownOperator(found.operator.to_string()));
         }
     }
-    Ok((
-        predicates,
-        kinds,
-        predicate_kinds,
-        literals,
-        emits,
-        relations,
-        fields,
-        emit_literals,
-    ))
+    Ok((emits, relations, fields, emit_literals))
 }
 
 fn intern(value: &str, names: &mut Vec<Box<str>>) -> u16 {

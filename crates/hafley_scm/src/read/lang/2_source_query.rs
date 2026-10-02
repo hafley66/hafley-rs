@@ -212,6 +212,7 @@ fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
                 error.row.saturating_add(1)
             )
         }
+        hafley_scm::QueryExtError::Scmpp(error) => format!("invalid query: {error}"),
         hafley_scm::QueryExtError::UnknownOperator(operator) => {
             format!("invalid query: predicate #{operator} is not allowed")
         }
