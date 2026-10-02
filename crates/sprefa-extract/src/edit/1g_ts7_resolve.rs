@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use serde_json::{json, Value};
 
 use super::checker_edges::{CheckerDefs, CheckerEdge};
+use super::ts_cst_tokens::CstTokens;
 use super::ts7_cleave_facts::with_session;
 use super::ts7_lsp_session::file_uri;
 use super::ts7_graph_target::position;
@@ -15,7 +16,8 @@ use crate::{FamilyTag, FlatFact, ProjectError, RawProjectFact, ResolveRequest, R
 #[derive(Default)]
 struct File {
     text: String,
-    sites: Vec<(u32, u32, String)>,
+    /// `(site start, site end, callee token start)` per call site.
+    calls: Vec<(u32, u32, u32)>,
     attributes: Vec<(u32, u32)>,
 }
 
@@ -23,6 +25,8 @@ struct File {
 struct References {
     files: BTreeMap<String, File>,
     defs: CheckerDefs,
+    /// The file whose facts are arriving: its CST and its call sites.
+    open: Option<(String, CstTokens, Vec<(u32, u32, String)>)>,
 }
 
 fn typescript(path: &str) -> bool {
@@ -42,37 +46,43 @@ fn locations(result: Value) -> Vec<Value> {
 }
 
 impl References {
+    /// A file's raw facts arrive together; its CST lives until the next file starts.
     fn capture(&mut self, raw: &RawProjectFact<'_>) {
         if !typescript(raw.path) {
             return;
         }
         self.defs.capture(raw);
-        let file = self.files.entry(raw.path.to_string()).or_insert_with(|| File {
-            text: String::from_utf8_lossy(raw.content).into_owned(),
-            ..File::default()
-        });
-        match &raw.fact {
-            FlatFact::Node { family: FamilyTag::Cst, span, kind, .. }
-                if kind == "jsx_attribute" =>
-            {
-                // The CST span already marks this attribute. Its first token
-                // is the name; the expression/string value stays outside it.
-                if let Some(attribute) = file.text.get(span.start as usize..span.end as usize) {
-                    let name = attribute.split(|ch: char| ch.is_whitespace() || ch == '=')
-                        .next().unwrap_or("");
-                    if !name.is_empty() {
-                        file.attributes.push((span.start, span.start + name.len() as u32));
-                    }
-                }
-            }
-            FlatFact::Site { family: FamilyTag::Call, span, callee, .. } => {
-                file.sites.push((span.start, span.end, callee.clone()));
-            }
-            _ => {}
+        if self.open.as_ref().is_none_or(|(path, ..)| path != raw.path) {
+            self.close();
+            self.files.entry(raw.path.to_string()).or_insert_with(|| File {
+                text: String::from_utf8_lossy(raw.content).into_owned(),
+                ..File::default()
+            });
+            self.open = Some((raw.path.to_string(), CstTokens::default(), Vec::new()));
+        }
+        let Some((_, cst, sites)) = self.open.as_mut() else { return };
+        cst.push(&raw.fact);
+        if let FlatFact::Site { family: FamilyTag::Call, span, callee, .. } = &raw.fact {
+            sites.push((span.start, span.end, callee.clone()));
         }
     }
 
+    /// The open file's callee and attribute tokens; its CST is dropped.
+    fn close(&mut self) {
+        let Some((path, mut cst, sites)) = self.open.take() else { return };
+        cst.seal();
+        let Some(file) = self.files.get_mut(&path) else { return };
+        for (start, end, name) in sites {
+            // A site with no CST callee token is not asked about.
+            if let Some((token, _)) = cst.callee(&file.text, start, end, &name) {
+                file.calls.push((start, end, token));
+            }
+        }
+        file.attributes.extend(cst.attribute_names());
+    }
+
     fn append(&mut self, root: &Path, calls: bool, facts: &mut Vec<FlatFact>) -> Result<(), String> {
+        self.close();
         self.defs.seal();
         if self.files.is_empty() || !calls {
             return Ok(());
@@ -91,21 +101,10 @@ impl References {
             }
             for (source, file) in &self.files {
                 let uri = file_uri(&canonical(&crate::io_path(Path::new(source))))?;
-                for (start, end, name) in &file.sites {
-                    let Some(written) = file.text.get(*start as usize..*end as usize) else { continue };
-                    // Callee spans cover a member expression, a constructor call,
-                    // or a JSX opening element. Probe only the callee token.
-                    let callee = if let Some(tag) = written.strip_prefix('<') {
-                        tag.split(|ch: char| ch.is_whitespace() || ch == '/' || ch == '>')
-                            .next().unwrap_or(tag)
-                    } else {
-                        written.split('(').next().unwrap_or(written)
-                    };
-                    let Some(relative) = callee.rfind(name) else { continue };
-                    let offset = *start as usize + relative + usize::from(written.starts_with('<'));
+                for &(start, end, offset) in &file.calls {
                     let reply = session.lsp.request("textDocument/definition", &json!({
                         "textDocument": {"uri": uri.as_str()},
-                        "position": position(&file.text, offset)?,
+                        "position": position(&file.text, offset as usize)?,
                     }))?;
                     if let Some(error) = reply.error {
                         return Err(format!("definition {source}:{offset}: {}", error.message));
@@ -126,7 +125,7 @@ impl References {
                             .map_err(|error| format!("definition range: {error}"))?;
                         let at = byte_at_lsp_position(&target_file.text, at)? as u32;
                         let Some(target) = self.defs.target(target, at, None) else { continue };
-                        edges.push(CheckerEdge { source: source.clone(), site_start: *start, site_end: *end, target });
+                        edges.push(CheckerEdge { source: source.clone(), site_start: start, site_end: end, target });
                         break;
                     }
                 }
