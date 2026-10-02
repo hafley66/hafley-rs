@@ -480,6 +480,10 @@ mod t_snapshot;
 
 #[path = "193_ts_rtkq_jsx.rs"]
 mod t_193_ts_rtkq_jsx;
+#[path = "194_scmpp_rows.rs"]
+mod t_194_scmpp_rows;
+#[path = "195_scmpp_growth.rs"]
+mod t_195_scmpp_growth;
 
 #[test]
 fn every_test_file_is_a_module_here() {
