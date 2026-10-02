@@ -86,101 +86,83 @@ impl TsResolver {
         self.resolve_with_rung(from, module).map(|(path, _)| path)
     }
 
-    /// The source target and the workspace fallback rung that selected it.
+    /// The source target and the rung that selected it. A workspace package maps
+    /// its export through a declaration map or its tsconfig `outDir` -> `rootDir`.
     pub fn resolve_with_rung(&self, from: &Path, module: &str) -> Option<(PathBuf, &'static str)> {
         let _span = tracing::trace_span!("ts.resolve.specifier").entered();
-        let package = package_name(module).and_then(|name| self.packages.get_key_value(name));
-        if let Some((name, package)) = package {
-            let subpath = module.strip_prefix(name.as_str())?;
-            let key = if subpath.is_empty() {
-                ".".to_string()
-            } else {
-                format!(".{subpath}")
-            };
-            // Assets use the runtime export, even when a types condition names
-            // a declaration for that asset.
-            if key.ends_with(".css") {
-                let target = match package.manifest.get("exports") {
-                    Some(exports) => export_target_with_conditions(
-                        exports,
-                        &key,
-                        &["import", "node", "default", "require"],
-                    ),
-                    None => Some(format!(".{subpath}")),
-                }?;
-                let emitted = package.directory.join(target.trim_start_matches("./"));
-                if emitted
-                    .extension()
-                    .is_some_and(|extension| extension == "css")
-                {
-                    if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
-                        let source = package.directory.join("src").join(relative);
-                        if let Ok(source) = source.canonicalize() {
-                            if source.is_file() {
-                                return Some((source, "src_convention"));
-                            }
-                        }
-                    }
-                    if let Ok(asset) = emitted.canonicalize() {
-                        if asset.is_file() {
-                            return Some((asset, "exports"));
-                        }
-                    }
-                }
-                return None;
-            }
+        let Some((name, package)) = package_name(module).and_then(|name| self.packages.get_key_value(name)) else {
+            // Auto tsconfig discovery takes the importing file, including its name.
+            return self
+                .inner
+                .resolve_file(from, module)
+                .ok()
+                .map(|resolution| (resolution.path().to_path_buf(), "resolver"));
+        };
+        let subpath = &module[name.len()..];
+        let key = if subpath.is_empty() {
+            ".".to_string()
+        } else {
+            format!(".{subpath}")
+        };
+        let layout = package.layout(&self.inner);
+        // Assets use the runtime export, even when a types condition names
+        // a declaration for that asset.
+        if key.ends_with(".css") {
             let target = match package.manifest.get("exports") {
-                Some(exports) => export_target(exports, &key),
-                None if subpath.is_empty() => package
-                    .manifest
-                    .get("types")
-                    .or_else(|| package.manifest.get("module"))
-                    .or_else(|| package.manifest.get("main"))
-                    .and_then(serde_json::Value::as_str)
-                    .map(str::to_string),
+                Some(exports) => export_target_with_conditions(
+                    exports,
+                    &key,
+                    &["import", "node", "default", "require"],
+                ),
                 None => Some(format!(".{subpath}")),
             }?;
             let emitted = package.directory.join(target.trim_start_matches("./"));
-            if emitted.to_string_lossy().ends_with(".d.ts") {
-                if let Some(source) = declaration_source(&emitted, &self.root) {
-                    return Some((source, "declaration_map"));
-                }
-            } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
-                return Some((resolution.path().to_path_buf(), "exports"));
+            if emitted.extension().is_none_or(|extension| extension != "css") {
+                return None;
             }
-            if let Ok(resolution) = self.inner.resolve_file(from, module) {
-                let path = resolution.path();
-                if path.starts_with(&self.root) && !path.to_string_lossy().contains("/dist/") {
-                    return Some((path.to_path_buf(), "tsconfig_paths"));
+            if let Some(source) = layout.source_of(&emitted).and_then(|source| source.canonicalize().ok()) {
+                if source.is_file() {
+                    return Some((source, "out_dir_map"));
                 }
             }
-            if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
-                let relative = relative.to_string_lossy();
-                let stem = relative
-                    .strip_suffix(".d.ts")
-                    .or_else(|| relative.strip_suffix(".js"))
-                    .unwrap_or(&relative);
-                let source = package.directory.join("src").join(stem);
-                if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
-                    return Some((resolution.path().to_path_buf(), "src_convention"));
-                }
-                if !package.directory.join("src").is_dir() {
-                    let source = package.directory.join(stem);
-                    if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
-                        return Some((resolution.path().to_path_buf(), "package_convention"));
-                    }
-                }
-            }
-            if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
-                return Some((resolution.path().to_path_buf(), "exports_declaration"));
-            }
-            return None;
+            let asset = emitted.canonicalize().ok()?;
+            return asset.is_file().then_some((asset, "exports"));
         }
-        // Auto tsconfig discovery takes the importing file, including its name.
-        self.inner
-            .resolve_file(from, module)
-            .ok()
-            .map(|resolution| (resolution.path().to_path_buf(), "resolver"))
+        let target = match package.manifest.get("exports") {
+            Some(exports) => export_target(exports, &key),
+            None if subpath.is_empty() => package
+                .manifest
+                .get("types")
+                .or_else(|| package.manifest.get("module"))
+                .or_else(|| package.manifest.get("main"))
+                .and_then(serde_json::Value::as_str)
+                .map(str::to_string),
+            None => Some(format!(".{subpath}")),
+        }?;
+        let emitted = package.directory.join(target.trim_start_matches("./"));
+        if emitted.to_string_lossy().ends_with(".d.ts") {
+            if let Some(source) = declaration_source(&emitted, &self.root) {
+                return Some((source, "declaration_map"));
+            }
+        } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+            return Some((resolution.path().to_path_buf(), "exports"));
+        }
+        // tsconfig `paths` may name the source; a path into compiler output does not.
+        if let Ok(resolution) = self.inner.resolve_file(from, module) {
+            let path = resolution.path();
+            if path.starts_with(&self.root) && !layout.emits(path) {
+                return Some((path.to_path_buf(), "tsconfig_paths"));
+            }
+        }
+        if let Some(source) = layout.source_of(&emitted) {
+            if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
+                return Some((resolution.path().to_path_buf(), "out_dir_map"));
+            }
+        }
+        if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+            return Some((resolution.path().to_path_buf(), "exports_declaration"));
+        }
+        None
     }
 
     /// The same answer, kept only when it lands inside the root: a package in
