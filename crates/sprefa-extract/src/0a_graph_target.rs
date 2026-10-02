@@ -1,6 +1,6 @@
 //! Targeted slow graph evidence over the same resolved-edge rows as fast.
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -14,7 +14,7 @@ pub(super) fn facts(
     sprefa_extract::slow::require_ts_checker(request.paths)?;
     let mut definitions: BTreeMap<(String, String, bool), Vec<(u32, u32)>> = BTreeMap::new();
     let mut sites = Vec::new();
-    let mut callers: BTreeMap<String, Vec<(u32, u32, Option<String>)>> = BTreeMap::new();
+    let mut checker_defs = sprefa_extract::edit::checker_edges::CheckerDefs::default();
     let _extract_span = tracing::info_span!("fast.extract_resolve").entered();
     let mut facts = resolve_project_target_with_raw(request, &mut |raw| {
         if let FlatFact::Site { family: FamilyTag::Call, span, callee, .. } = &raw.fact {
@@ -22,13 +22,7 @@ pub(super) fn facts(
                 sites.push((raw.path.to_string(), span.start, span.end));
             }
         }
-        if let FlatFact::Node { family: FamilyTag::Call, span, name, .. } = &raw.fact {
-            callers.entry(raw.path.to_string()).or_default().push((
-                span.start,
-                span.end,
-                Some(name.clone().unwrap_or_else(|| sprefa_extract::closure_name(raw.content_id, span.start))),
-            ));
-        }
+        checker_defs.capture(&raw);
         if let FlatFact::Node {
             family: family @ (FamilyTag::Call | FamilyTag::Type),
             span,
@@ -350,44 +344,17 @@ pub(super) fn facts(
     for reference in &ts_references {
         references_by_source.entry(reference.source_path.as_str()).or_default().push(reference);
     }
-    let mut present: HashSet<(String, u32, u32, String, u32)> = facts.iter().filter_map(|fact| match fact {
-        FlatFact::ResolvedEdge { caller_path, caller_site_start, caller_site_end, callee_path, callee_start, .. } =>
-            Some((caller_path.clone(), *caller_site_start, *caller_site_end, callee_path.clone(), *callee_start)),
-        _ => None,
-    }).collect();
-    for (path, start, end) in sites {
-        let Some(reference) = references_by_source.get(path.as_str()).and_then(|references| references.iter().find(|reference| {
-            start <= reference.site_start && reference.site_end <= end
-        })) else {
-            continue;
-        };
-        let target = [true, false].into_iter().find_map(|is_call| {
-            definitions.get(&(reference.target_path.clone(), name.to_string(), is_call))?
-                .iter()
-                .find(|(start, end)| *start <= reference.target_start && reference.target_end <= *end)
-                .copied()
-        });
-        let Some((target_start, target_end)) = target else { continue };
-        let caller = callers.get(&path).and_then(|definitions| {
-            definitions.iter().filter(|(lo, hi, _)| *lo <= start && end <= *hi)
-                .min_by_key(|(lo, hi, _)| hi - lo)
-                .and_then(|(_, _, name)| name.clone())
-        });
-        if present.insert((path.clone(), start, end, reference.target_path.clone(), target_start)) {
-            facts.push(FlatFact::ResolvedEdge {
-                fact: None,
-                caller_path: path,
-                caller_name: caller,
-                caller_site_start: start,
-                caller_site_end: end,
-                callee_path: reference.target_path.clone(),
-                callee_name: Some(name.to_string()),
-                callee_start: target_start,
-                callee_end: target_end,
-                kind: "checker_resolve".to_string(),
-                resolution_origin: "checker".to_string(),
-            });
-        }
+    for references in references_by_source.values_mut() {
+        references.sort_by_key(|reference| (reference.site_start, reference.site_end));
     }
+    checker_defs.seal();
+    let edges: Vec<_> = sites.into_iter().filter_map(|(path, start, end)| {
+        let references = references_by_source.get(path.as_str())?;
+        let first = references.partition_point(|reference| reference.site_start < start);
+        let reference = references.get(first).filter(|reference| reference.site_end <= end)?;
+        let target = checker_defs.target(&reference.target_path, reference.target_start, Some(name))?;
+        Some(sprefa_extract::edit::checker_edges::CheckerEdge { source: path, site_start: start, site_end: end, target })
+    }).collect();
+    checker_defs.write(&mut facts, edges);
     Ok(facts)
 }
