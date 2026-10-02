@@ -103,6 +103,63 @@ fn flow_paths_follow_derived_interprocedural_edges() {
 }
 
 #[test]
+fn flow_paths_from_a_parameter_match_path_and_digest_seeds() {
+    let scratch = tempfile::tempdir().unwrap();
+    let path = scratch.path().join("0_local.ts");
+    let database = scratch.path().join("facts.db");
+    let source = "export function local(children: string) { return children; }\n";
+    std::fs::write(&path, source).unwrap();
+    let start = source.find("children: string").unwrap();
+    let end = start + "children: string".len();
+    let seed = format!("{}@{start}:{end}", path.display());
+    let path_output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["graph", "--flow-path", &seed, "--sqlite"])
+        .arg(&database)
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(path_output.status.success(), "{}", String::from_utf8_lossy(&path_output.stderr));
+    let connection = rusqlite::Connection::open(&database).unwrap();
+    let digest: String = connection.query_row("SELECT digest FROM file", [], |row| row.get(0)).unwrap();
+    let parameter: (u32, u32, String) = connection.query_row(
+        "SELECT span__start, span__end, name FROM node WHERE family = 'df' AND kind = 'param'",
+        [],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    ).unwrap();
+    assert_eq!(parameter, (start as u32, end as u32, "children".to_string()));
+    let mut statement = connection.prepare(
+        "SELECT to__start, to__end, min(_row) FROM edge WHERE family = 'df' \
+         AND _content_id = ?1 AND from__start = ?2 AND from__end = ?3 \
+         GROUP BY to__start, to__end",
+    ).unwrap();
+    let mut direct: Vec<(String, u64)> = statement.query_map(
+        rusqlite::params![digest, start as u32, end as u32],
+        |row| Ok((format!("{}:{}", row.get::<_, u32>(0)?, row.get::<_, u32>(1)?), row.get(2)?)),
+    ).unwrap().collect::<rusqlite::Result<_>>().unwrap();
+    assert!(!direct.is_empty());
+    direct.sort();
+    let digest_output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["graph", "--flow-path", &format!("{digest}@{start}:{end}")])
+        .arg(&path)
+        .output()
+        .unwrap();
+    assert!(digest_output.status.success(), "{}", String::from_utf8_lossy(&digest_output.stderr));
+    assert_eq!(path_output.stdout, digest_output.stdout);
+    let rows: Vec<Value> = String::from_utf8(path_output.stdout).unwrap().lines()
+        .map(|line| serde_json::from_str(line).unwrap()).collect();
+    assert!(rows.iter().all(|row| row["record"] == "graph_path"
+        && row["plane"] == "flow" && row["from_path"] == digest
+        && row["from_name"] == format!("{start}:{end}")
+        && row["to_path"] == digest
+        && row["witness"].as_array().unwrap().len() == row["depth"].as_u64().unwrap() as usize));
+    let mut actual: Vec<(String, u64)> = rows.iter().filter(|row| row["depth"] == 1)
+        .map(|row| (row["to_name"].as_str().unwrap().to_string(), row["witness"][0].as_u64().unwrap()))
+        .collect();
+    actual.sort();
+    assert_eq!(actual, direct);
+}
+
+#[test]
 #[cfg(feature = "graph")]
 fn control_slice_returns_a_closed_statement_set() {
     let path = "tests/fixtures/graph_ts/5_slice.ts";
