@@ -54,12 +54,12 @@ export function AssignmentExpression(props: AssignmentExpressionProps) {
   return <$Node kind="assignment_expression" props={props} rule={R_assignment_expression} multi={[]} />;
 }
 
-const R_associated_type: Rule = seq(lit("type"), field("name"), opt(field("type_parameters")), opt(field("bounds")), opt(child), lit(";"));
+const R_associated_type: Rule = seq(lit("type"), field("name"), opt(field("type_parameters")), opt(field("bounds")), opt(field("where_clause")), lit(";"));
 export interface AssociatedTypeProps {
   bounds?: $Children;
   name: $Children;
   type_parameters?: $Children;
-  children?: $Children;
+  where_clause?: $Children;
   refkey?: $Refkey;
 }
 export function AssociatedType(props: AssociatedTypeProps) {
@@ -279,11 +279,12 @@ export function EmptyStatement(props: EmptyStatementProps) {
   return <$Leaf kind="empty_statement">{props.children}</$Leaf>;
 }
 
-const R_enum_item: Rule = seq(opt(child), lit("enum"), field("name"), opt(field("type_parameters")), opt(child), field("body"));
+const R_enum_item: Rule = seq(opt(child), lit("enum"), field("name"), opt(field("type_parameters")), opt(field("where_clause")), field("body"));
 export interface EnumItemProps {
   body: $Children;
   name: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
   refkey?: $Refkey;
 }
@@ -386,11 +387,11 @@ export function FieldInitializerList(props: FieldInitializerListProps) {
   return <$Node kind="field_initializer_list" props={props} rule={R_field_initializer_list} multi={[]} />;
 }
 
-const R_field_pattern: Rule = seq(opt(kw(["ref"])), opt(child), choice(field("name"), seq(field("name"), lit(":"), field("pattern"))));
+const R_field_pattern: Rule = seq(opt(kw(["ref"])), opt(field("mutable_specifier")), choice(field("name"), seq(field("name"), lit(":"), field("pattern"))));
 export interface FieldPatternProps {
   name: $Children;
   pattern?: $Children;
-  children?: $Children;
+  mutable_specifier?: $Children;
   keywords?: string[];
 }
 export function FieldPattern(props: FieldPatternProps) {
@@ -432,13 +433,14 @@ export function FragmentSpecifier(props: FragmentSpecifierProps) {
   return <$Leaf kind="fragment_specifier">{props.children}</$Leaf>;
 }
 
-const R_function_item: Rule = seq(opt(child), opt(child), lit("fn"), field("name"), opt(field("type_parameters")), field("parameters"), opt(seq(lit("->"), field("return_type"))), opt(child), field("body"));
+const R_function_item: Rule = seq(opt(child), opt(child), lit("fn"), field("name"), opt(field("type_parameters")), field("parameters"), opt(seq(lit("->"), field("return_type"))), opt(field("where_clause")), field("body"));
 export interface FunctionItemProps {
   body: $Children;
   name: $Children;
   parameters: $Children;
   return_type?: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
   refkey?: $Refkey;
 }
@@ -454,12 +456,13 @@ export function FunctionModifiers(props: FunctionModifiersProps) {
   return <$Node kind="function_modifiers" props={props} rule={R_function_modifiers} multi={[]} />;
 }
 
-const R_function_signature_item: Rule = seq(opt(child), opt(child), lit("fn"), field("name"), opt(field("type_parameters")), field("parameters"), opt(seq(lit("->"), field("return_type"))), opt(child), lit(";"));
+const R_function_signature_item: Rule = seq(opt(child), opt(child), lit("fn"), field("name"), opt(field("type_parameters")), field("parameters"), opt(seq(lit("->"), field("return_type"))), opt(field("where_clause")), lit(";"));
 export interface FunctionSignatureItemProps {
   name: $Children;
   parameters: $Children;
   return_type?: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
   refkey?: $Refkey;
 }
@@ -542,13 +545,13 @@ export function IfExpression(props: IfExpressionProps) {
   return <$Node kind="if_expression" props={props} rule={R_if_expression} multi={[]} />;
 }
 
-const R_impl_item: Rule = seq(opt(kw(["unsafe"])), lit("impl"), opt(field("type_parameters")), opt(seq(opt(kw(["!"])), field("trait"), lit("for"))), field("type"), opt(child), choice(field("body"), lit(";")));
+const R_impl_item: Rule = seq(opt(kw(["unsafe"])), lit("impl"), opt(field("type_parameters")), opt(seq(opt(kw(["!"])), field("trait"), lit("for"))), field("type"), opt(field("where_clause")), choice(field("body"), lit(";")));
 export interface ImplItemProps {
   body?: $Children;
   trait?: $Children;
   type: $Children;
   type_parameters?: $Children;
-  children?: $Children;
+  where_clause?: $Children;
   keywords?: string[];
 }
 export function ImplItem(props: ImplItemProps) {
@@ -601,13 +604,13 @@ export function LetCondition(props: LetConditionProps) {
   return <$Node kind="let_condition" props={props} rule={R_let_condition} multi={[]} />;
 }
 
-const R_let_declaration: Rule = seq(lit("let"), opt(child), field("pattern"), opt(seq(lit(":"), field("type"))), opt(seq(lit("="), field("value"))), opt(seq(lit("else"), field("alternative"))), lit(";"));
+const R_let_declaration: Rule = seq(lit("let"), opt(field("mutable_specifier")), field("pattern"), opt(seq(lit(":"), field("type"))), opt(seq(lit("="), field("value"))), opt(seq(lit("else"), field("alternative"))), lit(";"));
 export interface LetDeclarationProps {
   alternative?: $Children;
   pattern: $Children;
   type?: $Children;
   value?: $Children;
-  children?: $Children;
+  mutable_specifier?: $Children;
 }
 export function LetDeclaration(props: LetDeclarationProps) {
   return <$Node kind="let_declaration" props={props} rule={R_let_declaration} multi={[]} />;
@@ -722,8 +725,9 @@ export function ModItem(props: ModItemProps) {
   return <$Node kind="mod_item" props={props} rule={R_mod_item} multi={[]} />;
 }
 
-const R_mut_pattern: Rule = seq(child, child);
+const R_mut_pattern: Rule = seq(field("mutable_specifier"), child);
 export interface MutPatternProps {
+  mutable_specifier?: $Children;
   children?: $Children;
 }
 export function MutPattern(props: MutPatternProps) {
@@ -766,11 +770,11 @@ export function OuterDocCommentMarker(props: OuterDocCommentMarkerProps) {
   return <$Leaf kind="outer_doc_comment_marker">{props.children}</$Leaf>;
 }
 
-const R_parameter: Rule = seq(opt(child), field("pattern"), lit(":"), field("type"));
+const R_parameter: Rule = seq(opt(field("mutable_specifier")), field("pattern"), lit(":"), field("type"));
 export interface ParameterProps {
   pattern: $Children;
   type: $Children;
-  children?: $Children;
+  mutable_specifier?: $Children;
 }
 export function Parameter(props: ParameterProps) {
   return <$Node kind="parameter" props={props} rule={R_parameter} multi={[]} />;
@@ -793,10 +797,10 @@ export function ParenthesizedExpression(props: ParenthesizedExpressionProps) {
   return <$Node kind="parenthesized_expression" props={props} rule={R_parenthesized_expression} multi={[]} />;
 }
 
-const R_pointer_type: Rule = seq(lit("*"), choice(lit("const"), child), field("type"));
+const R_pointer_type: Rule = seq(lit("*"), choice(lit("const"), field("mutable_specifier")), field("type"));
 export interface PointerTypeProps {
   type: $Children;
-  children?: $Children;
+  mutable_specifier?: $Children;
 }
 export function PointerType(props: PointerTypeProps) {
   return <$Node kind="pointer_type" props={props} rule={R_pointer_type} multi={[]} />;
@@ -846,26 +850,28 @@ export function RefPattern(props: RefPatternProps) {
   return <$Node kind="ref_pattern" props={props} rule={R_ref_pattern} multi={[]} />;
 }
 
-const R_reference_expression: Rule = seq(lit("&"), choice(seq(lit("raw"), choice(lit("const"), child)), opt(child)), field("value"));
+const R_reference_expression: Rule = seq(lit("&"), choice(seq(lit("raw"), choice(lit("const"), field("mutable_specifier"))), opt(field("mutable_specifier"))), field("value"));
 export interface ReferenceExpressionProps {
   value: $Children;
-  children?: $Children;
+  mutable_specifier?: $Children;
 }
 export function ReferenceExpression(props: ReferenceExpressionProps) {
   return <$Node kind="reference_expression" props={props} rule={R_reference_expression} multi={[]} />;
 }
 
-const R_reference_pattern: Rule = seq(lit("&"), opt(child), child);
+const R_reference_pattern: Rule = seq(lit("&"), opt(field("mutable_specifier")), child);
 export interface ReferencePatternProps {
+  mutable_specifier?: $Children;
   children?: $Children;
 }
 export function ReferencePattern(props: ReferencePatternProps) {
   return <$Node kind="reference_pattern" props={props} rule={R_reference_pattern} multi={[]} />;
 }
 
-const R_reference_type: Rule = seq(lit("&"), opt(child), opt(child), field("type"));
+const R_reference_type: Rule = seq(lit("&"), opt(child), opt(field("mutable_specifier")), field("type"));
 export interface ReferenceTypeProps {
   type: $Children;
+  mutable_specifier?: $Children;
   children?: $Children;
 }
 export function ReferenceType(props: ReferenceTypeProps) {
@@ -920,8 +926,9 @@ export function ScopedUseList(props: ScopedUseListProps) {
   return <$Node kind="scoped_use_list" props={props} rule={R_scoped_use_list} multi={[]} />;
 }
 
-const R_self_parameter: Rule = seq(opt(kw(["&"])), opt(child), opt(child), child);
+const R_self_parameter: Rule = seq(opt(kw(["&"])), opt(child), opt(field("mutable_specifier")), child);
 export interface SelfParameterProps {
+  mutable_specifier?: $Children;
   children?: $Children;
   keywords?: string[];
 }
@@ -954,11 +961,12 @@ export function SourceFile(props: SourceFileProps) {
   return <$Node kind="source_file" props={props} rule={R_source_file} multi={[]} scope />;
 }
 
-const R_static_item: Rule = seq(opt(child), lit("static"), opt(kw(["ref"])), opt(child), field("name"), lit(":"), field("type"), opt(seq(lit("="), field("value"))), lit(";"));
+const R_static_item: Rule = seq(opt(child), lit("static"), opt(kw(["ref"])), opt(field("mutable_specifier")), field("name"), lit(":"), field("type"), opt(seq(lit("="), field("value"))), lit(";"));
 export interface StaticItemProps {
   name: $Children;
   type: $Children;
   value?: $Children;
+  mutable_specifier?: $Children;
   children?: $Children;
   keywords?: string[];
   refkey?: $Refkey;
@@ -984,11 +992,12 @@ export function StructExpression(props: StructExpressionProps) {
   return <$Node kind="struct_expression" props={props} rule={R_struct_expression} multi={[]} />;
 }
 
-const R_struct_item: Rule = seq(opt(child), lit("struct"), field("name"), opt(field("type_parameters")), choice(seq(opt(child), field("body")), seq(field("body"), opt(child), lit(";")), lit(";")));
+const R_struct_item: Rule = seq(opt(child), lit("struct"), field("name"), opt(field("type_parameters")), choice(seq(opt(field("where_clause")), field("body")), seq(field("body"), opt(field("where_clause")), lit(";")), lit(";")));
 export interface StructItemProps {
   body?: $Children;
   name: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
   refkey?: $Refkey;
 }
@@ -1057,12 +1066,13 @@ export function TraitBounds(props: TraitBoundsProps) {
   return <$Node kind="trait_bounds" props={props} rule={R_trait_bounds} multi={[]} />;
 }
 
-const R_trait_item: Rule = seq(opt(child), opt(kw(["unsafe"])), lit("trait"), field("name"), opt(field("type_parameters")), opt(field("bounds")), opt(child), field("body"));
+const R_trait_item: Rule = seq(opt(child), opt(kw(["unsafe"])), lit("trait"), field("name"), opt(field("type_parameters")), opt(field("bounds")), opt(field("where_clause")), field("body"));
 export interface TraitItemProps {
   body: $Children;
   bounds?: $Children;
   name: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
   keywords?: string[];
   refkey?: $Refkey;
@@ -1151,11 +1161,12 @@ export function TypeCastExpression(props: TypeCastExpressionProps) {
   return <$Node kind="type_cast_expression" props={props} rule={R_type_cast_expression} multi={[]} />;
 }
 
-const R_type_item: Rule = seq(opt(child), lit("type"), field("name"), opt(field("type_parameters")), opt(child), lit("="), field("type"), opt(child), lit(";"));
+const R_type_item: Rule = seq(opt(child), lit("type"), field("name"), opt(field("type_parameters")), opt(field("where_clause")), lit("="), field("type"), opt(field("where_clause")), lit(";"));
 export interface TypeItemProps {
   name: $Children;
   type: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
   refkey?: $Refkey;
 }
@@ -1192,11 +1203,12 @@ export function UnaryExpression(props: UnaryExpressionProps) {
   return <$Node kind="unary_expression" props={props} rule={R_unary_expression} multi={[]} />;
 }
 
-const R_union_item: Rule = seq(opt(child), lit("union"), field("name"), opt(field("type_parameters")), opt(child), field("body"));
+const R_union_item: Rule = seq(opt(child), lit("union"), field("name"), opt(field("type_parameters")), opt(field("where_clause")), field("body"));
 export interface UnionItemProps {
   body: $Children;
   name: $Children;
   type_parameters?: $Children;
+  where_clause?: $Children;
   children?: $Children;
 }
 export function UnionItem(props: UnionItemProps) {
@@ -1265,10 +1277,10 @@ export function UseWildcard(props: UseWildcardProps) {
   return <$Node kind="use_wildcard" props={props} rule={R_use_wildcard} multi={[]} />;
 }
 
-const R_variadic_parameter: Rule = seq(opt(child), opt(seq(field("pattern"), lit(":"))), lit("..."));
+const R_variadic_parameter: Rule = seq(opt(field("mutable_specifier")), opt(seq(field("pattern"), lit(":"))), lit("..."));
 export interface VariadicParameterProps {
   pattern?: $Children;
-  children?: $Children;
+  mutable_specifier?: $Children;
 }
 export function VariadicParameter(props: VariadicParameterProps) {
   return <$Node kind="variadic_parameter" props={props} rule={R_variadic_parameter} multi={[]} />;

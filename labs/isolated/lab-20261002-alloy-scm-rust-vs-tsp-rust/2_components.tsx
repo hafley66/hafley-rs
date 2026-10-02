@@ -19,7 +19,7 @@ function generics(p: Props): Children {
   return xs.length ? <G.TypeParameters>{xs}</G.TypeParameters> : undefined;
 }
 function whereClause(p: Props): Children {
-  return p.where?.length ? <G.WhereClause keywords={[","]}>{p.where.map((x: Props) => <G.WherePredicate left={x.target} bounds={<G.TraitBounds>{x.bounds}</G.TraitBounds>} />)}</G.WhereClause> : undefined;
+  return p.where?.length ? <G.WhereClause>{p.where.map((x: Props) => <G.WherePredicate left={x.target} bounds={<G.TraitBounds>{x.bounds}</G.TraitBounds>} />)}</G.WhereClause> : undefined;
 }
 function attrs(p: Props): Children {
   const xs = [...(p.attrs ?? [])];
@@ -35,16 +35,16 @@ export function CrateDirectory(p: Props) {
 }
 export function ModDirectory(_p: Props): Children { throw new Gap("refkey/import resolution", "No module registration or nested directory synthesis in the grammar policy"); }
 export function StructDeclaration(p: Props) {
-  return <>{attrs(p)}<G.StructItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} body={p.braced || p.children ? <G.FieldDeclarationList>{p.children}</G.FieldDeclarationList> : undefined}>{[visibility(p), whereClause(p)]}</G.StructItem></>;
+  return <>{attrs(p)}<G.StructItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} where_clause={whereClause(p)} body={p.braced || p.children ? <G.FieldDeclarationList>{p.children}</G.FieldDeclarationList> : undefined}>{visibility(p)}</G.StructItem></>;
 }
 export function StructField(p: Props) {
   return <>{attrs(p)}<G.FieldDeclaration name={p.name} type={p.type}>{visibility(p)}</G.FieldDeclaration>,</>;
 }
 export function TupleStructDeclaration(p: Props) {
-  return <>{attrs(p)}<G.StructItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} body={<G.OrderedFieldDeclarationList type={p.fields} />}>{visibility(p)}</G.StructItem></>;
+  return <>{attrs(p)}<G.StructItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} where_clause={whereClause(p)} body={<G.OrderedFieldDeclarationList type={p.fields} />}>{visibility(p)}</G.StructItem></>;
 }
 export function EnumDeclaration(p: Props) {
-  return <>{attrs(p)}<G.EnumItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} body={<G.EnumVariantList>{p.children}</G.EnumVariantList>}>{[visibility(p), whereClause(p)]}</G.EnumItem></>;
+  return <>{attrs(p)}<G.EnumItem name={p.name} refkey={p.refkey} type_parameters={generics(p)} where_clause={whereClause(p)} body={<G.EnumVariantList>{p.children}</G.EnumVariantList>}>{visibility(p)}</G.EnumItem></>;
 }
 export function UnitVariant(p: Props) { return <><G.EnumVariant name={p.name} value={p.value} />,</>; }
 export function TupleVariant(p: Props) { return <><G.EnumVariant name={p.name} body={<G.OrderedFieldDeclarationList type={p.fields} />} />,</>; }
@@ -57,24 +57,24 @@ function parameters(p: Props): Children {
 }
 export function FunctionDeclaration(p: Props) {
   // function_modifiers has no consuming keyword prop. A caller-provided async modifier is an opaque child.
-  return <>{attrs(p)}<G.FunctionItem name={p.name} refkey={p.refkey} parameters={parameters(p)} return_type={p.returns} type_parameters={generics(p)} body={<G.Block>{p.children}</G.Block>}>{[visibility(p), p.async ? "async" : undefined, whereClause(p)]}</G.FunctionItem></>;
+  return <>{attrs(p)}<G.FunctionItem name={p.name} refkey={p.refkey} parameters={parameters(p)} return_type={p.returns} type_parameters={generics(p)} where_clause={whereClause(p)} body={<G.Block>{p.children}</G.Block>}>{[visibility(p), p.async ? "async" : undefined]}</G.FunctionItem></>;
 }
 export function ImplBlock(p: Props) {
-  return <G.ImplItem type={p.target} trait={p.trait} type_parameters={generics(p)} body={<G.DeclarationList>{p.children}</G.DeclarationList>}>{whereClause(p)}</G.ImplItem>;
+  return <G.ImplItem type={p.target} trait={p.trait} type_parameters={generics(p)} where_clause={whereClause(p)} body={<G.DeclarationList>{p.children}</G.DeclarationList>} />;
 }
 export function TypeAlias(p: Props) { return <>{attrs(p)}<G.TypeItem name={p.name} type_parameters={generics(p)} type={p.children}>{visibility(p)}</G.TypeItem></>; }
 export function TraitDeclaration(p: Props) {
-  return <>{attrs(p)}<G.TraitItem name={p.name} type_parameters={generics(p)} bounds={p.supertraits?.length ? <G.TraitBounds>{p.supertraits}</G.TraitBounds> : undefined} body={<G.DeclarationList>{p.children}</G.DeclarationList>}>{[visibility(p), whereClause(p)]}</G.TraitItem></>;
+  return <>{attrs(p)}<G.TraitItem name={p.name} type_parameters={generics(p)} where_clause={whereClause(p)} bounds={p.supertraits?.length ? <G.TraitBounds>{p.supertraits}</G.TraitBounds> : undefined} body={<G.DeclarationList>{p.children}</G.DeclarationList>}>{visibility(p)}</G.TraitItem></>;
 }
-export function TraitMethod(p: Props) { return <G.FunctionSignatureItem name={p.name} parameters={parameters(p)} return_type={p.returns} type_parameters={generics(p)}>{whereClause(p)}</G.FunctionSignatureItem>; }
+export function TraitMethod(p: Props) { return <G.FunctionSignatureItem name={p.name} parameters={parameters(p)} return_type={p.returns} type_parameters={generics(p)} where_clause={whereClause(p)} />; }
 export function AssociatedType(p: Props) { return <G.AssociatedType name={p.name} bounds={p.bounds?.length ? <G.TraitBounds>{p.bounds}</G.TraitBounds> : undefined} />; }
 export function ConstDeclaration(p: Props) { return <>{attrs(p)}<G.ConstItem name={p.name} type={p.type} value={p.children}>{visibility(p)}</G.ConstItem></>; }
-export function StaticDeclaration(p: Props) { return <>{attrs(p)}<G.StaticItem name={p.name} type={p.type} value={p.children}>{[visibility(p), p.mut ? <G.MutableSpecifier>mut</G.MutableSpecifier> : undefined]}</G.StaticItem></>; }
-export function LetDeclaration(p: Props) { return <G.LetDeclaration pattern={p.name} type={p.type} value={p.children}>{p.mut ? <G.MutableSpecifier>mut</G.MutableSpecifier> : undefined}</G.LetDeclaration>; }
+export function StaticDeclaration(p: Props) { return <>{attrs(p)}<G.StaticItem mutable_specifier={p.mut ? <G.MutableSpecifier>mut</G.MutableSpecifier> : undefined} name={p.name} type={p.type} value={p.children}>{visibility(p)}</G.StaticItem></>; }
+export function LetDeclaration(p: Props) { return <G.LetDeclaration pattern={p.name} type={p.type} value={p.children} mutable_specifier={p.mut ? <G.MutableSpecifier>mut</G.MutableSpecifier> : undefined} />; }
 export function LineComment(_p: Props): Children { throw new Gap("doc comments", "Generated line_comment only exposes doc-marker fields; ordinary comment body is a pruned PATTERN"); }
 export function BlockComment(_p: Props): Children { throw new Gap("doc comments", "Generated block_comment has no ordinary body prop"); }
 export function DocComment(p: Props) { return <G.LineComment outer={<G.OuterDocCommentMarker>/</G.OuterDocCommentMarker>} doc={<G.DocComment>{p.children}</G.DocComment>} />; }
-export function Ref(p: Props) { return <G.ReferenceType type={p.children}>{[p.lifetime ? <G.Lifetime>{p.lifetime}</G.Lifetime> : undefined, p.mut ? <G.MutableSpecifier>mut</G.MutableSpecifier> : undefined]}</G.ReferenceType>; }
+export function Ref(p: Props) { return <G.ReferenceType type={p.children} mutable_specifier={p.mut ? <G.MutableSpecifier>mut</G.MutableSpecifier> : undefined}>{p.lifetime ? <G.Lifetime>{p.lifetime}</G.Lifetime> : undefined}</G.ReferenceType>; }
 export function BoxType(p: Props) { return <G.GenericType type="Box" type_arguments={<G.TypeArguments>{p.children}</G.TypeArguments>} />; }
 export function RcType(p: Props) { return <G.GenericType type="Rc" type_arguments={<G.TypeArguments>{p.children}</G.TypeArguments>} />; }
 export function ArcType(p: Props) { return <G.GenericType type="Arc" type_arguments={<G.TypeArguments>{p.children}</G.TypeArguments>} />; }

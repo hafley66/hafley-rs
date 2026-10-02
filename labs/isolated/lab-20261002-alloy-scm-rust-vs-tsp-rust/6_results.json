@@ -7,8 +7,8 @@
   },
   "all": {
     "assertions": 239,
-    "PASS": 96,
-    "DIFF": 21,
+    "PASS": 97,
+    "DIFF": 20,
     "GAP": 122
   },
   "whitespace": {
@@ -27,10 +27,10 @@
   },
   "syntax": {
     "outputs": 114,
-    "parseClean": 110,
-    "parseFailed": 4,
-    "rustfmtClean": 61,
-    "rustfmtFailed": 53
+    "parseClean": 114,
+    "parseFailed": 0,
+    "rustfmtClean": 63,
+    "rustfmtFailed": 51
   },
   "fileSyntax": {
     "outputs": 14,
@@ -125,8 +125,8 @@
     {
       "file": "components/1_declarations/2_parity.test.tsx",
       "assertions": 35,
-      "PASS": 30,
-      "DIFF": 3,
+      "PASS": 31,
+      "DIFF": 2,
       "GAP": 2,
       "primary": {
         "assertions": 0,
@@ -2377,17 +2377,17 @@
       "status": "DIFF",
       "reason": "generics",
       "expected": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}",
-      "actual": "where T: Serialize, struct Foo<T> {\n  bar: T,\n}",
-      "detail": "expected 'where T: Serialize, struct Foo<T> {\\n…' to be 'struct Foo<T>\\nwhere\\n    T: Serializ…' // Object.is equality",
+      "actual": "struct Foo<T> where T: Serialize {\n  bar: T,\n}",
+      "detail": "expected 'struct Foo<T> where T: Serialize {\\n …' to be 'struct Foo<T>\\nwhere\\n    T: Serializ…' // Object.is equality",
       "byteEqual": false,
       "whitespaceEqual": false,
       "syntax": {
-        "context": "where T: Serialize, struct Foo<T> {\n  bar: T,\n}\n",
-        "ERROR": 1,
+        "context": "struct Foo<T> where T: Serialize {\n  bar: T,\n}\n",
+        "ERROR": 0,
         "MISSING": 0,
-        "parseClean": false,
+        "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "error: expected item, found keyword `where`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/956e24906361d245-B.rs:1:1\n  |\n1 | where T: Serialize, struct Foo<T> {\n  | ^^^^^ expected item\n  |\n  = note: for a full list of items that can appear in modules, see <https://doc.rust-lang.org/reference/items.html>\n\n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/956e24906361d245-B.rs:1:\n-struct Foo<T> where T: Serialize {\n-  bar: T,\n+struct Foo<T>\n+where\n+    T: Serialize,\n+{\n+    bar: T,\n }\n \n"
       },
       "oracleSyntax": {
         "context": "struct Foo<T>\nwhere\n    T: Serialize,\n {\n  bar: T,\n}\n",
@@ -3504,17 +3504,17 @@
       "status": "DIFF",
       "reason": "generics",
       "expected": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}",
-      "actual": "where T: Serialize + Send, trait Store<T> {\n  fn save(&self, item: &T);\n}",
-      "detail": "expected 'where T: Serialize + Send, trait Stor…' to be 'trait Store<T>\\nwhere\\n    T: Seriali…' // Object.is equality",
+      "actual": "trait Store<T> where T: Serialize + Send {\n  fn save(&self, item: &T);\n}",
+      "detail": "expected 'trait Store<T> where T: Serialize + S…' to be 'trait Store<T>\\nwhere\\n    T: Seriali…' // Object.is equality",
       "byteEqual": false,
       "whitespaceEqual": false,
       "syntax": {
-        "context": "where T: Serialize + Send, trait Store<T> {\n  fn save(&self, item: &T);\n}\n",
-        "ERROR": 1,
+        "context": "trait Store<T> where T: Serialize + Send {\n  fn save(&self, item: &T);\n}\n",
+        "ERROR": 0,
         "MISSING": 0,
-        "parseClean": false,
+        "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "error: expected item, found keyword `where`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/af72cd30fcd898d9-B.rs:1:1\n  |\n1 | where T: Serialize + Send, trait Store<T> {\n  | ^^^^^ expected item\n  |\n  = note: for a full list of items that can appear in modules, see <https://doc.rust-lang.org/reference/items.html>\n\n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/af72cd30fcd898d9-B.rs:1:\n-trait Store<T> where T: Serialize + Send {\n-  fn save(&self, item: &T);\n+trait Store<T>\n+where\n+    T: Serialize + Send,\n+{\n+    fn save(&self, item: &T);\n }\n \n"
       },
       "oracleSyntax": {
         "context": "trait Store<T>\nwhere\n    T: Serialize + Send,\n {\n  fn save(&self, item: &T);\n}\n",
@@ -3713,20 +3713,18 @@
       "testTitle": "\"renders static mut\"",
       "testInput": "{\n    expect(<RustRoot>\n      <StaticDeclaration name=\"BUFFER\" type={<>[u8; 1024]</>} mut>[0u8; 1024]</StaticDeclaration>\n    </RustRoot>).toRenderTo(\"static mut BUFFER: [u8; 1024] = [0u8; 1024];\");\n  }",
       "sourceHash": "80ceb35fce44619bf9d2b3117aa5e5c79ef5f87aa409a75a8ca9376913daa7b3",
-      "status": "DIFF",
-      "reason": "other",
+      "status": "PASS",
       "expected": "static mut BUFFER: [u8; 1024] = [0u8; 1024];",
-      "actual": "mut static BUFFER: [u8; 1024] = [0u8; 1024];",
-      "detail": "expected 'mut static BUFFER: [u8; 1024] = [0u8;…' to be 'static mut BUFFER: [u8; 1024] = [0u8;…' // Object.is equality",
-      "byteEqual": false,
-      "whitespaceEqual": false,
+      "actual": "static mut BUFFER: [u8; 1024] = [0u8; 1024];",
+      "byteEqual": true,
+      "whitespaceEqual": true,
       "syntax": {
-        "context": "mut static BUFFER: [u8; 1024] = [0u8; 1024];\n",
-        "ERROR": 1,
+        "context": "static mut BUFFER: [u8; 1024] = [0u8; 1024];\n",
+        "ERROR": 0,
         "MISSING": 0,
-        "parseClean": false,
-        "rustfmtExit": 1,
-        "rustfmt": "error: expected item, found keyword `mut`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/e5cafb0ffe9bc8c9-B.rs:1:1\n  |\n1 | mut static BUFFER: [u8; 1024] = [0u8; 1024];\n  | ^^^ expected item\n  |\n  = note: for a full list of items that can appear in modules, see <https://doc.rust-lang.org/reference/items.html>\n\n"
+        "parseClean": true,
+        "rustfmtExit": 0,
+        "rustfmt": ""
       },
       "oracleSyntax": {
         "context": "static mut BUFFER: [u8; 1024] = [0u8; 1024];\n",
@@ -4148,17 +4146,17 @@
       "status": "DIFF",
       "reason": "generics",
       "expected": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }",
-      "actual": "where T: Serialize, fn foo<T>(bar: T) {}",
-      "detail": "expected 'where T: Serialize, fn foo<T>(bar: T)…' to be 'fn foo<T>(bar: T)\\nwhere\\n    T: Seri…' // Object.is equality",
+      "actual": "fn foo<T>(bar: T) where T: Serialize {}",
+      "detail": "expected 'fn foo<T>(bar: T) where T: Serialize …' to be 'fn foo<T>(bar: T)\\nwhere\\n    T: Seri…' // Object.is equality",
       "byteEqual": false,
       "whitespaceEqual": false,
       "syntax": {
-        "context": "where T: Serialize, fn foo<T>(bar: T) {}\n",
-        "ERROR": 1,
+        "context": "fn foo<T>(bar: T) where T: Serialize {}\n",
+        "ERROR": 0,
         "MISSING": 0,
-        "parseClean": false,
+        "parseClean": true,
         "rustfmtExit": 1,
-        "rustfmt": "error: expected item, found keyword `where`\n --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/55c8b17a90b727a2-B.rs:1:1\n  |\n1 | where T: Serialize, fn foo<T>(bar: T) {}\n  | ^^^^^ expected item\n  |\n  = note: for a full list of items that can appear in modules, see <https://doc.rust-lang.org/reference/items.html>\n\n"
+        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/55c8b17a90b727a2-B.rs:1:\n-fn foo<T>(bar: T) where T: Serialize {}\n+fn foo<T>(bar: T)\n+where\n+    T: Serialize,\n+{\n+}\n \n"
       },
       "oracleSyntax": {
         "context": "fn foo<T>(bar: T)\nwhere\n    T: Serialize,\n { }\n",
@@ -4475,17 +4473,17 @@
       "status": "DIFF",
       "reason": "generics",
       "expected": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }",
-      "actual": "impl<T> Foo<T> where T: Clone, {}",
-      "detail": "expected 'impl<T> Foo<T> where T: Clone, {}' to be 'impl<T> Foo<T>\\nwhere\\n    T: Clone,\\…' // Object.is equality",
+      "actual": "impl<T> Foo<T> where T: Clone {}",
+      "detail": "expected 'impl<T> Foo<T> where T: Clone {}' to be 'impl<T> Foo<T>\\nwhere\\n    T: Clone,\\…' // Object.is equality",
       "byteEqual": false,
-      "whitespaceEqual": true,
+      "whitespaceEqual": false,
       "syntax": {
-        "context": "impl<T> Foo<T> where T: Clone, {}\n",
+        "context": "impl<T> Foo<T> where T: Clone {}\n",
         "ERROR": 0,
         "MISSING": 0,
         "parseClean": true,
-        "rustfmtExit": 1,
-        "rustfmt": "Diff in /Users/chrishafley/projects/hafley-rs/.boop-worktrees/lab/20261002-alloy-scm-rust/labs/isolated/lab-20261002-alloy-scm-rust-vs-tsp-rust/.results/syntax/5db4d5b937eccde3-B.rs:1:\n-impl<T> Foo<T> where T: Clone, {}\n+impl<T> Foo<T> where T: Clone {}\n \n"
+        "rustfmtExit": 0,
+        "rustfmt": ""
       },
       "oracleSyntax": {
         "context": "impl<T> Foo<T>\nwhere\n    T: Clone,\n { }\n",

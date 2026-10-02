@@ -51,7 +51,9 @@ export async function generate(lang, { full = false, outDir = join(here, "gen", 
   const localsScm = localsPath ? readFileSync(localsPath, "utf8") : "";
   const subsetPath = join(here, lang, "0_subset.mjs");
   const nodeInfo = new Map(nodeTypes.filter((n) => n.named && !n.subtypes).map((n) => [n.type, n]));
-  const SUBSET = !full && existsSync(subsetPath) ? (await import(pathToFileURL(subsetPath).href)).SUBSET : [...nodeInfo.keys()];
+  const config = existsSync(subsetPath) ? await import(pathToFileURL(subsetPath).href) : {};
+  const SUBSET = !full && config.SUBSET ? config.SUBSET : [...nodeInfo.keys()];
+  const namedChildren = new Set(config.NAMED_CHILDREN ?? []);
   const inSubset = new Set(SUBSET);
   const rules = grammar.rules;
   const supertypes = new Set((grammar.supertypes ?? []).map((s) => (typeof s === "string" ? s : s.name)));
@@ -123,6 +125,7 @@ export async function generate(lang, { full = false, outDir = join(here, "gen", 
         return inSubset.has(rule.value) ? "child" : "never";
       case "SYMBOL": {
         const name = rule.name;
+        if (namedChildren.has(name)) return `field(${JSON.stringify(name)})`;
         if (!name.startsWith("_")) return inSubset.has(name) ? "child" : "never";
         if (!rules[name]) { hiddenExternals++; return "blank"; } // hidden external token: zero-width here
         if (supertypes.has(name) || isSymbolChoice(rules[name])) {
@@ -205,7 +208,8 @@ export async function generate(lang, { full = false, outDir = join(here, "gen", 
     const lowered = lower(rule);
     if (lowered === "never") pruned++;
     const all = closure(lowered);
-    const fields = info.fields ?? {};
+    const fields = { ...info.fields };
+    for (const name of namedChildren) if (all.includes(`field(${JSON.stringify(name)})`)) fields[name] = { required: false, multiple: false };
     const def = definitions.get(kind);
     const props = Object.entries(fields)
       .filter(([f]) => all.includes(`field(${JSON.stringify(f)})`))

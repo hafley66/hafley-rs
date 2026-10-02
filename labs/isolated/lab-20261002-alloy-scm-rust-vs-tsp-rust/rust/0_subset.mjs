@@ -164,3 +164,6 @@ export const SUBSET = [
   "super",
   "type_identifier"
 ];
+
+// Rust policy consumes these grammar children through named prop queues.
+export const NAMED_CHILDREN = ["where_clause", "mutable_specifier"];

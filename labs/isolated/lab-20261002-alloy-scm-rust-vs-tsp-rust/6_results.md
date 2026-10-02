@@ -2,7 +2,7 @@
 
 Primary: 30 PASS, 5 DIFF, 102 GAP, 137/137 inventoried.
 
-All matchers: 96 PASS, 21 DIFF, 122 GAP, 239/239 inventoried.
+All matchers: 97 PASS, 20 DIFF, 122 GAP, 239/239 inventoried.
 
 Each row names the original A line. B is evaluated only from the original input. GAP rows have no candidate output. `6_results.json` retains oracle literals, input expressions, enclosing test bodies, parser contexts, and rustfmt output.
 
@@ -73,7 +73,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/0_StructDeclaration.test.tsx:104 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/0_StructDeclaration.test.tsx:120 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/0_StructDeclaration.test.tsx:136 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/0_StructDeclaration.test.tsx:156 | toRenderTo | supplemental | DIFF | false | false | generics | 1/0 | 1 |
+| components/1_declarations/0_StructDeclaration.test.tsx:156 | toRenderTo | supplemental | DIFF | false | false | generics | 0/0 | 1 |
 | components/1_declarations/0_StructDeclaration.test.tsx:181 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/0_StructDeclaration.test.tsx:187 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/1_EnumDeclaration.test.tsx:25 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
@@ -106,13 +106,13 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/2_parity.test.tsx:137 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:149 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:164 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
-| components/1_declarations/2_parity.test.tsx:176 | toRenderTo | supplemental | DIFF | false | false | generics | 1/0 | 1 |
+| components/1_declarations/2_parity.test.tsx:176 | toRenderTo | supplemental | DIFF | false | false | generics | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:195 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:213 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:219 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:225 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:238 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
-| components/1_declarations/2_parity.test.tsx:244 | toRenderTo | supplemental | DIFF | false | false | other | 1/0 | 1 |
+| components/1_declarations/2_parity.test.tsx:244 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 0 |
 | components/1_declarations/2_parity.test.tsx:252 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:258 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/2_parity.test.tsx:264 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
@@ -124,7 +124,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/4_FunctionDeclaration.test.tsx:45 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:59 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 0 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:72 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 0 |
-| components/1_declarations/4_FunctionDeclaration.test.tsx:84 | toRenderTo | supplemental | DIFF | false | false | generics | 1/0 | 1 |
+| components/1_declarations/4_FunctionDeclaration.test.tsx:84 | toRenderTo | supplemental | DIFF | false | false | generics | 0/0 | 1 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:102 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 0 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:115 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 0 |
 | components/1_declarations/4_FunctionDeclaration.test.tsx:121 | toRenderTo | supplemental | DIFF | false | true | whitespace/blank-line policy | 0/0 | 0 |
@@ -133,7 +133,7 @@ Each row names the original A line. B is evaluated only from the original input.
 | components/1_declarations/6_ImplBlock.test.tsx:26 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:44 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:69 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 0 |
-| components/1_declarations/6_ImplBlock.test.tsx:75 | toRenderTo | supplemental | DIFF | false | true | generics | 0/0 | 1 |
+| components/1_declarations/6_ImplBlock.test.tsx:75 | toRenderTo | supplemental | DIFF | false | false | generics | 0/0 | 0 |
 | components/1_declarations/6_ImplBlock.test.tsx:92 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/1_declarations/6_ImplBlock.test.tsx:122 | toRenderTo | supplemental | PASS | true | true | none | 0/0 | 1 |
 | components/2_references/0_Reference.test.tsx:39 | toMatchInlineSnapshot | primary | PASS | true | true | none | 0/0 | 1 |
@@ -326,7 +326,7 @@ other: No TypeSpec compiler-to-neutral adapter or model/emitter pipeline in cand
 
 ## components/1_declarations/0_StructDeclaration.test.tsx:156 (DIFF)
 
-generics: expected 'where T: Serialize, struct Foo<T> {\n…' to be 'struct Foo<T>\nwhere\n    T: Serializ…' // Object.is equality
+generics: expected 'struct Foo<T> where T: Serialize {\n …' to be 'struct Foo<T>\nwhere\n    T: Serializ…' // Object.is equality
 
 ```diff
 --- A expected
@@ -336,7 +336,7 @@ generics: expected 'where T: Serialize, struct Foo<T> {\n…' to be 'struct Foo<
 -where
 -    T: Serialize,
 - {
-+where T: Serialize, struct Foo<T> {
++struct Foo<T> where T: Serialize {
    bar: T,
  }
 \ No newline at end of file
@@ -369,7 +369,7 @@ whitespace/blank-line policy: expected 'trait Iterator {\n  type Item;\n\n\n …
 
 ## components/1_declarations/2_parity.test.tsx:176 (DIFF)
 
-generics: expected 'where T: Serialize + Send, trait Stor…' to be 'trait Store<T>\nwhere\n    T: Seriali…' // Object.is equality
+generics: expected 'trait Store<T> where T: Serialize + S…' to be 'trait Store<T>\nwhere\n    T: Seriali…' // Object.is equality
 
 ```diff
 --- A expected
@@ -379,23 +379,9 @@ generics: expected 'where T: Serialize + Send, trait Stor…' to be 'trait Store
 -where
 -    T: Serialize + Send,
 - {
-+where T: Serialize + Send, trait Store<T> {
++trait Store<T> where T: Serialize + Send {
    fn save(&self, item: &T);
  }
-\ No newline at end of file
-```
-
-## components/1_declarations/2_parity.test.tsx:244 (DIFF)
-
-other: expected 'mut static BUFFER: [u8; 1024] = [0u8;…' to be 'static mut BUFFER: [u8; 1024] = [0u8;…' // Object.is equality
-
-```diff
---- A expected
-+++ B actual
-@@ -1 +1 @@
--static mut BUFFER: [u8; 1024] = [0u8; 1024];
-\ No newline at end of file
-+mut static BUFFER: [u8; 1024] = [0u8; 1024];
 \ No newline at end of file
 ```
 
@@ -471,7 +457,7 @@ generics: expected 'fn foo<T: Display>(bar: T) {}' to be 'fn foo<T: Display>(bar
 
 ## components/1_declarations/4_FunctionDeclaration.test.tsx:84 (DIFF)
 
-generics: expected 'where T: Serialize, fn foo<T>(bar: T)…' to be 'fn foo<T>(bar: T)\nwhere\n    T: Seri…' // Object.is equality
+generics: expected 'fn foo<T>(bar: T) where T: Serialize …' to be 'fn foo<T>(bar: T)\nwhere\n    T: Seri…' // Object.is equality
 
 ```diff
 --- A expected
@@ -482,7 +468,7 @@ generics: expected 'where T: Serialize, fn foo<T>(bar: T)…' to be 'fn foo<T>(b
 -    T: Serialize,
 - { }
 \ No newline at end of file
-+where T: Serialize, fn foo<T>(bar: T) {}
++fn foo<T>(bar: T) where T: Serialize {}
 \ No newline at end of file
 ```
 
@@ -558,7 +544,7 @@ generics: expected 'impl<T> Foo<T> {}' to be 'impl<T> Foo<T> { }' // Object.is e
 
 ## components/1_declarations/6_ImplBlock.test.tsx:75 (DIFF)
 
-generics: expected 'impl<T> Foo<T> where T: Clone, {}' to be 'impl<T> Foo<T>\nwhere\n    T: Clone,\…' // Object.is equality
+generics: expected 'impl<T> Foo<T> where T: Clone {}' to be 'impl<T> Foo<T>\nwhere\n    T: Clone,\…' // Object.is equality
 
 ```diff
 --- A expected
@@ -569,7 +555,7 @@ generics: expected 'impl<T> Foo<T> where T: Clone, {}' to be 'impl<T> Foo<T>\nwh
 -    T: Clone,
 - { }
 \ No newline at end of file
-+impl<T> Foo<T> where T: Clone, {}
++impl<T> Foo<T> where T: Clone {}
 \ No newline at end of file
 ```
 
