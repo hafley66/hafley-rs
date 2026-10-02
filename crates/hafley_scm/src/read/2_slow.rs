@@ -39,6 +39,9 @@ pub fn slow_project_with_raw<E>(
     checkers: bool,
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
+    if checkers {
+        require_ts_checker(files).map_err(ResolveWithRawError::Project)?;
+    }
     let io_root = crate::read::io_path(root);
     let inputs = crate::read::project::read_inputs_streamed(
         files,
@@ -79,6 +82,22 @@ pub fn slow_project_with_raw<E>(
         facts.extend(checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?);
     }
     Ok(facts)
+}
+
+/// Check before SCIP discovery: an unavailable index must not hide a missing
+/// TypeScript checker behind a successful empty slow result.
+pub fn require_ts_checker(files: &[PathBuf]) -> Result<(), ProjectError> {
+    if !cfg!(feature = "ts-checker")
+        && files.iter().any(|path| {
+            crate::read::lang::source_for(&path.to_string_lossy())
+                .is_some_and(|source| source.name() == "ts")
+        })
+    {
+        return Err(ProjectError::CheckerUnavailable(
+            "ryi slow: TypeScript requires cargo feature ts-checker".to_string(),
+        ));
+    }
+    Ok(())
 }
 
 fn push_phase_one<E>(

@@ -11,6 +11,7 @@ pub(super) fn facts(
     root: &Path,
     name: &str,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+    sprefa_extract::slow::require_ts_checker(request.paths)?;
     let mut definitions: BTreeMap<(String, String, bool), Vec<(u32, u32)>> = BTreeMap::new();
     let _extract_span = tracing::info_span!("fast.extract_resolve").entered();
     let mut facts = resolve_project_target_with_raw(request, &mut |raw| {

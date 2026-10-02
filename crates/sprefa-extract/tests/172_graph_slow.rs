@@ -60,6 +60,29 @@ fn a_zero_second_timeout_is_refused() {
     assert_eq!(output.status.code(), Some(2));
 }
 
+#[cfg(not(feature = "ts-checker"))]
+#[test]
+fn slow_typescript_requires_the_checker_feature_before_index_discovery() {
+    for query in [
+        vec!["--from", "chainC"],
+        vec!["--call-path", "chainC", "chainD"],
+        vec!["--callers", "chainD"],
+        vec!["--uses", "Widget"],
+    ] {
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .current_dir(env!("CARGO_MANIFEST_DIR"))
+            .env("RUST_LOG", "off")
+            .args(["graph", "--slow"])
+            .args(query)
+            .arg("tests/fixtures/graph_ts")
+            .output()
+            .expect("graph binary runs");
+        assert!(!output.status.success());
+        assert!(String::from_utf8_lossy(&output.stderr).contains("ts-checker"));
+        assert!(output.stdout.is_empty());
+    }
+}
+
 #[cfg(feature = "rust-checker")]
 #[test]
 fn targeted_checker_rows_match_the_whole_checker_at_unresolved_sites() {
@@ -147,6 +170,7 @@ fn targeted_checker_rows_match_the_whole_checker_at_unresolved_sites() {
 }
 
 #[test]
+#[cfg(feature = "ts-checker")]
 fn typescript_target_references_include_importing_files() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))

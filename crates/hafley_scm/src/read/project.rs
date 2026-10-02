@@ -157,11 +157,14 @@ pub enum ProjectError {
     CargoMetadataFailed(PathBuf, String),
     /// A bundled `.scm` query refused one of fast's files.
     Scm(String),
+    /// A requested slow TypeScript run has no compiled checker.
+    CheckerUnavailable(String),
 }
 
 impl std::fmt::Display for ProjectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
+            Self::CheckerUnavailable(detail) => f.write_str(detail),
             Self::Read(path, err) => write!(f, "read {}: {err}", path.display()),
             Self::Scip(err) => write!(f, "scip: {err:?}"),
             Self::ScipNeedsRoot => {
