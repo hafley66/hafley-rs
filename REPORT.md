@@ -1094,3 +1094,20 @@ in both serializers. Preserve protocol/run headers and the existing assertion:
 resolved helper callee span 33..39, then written helper() span 33..41. No
 assertion or golden changes.
 Coordinator: `cargo test --features cli --test all t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site -- --exact --test-threads=1`
+
+### dogfood/ts/J01.sh: slow-tier JSX rows
+
+Cause: JSX commit `826a1a05` appends retained syntax in project resolve, but
+`crates/hafley_scm/src/read/2_slow.rs:52` initializes its result with no syntax.
+`checker_facts` at `2_slow.rs:619` retains checker edges only. J01 commit
+`4718ffbb` expects the written element/attribute facts alongside those edges
+in both tiers. Main lacks J01; its main..HEAD history identifies `4718ffbb`.
+Change: seed slow results with the same retained written-syntax projection,
+including on the no-index return path. JSONL and SQLite receive those facts;
+SCIP/checker edge generation and J01 assertions remain unchanged.
+Add a deterministic CLI/SQLite test with an empty supplied SCIP index and
+checkers disabled, comparing written rows to the unchanged 193 golden.
+Coordinator, crate `crates/sprefa-extract`, target `all`:
+`cargo test --features cli --test all t_193_ts_rtkq_jsx::slow_retains_written_syntax_with_an_empty_index -- --exact --test-threads=1`
+The coordinator also runs the existing J01 dogfood gate with its configured
+RYII, STATE, and CORPUS environment and a cli,ts-checker binary.

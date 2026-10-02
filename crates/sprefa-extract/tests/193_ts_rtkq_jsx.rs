@@ -102,6 +102,31 @@ fn written_calls_and_nested_jsx_match_jsonl_and_sqlite_goldens() {
 }
 
 #[test]
+fn slow_retains_written_syntax_with_an_empty_index() {
+    let scratch = tempfile::tempdir().unwrap();
+    // Empty protobuf is a valid SCIP index with no documents. Syntax rows
+    // must survive independently of compiler/index answers.
+    let index = scratch.path().join("empty.scip");
+    std::fs::write(&index, b"").unwrap();
+    let index = index.to_str().unwrap();
+    let args = [
+        "slow", "--no-checker", "--scip-index", index,
+        COMPONENTS, NESTED, HOOKS,
+    ];
+    let expected = syntax_rows(GOLDEN);
+    assert_eq!(syntax_rows(&run(&args)), expected, "slow JSONL");
+    let path = scratch.path().join("slow.db");
+    let mut sqlite_args = args.to_vec();
+    sqlite_args.extend(["--sqlite", path.to_str().unwrap()]);
+    run(&sqlite_args);
+    assert_eq!(
+        database_rows(&Connection::open(path).unwrap()),
+        expected,
+        "slow SQLite"
+    );
+}
+
+#[test]
 fn written_tsx_calls_are_additive_to_the_original_resolved_site() {
     let scratch = tempfile::tempdir().unwrap();
     let caller = scratch.path().join("0_caller.tsx");

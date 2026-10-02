@@ -49,7 +49,9 @@ pub fn slow_project_with_raw<E>(
         crate::read::project::Planes::All,
         &mut |input, content| push_phase_one(input, content, push_raw),
     )?;
-    let mut facts = Vec::new();
+    // Written JSX/call syntax shares the retained parse with fast and resolve;
+    // retain it even when SCIP discovery has no index to return.
+    let mut facts = crate::read::project::syntax_facts(&inputs);
     let _scip_span = crate::read::trace::tracked(tracing::info_span!("slow.scip.load_build")).entered();
     let index = match index {
         Some(path) => crate::read::scip_decode::load_index(&crate::read::io_path(path))
