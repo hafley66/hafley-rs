@@ -100,3 +100,9 @@ Arguments:
   [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
              fork <id>`; `join` and `diff` take their own
 ```
+
+## ryi TS edit-plan defects (2026-10-02, feature-ryi-ts-refactor)
+
+Verification deferred by the user's stop instruction: release build and crate test processes were terminated; no completed gates. Case scripts below are unrun. The coordinator will run the release build, assigned dogfood cases, and `cargo test --features cli` serially. Existing golden-parity failures remain excluded from the no-new-failures requirement.
+
+- D3 before: in-package moves could add the root workspace package as a dependency for an existing reference. After: dependency additions require changed package ownership. Case: `D03.sh`, unrun.
