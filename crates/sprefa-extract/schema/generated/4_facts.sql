@@ -69,7 +69,8 @@ CREATE TABLE IF NOT EXISTS "node" (
     "span__start" INTEGER NOT NULL,
     "span__end" INTEGER NOT NULL,
     "kind" TEXT NOT NULL,
-    "name" TEXT
+    "name" TEXT,
+    "named" INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS "edge" (
@@ -85,7 +86,10 @@ CREATE TABLE IF NOT EXISTS "edge" (
     "from_kind" TEXT,
     "to__start" INTEGER NOT NULL,
     "to__end" INTEGER NOT NULL,
-    "to_kind" TEXT
+    "to_kind" TEXT,
+    "field" TEXT,
+    "index" INTEGER,
+    "named_index" INTEGER
 );
 
 CREATE TABLE IF NOT EXISTS "param" (
@@ -609,7 +613,10 @@ CREATE TABLE IF NOT EXISTS "capture" (
     "start" INTEGER NOT NULL,
     "end" INTEGER NOT NULL,
     "match_start" INTEGER NOT NULL,
-    "match_end" INTEGER NOT NULL
+    "match_end" INTEGER NOT NULL,
+    "pattern" INTEGER,
+    "match" INTEGER,
+    "kind" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "symbol" (

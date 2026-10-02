@@ -637,6 +637,15 @@
         "kind": "string",
         "optional": false,
         "nullable": true
+      },
+      {
+        "name": "named",
+        "path": [
+          "named"
+        ],
+        "kind": "boolean",
+        "optional": true,
+        "nullable": false
       }
     ]
   },
@@ -773,6 +782,33 @@
           "to_kind"
         ],
         "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "field",
+        "path": [
+          "field"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "index",
+        "path": [
+          "index"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "named_index",
+        "path": [
+          "named_index"
+        ],
+        "kind": "uint32",
         "optional": true,
         "nullable": false
       }
@@ -5004,6 +5040,33 @@
         ],
         "kind": "uint32",
         "optional": false,
+        "nullable": false
+      },
+      {
+        "name": "pattern",
+        "path": [
+          "pattern"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "match",
+        "path": [
+          "match"
+        ],
+        "kind": "uint32",
+        "optional": true,
+        "nullable": false
+      },
+      {
+        "name": "kind",
+        "path": [
+          "kind"
+        ],
+        "kind": "string",
+        "optional": true,
         "nullable": false
       }
     ]

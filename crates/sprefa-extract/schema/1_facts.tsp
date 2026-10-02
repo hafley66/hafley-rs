@@ -23,11 +23,13 @@ model Diagnostic { ...ExportRow; record: "diagnostic"; run: uint32; relation: st
 model Node {
   ...ExportRow; record: "node"; ...LocatedFact;
   span: Extract.SpanOut; kind: string; name: string | null;
+  named?: boolean;
 }
 model Edge {
   ...ExportRow; record: "edge"; ...LocatedFact;
   kind: string; from: Extract.SpanOut; from_kind?: string;
   to: Extract.SpanOut; to_kind?: string;
+  field?: string; index?: uint32; named_index?: uint32;
 }
 model Param { ...ExportRow; record: "param"; ...LocatedFact; span: Extract.SpanOut; pos: uint32; }
 model Arg { ...ExportRow; record: "arg"; ...LocatedFact; call: Extract.SpanOut; pos: int64; arg: Extract.SpanOut; }
@@ -86,7 +88,7 @@ model PackageEdge { ...ExportRow; record: "package_edge"; src_manifest: string; 
 model File { ...ExportRow; record: "file"; path: string; digest: string; bytes: uint32; lines: uint32; }
 model LineStart { ...ExportRow; record: "line_start"; path: string; digest: string; offsets: uint32[]; }
 model SizeSkip { ...ExportRow; record: "size_skip"; path: string; bytes: uint64; limit: uint64; reason: string; }
-model Capture { ...ExportRow; record: "capture"; query: string; capture: string; text: string; start: uint32; end: uint32; match_start: uint32; match_end: uint32; }
+model Capture { ...ExportRow; record: "capture"; query: string; capture: string; text: string; start: uint32; end: uint32; match_start: uint32; match_end: uint32; pattern?: uint32; `match`?: uint32; kind?: string; }
 model Symbol { ...ExportRow; record: "symbol"; symbol: string; path: string; kind: string; }
 model Occurrence { ...ExportRow; record: "occurrence"; symbol: string; path: string; start: uint32; end: uint32; role: string; exported: boolean; decl_start: uint32; decl_end: uint32; }
 model FreeName { ...ExportRow; record: "free_name"; path: string; owner_start: uint32; owner_end: uint32; name: string; start: uint32; end: uint32; }

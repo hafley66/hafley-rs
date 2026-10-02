@@ -304,6 +304,8 @@ pub mod models {
         pub kind: String,
         #[serde(deserialize_with = "super::required_nullable")]
         pub name: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub named: Option<bool>,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -319,6 +321,12 @@ pub mod models {
         pub to: SpanOut,
         #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
         pub to_kind: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub field: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub index: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub named_index: Option<u32>,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -793,6 +801,12 @@ pub mod models {
         pub end: u32,
         pub match_start: u32,
         pub match_end: u32,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub pattern: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub r#match: Option<u32>,
+        #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "super::optional_non_null")]
+        pub kind: Option<String>,
     }
 
     #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -1845,9 +1859,9 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let diagnostic_capacity = if diagnostic.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"diagnostic\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"run\", \"relation\", \"detail\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
-    let node_capacity = if node.is_empty() { 1 } else { statement_capacity(conn, 10, "INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let node_capacity = if node.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"named\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let edge_capacity = if edge.is_empty() { 1 } else { statement_capacity(conn, 13, "INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let edge_capacity = if edge.is_empty() { 1 } else { statement_capacity(conn, 16, "INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let param_capacity = if param.is_empty() { 1 } else { statement_capacity(conn, 9, "INSERT INTO \"param\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"pos\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -1925,7 +1939,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
 
     let size_skip_capacity = if size_skip.is_empty() { 1 } else { statement_capacity(conn, 8, "INSERT INTO \"size_skip\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"path\", \"bytes\", \"limit\", \"reason\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?)")? };
 
-    let capture_capacity = if capture.is_empty() { 1 } else { statement_capacity(conn, 11, "INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
+    let capture_capacity = if capture.is_empty() { 1 } else { statement_capacity(conn, 14, "INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")? };
 
     let symbol_capacity = if symbol.is_empty() { 1 } else { statement_capacity(conn, 7, "INSERT INTO \"symbol\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"symbol\", \"path\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?)")? };
 
@@ -2052,7 +2066,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in node.chunks(node_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"named\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -2063,7 +2077,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in edge.chunks(edge_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -2492,7 +2506,7 @@ pub fn insert_all(conn: &rusqlite::Connection, source: &Source<'_>, rows: &[Fact
     }
 
     for chunk in capture.chunks(capture_capacity) {
-        let sql = multi_row_sql("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
+        let sql = multi_row_sql("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES ", "(?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)", chunk.len());
         let mut statement = conn.prepare_cached(&sql)?;
         let mut parameter = 1;
         for (index, row) in chunk {
@@ -2994,11 +3008,13 @@ impl models::Node {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.name.as_deref())?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.named)?;
+        parameter += 1;
         Ok(parameter)
     }
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"node\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"span__start\", \"span__end\", \"kind\", \"name\", \"named\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
@@ -3032,11 +3048,17 @@ impl models::Edge {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.to_kind.as_deref())?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.field.as_deref())?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.index)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.named_index)?;
+        parameter += 1;
         Ok(parameter)
     }
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"edge\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"fact\", \"family\", \"kind\", \"from__start\", \"from__end\", \"from_kind\", \"to__start\", \"to__end\", \"to_kind\", \"field\", \"index\", \"named_index\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
@@ -4317,11 +4339,17 @@ impl models::Capture {
         parameter += 1;
         statement.raw_bind_parameter(parameter, self.match_end)?;
         parameter += 1;
+        statement.raw_bind_parameter(parameter, self.pattern)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.r#match)?;
+        parameter += 1;
+        statement.raw_bind_parameter(parameter, self.kind.as_deref())?;
+        parameter += 1;
         Ok(parameter)
     }
     #[cfg(test)]
     pub fn insert(&self, conn: &rusqlite::Connection, source: &Source<'_>) -> Result<usize, InsertError> {
-        let mut statement = conn.prepare_cached("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
+        let mut statement = conn.prepare_cached("INSERT INTO \"capture\" (\"_row\", \"_input_path\", \"_content_id\", \"record\", \"query\", \"capture\", \"text\", \"start\", \"end\", \"match_start\", \"match_end\", \"pattern\", \"match\", \"kind\") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)")?;
         self.bind(&mut statement, 1, source)?;
         Ok(statement.raw_execute()?)
     }
