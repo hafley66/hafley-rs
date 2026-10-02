@@ -484,6 +484,7 @@ fn scan_member_seats(program: &Program<'_>, old: &str) -> Vec<MemberSeat> {
 struct PropertyDecl {
     owner: String,
     span: oxc_span::Span,
+    method: bool,
 }
 
 fn property_declarations(program: &Program<'_>, old: &str) -> Vec<PropertyDecl> {
@@ -520,6 +521,7 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
                 self.declarations.push(PropertyDecl {
                     owner: owner.clone(),
                     span: property.key.span(),
+                    method: false,
                 });
             }
         }
@@ -532,6 +534,7 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
                 self.declarations.push(PropertyDecl {
                     owner: owner.clone(),
                     span: method.key.span(),
+                    method: true,
                 });
             }
         }
@@ -544,6 +547,7 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
                 self.declarations.push(PropertyDecl {
                     owner: owner.clone(),
                     span: method.key.span(),
+                    method: true,
                 });
             }
         }
@@ -562,6 +566,7 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
                 self.declarations.push(PropertyDecl {
                     owner: owner.clone(),
                     span: property.key.span(),
+                    method: false,
                 });
             }
         }
@@ -576,6 +581,7 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
                         self.declarations.push(PropertyDecl {
                             owner: alias.id.name.to_string(),
                             span: property.key.span(),
+                            method: false,
                         });
                     }
                 }
@@ -596,6 +602,7 @@ impl<'a> Visit<'a> for PropertyDeclScan<'a> {
                         self.declarations.push(PropertyDecl {
                             owner: identifier.name.to_string(),
                             span: property.key.span(),
+                            method: false,
                         });
                     }
                 }
@@ -658,6 +665,16 @@ fn property_refs(
         }));
     }
     if !stops.is_empty() {
+        if declaration.method {
+            return Err(RenameStop::Refused {
+                anchor: request.anchor.clone(),
+                engine: "TypeScript syntax",
+                reason: format!(
+                    "{}.{} has unresolved receivers; rerun with --slow",
+                    declaration.owner, request.old
+                ),
+            });
+        }
         return Err(RenameStop::Dynamic(stops));
     }
     if refs.len() == 1 {
