@@ -1,0 +1,23 @@
+{
+  "compilerOptions": {
+    "lib": [
+      "es2023"
+    ],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "target": "es2022",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "jsx": "preserve",
+    "jsxImportSource": "@alloy-js/core"
+  },
+  "include": [
+    "core/**/*",
+    "rust/**/*",
+    "gen/**/*",
+    "twins/**/*",
+    "*.tsx",
+    "*.ts"
+  ]
+}
