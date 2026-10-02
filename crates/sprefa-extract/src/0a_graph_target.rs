@@ -1,6 +1,6 @@
 //! Targeted slow graph evidence over the same resolved-edge rows as fast.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -26,7 +26,7 @@ pub(super) fn facts(
             callers.entry(raw.path.to_string()).or_default().push((
                 span.start,
                 span.end,
-                Some(name.clone().unwrap_or_else(|| format!("closure@{}", span.start))),
+                Some(name.clone().unwrap_or_else(|| sprefa_extract::closure_name(raw.content_id, span.start))),
             ));
         }
         if let FlatFact::Node {
@@ -346,11 +346,19 @@ pub(super) fn facts(
             *resolution_origin = "checker".to_string();
         }
     }
+    let mut references_by_source: HashMap<&str, Vec<&sprefa_extract::edit::ts7_graph_target::TargetReference>> = HashMap::new();
+    for reference in &ts_references {
+        references_by_source.entry(reference.source_path.as_str()).or_default().push(reference);
+    }
+    let mut present: HashSet<(String, u32, u32, String, u32)> = facts.iter().filter_map(|fact| match fact {
+        FlatFact::ResolvedEdge { caller_path, caller_site_start, caller_site_end, callee_path, callee_start, .. } =>
+            Some((caller_path.clone(), *caller_site_start, *caller_site_end, callee_path.clone(), *callee_start)),
+        _ => None,
+    }).collect();
     for (path, start, end) in sites {
-        let Some(reference) = ts_references.iter().find(|reference| {
-            reference.source_path == path
-                && start <= reference.site_start && reference.site_end <= end
-        }) else {
+        let Some(reference) = references_by_source.get(path.as_str()).and_then(|references| references.iter().find(|reference| {
+            start <= reference.site_start && reference.site_end <= end
+        })) else {
             continue;
         };
         let target = [true, false].into_iter().find_map(|is_call| {
@@ -365,11 +373,7 @@ pub(super) fn facts(
                 .min_by_key(|(lo, hi, _)| hi - lo)
                 .and_then(|(_, _, name)| name.clone())
         });
-        let present = facts.iter().any(|fact| matches!(fact, FlatFact::ResolvedEdge {
-            caller_path, caller_site_start, caller_site_end, callee_path, callee_start, ..
-        } if *caller_path == path && *caller_site_start == start && *caller_site_end == end
-            && *callee_path == reference.target_path && *callee_start == target_start));
-        if !present {
+        if present.insert((path.clone(), start, end, reference.target_path.clone(), target_start)) {
             facts.push(FlatFact::ResolvedEdge {
                 fact: None,
                 caller_path: path,

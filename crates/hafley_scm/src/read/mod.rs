@@ -110,7 +110,7 @@ pub use manifests::{
 };
 #[cfg(feature = "read")]
 pub use project::{
-    diet_scip, diet_scip_jsonl, diet_scip_streamed, diet_scip_with_raw, extract_pool,
+    closure_name, diet_scip, diet_scip_jsonl, diet_scip_streamed, diet_scip_with_raw, extract_pool,
     resolve_project, resolve_project_jsonl, resolve_project_target_with_raw,
     resolve_project_with_raw, resolve_project_with_raw_tsi,
     resolve_project_with_tsi_tiers, scip_facts, scip_facts_jsonl, scip_family,

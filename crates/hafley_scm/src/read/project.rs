@@ -3282,16 +3282,21 @@ pub(super) fn caller_name(
     }
     Some(match node.name {
         Some(name) => input.output.strings.lookup(name).to_string(),
-        None => {
-            #[cfg(feature = "typescript")]
-            if let Some(name) = crate::read::lang::ts_receivers::facts_of(&input.blob, None)
-                .and_then(|facts| facts.closure_names.get(&node.span.start).cloned())
-            {
-                return Some(name);
-            }
-            format!("closure@{}", node.span.start)
-        }
+        None => closure_name(&input.blob, node.span.start),
     })
+}
+
+/// The `caller_name` of an unnamed callable: its owner-and-content identity when
+/// the TypeScript pass recorded one, else its start byte.
+pub fn closure_name(blob: &ContentId, start: u32) -> String {
+    #[cfg(feature = "typescript")]
+    if let Some(name) = crate::read::lang::ts_receivers::facts_of(blob, None)
+        .and_then(|facts| facts.closure_names.get(&start).cloned())
+    {
+        return name;
+    }
+    let _ = blob;
+    format!("closure@{start}")
 }
 
 /// Test-only filesystem `BlobSource`: project-relative path in, bytes out,
