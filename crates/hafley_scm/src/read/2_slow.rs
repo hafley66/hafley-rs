@@ -68,6 +68,11 @@ pub fn slow_project_with_raw<E>(
                 detail: skip.reason.detail(),
             }));
             let Some(path) = report.index else {
+                if checkers {
+                    facts.extend(
+                        checker_facts(files, &io_root).map_err(ResolveWithRawError::Project)?,
+                    );
+                }
                 return Ok(facts);
             };
             crate::read::scip_decode::load_index(&path)
