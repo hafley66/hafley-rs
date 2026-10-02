@@ -1,5 +1,5 @@
-import { probe, probeTest } from "../../../4_probe.js";
-import { List, Output, render, refkey } from "@alloy-js/core";
+import { probe, probeTest, render } from "../../../4_probe.js";
+import { List, Output, refkey } from "@alloy-js/core";
 import { describe, expect, it } from "vitest";
 import { CrateDirectory } from "../../../2_components.js";
 import { SourceFile } from "../../../2_components.js";

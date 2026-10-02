@@ -50,9 +50,16 @@ for (const file of files) {
     const [reason,detail]=gapFor(name);
     writeFileSync(out,`// B twin of ${name}; original inputs and oracle literals are in fixtures/ and 3_assertions.json.\nimport { it } from "vitest";\nimport { gap } from ${JSON.stringify(harness.startsWith('.')?harness:'./'+harness)};\n`+assertions.map(a=>`it(${JSON.stringify(a.testTitle+" assertion "+a.ordinal)}, () => gap(${JSON.stringify(a.id)}, ${JSON.stringify(reason)}, ${JSON.stringify(detail)}));`).join("\n")+"\n");
   } else {
-    const edits=[];
+    const edits=[]; let usesRender=false;
     for(const n of sf.statements) if(ts.isImportDeclaration(n)) {
       const from=n.moduleSpecifier.text;
+      if(from === "@alloy-js/core" && n.importClause?.namedBindings && ts.isNamedImports(n.importClause.namedBindings)) {
+        const names=n.importClause.namedBindings.elements;
+        if(names.some(e=>e.name.text === "render")) {
+          usesRender=true;
+          edits.push([n.getStart(sf),n.end,`import { ${names.filter(e=>e.name.text !== "render").map(e=>e.getText(sf)).join(", ")} } from "@alloy-js/core";`]);
+        }
+      }
       if(from.startsWith("."))edits.push([n.moduleSpecifier.getStart(sf),n.moduleSpecifier.end,JSON.stringify(bridge.startsWith('.')?bridge:'./'+bridge)]);
     }
     for(const a of assertions) {
@@ -65,7 +72,7 @@ for (const file of files) {
       edits.push([t.fn.body.end,t.fn.body.end,`)`]);
     }
     edits.sort((a,b)=>b[0]-a[0]);let text=source;for(const [s,e,v] of edits)text=text.slice(0,s)+v+text.slice(e);
-    text=`import { probe, probeTest } from ${JSON.stringify(harness.startsWith('.')?harness:'./'+harness)};\n`+text;
+    text=`import { probe, probeTest${usesRender?", render":""} } from ${JSON.stringify(harness.startsWith('.')?harness:'./'+harness)};\n`+text;
     writeFileSync(out,text);
   }
 }
