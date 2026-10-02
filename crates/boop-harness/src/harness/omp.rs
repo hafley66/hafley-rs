@@ -185,8 +185,7 @@ impl Harness for Omp {
     }
 
     fn sessions_for_cwd(&self, cwd: &str) -> Result<Vec<SessionRef>> {
-        let base = omp_sessions_dir()?.join(encode_cwd(cwd));
-        sessions_in(&base)
+        sessions_for_cwd_in(&omp_sessions_dir()?, cwd)
     }
 
     fn session_roots(&self) -> Result<Vec<PathBuf>> {
@@ -375,8 +374,18 @@ fn omp_sessions_dir() -> Result<PathBuf> {
     Ok(omp_agent_dir()?.join("sessions"))
 }
 
-fn encode_cwd(cwd: &str) -> String {
-    cwd.replace('/', "-")
+fn sessions_for_cwd_in(base: &Path, cwd: &str) -> Result<Vec<SessionRef>> {
+    // OMP has used absolute, home-relative, temp-relative and hashed directory
+    // names. The transcript header owns cwd across these storage layouts.
+    let requested = std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd));
+    Ok(sessions_in(base)?
+        .into_iter()
+        .filter(|session| {
+            session.cwd.as_deref().is_some_and(|cwd| {
+                std::fs::canonicalize(cwd).unwrap_or_else(|_| PathBuf::from(cwd)) == requested
+            })
+        })
+        .collect())
 }
 
 /// omp's agent root, shared by transcript and terminal-session discovery.
@@ -1080,6 +1089,37 @@ fn read_omp(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cwd_lookup_uses_headers_across_native_directory_layouts_and_aliases() {
+        let root = tempfile::tempdir().unwrap();
+        let cwd = root.path().join("repo");
+        std::fs::create_dir(&cwd).unwrap();
+        let alias = root.path().join("alias");
+        std::os::unix::fs::symlink(&cwd, &alias).unwrap();
+        let sessions = root.path().join("sessions");
+        for (directory, id, header_cwd) in [
+            ("--absolute-repo--", "absolute", &cwd),
+            ("-tmp-repo", "temporary", &alias),
+            ("-repo", "home", &cwd),
+            ("abs-repo-hash", "hashed", &cwd),
+            ("other", "other", &root.path().join("other")),
+        ] {
+            let dir = sessions.join(directory);
+            std::fs::create_dir_all(&dir).unwrap();
+            let header = serde_json::json!({"type": "session", "id": id, "cwd": header_cwd});
+            std::fs::write(dir.join(format!("{id}.jsonl")), format!("{header}\n")).unwrap();
+        }
+        for spelling in [&cwd, &alias] {
+            let mut ids: Vec<_> = sessions_for_cwd_in(&sessions, spelling.to_str().unwrap())
+                .unwrap()
+                .into_iter()
+                .map(|session| session.session_id)
+                .collect();
+            ids.sort();
+            assert_eq!(ids, ["absolute", "hashed", "home", "temporary"]);
+        }
+    }
 
     fn transcript(path: &Path, id: &str, parent: Option<&str>) {
         let mut session = serde_json::json!({

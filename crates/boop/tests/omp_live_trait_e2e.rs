@@ -505,10 +505,27 @@ fn omp_live_panes_bind_distinct_sessions_and_project_real_transcripts() {
         let session = adapter
             .session_by_id(expected, Some(&scratch.repo().display().to_string()))
             .expect("OMP session lookup succeeds")
-            .expect("real OMP transcript by UUID");
+            .unwrap_or_else(|| {
+                panic!(
+                    "real OMP transcript by UUID {expected}; transcripts: {:?}",
+                    adapter.sessions()
+                )
+            });
         let chunk = adapter
             .read_from(&session, 0)
             .expect("read real OMP transcript");
+        eprintln!(
+            "evidence OMP: db={} pane={pane} session={expected} transcript={} reply={}",
+            scratch.db().display(),
+            session.path.display(),
+            scratch
+                .screen(if pane == &pane_a {
+                    "omp-live-a"
+                } else {
+                    "omp-live-b"
+                })
+                .contains(mock_tui::MOCK_REPLY_MARKER)
+        );
         assert!(
             !chunk.events.is_empty(),
             "OMP transcript has no adapter events"
