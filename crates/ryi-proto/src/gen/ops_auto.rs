@@ -300,44 +300,6 @@ pub struct RenameArgs {
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DismantleArgs {
-  #[doc = "FILE#ITEM (omit with --list)"]
-  #[arg()]
-  pub target: Option<String>,
-  #[doc = "TSV of FILE#ITEM rows"]
-  #[arg(long)]
-  pub list: Option<PathBuf>,
-  #[doc = "Corpus root (default: git root of the first target)"]
-  #[arg(long)]
-  pub root: Option<PathBuf>,
-  #[doc = "Soopy state root, outside the corpus"]
-  #[arg(long)]
-  pub state: Option<PathBuf>,
-  #[doc = "Byte offset of the declaration when ITEM is declared twice"]
-  #[arg(long)]
-  pub at: Option<u32>,
-  #[doc = "TODO: help. Unsafe: delete every dependent item too, cascading; without it, refuse while references remain"]
-  #[arg(long)]
-  #[serde(default)]
-  pub cascade: bool,
-  #[doc = "Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust"]
-  #[arg(long)]
-  #[serde(default)]
-  pub slow: bool,
-  #[doc = "Apply instead of dry run"]
-  #[arg(long)]
-  #[serde(default)]
-  pub commit: bool,
-  #[doc = "Command to run after --commit; failure rolls back"]
-  #[arg(long)]
-  pub verify: Option<String>,
-  #[doc = "End with one JSON line holding the plan"]
-  #[arg(long)]
-  #[serde(default)]
-  pub json: bool,
-}
-
-#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct QueryArgs {
   #[command(flatten)]
   #[serde(flatten)]
