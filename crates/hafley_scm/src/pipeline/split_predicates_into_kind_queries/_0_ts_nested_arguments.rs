@@ -112,6 +112,9 @@ fn normalize(
         if !boundary {
             continue;
         }
+        if text[end..].trim_start().starts_with('@') {
+            continue;
+        }
         let fragment = &text[offset..end];
         if matches!(pattern_query(language, fragment), Err(QueryExtError::Parse(ref error)) if error.kind == QueryErrorKind::Syntax)
         {

@@ -491,3 +491,14 @@ fn relational_query_syntax_and_root_capture() {
         ""
     );
 }
+
+#[test]
+fn relational_parent_reused_capture() {
+    let language = tree_sitter::Language::new(tree_sitter_rust::LANGUAGE);
+    // expression_statement > call_expression; both nodes use capture c.
+    let query = "((call_expression) @c (#has-parent? @c (expression_statement) @c))";
+    assert_eq!(
+        matches(&language, RUST, query),
+        "c=a(), c=a(); | c=b(), c=b(); | c=c(), c=c();"
+    );
+}
