@@ -100,3 +100,9 @@ Arguments:
   [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
              fork <id>`; `join` and `diff` take their own
 ```
+
+## ryi TS exports lane, 2026-10-02
+
+D2 before: plan reports 342/486 unresolved workspace import pairs. After: shared workspace package resolution implemented for edit plans and module fact bindings. Source rung order: exports types declaration map, tsconfig paths, package `dist` to `src` convention, then the declaration itself if no source exists. Direct source exports retain their target. Exact exports, wildcard exports, blocked exports, and one-source declaration maps are handled. No new commands, flags, analyses, or graph walkers.
+
+D2 verification: UNRUN by coordinator instruction to serialize gates. `D02.sh` checks every workspace pair from SQLite specifier facts against both fast JSONL and SQLite resolved_import module rows, listing each missing pair before failure. `workspace_exports_resolve_to_sources_in_rung_order` checks map > paths > convention plus wildcard and blocked exports. Corpus is `/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-exports` at d0802620. No measured after count or corpus rung totals are available yet. Required release build, dogfood runner, and `cargo test --features cli` remain for the coordinator; use CARGO_BUILD_JOBS=4. Known pre-existing failures: golden_parity::ported_facets_match_v5 and golden_parity::rust_doc_parity.

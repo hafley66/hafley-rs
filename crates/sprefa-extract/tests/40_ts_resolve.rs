@@ -177,3 +177,101 @@ fn the_resolver_crosses_threads() {
     fn assert_send_sync<T: Send + Sync>() {}
     assert_send_sync::<TsResolver>();
 }
+
+/// Workspace manifests resolve without node_modules links or built dist files.
+/// A declaration map wins over paths; paths win over the src convention.
+#[test]
+fn workspace_exports_resolve_to_sources_in_rung_order() {
+    let root = stage("workspace-exports");
+    let package = root.join("packages/lib");
+    std::fs::create_dir_all(package.join("src")).unwrap();
+    std::fs::create_dir_all(package.join("dist")).unwrap();
+    std::fs::write(
+        package.join("package.json"),
+        r#"{
+      "name":"@fixture/lib",
+      "exports":{
+        ".":{"types":"./dist/index.d.ts","import":"./dist/index.js"},
+        "./mapped":{"types":"./dist/mapped.d.ts"},
+        "./aliased":{"types":"./dist/aliased.d.ts"},
+        "./wild/*":{"types":"./dist/*.d.ts"},
+        "./blocked":null
+      }
+    }"#,
+    )
+    .unwrap();
+    for name in [
+        "index",
+        "actual",
+        "mapped",
+        "aliased",
+        "path-target",
+        "leaf",
+    ] {
+        std::fs::write(
+            package.join(format!("src/{name}.ts")),
+            "export const value = 1;\n",
+        )
+        .unwrap();
+    }
+    std::fs::write(
+        package.join("dist/mapped.d.ts"),
+        "export declare const value: number;\n",
+    )
+    .unwrap();
+    std::fs::write(
+        package.join("dist/mapped.d.ts.map"),
+        r#"{"version":3,"sourceRoot":"../src","sources":["actual.ts"],"mappings":""}"#,
+    )
+    .unwrap();
+    std::fs::write(
+        root.join("tsconfig.json"),
+        r#"{"compilerOptions":{"baseUrl":".","paths":{
+      "@fixture/lib/aliased":["packages/lib/src/path-target.ts"],
+      "@fixture/lib/mapped":["packages/lib/src/path-target.ts"]
+    }}}"#,
+    )
+    .unwrap();
+    let resolver = TsResolver::new(&root).unwrap();
+    let from = root.join("src/index.ts");
+    let rows: Vec<_> = [
+        "@fixture/lib",
+        "@fixture/lib/mapped",
+        "@fixture/lib/aliased",
+        "@fixture/lib/wild/leaf",
+        "@fixture/lib/blocked",
+    ]
+    .into_iter()
+    .map(|module| {
+        (
+            module,
+            resolver
+                .resolve_with_rung(&from, module)
+                .map(|(path, rung)| (relative(&root, &path), rung)),
+        )
+    })
+    .collect();
+    assert_eq!(
+        rows,
+        vec![
+            (
+                "@fixture/lib",
+                Some(("packages/lib/src/index.ts".into(), "src_convention"))
+            ),
+            (
+                "@fixture/lib/mapped",
+                Some(("packages/lib/src/actual.ts".into(), "declaration_map"))
+            ),
+            (
+                "@fixture/lib/aliased",
+                Some(("packages/lib/src/path-target.ts".into(), "tsconfig_paths"))
+            ),
+            (
+                "@fixture/lib/wild/leaf",
+                Some(("packages/lib/src/leaf.ts".into(), "src_convention"))
+            ),
+            ("@fixture/lib/blocked", None),
+        ]
+    );
+    std::fs::remove_dir_all(root).unwrap();
+}
