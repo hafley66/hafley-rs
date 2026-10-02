@@ -122,3 +122,18 @@ for precedes/follows, `relational_nth_child` for positions,
 
 The updated user documentation is
 `crates/sprefa-extract/docs/2_scm-with-ast-grep-relations-20260920.md`.
+
+Final relation-specific edge rows and coordinator filters:
+
+| Relation | Additional row names / case | Narrow cargo test filter |
+| --- | --- | --- |
+| has | `strict_descendant`, `direct_capture`, `negated_binding`, rejected binding leaves arena rows/spans empty | `relational_has_strict_and_rejected_bindings` |
+| has-ancestor | `nearest`, `bounded`, `negated_no_bindings`, with nested Rust/TS functions | `relational_ancestor_nearest_and_bounded` |
+| has-parent | Reusing outer capture name on related root retains both nodes | `relational_parent_reused_capture` |
+| precedes | `adjacent_comment`, `past_comment`, `not_adjacent_comment` | `relational_precedes_named_comment_boundary` |
+| follows | `adjacent_comment`, `past_comment`, `not_adjacent_comment` | `relational_follows_named_comment_boundary` |
+| nth-child | `comment_counts`, `of_excludes_comment`, `not_comment_counts` | `relational_nth_child_named_comment` |
+
+Use each filter with `CARGO_BUILD_JOBS=4 cargo test -p hafley_scm --test
+_0_relational_predicates FILTER`. The earlier `relational_` filter includes all
+these cases. Relation-specific test changes were committed separately.

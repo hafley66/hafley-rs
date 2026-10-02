@@ -572,14 +572,14 @@ fn relational_ancestor_nearest_and_bounded() {
                 "nearest",
                 format!("#has-ancestor? @c ({function} name: (identifier) @fn)"),
             ),
-            // $function:has(> identifier:text("=", "outer")) call_expression:not($function $function call_expression)
+            // $function:has(> identifier:text(= "outer")) call_expression:not($function $function call_expression)
             (
                 "bounded",
                 format!(
                     r#"#has-ancestor? @c (({function} name: (identifier) @fn) (#eq? @fn "outer")) stopBy: ({function})"#
                 ),
             ),
-            // call_expression:not($function:has(> identifier:text("=", "missing")) call_expression)
+            // call_expression:not($function:has(> identifier:text(= "missing")) call_expression)
             (
                 "negated_no_bindings",
                 format!(
