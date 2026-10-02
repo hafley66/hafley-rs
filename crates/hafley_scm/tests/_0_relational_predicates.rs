@@ -551,3 +551,50 @@ fn relational_has_strict_and_rejected_bindings() {
         "rows=0 spans=0"
     );
 }
+
+#[test]
+fn relational_ancestor_nearest_and_bounded() {
+    for (language, source, function) in [
+        (
+            tree_sitter::Language::new(tree_sitter_rust::LANGUAGE),
+            "fn outer() { fn inner() { a(); } b(); }",
+            "function_item",
+        ),
+        (
+            tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT),
+            "function outer() { function inner() { a(); } b(); }",
+            "function_declaration",
+        ),
+    ] {
+        let rows = [
+            // $function:has(> identifier[field="name"]) call_expression
+            (
+                "nearest",
+                format!("#has-ancestor? @c ({function} name: (identifier) @fn)"),
+            ),
+            // $function:has(> identifier:text("=", "outer")) call_expression:not($function $function call_expression)
+            (
+                "bounded",
+                format!(
+                    r#"#has-ancestor? @c (({function} name: (identifier) @fn) (#eq? @fn "outer")) stopBy: ({function})"#
+                ),
+            ),
+            // call_expression:not($function:has(> identifier:text("=", "missing")) call_expression)
+            (
+                "negated_no_bindings",
+                format!(
+                    r#"#not-has-ancestor? @c (({function} name: (identifier) @fn) (#eq? @fn "missing"))"#
+                ),
+            ),
+        ];
+        let actual = rows
+            .iter()
+            .map(|(name, args)| {
+                let scm = format!("((call_expression) @c ({args}))");
+                format!("{name}: {}", matches(&language, source, &scm))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(actual, "nearest: c=a(), fn=inner | c=b(), fn=outer\nbounded: c=b(), fn=outer\nnegated_no_bindings: c=a() | c=b()");
+    }
+}
