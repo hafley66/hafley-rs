@@ -476,6 +476,9 @@ mod t_scip_indexer_pick;
 #[path = "snapshot.rs"]
 mod t_snapshot;
 
+#[path = "193_ts_rtkq_jsx.rs"]
+mod t_193_ts_rtkq_jsx;
+
 #[test]
 fn every_test_file_is_a_module_here() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
