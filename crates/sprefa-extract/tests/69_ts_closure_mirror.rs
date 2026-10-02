@@ -82,14 +82,17 @@ fn one_mirror_edge_per_closure_caller_edge() {
 #[test]
 fn nested_arrows_mirror_to_the_named_fn() {
     let edges = resolved_edges();
-    let wrap_callers: BTreeSet<&str> = edges
+    let wrap_callers: BTreeSet<String> = edges
         .iter()
         .filter(|(_, callee, _)| callee == "wrap")
-        .map(|(caller, _, _)| caller.as_str())
+        .map(|(caller, _, _)| caller.clone())
         .collect();
     assert_eq!(
         wrap_callers,
-        BTreeSet::from(["closure@622", "outer"]),
+        BTreeSet::from([
+            format!("closure@outer:{}:0", sprefa_extract::content_id_of(b"() => {\n      wrap();\n    }")),
+            "outer".to_string(),
+        ]),
         "all edges: {edges:?}"
     );
 }
@@ -99,14 +102,19 @@ fn nested_arrows_mirror_to_the_named_fn() {
 #[test]
 fn a_module_level_arrow_mirrors_to_the_module() {
     let edges = resolved_edges();
-    let helper_callers: BTreeSet<&str> = edges
+    let helper_callers: BTreeSet<String> = edges
         .iter()
         .filter(|(_, callee, _)| callee == "helper")
-        .map(|(caller, _, _)| caller.as_str())
+        .map(|(caller, _, _)| caller.clone())
         .collect();
     assert_eq!(
         helper_callers,
-        BTreeSet::from(["<module>", "closure@591", "closure@665", "outer"]),
+        BTreeSet::from([
+            "<module>".to_string(),
+            format!("closure@outer:{}:0", sprefa_extract::content_id_of(b"() => {\n    helper(1);\n    run(() => {\n      wrap();\n    });\n  }")),
+            format!("closure@<module>:{}:0", sprefa_extract::content_id_of(b"() => {\n  helper(2);\n}")),
+            "outer".to_string(),
+        ]),
         "all edges: {edges:?}"
     );
 }

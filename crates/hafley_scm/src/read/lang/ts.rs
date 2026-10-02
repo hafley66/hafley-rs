@@ -2060,7 +2060,30 @@ impl Project<CallF> for CallProjector<'_> {
         // resolve leg joins them by `CallSite.span`.
         let blob = crate::read::dispatch::extracting_blob(self.content.as_bytes())
             .unwrap_or_else(|| content_id_of(self.content.as_bytes()));
-        ts_receivers::store_facts(blob, ts_receivers::collect(program));
+        let mut facts = ts_receivers::collect(program);
+        let mut anonymous: Vec<_> = sink.nodes.iter().filter(|node| node.name.is_none()).collect();
+        anonymous.sort_by_key(|node| node.span.start);
+        let mut copies = BTreeMap::<(String, ContentId), u32>::new();
+        for node in anonymous {
+            let owner = sink.nodes.iter()
+                .filter(|parent| parent.name.is_some()
+                    && parent.span.start <= node.span.start
+                    && node.span.end() <= parent.span.end())
+                .min_by_key(|parent| parent.span.len)
+                .and_then(|parent| parent.name)
+                .map(|name| strings.lookup(name))
+                .unwrap_or(MODULE_DEF_NAME);
+            let Some(body) = self.content.as_bytes()
+                .get(node.span.start as usize..node.span.end() as usize) else {
+                    continue;
+                };
+            let digest = content_id_of(body);
+            let ordinal = copies.entry((owner.to_string(), digest.clone())).or_default();
+            facts.closure_names.insert(node.span.start,
+                format!("closure@{owner}:{digest}:{ordinal}"));
+            *ordinal += 1;
+        }
+        ts_receivers::store_facts(blob, facts);
     }
 }
 

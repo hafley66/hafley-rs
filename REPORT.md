@@ -127,3 +127,13 @@ fixtures that expected such resolutions. No frozen snapshots were regenerated.
 D16 does not derive class ownership. The callers relation carries callee path,
 name and span. Class.method is explicitly rejected instead of reporting an empty
 success. FILE#name retains all same-named declarations within the selected file.
+
+| Defect | Before (plan evidence) | After (implementation, unverified) | Layer |
+|---|---|---|---|
+| D19 | Offset-only closure names remove/re-add unchanged call edges after earlier edits | Anonymous TS callers use named-owner + BLAKE3 closure bytes + duplicate-body ordinal; fast and SCIP slow share formatting; D19.sh asserts corpus delta and synthetic raw identity/diff invariance | Resolution fact identity, consumed by existing diff |
+
+D19 identity scope: unrelated prefix or different-body sibling insertions preserve
+identity. Edits inside the closure change its digest. Adding an identical closure
+before another identical closure in the same named owner can shift ordinals.
+Two existing TS closure-mirror expectations were updated for the declared identity
+change; frozen extraction snapshots were not regenerated.

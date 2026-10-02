@@ -28,6 +28,8 @@ use crate::read::types::PathIndex;
 pub struct TsFileTypes {
     /// Callee starts whose spelling is a lexical identifier, including globals.
     pub plain_calls: BTreeSet<u32>,
+    /// Anonymous callable start -> content identity within its named owner.
+    pub closure_names: HashMap<u32, String>,
     /// Plain-call callee start -> lexical callable declaration span.
     pub local_calls: HashMap<u32, (u32, u32)>,
     /// fn-like span start -> declared return type name (a plain
