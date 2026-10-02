@@ -2,10 +2,10 @@
 #![allow(dead_code)]
 //! scm++ growth classes, counted with hafley-observe spans: compile is per level, writes and rows per file size.
 
-#[path = "../src/bin/ryi/0_sqlite.rs"]
-mod sqlite;
 #[path = "../src/bin/ryi/2_scmpp.rs"]
 mod scmpp;
+#[path = "../src/bin/ryi/0_sqlite.rs"]
+mod sqlite;
 
 use hafley_observe::{assert_growth_sized, CountRecorder, Growth, SpanCounts};
 use tracing_subscriber::prelude::*;
@@ -18,7 +18,9 @@ fn counted(work: impl FnOnce()) -> SpanCounts {
 }
 
 fn rust() -> tree_sitter::Language {
-    sprefa_extract::RyiLang::parse_name("rust").unwrap().tree_sitter_language()
+    sprefa_extract::RyiLang::parse_name("rust")
+        .unwrap()
+        .tree_sitter_language()
 }
 
 /// Two levels whatever `n` is; `n` adds kept text predicates, cross-level conditions and comments.
@@ -37,7 +39,9 @@ fn query(n: usize) -> String {
 
 /// `n` recursive functions: one level-0 match, one call and one result row each.
 fn source(n: usize) -> String {
-    (0..n).map(|i| format!("fn f{i}(n: u32) -> u32 {{ if n == 0 {{ 0 }} else {{ f{i}(n - 1) }} }}\n")).collect()
+    (0..n)
+        .map(|i| format!("fn f{i}(n: u32) -> u32 {{ if n == 0 {{ 0 }} else {{ f{i}(n - 1) }} }}\n"))
+        .collect()
 }
 
 #[test]
@@ -51,7 +55,14 @@ fn compile_counts_one_query_new_per_level_as_query_text_grows() {
     });
     small_counts.assert_instances("scmpp_query_new", 2);
     large_counts.assert_instances("scmpp_query_new", 2);
-    assert_growth_sized(&small_counts, &large_counts, "scmpp_query_new", small.len(), large.len(), Growth::Constant);
+    assert_growth_sized(
+        &small_counts,
+        &large_counts,
+        "scmpp_query_new",
+        small.len(),
+        large.len(),
+        Growth::Constant,
+    );
 }
 
 fn store_and_query(functions: usize) -> (SpanCounts, usize) {
@@ -62,8 +73,17 @@ fn store_and_query(functions: usize) -> (SpanCounts, usize) {
     let counts = counted(|| {
         let mut db = sqlite::Database::memory().unwrap();
         let mut written = std::collections::HashSet::new();
-        scmpp::write_file(&mut db, &compiled, "growth.scm", "growth.rs", "digest", text.as_bytes(), &tree, &mut written)
-            .unwrap();
+        scmpp::write_file(
+            &mut db,
+            &compiled,
+            "growth.scm",
+            "growth.rs",
+            "digest",
+            text.as_bytes(),
+            &tree,
+            &mut written,
+        )
+        .unwrap();
         found = scmpp::run_sql(&mut db, &compiled).unwrap().len();
     });
     (counts, found)

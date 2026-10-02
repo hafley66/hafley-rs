@@ -66,16 +66,29 @@ pub enum Cond {
 
 #[derive(Debug)]
 pub enum ScmppError {
-    Syntax { offset: usize, message: String },
-    Query { pattern: u16, text: String, error: tree_sitter::QueryError },
+    Syntax {
+        offset: usize,
+        message: String,
+    },
+    Query {
+        pattern: u16,
+        text: String,
+        error: tree_sitter::QueryError,
+    },
     Unsupported(String),
 }
 
 impl std::fmt::Display for ScmppError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Syntax { offset, message } => write!(f, "scm++ syntax at byte {offset}: {message}"),
-            Self::Query { pattern, text, error } => {
+            Self::Syntax { offset, message } => {
+                write!(f, "scm++ syntax at byte {offset}: {message}")
+            }
+            Self::Query {
+                pattern,
+                text,
+                error,
+            } => {
                 write!(f, "scm++ level {pattern} `{text}`: {error}")
             }
             Self::Unsupported(message) => write!(f, "scm++: {message}"),

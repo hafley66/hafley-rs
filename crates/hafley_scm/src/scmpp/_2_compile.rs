@@ -14,11 +14,18 @@ struct Ctx<'a> {
 type Scope<'s> = &'s [Vec<Box<str>>];
 
 pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
-    let mut ctx = Ctx { lang, patterns: Vec::new() };
+    let mut ctx = Ctx {
+        lang,
+        patterns: Vec::new(),
+    };
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
     let sql = super::_3_lower::lower(&plan, &ctx.patterns);
-    Ok(Compiled { patterns: ctx.patterns, plan, sql })
+    Ok(Compiled {
+        patterns: ctx.patterns,
+        plan,
+        sql,
+    })
 }
 
 fn unsupported(pred: &Pred, message: &str) -> ScmppError {
@@ -28,14 +35,34 @@ fn unsupported(pred: &Pred, message: &str) -> ScmppError {
 fn resolve(name: &str, mine: &[Box<str>], outer: Scope) -> Option<CapRef> {
     let depth = outer.len();
     std::iter::once((depth, mine))
-        .chain(outer.iter().enumerate().rev().map(|(d, names)| (d, names.as_slice())))
+        .chain(
+            outer
+                .iter()
+                .enumerate()
+                .rev()
+                .map(|(d, names)| (d, names.as_slice())),
+        )
         .find(|(_, names)| names.iter().any(|seen| seen.as_ref() == name))
-        .map(|(d, _)| CapRef { level: d as u8, name: name.into() })
+        .map(|(d, _)| CapRef {
+            level: d as u8,
+            name: name.into(),
+        })
 }
 
 const TEXT_BUILTINS: [&str; 13] = [
-    "eq?", "not-eq?", "any-eq?", "any-not-eq?", "match?", "not-match?", "any-match?",
-    "any-not-match?", "any-of?", "not-any-of?", "set!", "is?", "is-not?",
+    "eq?",
+    "not-eq?",
+    "any-eq?",
+    "any-not-eq?",
+    "match?",
+    "not-match?",
+    "any-match?",
+    "any-not-match?",
+    "any-of?",
+    "not-any-of?",
+    "set!",
+    "is?",
+    "is-not?",
 ];
 
 fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, ScmppError> {
@@ -48,37 +75,65 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
     let mut conds = Vec::new();
     for name in &mine {
         if let Some(enclosing) = resolve(name, &[], outer) {
-            conds.push(Cond::Same(CapRef { level: depth, name: name.clone() }, enclosing));
+            conds.push(Cond::Same(
+                CapRef {
+                    level: depth,
+                    name: name.clone(),
+                },
+                enclosing,
+            ));
         }
     }
     let mut kept = String::new();
     let mut relations = Vec::new();
     for pred in &split.preds {
         let captured = |name: &str| {
-            resolve(name, &mine, outer).ok_or_else(|| unsupported(pred, &format!("unknown capture @{name}")))
+            resolve(name, &mine, outer)
+                .ok_or_else(|| unsupported(pred, &format!("unknown capture @{name}")))
         };
-        let (negated, bare) = pred.op.strip_prefix("not-").map_or((false, pred.op.as_str()), |rest| (true, rest));
+        let (negated, bare) = pred
+            .op
+            .strip_prefix("not-")
+            .map_or((false, pred.op.as_str()), |rest| (true, rest));
         if TEXT_BUILTINS.contains(&pred.op.as_str()) {
-            let names: Vec<&str> = pred.args.iter().filter_map(|arg| match arg {
-                Arg::Capture(name) => Some(name.as_str()),
-                _ => None,
-            }).collect();
+            let names: Vec<&str> = pred
+                .args
+                .iter()
+                .filter_map(|arg| match arg {
+                    Arg::Capture(name) => Some(name.as_str()),
+                    _ => None,
+                })
+                .collect();
             for name in &names {
                 captured(name)?;
             }
-            if names.iter().all(|name| mine.iter().any(|seen| seen.as_ref() == *name)) {
+            if names
+                .iter()
+                .all(|name| mine.iter().any(|seen| seen.as_ref() == *name))
+            {
                 kept.push(' ');
                 kept.push_str(&pred.text);
                 continue;
             }
             let cond = match (bare, pred.args.as_slice()) {
-                ("eq?", [Arg::Capture(a), Arg::Capture(b)]) => Cond::TextEq(captured(a)?, captured(b)?),
+                ("eq?", [Arg::Capture(a), Arg::Capture(b)]) => {
+                    Cond::TextEq(captured(a)?, captured(b)?)
+                }
                 ("match?", [Arg::Capture(a), Arg::Str(pattern)]) => {
                     Cond::TextMatch(captured(a)?, pattern.as_str().into())
                 }
-                _ => return Err(unsupported(pred, "across levels only #eq? @a @b and #match? @a \"re\"")),
+                _ => {
+                    return Err(unsupported(
+                        pred,
+                        "across levels only #eq? @a @b and #match? @a \"re\"",
+                    ))
+                }
             };
-            conds.push(if negated { Cond::Not(Box::new(cond)) } else { cond });
+            conds.push(if negated {
+                Cond::Not(Box::new(cond))
+            } else {
+                cond
+            });
             continue;
         }
         match bare {
@@ -86,15 +141,22 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
                 let [Arg::Capture(name), literals @ ..] = pred.args.as_slice() else {
                     return Err(unsupported(pred, "expects @capture \"literal\"+"));
                 };
-                let literals = literals.iter().map(|arg| match arg {
-                    Arg::Str(text) | Arg::Word(text) => Ok(text.as_str().into()),
-                    _ => Err(unsupported(pred, "expects @capture \"literal\"+")),
-                }).collect::<Result<Vec<_>, _>>()?;
+                let literals = literals
+                    .iter()
+                    .map(|arg| match arg {
+                        Arg::Str(text) | Arg::Word(text) => Ok(text.as_str().into()),
+                        _ => Err(unsupported(pred, "expects @capture \"literal\"+")),
+                    })
+                    .collect::<Result<Vec<_>, _>>()?;
                 if literals.is_empty() {
                     return Err(unsupported(pred, "expects @capture \"literal\"+"));
                 }
                 let cond = Cond::Contains(captured(name)?, literals);
-                conds.push(if negated { Cond::Not(Box::new(cond)) } else { cond });
+                conds.push(if negated {
+                    Cond::Not(Box::new(cond))
+                } else {
+                    cond
+                });
             }
             "has?" | "has-ancestor?" | "has-parent?" | "precedes?" | "follows?" | "nth-child?" => {
                 relations.push((pred, negated, bare));
@@ -108,16 +170,34 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
         let _span = tracing::trace_span!("scmpp_query_new").entered();
         Query::new(ctx.lang, &flat)
     }
-    .map_err(|error| ScmppError::Query { pattern, text: flat.clone(), error })?;
-    let captures = query.capture_names().iter().filter(|name| **name != ROOT).map(|name| (*name).into()).collect();
-    ctx.patterns.push(FlatPattern { id: pattern, text: flat, captures, query });
+    .map_err(|error| ScmppError::Query {
+        pattern,
+        text: flat.clone(),
+        error,
+    })?;
+    let captures = query
+        .capture_names()
+        .iter()
+        .filter(|name| **name != ROOT)
+        .map(|name| (*name).into())
+        .collect();
+    ctx.patterns.push(FlatPattern {
+        id: pattern,
+        text: flat,
+        captures,
+        query,
+    });
     let mut inner = outer.to_vec();
     inner.push(mine.clone());
     let mut rels = Vec::new();
     for (pred, negated, bare) in relations {
         rels.push(relation(ctx, pred, negated, bare, &mine, outer, &inner)?);
     }
-    Ok(Level { pattern, rels, conds })
+    Ok(Level {
+        pattern,
+        rels,
+        conds,
+    })
 }
 
 /// `kind+` positional targets become one alternation level; supertypes expand inside tree-sitter.
@@ -145,9 +225,13 @@ fn relation(
     inner: Scope,
 ) -> Result<Rel, ScmppError> {
     let [Arg::Capture(from), args @ ..] = pred.args.as_slice() else {
-        return Err(unsupported(pred, "first argument is the @capture the relation starts at"));
+        return Err(unsupported(
+            pred,
+            "first argument is the @capture the relation starts at",
+        ));
     };
-    let from = resolve(from, mine, outer).ok_or_else(|| unsupported(pred, &format!("unknown capture @{from}")))?;
+    let from = resolve(from, mine, outer)
+        .ok_or_else(|| unsupported(pred, &format!("unknown capture @{from}")))?;
     let mut rel = Rel {
         from,
         walk: Walk::Descendant,
@@ -163,7 +247,10 @@ fn relation(
         let [Arg::Word(index), rest @ ..] = args else {
             return Err(unsupported(pred, "expects @capture N [of L]"));
         };
-        let index = index.parse::<u32>().ok().filter(|n| *n > 0)
+        let index = index
+            .parse::<u32>()
+            .ok()
+            .filter(|n| *n > 0)
             .ok_or_else(|| unsupported(pred, "N is a positive integer"))?;
         rel.walk = Walk::NthChild(index);
         args = match rest {
@@ -187,7 +274,8 @@ fn relation(
         "precedes?" => Walk::Precedes,
         _ => Walk::Follows,
     };
-    let (text, base) = target_text(pred, &mut args)?.ok_or_else(|| unsupported(pred, "needs a (pattern) or kind+"))?;
+    let (text, base) = target_text(pred, &mut args)?
+        .ok_or_else(|| unsupported(pred, "needs a (pattern) or kind+"))?;
     let mut seen: Vec<&str> = Vec::new();
     let mut stop = None;
     while let [Arg::Key(key), value, rest @ ..] = args {
@@ -212,10 +300,16 @@ fn relation(
         args = rest;
     }
     if !args.is_empty() {
-        return Err(unsupported(pred, &format!("unexpected argument {:?}", args[0])));
+        return Err(unsupported(
+            pred,
+            &format!("unexpected argument {:?}", args[0]),
+        ));
     }
     if rel.walk == Walk::Parent && (rel.neighbor || stop.is_some()) {
-        return Err(unsupported(pred, "has-parent is one step; stopBy does not apply"));
+        return Err(unsupported(
+            pred,
+            "has-parent is one step; stopBy does not apply",
+        ));
     }
     rel.target = Some(Box::new(level(ctx, &text, base, inner)?));
     if let Some((text, base)) = stop {

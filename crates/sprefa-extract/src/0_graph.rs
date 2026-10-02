@@ -878,6 +878,7 @@ fn slice_at(seed: &str) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
                         span,
                         kind,
                         name,
+                        named: None,
                     },
                 );
             }

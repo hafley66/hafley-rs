@@ -25,7 +25,10 @@ pub enum Arg {
 }
 
 fn syntax(offset: usize, message: impl Into<String>) -> ScmppError {
-    ScmppError::Syntax { offset, message: message.into() }
+    ScmppError::Syntax {
+        offset,
+        message: message.into(),
+    }
 }
 
 fn after_string(text: &[u8], start: usize, base: usize) -> Result<usize, ScmppError> {
@@ -41,7 +44,10 @@ fn after_string(text: &[u8], start: usize, base: usize) -> Result<usize, ScmppEr
 }
 
 fn after_comment(text: &[u8], start: usize) -> usize {
-    text[start..].iter().position(|b| *b == b'\n').map_or(text.len(), |n| start + n)
+    text[start..]
+        .iter()
+        .position(|b| *b == b'\n')
+        .map_or(text.len(), |n| start + n)
 }
 
 /// The one paren counter: `(` and `[` open, `)` and `]` close; strings and `;` comments skipped.
@@ -60,7 +66,9 @@ pub fn after_group(text: &[u8], start: usize, base: usize) -> Result<usize, Scmp
             }
             b'(' | b'[' => depth += 1,
             b')' | b']' => {
-                depth = depth.checked_sub(1).ok_or_else(|| syntax(base + i, "unbalanced close"))?;
+                depth = depth
+                    .checked_sub(1)
+                    .ok_or_else(|| syntax(base + i, "unbalanced close"))?;
                 if depth == 0 {
                     return Ok(i + 1);
                 }
@@ -151,7 +159,12 @@ fn pred(text: &str, base: usize) -> Result<Pred, ScmppError> {
             }
         }
     }
-    Ok(Pred { op, text: text.to_string(), args, offset: base })
+    Ok(Pred {
+        op,
+        text: text.to_string(),
+        args,
+        offset: base,
+    })
 }
 
 /// Cuts every `(#...)` predicate out of `text`; nested patterns stay inside their predicate's args.
@@ -199,7 +212,11 @@ pub fn split(text: &str, base: usize) -> Result<LevelText, ScmppError> {
         }
     }
     let root = root_of(root.trim(), base)?;
-    Ok(LevelText { root, captures, preds })
+    Ok(LevelText {
+        root,
+        captures,
+        preds,
+    })
 }
 
 /// Start offsets of the pattern items at depth 0; captures, quantifiers and anchors attach.
@@ -242,12 +259,18 @@ fn root_of(text: &str, base: usize) -> Result<String, ScmppError> {
     let mut text = text;
     loop {
         if items(text, base)?.len() != 1 {
-            return Err(syntax(base, format!("a level needs exactly one root pattern: `{text}`")));
+            return Err(syntax(
+                base,
+                format!("a level needs exactly one root pattern: `{text}`"),
+            ));
         }
         let bytes = text.as_bytes();
         let grouping = bytes.first() == Some(&b'(')
             && after_group(bytes, 0, base)? == bytes.len()
-            && matches!(text[1..].trim_start().as_bytes().first(), Some(b'(' | b'[' | b'"'));
+            && matches!(
+                text[1..].trim_start().as_bytes().first(),
+                Some(b'(' | b'[' | b'"')
+            );
         if !grouping {
             return Ok(text.to_string());
         }

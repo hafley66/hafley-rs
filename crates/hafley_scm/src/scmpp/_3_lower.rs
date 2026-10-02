@@ -2,26 +2,33 @@ use super::_0_types::{CapRef, Cond, FlatPattern, Level, Rel, Rows, ScmppError, W
 
 /// Exported captures in column order: level 0, then every `rows: each` level reached without `not-`.
 pub fn exports(plan: &Level, patterns: &[FlatPattern]) -> Result<Vec<(u16, Box<str>)>, ScmppError> {
-    fn visit(level: &Level, patterns: &[FlatPattern], depth: u8, out: &mut Vec<(u16, Box<str>)>) -> Result<(), ScmppError> {
+    fn export_level(
+        level: &Level,
+        patterns: &[FlatPattern],
+        depth: u8,
+        out: &mut Vec<(u16, Box<str>)>,
+    ) -> Result<(), ScmppError> {
         for name in &patterns[level.pattern as usize].captures {
             let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
             if joined {
                 continue;
             }
             if out.iter().any(|(_, seen)| seen == name) {
-                return Err(ScmppError::Unsupported(format!("@{name} is bound by two levels; use two names and #eq?")));
+                return Err(ScmppError::Unsupported(format!(
+                    "@{name} is bound by two levels; use two names and #eq?"
+                )));
             }
             out.push((level.pattern, name.clone()));
         }
         for rel in &level.rels {
             if let (Some(target), Rows::Each, false) = (&rel.target, rel.rows, rel.negated) {
-                visit(target, patterns, depth + 1, out)?;
+                export_level(target, patterns, depth + 1, out)?;
             }
         }
         Ok(())
     }
     let mut out = Vec::new();
-    visit(plan, patterns, 0, &mut out)?;
+    export_level(plan, patterns, 0, &mut out)?;
     Ok(out)
 }
 
@@ -108,12 +115,23 @@ impl Body {
                 wh.extend(join.on);
                 continue;
             }
-            let on = if join.on.is_empty() { "1".to_string() } else { join.on.join(" AND ") };
+            let on = if join.on.is_empty() {
+                "1".to_string()
+            } else {
+                join.on.join(" AND ")
+            };
             let kind = if join.left { "LEFT JOIN" } else { "JOIN" };
-            from.push_str(&format!("\n  {kind} {} AS {} ON {on}", join.table, join.alias));
+            from.push_str(&format!(
+                "\n  {kind} {} AS {} ON {on}",
+                join.table, join.alias
+            ));
         }
         wh.extend(self.wh);
-        let wh = if wh.is_empty() { "1".to_string() } else { wh.join("\n  AND ") };
+        let wh = if wh.is_empty() {
+            "1".to_string()
+        } else {
+            wh.join("\n  AND ")
+        };
         (from, wh)
     }
 
@@ -126,11 +144,6 @@ impl Body {
 
 /// Columns a level's subtree reads off its captures, so only those joins are written.
 fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
-    let mut add = |at: &CapRef| {
-        if at.level == depth && !out.contains(&at.name) {
-            out.push(at.name.clone());
-        }
-    };
     fn cond_refs<'c>(cond: &'c Cond, out: &mut Vec<&'c CapRef>) {
         match cond {
             Cond::TextEq(a, b) | Cond::Same(a, b) => out.extend([a, b]),
@@ -138,18 +151,22 @@ fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
             Cond::Not(inner) => cond_refs(inner, out),
         }
     }
-    fn walk<'c>(level: &'c Level, out: &mut Vec<&'c CapRef>) {
+    fn level_refs<'c>(level: &'c Level, out: &mut Vec<&'c CapRef>) {
         level.conds.iter().for_each(|cond| cond_refs(cond, out));
         for rel in &level.rels {
             out.push(&rel.from);
             if let (Some(target), false) = (&rel.target, matches!(rel.walk, Walk::NthChild(_))) {
-                walk(target, out);
+                level_refs(target, out);
             }
         }
     }
     let mut refs = Vec::new();
-    walk(level, &mut refs);
-    refs.into_iter().for_each(&mut add);
+    level_refs(level, &mut refs);
+    for at in refs {
+        if at.level == depth && !out.contains(&at.name) {
+            out.push(at.name.clone());
+        }
+    }
 }
 
 struct Lower<'a> {
@@ -161,12 +178,25 @@ struct Lower<'a> {
 }
 
 pub fn lower(plan: &Level, patterns: &[FlatPattern]) -> String {
-    let mut lower = Lower { patterns, ctes: Vec::new(), next: 0, select: vec![format!("{}._input_path AS path", root(plan.pattern))], order: Vec::new() };
+    let mut lower = Lower {
+        patterns,
+        ctes: Vec::new(),
+        next: 0,
+        select: vec![format!("{}._input_path AS path", root(plan.pattern))],
+        order: Vec::new(),
+    };
     let mut body = Body::default();
     lower.level(plan, &mut Vec::new(), &mut body, true);
     let (from, wh) = body.render();
-    let with = if lower.ctes.is_empty() { String::new() } else { format!("WITH RECURSIVE\n{}\n", lower.ctes.join(",\n")) };
-    let order = std::iter::once(format!("{}._input_path", root(plan.pattern))).chain(lower.order).collect::<Vec<_>>().join(", ");
+    let with = if lower.ctes.is_empty() {
+        String::new()
+    } else {
+        format!("WITH RECURSIVE\n{}\n", lower.ctes.join(",\n"))
+    };
+    let order = std::iter::once(format!("{}._input_path", root(plan.pattern)))
+        .chain(lower.order)
+        .collect::<Vec<_>>()
+        .join(", ");
     format!(
         "{with}SELECT {}\nFROM {from}\nWHERE {wh}\nORDER BY {order}",
         lower.select.join(",\n  "),
@@ -182,11 +212,19 @@ impl Lower<'_> {
     fn level(&mut self, level: &Level, chain: &mut Vec<u16>, body: &mut Body, export: bool) {
         let pattern = level.pattern;
         let r = root(pattern);
-        let mut on = vec![format!("{r}.pattern = {pattern}"), format!("{r}.capture = '__root'")];
+        let mut on = vec![
+            format!("{r}.pattern = {pattern}"),
+            format!("{r}.capture = '__root'"),
+        ];
         if let Some(parent) = chain.last() {
             on.push(format!("{r}._input_path = {}._input_path", root(*parent)));
         }
-        body.from.push(Join { left: false, table: "capture".into(), alias: r.clone(), on });
+        body.from.push(Join {
+            left: false,
+            table: "capture".into(),
+            alias: r.clone(),
+            on,
+        });
         if export {
             self.order.push(format!("{r}.start"));
             self.order.push(format!("{r}.\"match\""));
@@ -203,7 +241,8 @@ impl Lower<'_> {
             let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
             if export && !joined {
                 for column in ["start", "end", "text"] {
-                    self.select.push(format!("{alias}.\"{column}\" AS \"{name}__{column}\""));
+                    self.select
+                        .push(format!("{alias}.\"{column}\" AS \"{name}__{column}\""));
                 }
             }
             body.from.push(Join {
@@ -229,14 +268,24 @@ impl Lower<'_> {
 
     fn cond(&self, cond: &Cond, chain: &[u16]) -> String {
         match cond {
-            Cond::TextEq(a, b) => format!("{}.text = {}.text", self.alias(a, chain), self.alias(b, chain)),
-            Cond::TextMatch(a, pattern) => format!("regexp({}, {}.text)", lit(pattern), self.alias(a, chain)),
+            Cond::TextEq(a, b) => format!(
+                "{}.text = {}.text",
+                self.alias(a, chain),
+                self.alias(b, chain)
+            ),
+            Cond::TextMatch(a, pattern) => {
+                format!("regexp({}, {}.text)", lit(pattern), self.alias(a, chain))
+            }
             Cond::Contains(a, literals) => literals
                 .iter()
-                .map(|literal| format!("instr({}.text, {}) > 0", self.alias(a, chain), lit(literal)))
+                .map(|literal| {
+                    format!("instr({}.text, {}) > 0", self.alias(a, chain), lit(literal))
+                })
                 .collect::<Vec<_>>()
                 .join(" AND "),
-            Cond::Same(a, b) => Key::of(&self.alias(a, chain)).same(&Key::of(&self.alias(b, chain))),
+            Cond::Same(a, b) => {
+                Key::of(&self.alias(a, chain)).same(&Key::of(&self.alias(b, chain)))
+            }
             Cond::Not(inner) => format!("NOT ({})", self.cond(inner, chain)),
         }
     }
@@ -253,8 +302,15 @@ impl Lower<'_> {
         let from = Key::of(&self.alias(&rel.from, chain));
         if let Walk::NthChild(index) = rel.walk {
             let cte = self.nth_cte(rel.target.as_deref());
-            let found = format!("EXISTS (SELECT 1 FROM {cte} AS s WHERE {} AND s.n = {index})", Key::walk("s").same(&from));
-            body.wh.push(if rel.negated { format!("NOT {found}") } else { found });
+            let found = format!(
+                "EXISTS (SELECT 1 FROM {cte} AS s WHERE {} AND s.n = {index})",
+                Key::walk("s").same(&from)
+            );
+            body.wh.push(if rel.negated {
+                format!("NOT {found}")
+            } else {
+                found
+            });
             return;
         }
         let seed = chain[rel.from.level as usize];
@@ -277,38 +333,72 @@ impl Lower<'_> {
     /// The edge or walk rows that relate `from` (a capture of pattern `seed`) to the target root `to`.
     fn step(&mut self, rel: &Rel, seed: u16, from: &Key, to: &Key, body: &mut Body) {
         let n = self.fresh();
-        let field = |alias: &str| rel.field.as_ref().map(|name| format!("{alias}.field = {}", lit(name)));
-        let into = |alias: &str, child: &Key| vec![format!("{alias}.family = 'cst'"), Key::edge(alias, "to").same(child)];
+        let field = |alias: &str| {
+            rel.field
+                .as_ref()
+                .map(|name| format!("{alias}.field = {}", lit(name)))
+        };
+        let into = |alias: &str, child: &Key| {
+            vec![
+                format!("{alias}.family = 'cst'"),
+                Key::edge(alias, "to").same(child),
+            ]
+        };
         match (rel.walk, rel.neighbor) {
             (Walk::Parent, _) | (Walk::Ancestor, true) | (Walk::Descendant, true) => {
                 let alias = format!("\"e{n}\"");
-                let (child, parent) = if rel.walk == Walk::Descendant { (to, from) } else { (from, to) };
+                let (child, parent) = if rel.walk == Walk::Descendant {
+                    (to, from)
+                } else {
+                    (from, to)
+                };
                 let mut on = into(&alias, child);
                 on.push(Key::edge(&alias, "from").same_node(parent));
                 on.extend(field(&alias));
-                body.from.push(Join { left: false, table: "edge".into(), alias, on });
+                body.from.push(Join {
+                    left: false,
+                    table: "edge".into(),
+                    alias,
+                    on,
+                });
             }
             (Walk::Ancestor | Walk::Descendant, false) => {
                 let cte = self.walk_cte(rel, seed);
                 let alias = format!("\"w{n}\"");
                 let mut on = vec![
                     format!("{alias}.cid = {}", from.cid),
-                    format!("{alias}.fs = {} AND {alias}.fe = {} AND {alias}.fk = {}", from.start, from.end, from.kind),
+                    format!(
+                        "{alias}.fs = {} AND {alias}.fe = {} AND {alias}.fk = {}",
+                        from.start, from.end, from.kind
+                    ),
                     Key::walk(&alias).same_node(to),
                 ];
                 on.extend(field(&alias));
-                body.from.push(Join { left: false, table: cte, alias, on });
+                body.from.push(Join {
+                    left: false,
+                    table: cte,
+                    alias,
+                    on,
+                });
             }
             (Walk::Precedes | Walk::Follows, _) => {
                 let (mine, theirs) = (format!("\"e{n}a\""), format!("\"e{n}b\""));
                 let order = match (rel.walk, rel.neighbor) {
-                    (Walk::Precedes, true) => format!("{theirs}.named_index = {mine}.named_index + 1"),
+                    (Walk::Precedes, true) => {
+                        format!("{theirs}.named_index = {mine}.named_index + 1")
+                    }
                     (Walk::Precedes, false) => format!("{theirs}.named_index > {mine}.named_index"),
                     (_, true) => format!("{theirs}.named_index = {mine}.named_index - 1"),
                     (_, false) => format!("{theirs}.named_index < {mine}.named_index"),
                 };
-                let siblings = |alias: &str| Key::edge(alias, "from").same(&Key::edge(&mine, "from"));
-                body.from.push(Join { left: false, table: "edge".into(), alias: mine.clone(), on: into(&mine, from) });
+                let siblings =
+                    |alias: &str| Key::edge(alias, "from").same(&Key::edge(&mine, "from"));
+                body.from.push(Join {
+                    left: false,
+                    table: "edge".into(),
+                    alias: mine.clone(),
+                    on: into(&mine, from),
+                });
                 let mut on = into(&theirs, to);
                 on.push(siblings(&theirs));
                 on.push(order);
@@ -323,7 +413,12 @@ impl Lower<'_> {
                         siblings(&between)
                     ));
                 }
-                body.from.push(Join { left: false, table: "edge".into(), alias: theirs, on });
+                body.from.push(Join {
+                    left: false,
+                    table: "edge".into(),
+                    alias: theirs,
+                    on,
+                });
             }
             (Walk::NthChild(_), _) => unreachable!("nth-child lowers in rel"),
         }
@@ -332,8 +427,17 @@ impl Lower<'_> {
     /// Closure from every node the `from` capture binds, down or up `edge`; `stopBy` ends a branch inclusively.
     fn walk_cte(&mut self, rel: &Rel, seed: u16) -> String {
         let name = format!("walk{}", self.fresh());
-        let (near, far) = if rel.walk == Walk::Descendant { ("from", "to") } else { ("to", "from") };
-        let stop = rel.stop.as_deref().map(|stop| format!("\n    WHERE NOT {}", self.node_matches(stop, &Key::walk("w"))));
+        let (near, far) = if rel.walk == Walk::Descendant {
+            ("from", "to")
+        } else {
+            ("to", "from")
+        };
+        let stop = rel.stop.as_deref().map(|stop| {
+            format!(
+                "\n    WHERE NOT {}",
+                self.node_matches(stop, &Key::walk("w"))
+            )
+        });
         let step = |alias: &str| {
             format!(
                 "JOIN edge AS e ON e._content_id = {alias}.cid AND e.family = 'cst' AND e.{near}__start = {alias}.start \
@@ -358,7 +462,14 @@ impl Lower<'_> {
     /// 1-based position of each named child among its siblings that match `of`.
     fn nth_cte(&mut self, of: Option<&Level>) -> String {
         let name = format!("nth{}", self.fresh());
-        let filter = of.map(|level| format!("\n    AND {}", self.node_matches(level, &Key::edge("e", "to")))).unwrap_or_default();
+        let filter = of
+            .map(|level| {
+                format!(
+                    "\n    AND {}",
+                    self.node_matches(level, &Key::edge("e", "to"))
+                )
+            })
+            .unwrap_or_default();
         self.ctes.push(format!(
             "{name}(cid, start, \"end\", kind, n) AS (\n    \
              SELECT e._content_id, e.to__start, e.to__end, e.to_kind, ROW_NUMBER() OVER (\

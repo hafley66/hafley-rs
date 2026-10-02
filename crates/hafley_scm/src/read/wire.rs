@@ -268,6 +268,7 @@ fn flatten_cst<E>(
             span: SpanOut::new(node.span.start, node.span.end()),
             kind: strings.lookup(node.kind).to_string(),
             name: node.name.map(|id| strings.lookup(id).to_string()),
+            named: None,
         })?;
     }
     for edge in &bundle.edges {
@@ -286,6 +287,9 @@ fn flatten_cst<E>(
             from_kind: None,
             to: SpanOut::new(to.span.start, to.span.end()),
             to_kind: None,
+            field: None,
+            index: None,
+            named_index: None,
         })?;
     }
     Ok(())
@@ -308,6 +312,7 @@ fn flatten_type<E>(
             span: SpanOut::new(node.span.start, node.span.end()),
             kind: node.kind.as_str().to_string(),
             name: node.name.map(|id| strings.lookup(id).to_string()),
+            named: None,
         })?;
     }
     for sig in &bundle.aux.sigs {
@@ -398,6 +403,7 @@ fn flatten_call<E>(
             span: SpanOut::new(node.span.start, node.span.end()),
             kind: node.kind.as_str().to_string(),
             name: node.name.map(|id| strings.lookup(id).to_string()),
+            named: None,
         })?;
     }
     for site in &bundle.aux.sites {
@@ -487,6 +493,7 @@ pub fn flatten_cfg_each<E>(
             span: SpanOut::new(node.span.start, node.span.end()),
             kind: node.kind.as_str().to_string(),
             name: None,
+            named: None,
         })?;
     }
     for edge in &bundle.edges {
@@ -500,6 +507,9 @@ pub fn flatten_cfg_each<E>(
             from_kind: Some(from.kind.as_str().to_string()),
             to: SpanOut::new(to.span.start, to.span.end()),
             to_kind: Some(to.kind.as_str().to_string()),
+            field: None,
+            index: None,
+            named_index: None,
         })?;
     }
     Ok(())
@@ -638,6 +648,7 @@ fn flatten_df<E>(
             span: SpanOut::new(node.span.start, node.span.end()),
             kind: node.kind.as_str().to_string(),
             name: node.name.map(|id| strings.lookup(id).to_string()),
+            named: None,
         })?;
     }
     for edge in &bundle.edges {
@@ -651,6 +662,9 @@ fn flatten_df<E>(
             from_kind: Some(from.kind.as_str().to_string()),
             to: SpanOut::new(to.span.start, to.span.end()),
             to_kind: Some(to.kind.as_str().to_string()),
+            field: None,
+            index: None,
+            named_index: None,
         })?;
     }
     for param in &bundle.aux.params {

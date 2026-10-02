@@ -2760,6 +2760,8 @@ pub enum FlatFact {
         span: SpanOut,
         kind: String,
         name: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        named: Option<bool>,
     },
     /// `from_kind`/`to_kind` spell the endpoints' node kinds, so a consumer
     /// keyed on the wire alone carries the whole `(span, kind)` node identity.
@@ -2774,6 +2776,12 @@ pub enum FlatFact {
         to: SpanOut,
         #[serde(skip_serializing_if = "Option::is_none")]
         to_kind: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        field: Option<String>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        index: Option<u32>,
+        #[serde(skip_serializing_if = "Option::is_none", default)]
+        named_index: Option<u32>,
     },
     /// DfF parameter slot bridge: one parameter node and its typed-parameter
     /// position. The receiver/self is omitted from the position count.
