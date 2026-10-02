@@ -78,6 +78,7 @@ export interface Policy {
   accept?(kind: string, props: Record<string, any>, toks: Tok[]): boolean;
   // kind-specific layout; undefined falls through to lines/list/block/inline
   layout?(kind: string, toks: Tok[], inline: (toks: Tok[]) => Children[]): Children | undefined;
+  empty?(kind: string): Children; // empty `block` kind; default "{}"
   declare?(kind: string, name: string, refkey: Refkey | undefined): Children;
   scope?(kind: string, body: Children): Children;
 }
@@ -105,7 +106,7 @@ function layout(policy: Policy, kind: string, toks: Tok[]): Children {
   if (policy.list.has(kind)) return groups(toks).map((g, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, g)]);
   if (!policy.block.has(kind)) return inline(policy, kind, toks);
   const gs = groups(toks.slice(1, -1));
-  if (gs.length === 0) return "{}";
+  if (gs.length === 0) return policy.empty?.(kind) ?? "{}";
   return ["{", <Indent hardline trailingBreak>{gs.map((g, i) => [i > 0 ? <hbr /> : "", inline(policy, kind, g)])}</Indent>, "}"];
 }
 

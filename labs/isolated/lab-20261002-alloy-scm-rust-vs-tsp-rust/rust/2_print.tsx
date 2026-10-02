@@ -1,10 +1,12 @@
-import { isComponentCreator, createScope, createSymbol, Declaration, Name, type Refkey, Scope, useScope } from "@alloy-js/core";
+import { isComponentCreator, createContext, createScope, createSymbol, Declaration, Name, type Refkey, Scope, useContext, useScope } from "@alloy-js/core";
 import { isLit, makeNode, type Policy, type Tok } from "../core/0_print.js";
 import { useRustNamePolicy } from "./0_name-policy.js";
 import { OrderedFieldDeclarationList } from "../gen/rust/0_nodes.js";
 import { RustScope, RustSymbol, sourceFileOf, SPACE_OF } from "./1_scope.js";
 export { Leaf } from "../core/0_print.js";
 const TIGHT = new Set(["attribute_item", "token_tree", "type_arguments", "type_parameters", "lifetime", "generic_type", "scoped_type_identifier", "scoped_identifier"]);
+// A prints empty function and impl bodies as `{ }`, empty struct/enum/trait bodies as `{}`.
+const EmptyBody = createContext<string>("{}");
 export const RUST_POLICY: Policy = {
   accept(kind, props, toks) {
     if (kind !== "struct_item" || !props.body) return true;
@@ -12,11 +14,13 @@ export const RUST_POLICY: Policy = {
   },
   // A layout: `\nwhere\n    P1,\n    P2,\n` with the body brace after a space on the next line.
   layout(kind, toks, inline) {
+    if (kind === "impl_item") return inline(toks.map((t) => ("val" in t && t.src === "body" ? { ...t, val: <EmptyBody.Provider value="{ }">{t.val}</EmptyBody.Provider> } : t)));
     if (kind !== "where_clause") return undefined;
     const preds: Tok[][] = [];
     for (const t of toks.slice(1)) ("val" in t || preds.length === 0 ? preds.push([t]) : preds.at(-1)!.push(t));
     return [<hbr />, "where", <hbr />, preds.map((g, i) => [i > 0 ? <hbr /> : "", "    ", inline(g)]), <hbr />];
   },
+  empty: (kind) => (kind === "block" ? "{ }" : kind === "declaration_list" ? useContext(EmptyBody) : "{}"),
   space(kind, prev, tok) {
     if ("val" in tok && tok.src === "where_clause") return false;
     if ((kind === "struct_item" || kind === "enum_variant") && "val" in tok && tok.src === "body" && isComponentCreator(tok.val, OrderedFieldDeclarationList)) return false;
