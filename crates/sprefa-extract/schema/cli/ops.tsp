@@ -115,7 +115,7 @@ op graph(
   /** Shortest type-reference paths from NAME */
   @valueName("NAME") type_path?: string,
 
-  @doc("Flow paths from BLOB@START:END")
+  @doc("Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges.")
   @valueName("BLOB@START:END") flow_path?: string,
 
   /** Control-dependence slice at PATH:BYTE */
@@ -258,39 +258,6 @@ op rename(
   no_scip_merge?: boolean,
 
   /** End with one JSON line of abstains */
-  json?: boolean,
-): jsonValue;
-
-/** TODO: help. Delete a type and everything that depends on it */
-op dismantle(
-  /** FILE#ITEM (omit with --list) */
-  @positional target?: string,
-
-  /** TSV of FILE#ITEM rows */
-  list?: path,
-
-  /** Corpus root (default: git root of the first target) */
-  root?: path,
-
-  /** Soopy state root, outside the corpus */
-  state?: path,
-
-  /** Byte offset of the declaration when ITEM is declared twice */
-  at?: uint32,
-
-  /** TODO: help. Unsafe: delete every dependent item too, cascading; without it, refuse while references remain */
-  cascade?: boolean,
-
-  /** Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust */
-  slow?: boolean,
-
-  /** Apply instead of dry run */
-  commit?: boolean,
-
-  /** Command to run after --commit; failure rolls back */
-  verify?: string,
-
-  /** End with one JSON line holding the plan */
   json?: boolean,
 ): jsonValue;
 

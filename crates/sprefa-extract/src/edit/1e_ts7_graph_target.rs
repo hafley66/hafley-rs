@@ -15,9 +15,11 @@ pub struct TargetReference {
     pub site_start: u32,
     pub site_end: u32,
     pub target_path: String,
+    pub target_start: u32,
+    pub target_end: u32,
 }
 
-fn position(text: &str, offset: usize) -> Result<Value, String> {
+pub(super) fn position(text: &str, offset: usize) -> Result<Value, String> {
     let before = text.get(..offset).ok_or("position splits a character")?;
     Ok(json!({
         "line": before.bytes().filter(|byte| *byte == b'\n').count(),
@@ -112,6 +114,8 @@ pub fn references(
                         site_start: byte_at_lsp_position(&source_text, start)? as u32,
                         site_end: byte_at_lsp_position(&source_text, end)? as u32,
                         target_path: target_path.clone(),
+                        target_start: declaration.start,
+                        target_end: declaration.end(),
                     });
                 }
             }

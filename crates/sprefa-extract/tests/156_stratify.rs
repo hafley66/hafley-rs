@@ -147,7 +147,7 @@ fn stratify_is_deterministic_and_leaves_the_tree_unchanged() {
     rows(&first.stdout)
         .into_iter()
         .find(|row| {
-            row["record"] == "stratify_move"
+            row["record"] == "locality"
                 && row["reason"] == "split_candidate"
                 && row["cut_lines"]
                     .as_array()
@@ -156,7 +156,7 @@ fn stratify_is_deterministic_and_leaves_the_tree_unchanged() {
         .unwrap_or_else(|| panic!("{}", String::from_utf8_lossy(&first.stdout)));
     let merge = rows(&first.stdout)
         .into_iter()
-        .find(|row| row["record"] == "stratify_move" && row["reason"] == "merge_candidate")
+        .find(|row| row["record"] == "locality" && row["reason"] == "merge_candidate")
         .unwrap();
     assert!(merge["shared_edges"].as_u64().unwrap() > 0);
     let prefix_move = rows(&first.stdout)
@@ -213,4 +213,68 @@ fn entrypoints_union_unranked_paths_and_ranked_paths_choose_the_highest_rank() {
         .find(|row| row["record"] == "stratum" && row["path"] == "target.ts")
         .unwrap();
     assert_eq!(target["via"], "small.ts:small");
+}
+
+#[test]
+fn stratify_preserves_full_stems_and_omits_colliding_moves() {
+    let fixture = fixture("numbered");
+    let seeds = [
+        "0_log.ts",
+        "4_jsxAuto.test.ts",
+        "2a_Signal.browser.test.ts",
+        "10_history.memory.ts",
+        "3_plain.tsx",
+        "1_duplicate.ts",
+        "2_duplicate.ts",
+        "9_blocked.ts",
+        "8_directory.ts",
+    ];
+    for path in seeds.iter().chain(["0_blocked.ts"].iter()) {
+        std::fs::write(fixture.root.join(path), "export function leaf(){return 1}\n").unwrap();
+    }
+    // An occupied destination outside the source file set also blocks a move.
+    std::fs::create_dir(fixture.root.join("0_directory.ts")).unwrap();
+    let first = run_froms(&fixture, &seeds, &[]);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    let second = run_froms(&fixture, &seeds, &[]);
+    assert!(second.status.success());
+    assert_eq!(first.stdout, second.stdout);
+    let moves: Vec<_> = rows(&first.stdout)
+        .into_iter()
+        .filter(|row| row["record"] == "stratify_move")
+        .collect();
+    let paths: Vec<_> = moves
+        .iter()
+        .map(|row| {
+            (
+                row["from_path"].as_str().unwrap(),
+                row["to_path"].as_str().unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(
+        paths,
+        vec![
+            ("0_log.ts", "0_log.ts"),
+            ("10_history.memory.ts", "0_history.memory.ts"),
+            ("2a_Signal.browser.test.ts", "0_Signal.browser.test.ts"),
+            ("3_plain.tsx", "0_plain.tsx"),
+            ("4_jsxAuto.test.ts", "0_jsxAuto.test.ts"),
+        ]
+    );
+    for row in moves {
+        assert_eq!(row["reason"], "depth_prefix");
+        assert_eq!(
+            row["move_tsv"],
+            format!(
+                "{}\t{}",
+                row["from_path"].as_str().unwrap(),
+                row["to_path"].as_str().unwrap()
+            )
+        );
+    }
 }

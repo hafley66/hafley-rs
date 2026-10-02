@@ -4,6 +4,8 @@
 #[cfg(feature = "cli")]
 #[path = "support/0_daemon_guard.rs"]
 mod daemon_guard;
+#[path = "support/1_v6_only.rs"]
+mod v6_only;
 
 #[path = "0_prolog.rs"]
 mod t_0_prolog;
@@ -475,6 +477,9 @@ mod t_scip_freshness;
 mod t_scip_indexer_pick;
 #[path = "snapshot.rs"]
 mod t_snapshot;
+
+#[path = "193_ts_rtkq_jsx.rs"]
+mod t_193_ts_rtkq_jsx;
 
 #[test]
 fn every_test_file_is_a_module_here() {

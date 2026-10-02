@@ -92,6 +92,42 @@ fn raw_sink_gets_file_and_syntax_facts_from_the_resolve_inputs() {
 }
 
 #[test]
+fn ts_occurrences_use_the_raw_sink_without_changing_the_resolved_answer() {
+    let paths: Vec<PathBuf> = [
+        "tests/fixtures/resolve/0_caller.ts",
+        "tests/fixtures/resolve/1_callee.ts",
+    ]
+    .into_iter()
+    .map(PathBuf::from)
+    .collect();
+    let mut expected_raw = Vec::new();
+    for path in &paths {
+        let content = std::fs::read(path).unwrap();
+        let name = path.to_str().unwrap();
+        expected_raw.push(file_fact(name, &content));
+        expected_raw.extend(flatten(&dispatch(name, &content, FamilyMask::ALL).unwrap()));
+        expected_raw.extend(
+            sprefa_extract::scm_facts(std::slice::from_ref(path))
+                .unwrap()
+                .into_iter()
+                .filter(|fact| !matches!(fact,
+                    FlatFact::CallSiteRow { .. }
+                        | FlatFact::JsxElementRow { .. }
+                        | FlatFact::JsxAttributeRow { .. }
+                )),
+        );
+    }
+    let mut raw = Vec::new();
+    let resolved = resolve_project_with_raw(&request(&paths), &mut |row| {
+        raw.push(row.fact);
+        Ok::<(), std::convert::Infallible>(())
+    })
+    .unwrap();
+    assert_eq!(json(raw), json(expected_raw));
+    assert_eq!(json(resolved), json(resolve_project(&request(&paths)).unwrap()));
+}
+
+#[test]
 fn diet_raw_wrapper_preserves_the_resolved_answer_and_sink_errors() {
     let (root, paths, _) = fixture();
     let expected = json(diet_scip(&paths).unwrap());

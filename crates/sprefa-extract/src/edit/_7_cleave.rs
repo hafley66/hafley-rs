@@ -27,7 +27,7 @@ use sprefa_extract::edit_seams::CleavePlan;
 use sprefa_extract::edit_seams::CleaveSpecifier;
 use sprefa_extract::move_stage::{
     content_id, print_previews_with as print_previews, run_verify_command, stage_and_commit,
-    state_root, Mirror, VerifyJournal,
+    state_root_for, Mirror, VerifyJournal,
 };
 use sprefa_extract::{
     cleave_for, directory_path, directory_source, dispatch, flatten_each, replace_action,
@@ -59,15 +59,15 @@ const IMPORTED_TRAITS: [&str; 16] = [
 
 const SCOPE: &str = "not supported: cross-language cleave, moving a type with its impl blocks";
 
-pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
+pub fn run(cli: CleaveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
         return Err("--verify needs --commit".to_string().into());
     }
     if let Some(list) = cli.list.as_deref() {
-        return run_list(&cli, list);
+        return run_list(&cli, list, home);
     }
     let plan = Plan::build(&cli)?;
-    let state = state_root(cli.state.as_deref())?;
+    let state = state_root_for(cli.state.as_deref(), home, &[plan.root.as_path()])?;
 
     crate::outln!("root {}", plan.root.display());
     crate::outln!(
@@ -162,11 +162,11 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
 
 /// `--list`: every row planned in order over ONE corpus walk and ONE resolve,
 /// each row reading the texts the rows before it wrote, landed as ONE stage.
-fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
+fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), crate::RyiExit> {
     let rows = read_cleave_list(list)?;
     let (first, _) = split_target(&rows[0].0)?;
     let root = plan_root(cli.root.as_ref(), &first)?;
-    let state = state_root(cli.state.as_deref())?;
+    let state = state_root_for(cli.state.as_deref(), home, &[root.as_path()])?;
     let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
     let mut imports = Imports::read(&cx, &root)?;
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
@@ -678,6 +678,8 @@ struct Plan {
     callers: Vec<FileFacts>,
     /// Each caller's module spelling for SRC, beside its own facts.
     caller_modules: Vec<String>,
+    /// A star barrel still reads the moved export through SRC.
+    keep_source_export: bool,
     /// Call sites naming the item through a module path, as (file, span).
     qualified: Vec<(String, Span)>,
     /// `pub use DEST::ITEM;` lines landing after each `pub use SRC::*;`.
@@ -783,6 +785,16 @@ impl Plan {
         let cfg_prefix = item_cfg_prefix(&src, &source.text, &item_decl)?;
 
         let (mut dragged, drag_iterations) = source.drag_fixpoint(&item_decl, drag);
+        if arm.name() == "ts" {
+            for row in dragged.iter().filter(|row| row.action == "exported") {
+                if source.mutable_bindings.iter().any(|span| inside(*span, row.span)) {
+                    return Err(format!(
+                        "cleave refuses mutable binding {} left in {src}; moving {item} would import that binding into {dest}",
+                        row.name
+                    ));
+                }
+            }
+        }
         let travelling_types: BTreeSet<String> = std::iter::once(item.clone())
             .chain(
                 dragged
@@ -1004,6 +1016,7 @@ impl Plan {
                 dest_imports: Vec::new(),
                 callers: Vec::new(),
                 caller_modules: Vec::new(),
+                keep_source_export: false,
                 qualified: Vec::new(),
                 reexports: Vec::new(),
             });
@@ -1053,8 +1066,35 @@ impl Plan {
         }
 
         let mut callers = imports.callers(&src, &item);
+        let mut keep_source_export = false;
+        if let (true, Some(resolver)) = (arm.name() == "ts", imports.ts_resolver.as_ref()) {
+            let barrels: Vec<String> = imports.modules.iter()
+                .filter(|(importer, target)| *target == src && cleave_for(importer).is_some_and(|arm| arm.name() == "ts"))
+                .map(|(importer, _)| importer.clone()).collect();
+            for rel in &barrels {
+                if rel == &src || rel == &dest {
+                    continue;
+                }
+                let facts = FileFacts::open(&cx, rel, false)?;
+                // Named consumers are repointed below. A star barrel keeps
+                // its module route and therefore still needs SRC's export.
+                if let Some(modules) = sprefa_extract::lang::ts_resolve::module_facts(rel, facts.text.as_bytes()) {
+                    keep_source_export |= modules.star_exports.iter().any(|module| {
+                        resolver.resolve(&cx.abs(rel), module).is_some_and(|path| path == cx.abs(&src))
+                    });
+                }
+                if facts.specifiers.iter().any(|row| {
+                    row.kind == "reexport"
+                        && row.imported.as_deref().unwrap_or(&row.name) == item
+                        && resolver.resolve(&cx.abs(rel), &row.module).is_some_and(|path| path == cx.abs(&src))
+                }) {
+                    callers.push(rel.clone());
+                }
+            }
+        }
         callers.extend(package_callers(&cx, arm, &src, &item, &callers)?);
         callers.sort();
+        callers.dedup();
         let mut views = Vec::with_capacity(callers.len());
         let mut caller_modules = Vec::with_capacity(callers.len());
         for caller in &callers {
@@ -1065,9 +1105,9 @@ impl Plan {
                 facts
                     .specifiers
                     .iter()
-                    .filter(|row| row.name == item)
+                    .filter(|row| row.name == item || row.imported.as_deref() == Some(item.as_str()))
                     .find(|row| module_key(&item, &row.module) == direct)
-                    .or_else(|| facts.specifiers.iter().find(|row| row.name == item))
+                    .or_else(|| facts.specifiers.iter().find(|row| row.name == item || row.imported.as_deref() == Some(item.as_str())))
                     .map_or_else(String::new, |row| row.module.clone()),
             );
             views.push(facts);
@@ -1145,6 +1185,7 @@ impl Plan {
             dest_imports,
             callers: views,
             caller_modules,
+            keep_source_export,
             qualified,
             reexports,
         })
@@ -1302,6 +1343,20 @@ impl Plan {
                 .collect()
         };
         let mut edits: Vec<Respell> = Vec::new();
+        if self.arm.name() == "ts"
+            && self.keep_source_export
+            && self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.exported)
+        {
+            let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);
+            let type_head = if self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.type_only) { " type" } else { "" };
+            let (quote, semicolon, _) = sprefa_extract::edit::ts_mutate::import_style(&self.source.text);
+            edits.push(Respell {
+                file: self.rows.src.clone(),
+                span: Span::anchor(self.rows.item_span.start),
+                text: format!("export{type_head} {{ {} }} from {quote}{module}{quote}{}\n", self.rows.item, if semicolon { ";" } else { "" }),
+                receipt: Some(format!("public API {} keeps {}", self.rows.src, self.rows.item)),
+            });
+        }
         for row in self
             .rows
             .dragged
@@ -2030,6 +2085,10 @@ struct Imports {
     /// Resolved call sites `(caller file, site span, callee file, callee name)`.
     calls: Vec<(String, Span, String, String)>,
     rust_routes: hafley_scm::read::lang::rust_modules::RustModuleIndex,
+    /// `(importer, target)` for every resolved module specifier: the barrels a
+    /// cleave must re-read are the importers whose target is SRC.
+    modules: BTreeSet<(String, String)>,
+    ts_resolver: Option<sprefa_extract::lang::ts_resolve::TsResolver>,
 }
 
 impl Imports {
@@ -2070,7 +2129,16 @@ impl Imports {
             resolve_project(&request).map_err(|error| format!("resolve {root:?}: {error}"))?;
         let mut names = Vec::new();
         let mut calls = Vec::new();
+        let mut modules = BTreeSet::new();
         for fact in &facts {
+            if let FlatFact::ResolvedImportRow { src_path, target_path, target_name: None, kind, .. } = fact {
+                if kind == "module" {
+                    if let (Some(importer), Some(target)) = (rel_of(root, src_path), rel_of(root, target_path)) {
+                        modules.insert((importer, target));
+                    }
+                }
+                continue;
+            }
             if let FlatFact::ResolvedEdge {
                 caller_path,
                 callee_path,
@@ -2112,10 +2180,17 @@ impl Imports {
             names.push((importer, name.clone(), target, declared.clone(), relayed));
         }
         let rust_routes = rust_route_index(cx)?;
+        let ts_resolver = if paths.iter().any(|path| cleave_for(&path.to_string_lossy()).is_some_and(|arm| arm.name() == "ts")) {
+            Some(sprefa_extract::lang::ts_resolve::TsResolver::new(root)?)
+        } else {
+            None
+        };
         Ok(Self {
             names,
             calls,
             rust_routes,
+            modules,
+            ts_resolver,
         })
     }
 
@@ -2146,6 +2221,12 @@ impl Imports {
             }
         }
         self.names.extend(added);
+        let relayed: Vec<String> = self.modules.iter()
+            .filter(|(_, target)| target == src).map(|(importer, _)| importer.clone()).collect();
+        self.modules.insert((src.clone(), dest.clone()));
+        for importer in relayed {
+            self.modules.insert((importer, dest.clone()));
+        }
         self.names
             .push((src.clone(), item.clone(), dest.clone(), item.clone(), false));
         self.calls.retain_mut(|(caller, span, target, callee)| {
@@ -2290,6 +2371,7 @@ struct FileFacts {
     specifiers: Vec<SpecifierRow>,
     import_statements: Vec<Span>,
     import_end: u32,
+    mutable_bindings: Vec<Span>,
     /// The callee, its span, and whether it was reached through a receiver.
     sites: Vec<(String, Span, bool)>,
     decls: Vec<Decl>,
@@ -2318,6 +2400,7 @@ impl FileFacts {
         let mut specifiers = Vec::new();
         let mut import_statements = Vec::new();
         let mut import_end = 0;
+        let mut mutable_bindings = Vec::new();
         let mut sites = Vec::new();
         flatten_each(&out, None, &mut |fact: FlatFact| -> Result<(), ()> {
             match fact {
@@ -2329,6 +2412,24 @@ impl FileFacts {
                 } if kind == "import_statement" => {
                     import_end = import_end.max(line_end(&text, span.end));
                     import_statements.push(span_of(span.start, span.end));
+                }
+                FlatFact::Node {
+                    family: sprefa_extract::FamilyTag::Cst,
+                    kind,
+                    span,
+                    ..
+                } if kind == "export_statement" => {
+                    import_statements.push(span_of(span.start, span.end));
+                }
+                FlatFact::Node {
+                    family: sprefa_extract::FamilyTag::Cst,
+                    kind,
+                    span,
+                    ..
+                } if matches!(kind.as_str(), "lexical_declaration" | "variable_declaration") => {
+                    if matches!(text[span.start as usize..span.end as usize].split_whitespace().next(), Some("let" | "var")) {
+                        mutable_bindings.push(span_of(span.start, span.end));
+                    }
                 }
                 FlatFact::Specifier {
                     span,
@@ -2392,6 +2493,7 @@ impl FileFacts {
             specifiers,
             import_statements,
             import_end,
+            mutable_bindings,
             sites,
             decls,
             free,

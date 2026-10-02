@@ -319,7 +319,7 @@ fn resolve_without_the_flag_stays_byte_offset() {
         &a_path.to_string_lossy(),
         &b_path.to_string_lossy(),
     ]);
-    for line in stdout_lines(&output) {
+    for line in stdout_lines(&output).into_iter().filter(|line| !crate::v6_only::is_written_syntax_row(line)) {
         assert!(!line.contains("\"line\":"), "{line}");
         assert!(!line.contains("_line\":"), "{line}");
     }

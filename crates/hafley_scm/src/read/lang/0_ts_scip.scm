@@ -68,3 +68,18 @@
 
 (import_statement) @local.import
 (export_statement) @local.export.package
+
+; Written call sites, independent of whether the callee resolves.
+(call_expression function: (_) @syntax.call.callee) @syntax.call.span
+(new_expression constructor: (_) @syntax.call.callee) @syntax.call.span
+
+; Callable ownership, including anonymous callbacks and variable-bound arrows.
+[(function_declaration) (function_expression) (generator_function_declaration)
+ (generator_function) (arrow_function) (method_definition)] @syntax.fn.span
+[(function_declaration name: (_) @syntax.fn.name)
+ (function_expression name: (_) @syntax.fn.name)
+ (generator_function_declaration name: (_) @syntax.fn.name)
+ (generator_function name: (_) @syntax.fn.name)
+ (method_definition name: (_) @syntax.fn.name)]
+(variable_declarator name: (identifier) @syntax.binding.name
+ value: [(arrow_function) (function_expression)]) @syntax.binding.span

@@ -25,14 +25,17 @@ use std::time::Instant;
 use clap::{CommandFactory as _, FromArgMatches as _};
 
 use sprefa_extract::schema::schema_text;
+use sprefa_extract::edit::ts7_resolve::{
+    resolve_project_jsonl, resolve_project_with_raw, slow_project, slow_project_with_raw,
+};
 use sprefa_extract::trail::Trail;
 use sprefa_extract::tsi::{ingest, Mode, RunOut};
 use sprefa_extract::{
     cfg_bundle, content_id_of, deps::diet_file_edges_jsonl, diet_scip_jsonl, dispatch,
     file_fact_with_content_id, flatten_cfg_each, flatten_each, line_start_fact_with_content_id,
-    newline_offsets, package_edges_jsonl, resolve_project_jsonl, resolve_project_with_raw,
+    newline_offsets, package_edges_jsonl,
     scip_facts_jsonl, scip_family_from_index_jsonl, scip_family_jsonl, scip_file_edges_jsonl,
-    scip_index_location, size_skip_fact, slow_project, slow_project_with_raw, sorted_lines,
+    scip_index_location, size_skip_fact, sorted_lines,
     source_for, FamilyMask, FlatFact, IndexBudget, ResolveArms, ResolveRequest, ScipFamilyRequest,
     ScipMode, ScipRecords, DEFAULT_MAX_BYTES,
 };
@@ -546,6 +549,7 @@ fn parse_cli() -> Ryi {
 }
 
 fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
     if let Some(format) = ryi.file.format.as_deref() {
         if format != "jsonl" {
             eprintln!("ryi: --format {format}: use jsonl");
@@ -581,16 +585,15 @@ fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
         Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
         Some(Cmd::Stratify(args)) => return or_exit_2(stratify::run(args)),
         Some(Cmd::Query(args)) => return or_exit_2(query::run(args)),
-        Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args)),
-        Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args)),
-        Some(Cmd::Rename(args)) => match source_rename::run(args) {
+        Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args, home.as_deref())),
+        Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args, home.as_deref())),
+        Some(Cmd::Rename(args)) => match source_rename::run(args, home.as_deref()) {
             Ok(()) => return Ok(()),
             Err(error) => {
                 return Err(RyiExit::new(error.exit, error.to_string()).into());
             }
         },
-        Some(Cmd::Dismantle(_)) => return Err(RyiExit::new(2, "dismantle: TODO, not implemented").into()),
-        Some(Cmd::Region(args)) => match region_writer::run(args) {
+        Some(Cmd::Region(args)) => match region_writer::run(args, home.as_deref()) {
             Ok(0) => return Ok(()),
             Ok(code) => return Err(RyiExit::new(code, "").into()),
             Err(error) => return Err(error.into()),
@@ -692,7 +695,6 @@ fn run_formatted(ryi: Ryi, out: &mut dyn Write) -> Result<(), Box<dyn std::error
         Some(Cmd::Cleave(args)) => write_formatted_one(out, ops::cleave(&args)),
         Some(Cmd::Move(args)) => write_formatted_one(out, ops::r#move(&args)),
         Some(Cmd::Rename(args)) => write_formatted_one(out, ops::rename(&args)),
-        Some(Cmd::Dismantle(args)) => write_formatted_one(out, ops::dismantle(&args)),
         Some(Cmd::Region(args)) => write_formatted_one(out, ops::region(&args)),
         Some(Cmd::Schema) => write_formatted_one(out, ops::schema(&Default::default())),
         Some(Cmd::Trail(args)) => write_formatted_one(out, ops::trail(&args)),
@@ -709,6 +711,7 @@ fn run_verb(
     mut writer: Box<dyn Write + Send>,
     cancelled: Option<Arc<AtomicBool>>,
 ) -> RyiResult<()> {
+    let home = std::env::var_os("HOME").map(PathBuf::from);
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
         Some(Cmd::Fast(args)) => run_file_verb(file_args_from_fast(args), Tier::Fast, writer),
@@ -724,12 +727,11 @@ fn run_verb(
         Some(Cmd::Graph(args)) => or_exit_2(graph::run_to(args, &mut writer)),
         Some(Cmd::Stratify(args)) => or_exit_2(stratify::run_to(args, &mut writer)),
         Some(Cmd::Query(args)) => or_exit_2(query::run_to(args, writer)),
-        Some(Cmd::Move(args)) => or_exit_2(source_move::run(args)),
-        Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args)),
-        Some(Cmd::Rename(args)) => source_rename::run(args)
+        Some(Cmd::Move(args)) => or_exit_2(source_move::run(args, home.as_deref())),
+        Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args, home.as_deref())),
+        Some(Cmd::Rename(args)) => source_rename::run(args, home.as_deref())
             .map_err(|error| RyiExit::new(error.exit, error.to_string()).into()),
-        Some(Cmd::Dismantle(_)) => Err(RyiExit::new(2, "dismantle: TODO, not implemented").into()),
-        Some(Cmd::Region(args)) => region_writer::run(args)
+        Some(Cmd::Region(args)) => region_writer::run(args, home.as_deref())
             .and_then(|code| {
                 if code == 0 {
                     Ok(())

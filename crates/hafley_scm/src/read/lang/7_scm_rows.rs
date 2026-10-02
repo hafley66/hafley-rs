@@ -61,6 +61,8 @@ pub struct ScmCaptures {
     label_ids: Vec<u16>,
     starts: Vec<u32>,
     ends: Vec<u32>,
+    /// Preserve match pairing for nested callees such as `factory()()`.
+    calls: Vec<(u32, u32, u32, u32)>,
 }
 
 impl ScmCaptures {
@@ -77,6 +79,32 @@ impl ScmCaptures {
         arena: &hafley_scm::MatchArena,
         source: Arc<[u8]>,
     ) -> Self {
+        let mut calls = Vec::new();
+        let site_label = query
+            .names
+            .iter()
+            .position(|name| name.as_ref() == "syntax.call.span");
+        let callee_label = query
+            .names
+            .iter()
+            .position(|name| name.as_ref() == "syntax.call.callee");
+        if let (Some(site_label), Some(callee_label)) = (site_label, callee_label) {
+            for row in &arena.rows {
+                let spans = &arena.spans[row.spans.start as usize..row.spans.end as usize];
+                let site = spans.iter().find(|span| span.name as usize == site_label);
+                let callee = spans.iter().find(|span| span.name as usize == callee_label);
+                if let (Some(site), Some(callee)) = (site, callee) {
+                    calls.push((
+                        site.bytes.start,
+                        site.bytes.end,
+                        callee.bytes.start,
+                        callee.bytes.end,
+                    ));
+                }
+            }
+            calls.sort_unstable();
+            calls.dedup();
+        }
         let mut captures = kept_captures(query, arena, &source);
         captures.sort_by(|left, right| {
             query.names[left.0 as usize]
@@ -103,6 +131,7 @@ impl ScmCaptures {
             label_ids,
             starts,
             ends,
+            calls,
         }
     }
 
@@ -118,8 +147,159 @@ impl ScmCaptures {
     }
 
     pub fn facts(&self, path: &str) -> Vec<FlatFact> {
-        rows(path, self.source.len() as u32, self.views())
+        let captures = self.views();
+        let mut facts = rows(path, self.source.len() as u32, &captures);
+        facts.extend(syntax_rows(path, &self.source, &captures, &self.calls));
+        facts
     }
+
+    pub fn syntax_facts(&self, path: &str) -> Vec<FlatFact> {
+        syntax_rows(path, &self.source, &self.views(), &self.calls)
+    }
+}
+
+/// Additive written-syntax rows. Captures and their source buffer are retained
+/// by the same fast pass; no parser or resolution pass is added here.
+fn syntax_rows(
+    path: &str,
+    source: &[u8],
+    captures: &[Capture<'_>],
+    calls: &[(u32, u32, u32, u32)],
+) -> Vec<FlatFact> {
+    let functions = labelled(captures, |label| label == "syntax.fn.span");
+    let elements = labelled(captures, |label| label == "syntax.jsx.span");
+    if functions.is_empty() && elements.is_empty() && calls.is_empty() {
+        return Vec::new();
+    }
+    let function_nest = Nest::new(functions.iter().map(|c| (c.start, c.end)).collect());
+    let element_nest = Nest::new(elements.iter().map(|c| (c.start, c.end)).collect());
+    let mut function_names = vec!["<anonymous>"; functions.len()];
+    for name in captures.iter().filter(|c| c.label == "syntax.fn.name") {
+        if let Some(index) = function_nest.innermost(name.start, name.end, None) {
+            function_names[index] = name.text;
+        }
+    }
+    let bindings = labelled(captures, |label| label == "syntax.binding.span");
+    let binding_nest = Nest::new(bindings.iter().map(|c| (c.start, c.end)).collect());
+    let mut function_order: Vec<usize> = (0..functions.len()).collect();
+    function_order.sort_by_key(|&index| {
+        (
+            functions[index].start,
+            std::cmp::Reverse(functions[index].end),
+        )
+    });
+    for name in captures.iter().filter(|c| c.label == "syntax.binding.name") {
+        if let Some(binding) = binding_nest.innermost(name.start, name.end, None) {
+            let span = bindings[binding];
+            let first =
+                function_order.partition_point(|&index| functions[index].start < span.start);
+            if let Some(&index) = function_order
+                .get(first)
+                .filter(|&&index| functions[index].end <= span.end)
+            {
+                function_names[index] = name.text;
+            }
+        }
+    }
+    let owner = |capture: &Capture<'_>| {
+        function_nest
+            .innermost(capture.start, capture.end, None)
+            .map_or("<root>", |index| function_names[index])
+            .to_string()
+    };
+    let newlines: Vec<usize> = memchr::memchr_iter(b'\n', source).collect();
+    let line =
+        |start: u32| (newlines.partition_point(|&offset| offset < start as usize) + 1) as u32;
+    let mut facts = Vec::new();
+    for &(start, end, callee_start, callee_end) in calls {
+        let call = Capture {
+            label: "syntax.call.span",
+            text: "",
+            start,
+            end,
+        };
+        facts.push(FlatFact::CallSiteRow {
+            callee: capture_text(source, callee_start, callee_end).to_string(),
+            path: path.to_string(),
+            line: line(call.start),
+            enclosing_fn: owner(&call),
+            start: call.start,
+            end: call.end,
+        });
+    }
+    let mut element_names = vec!["<fragment>"; elements.len()];
+    for name in captures.iter().filter(|c| c.label == "syntax.jsx.name") {
+        if let Some(index) = element_nest.innermost(name.start, name.end, None) {
+            element_names[index] = name.text;
+        }
+    }
+    for (index, element) in elements.iter().enumerate() {
+        facts.push(FlatFact::JsxElementRow {
+            name: element_names[index].to_string(),
+            path: path.to_string(),
+            line: line(element.start),
+            enclosing_fn: owner(element),
+            start: element.start,
+            end: element.end,
+            parent_start: element_nest
+                .innermost(element.start, element.end, Some(index))
+                .map(|parent| elements[parent].start),
+        });
+    }
+    let attributes = labelled(captures, |label| label == "syntax.jsx.attr.span");
+    let attribute_nest = Nest::new(attributes.iter().map(|c| (c.start, c.end)).collect());
+    let mut names = vec![None; attributes.len()];
+    let mut values = vec![None; attributes.len()];
+    for capture in captures {
+        let target = match capture.label {
+            "syntax.jsx.attr.name" => &mut names,
+            "syntax.jsx.attr.value" => &mut values,
+            _ => continue,
+        };
+        if let Some(index) = attribute_nest.innermost(capture.start, capture.end, None) {
+            target[index] = Some(capture.text);
+        }
+    }
+    for (index, attribute) in attributes.iter().enumerate() {
+        let Some(element) = element_nest.innermost(attribute.start, attribute.end, None) else {
+            continue;
+        };
+        let Some(name) = names[index] else { continue };
+        facts.push(FlatFact::JsxAttributeRow {
+            path: path.to_string(),
+            element_start: elements[element].start,
+            name: name.to_string(),
+            value: values[index].map(str::to_string),
+            start: attribute.start,
+            end: attribute.end,
+        });
+    }
+    let holders = Nest::new(
+        labelled(captures, |label| label == "syntax.jsx.spread.holder")
+            .iter()
+            .map(|c| (c.start, c.end))
+            .collect(),
+    );
+    for spread in captures
+        .iter()
+        .filter(|c| c.label == "syntax.jsx.spread.span")
+    {
+        if holders.innermost(spread.start, spread.end, None).is_none() {
+            continue;
+        }
+        let Some(element) = element_nest.innermost(spread.start, spread.end, None) else {
+            continue;
+        };
+        facts.push(FlatFact::JsxAttributeRow {
+            path: path.to_string(),
+            element_start: elements[element].start,
+            name: "..".into(),
+            value: Some(spread.text.to_string()),
+            start: spread.start,
+            end: spread.end,
+        });
+    }
+    facts
 }
 
 fn capture_text(source: &[u8], start: u32, end: u32) -> &str {
@@ -618,14 +798,14 @@ fn owned(definitions: &[Definition]) -> Owned<'_> {
 
 /// The scope tree, the definitions it owns, and the references it resolves,
 /// projected onto the three pass-1 rows.
-fn rows(path: &str, file_end: u32, captures: Vec<Capture<'_>>) -> Vec<FlatFact> {
-    let scope_spans = labelled(&captures, |label| label == "local.scope");
+fn rows(path: &str, file_end: u32, captures: &[Capture<'_>]) -> Vec<FlatFact> {
+    let scope_spans = labelled(captures, |label| label == "local.scope");
     let scopes = scope_tree(file_end, &scope_spans);
-    let definitions = definitions(&captures, &scopes);
+    let definitions = definitions(captures, &scopes);
     let owned = owned(&definitions);
     let by_start = starts_order(&definitions);
     let names = scope_names(&scopes.scopes, &definitions, &by_start);
-    let exports = labelled(&captures, |label| label == "local.export.package");
+    let exports = labelled(captures, |label| label == "local.export.package");
     let declaring = exports
         .iter()
         .any(|export| first_inside(&definitions, &by_start, export.start, export.end).is_none());
@@ -698,7 +878,7 @@ fn rows(path: &str, file_end: u32, captures: Vec<Capture<'_>>) -> Vec<FlatFact> 
     facts.extend(free_names(
         path,
         file_end,
-        &captures,
+        captures,
         &scopes,
         &definitions,
         &owned,

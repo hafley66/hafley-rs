@@ -110,7 +110,15 @@ pub(super) struct Ts7Lsp {
 
 impl Ts7Lsp {
     fn open(root: &Path) -> Result<Self, String> {
-        let tsc = Path::new(env!("CARGO_MANIFEST_DIR")).join("ts7/node_modules/typescript/bin/tsc");
+        let bundled = Path::new(env!("CARGO_MANIFEST_DIR")).join("ts7/node_modules/typescript/bin/tsc");
+        let tsc = if bundled.is_file() {
+            bundled
+        } else {
+            root.ancestors()
+                .map(|root| root.join("node_modules/typescript/bin/tsc"))
+                .find(|path| path.is_file())
+                .unwrap_or(bundled)
+        };
         if !tsc.is_file() {
             return Err(format!(
                 "TypeScript LSP executable missing: {}",

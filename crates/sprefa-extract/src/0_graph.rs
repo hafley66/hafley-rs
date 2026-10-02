@@ -6,15 +6,17 @@
 use crate::cli::GraphArgs;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 #[cfg(feature = "graph")]
-use sprefa_extract::{cfg_facts, FamilyTag};
+use sprefa_extract::cfg_facts;
 use sprefa_extract::{
-    newline_offsets, resolve_project_with_tsi_tiers, slow_project, FlatFact, ResolveArms,
+    newline_offsets, resolve_project_with_raw_tsi, resolve_project_with_tsi_tiers,
+    slow_project, slow_project_with_raw, FamilyTag, FlatFact, ResolveArms,
     ResolveRequest, ScipMode, ScipRecords,
 };
 
@@ -22,9 +24,19 @@ use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
 #[path = "0a_graph_target.rs"]
 mod target;
 
-const CALLERS_SQL: &str = "SELECT \"caller_path\", \"caller_name\", \"callee_path\", \
-                           \"callee_name\", \"grade\", \"kind\", \"caller_site_start\", \
-                           \"callee_start\" FROM \"callers\" WHERE \"callee_name\" IS ?1";
+const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_name, \
+                         grade, kind, caller_site_start, callee_start FROM ( \
+                         SELECT e.*, ROW_NUMBER() OVER ( \
+                         PARTITION BY caller_path, caller_site_start, caller_site_end, \
+                                      callee_path, callee_start, callee_end \
+                         ORDER BY resolution_origin IN ('checker', 'scip') DESC, \
+                                  caller_name LIKE 'closure@%' DESC, \
+                                  caller_name, kind, resolution_origin) AS site_rank, \
+                         CASE WHEN resolution_origin IN ('module_plane', 'checker', 'scip') \
+                              THEN '+' WHEN resolution_origin = 'unresolved' \
+                              THEN '-' ELSE '~' END AS grade \
+                         FROM resolved_edge AS e WHERE callee_name IS ?1) \
+                         WHERE site_rank = 1";
 
 const USES_SQL: &str = "SELECT \"user_path\", \"user_name\", \"type_path\", \"type_name\", \
                         \"grade\", \"kind\", \"user_start\", NULL FROM \"uses\" \
@@ -57,7 +69,41 @@ fn load_store(
         go_checker: (!cli.slow && cli.go_checker).then_some(root.as_path()),
         witness: true,
     };
-    let facts = if cli.slow {
+    let mut database = match sqlite {
+        Some(path) => Database::create(path)?,
+        None => Database::memory()?,
+    };
+    let facts = if matches!(arm, Arm::FlowPath(_)) {
+        let mut push_raw = |raw: sprefa_extract::RawProjectFact<'_>| {
+            if matches!(
+                &raw.fact,
+                FlatFact::FileRow { .. }
+                    | FlatFact::Node { family: FamilyTag::Df, .. }
+                    | FlatFact::Edge { family: FamilyTag::Df, .. }
+            ) {
+                database
+                    .source(raw.path, raw.content_id.to_string())
+                    .map_err(|error| std::io::Error::other(error.to_string()))?;
+                database
+                    .bind_row(&raw.fact)
+                    .map_err(|error| std::io::Error::other(error.to_string()))?;
+            }
+            Ok::<(), std::io::Error>(())
+        };
+        let facts = if cli.slow {
+            slow_project_with_raw(
+                paths,
+                &root,
+                cli.scip_index.as_deref(),
+                cli.scip_index.is_none(),
+                &mut push_raw,
+            )?
+        } else {
+            resolve_project_with_raw_tsi(&request, &mut push_raw)?
+        };
+        database.clear_source()?;
+        facts
+    } else if cli.slow {
         if let Some(index) = cli.scip_index.as_deref() {
             slow_project(paths, &root, Some(index), false)?
         } else if matches!(arm, Arm::Callers(_) | Arm::Uses(_)) {
@@ -67,10 +113,6 @@ fn load_store(
         }
     } else {
         resolve_project_with_tsi_tiers(&request)?
-    };
-    let mut database = match sqlite {
-        Some(path) => Database::create(path)?,
-        None => Database::memory()?,
     };
     let _store_span = tracing::info_span!("store.write").entered();
     for fact in &facts {
@@ -227,7 +269,11 @@ fn plane_edges(
         "flow" => {
             "SELECT \"_row\", \"from_blob\", printf('%d:%d', \"from__start\", \"from__end\"), \
                    \"to_blob\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
-                   FROM \"flow_edge\""
+                   FROM \"flow_edge\" \
+             UNION ALL \
+             SELECT \"_row\", \"_content_id\", printf('%d:%d', \"from__start\", \"from__end\"), \
+                    \"_content_id\", printf('%d:%d', \"to__start\", \"to__end\"), '~', NULL \
+                    FROM \"edge\" WHERE \"family\" = 'df' AND \"_content_id\" IS NOT NULL"
                 .to_string()
         }
         _ => unreachable!("only fixed graph planes reach this query"),
@@ -375,19 +421,44 @@ fn paths(
         .collect())
 }
 
-/// Flow identity is a content digest and byte span. The seed uses the final
-/// @ to separate the digest from START:END.
-fn flow_seed(seed: &str) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
+/// Normalize a path to the content identity used by flow facts. Revision
+/// queries read their scratch tree; digest seeds already name that identity.
+fn flow_seed(seed: &str, root: Option<&Path>) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>> {
     let (blob, span) = seed
         .rsplit_once('@')
-        .ok_or("flow seed must be BLOB@START:END")?;
+        .ok_or("flow seed must be PATH@START:END or BLOB@START:END")?;
     let (start, end) = span
         .split_once(':')
-        .ok_or("flow seed must be BLOB@START:END")?;
+        .ok_or("flow seed must be PATH@START:END or BLOB@START:END")?;
     let start: u32 = start.parse()?;
     let end: u32 = end.parse()?;
+    if start >= end {
+        return Err("flow seed requires START < END (zero-based byte offsets, END exclusive)".into());
+    }
+    let digest = blob.strip_prefix("blake3:").filter(|hex| {
+        hex.len() == 64 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }).or_else(|| blob.strip_prefix("git:").filter(|hex| {
+        hex.len() == 40 && hex.bytes().all(|byte| byte.is_ascii_hexdigit())
+    }));
+    let blob = if digest.is_some() {
+        blob.to_ascii_lowercase()
+    } else {
+        let path = Path::new(blob);
+        let path = match root {
+            Some(root) if !path.is_absolute() => root.join(path),
+            _ => path.to_path_buf(),
+        };
+        let mut bytes = Vec::new();
+        fs::File::open(sprefa_extract::io_path(&path))
+            .and_then(|mut file| file.read_to_end(&mut bytes))
+            .map_err(|error| format!("flow seed input '{blob}': {error}"))?;
+        if end as usize > bytes.len() {
+            return Err(format!("flow seed END {end} exceeds input length {}", bytes.len()).into());
+        }
+        sprefa_extract::content_id_of(&bytes).to_string()
+    };
     Ok(BTreeSet::from([(
-        blob.to_string(),
+        blob,
         Some(format!("{start}:{end}")),
     )]))
 }
@@ -470,8 +541,8 @@ enum Arm<'a> {
 impl Arm<'_> {
     fn name(&self) -> &str {
         match self {
-            Arm::Callers(name)
-            | Arm::Uses(name)
+            Arm::Callers(name) => name.rsplit_once('#').map_or(*name, |(_, name)| name),
+            Arm::Uses(name)
             | Arm::From(name)
             | Arm::CallPath(name)
             | Arm::TypePath(name)
@@ -504,7 +575,25 @@ impl Arm<'_> {
         lines: &mut Lines,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
         match self {
-            Arm::Callers(name) => edges(connection, CALLERS_SQL, name, lines),
+            Arm::Callers(anchor) => {
+                let (path, name) = match anchor.split_once('#') {
+                    Some((path, name)) => (Some(path), name),
+                    None => (None, *anchor),
+                };
+                let mut rows = edges(connection, CALLERS_SQL, name, lines)?;
+                if let Some(path) = path {
+                    let target = fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
+                    rows.retain(|row| {
+                        let FlatFact::GraphEdge { to_path, .. } = row else {
+                            return false;
+                        };
+                        let candidate = fs::canonicalize(to_path)
+                            .unwrap_or_else(|_| PathBuf::from(to_path));
+                        candidate == target
+                    });
+                }
+                Ok(rows)
+            }
             Arm::Uses(name) => {
                 let mut rows = edges(connection, USES_SQL, name, lines)?;
                 let table_exists: bool = connection.query_row(
@@ -544,7 +633,7 @@ impl Arm<'_> {
                 |edges| Ok(named_starts(edges, name)),
                 deadline,
             ),
-            Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed), deadline),
+            Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline),
         }
     }
 
@@ -669,6 +758,17 @@ pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    if let Some(anchor) = cli.callers.as_deref() {
+        match anchor.split_once('#') {
+            Some((path, name)) if path.is_empty() || name.is_empty() || name.contains('#') => {
+                return Err("--callers requires NAME or FILE#NAME".into());
+            }
+            None if anchor.contains('.') => {
+                return Err("--callers Class.method is unsupported; use FILE#method".into());
+            }
+            _ => {}
+        }
+    }
     #[cfg(feature = "graph")]
     if let Some(seed) = cli.slice.as_deref() {
         emit_rows(&slice_at(seed)?, output)?;
@@ -897,5 +997,46 @@ mod tests {
         let edges = [edge(1, "a", "b")];
         let past = Deadline { at: Instant::now() };
         assert!(first_discovery(&edges, named_starts(&edges, "a"), &past).is_err());
+    }
+
+    #[test]
+    fn flow_paths_join_local_and_interprocedural_edges_with_stored_witnesses() {
+        let mut database = Database::memory().unwrap();
+        for (path, blob, family, from, to) in [
+            ("a.ts", "blake3:a", "df", 1, 3),
+            ("a.ts", "blake3:a", "call", 1, 9),
+            ("b.ts", "blake3:b", "df", 5, 7),
+        ] {
+            database.source(path, blob.to_string()).unwrap();
+            database.insert(serde_json::json!({
+                "record": "edge", "family": family, "kind": "use",
+                "from": {"start": from, "end": from + 1},
+                "to": {"start": to, "end": to + 1}
+            })).unwrap();
+        }
+        database.clear_source().unwrap();
+        database.insert(serde_json::json!({
+            "record": "flow_edge", "family": "flow", "kind": "arg_to_param",
+            "from_blob": "blake3:a", "from": {"start": 3, "end": 4},
+            "to_blob": "blake3:b", "to": {"start": 5, "end": 6}
+        })).unwrap();
+        database.flush().unwrap();
+        let rows = paths(
+            database.connection(),
+            "flow",
+            |_| Ok(BTreeSet::from([("blake3:a".to_string(), Some("1:2".to_string()))])),
+            &Deadline { at: Instant::now() + Duration::from_secs(60) },
+        ).unwrap();
+        assert_eq!(
+            serde_json::to_value(rows).unwrap(),
+            serde_json::json!([
+                {"record": "graph_path", "plane": "flow", "from_path": "blake3:a", "from_name": "1:2",
+                 "to_path": "blake3:a", "to_name": "3:4", "depth": 1, "witness": [1]},
+                {"record": "graph_path", "plane": "flow", "from_path": "blake3:a", "from_name": "1:2",
+                 "to_path": "blake3:b", "to_name": "5:6", "depth": 2, "witness": [1, 4]},
+                {"record": "graph_path", "plane": "flow", "from_path": "blake3:a", "from_name": "1:2",
+                 "to_path": "blake3:b", "to_name": "7:8", "depth": 3, "witness": [1, 4, 3]}
+            ])
+        );
     }
 }

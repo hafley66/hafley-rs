@@ -130,7 +130,7 @@ pub struct GraphArgs {
   #[doc = "Shortest type-reference paths from NAME"]
   #[arg(long, value_name = "NAME")]
   pub type_path: Option<String>,
-  #[doc = "Flow paths from BLOB@START:END"]
+  #[doc = "Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges."]
   #[arg(long, value_name = "BLOB@START:END")]
   pub flow_path: Option<String>,
   #[doc = "Control-dependence slice at PATH:BYTE"]
@@ -294,44 +294,6 @@ pub struct RenameArgs {
   #[serde(default)]
   pub no_scip_merge: bool,
   #[doc = "End with one JSON line of abstains"]
-  #[arg(long)]
-  #[serde(default)]
-  pub json: bool,
-}
-
-#[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct DismantleArgs {
-  #[doc = "FILE#ITEM (omit with --list)"]
-  #[arg()]
-  pub target: Option<String>,
-  #[doc = "TSV of FILE#ITEM rows"]
-  #[arg(long)]
-  pub list: Option<PathBuf>,
-  #[doc = "Corpus root (default: git root of the first target)"]
-  #[arg(long)]
-  pub root: Option<PathBuf>,
-  #[doc = "Soopy state root, outside the corpus"]
-  #[arg(long)]
-  pub state: Option<PathBuf>,
-  #[doc = "Byte offset of the declaration when ITEM is declared twice"]
-  #[arg(long)]
-  pub at: Option<u32>,
-  #[doc = "TODO: help. Unsafe: delete every dependent item too, cascading; without it, refuse while references remain"]
-  #[arg(long)]
-  #[serde(default)]
-  pub cascade: bool,
-  #[doc = "Plan with the compiler: the TypeScript 7 checker for TypeScript, rust-analyzer for Rust"]
-  #[arg(long)]
-  #[serde(default)]
-  pub slow: bool,
-  #[doc = "Apply instead of dry run"]
-  #[arg(long)]
-  #[serde(default)]
-  pub commit: bool,
-  #[doc = "Command to run after --commit; failure rolls back"]
-  #[arg(long)]
-  pub verify: Option<String>,
-  #[doc = "End with one JSON line holding the plan"]
   #[arg(long)]
   #[serde(default)]
   pub json: bool,

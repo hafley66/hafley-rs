@@ -1,6 +1,6 @@
 //! Targeted slow graph evidence over the same resolved-edge rows as fast.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
@@ -11,9 +11,24 @@ pub(super) fn facts(
     root: &Path,
     name: &str,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
+    sprefa_extract::slow::require_ts_checker(request.paths)?;
     let mut definitions: BTreeMap<(String, String, bool), Vec<(u32, u32)>> = BTreeMap::new();
+    let mut sites = Vec::new();
+    let mut callers: BTreeMap<String, Vec<(u32, u32, Option<String>)>> = BTreeMap::new();
     let _extract_span = tracing::info_span!("fast.extract_resolve").entered();
     let mut facts = resolve_project_target_with_raw(request, &mut |raw| {
+        if let FlatFact::Site { family: FamilyTag::Call, span, callee, .. } = &raw.fact {
+            if callee == name {
+                sites.push((raw.path.to_string(), span.start, span.end));
+            }
+        }
+        if let FlatFact::Node { family: FamilyTag::Call, span, name, .. } = &raw.fact {
+            callers.entry(raw.path.to_string()).or_default().push((
+                span.start,
+                span.end,
+                Some(name.clone().unwrap_or_else(|| sprefa_extract::closure_name(raw.content_id, span.start))),
+            ));
+        }
         if let FlatFact::Node {
             family: family @ (FamilyTag::Call | FamilyTag::Type),
             span,
@@ -41,7 +56,7 @@ pub(super) fn facts(
             (supplied, sprefa_extract::io_path(path))
         })
         .collect();
-    let ts_seeds: Vec<(String, String)> = facts
+    let mut ts_seeds: BTreeSet<(String, String)> = facts
         .iter()
         .filter_map(|fact| {
             let (path, target, origin) = match fact {
@@ -64,25 +79,15 @@ pub(super) fn facts(
                 && (path.ends_with(".ts") || path.ends_with(".tsx")))
             .then(|| (path.clone(), name.to_string()))
         })
-        .collect::<BTreeSet<_>>()
-        .into_iter()
         .collect();
-    let ts_sources: BTreeSet<String> = facts
-        .iter()
-        .filter_map(|fact| match fact {
-            FlatFact::ResolvedEdge {
-                caller_path,
-                callee_name,
-                ..
-            } if callee_name.as_deref() == Some(name) => Some(caller_path.clone()),
-            FlatFact::ResolvedTypeEdge {
-                owner_path,
-                target_name,
-                ..
-            } if target_name.as_deref() == Some(name) => Some(owner_path.clone()),
-            _ => None,
-        })
-        .collect();
+    ts_seeds.extend(definitions.keys().filter_map(|(path, definition, _)| {
+        (definition == name && (path.ends_with(".ts") || path.ends_with(".tsx")))
+            .then(|| (path.clone(), definition.clone()))
+    }));
+    let ts_seeds: Vec<_> = ts_seeds.into_iter().collect();
+    // Open unresolved source files too. A checker search must not inherit
+    // the fast tier's set of already-bound callers as its project boundary.
+    let ts_sources: BTreeSet<_> = files.iter().map(|(path, _)| path.clone()).collect();
     let ts_references = sprefa_extract::edit::ts7_graph_target::references(
         &std::fs::canonicalize(root).unwrap_or_else(|_| root.to_path_buf()),
         &files,
@@ -339,6 +344,49 @@ pub(super) fn facts(
             reference.source_path == *owner_path && reference.target_path == *target_path
         }) {
             *resolution_origin = "checker".to_string();
+        }
+    }
+    let mut references_by_source: HashMap<&str, Vec<&sprefa_extract::edit::ts7_graph_target::TargetReference>> = HashMap::new();
+    for reference in &ts_references {
+        references_by_source.entry(reference.source_path.as_str()).or_default().push(reference);
+    }
+    let mut present: HashSet<(String, u32, u32, String, u32)> = facts.iter().filter_map(|fact| match fact {
+        FlatFact::ResolvedEdge { caller_path, caller_site_start, caller_site_end, callee_path, callee_start, .. } =>
+            Some((caller_path.clone(), *caller_site_start, *caller_site_end, callee_path.clone(), *callee_start)),
+        _ => None,
+    }).collect();
+    for (path, start, end) in sites {
+        let Some(reference) = references_by_source.get(path.as_str()).and_then(|references| references.iter().find(|reference| {
+            start <= reference.site_start && reference.site_end <= end
+        })) else {
+            continue;
+        };
+        let target = [true, false].into_iter().find_map(|is_call| {
+            definitions.get(&(reference.target_path.clone(), name.to_string(), is_call))?
+                .iter()
+                .find(|(start, end)| *start <= reference.target_start && reference.target_end <= *end)
+                .copied()
+        });
+        let Some((target_start, target_end)) = target else { continue };
+        let caller = callers.get(&path).and_then(|definitions| {
+            definitions.iter().filter(|(lo, hi, _)| *lo <= start && end <= *hi)
+                .min_by_key(|(lo, hi, _)| hi - lo)
+                .and_then(|(_, _, name)| name.clone())
+        });
+        if present.insert((path.clone(), start, end, reference.target_path.clone(), target_start)) {
+            facts.push(FlatFact::ResolvedEdge {
+                fact: None,
+                caller_path: path,
+                caller_name: caller,
+                caller_site_start: start,
+                caller_site_end: end,
+                callee_path: reference.target_path.clone(),
+                callee_name: Some(name.to_string()),
+                callee_start: target_start,
+                callee_end: target_end,
+                kind: "checker_resolve".to_string(),
+                resolution_origin: "checker".to_string(),
+            });
         }
     }
     Ok(facts)

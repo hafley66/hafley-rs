@@ -15,7 +15,7 @@
 //! `Resolve<TypeF>`; phase 1 stays pure-content.
 
 use std::cell::RefCell;
-use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::OnceLock;
 
 use oxc_allocator::Allocator;
@@ -38,7 +38,7 @@ use crate::read::family::{
 use crate::read::rows::{Edge, FamilyBundle, Node};
 use crate::read::scip::{byte_range_cached, definition_of, join_documents, site_occurrence};
 use crate::read::seams::{
-    containing_def_site_in, corpus_defs, covering_def, def_named, own_blob, DefIndex, DefSite,
+    containing_def_site_in, corpus_defs, covering_def, own_blob, DefIndex, DefSite,
     ParseError, Parser, Project, Resolve,
 };
 use crate::read::shape::{ContentId, FamilyTag, NameId, NodeRef, Span, Strings, ZERO_CONTENT_ID};
@@ -56,7 +56,20 @@ use super::ts_receivers;
 
 /// TypeScript's own `.scm`: the scope/definition/call captures fast lowers
 /// through L1. Owned here, read through `Source::scm_query`.
-const TYPESCRIPT_SCM: &str = include_str!("../../../../sprefa-extract/queries/typescript/scip.scm");
+const TYPESCRIPT_SCM: &str = include_str!("0_ts_scip.scm");
+const TSX_SCM: &str = concat!(
+    include_str!("0_ts_scip.scm"),
+    "\n",
+    include_str!("0_ts_jsx.scm"),
+);
+
+fn typescript_scm(path: &str) -> &'static str {
+    if RyiLang::from_path(path) == Some(RyiLang::Tsx) {
+        TSX_SCM
+    } else {
+        TYPESCRIPT_SCM
+    }
+}
 
 thread_local! {
     static TS_CST_PARSER: RefCell<(Option<RyiLang>, tree_sitter::Parser)> =
@@ -72,7 +85,8 @@ fn cst_and_scm(
     path: &str,
     content: &[u8],
     strings: &mut Strings,
-) -> Option<(FamilyBundle<CstF>, Option<ScmCaptures>)> {
+    want_cst: bool,
+) -> Option<(Option<FamilyBundle<CstF>>, Option<ScmCaptures>)> {
     std::str::from_utf8(content).ok()?;
     let lang = RyiLang::from_path(path)?;
     let language = lang.tree_sitter_language();
@@ -84,7 +98,11 @@ fn cst_and_scm(
         }
         state.1.parse(content, None)
     })?;
-    let cst = cst_bundle_from_tree(path, content, &tree, strings)?;
+    let cst = if want_cst {
+        Some(cst_bundle_from_tree(path, content, &tree, strings)?)
+    } else {
+        None
+    };
     let query_slot = match lang {
         RyiLang::TypeScript => Some(&TS_SCM_QUERY),
         RyiLang::Tsx => Some(&TSX_SCM_QUERY),
@@ -92,7 +110,7 @@ fn cst_and_scm(
     };
     let captures = query_slot.and_then(|slot| {
         let query = slot.get_or_init(|| {
-            hafley_scm::build(&language, TYPESCRIPT_SCM)
+            hafley_scm::build(&language, typescript_scm(path))
                 .expect("the bundled TypeScript query compiles")
         });
         let mut arena = hafley_scm::MatchArena::default();
@@ -2060,7 +2078,32 @@ impl Project<CallF> for CallProjector<'_> {
         // resolve leg joins them by `CallSite.span`.
         let blob = crate::read::dispatch::extracting_blob(self.content.as_bytes())
             .unwrap_or_else(|| content_id_of(self.content.as_bytes()));
-        ts_receivers::store_facts(blob, ts_receivers::collect(program));
+        let mut facts = ts_receivers::collect(program);
+        // Outer spans first; a named node precedes an unnamed one on the same span.
+        let mut order: Vec<_> = sink.nodes.iter().collect();
+        order.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end()), node.name.is_none()));
+        let mut named: Vec<(u32, NameId)> = Vec::new();
+        let mut copies = BTreeMap::<(String, ContentId), u32>::new();
+        for node in order {
+            while named.last().is_some_and(|(end, _)| *end < node.span.end()) {
+                named.pop();
+            }
+            if let Some(name) = node.name {
+                named.push((node.span.end(), name));
+                continue;
+            }
+            let owner = named.last().map_or(MODULE_DEF_NAME, |(_, name)| strings.lookup(*name));
+            let Some(body) = self.content.as_bytes()
+                .get(node.span.start as usize..node.span.end() as usize) else {
+                    continue;
+                };
+            let digest = content_id_of(body);
+            let ordinal = copies.entry((owner.to_string(), digest.clone())).or_default();
+            facts.closure_names.insert(node.span.start,
+                format!("closure@{owner}:{digest}:{ordinal}"));
+            *ordinal += 1;
+        }
+        ts_receivers::store_facts(blob, facts);
     }
 }
 
@@ -2248,6 +2291,20 @@ struct RuntimeModuleWalker<'a> {
 }
 
 impl<'a> OxcVisit<'a> for RuntimeModuleWalker<'a> {
+    fn visit_ts_import_type(&mut self, it: &ts::TSImportType<'a>) {
+        let module = it.source.value.as_str();
+        self.out.push(ScannedSpecifier {
+            span: it.source.span,
+            name: module,
+            kind: SpecifierKind::DynamicImport,
+            module,
+            module_span: it.source.span,
+            imported: None,
+            type_only: true,
+        });
+        oxc_ast_visit::walk::walk_ts_import_type(self, it);
+    }
+
     fn visit_import_expression(&mut self, it: &ts::ImportExpression<'a>) {
         if let ts::Expression::StringLiteral(lit) = &it.source {
             let module = lit.value.as_str();
@@ -2723,6 +2780,18 @@ struct CallWalker<'c> {
 }
 
 impl<'a> OxcVisit<'a> for CallWalker<'_> {
+    fn visit_variable_declarator(&mut self, var: &ts::VariableDeclarator<'a>) {
+        if self.depth > 0 {
+            if let ts::BindingPattern::BindingIdentifier(id) = &var.id {
+                if var.init.as_ref().is_some_and(|init| matches!(init,
+                    ts::Expression::ArrowFunctionExpression(_)
+                    | ts::Expression::FunctionExpression(_))) {
+                    self.nested_defs.push((var.span, id.name.to_string()));
+                }
+            }
+        }
+        oxc_ast_visit::walk::walk_variable_declarator(self, var);
+    }
     fn visit_function(&mut self, func: &ts::Function<'a>, flags: oxc_syntax::scope::ScopeFlags) {
         // Only named DECLARATIONS below the top level (function expressions and
         // method values are already Methods; top-level decls are call_defs').
@@ -4188,7 +4257,7 @@ impl Source for TsSource {
     fn scm_query(&self, path: &str) -> Option<&'static str> {
         source_type_for(path)
             .filter(|source_type| source_type.is_typescript())
-            .map(|_| TYPESCRIPT_SCM)
+            .map(|_| typescript_scm(path))
     }
 
     fn extract(&self, path: &str, content: &[u8], mask: FamilyMask) -> RyiOutput {
@@ -4197,13 +4266,13 @@ impl Source for TsSource {
 
         // cst via the shared walk (masked). Owns its () arena; dropped at block
         // end. A failed parse leaves cst None (no panic).
-        let cst = if mask.cst {
+        let cst = if mask.cst || mask.call {
             let parse_span = trace::parse_span("ts", "tree-sitter");
             let _parse_guard = parse_span.enter();
             let span = trace::family_span("ts", "cst");
             let _entered = span.enter();
-            let bundle = if mask == FamilyMask::ALL {
-                cst_and_scm(path, content, &mut strings).map(|(bundle, captures)| {
+            let bundle = if mask.call {
+                cst_and_scm(path, content, &mut strings, mask.cst).and_then(|(bundle, captures)| {
                     scm_captures = captures;
                     bundle
                 })
@@ -4675,19 +4744,62 @@ impl TsSource {
     /// The name-match target of one callee (the NameResolve leg). Pub so the
     /// scip ratchet re-runs it to classify overrides — same discipline as
     /// `type_edge_candidates`. Same-file wins via the span-join;
-    /// cross-file a unique corpus blob (the CallF facet's site preferred);
-    /// ambiguous/absent -> None.
+    /// Cross-file a unique corpus blob supplies the heuristic fallback;
+    /// standard global names remain external without a lexical binding.
     pub fn call_name_match(
         output: &RyiOutput,
         index: &DefIndex,
         callee: &str,
         own: Option<&ContentId>,
     ) -> Option<(ContentId, Span)> {
-        let sites = corpus_defs(index, callee);
+        Self::call_name_match_in(output, index, callee, own, &Self::nested_callables(output))
+    }
+
+    /// Free defs inside another named, non-module def: these need a lexical
+    /// target, never the file's unbound-name fallback.
+    pub fn nested_callables(output: &RyiOutput) -> HashSet<Span> {
+        let Some(call) = output.call.as_ref() else {
+            return HashSet::new();
+        };
+        let mut order: Vec<_> = call.nodes.iter().collect();
+        order.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end())));
+        let mut open: Vec<(Span, bool)> = Vec::new();
+        let mut nested = HashSet::new();
+        for node in order {
+            while open.last().is_some_and(|(span, _)| span.end() < node.span.end()) {
+                open.pop();
+            }
+            if node.kind == CallKind::Free
+                && node.name.is_some()
+                && open.iter().any(|(span, owner)| *owner && *span != node.span)
+            {
+                nested.insert(node.span);
+            }
+            let owner = node
+                .name
+                .is_some_and(|name| output.strings.lookup(name) != MODULE_DEF_NAME);
+            open.push((node.span, owner));
+        }
+        nested
+    }
+
+    fn call_name_match_in(
+        output: &RyiOutput,
+        index: &DefIndex,
+        callee: &str,
+        own: Option<&ContentId>,
+        nested: &HashSet<Span>,
+    ) -> Option<(ContentId, Span)> {
+        let sites: Vec<&DefSite> = corpus_defs(index, callee).iter()
+            .filter(|site| own != Some(&site.blob) || !nested.contains(&site.span))
+            .collect();
         // A same-file declaration names this call before the unique-blob leg.
         if let (Some(call), Some(own_blob)) = (output.call.as_ref(), own) {
-            if let Some(node) = def_named(call, &output.strings, callee) {
-                let span = call.node(node).span;
+            if let Some(node) = call.nodes.iter().find(|node| {
+                node.name.is_some_and(|name| output.strings.lookup(name) == callee)
+                    && !nested.contains(&node.span)
+            }) {
+                let span = node.span;
                 if sites
                     .iter()
                     .any(|site| site.blob == *own_blob && site.span == span)
@@ -4696,7 +4808,37 @@ impl TsSource {
                 }
             }
         }
-        unique_blob(sites.iter(), FamilyTag::Call)
+        if BUILTIN_GLOBALS.contains(&callee) {
+            return None;
+        }
+        unique_blob(sites.into_iter(), FamilyTag::Call)
+    }
+
+    /// The lexical leg the arm runs before name-match (D9): the plain callee's
+    /// own-file callable declaration. Pub so the scip ratchet re-runs it.
+    pub fn call_lexical_match(
+        output: &RyiOutput,
+        site: &CallSite,
+        own: &ContentId,
+        paths: Option<&crate::read::types::PathIndex>,
+    ) -> Option<(ContentId, Span)> {
+        // A member and its receiver's inner call can share a start byte
+        // (`mk().push`). Only the plain callee owns this target.
+        if site
+            .callee_path
+            .is_some_and(|path| output.strings.lookup(path).contains('.'))
+        {
+            return None;
+        }
+        let facts = ts_receivers::facts_of(own, paths)?;
+        let (start, end) = facts.local_calls.get(&site.span.start)?;
+        output
+            .call
+            .as_ref()?
+            .nodes
+            .iter()
+            .find(|node| node.span.start == *start && node.span.end() == *end)
+            .map(|node| (own.clone(), node.span))
     }
 }
 
@@ -4863,6 +5005,22 @@ const BUILTIN_MEMBERS: &[&str] = &[
     "valueOf",
 ];
 
+/// Global runtime names excluded from the corpus spelling heuristic. Local
+/// declarations and imports still bind through their own resolution legs.
+const BUILTIN_GLOBALS: &[&str] = &[
+    "Array", "ArrayBuffer", "BigInt", "Boolean", "Date", "Error", "EvalError",
+    "Function", "Map", "Number", "Object", "Promise", "Proxy", "RangeError",
+    "ReferenceError", "RegExp", "Set", "String", "Symbol", "SyntaxError",
+    "TypeError", "URIError", "WeakMap", "WeakRef", "WeakSet", "URL",
+    "URLSearchParams", "AbortController", "AbortSignal", "Blob", "Event",
+    "EventTarget", "File", "FormData", "Headers", "Request", "Response",
+    "WebSocket", "Worker", "atob", "btoa", "cancelAnimationFrame",
+    "clearInterval", "clearTimeout", "decodeURI", "decodeURIComponent",
+    "encodeURI", "encodeURIComponent", "eval", "fetch", "isFinite", "isNaN",
+    "parseFloat", "parseInt", "queueMicrotask", "requestAnimationFrame",
+    "setInterval", "setTimeout", "structuredClone",
+];
+
 /// Whether the name match at `target` is a receiver-blind mismatch: a member
 /// call whose receiver names no scope this file can see, spelling a builtin
 /// member name, bound to something that is not a class member.
@@ -4949,6 +5107,7 @@ impl Resolve<CallF> for TsSource {
         let own_facts = own
             .as_ref()
             .and_then(|blob| ts_receivers::facts_of(blob, paths));
+        let nested = Self::nested_callables(output);
         let recv_map: HashMap<(u32, u32), &ts_receivers::TypeBinding> = own_facts
             .as_ref()
             .map(|facts| {
@@ -5100,7 +5259,14 @@ impl Resolve<CallF> for TsSource {
                 if imported {
                     return None;
                 }
-                Self::call_name_match(output, def_index, callee, own.as_ref())
+                // A bound lexical value owns its spelling even when it has
+                // no callable definition. Unbound names retain the corpus leg.
+                if own_facts.as_ref().is_some_and(|facts| {
+                    facts.bound_calls.contains(&site.span.start)
+                }) {
+                    return None;
+                }
+                Self::call_name_match_in(output, def_index, callee, own.as_ref(), &nested)
                     .filter(|t| !receiver_blind_builtin(output, call, site, callee, kinds, t))
                     .map(|(blob, span)| {
                         let origin = if own.as_ref() == Some(&blob) {
@@ -5111,7 +5277,11 @@ impl Resolve<CallF> for TsSource {
                         (blob, span, origin)
                     })
             };
-            let own_t = match (&import_t, &seat_t) {
+            let local_t = own
+                .as_ref()
+                .and_then(|blob| Self::call_lexical_match(output, site, blob, paths))
+                .map(|(blob, span)| (blob, span, ResolutionOrigin::SameFile));
+            let own_t = local_t.or_else(|| match (&import_t, &seat_t) {
                 (Some(found), _) => Some((
                     found.target_blob.clone(),
                     found.target_span,
@@ -5136,7 +5306,7 @@ impl Resolve<CallF> for TsSource {
                 // binding is untyped: the name match answers free calls only.
                 (None, None) if member && !imported_receiver => None,
                 (None, None) => name_match(),
-            };
+            });
             let own_kind = match (&import_t, &seat_t) {
                 (Some(_), _) | (None, Some(_)) => CallEdgeKind::ImportResolve,
                 (None, None) => CallEdgeKind::NameResolve,
@@ -5270,7 +5440,7 @@ impl Resolve<CallF> for TsSource {
                 if modules.is_some_and(|(modules, path)| modules.import(path, named).is_some()) {
                     return None;
                 }
-                Self::call_name_match(output, def_index, named, own.as_ref()).map(|(blob, span)| {
+                Self::call_name_match_in(output, def_index, named, own.as_ref(), &nested).map(|(blob, span)| {
                     let origin = if own.as_ref() == Some(&blob) {
                         ResolutionOrigin::SameFile
                     } else {

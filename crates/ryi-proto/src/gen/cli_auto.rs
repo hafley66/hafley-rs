@@ -1,7 +1,6 @@
 use crate::models::file_args::FileArgs;
 use crate::ops_auto::CleaveArgs;
 use crate::ops_auto::DiffArgs;
-use crate::ops_auto::DismantleArgs;
 use crate::ops_auto::FastArgs;
 use crate::ops_auto::GraphArgs;
 use crate::ops_auto::IngestArgs;
@@ -42,8 +41,6 @@ pub enum Cmd {
   #[doc = "Rename a symbol and every occurrence bound to it"]
   #[command(after_help = "Exit codes: 2 plan error, 3 ambiguous (pass --at), 4 not found, 5 inexact, 6 dynamic, 7 plan has abstains, 8 the --slow engine refused")]
   Rename(RenameArgs),
-  #[doc = "TODO: help. Delete a type and everything that depends on it"]
-  Dismantle(DismantleArgs),
   #[doc = "Run a tree-sitter query over files"]
   Query(QueryArgs),
   #[doc = "Replace a generated region between sprefa markers"]

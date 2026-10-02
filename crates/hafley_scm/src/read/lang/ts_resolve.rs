@@ -45,6 +45,7 @@ const EXTENSION_ALIAS: [(&str, &[&str]); 4] = [
 pub struct TsResolver {
     inner: Resolver,
     root: PathBuf,
+    packages: BTreeMap<String, WorkspacePackage>,
 }
 
 impl TsResolver {
@@ -56,6 +57,7 @@ impl TsResolver {
             .map_err(|error| format!("canonicalize root {}: {error}", root.display()))?;
         Ok(Self {
             inner: Resolver::new(options()),
+            packages: workspace_packages(&root),
             root,
         })
     }
@@ -67,10 +69,109 @@ impl TsResolver {
     /// The file `module` names when written by `from`. `None` when it resolves
     /// to nothing: a missing file, an uninstalled package, a builtin.
     pub fn resolve(&self, from: &Path, module: &str) -> Option<PathBuf> {
-        // `resolve_file` takes the IMPORTING FILE, not its directory: the
-        // TsconfigDiscovery::Auto branch only runs there (oxc_resolver lib.rs:250).
-        let resolution = self.inner.resolve_file(from, module).ok()?;
-        Some(resolution.path().to_path_buf())
+        self.resolve_with_rung(from, module).map(|(path, _)| path)
+    }
+
+    /// The source target and the workspace fallback rung that selected it.
+    pub fn resolve_with_rung(&self, from: &Path, module: &str) -> Option<(PathBuf, &'static str)> {
+        let package = self.packages.iter().find_map(|(name, package)| {
+            (module == name
+                || module
+                    .strip_prefix(name.as_str())
+                    .is_some_and(|rest| rest.starts_with('/')))
+            .then_some((name, package))
+        });
+        if let Some((name, package)) = package {
+            let subpath = module.strip_prefix(name.as_str())?;
+            let key = if subpath.is_empty() {
+                ".".to_string()
+            } else {
+                format!(".{subpath}")
+            };
+            // Assets use the runtime export, even when a types condition names
+            // a declaration for that asset.
+            if key.ends_with(".css") {
+                let target = match package.manifest.get("exports") {
+                    Some(exports) => export_target_with_conditions(
+                        exports,
+                        &key,
+                        &["import", "node", "default", "require"],
+                    ),
+                    None => Some(format!(".{subpath}")),
+                }?;
+                let emitted = package.directory.join(target.trim_start_matches("./"));
+                if emitted
+                    .extension()
+                    .is_some_and(|extension| extension == "css")
+                {
+                    if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
+                        let source = package.directory.join("src").join(relative);
+                        if let Ok(source) = source.canonicalize() {
+                            if source.is_file() {
+                                return Some((source, "src_convention"));
+                            }
+                        }
+                    }
+                    if let Ok(asset) = emitted.canonicalize() {
+                        if asset.is_file() {
+                            return Some((asset, "exports"));
+                        }
+                    }
+                }
+                return None;
+            }
+            let target = match package.manifest.get("exports") {
+                Some(exports) => export_target(exports, &key),
+                None if subpath.is_empty() => package
+                    .manifest
+                    .get("types")
+                    .or_else(|| package.manifest.get("module"))
+                    .or_else(|| package.manifest.get("main"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                None => Some(format!(".{subpath}")),
+            }?;
+            let emitted = package.directory.join(target.trim_start_matches("./"));
+            if emitted.to_string_lossy().ends_with(".d.ts") {
+                if let Some(source) = declaration_source(&emitted, &self.root) {
+                    return Some((source, "declaration_map"));
+                }
+            } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+                return Some((resolution.path().to_path_buf(), "exports"));
+            }
+            if let Ok(resolution) = self.inner.resolve_file(from, module) {
+                let path = resolution.path();
+                if path.starts_with(&self.root) && !path.to_string_lossy().contains("/dist/") {
+                    return Some((path.to_path_buf(), "tsconfig_paths"));
+                }
+            }
+            if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
+                let relative = relative.to_string_lossy();
+                let stem = relative
+                    .strip_suffix(".d.ts")
+                    .or_else(|| relative.strip_suffix(".js"))
+                    .unwrap_or(&relative);
+                let source = package.directory.join("src").join(stem);
+                if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
+                    return Some((resolution.path().to_path_buf(), "src_convention"));
+                }
+                if !package.directory.join("src").is_dir() {
+                    let source = package.directory.join(stem);
+                    if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
+                        return Some((resolution.path().to_path_buf(), "package_convention"));
+                    }
+                }
+            }
+            if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+                return Some((resolution.path().to_path_buf(), "exports_declaration"));
+            }
+            return None;
+        }
+        // Auto tsconfig discovery takes the importing file, including its name.
+        self.inner
+            .resolve_file(from, module)
+            .ok()
+            .map(|resolution| (resolution.path().to_path_buf(), "resolver"))
     }
 
     /// The same answer, kept only when it lands inside the root: a package in
@@ -79,6 +180,112 @@ impl TsResolver {
         let path = self.resolve(from, module)?;
         path.starts_with(&self.root).then_some(path)
     }
+}
+
+/// A package manifest in the source workspace, independent of installed links.
+struct WorkspacePackage {
+    directory: PathBuf,
+    manifest: serde_json::Value,
+}
+
+fn workspace_packages(root: &Path) -> BTreeMap<String, WorkspacePackage> {
+    let mut packages = BTreeMap::new();
+    for entry in ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .filter_entry(|entry| {
+            !matches!(
+                entry.file_name().to_str(),
+                Some(".git" | "node_modules" | "target" | "dist")
+            )
+        })
+        .build()
+        .filter_map(Result::ok)
+    {
+        if entry.file_name() != "package.json" {
+            continue;
+        }
+        let Some(manifest) = std::fs::File::open(crate::read::io_path(entry.path()))
+            .ok()
+            .and_then(|file| serde_json::from_reader::<_, serde_json::Value>(file).ok())
+        else {
+            continue;
+        };
+        let Some(name) = manifest.get("name").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        packages.insert(
+            name.to_string(),
+            WorkspacePackage {
+                directory: entry.path().parent().unwrap().to_path_buf(),
+                manifest,
+            },
+        );
+    }
+    packages
+}
+
+fn export_target(value: &serde_json::Value, key: &str) -> Option<String> {
+    export_target_with_conditions(
+        value,
+        key,
+        &["types", "import", "node", "default", "require"],
+    )
+}
+
+fn export_target_with_conditions(
+    value: &serde_json::Value,
+    key: &str,
+    conditions: &[&str],
+) -> Option<String> {
+    match value {
+        serde_json::Value::String(target) => Some(target.clone()),
+        serde_json::Value::Array(values) => values
+            .iter()
+            .find_map(|value| export_target_with_conditions(value, key, conditions)),
+        serde_json::Value::Object(values) => {
+            if values.keys().any(|name| name.starts_with('.')) {
+                if let Some(value) = values.get(key) {
+                    return export_target_with_conditions(value, key, conditions);
+                }
+                let mut patterns: Vec<_> = values
+                    .iter()
+                    .filter_map(|(pattern, value)| {
+                        let (prefix, suffix) = pattern.split_once('*')?;
+                        let middle = key.strip_prefix(prefix)?.strip_suffix(suffix)?;
+                        Some((prefix.len(), suffix.len(), middle, value))
+                    })
+                    .collect();
+                patterns
+                    .sort_by_key(|(prefix, suffix, _, _)| std::cmp::Reverse((*prefix, *suffix)));
+                let (_, _, middle, value) = patterns.first()?;
+                return export_target_with_conditions(value, key, conditions)
+                    .map(|target| target.replace('*', middle));
+            }
+            conditions.iter().find_map(|condition| {
+                values
+                    .get(*condition)
+                    .and_then(|value| export_target_with_conditions(value, key, conditions))
+            })
+        }
+        _ => None,
+    }
+}
+
+fn declaration_source(path: &Path, root: &Path) -> Option<PathBuf> {
+    let map_path = PathBuf::from(format!("{}.map", path.display()));
+    let map: serde_json::Value = serde_json::from_reader(std::fs::File::open(crate::read::io_path(&map_path)).ok()?).ok()?;
+    let sources = map.get("sources")?.as_array()?;
+    // A declaration map with multiple source files does not identify one module.
+    let [source] = sources.as_slice() else {
+        return None;
+    };
+    let base = map_path.parent()?.join(
+        map.get("sourceRoot")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(""),
+    );
+    let source = base.join(source.as_str()?).canonicalize().ok()?;
+    (source.starts_with(root) && source.is_file()).then_some(source)
 }
 
 /// The ESM-style TS options. Every value is a stated policy; the defaults this
@@ -898,6 +1105,57 @@ impl TsModuleIndex {
             });
         }
 
+        // Both edit plans and fact bindings resolve workspace exports to the
+        // same source files, even when a snapshot has no installed links.
+        let mut root = by_real_path
+            .keys()
+            .next()
+            .and_then(|path| path.parent())
+            .map(Path::to_path_buf);
+        for path in by_real_path.keys() {
+            while root.as_ref().is_some_and(|root| !path.starts_with(root)) {
+                root = root.and_then(|root| root.parent().map(Path::to_path_buf));
+            }
+        }
+        // Package identity comes from the supplied inputs' ancestor manifests.
+        // Multiple input roots may share only a broad filesystem ancestor;
+        // scanning that ancestor would admit packages outside this run.
+        let mut packages = BTreeMap::new();
+        let mut package_paths = HashMap::new();
+        let mut visited = HashSet::new();
+        for (real, path) in &by_real_path {
+            for (directory, written) in real
+                .ancestors()
+                .skip(1)
+                .zip(Path::new(path).ancestors().skip(1))
+            {
+                if !visited.insert(directory.to_path_buf()) {
+                    continue;
+                }
+                let Some(manifest) = std::fs::File::open(crate::read::io_path(&directory.join("package.json")))
+                    .ok()
+                    .and_then(|file| serde_json::from_reader::<_, serde_json::Value>(file).ok())
+                else {
+                    continue;
+                };
+                let Some(name) = manifest.get("name").and_then(serde_json::Value::as_str) else {
+                    continue;
+                };
+                package_paths.insert(directory.to_path_buf(), written.to_path_buf());
+                packages.insert(
+                    name.to_string(),
+                    WorkspacePackage {
+                        directory: directory.to_path_buf(),
+                        manifest,
+                    },
+                );
+            }
+        }
+        let workspace = root.map(|root| TsResolver {
+            inner: Resolver::new(options()),
+            root,
+            packages,
+        });
         let resolver = Resolver::new(options());
         // A staged source snapshot carries package manifests but normally not
         // node_modules symlinks. Local `link:` dependencies still name corpus
@@ -962,6 +1220,28 @@ impl TsModuleIndex {
             for specifier in facts.specifiers() {
                 let key = (directory.clone(), specifier.to_string());
                 let answer = answers.entry(key).or_insert_with(|| {
+                    if let Some(real) = workspace
+                        .as_ref()
+                        .and_then(|resolver| resolver.resolve(&from, specifier))
+                    {
+                        if let Some(path) = by_real_path.get(&real) {
+                            return Some(path.clone());
+                        }
+                        // A CSS module edge carries a source path without
+                        // requiring an extracted blob or definition for CSS.
+                        if real.extension().is_some_and(|extension| extension == "css") {
+                            let (directory, written) = package_paths
+                                .iter()
+                                .filter(|(directory, _)| real.starts_with(directory))
+                                .max_by_key(|(directory, _)| directory.components().count())?;
+                            return Some(
+                                written
+                                    .join(real.strip_prefix(directory).ok()?)
+                                    .to_string_lossy()
+                                    .into_owned(),
+                            );
+                        }
+                    }
                     let resolved = resolver.resolve_file(&from, specifier).ok().or_else(|| {
                         let (name, root) = links?.iter().find(|(name, _)| {
                             specifier == name
@@ -1344,5 +1624,145 @@ impl TsModuleIndex {
             }
         }
         best.map(|(span, name, _)| (span, name.to_string()))
+    }
+}
+
+#[cfg(test)]
+mod workspace_import_tests {
+    use super::*;
+
+    #[test]
+    fn workspace_inputs_resolve_root_sources_assets_and_extra_packages() {
+        let root = std::env::temp_dir().join(format!("d2-workspace-inputs-{}", std::process::id()));
+        std::fs::create_dir(&root).unwrap();
+        let written = [
+            ("rxjs/packages/app/src/main.ts", ""),
+            (
+                "rxjs/packages/renderer/package.json",
+                r#"{"name":"@fixture/renderer","exports":{".":{"types":"./dist/index.d.ts","import":"./dist/index.js"}}}"#,
+            ),
+            (
+                "rxjs/packages/renderer/index.ts",
+                "export const render = 1;",
+            ),
+            (
+                "rxjs/packages/assets/package.json",
+                r#"{"name":"@fixture/assets","exports":{"./theme.css":"./dist/theme.css","./style.css":{"types":"./dist/style.css.d.ts","default":"./dist/style.css"},"./blocked.css":null}}"#,
+            ),
+            ("rxjs/packages/assets/src/index.ts", ""),
+            ("rxjs/packages/assets/src/theme.css", "body {}"),
+            ("rxjs/packages/assets/src/style.css", "body {}"),
+            (
+                "rxjs.tsp/packages/rust/package.json",
+                r#"{"name":"@fixture/alloy-rs","exports":{"./adapters":{"types":"./dist/adapters/index.d.ts","default":"./dist/adapters/index.js"},"./emitter":{"types":"./dist/emitter/index.d.ts","default":"./dist/emitter/index.js"}}}"#,
+            ),
+            (
+                "rxjs.tsp/packages/rust/src/adapters/index.ts",
+                "export const adapt = 1;",
+            ),
+            (
+                "rxjs.tsp/packages/rust/src/emitter/index.ts",
+                "export const emit = 1;",
+            ),
+            // An unsupplied neighboring package must not enter the registry.
+            (
+                "outside/package.json",
+                r#"{"name":"@fixture/outside","exports":"./index.ts"}"#,
+            ),
+            ("outside/index.ts", "export const outside = 1;"),
+        ];
+        for (path, content) in written {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, content).unwrap();
+        }
+        let root = root.canonicalize().unwrap();
+        // No manifests or CSS assets are extracted inputs, matching D02's
+        // TS/TSX patterns. Only the second input root supplies alloy-rs sources.
+        let corpus: Vec<_> = [
+            "rxjs/packages/app/src/main.ts",
+            "rxjs/packages/renderer/index.ts",
+            "rxjs/packages/assets/src/index.ts",
+            "rxjs.tsp/packages/rust/src/adapters/index.ts",
+            "rxjs.tsp/packages/rust/src/emitter/index.ts",
+        ]
+        .into_iter()
+        .map(|path| {
+            let path = root.join(path);
+            let blob = crate::read::shape::content_id_of(std::fs::read_to_string(crate::read::io_path(&path)).unwrap().as_bytes());
+            (path.to_string_lossy().into_owned(), blob)
+        })
+        .collect();
+        let importer = corpus[0].0.clone();
+        let specifiers = [
+            "@fixture/renderer",
+            "@fixture/assets/theme.css",
+            "@fixture/assets/style.css",
+            "@fixture/assets/blocked.css",
+            "@fixture/alloy-rs/adapters",
+            "@fixture/alloy-rs/emitter",
+            "@fixture/outside",
+        ];
+        let facts = ModuleFacts {
+            requested_modules: specifiers.iter().map(|module| module.to_string()).collect(),
+            ..ModuleFacts::default()
+        };
+        let index = TsModuleIndex::build(
+            vec![(importer.clone(), facts)],
+            &corpus,
+            &DefIndex::default(),
+        );
+        let targets: Vec<_> = specifiers
+            .iter()
+            .map(|module| {
+                index.target(&importer, module).map(|path| {
+                    Path::new(path)
+                        .strip_prefix(&root)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned()
+                })
+            })
+            .collect();
+        assert_eq!(
+            targets,
+            vec![
+                Some("rxjs/packages/renderer/index.ts".to_string()),
+                Some("rxjs/packages/assets/src/theme.css".to_string()),
+                Some("rxjs/packages/assets/src/style.css".to_string()),
+                None,
+                Some("rxjs.tsp/packages/rust/src/adapters/index.ts".to_string()),
+                Some("rxjs.tsp/packages/rust/src/emitter/index.ts".to_string()),
+                None,
+            ]
+        );
+        let modules: Vec<_> = index
+            .bindings(&importer)
+            .into_iter()
+            .map(|row| (row.name, row.kind))
+            .collect();
+        assert_eq!(
+            modules,
+            vec![
+                (
+                    "@fixture/alloy-rs/adapters".to_string(),
+                    ResolvedImportKind::Module
+                ),
+                (
+                    "@fixture/alloy-rs/emitter".to_string(),
+                    ResolvedImportKind::Module
+                ),
+                (
+                    "@fixture/assets/style.css".to_string(),
+                    ResolvedImportKind::Module
+                ),
+                (
+                    "@fixture/assets/theme.css".to_string(),
+                    ResolvedImportKind::Module
+                ),
+                ("@fixture/renderer".to_string(), ResolvedImportKind::Module),
+            ]
+        );
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

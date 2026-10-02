@@ -85,9 +85,9 @@ fn slow_type_alias_uses_lsp_items_and_diagnostics() {
 fn slow_preserves_default_namespace_and_type_imports() {
     let (root, _) = cleave_with("import_kind", "inspect", "dest.ts", true);
     let dest = read(&root, "dest.ts");
-    assert!(dest.contains("import fs from \"node:fs\""));
-    assert!(dest.contains("import * as path from \"node:path\""));
-    assert!(dest.contains("import type { Node as TreeNode } from \"tree\""));
+    assert!(dest.contains("import fs from 'node:fs';"));
+    assert!(dest.contains("import * as path from 'node:path';"));
+    assert!(dest.contains("import type { Node as TreeNode } from 'tree';"));
 }
 
 #[test]
@@ -137,7 +137,7 @@ fn overloads_move_and_export_together_and_reexports_are_not_imports() {
     let (root, _) = cleave("overload", "wrap", "dest.ts");
     assert_eq!(
         read(&root, "dest.ts"),
-        "import { Code } from \"./lib\";\nimport { code } from \"./lib\";\nexport const marker = 1;\n\nexport function wrap(value: string): Code;\nexport function wrap(value: Code): Code;\nexport function wrap(value: string | Code): Code {\n  return typeof value === \"string\" ? code(value) : value;\n}\n"
+        "import { Code, code } from \"./lib\";\nexport const marker = 1;\n\nexport function wrap(value: string): Code;\nexport function wrap(value: Code): Code;\nexport function wrap(value: string | Code): Code {\n  return typeof value === \"string\" ? code(value) : value;\n}\n"
     );
     assert_eq!(
         read(&root, "source.ts"),
@@ -177,9 +177,9 @@ fn source_use_exports_the_moved_function() {
 fn destination_keeps_default_namespace_alias_and_type_imports() {
     let (root, _) = cleave("import_kind", "inspect", "dest.ts");
     let dest = read(&root, "dest.ts");
-    assert!(dest.contains("import fs from \"node:fs\""));
-    assert!(dest.contains("import * as path from \"node:path\""));
-    assert!(dest.contains("import type { Node as TreeNode } from \"tree\""));
+    assert!(dest.contains("import fs from 'node:fs';"));
+    assert!(dest.contains("import * as path from 'node:path';"));
+    assert!(dest.contains("import type { Node as TreeNode } from 'tree';"));
 }
 
 #[test]
