@@ -780,3 +780,13 @@ read_to_end, preserving arbitrary bytes and existing errors
 `crates/sprefa-extract/src/edit/_6_move.rs:124`).
 These remove the added fs::read rule matches without adding allowances.
 Code reading only; coordinator validation pending.
+
+## ryi TS quality gate: local query includes (2026-10-02)
+
+Change: the TypeScript and JSX query assets now live beside their sole code
+consumer as `crates/hafley_scm/src/read/lang/0_ts_scip.scm:1` and
+`crates/hafley_scm/src/read/lang/0_ts_jsx.scm:1`. Their contents are unchanged.
+The includes in `crates/hafley_scm/src/read/lang/ts.rs:59,68` are local paths,
+removing the added cross-crate include match. Both assets are foundational
+inputs to the language implementation. Code reading only; coordinator
+validation pending. No allowlist changes.

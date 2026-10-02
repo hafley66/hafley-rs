@@ -56,7 +56,7 @@ use super::ts_receivers;
 
 /// TypeScript's own `.scm`: the scope/definition/call captures fast lowers
 /// through L1. Owned here, read through `Source::scm_query`.
-const TYPESCRIPT_SCM: &str = include_str!("../../../../sprefa-extract/queries/typescript/scip.scm");
+const TYPESCRIPT_SCM: &str = include_str!("0_ts_scip.scm");
 static TSX_SCM: OnceLock<String> = OnceLock::new();
 
 fn typescript_scm(path: &str) -> &'static str {
@@ -65,7 +65,7 @@ fn typescript_scm(path: &str) -> &'static str {
             format!(
                 "{}\n{}",
                 TYPESCRIPT_SCM,
-                include_str!("../../../../sprefa-extract/queries/typescript/0_jsx.scm")
+                include_str!("0_ts_jsx.scm")
             )
         })
     } else {
