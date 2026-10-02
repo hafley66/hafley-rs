@@ -204,9 +204,9 @@ fn workspace_packages(root: &Path) -> BTreeMap<String, WorkspacePackage> {
         if entry.file_name() != "package.json" {
             continue;
         }
-        let Some(manifest) = std::fs::read(entry.path())
+        let Some(manifest) = std::fs::File::open(crate::read::io_path(entry.path()))
             .ok()
-            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+            .and_then(|file| serde_json::from_reader::<_, serde_json::Value>(file).ok())
         else {
             continue;
         };
@@ -273,7 +273,7 @@ fn export_target_with_conditions(
 
 fn declaration_source(path: &Path, root: &Path) -> Option<PathBuf> {
     let map_path = PathBuf::from(format!("{}.map", path.display()));
-    let map: serde_json::Value = serde_json::from_slice(&std::fs::read(&map_path).ok()?).ok()?;
+    let map: serde_json::Value = serde_json::from_reader(std::fs::File::open(crate::read::io_path(&map_path)).ok()?).ok()?;
     let sources = map.get("sources")?.as_array()?;
     // A declaration map with multiple source files does not identify one module.
     let [source] = sources.as_slice() else {
@@ -1132,9 +1132,9 @@ impl TsModuleIndex {
                 if !visited.insert(directory.to_path_buf()) {
                     continue;
                 }
-                let Some(manifest) = std::fs::read(directory.join("package.json"))
+                let Some(manifest) = std::fs::File::open(crate::read::io_path(&directory.join("package.json")))
                     .ok()
-                    .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+                    .and_then(|file| serde_json::from_reader::<_, serde_json::Value>(file).ok())
                 else {
                     continue;
                 };
@@ -1689,7 +1689,7 @@ mod workspace_import_tests {
         .into_iter()
         .map(|path| {
             let path = root.join(path);
-            let blob = crate::read::shape::content_id_of(&std::fs::read(&path).unwrap());
+            let blob = crate::read::shape::content_id_of(std::fs::read_to_string(crate::read::io_path(&path)).unwrap().as_bytes());
             (path.to_string_lossy().into_owned(), blob)
         })
         .collect();

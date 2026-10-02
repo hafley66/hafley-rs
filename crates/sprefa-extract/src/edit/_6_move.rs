@@ -5,6 +5,7 @@
 
 use crate::cli::MoveArgs;
 use std::collections::{BTreeMap, BTreeSet};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 use sprefa_extract::move_stage::{
@@ -119,8 +120,11 @@ pub fn run(cli: MoveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
 
 fn move_request_state(cli: &MoveArgs, plans: &[Plan], state: &Path) -> Result<PathBuf, String> {
     let list_bytes = cli.list.as_ref().map(|path| {
-        std::fs::read(sprefa_extract::io_path(path))
-            .map_err(|error| format!("read move list {}: {error}", path.display()))
+        let mut bytes = Vec::new();
+        std::fs::File::open(sprefa_extract::io_path(path))
+            .and_then(|mut file| file.read_to_end(&mut bytes))
+            .map_err(|error| format!("read move list {}: {error}", path.display()))?;
+        Ok::<_, String>(bytes)
     }).transpose()?;
     let inputs: Vec<_> = plans.iter().map(|plan| (&plan.root, &plan.stages)).collect();
     let request = serde_json::to_vec(&(cli, list_bytes, inputs))

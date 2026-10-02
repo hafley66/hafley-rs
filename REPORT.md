@@ -767,3 +767,16 @@ Resolve imports that helper (`crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:1
 and removes its duplicate. Graph references, call definitions, and JSX attribute
 definitions use the same conversion and character-boundary check. The Rust shim
 is unchanged. Code reading only; coordinator validation pending.
+
+## ryi TS quality gate: normalized file readers (2026-10-02)
+
+Change: new JSON reads use File::open(io_path(...)) plus serde_json::from_reader
+in `crates/hafley_scm/src/read/lang/ts_resolve.rs:207,276,1135`.
+The new workspace fixture digest reads its UTF-8 fixture through io_path
+(`crates/hafley_scm/src/read/lang/ts_resolve.rs:1692`).
+Flow seed bytes and move-list identity bytes use normalized File::open and
+read_to_end, preserving arbitrary bytes and existing errors
+(`crates/sprefa-extract/src/0_graph.rs:452`;
+`crates/sprefa-extract/src/edit/_6_move.rs:124`).
+These remove the added fs::read rule matches without adding allowances.
+Code reading only; coordinator validation pending.
