@@ -790,3 +790,12 @@ The includes in `crates/hafley_scm/src/read/lang/ts.rs:59,68` are local paths,
 removing the added cross-crate include match. Both assets are foundational
 inputs to the language implementation. Code reading only; coordinator
 validation pending. No allowlist changes.
+
+## ryi TS quality gate: compile-time JSX query text (2026-10-02)
+
+Change: TSX query text is a compile-time concat of the same base query, newline,
+and JSX query (`crates/hafley_scm/src/read/lang/ts.rs:60`).
+`typescript_scm` returns that constant (`ts.rs:66`). The added OnceLock<String>
+is removed; the existing two compiled-query caches remain. Query text and
+&'static str lifetime are preserved. Code reading only; coordinator validation
+pending. No allowlist changes.

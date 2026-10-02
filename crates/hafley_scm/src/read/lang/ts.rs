@@ -57,17 +57,15 @@ use super::ts_receivers;
 /// TypeScript's own `.scm`: the scope/definition/call captures fast lowers
 /// through L1. Owned here, read through `Source::scm_query`.
 const TYPESCRIPT_SCM: &str = include_str!("0_ts_scip.scm");
-static TSX_SCM: OnceLock<String> = OnceLock::new();
+const TSX_SCM: &str = concat!(
+    include_str!("0_ts_scip.scm"),
+    "\n",
+    include_str!("0_ts_jsx.scm"),
+);
 
 fn typescript_scm(path: &str) -> &'static str {
     if RyiLang::from_path(path) == Some(RyiLang::Tsx) {
-        TSX_SCM.get_or_init(|| {
-            format!(
-                "{}\n{}",
-                TYPESCRIPT_SCM,
-                include_str!("0_ts_jsx.scm")
-            )
-        })
+        TSX_SCM
     } else {
         TYPESCRIPT_SCM
     }
