@@ -25,6 +25,7 @@ pub fn holds_for_candidate(
                             [kinds.start as usize..kinds.end as usize]
                             .iter()
                             .any(|kind| walk::holds(p, capture.node, &kind_ids[*kind as usize])),
+                        PredicateKind::NthChild { index, kind } => crate::walk::_1_ts_nth_child::holds(capture.node, *index, *kind),
                         PredicateKind::Contains { literals } => {
                             src.get(capture.node.byte_range()).is_some_and(|text| {
                                 q.literals[literals.start as usize..literals.end as usize]

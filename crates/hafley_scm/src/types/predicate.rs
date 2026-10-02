@@ -6,6 +6,10 @@ pub enum PredicateKind {
         walk: super::Walk,
         stop: super::Stop,
     },
+    NthChild {
+        index: u32,
+        kind: Option<u16>,
+    },
     Contains {
         literals: Range<u16>,
     },

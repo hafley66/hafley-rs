@@ -49,3 +49,25 @@ fn relational_siblings() {
     })).collect::<Vec<_>>().join("\n");
     assert_eq!(actual, "rust/precedes_neighbor: c=b();\nrust/precedes_end: c=a(); | c=b();\nrust/follows_neighbor: c=c();\nrust/follows_end: c=b(); | c=c();\nrust/not_precedes_neighbor: c=a(); | c=c();\nrust/not_precedes_end: c=c();\nrust/not_follows_neighbor: c=a(); | c=b();\nrust/not_follows_end: c=a();\nts/precedes_neighbor: c=b();\nts/precedes_end: c=a(); | c=b();\nts/follows_neighbor: c=c();\nts/follows_end: c=b(); | c=c();\nts/not_precedes_neighbor: c=a(); | c=c();\nts/not_precedes_end: c=c();\nts/not_follows_neighbor: c=a(); | c=b();\nts/not_follows_end: c=a();");
 }
+
+#[test]
+fn relational_nth_child() {
+    let rows = [
+        // expression_statement:nth-child(3)
+        Row { name: "nth_child", args: "#nth-child? @c 3" },
+        // expression_statement:nth-child(2 of expression_statement)
+        Row { name: "nth_child_of", args: "#nth-child? @c 2 of expression_statement" },
+        // expression_statement:not(:nth-child(3))
+        Row { name: "not_nth_child", args: "#not-nth-child? @c 3" },
+        // expression_statement:not(:nth-child(2 of expression_statement))
+        Row { name: "not_nth_child_of", args: "#not-nth-child? @c 2 of expression_statement" },
+    ];
+    let actual = [
+        ("rust", tree_sitter::Language::new(tree_sitter_rust::LANGUAGE), RUST),
+        ("ts", tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT), TS),
+    ].iter().flat_map(|(name, language, source)| rows.iter().map(move |row| {
+        let scm = format!("((expression_statement) @c ({}))", row.args);
+        format!("{name}/{}: {}", row.name, matches(language, source, &scm))
+    })).collect::<Vec<_>>().join("\n");
+    assert_eq!(actual, "rust/nth_child: c=b();\nrust/nth_child_of: c=b();\nrust/not_nth_child: c=a(); | c=c();\nrust/not_nth_child_of: c=a(); | c=c();\nts/nth_child: c=b();\nts/nth_child_of: c=b();\nts/not_nth_child: c=a(); | c=c();\nts/not_nth_child_of: c=a(); | c=c();");
+}

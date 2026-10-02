@@ -30,7 +30,26 @@ pub fn parse_into_predicate(
     };
     let args = &found.args[1..];
     match bare {
+        "nth-child?" => {
+            let Some(QueryPredicateArg::String(index)) = args.first() else {
+                return Err(arity(found.args.len()));
+            };
+            let index = index.parse::<u32>().ok().filter(|index| *index > 0)
+                .ok_or_else(|| arity(found.args.len()))?;
+            let kind = if args.len() == 1 {
+                None
+            } else if let [_, QueryPredicateArg::String(of), QueryPredicateArg::String(kind)] = args {
+                if of.as_ref() != "of" || language.id_for_node_kind(kind, true) == 0 {
+                    return Err(QueryExtError::UnknownOperator(format!("{operator} (unknown of kind '{kind}' in pattern {pattern})")));
+                }
+                Some(language.id_for_node_kind(kind, true))
+            } else {
+                return Err(arity(found.args.len()));
+            };
+            Ok(Predicate { pattern, capture, kind: PredicateKind::NthChild { index, kind }, negated })
+        }
         "contains?" => {
+
             if args.is_empty()
                 || args
                     .iter()

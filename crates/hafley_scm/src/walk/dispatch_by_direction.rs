@@ -12,7 +12,7 @@ pub fn holds(p: &Predicate, node: Node, kind_ids: &[u32]) -> bool {
             Walk::Descendant => descendant_holds(node, stop, kind_ids),
             Walk::Precedes | Walk::Follows => super::_0_ts_sibling_holds::sibling_holds(node, walk, stop, kind_ids),
         },
-        crate::types::PredicateKind::Contains { .. } => false,
+        crate::types::PredicateKind::Contains { .. } | crate::types::PredicateKind::NthChild { .. } => false,
     }
 }
 
