@@ -620,10 +620,12 @@ pub fn collect(program: &Program<'_>) -> TsFileTypes {
         .build(program)
         .semantic;
     for node in semantic.nodes().iter() {
-        let oxc_ast::AstKind::CallExpression(call) = node.kind() else {
-            continue;
+        let callee = match node.kind() {
+            oxc_ast::AstKind::CallExpression(call) => &call.callee,
+            oxc_ast::AstKind::NewExpression(call) => &call.callee,
+            _ => continue,
         };
-        let ts::Expression::Identifier(id) = &call.callee else {
+        let ts::Expression::Identifier(id) = callee else {
             continue;
         };
         walker.facts.plain_calls.insert(id.span.start);
@@ -639,6 +641,19 @@ pub fn collect(program: &Program<'_>) -> TsFileTypes {
                     ts::Expression::ArrowFunctionExpression(_)
                     | ts::Expression::FunctionExpression(_))) => var.span,
             oxc_ast::AstKind::Function(function) => function.span,
+            oxc_ast::AstKind::Class(class) => {
+                let Some(span) = class.body.body.iter().find_map(|element| {
+                    match element {
+                        ts::ClassElement::MethodDefinition(method)
+                            if method.kind == ts::MethodDefinitionKind::Constructor
+                                && method.value.body.is_some() => Some(method.span),
+                        _ => None,
+                    }
+                }) else {
+                    continue;
+                };
+                span
+            }
             _ => continue,
         };
         walker.facts.local_calls.insert(id.span.start, (span.start, span.end));

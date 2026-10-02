@@ -142,3 +142,6 @@ Static review: `git diff --check` and `bash -n` on D09, D10, D11, D12, D13,
 D16 and D19 completed. No case bodies were executed. Build, crate test and
 runtime correctness remain unverified. D13 selection prefers verified rows
 and preserves the existing unresolved grade.
+
+D10 lexical identifier coverage includes both calls and `new` expressions;
+explicit local class constructors join their method declaration spans.
