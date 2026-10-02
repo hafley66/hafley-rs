@@ -7,6 +7,7 @@ use serde_json::{json, Value};
 
 use super::ts7_cleave_facts::with_session;
 use super::ts7_lsp_session::file_uri;
+use super::ts7_graph_target::position;
 use super::ts7_symbol_seed::{byte_at_lsp_position, qualified_declaration};
 use crate::{FamilyTag, FlatFact, ProjectError, RawProjectFact, ResolveRequest, ResolveWithRawError};
 
@@ -29,14 +30,6 @@ fn typescript(path: &str) -> bool {
 
 fn canonical(path: &Path) -> PathBuf {
     std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
-}
-
-fn position(text: &str, offset: usize) -> Result<Value, String> {
-    let before = text.get(..offset).ok_or("reference splits a character")?;
-    Ok(json!({
-        "line": before.bytes().filter(|byte| *byte == b'\n').count(),
-        "character": before.rsplit('\n').next().unwrap_or(before).encode_utf16().count(),
-    }))
 }
 
 fn locations(result: Value) -> Vec<Value> {

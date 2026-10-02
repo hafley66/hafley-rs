@@ -745,3 +745,80 @@ The runner creates the sibling read-only checkout at
 `/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-workspace-imports-2.tsp`.
 The established golden_parity root-prefix failures remain coordinator context,
 not results from this lane.
+
+## ryi TS quality gate: HOME injection (2026-10-02)
+
+Change: CLI dispatch captures HOME as an OS path and passes it through move,
+rename, cleave (including list mode), and region to the state helpers.
+`requested_state_root` no longer reads the environment
+(`crates/sprefa-extract/src/edit/_3_stage.rs:22`). Explicit --state still wins;
+missing HOME still returns the existing error. `state_root_for` resolves and
+rejects state inside each target before `state_root` creates directories
+(`crates/sprefa-extract/src/edit/_3_stage.rs:33,55`). Boundary capture is at
+`crates/sprefa-extract/src/bin/ryi.rs:552,715`.
+
+Code reading only. Coordinator validation pending; no allowlist changes.
+
+## ryi TS quality gate: shared LSP position (2026-10-02)
+
+Change: the existing byte-offset to UTF-16 LSP-position helper is visible to
+sibling edit modules (`crates/sprefa-extract/src/edit/1e_ts7_graph_target.rs:22`).
+Resolve imports that helper (`crates/sprefa-extract/src/edit/1g_ts7_resolve.rs:10`)
+and removes its duplicate. Graph references, call definitions, and JSX attribute
+definitions use the same conversion and character-boundary check. The Rust shim
+is unchanged. Code reading only; coordinator validation pending.
+
+## ryi TS quality gate: normalized file readers (2026-10-02)
+
+Change: new JSON reads use File::open(io_path(...)) plus serde_json::from_reader
+in `crates/hafley_scm/src/read/lang/ts_resolve.rs:207,276,1135`.
+The new workspace fixture digest reads its UTF-8 fixture through io_path
+(`crates/hafley_scm/src/read/lang/ts_resolve.rs:1692`).
+Flow seed bytes and move-list identity bytes use normalized File::open and
+read_to_end, preserving arbitrary bytes and existing errors
+(`crates/sprefa-extract/src/0_graph.rs:452`;
+`crates/sprefa-extract/src/edit/_6_move.rs:124`).
+These remove the added fs::read rule matches without adding allowances.
+Code reading only; coordinator validation pending.
+
+## ryi TS quality gate: local query includes (2026-10-02)
+
+Change: the TypeScript and JSX query assets now live beside their sole code
+consumer as `crates/hafley_scm/src/read/lang/0_ts_scip.scm:1` and
+`crates/hafley_scm/src/read/lang/0_ts_jsx.scm:1`. Their contents are unchanged.
+The includes in `crates/hafley_scm/src/read/lang/ts.rs:59,68` are local paths,
+removing the added cross-crate include match. Both assets are foundational
+inputs to the language implementation. Code reading only; coordinator
+validation pending. No allowlist changes.
+
+## ryi TS quality gate: compile-time JSX query text (2026-10-02)
+
+Change: TSX query text is a compile-time concat of the same base query, newline,
+and JSX query (`crates/hafley_scm/src/read/lang/ts.rs:60`).
+`typescript_scm` returns that constant (`ts.rs:66`). The added OnceLock<String>
+is removed; the existing two compiled-query caches remain. Query text and
+&'static str lifetime are preserved. Code reading only; coordinator validation
+pending. No allowlist changes.
+
+### Merged-file rule review receipt
+
+Reviewed scripts/quality-gate.sh and all 11 rule definitions. The initial
+main...integrate/ryi-ts file set at 9b100d15 contained 121 files: 33 Rust source
+files under the four source rule roots, 11 Rust files under test roots, and
+77 files outside the rules' roots/extensions. Review checked matching constructs
+and enclosing functions against the existing allowances, and checked newly
+introduced free-function names against definitions in the source roots.
+Further findings repaired above: file reads, the cross-crate JSX include,
+and the extra TypeScript string cache. No further unallowlisted match was
+identified by this source review.
+
+The integration branch advanced during this lane to 06d24aca. Its additional
+changes are three task briefs and a SQLite integer conversion at
+`crates/sprefa-extract/tests/167_graph_paths.rs:137`; that conversion introduces
+no gate-rule match. The reviewed merged file set is therefore 124 files.
+No integration commits were merged into this lane.
+
+`git diff --check 9b100d15..HEAD` passed. Compilation and
+`t_186_quality_gate::repository_quality_gate_matches_its_allowlists` remain
+unrun and require coordinator execution. No cargo, npm, node, Python, quality
+gate, or dogfood script was run. Help captures and allowlists were not edited.

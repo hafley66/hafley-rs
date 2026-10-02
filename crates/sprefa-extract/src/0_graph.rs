@@ -6,6 +6,7 @@
 use crate::cli::GraphArgs;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -443,10 +444,14 @@ fn flow_seed(seed: &str, root: Option<&Path>) -> Result<BTreeSet<Node>, Box<dyn 
         blob.to_ascii_lowercase()
     } else {
         let path = Path::new(blob);
-        let bytes = match root {
-            Some(root) if !path.is_absolute() => fs::read(root.join(path)),
-            _ => fs::read(sprefa_extract::io_path(path)),
-        }.map_err(|error| format!("flow seed input '{blob}': {error}"))?;
+        let path = match root {
+            Some(root) if !path.is_absolute() => root.join(path),
+            _ => path.to_path_buf(),
+        };
+        let mut bytes = Vec::new();
+        fs::File::open(sprefa_extract::io_path(&path))
+            .and_then(|mut file| file.read_to_end(&mut bytes))
+            .map_err(|error| format!("flow seed input '{blob}': {error}"))?;
         if end as usize > bytes.len() {
             return Err(format!("flow seed END {end} exceeds input length {}", bytes.len()).into());
         }

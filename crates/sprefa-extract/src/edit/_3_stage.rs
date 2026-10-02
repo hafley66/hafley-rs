@@ -10,8 +10,8 @@ use std::time::{Duration, Instant};
 use crate::drain::{bind_action, directory_path, directory_source, source_rel};
 
 /// `--state` as asked, else `$HOME/.agent/soopy-state`.
-pub fn state_root(requested: Option<&Path>) -> Result<PathBuf, String> {
-    let root = requested_state_root(requested)?;
+pub fn state_root(requested: Option<&Path>, home: Option<&Path>) -> Result<PathBuf, String> {
+    let root = requested_state_root(requested, home)?;
     let root = hafley_scm::read::io_path(&root);
     std::fs::create_dir_all(&root)
         .map_err(|error| format!("create state root {}: {error}", root.display()))?;
@@ -19,19 +19,19 @@ pub fn state_root(requested: Option<&Path>) -> Result<PathBuf, String> {
         .map_err(|error| format!("canonicalize state root {}: {error}", root.display()))
 }
 
-fn requested_state_root(requested: Option<&Path>) -> Result<PathBuf, String> {
+fn requested_state_root(requested: Option<&Path>, home: Option<&Path>) -> Result<PathBuf, String> {
     Ok(match requested {
         Some(path) => path.to_path_buf(),
         None => {
-            let home = std::env::var_os("HOME")
+            let home = home
                 .ok_or_else(|| "HOME is unset and --state was not supplied".to_string())?;
-            PathBuf::from(home).join(".agent").join("soopy-state")
+            home.join(".agent").join("soopy-state")
         }
     })
 }
 
-pub fn state_root_for(requested: Option<&Path>, targets: &[&Path]) -> Result<PathBuf, String> {
-    let candidate = requested_state_root(requested)?;
+pub fn state_root_for(requested: Option<&Path>, home: Option<&Path>, targets: &[&Path]) -> Result<PathBuf, String> {
+    let candidate = requested_state_root(requested, home)?;
     let candidate = hafley_scm::read::io_path(&candidate);
     let candidate = if candidate.is_absolute() { candidate } else {
         std::env::current_dir().map_err(|error| format!("read cwd: {error}"))?.join(candidate)
@@ -52,7 +52,7 @@ pub fn state_root_for(requested: Option<&Path>, targets: &[&Path]) -> Result<Pat
             return Err("commit state root must be outside target root (applies to dry run and commit)".to_string());
         }
     }
-    state_root(Some(&resolved))
+    state_root(Some(&resolved), None)
 }
 
 fn stage_into<S: soopy::StageStore>(
