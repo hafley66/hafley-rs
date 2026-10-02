@@ -181,3 +181,17 @@ They were not rerun or modified. No boop tests were run. No push was performed.
 
 Commits before this report: `eb55297f` fixtures; `826a1a05` fact extraction and
 storage; `9401921a` fact goldens and unrun dogfood script.
+Arguments:
+  [COMMENT]  `comment_id` in `agent_turn_comment`. Required by the bare spawn spelling `boop beep
+             fork <id>`; `join` and `diff` take their own
+```
+
+## ryi TS exports lane, 2026-10-02
+
+D2 before: plan reports 342/486 unresolved workspace import pairs. After: shared workspace package resolution implemented for edit plans and module fact bindings. Source rung order: exports types declaration map, tsconfig paths, package `dist` to `src` convention, then the declaration itself if no source exists. Direct source exports retain their target. Exact exports, wildcard exports, blocked exports, and one-source declaration maps are handled. No new commands, flags, analyses, or graph walkers.
+
+D2 verification: UNRUN by coordinator instruction to serialize gates. `D02.sh` checks every workspace pair from SQLite specifier facts against both fast JSONL and SQLite resolved_import module rows, listing each missing pair before failure. `workspace_exports_resolve_to_sources_in_rung_order` checks map > paths > convention plus wildcard and blocked exports. Corpus is `/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-exports` at d0802620. No measured after count or corpus rung totals are available yet. Required release build, dogfood runner, and `cargo test --features cli` remain for the coordinator; use CARGO_BUILD_JOBS=4. Known pre-existing failures: golden_parity::ported_facets_match_v5 and golden_parity::rust_doc_parity.
+
+D1 before: toSignal 2/22 files and GraphId 7/31 files, with silent success and new consumer type errors in the plan. After: fast inherits D2's workspace source resolver; slow retains TS7's edits and supplements exported root bindings using the existing importer binding walk across sibling workspace packages. Duplicate file/span edits are excluded. Property renames keep their compiler-selected receivers. UNRUN: `D01.sh` checks fast and slow committed file coverage (toSignal >=22, GraphId >=31), empty abstains, and zero new tsc diagnostics against a fresh pre-edit baseline in affected packages. No measured coverage or tsc result is claimed. The TS7 LSP and all build/test/dogfood gates await serialized coordinator execution.
+
+D24 before: the two md declarations have no path-bearing records in fast JSONL (plan: 159 of 161 TS paths). After: fast JSONL emits existing file facts for `.d.ts`, `.d.mts`, and `.d.cts` inputs, including declarations with no symbols or occurrences. SQLite already emits file rows through its raw-input path. This is a fact-output fix. UNRUN: `D24.sh` asserts both `packages/md/src/0_css.d.ts` and `packages/md/src/style.css.d.ts` occur as file rows in fast JSONL and fast SQLite. Build, crate tests, and case execution remain for the coordinator.

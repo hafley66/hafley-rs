@@ -138,6 +138,25 @@ pub fn symbol_refs_and_abstains(
         });
         replacements.push((rel, site, edit.new_text));
     }
+    // Keep the compiler's edits for its project and use the existing importer
+    // binding walk for exported names consumed by sibling workspace packages.
+    for reference in super::ts_rename::workspace_importer_refs(cx, request) {
+        if refs
+            .iter()
+            .any(|existing| existing.file == reference.file && existing.span == reference.span)
+        {
+            continue;
+        }
+        let replacement = crate::edit_seams::Rename::respell_symbol(
+            &crate::lang::ts::TsSource,
+            cx,
+            request,
+            &reference,
+        )
+        .ok_or_else(|| inexact(request, reference.span))?;
+        replacements.push((reference.file.clone(), reference.span, replacement.text));
+        refs.push(reference);
+    }
     for (rel, site, replacement) in replacements {
         session.pending.insert(rel.clone());
         cx.put_slow_edit(&rel, site, replacement);

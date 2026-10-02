@@ -45,6 +45,7 @@ const EXTENSION_ALIAS: [(&str, &[&str]); 4] = [
 pub struct TsResolver {
     inner: Resolver,
     root: PathBuf,
+    packages: BTreeMap<String, WorkspacePackage>,
 }
 
 impl TsResolver {
@@ -56,6 +57,7 @@ impl TsResolver {
             .map_err(|error| format!("canonicalize root {}: {error}", root.display()))?;
         Ok(Self {
             inner: Resolver::new(options()),
+            packages: workspace_packages(&root),
             root,
         })
     }
@@ -67,10 +69,71 @@ impl TsResolver {
     /// The file `module` names when written by `from`. `None` when it resolves
     /// to nothing: a missing file, an uninstalled package, a builtin.
     pub fn resolve(&self, from: &Path, module: &str) -> Option<PathBuf> {
-        // `resolve_file` takes the IMPORTING FILE, not its directory: the
-        // TsconfigDiscovery::Auto branch only runs there (oxc_resolver lib.rs:250).
-        let resolution = self.inner.resolve_file(from, module).ok()?;
-        Some(resolution.path().to_path_buf())
+        self.resolve_with_rung(from, module).map(|(path, _)| path)
+    }
+
+    /// The source target and the workspace fallback rung that selected it.
+    pub fn resolve_with_rung(&self, from: &Path, module: &str) -> Option<(PathBuf, &'static str)> {
+        let package = self.packages.iter().find_map(|(name, package)| {
+            (module == name
+                || module
+                    .strip_prefix(name.as_str())
+                    .is_some_and(|rest| rest.starts_with('/')))
+            .then_some((name, package))
+        });
+        if let Some((name, package)) = package {
+            let subpath = module.strip_prefix(name.as_str())?;
+            let key = if subpath.is_empty() {
+                ".".to_string()
+            } else {
+                format!(".{subpath}")
+            };
+            let target = match package.manifest.get("exports") {
+                Some(exports) => export_target(exports, &key),
+                None if subpath.is_empty() => package
+                    .manifest
+                    .get("types")
+                    .or_else(|| package.manifest.get("module"))
+                    .or_else(|| package.manifest.get("main"))
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_string),
+                None => Some(format!(".{subpath}")),
+            }?;
+            let emitted = package.directory.join(target.trim_start_matches("./"));
+            if emitted.to_string_lossy().ends_with(".d.ts") {
+                if let Some(source) = declaration_source(&emitted, &self.root) {
+                    return Some((source, "declaration_map"));
+                }
+            } else if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+                return Some((resolution.path().to_path_buf(), "exports"));
+            }
+            if let Ok(resolution) = self.inner.resolve_file(from, module) {
+                let path = resolution.path();
+                if path.starts_with(&self.root) && !path.to_string_lossy().contains("/dist/") {
+                    return Some((path.to_path_buf(), "tsconfig_paths"));
+                }
+            }
+            if let Ok(relative) = emitted.strip_prefix(package.directory.join("dist")) {
+                let relative = relative.to_string_lossy();
+                let stem = relative
+                    .strip_suffix(".d.ts")
+                    .or_else(|| relative.strip_suffix(".js"))
+                    .unwrap_or(&relative);
+                let source = package.directory.join("src").join(stem);
+                if let Ok(resolution) = self.inner.resolve_file(from, source.to_str()?) {
+                    return Some((resolution.path().to_path_buf(), "src_convention"));
+                }
+            }
+            if let Ok(resolution) = self.inner.resolve_file(from, emitted.to_str()?) {
+                return Some((resolution.path().to_path_buf(), "exports_declaration"));
+            }
+            return None;
+        }
+        // Auto tsconfig discovery takes the importing file, including its name.
+        self.inner
+            .resolve_file(from, module)
+            .ok()
+            .map(|resolution| (resolution.path().to_path_buf(), "resolver"))
     }
 
     /// The same answer, kept only when it lands inside the root: a package in
@@ -79,6 +142,101 @@ impl TsResolver {
         let path = self.resolve(from, module)?;
         path.starts_with(&self.root).then_some(path)
     }
+}
+
+/// A package manifest in the source workspace, independent of installed links.
+struct WorkspacePackage {
+    directory: PathBuf,
+    manifest: serde_json::Value,
+}
+
+fn workspace_packages(root: &Path) -> BTreeMap<String, WorkspacePackage> {
+    let mut packages = BTreeMap::new();
+    for entry in ignore::WalkBuilder::new(root)
+        .hidden(false)
+        .filter_entry(|entry| {
+            !matches!(
+                entry.file_name().to_str(),
+                Some(".git" | "node_modules" | "target" | "dist")
+            )
+        })
+        .build()
+        .filter_map(Result::ok)
+    {
+        if entry.file_name() != "package.json" {
+            continue;
+        }
+        let Some(manifest) = std::fs::read(entry.path())
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
+        else {
+            continue;
+        };
+        let Some(name) = manifest.get("name").and_then(serde_json::Value::as_str) else {
+            continue;
+        };
+        packages.insert(
+            name.to_string(),
+            WorkspacePackage {
+                directory: entry.path().parent().unwrap().to_path_buf(),
+                manifest,
+            },
+        );
+    }
+    packages
+}
+
+fn export_target(value: &serde_json::Value, key: &str) -> Option<String> {
+    match value {
+        serde_json::Value::String(target) => Some(target.clone()),
+        serde_json::Value::Array(values) => {
+            values.iter().find_map(|value| export_target(value, key))
+        }
+        serde_json::Value::Object(values) => {
+            if values.keys().any(|name| name.starts_with('.')) {
+                if let Some(value) = values.get(key) {
+                    return export_target(value, key);
+                }
+                let mut patterns: Vec<_> = values
+                    .iter()
+                    .filter_map(|(pattern, value)| {
+                        let (prefix, suffix) = pattern.split_once('*')?;
+                        let middle = key.strip_prefix(prefix)?.strip_suffix(suffix)?;
+                        Some((prefix.len(), suffix.len(), middle, value))
+                    })
+                    .collect();
+                patterns
+                    .sort_by_key(|(prefix, suffix, _, _)| std::cmp::Reverse((*prefix, *suffix)));
+                let (_, _, middle, value) = patterns.first()?;
+                return export_target(value, key).map(|target| target.replace('*', middle));
+            }
+            ["types", "import", "node", "default", "require"]
+                .iter()
+                .find_map(|condition| {
+                    values
+                        .get(*condition)
+                        .and_then(|value| export_target(value, key))
+                })
+        }
+        _ => None,
+    }
+}
+
+fn declaration_source(path: &Path, root: &Path) -> Option<PathBuf> {
+    let map_path = PathBuf::from(format!("{}.map", path.display()));
+    let map: serde_json::Value = serde_json::from_slice(&std::fs::read(&map_path).ok()?).ok()?;
+    let sources = map.get("sources")?.as_array()?;
+    // A declaration map with multiple source files does not identify one module.
+    let [source] = sources.as_slice() else {
+        return None;
+    };
+    let base = map_path.parent()?.join(
+        map.get("sourceRoot")
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or(""),
+    );
+    let source = base.join(source.as_str()?).canonicalize().ok()?;
+    (source.starts_with(root) && source.is_file()).then_some(source)
 }
 
 /// The ESM-style TS options. Every value is a stated policy; the defaults this
@@ -898,6 +1056,19 @@ impl TsModuleIndex {
             });
         }
 
+        // Both edit plans and fact bindings resolve workspace exports to the
+        // same source files, even when a snapshot has no installed links.
+        let mut root = by_real_path
+            .keys()
+            .next()
+            .and_then(|path| path.parent())
+            .map(Path::to_path_buf);
+        for path in by_real_path.keys() {
+            while root.as_ref().is_some_and(|root| !path.starts_with(root)) {
+                root = root.and_then(|root| root.parent().map(Path::to_path_buf));
+            }
+        }
+        let workspace = root.as_deref().and_then(|root| TsResolver::new(root).ok());
         let resolver = Resolver::new(options());
         // A staged source snapshot carries package manifests but normally not
         // node_modules symlinks. Local `link:` dependencies still name corpus
@@ -962,6 +1133,14 @@ impl TsModuleIndex {
             for specifier in facts.specifiers() {
                 let key = (directory.clone(), specifier.to_string());
                 let answer = answers.entry(key).or_insert_with(|| {
+                    if let Some(real) = workspace
+                        .as_ref()
+                        .and_then(|resolver| resolver.resolve(&from, specifier))
+                    {
+                        if let Some(path) = by_real_path.get(&real) {
+                            return Some(path.clone());
+                        }
+                    }
                     let resolved = resolver.resolve_file(&from, specifier).ok().or_else(|| {
                         let (name, root) = links?.iter().find(|(name, _)| {
                             specifier == name
