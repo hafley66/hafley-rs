@@ -677,10 +677,28 @@ fn case_disk_floor(scratch: &Scratch, case: &Case, base_sha: &str) {
     let new_target = scratch.lane_target(&new_lane);
     std::fs::create_dir_all(old_target.join("debug")).unwrap();
     std::fs::write(old_target.join("debug/old"), b"x").unwrap();
-    std::thread::sleep(Duration::from_millis(50));
+
     std::fs::create_dir_all(new_target.join("debug")).unwrap();
     std::fs::write(new_target.join("debug/new"), b"x").unwrap();
 
+    let now = std::time::SystemTime::now();
+    let old = now - boop::gc::TARGET_AGE - Duration::from_secs(120);
+    let new = old + Duration::from_secs(60);
+    for (target, at) in [(&old_target, old), (&new_target, new)] {
+        for path in [
+            target.join("debug/old"),
+            target.join("debug/new"),
+            target.join("debug"),
+            target.clone(),
+        ] {
+            if path.exists() {
+                std::fs::File::open(path)
+                    .unwrap()
+                    .set_times(std::fs::FileTimes::new().set_modified(at))
+                    .unwrap();
+            }
+        }
+    }
     let stem = uniq(case, "floor");
     let branch = format!("feature/{stem}");
     let lane = format!("feature-{stem}");
