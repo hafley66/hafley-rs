@@ -106,3 +106,4 @@ Arguments:
 Verification deferred by the user's stop instruction: release build and crate test processes were terminated; no completed gates. Case scripts below are unrun. The coordinator will run the release build, assigned dogfood cases, and `cargo test --features cli` serially. Existing golden-parity failures remain excluded from the no-new-failures requirement.
 
 - D3 before: in-package moves could add the root workspace package as a dependency for an existing reference. After: dependency additions require changed package ownership. Case: `D03.sh`, unrun.
+- D4 before: runtime imports were scanned, type-position imports were absent. After: the shared Oxc module scan emits type-only dynamic-import rows, including `typeof import`, for existing move rewrites. Case: `D04.sh`, unrun.

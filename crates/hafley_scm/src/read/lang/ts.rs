@@ -2248,6 +2248,20 @@ struct RuntimeModuleWalker<'a> {
 }
 
 impl<'a> OxcVisit<'a> for RuntimeModuleWalker<'a> {
+    fn visit_ts_import_type(&mut self, it: &ts::TSImportType<'a>) {
+        let module = it.source.value.as_str();
+        self.out.push(ScannedSpecifier {
+            span: it.source.span,
+            name: module,
+            kind: SpecifierKind::DynamicImport,
+            module,
+            module_span: it.source.span,
+            imported: None,
+            type_only: true,
+        });
+        oxc_ast_visit::walk::walk_ts_import_type(self, it);
+    }
+
     fn visit_import_expression(&mut self, it: &ts::ImportExpression<'a>) {
         if let ts::Expression::StringLiteral(lit) = &it.source {
             let module = lit.value.as_str();
