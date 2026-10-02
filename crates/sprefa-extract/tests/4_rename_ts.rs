@@ -888,7 +888,7 @@ fn exported_symbol_reaches_workspace_consumers_without_dist_or_links() {
         })
         .collect();
     assert_eq!(sources, vec![
-        ("src/workspace.ts", "import { Widget } from '@fixture/foo';\nexport const value: Widget = new Widget();\n".into()),
-        ("src/workspace_alias.ts", "import { Widget as Local } from '@fixture/foo';\nexport const value: Local = new Local();\n".into()),
+        ("src/workspace.ts", "import { Widget } from '@fixture/foo';\nexport const value: Widget = new Widget();\n".to_string()),
+        ("src/workspace_alias.ts", "import { Widget as Local } from '@fixture/foo';\nexport const value: Local = new Local();\n".to_string()),
     ]);
 }
