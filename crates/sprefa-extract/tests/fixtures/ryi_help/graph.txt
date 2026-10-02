@@ -15,7 +15,7 @@ Options:
       --from <NAME>                 Everything NAME reaches along call edges
       --call-path <NAME>            Shortest call paths from NAME
       --type-path <NAME>            Shortest type-reference paths from NAME
-      --flow-path <BLOB@START:END>  Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges.
+      --flow-path <BLOB@START:END>  Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges
       --slice <PATH:BYTE>           Control-dependence slice at PATH:BYTE
       --sqlite <PATH>               Keep the fact store in a new SQLite database at PATH
       --slow                        Walk the SCIP oracle's edges (ryi slow) instead of the syntax resolve
