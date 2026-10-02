@@ -28,6 +28,8 @@ use crate::read::types::PathIndex;
 pub struct TsFileTypes {
     /// Callee starts whose spelling is a lexical identifier, including globals.
     pub plain_calls: BTreeSet<u32>,
+    /// Plain-call callee starts bound to local non-callable values.
+    pub bound_calls: BTreeSet<u32>,
     /// Anonymous callable start -> content identity within its named owner.
     pub closure_names: HashMap<u32, String>,
     /// Plain-call callee start -> lexical callable declaration span.
@@ -654,7 +656,12 @@ pub fn collect(program: &Program<'_>) -> TsFileTypes {
                 };
                 span
             }
-            _ => continue,
+            _ => {
+                if !semantic.scoping().symbol_flags(symbol).is_import() {
+                    walker.facts.bound_calls.insert(id.span.start);
+                }
+                continue;
+            }
         };
         walker.facts.local_calls.insert(id.span.start, (span.start, span.end));
     }

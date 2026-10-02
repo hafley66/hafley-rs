@@ -333,12 +333,20 @@ fn the_diet_scip_family_stream_is_the_fast_output() {
         "tests/fixtures/ts/lambdas.ts",
         "tests/fixtures/ts/consts.ts",
     ]);
-    assert_eq!(stream, DIET_SCIP_GOLDEN);
+    // The JSX brief's row 2 adds written call/JSX facts to fast. The legacy
+    // family rows retain their byte-exact golden, including their order.
+    let legacy: String = stream
+        .lines()
+        .filter(|line| !is_written_syntax_row(line))
+        .map(|line| format!("{line}\n"))
+        .collect();
+    assert_eq!(legacy, DIET_SCIP_GOLDEN);
     assert!(
         stream.lines().all(|line| line.contains("\"resolved_edge\"")
             || line.contains("\"resolved_type_edge\"")
             || line.contains("\"record\":\"unresolved\"")
-            || is_scm_row(line)),
+            || is_scm_row(line)
+            || is_written_syntax_row(line)),
         "a fast stream carries resolve-pass records (edges + drops) and scm rows: {stream}"
     );
 }
@@ -346,6 +354,12 @@ fn the_diet_scip_family_stream_is_the_fast_output() {
 /// The records `queries/<lang>/scip.scm` owns.
 fn is_scm_row(line: &str) -> bool {
     ["symbol", "occurrence", "local", "free_name"]
+        .iter()
+        .any(|record| line.contains(&format!("\"record\":\"{record}\"")))
+}
+
+fn is_written_syntax_row(line: &str) -> bool {
+    ["call_site", "jsx_element", "jsx_attribute"]
         .iter()
         .any(|record| line.contains(&format!("\"record\":\"{record}\"")))
 }
@@ -363,7 +377,7 @@ fn diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows() {
     let fast = run(&labelled);
     let resolved: String = fast
         .lines()
-        .filter(|line| !is_scm_row(line))
+        .filter(|line| !is_scm_row(line) && !is_written_syntax_row(line))
         .map(|line| format!("{line}\n"))
         .collect();
     assert_eq!(resolved, run(&original));

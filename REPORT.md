@@ -440,3 +440,176 @@ CARGO_BUILD_JOBS=4 cargo test --features cli --test all t_167_graph_paths:: -- -
 CARGO_BUILD_JOBS=4 cargo build --release --bin ryii --features cli,ts-checker,typespec
 RYII="${CARGO_TARGET_DIR:-$PWD/target}/release/ryii" CORPUS="$HOME/projects/rxjs-corpus-feature-ryi-ts-graph" dogfood/ts/run.sh D25
 ```
+## ryi TS resolve regression repair (2026-10-02)
+
+Code complete only. No cargo build/test/check, npm, node, installs, or dogfood
+scripts were run. `git diff --check` passes. Runtime results remain pending
+with the coordinator. All commands below run from `crates/sprefa-extract`,
+using its single integration target `all`, one command at a time.
+
+Repair commits:
+
+- `011bfc60`: restore the corpus-unique call leg while retaining lexical callable
+  targets, local value shadowing, import/receiver guards, and runtime-global exclusions.
+- `62fd3c09`: preserve plain `.ts` resolve output and retain additive `.tsx`
+  written syntax. A new test pins resolved `helper` at 33..39 beside written
+  `helper()` at 33..41.
+- `edbd2b74`: send D21 TypeScript SCM rows through the source/raw sink rather
+  than adding them to the resolved return value. Rust raw output remains unchanged.
+
+### Scope and deliberate fact changes
+
+`TASKS/ryi-ts-rtkq-jsx-golden.BRIEF.md` row 2 explicitly requests call-site and
+JSX facts in `fast` and `--resolve` **on .tsx**. Resolve syntax is therefore
+additive for `.tsx`; plain `.ts` keeps its edge-only output. Fast continues
+emitting `call_site`, `jsx_element`, and `jsx_attribute` wherever the queries
+capture them. Resolved edges still use the OXC callee coordinates and their
+existing serialization; written calls retain full-call coordinates.
+
+The assertion changes in `tests/8_scip_families_cli.rs` implement that declared
+brief row 2 addition: compare the legacy records byte-for-byte to the unchanged
+`diet_scip_ts.jsonl`, separately allow the three new syntax record kinds, and
+remove these additive fast-only rows when comparing plain `.ts` fast to resolve.
+No golden was changed. `tests/193_ts_rtkq_jsx.rs` retains its existing syntax
+payload golden across JSONL, SQLite, and direct SCM extraction.
+
+Plan rows D10/D11 in `plans/2026-10-01-ryi-ts-utility.md` require DOM/lib globals
+and lexically bound values to stay out of unrelated corpus edges. The repair
+retains those guards rather than suppressing every unbound call. The finite
+runtime-global spelling list is heuristic; it does not enumerate all host APIs.
+D9 lexical callable facts and D19 closure identities remain present.
+
+Plan row D21 requests occurrence parity in resolve SQLite output. These TS rows
+now carry the source identity through `RawProjectFact`, while returned resolved
+rows agree with JSONL. The new raw test compares all raw rows with direct
+extraction and compares the resolved return value with `resolve_project`.
+
+### t_1_resolve_cli::resolve_mode_streams_cross_file_edges
+
+Cause: `7ed47bee` removed `call_name_match`'s corpus fallback and rejected every
+plain call, including the fixture's unimported `helper`; current repair sites
+are `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`.
+`826a1a05` also appended plain-TS syntax at
+`crates/hafley_scm/src/read/project.rs:269`.
+Change: restore the guarded corpus leg and scope resolve syntax to TSX.
+Gate: `cargo test --features cli --test all t_1_resolve_cli::resolve_mode_streams_cross_file_edges -- --exact --test-threads=1`
+
+### t_1_resolve_cli::resolve_type_arm_streams_resolved_type_edges
+
+Cause: `826a1a05`, `crates/hafley_scm/src/read/project.rs:269`, appended call
+syntax even to a type-only resolve, because the input mask includes the call plane.
+Change: plain `.ts` retains the original resolved-type stream.
+Gate: `cargo test --features cli --test all t_1_resolve_cli::resolve_type_arm_streams_resolved_type_edges -- --exact --test-threads=1`
+
+### t_1a_resolve_raw::raw_sink_gets_file_and_syntax_facts_from_the_resolve_inputs
+
+Cause: `0d32142a`, `crates/hafley_scm/src/read/project.rs:329`, changed the raw
+wrapper to append all SCM project rows to the resolved return value. Its Rust
+fixture's returned rows consequently differed from `resolve_project`. Those
+extra symbol rows came from the returned SCM section, not `flatten_each`.
+Change: restore the resolved return contract; route D21 TS SCM rows through
+`push_raw` with source identity and leave the Rust raw plane unchanged.
+Gate: `cargo test --features cli --test all t_1a_resolve_raw::raw_sink_gets_file_and_syntax_facts_from_the_resolve_inputs -- --exact --test-threads=1`
+
+### t_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed the call edge needed by the derived interprocedural flow join.
+Change: restore `run -> helper` and its input to the existing flow join.
+Gate: `cargo test --features cli --test all t_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families -- --exact --test-threads=1`
+
+### t_23_flow_cli_dispatch::flow_is_a_resolve_arm
+
+Cause: `7ed47bee` removed the join's call edge at
+`crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`; `826a1a05` additionally
+introduced non-flow syntax rows at `crates/hafley_scm/src/read/project.rs:269`.
+Change: restore the call input and retain the plain-TS flow-only stream.
+Gate: `cargo test --features cli --test all t_23_flow_cli_dispatch::flow_is_a_resolve_arm -- --exact --test-threads=1`
+
+### t_23_flow_cli_dispatch::resolve_without_family_is_byte_identical
+
+Cause: `7ed47bee` removed the corpus-unique edge at
+`crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`; `826a1a05` appended
+plain-TS written calls at `crates/hafley_scm/src/read/project.rs:269`.
+Change: restore the edge and retain the original edge-only default.
+Gate: `cargo test --features cli --test all t_23_flow_cli_dispatch::resolve_without_family_is_byte_identical -- --exact --test-threads=1`
+
+### t_4_capability_parity::every_library_capability_is_reachable_through_the_binary
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed the cross-file resolved call used as the ResolveCall CLI witness.
+Change: restore the guarded corpus-unique leg through the existing CLI dispatch.
+Gate: `cargo test --features cli --test all t_4_capability_parity::every_library_capability_is_reachable_through_the_binary -- --exact --test-threads=1`
+
+### t_55_diff_verb::one_to_two_matches_the_hand_derived_rows
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed revision 2's unimported `beta -> alpha` edge from the diff fixture.
+Change: restore the corpus edge at each revision; leave the diff code and golden unchanged.
+Gate: `cargo test --features cli --test all t_55_diff_verb::one_to_two_matches_the_hand_derived_rows -- --exact --test-threads=1`
+
+### t_55_diff_verb::a_dirty_worktree_does_not_change_the_delta
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed the same committed `beta -> alpha` edge; its expected delta was therefore absent.
+Change: restore the committed-source corpus edge without changing revision reads.
+Gate: `cargo test --features cli --test all t_55_diff_verb::a_dirty_worktree_does_not_change_the_delta -- --exact --test-threads=1`
+
+### t_8_scip_families_cli::the_diet_scip_family_stream_is_the_fast_output
+
+Cause: `826a1a05`, `crates/hafley_scm/src/read/lang/7_scm_rows.rs:147`, deliberately
+adds written syntax to fast facts, while the test required the entire old stream.
+Change: apply brief row 2's additive-record contract while keeping every legacy
+row and its order pinned to the unchanged golden. The new syntax golden remains
+covered by `t_193_ts_rtkq_jsx`.
+Gate: `cargo test --features cli --test all t_8_scip_families_cli::the_diet_scip_family_stream_is_the_fast_output -- --exact --test-threads=1`
+
+### t_98_resolve_witness::one_witness_per_leg_on_a_syntax_run
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed the fixture's resolved call, leaving no edge to witness.
+Change: restore the edge through the existing witness serialization.
+Gate: `cargo test --features cli --test all t_98_resolve_witness::one_witness_per_leg_on_a_syntax_run -- --exact --test-threads=1`
+
+### t_98_resolve_witness::the_flag_off_stream_is_the_committed_golden
+
+Cause: `7ed47bee` removed the edge at
+`crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`; `826a1a05` appended
+plain-TS written calls at `crates/hafley_scm/src/read/project.rs:269`.
+Change: restore the edge and keep the flag-off plain-TS stream edge-only.
+Gate: `cargo test --features cli --test all t_98_resolve_witness::the_flag_off_stream_is_the_committed_golden -- --exact --test-threads=1`
+
+### t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed the resolve fixture's call edge, so its reference run had no flow edge.
+Change: restore the call input to the existing flow derivation and graph path query.
+Gate: `cargo test --features cli --test all t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges -- --exact --test-threads=1`
+
+### t_168_graph_revision::a_path_added_between_commits_is_reported_once
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771` and `:5194`,
+removed revision 2's unimported `beta -> alpha` edge, yielding zero added paths.
+Change: restore that corpus edge; revision path comparison code is unchanged.
+Gate: `cargo test --features cli --test all t_168_graph_revision::a_path_added_between_commits_is_reported_once -- --exact --test-threads=1`
+
+### t_golden_parity::call_resolve_scip_ratchet_ts
+
+Cause: `7ed47bee`, `crates/hafley_scm/src/read/lang/ts.rs:4771`, removed the
+public `call_name_match` corpus leg used by both resolution and the independent
+ratchet twin, dropping corpus-unique true outcomes below the pinned floor.
+Change: restore the heuristic with runtime-global exclusions. Keep the ratchet,
+its floor, and `RATCHET.tsv` unchanged.
+Gate: `cargo test --features cli --test all t_golden_parity::call_resolve_scip_ratchet_ts -- --exact --test-threads=1`
+
+### Additional coordinator checks
+
+These commands cover retained JSX facts, both new regression tests, the second
+fast/resolve comparison, and D21's SQLite route:
+
+- `cargo test --features cli --test all t_193_ts_rtkq_jsx:: -- --test-threads=1`
+- `cargo test --features cli --test all t_1a_resolve_raw:: -- --test-threads=1`
+- `cargo test --features cli --test all t_8_scip_families_cli::diet_scip_is_the_resolve_pass_with_both_arms_plus_the_scm_rows -- --exact --test-threads=1`
+
+D10/D11 dogfood checks remain coordinator work after the serialized cargo gates.
+The repair itself did not execute them.

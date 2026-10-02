@@ -48,7 +48,7 @@ use crate::read::tsi::Arg;
 use crate::read::types::LangKind;
 use crate::read::types::TsiNames;
 use crate::read::types::{content_id_of, RefPosition, Reference, Unresolved, UnresolvedReason};
-use crate::read::types::span_arg;
+use crate::read::types::{span_arg, unique_blob};
 use crate::read::types::{KindIndex, ScipIndex};
 
 use super::ts_checker::TsCheckerAnswer;
@@ -4744,8 +4744,8 @@ impl TsSource {
     /// The name-match target of one callee (the NameResolve leg). Pub so the
     /// scip ratchet re-runs it to classify overrides — same discipline as
     /// `type_edge_candidates`. Same-file wins via the span-join;
-    /// Cross-file binding belongs to the module and checker legs.
-    /// Absent same-file declarations return None.
+    /// Cross-file a unique corpus blob supplies the heuristic fallback;
+    /// standard global names remain external without a lexical binding.
     pub fn call_name_match(
         output: &RyiOutput,
         index: &DefIndex,
@@ -4765,9 +4765,10 @@ impl TsSource {
                 }
             }
         }
-        // Cross-file TypeScript calls require an import or checker binding.
-        // Corpus spelling uniqueness does not establish lexical visibility.
-        None
+        if BUILTIN_GLOBALS.contains(&callee) {
+            return None;
+        }
+        unique_blob(sites.iter(), FamilyTag::Call)
     }
 }
 
@@ -4932,6 +4933,22 @@ const BUILTIN_MEMBERS: &[&str] = &[
     "trunc",
     "unshift",
     "valueOf",
+];
+
+/// Global runtime names excluded from the corpus spelling heuristic. Local
+/// declarations and imports still bind through their own resolution legs.
+const BUILTIN_GLOBALS: &[&str] = &[
+    "Array", "ArrayBuffer", "BigInt", "Boolean", "Date", "Error", "EvalError",
+    "Function", "Map", "Number", "Object", "Promise", "Proxy", "RangeError",
+    "ReferenceError", "RegExp", "Set", "String", "Symbol", "SyntaxError",
+    "TypeError", "URIError", "WeakMap", "WeakRef", "WeakSet", "URL",
+    "URLSearchParams", "AbortController", "AbortSignal", "Blob", "Event",
+    "EventTarget", "File", "FormData", "Headers", "Request", "Response",
+    "WebSocket", "Worker", "atob", "btoa", "cancelAnimationFrame",
+    "clearInterval", "clearTimeout", "decodeURI", "decodeURIComponent",
+    "encodeURI", "encodeURIComponent", "eval", "fetch", "isFinite", "isNaN",
+    "parseFloat", "parseInt", "queueMicrotask", "requestAnimationFrame",
+    "setInterval", "setTimeout", "structuredClone",
 ];
 
 /// Whether the name match at `target` is a receiver-blind mismatch: a member
@@ -5171,11 +5188,10 @@ impl Resolve<CallF> for TsSource {
                 if imported {
                     return None;
                 }
-                // Every plain call's lexical callable target was recorded by
-                // OXC. A missing target names a local value or global, never
-                // an unrelated same-spelled declaration in this file.
+                // A bound lexical value owns its spelling even when it has
+                // no callable definition. Unbound names retain the corpus leg.
                 if own_facts.as_ref().is_some_and(|facts| {
-                    facts.plain_calls.contains(&site.span.start)
+                    facts.bound_calls.contains(&site.span.start)
                 }) {
                     return None;
                 }

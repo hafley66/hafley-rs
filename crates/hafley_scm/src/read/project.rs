@@ -269,6 +269,9 @@ pub fn resolve_project(request: &ResolveRequest) -> Result<Vec<FlatFact>, Projec
 fn syntax_facts(inputs: &[ProjectInput]) -> Vec<FlatFact> {
     inputs
         .iter()
+        // The JSX increment adds written syntax to TSX resolve output. Plain
+        // TypeScript retains the existing edge-only resolve contract.
+        .filter(|input| input.path.ends_with(".tsx"))
         .filter_map(|input| {
             Some(
                 input
@@ -328,9 +331,33 @@ pub fn resolve_project_with_raw<E>(
     push_raw: &mut impl FnMut(RawProjectFact<'_>) -> Result<(), E>,
 ) -> Result<Vec<FlatFact>, ResolveWithRawError<E>> {
     let inputs = read_inputs_streamed(request.paths, true, Planes::All, &mut |input, content| {
-        push_input_raw(input, content, push_raw)
+        push_input_raw(input, content, push_raw)?;
+        // D21 retains TypeScript's fast occurrence plane in SQLite through
+        // the source sink, leaving the resolved answer identical to JSONL.
+        if source_for(&input.path).is_some_and(|source| source.name() == "ts") {
+            if let Some(captures) = &input.output.scm_captures {
+                for fact in captures.facts(&input.path) {
+                    if matches!(
+                        fact,
+                        FlatFact::CallSiteRow { .. }
+                            | FlatFact::JsxElementRow { .. }
+                            | FlatFact::JsxAttributeRow { .. }
+                    ) {
+                        continue;
+                    }
+                    push_raw(RawProjectFact {
+                        path: &input.path,
+                        content_id: &input.blob,
+                        content,
+                        fact,
+                    })
+                    .map_err(ResolveWithRawError::RawSink)?;
+                }
+            }
+        }
+        Ok(())
     })?;
-    resolve_pushed(request, inputs, Some(request.paths))
+    resolve_pushed(request, inputs, None)
 }
 
 /// Stream the call and type rows used by a targeted resolve, leaving out the
