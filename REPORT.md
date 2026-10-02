@@ -745,3 +745,16 @@ The runner creates the sibling read-only checkout at
 `/Users/chrishafley/projects/rxjs-corpus-feature-ryi-ts-workspace-imports-2.tsp`.
 The established golden_parity root-prefix failures remain coordinator context,
 not results from this lane.
+
+## ryi TS quality gate: HOME injection (2026-10-02)
+
+Change: CLI dispatch captures HOME as an OS path and passes it through move,
+rename, cleave (including list mode), and region to the state helpers.
+`requested_state_root` no longer reads the environment
+(`crates/sprefa-extract/src/edit/_3_stage.rs:22`). Explicit --state still wins;
+missing HOME still returns the existing error. `state_root_for` resolves and
+rejects state inside each target before `state_root` creates directories
+(`crates/sprefa-extract/src/edit/_3_stage.rs:33,55`). Boundary capture is at
+`crates/sprefa-extract/src/bin/ryi.rs:552,715`.
+
+Code reading only. Coordinator validation pending; no allowlist changes.

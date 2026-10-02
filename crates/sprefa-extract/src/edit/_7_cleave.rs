@@ -59,15 +59,15 @@ const IMPORTED_TRAITS: [&str; 16] = [
 
 const SCOPE: &str = "not supported: cross-language cleave, moving a type with its impl blocks";
 
-pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
+pub fn run(cli: CleaveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
         return Err("--verify needs --commit".to_string().into());
     }
     if let Some(list) = cli.list.as_deref() {
-        return run_list(&cli, list);
+        return run_list(&cli, list, home);
     }
     let plan = Plan::build(&cli)?;
-    let state = state_root_for(cli.state.as_deref(), &[plan.root.as_path()])?;
+    let state = state_root_for(cli.state.as_deref(), home, &[plan.root.as_path()])?;
 
     crate::outln!("root {}", plan.root.display());
     crate::outln!(
@@ -162,11 +162,11 @@ pub fn run(cli: CleaveArgs) -> Result<(), crate::RyiExit> {
 
 /// `--list`: every row planned in order over ONE corpus walk and ONE resolve,
 /// each row reading the texts the rows before it wrote, landed as ONE stage.
-fn run_list(cli: &CleaveArgs, list: &Path) -> Result<(), crate::RyiExit> {
+fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), crate::RyiExit> {
     let rows = read_cleave_list(list)?;
     let (first, _) = split_target(&rows[0].0)?;
     let root = plan_root(cli.root.as_ref(), &first)?;
-    let state = state_root_for(cli.state.as_deref(), &[root.as_path()])?;
+    let state = state_root_for(cli.state.as_deref(), home, &[root.as_path()])?;
     let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
     let mut imports = Imports::read(&cx, &root)?;
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();

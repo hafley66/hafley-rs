@@ -27,13 +27,13 @@ fn plan_of(cli: &MoveArgs) -> Result<Vec<Plan>, String> {
     }
 }
 
-pub fn run(cli: MoveArgs) -> Result<(), crate::RyiExit> {
+pub fn run(cli: MoveArgs, home: Option<&Path>) -> Result<(), crate::RyiExit> {
     if cli.verify.is_some() && !cli.commit {
         return Err("--verify needs --commit".to_string().into());
     }
     let plan = plan_of(&cli)?;
     let roots: Vec<_> = plan.iter().map(|plan| plan.root.as_path()).collect();
-    let state = state_root_for(cli.state.as_deref(), &roots)?;
+    let state = state_root_for(cli.state.as_deref(), home, &roots)?;
     let state = move_request_state(&cli, &plan, &state)?;
     let multi = plan.len() > 1;
     let prefix = |plan: &Plan| root_prefix(multi, &plan.root);

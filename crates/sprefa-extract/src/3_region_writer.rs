@@ -7,7 +7,7 @@ use std::path::Path;
 use sprefa_extract::move_stage::{stage_and_commit, state_root};
 use sprefa_extract::propose_owned_region;
 
-pub fn run(cli: RegionArgs) -> crate::RyiResult<i32> {
+pub fn run(cli: RegionArgs, home: Option<&Path>) -> crate::RyiResult<i32> {
     let target = sprefa_extract::io_path(&cli.target)
         .canonicalize()
         .map_err(|error| {
@@ -66,7 +66,7 @@ pub fn run(cli: RegionArgs) -> crate::RyiResult<i32> {
         soopy::ActionProducer::unordered("dl7-owned-region"),
     );
     let state =
-        state_root(cli.state.as_deref()).map_err(|message| crate::RyiExit::new(2, message))?;
+        state_root(cli.state.as_deref(), home).map_err(|message| crate::RyiExit::new(2, message))?;
     let (stage, _) = stage_and_commit(root, &state, &request.actions, soopy::Durability::Durable)
         .map_err(|message| crate::RyiExit::new(2, message))?;
     print_status(

@@ -549,6 +549,8 @@ fn parse_cli() -> Ryi {
 }
 
 fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
+    let home = std::env::vars_os().find(|(name, _)| name == "HOME")
+        .map(|(_, value)| PathBuf::from(value));
     if let Some(format) = ryi.file.format.as_deref() {
         if format != "jsonl" {
             eprintln!("ryi: --format {format}: use jsonl");
@@ -584,15 +586,15 @@ fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
         Some(Cmd::Graph(args)) => return or_exit_2(graph::run(args)),
         Some(Cmd::Stratify(args)) => return or_exit_2(stratify::run(args)),
         Some(Cmd::Query(args)) => return or_exit_2(query::run(args)),
-        Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args)),
-        Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args)),
-        Some(Cmd::Rename(args)) => match source_rename::run(args) {
+        Some(Cmd::Move(args)) => return or_exit_2(source_move::run(args, home.as_deref())),
+        Some(Cmd::Cleave(args)) => return or_exit_2(cleave::run(args, home.as_deref())),
+        Some(Cmd::Rename(args)) => match source_rename::run(args, home.as_deref()) {
             Ok(()) => return Ok(()),
             Err(error) => {
                 return Err(RyiExit::new(error.exit, error.to_string()).into());
             }
         },
-        Some(Cmd::Region(args)) => match region_writer::run(args) {
+        Some(Cmd::Region(args)) => match region_writer::run(args, home.as_deref()) {
             Ok(0) => return Ok(()),
             Ok(code) => return Err(RyiExit::new(code, "").into()),
             Err(error) => return Err(error.into()),
@@ -710,6 +712,8 @@ fn run_verb(
     mut writer: Box<dyn Write + Send>,
     cancelled: Option<Arc<AtomicBool>>,
 ) -> RyiResult<()> {
+    let home = std::env::vars_os().find(|(name, _)| name == "HOME")
+        .map(|(_, value)| PathBuf::from(value));
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
         Some(Cmd::Fast(args)) => run_file_verb(file_args_from_fast(args), Tier::Fast, writer),
@@ -725,11 +729,11 @@ fn run_verb(
         Some(Cmd::Graph(args)) => or_exit_2(graph::run_to(args, &mut writer)),
         Some(Cmd::Stratify(args)) => or_exit_2(stratify::run_to(args, &mut writer)),
         Some(Cmd::Query(args)) => or_exit_2(query::run_to(args, writer)),
-        Some(Cmd::Move(args)) => or_exit_2(source_move::run(args)),
-        Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args)),
-        Some(Cmd::Rename(args)) => source_rename::run(args)
+        Some(Cmd::Move(args)) => or_exit_2(source_move::run(args, home.as_deref())),
+        Some(Cmd::Cleave(args)) => or_exit_2(cleave::run(args, home.as_deref())),
+        Some(Cmd::Rename(args)) => source_rename::run(args, home.as_deref())
             .map_err(|error| RyiExit::new(error.exit, error.to_string()).into()),
-        Some(Cmd::Region(args)) => region_writer::run(args)
+        Some(Cmd::Region(args)) => region_writer::run(args, home.as_deref())
             .and_then(|code| {
                 if code == 0 {
                     Ok(())

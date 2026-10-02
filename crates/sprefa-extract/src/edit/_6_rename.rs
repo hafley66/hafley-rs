@@ -61,9 +61,9 @@ fn stop_error(stop: RenameStop) -> RenameError {
     }
 }
 
-pub fn run(cli: RenameArgs) -> Result<(), RenameError> {
+pub fn run(cli: RenameArgs, home: Option<&Path>) -> Result<(), RenameError> {
     let plan = Plan::build(&cli)?;
-    let state = state_root_for(cli.state.as_deref(), &[plan.root.as_path()]).map_err(plan_error)?;
+    let state = state_root_for(cli.state.as_deref(), home, &[plan.root.as_path()]).map_err(plan_error)?;
 
     crate::outln!("root {}", plan.root.display());
     for (request, refs) in plan.cx.batch().iter().zip(&plan.refs) {
