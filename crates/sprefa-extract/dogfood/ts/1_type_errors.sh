@@ -6,8 +6,8 @@ type_errors() {
   if [ "$rc" -ne 0 ] && ! rg -q 'error TS[0-9]+' ".dogfood/$CASE.$phase.$pkg.txt"; then
     cat ".dogfood/$CASE.$phase.$pkg.txt"; return 1
   fi
-  # The diagnostic code/path pair remains stable when an edit shifts line numbers.
-  sed -n -E 's/^(.*)\([0-9]+,[0-9]+\): error (TS[0-9]+):.*/\1 \2/p' ".dogfood/$CASE.$phase.$pkg.txt" | LC_ALL=C sort > ".dogfood/$CASE.$phase.$pkg.errors"
+  # Preserve diagnostic messages and duplicate counts while ignoring line shifts.
+  { rg 'error TS[0-9]+' ".dogfood/$CASE.$phase.$pkg.txt" || true; } | sed -E 's/\([0-9]+,[0-9]+\): error /: error /' | LC_ALL=C sort > ".dogfood/$CASE.$phase.$pkg.errors"
 }
 
 type_baseline() {
