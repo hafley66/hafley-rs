@@ -290,6 +290,38 @@ fn importer_refs(cx: &RenameCx, request: &RenameRequest) -> Vec<SymbolRef> {
     refs
 }
 
+/// The compiler's project-local rename can omit other workspace packages.
+/// Only an exported root binding has importer seats outside that project;
+/// property declarations retain the compiler's receiver-specific edits.
+pub(crate) fn workspace_importer_refs(cx: &RenameCx, request: &RenameRequest) -> Vec<SymbolRef> {
+    let Some(text) = cx.text(&request.anchor) else {
+        return Vec::new();
+    };
+    let parser = OxcParser;
+    let arena = parser.make_arena();
+    let Ok(program) = parser.parse(&arena, &request.anchor, text.as_bytes()) else {
+        return Vec::new();
+    };
+    if !exports_bare(&program, &request.old) {
+        return Vec::new();
+    }
+    let semantic = SemanticBuilder::new().build(&program).semantic;
+    let scoping = semantic.scoping();
+    if !scoping
+        .iter_bindings_in(scoping.root_scope_id())
+        .any(|symbol| {
+            scoping.symbol_name(symbol) == request.old
+                && request.at.is_none_or(|at| {
+                    let span = scoping.symbol_span(symbol);
+                    span.start <= at && at < span.end
+                })
+        })
+    {
+        return Vec::new();
+    }
+    importer_refs(cx, request)
+}
+
 /// One importer's seats for `name`, over the import and re-export clauses whose
 /// module specifier sits at one of `sources`.
 fn importer_seats(cx: &RenameCx, rel: &str, sources: &BTreeSet<u32>, name: &str) -> ImporterSeats {

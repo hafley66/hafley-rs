@@ -820,9 +820,21 @@ fn class_method_renames_and_ignored_output_stays_out() {
     for args in [
         &["init", "-q", "."][..],
         &["add", "src", ".gitignore"],
-        &["-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", "fixture"],
+        &[
+            "-c",
+            "user.email=t@t",
+            "-c",
+            "user.name=t",
+            "commit",
+            "-qm",
+            "fixture",
+        ],
     ] {
-        let status = Command::new("git").args(args).current_dir(&fixture.root).status().unwrap();
+        let status = Command::new("git")
+            .args(args)
+            .current_dir(&fixture.root)
+            .status()
+            .unwrap();
         assert!(status.success(), "git {args:?}");
     }
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
@@ -849,4 +861,34 @@ fn class_method_renames_and_ignored_output_stays_out() {
         std::fs::read_to_string(fixture.root.join("dist/box.js")).unwrap(),
         "export function start(box) {\n  return box.run();\n}\n"
     );
+}
+
+#[test]
+fn exported_symbol_reaches_workspace_consumers_without_dist_or_links() {
+    let fixture = fixture(EXPORTS, "workspace-dist");
+    std::fs::write(fixture.root.join("package.json"), r#"{"name":"@fixture/foo","exports":{".":{"types":"./dist/lib.d.ts","import":"./dist/lib.js"}}}"#).unwrap();
+    std::fs::write(
+        fixture.root.join("src/workspace.ts"),
+        "import { Foo } from '@fixture/foo';\nexport const value: Foo = new Foo();\n",
+    )
+    .unwrap();
+    std::fs::write(
+        fixture.root.join("src/workspace_alias.ts"),
+        "import { Foo as Local } from '@fixture/foo';\nexport const value: Local = new Local();\n",
+    )
+    .unwrap();
+    rename_verb(&fixture, "src/lib.ts#Foo", "Widget", &["--commit"]);
+    let sources: Vec<_> = ["src/workspace.ts", "src/workspace_alias.ts"]
+        .into_iter()
+        .map(|path| {
+            (
+                path,
+                std::fs::read_to_string(fixture.root.join(path)).unwrap(),
+            )
+        })
+        .collect();
+    assert_eq!(sources, vec![
+        ("src/workspace.ts", "import { Widget } from '@fixture/foo';\nexport const value: Widget = new Widget();\n".into()),
+        ("src/workspace_alias.ts", "import { Widget as Local } from '@fixture/foo';\nexport const value: Local = new Local();\n".into()),
+    ]);
 }
