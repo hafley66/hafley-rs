@@ -1,0 +1,14 @@
+{"record":"call_site","callee":"Math.sqrt","path":"tests/fixtures/ts/docs.ts","line":37,"fn":"magnitude","start":1155,"end":1199}
+{"record":"call_site","callee":"Math.sqrt","path":"tests/fixtures/ts/sample.ts","line":31,"fn":"magnitude","start":632,"end":676}
+{"record":"call_site","callee":"Vec2","path":"tests/fixtures/ts/docs.ts","line":42,"fn":"scaled","start":1281,"end":1315}
+{"record":"call_site","callee":"Vec2","path":"tests/fixtures/ts/sample.ts","line":11,"fn":"shift","start":350,"end":382}
+{"record":"call_site","callee":"Vec2","path":"tests/fixtures/ts/sample.ts","line":35,"fn":"scaled","start":765,"end":789}
+{"record":"call_site","callee":"[outer, outer + 1].map","path":"tests/fixtures/ts/lambdas.ts","line":28,"fn":"<anonymous>","start":1283,"end":1327}
+{"record":"call_site","callee":"clamp","path":"tests/fixtures/ts/sample.ts","line":11,"fn":"shift","start":359,"end":369}
+{"record":"call_site","callee":"clamp","path":"tests/fixtures/ts/sample.ts","line":11,"fn":"shift","start":371,"end":381}
+{"record":"call_site","callee":"positive.reduce","path":"tests/fixtures/ts/lambdas.ts","line":21,"fn":"summarize","start":1045,"end":1116}
+{"record":"call_site","callee":"scaled.filter","path":"tests/fixtures/ts/lambdas.ts","line":17,"fn":"summarize","start":901,"end":954}
+{"record":"call_site","callee":"values.map","path":"tests/fixtures/ts/lambdas.ts","line":15,"fn":"summarize","start":787,"end":824}
+{"record":"call_site","callee":"values.map","path":"tests/fixtures/ts/lambdas.ts","line":28,"fn":"pairs","start":1261,"end":1328}
+{"record":"call_site","callee":"values.map","path":"tests/fixtures/ts/lambdas.ts","line":33,"fn":"doubleAll","start":1480,"end":1498}
+{"record":"call_site","callee":"values.map((outer) => [outer, outer + 1].map((inner) => inner * 2)).flat","path":"tests/fixtures/ts/lambdas.ts","line":28,"fn":"pairs","start":1261,"end":1335}
