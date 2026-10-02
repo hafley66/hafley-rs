@@ -1,0 +1,20 @@
+{
+  "name": "lab-alloy-scm-rust-vs-tsp-rust",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen": "node 0_gen.mjs rust",
+    "test": "node 0_gen.mjs rust && tsc -p . && node 5_report.mjs --clean && vitest run && node 5_report.mjs",
+    "twins": "node 3_twins.mjs",
+    "report": "node 5_report.mjs"
+  },
+  "dependencies": {
+    "@alloy-js/core": "0.23.0-dev.12"
+  },
+  "devDependencies": {
+    "@alloy-js/rollup-plugin": "^0.1.0",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.0",
+    "@types/node": "^22.0.0"
+  }
+}
