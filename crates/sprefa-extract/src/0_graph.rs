@@ -27,11 +27,12 @@ const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_
                          SELECT e.*, ROW_NUMBER() OVER ( \
                          PARTITION BY caller_path, caller_site_start, caller_site_end, \
                                       callee_path, callee_start, callee_end \
-                         ORDER BY caller_name LIKE 'closure@%' DESC, \
-                                  resolution_origin IN ('checker', 'scip') DESC, \
+                         ORDER BY resolution_origin IN ('checker', 'scip') DESC, \
+                                  caller_name LIKE 'closure@%' DESC, \
                                   caller_name, kind, resolution_origin) AS site_rank, \
                          CASE WHEN resolution_origin IN ('module_plane', 'checker', 'scip') \
-                              THEN '+' ELSE '~' END AS grade \
+                              THEN '+' WHEN resolution_origin = 'unresolved' \
+                              THEN '-' ELSE '~' END AS grade \
                          FROM resolved_edge AS e WHERE callee_name IS ?1) \
                          WHERE site_rank = 1";
 
@@ -479,7 +480,7 @@ enum Arm<'a> {
 impl Arm<'_> {
     fn name(&self) -> &str {
         match self {
-            Arm::Callers(name) => name.rsplit_once('#').map_or(name, |(_, name)| name),
+            Arm::Callers(name) => name.rsplit_once('#').map_or(*name, |(_, name)| name),
             Arm::Uses(name)
             | Arm::From(name)
             | Arm::CallPath(name)
