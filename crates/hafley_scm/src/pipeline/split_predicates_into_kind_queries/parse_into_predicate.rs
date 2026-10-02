@@ -54,7 +54,7 @@ pub fn parse_into_predicate(
                 negated,
             })
         }
-        "has?" | "has-ancestor?" | "has-parent?" => {
+        "has?" | "has-ancestor?" | "has-parent?" | "precedes?" | "follows?" => {
             if args.is_empty()
                 || args
                     .iter()
@@ -102,6 +102,10 @@ pub fn parse_into_predicate(
                 Walk::Parent
             } else if bare == "has?" {
                 Walk::Descendant
+            } else if bare == "precedes?" {
+                Walk::Precedes
+            } else if bare == "follows?" {
+                Walk::Follows
             } else {
                 Walk::Ancestor
             };
