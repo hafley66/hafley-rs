@@ -642,3 +642,47 @@ fn relational_precedes_named_comment_boundary() {
         );
     }
 }
+
+#[test]
+fn relational_follows_named_comment_boundary() {
+    let rows = [
+        // expression_statement + expression_statement
+        Row {
+            name: "adjacent_comment",
+            args: "#follows? @c expression_statement neighbor",
+        },
+        // expression_statement ~ expression_statement
+        Row {
+            name: "past_comment",
+            args: "#follows? @c expression_statement end",
+        },
+        // expression_statement:not(expression_statement + expression_statement)
+        Row {
+            name: "not_adjacent_comment",
+            args: "#not-follows? @c expression_statement neighbor",
+        },
+    ];
+    for (language, source) in [
+        (
+            tree_sitter::Language::new(tree_sitter_rust::LANGUAGE),
+            "fn host() { a(); /* gap */ b(); }",
+        ),
+        (
+            tree_sitter::Language::new(tree_sitter_typescript::LANGUAGE_TYPESCRIPT),
+            "function host() { a(); /* gap */ b(); }",
+        ),
+    ] {
+        let actual = rows
+            .iter()
+            .map(|row| {
+                let scm = format!("((expression_statement) @c ({}))", row.args);
+                format!("{}: {}", row.name, matches(&language, source, &scm))
+            })
+            .collect::<Vec<_>>()
+            .join("\n");
+        assert_eq!(
+            actual,
+            "adjacent_comment: \npast_comment: c=b();\nnot_adjacent_comment: c=a(); | c=b();"
+        );
+    }
+}
