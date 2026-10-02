@@ -549,8 +549,7 @@ fn parse_cli() -> Ryi {
 }
 
 fn run(ryi: Ryi) -> Result<(), Box<dyn std::error::Error>> {
-    let home = std::env::vars_os().find(|(name, _)| name == "HOME")
-        .map(|(_, value)| PathBuf::from(value));
+    let home = std::env::var_os("HOME").map(PathBuf::from);
     if let Some(format) = ryi.file.format.as_deref() {
         if format != "jsonl" {
             eprintln!("ryi: --format {format}: use jsonl");
@@ -712,8 +711,7 @@ fn run_verb(
     mut writer: Box<dyn Write + Send>,
     cancelled: Option<Arc<AtomicBool>>,
 ) -> RyiResult<()> {
-    let home = std::env::vars_os().find(|(name, _)| name == "HOME")
-        .map(|(_, value)| PathBuf::from(value));
+    let home = std::env::var_os("HOME").map(PathBuf::from);
     let result: Result<(), Box<dyn std::error::Error>> = match ryi.cmd {
         None => run_file_verb(ryi.file, Tier::Files, writer),
         Some(Cmd::Fast(args)) => run_file_verb(file_args_from_fast(args), Tier::Fast, writer),
