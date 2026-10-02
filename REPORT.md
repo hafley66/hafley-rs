@@ -937,3 +937,81 @@ cargo test --features cli --test all t_172_graph_slow::slow_typescript_requires_
 
 Static validation: `git diff --check`. Compilation and runtime verification
 remain coordinator work, with each gate run separately.
+## ryi TS cleave destination imports: D8 contradiction (2026-10-02)
+
+Branch: `feature/ryi-ts-fix-cleave-imports`. Product changes stopped under the
+brief's rule: if a plan row and an existing test contradict, document the
+contradiction and stop. No product code, fixture, assertion, or golden changed.
+No cargo, npm, node, dogfood, install, or build command ran.
+
+Compared the current tests and fixtures with `git show main:<path>` and read
+`git log main..HEAD -- <path>`. These tests and fixtures have no commits in that
+range. Both main and HEAD have a grouped overload source import and single
+quotes in the import-kind source. The brief's claim that the overload source
+has separate imports differs from the checked-in fixture.
+
+Plan row D8 at `plans/2026-10-01-ryi-ts-utility.md:102` requires new imports to
+follow file style and records splitting grouped imports as a defect.
+`crates/sprefa-extract/dogfood/ts/D08.sh` also asserts preservation of grouped
+named imports. Commit `6c16c9f6967e1c6448f34b48f3b650cdbedde24d` changed destination
+import rendering to preserve quote style and group bindings. Its parent rendered
+one double-quoted import per binding. Findings below are from code and history;
+runtime verification remains with the coordinator.
+
+### destination_keeps_default_namespace_alias_and_type_imports
+
+Cause: `crates/sprefa-extract/src/edit/7b_cleave_ts_imports.rs:76` selects source
+style when the destination has no specifiers; line 96 renders with that style.
+Commit `6c16c9f6` introduced this behavior. The source fixture at
+`crates/sprefa-extract/tests/fixtures/cleave_ts_oracle/import_kind/source.ts:1`
+uses `import fs from 'node:fs';`, while the assertion at
+`crates/sprefa-extract/tests/155a_cleave_ts_oracle.rs:180` requires double quotes.
+The namespace and type assertions at lines 181 and 182 also require double
+quotes. The failed substring assertion alone does not establish that the
+binding was dropped. This conflicts with D8's quote-style preservation.
+
+Change: report only; stopped before product or assertion edits.
+
+Coordinator filter (crate `crates/sprefa-extract`, target `all`):
+
+```sh
+cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::destination_keeps_default_namespace_alias_and_type_imports -- --exact
+```
+
+### slow_preserves_default_namespace_and_type_imports
+
+Cause: the same destination rendering path at
+`crates/sprefa-extract/src/edit/7b_cleave_ts_imports.rs:76` and `:96`, introduced
+by `6c16c9f6`. This test uses the same single-quoted source fixture. Its
+assertions at `crates/sprefa-extract/tests/155a_cleave_ts_oracle.rs:88` through
+90 require double-quoted imports, conflicting with D8. A missing double-quoted
+substring alone does not establish a missing default binding in the slow lane.
+
+Change: report only; stopped before product or assertion edits.
+
+Coordinator filter (crate `crates/sprefa-extract`, target `all`):
+
+```sh
+cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports -- --exact
+```
+
+### overloads_move_and_export_together_and_reexports_are_not_imports
+
+Cause: `crates/sprefa-extract/src/edit/7b_cleave_ts_imports.rs:96` passes all
+wanted bindings for one module to `lines`, introduced by `6c16c9f6`.
+The actual source at
+`crates/sprefa-extract/tests/fixtures/cleave_ts_oracle/overload/source.ts:1`
+is `import { Code, code } from "./lib";` on both main and HEAD. The destination
+assertion at `crates/sprefa-extract/tests/155a_cleave_ts_oracle.rs:140` requires
+separate `Code` and `code` import statements. Preserving this source's grouping
+produces the reported grouped output and conflicts with that assertion under
+D8. The renderer also lacks a source-statement partition when separate imports
+share a module, but changing it cannot resolve this fixture's contradiction.
+
+Change: report only; stopped before product, fixture, or assertion edits.
+
+Coordinator filter (crate `crates/sprefa-extract`, target `all`):
+
+```sh
+cargo test --manifest-path crates/sprefa-extract/Cargo.toml --features cli --test all t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports -- --exact
+```
