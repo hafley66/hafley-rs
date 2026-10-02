@@ -309,7 +309,10 @@ pub struct QueryArgs {
   pub lang: Option<String>,
   #[doc = "Tree-sitter query text"]
   #[arg(long)]
-  pub query: String,
+  pub query: Option<String>,
+  #[doc = "scm++ query file: nested relations lowered to SQL over capture and CST rows"]
+  #[arg(long, value_name = "FILE")]
+  pub scmpp: Option<PathBuf>,
   #[doc = "Expected content digest (one input only)"]
   #[arg(long)]
   pub digest: Option<String>,

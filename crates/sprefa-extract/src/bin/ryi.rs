@@ -71,6 +71,9 @@ use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
 #[path = "ryi/1_inputs.rs"]
 mod inputs;
 
+#[path = "ryi/2_scmpp.rs"]
+mod scmpp;
+
 #[path = "../0_query.rs"]
 mod query;
 

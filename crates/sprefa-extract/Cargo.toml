@@ -199,7 +199,7 @@ prost = { version = "0.13", optional = true }
 # (run.rs:289) - it already depends on this one (its Cargo.toml:31), so reuse is
 # a cycle; sprefa-store's sea-orm/sqlx reader - async, banned above the SqlRunner
 # seam. `trace` is what the once-per-run statement count is measured on.
-rusqlite = { version = "0.40", features = ["bundled", "limits", "trace", "vtab"], optional = true }
+rusqlite = { version = "0.40", features = ["bundled", "limits", "trace", "vtab", "functions"], optional = true }
 # Batch-local text offsets keep each value at 16 bytes. FxHasher fingerprints
 # short strings; hashbrown's prehashed table compares bytes without rehashing.
 rustc-hash = { version = "2", optional = true }

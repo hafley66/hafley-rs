@@ -506,6 +506,10 @@ impl Output {
         }
         db.bind_row(fact)
     }
+    /// One line to stdout even when a database is attached.
+    pub fn stdout_line(&mut self, line: &str) -> Result<()> {
+        self.write_stdout(line.as_bytes())
+    }
     pub fn clear_source(&mut self) -> Result<()> {
         if let Some(db) = &mut self.database {
             db.clear_source()?;

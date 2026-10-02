@@ -270,7 +270,10 @@ op query(
   lang?: string,
 
   /** Tree-sitter query text */
-  query: string,
+  query?: string,
+
+  /** scm++ query file: nested relations lowered to SQL over capture and CST rows */
+  @valueName("FILE") scmpp?: path,
 
   /** Expected content digest (one input only) */
   digest?: string,

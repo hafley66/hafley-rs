@@ -1,6 +1,6 @@
 Run a tree-sitter query over files
 
-Usage: ryii query [OPTIONS] --query <QUERY> [PATH]...
+Usage: ryii query [OPTIONS] [PATH]...
 
 Arguments:
   [PATH]...  Files, directories, or globs; - reads a path list from stdin
@@ -12,6 +12,7 @@ Options:
       --root <DIR>       Corpus root
       --lang <LANG>      Language name (default: from each file's extension)
       --query <QUERY>    Tree-sitter query text
+      --scmpp <FILE>     scm++ query file: nested relations lowered to SQL over capture and CST rows
       --digest <DIGEST>  Expected content digest (one input only)
       --sqlite <PATH>    Write to a new SQLite database instead of stdout
   -h, --help             Print help
