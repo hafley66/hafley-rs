@@ -44,12 +44,7 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
                 Ok(_) => true,
                 Err(hafley_scm::QueryExtError::Parse(error))
                     if error.kind == tree_sitter::QueryErrorKind::NodeType => false,
-                Err(hafley_scm::QueryExtError::ScmppOnly { pattern, op }) => {
-                    return Err(format!(
-                        "query ({language}): pattern {pattern}: #{op} runs only under ryii query --scmpp"
-                    ))
-                }
-                Err(error) => return Err(format!("query ({language}): {error:?}")),
+                Err(error) => return Err(format!("query ({language}): {error}")),
             };
             compatible.insert(language.clone(), supported);
         }

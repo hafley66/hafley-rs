@@ -22,7 +22,10 @@ pub fn read_and_parse_predicates(user: &Query) -> Result<ParsedPredicates, Query
                 )?);
                 continue;
             }
-            return Err(QueryExtError::UnknownOperator(found.operator.to_string()));
+            return Err(QueryExtError::UnknownOperator {
+                pattern: pattern as u16,
+                operator: found.operator.to_string(),
+            });
         }
     }
     Ok((emits, relations, fields, emit_literals))

@@ -216,7 +216,7 @@ fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
         hafley_scm::QueryExtError::ScmppOnly { pattern, op } => format!(
             "invalid query: pattern {pattern}: #{op} runs only under ryii query --scmpp"
         ),
-        hafley_scm::QueryExtError::UnknownOperator(operator) => {
+        hafley_scm::QueryExtError::UnknownOperator { operator, .. } => {
             format!("invalid query: predicate #{operator} is not allowed")
         }
         hafley_scm::QueryExtError::Arity { operator, got } => {
