@@ -353,6 +353,31 @@ nest to any depth:
 A capture name bound by two exported levels is an error; use two names and
 `#eq?`.
 
+## Quantified captures
+
+A capture under `*` or `+` binds one node per repetition, and every exported
+capture joins on its own. One match emits one row per combination of its
+captures' nodes: the cartesian product, across levels when `rows: each`
+exports them. Here `@i` binds 2 nodes and `@s` binds 3, so the one array
+gives 6 rows:
+
+```scheme
+((array_expression (integer_literal)* @i) @a
+ (#has-ancestor? @a (function_item body: (block (expression_statement)+ @s)) rows: each))
+```
+
+```
+{"i__text":"1","a__text":"[1, 2]","s__text":"host(&[1, 2]);"}
+{"i__text":"1","a__text":"[1, 2]","s__text":"log(0);"}
+{"i__text":"1","a__text":"[1, 2]","s__text":"return 7;"}
+{"i__text":"2","a__text":"[1, 2]","s__text":"host(&[1, 2]);"}
+{"i__text":"2","a__text":"[1, 2]","s__text":"log(0);"}
+{"i__text":"2","a__text":"[1, 2]","s__text":"return 7;"}
+```
+
+A `*` or `?` capture that binds no node contributes one row with `null` in
+its columns.
+
 ## `--query`, bundled queries, and `--sqlite`
 
 `ryii query --query TEXT` and the `.scm` files the crate runs through
