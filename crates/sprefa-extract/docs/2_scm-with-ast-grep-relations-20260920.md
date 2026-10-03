@@ -402,6 +402,10 @@ the query has a relation predicate, the one reader of `edge`), and prints no
 rows to stdout. Without `--sqlite` the rows live in an in-memory database for
 the run and print to stdout.
 
+`--timeout SECS` bounds the whole `--scmpp` run, file reads and the SQL: past
+it the SQL is interrupted, no rows print, and `ryii query` exits 3, as
+`ryii graph --timeout` does.
+
 ## Reference
 
 | Predicate | Reach | CSS form for target `A` and related node `B` |

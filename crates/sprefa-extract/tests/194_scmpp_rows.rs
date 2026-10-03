@@ -357,3 +357,33 @@ fn sqlite_limits_fail_before_any_file_is_read() {
          2 query (rust): scm++ SQL for 31 captures, 31 levels deep, exceeds a SQLite limit: Expression tree is too large (maximum depth 1000)"
     );
 }
+
+/// 200 nested blocks under 5 nested `rows: each` levels run for minutes; `--timeout 1`
+/// stops the SQL and exits 3, the way `graph --timeout` does.
+#[test]
+fn timeout_stops_the_sql_with_exit_3() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("deep.rs");
+    let scm = dir.path().join("deep.scm");
+    std::fs::write(&source, format!("fn d() {{ {} g(); {} }}\n", "{ ".repeat(200), "} ".repeat(200))).unwrap();
+    let mut query = "(block)".to_string();
+    for level in 0..5 {
+        query = format!("((block) @b{level} (#has-ancestor? @b{level} {query} rows: each))");
+    }
+    std::fs::write(&scm, format!("((call_expression) @c (#has-ancestor? @c {query} rows: each))")).unwrap();
+    let started = std::time::Instant::now();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["query", "--timeout", "1", "--scmpp"])
+        .arg(&scm)
+        .arg(&source)
+        .env("DL_TRAIL", "0")
+        .output()
+        .expect("ryii runs");
+    let actual = (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        output.stdout.len(),
+        started.elapsed() < std::time::Duration::from_secs(30),
+    );
+    assert_eq!(actual, (Some(3), "query: query exceeded 1s".to_string(), 0, true));
+}

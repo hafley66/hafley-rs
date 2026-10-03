@@ -66,6 +66,9 @@ mod sqlite;
 #[path = "ryi/0_revision.rs"]
 mod revision;
 
+#[path = "ryi/0b_deadline.rs"]
+mod deadline;
+
 use cli::{Cmd, FastArgs, FileArgs, IngestArgs, Ryi, ScipArgs, SlowArgs};
 
 #[path = "ryi/1_inputs.rs"]
