@@ -30,3 +30,25 @@ Contact points:
    are SQL views over ryi's interned base tables (base tables ryi-private). A column change
    = version bump in crates/sprefa-extract/schema/1_facts.tsp + a note to sprefa. ryi keeps a
    contract test running the _9j command shape and asserting those columns.
+
+## Fixpoint, rounds 3-6 (2026-10-03, same day)
+
+| date | decision | where it bites |
+| --- | --- | --- |
+| 2026-10-03 | ryi = extraction + closed store + on-request fact providers + edit application. sprefa = every rule, every walk, every scope, every plan IR. ryi tables are CLOSED: ryi writes, nobody else mutates, sprefa reads. | plans/2026-10-03-graph-slow-demand-walk.md |
+
+| item | ryi | sprefa |
+| --- | --- | --- |
+| open recursion over graphs (call paths, chains, points-to) | per-body provider: edges out of one body, warm RA Session | owns the walk (demand-lowered rules) |
+| closed-form tree recursion (preorder pre/last intervals) | owns (index) | reads |
+| graph --slow loop | thin loop over the provider until the protocol exists; then deleted, graph --slow = canned sprefa program | canned program |
+| `extra` seam | dropped | - |
+| provider protocol | daemon (server_auto) API is the default seam; in-process only behind an opt-in feature of a thin client crate | never compiles RA |
+| scope ("which things") | commands take `--scope <relation>`; --entry/--pattern/PATH#NAME are sugar for it | computes scope relations; syntax atoms = scm++ patterns evaluated by ryi |
+| plan IR / SQL | scm++ lowers to ivm-ir (sqlite_ivm, engine-free), consumed via local kellnr registry, pinned; no new SQL generator meanwhile | owns ivm-ir + batch and incremental renderers |
+| fact schema truth | 1_facts.tsp (+ tsi .tsp) is truth | dl8 reads it via a TypeSpec importer; regenerated registry.rs compared byte for byte |
+| ids | contract carries ids + dict(id, text); id = 64-bit content hash, collision = error | joins on ids, decodes at output |
+| deltas | owns emission + format (`ryii watch`): relation, ids, sign, epoch per settled change; file edit retracts old content id rows | consumes as frontiers |
+| formats | SQLite views now; Parquet later as a second materialization | one reader adapter |
+| witness tier | contract views carry it | filter / rank by it; a gap is a missing witness |
+| edits | binding-exact sites (provider); applies span edits to hand-written files | policy sites; dl8 fs.file whole-writes generated files only |
