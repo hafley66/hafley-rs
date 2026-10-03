@@ -17,8 +17,9 @@ impl Deadline {
 }
 
 /// Runs `work` under a `secs` budget (`None`: unbounded); `verb` prefixes the exit-3 message.
+/// Without a SQLite `handle`, `work` alone polls `expired`.
 pub fn within<T>(
-    handle: InterruptHandle,
+    handle: Option<InterruptHandle>,
     secs: Option<u64>,
     verb: &str,
     work: impl FnOnce(&Deadline) -> Result<T, Box<dyn std::error::Error>>,
@@ -32,7 +33,7 @@ pub fn within<T>(
     };
     let (done, wait) = mpsc::channel::<()>();
     let timer = std::thread::spawn(move || {
-        if let Err(mpsc::RecvTimeoutError::Timeout) = wait.recv_timeout(budget) {
+        if let (Err(mpsc::RecvTimeoutError::Timeout), Some(handle)) = (wait.recv_timeout(budget), handle) {
             handle.interrupt();
         }
     });

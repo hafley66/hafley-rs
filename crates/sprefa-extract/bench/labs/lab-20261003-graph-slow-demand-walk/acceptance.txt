@@ -1,0 +1,8 @@
+1 eager lib.rs#build wall=26.25 rss_mb=818 footprint_mb=2782 edges=27 bodies=
+1 eager 0_graph.rs#run wall=19.38 rss_mb=1017 footprint_mb=2268 edges=112 bodies=
+1 walk lib.rs#build wall=9.15 rss_mb=999 footprint_mb=2010 edges=31 bodies=16
+1 walk 0_graph.rs#run wall=11.17 rss_mb=1089 footprint_mb=2235 edges=116 bodies=95
+2 eager lib.rs#build wall=21.52 rss_mb=1137 footprint_mb=2771 edges=27 bodies=
+2 eager 0_graph.rs#run wall=16.48 rss_mb=1377 footprint_mb=2265 edges=112 bodies=
+2 walk lib.rs#build wall=5.96 rss_mb=1501 footprint_mb=2017 edges=31 bodies=16
+2 walk 0_graph.rs#run wall=7.72 rss_mb=1661 footprint_mb=2242 edges=116 bodies=95

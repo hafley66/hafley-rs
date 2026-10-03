@@ -29,6 +29,12 @@ pub use rename::{rename, RenameEdit, RenameFailure, RenameSeed};
 #[path = "8e_rust_checker_modules.rs"]
 mod modules;
 pub use modules::{module_tree, ModulePlace, RustModuleTree};
+#[path = "8f_rust_checker_body_edges.rs"]
+mod body_edges;
+pub use body_edges::{BodyEdge, BodyEdges, EdgeKind, WalkNode, WalkSession};
+#[path = "8g_rust_checker_walk.rs"]
+mod walk;
+pub use walk::{demand_walk, WalkAnswer, WalkEdge, WalkQuestion};
 use crate::read::trace::{phase_span, record_phase, Phase};
 use crate::read::tsi::{Arg, CoverageClaim, FactOut};
 pub use target_types::{target_types, TargetTypeReference};

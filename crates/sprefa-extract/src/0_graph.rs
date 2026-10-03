@@ -24,6 +24,8 @@ use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
 mod target;
 #[path = "0b_graph_anchor.rs"]
 mod anchor;
+#[path = "0c_graph_walk.rs"]
+mod walk;
 
 const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_name, \
                          grade, kind, caller_site_start, callee_start FROM ( \
@@ -372,13 +374,12 @@ fn named_starts(edges: &[PlaneEdge], anchor: &str) -> BTreeSet<Node> {
 /// The reach closure seeded at NAME: one row per node it reaches, at the
 /// shortest depth, graded by the edge that discovered it there.
 fn nodes(
-    connection: &Connection,
+    edges: &[PlaneEdge],
     name: &str,
     deadline: &Deadline,
     lines: &mut Lines,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-    let edges = plane_edges(connection, "call")?;
-    let found = first_discovery(&edges, named_starts(&edges, name), deadline)?;
+    let found = first_discovery(edges, named_starts(edges, name), deadline)?;
     Ok(found
         .into_iter()
         .map(|found| {
@@ -396,13 +397,12 @@ fn nodes(
 
 /// One shortest, edge-row-witnessed path per destination on `plane`.
 fn paths(
-    connection: &Connection,
+    edges: &[PlaneEdge],
     plane: &str,
     starts: impl FnOnce(&[PlaneEdge]) -> Result<BTreeSet<Node>, Box<dyn std::error::Error>>,
     deadline: &Deadline,
 ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-    let edges = plane_edges(connection, plane)?;
-    let found = first_discovery(&edges, starts(&edges)?, deadline)?;
+    let found = first_discovery(edges, starts(edges)?, deadline)?;
     Ok(found
         .into_iter()
         .map(|found| FlatFact::GraphPath {
@@ -609,20 +609,25 @@ impl Arm<'_> {
                 rows.sort_by_key(|row| serde_json::to_string(row).expect("graph row serializes"));
                 Ok(rows)
             }
-            Arm::From(name) => nodes(connection, name, deadline, lines),
+            Arm::From(name) => nodes(&plane_edges(connection, "call")?, name, deadline, lines),
             Arm::CallPath(name) => paths(
-                connection,
+                &plane_edges(connection, "call")?,
                 "call",
                 |edges| Ok(named_starts(edges, name)),
                 deadline,
             ),
             Arm::TypePath(name) => paths(
-                connection,
+                &plane_edges(connection, "type")?,
                 "type",
                 |edges| Ok(named_starts(edges, name)),
                 deadline,
             ),
-            Arm::FlowPath(seed) => paths(connection, "flow", |_| flow_seed(seed, lines.root.as_deref()), deadline),
+            Arm::FlowPath(seed) => paths(
+                &plane_edges(connection, "flow")?,
+                "flow",
+                |_| flow_seed(seed, lines.root.as_deref()),
+                deadline,
+            ),
         }
     }
 
@@ -633,7 +638,7 @@ impl Arm<'_> {
         secs: u64,
         root: Option<PathBuf>,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-        crate::deadline::within(connection.get_interrupt_handle(), Some(secs), "graph", |deadline| {
+        crate::deadline::within(Some(connection.get_interrupt_handle()), Some(secs), "graph", |deadline| {
             let mut lines = Lines {
                 root,
                 tables: HashMap::new(),
@@ -814,10 +819,14 @@ pub fn run_to(
         }
     } else {
         let paths = crate::inputs::expand(&cli.inputs)?;
-        let database = load_store(&paths, &arm, &cli, None, cli.sqlite.as_deref())?;
-        let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone())?;
-        database.close()?;
-        rows
+        if let Some(anchor) = walk::rust_anchor(&arm, &cli, &paths) {
+            walk::walk_rows(&arm, &cli, &paths, anchor)?
+        } else {
+            let database = load_store(&paths, &arm, &cli, None, cli.sqlite.as_deref())?;
+            let rows = arm.ask_within(database.connection(), cli.timeout, cli.inputs.root.clone())?;
+            database.close()?;
+            rows
+        }
     };
     emit_rows(&rows, output)?;
     emit_summary_line(&rows, &arm, cli.compare.is_some());
@@ -1003,7 +1012,7 @@ mod tests {
         })).unwrap();
         database.flush().unwrap();
         let rows = paths(
-            database.connection(),
+            &plane_edges(database.connection(), "flow").unwrap(),
             "flow",
             |_| Ok(BTreeSet::from([("blake3:a".to_string(), Some("1:2".to_string()))])),
             &Deadline { at: Some(Instant::now() + Duration::from_secs(60)) },

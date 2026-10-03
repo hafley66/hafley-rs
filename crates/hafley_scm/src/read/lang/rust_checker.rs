@@ -80,6 +80,8 @@ pub enum CheckerError {
     NotBuilt,
     NoWorkspace(String),
     Budget(Duration),
+    /// A demand walk popped a body past its deadline.
+    Deadline,
 }
 
 impl std::fmt::Display for CheckerError {
@@ -93,6 +95,7 @@ impl std::fmt::Display for CheckerError {
             Self::Budget(budget) => {
                 write!(f, "workspace load exceeded {:.0}s", budget.as_secs_f64())
             }
+            Self::Deadline => write!(f, "the demand walk passed its deadline"),
         }
     }
 }
@@ -341,6 +344,11 @@ pub fn target_calls(
 pub use super::rust_checker_ra::{rename, RenameEdit, RenameFailure, RenameSeed};
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{module_tree, ModulePlace, RustModuleTree};
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{
+    demand_walk, BodyEdge, BodyEdges, EdgeKind, WalkAnswer, WalkEdge, WalkNode, WalkQuestion,
+    WalkSession,
+};
 
 #[cfg(feature = "rust-checker")]
 pub fn target_types(

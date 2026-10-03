@@ -489,6 +489,8 @@ mod t_195_scmpp_growth;
 mod t_194_ts_resolve_growth;
 #[path = "195_ts_lib_globals.rs"]
 mod t_195_ts_lib_globals;
+#[path = "196_rust_walk_growth.rs"]
+mod t_196_rust_walk_growth;
 
 #[test]
 fn every_test_file_is_a_module_here() {

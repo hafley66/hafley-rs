@@ -138,27 +138,24 @@ fn slow_walk_answers_a_rust_tree_and_reports_the_unowned_file() {
         "pub fn shimmed() -> usize {\n    2\n}\n",
     )
     .unwrap();
-    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .current_dir(scratch.path())
-        .env("RUST_LOG", "off")
-        .args([
-            "graph",
-            "--slow",
-            "--from",
-            "lib.rs#build",
-            "--root",
-            ".",
-            "src",
-        ])
-        .output()
-        .expect("graph binary runs");
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(output.status.success(), "{stderr}");
-    let rows: Vec<Value> = String::from_utf8(output.stdout)
-        .unwrap()
-        .lines()
-        .map(|line| serde_json::from_str(line).unwrap())
-        .collect();
+    // The demand walk reads only the seed files, so only an unowned seed declines.
+    let graph = |anchor: &str| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .current_dir(scratch.path())
+            .env("RUST_LOG", "off")
+            .args(["graph", "--slow", "--from", anchor, "--root", ".", "src"])
+            .output()
+            .expect("graph binary runs");
+        let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+        assert!(output.status.success(), "{stderr}");
+        let rows: Vec<Value> = String::from_utf8(output.stdout)
+            .unwrap()
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        (rows, stderr)
+    };
+    let (rows, stderr) = graph("lib.rs#build");
     assert_eq!(
         rows,
         serde_json::from_str::<Vec<Value>>(
@@ -168,7 +165,14 @@ fn slow_walk_answers_a_rust_tree_and_reports_the_unowned_file() {
     );
     assert_eq!(
         stderr,
-        "ryi slow: tier.rust-analyzer declined src/shim.rs: owns no module in the loaded crate graph (cfg-gated, or outside every crate root)\n1 edges: 1 +, 0 ~, 0 -\n"
+        "demand walk: 2 bodies inferred, 1 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n1 edges: 1 +, 0 ~, 0 -\n"
+    );
+    let (rows, stderr) = graph("shim.rs#shimmed");
+    assert_eq!(rows, Vec::<Value>::new());
+    assert_eq!(
+        stderr,
+        "ryi slow: tier.rust-analyzer declined src/shim.rs: owns no module in the loaded crate graph (cfg-gated, or outside every crate root)\n\
+         demand walk: 0 bodies inferred, 0 call, 0 method, 0 passed, 0 trait_impl, 0 extern edges\n0 edges: 0 +, 0 ~, 0 -\n"
     );
 }
 
