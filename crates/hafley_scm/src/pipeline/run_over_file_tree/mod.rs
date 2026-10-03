@@ -1,5 +1,4 @@
 mod append_to_match_arena;
-mod test_predicates_per_candidate;
 mod ts_match_limit_check;
 mod ts_user_cursor_into_candidates;
 

@@ -119,7 +119,6 @@
 ((secondary_constructor) @def.span
   (#emit! "call.def" "span" @def.span "kind" "constructor"))
 ((lambda_literal) @def.span
-  (#has-ancestor? @def.span "function_declaration")
   (#emit! "call.def" "span" @def.span "kind" "lambda"))
 
 ((class_declaration

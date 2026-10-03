@@ -178,15 +178,6 @@ struct Lower<'a> {
 }
 
 pub fn lower(plan: &Level, patterns: &[FlatPattern]) -> String {
-    render(plan, patterns, true)
-}
-
-/// The same joins and filters; projects the distinct level-0 match ordinals instead of captures.
-pub fn lower_matches(plan: &Level, patterns: &[FlatPattern]) -> String {
-    render(plan, patterns, false)
-}
-
-fn render(plan: &Level, patterns: &[FlatPattern], export: bool) -> String {
     let mut lower = Lower {
         patterns,
         ctes: Vec::new(),
@@ -195,19 +186,13 @@ fn render(plan: &Level, patterns: &[FlatPattern], export: bool) -> String {
         order: Vec::new(),
     };
     let mut body = Body::default();
-    lower.level(plan, &mut Vec::new(), &mut body, export);
+    lower.level(plan, &mut Vec::new(), &mut body, true);
     let (from, wh) = body.render();
     let with = if lower.ctes.is_empty() {
         String::new()
     } else {
         format!("WITH RECURSIVE\n{}\n", lower.ctes.join(",\n"))
     };
-    if !export {
-        return format!(
-            "{with}SELECT DISTINCT {}.\"match\"\nFROM {from}\nWHERE {wh}",
-            root(plan.pattern)
-        );
-    }
     let order = std::iter::once(format!("{}._input_path", root(plan.pattern)))
         .chain(lower.order)
         .collect::<Vec<_>>()

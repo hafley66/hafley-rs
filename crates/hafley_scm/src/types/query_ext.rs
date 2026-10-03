@@ -1,8 +1,6 @@
 /// The user's `.scm` compiled once per language. Built once, run over many files.
 pub struct QueryExt {
     pub user: tree_sitter::Query,
-    /// `(pattern, compiled)` for each user pattern with relation predicates, sorted by pattern.
-    pub scmpp: Vec<(u16, crate::scmpp::Compiled)>,
     pub names: Vec<Box<str>>,
     pub emits: Vec<super::EmitSpec>,
     pub relations: Vec<Box<str>>,

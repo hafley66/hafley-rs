@@ -32,6 +32,17 @@ fn jsonl(path: &std::path::Path, query: &str) -> String {
         .replace(&format!(",\"path\":\"{}\"", path.display()), "")
 }
 
+/// stderr of a `ryi query` that exits non-zero.
+fn refused(path: &std::path::Path, query: &str) -> String {
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["query", "--lang", "rust", "--query", query])
+        .arg(path)
+        .output()
+        .expect("ryi binary runs");
+    assert!(!output.status.success(), "ryi query accepted {query}");
+    String::from_utf8(output.stderr).unwrap().trim_end().to_string()
+}
+
 fn temp_file() -> std::path::PathBuf {
     let dir = std::env::temp_dir().join(format!(
         "query_scm_dogfood_{}_{}",
@@ -51,43 +62,39 @@ fn temp_file() -> std::path::PathBuf {
 fn ryi_query_predicate_families_through_hafley_scm() {
     let path = temp_file();
 
-    // 1. host ancestor walk: the let pattern identifiers, not the call sites.
+    // 1. relation predicates and #contains? are refused by `ryi query`; `--scmpp` evaluates them.
     assert_eq!(
-        jsonl(&path, "((identifier) @name (#has-parent? @name let_declaration))"),
-        "{\"end_line\":2,\"line\":2,\"name\":\"seed\"}\n{\"end_line\":7,\"line\":7,\"name\":\"grain\"}\n"
+        [
+            "((identifier) @name (#has-parent? @name let_declaration))",
+            "((string_literal) @lit (#contains? @lit \"seed\"))",
+            "((string_literal) @lit (#not-contains? @lit \"seed\"))",
+        ]
+        .map(|query| refused(&path, query))
+        .join("\n"),
+        "query (rust): pattern 0: #has-parent? is a relation predicate; use ryii query --scmpp\n\
+         query (rust): UnknownOperator(\"contains?\")\n\
+         query (rust): UnknownOperator(\"not-contains?\")"
     );
 
-    // 2. host contains: the seed literals, not the oat ones.
-    assert_eq!(
-        jsonl(&path, "((string_literal) @lit (#contains? @lit \"seed\"))"),
-        "{\"end_line\":2,\"line\":2,\"lit\":\"\\\"seed\\\"\"}\n{\"end_line\":3,\"line\":3,\"lit\":\"\\\"seed\\\"\"}\n"
-    );
-
-    // 3. generic not- form over a host predicate.
-    assert_eq!(
-        jsonl(&path, "((string_literal) @lit (#not-contains? @lit \"seed\"))"),
-        "{\"end_line\":7,\"line\":7,\"lit\":\"\\\"oat\\\"\"}\n{\"end_line\":8,\"line\":8,\"lit\":\"\\\"oat\\\"\"}\n"
-    );
-
-    // 4. native eq?, evaluated by the tree-sitter cursor itself.
+    // 2. native eq?, evaluated by the tree-sitter cursor itself.
     assert_eq!(
         jsonl(&path, "((identifier) @name (#eq? @name \"seed\"))"),
         "{\"end_line\":2,\"line\":2,\"name\":\"seed\"}\n{\"end_line\":3,\"line\":3,\"name\":\"seed\"}\n"
     );
 
-    // 5. native not-eq?.
+    // 3. native not-eq?.
     assert_eq!(
         jsonl(&path, "((identifier) @name (#not-eq? @name \"seed\"))"),
         "{\"end_line\":1,\"line\":1,\"name\":\"alpha\"}\n{\"end_line\":6,\"line\":6,\"name\":\"beta\"}\n{\"end_line\":7,\"line\":7,\"name\":\"grain\"}\n{\"end_line\":8,\"line\":8,\"name\":\"grain\"}\n"
     );
 
-    // 6. native any-of? over several literals.
+    // 4. native any-of? over several literals.
     assert_eq!(
         jsonl(&path, "((identifier) @name (#any-of? @name \"alpha\" \"beta\"))"),
         "{\"end_line\":1,\"line\":1,\"name\":\"alpha\"}\n{\"end_line\":6,\"line\":6,\"name\":\"beta\"}\n"
     );
 
-    // 7. two patterns with conflicting eq? predicates: each pattern keeps the
+    // 5. two patterns with conflicting eq? predicates: each pattern keeps the
     //    rows its own predicate passes, so neither predicate leaks into the
     //    other pattern's matches.
     assert_eq!(

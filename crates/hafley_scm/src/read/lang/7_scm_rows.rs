@@ -683,6 +683,12 @@ fn scm_error(path: &str, error: hafley_scm::QueryExtError) -> ScmError {
             path: path.to_string(),
             detail: error.to_string(),
         },
+        hafley_scm::QueryExtError::RelationPredicate { pattern, op } => ScmError::Query {
+            path: path.to_string(),
+            detail: format!(
+                "pattern {pattern}: #{op} is a relation predicate; use ryii query --scmpp"
+            ),
+        },
         hafley_scm::QueryExtError::UnknownOperator(operator) => ScmError::Query {
             path: path.to_string(),
             detail: format!("predicate #{operator} is not allowed"),

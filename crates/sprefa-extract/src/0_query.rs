@@ -44,9 +44,11 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<(), Strin
                 Ok(_) => true,
                 Err(hafley_scm::QueryExtError::Parse(error))
                     if error.kind == tree_sitter::QueryErrorKind::NodeType => false,
-                Err(hafley_scm::QueryExtError::Scmpp(hafley_scm::scmpp::ScmppError::Query {
-                    error, ..
-                })) if error.kind == tree_sitter::QueryErrorKind::NodeType => false,
+                Err(hafley_scm::QueryExtError::RelationPredicate { pattern, op }) => {
+                    return Err(format!(
+                        "query ({language}): pattern {pattern}: #{op} is a relation predicate; use ryii query --scmpp"
+                    ))
+                }
                 Err(error) => return Err(format!("query ({language}): {error:?}")),
             };
             compatible.insert(language.clone(), supported);

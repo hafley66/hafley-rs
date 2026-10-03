@@ -1,13 +1,8 @@
-/// A level-0 match named by its captures: `(name, start, end)`, sorted.
-pub type MatchKey = Vec<(Box<str>, u32, u32)>;
-
 /// Output of the front end: plain tree-sitter text per level, the join plan, its SQL.
 pub struct Compiled {
     pub patterns: Vec<FlatPattern>,
     pub plan: Level,
     pub sql: String,
-    /// `SELECT DISTINCT` of the level-0 match ordinals the relations accept; the build path filters by it.
-    pub match_sql: String,
 }
 
 pub struct FlatPattern {
@@ -81,10 +76,6 @@ pub enum ScmppError {
         error: tree_sitter::QueryError,
     },
     Unsupported(String),
-    MatchLimit {
-        pattern: u16,
-    },
-    Sql(String),
 }
 
 impl std::fmt::Display for ScmppError {
@@ -101,10 +92,6 @@ impl std::fmt::Display for ScmppError {
                 write!(f, "scm++ level {pattern} `{text}`: {error}")
             }
             Self::Unsupported(message) => write!(f, "scm++: {message}"),
-            Self::MatchLimit { pattern } => {
-                write!(f, "scm++ level {pattern}: tree-sitter match limit exceeded")
-            }
-            Self::Sql(message) => write!(f, "scm++ SQL: {message}"),
         }
     }
 }

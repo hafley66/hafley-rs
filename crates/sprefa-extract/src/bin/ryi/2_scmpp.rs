@@ -1,14 +1,157 @@
 //! scm++ storage: capture and CST rows per file, then the compiled SQL over them.
 use std::collections::HashSet;
 
-use hafley_scm::scmpp::{CaptureRow, Compiled, CstRow};
+use hafley_scm::scmpp::{Compiled, ROOT};
+use rusqlite::functions::FunctionFlags;
+use rusqlite::Connection;
 use serde_json::{Map, Value};
-use tree_sitter::Tree;
+use tree_sitter::{QueryCursor, StreamingIterator, Tree};
 
 use super::sqlite::writers::{models, Fact};
 use super::sqlite::Database;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+pub const INDEXES: &str = "\
+CREATE INDEX IF NOT EXISTS scmpp_capture_match ON capture(_input_path, pattern, \"match\", capture);
+CREATE INDEX IF NOT EXISTS scmpp_capture_node ON capture(pattern, capture, _content_id, start, \"end\", kind);
+CREATE INDEX IF NOT EXISTS scmpp_edge_to ON edge(_content_id, to__start, to__end, to_kind);
+CREATE INDEX IF NOT EXISTS scmpp_edge_from ON edge(_content_id, from__start, from__end, from_kind);";
+
+/// The `regexp()` a cross-level `#match?` lowers to.
+pub fn register_regexp(connection: &Connection) -> rusqlite::Result<()> {
+    connection.create_scalar_function(
+        "regexp",
+        2,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC,
+        |context| {
+            let pattern =
+                context.get_or_create_aux(
+                    0,
+                    |value| -> std::result::Result<
+                        regex::Regex,
+                        Box<dyn std::error::Error + Send + Sync>,
+                    > { Ok(regex::Regex::new(value.as_str()?)?) },
+                )?;
+            let text = context.get::<Option<String>>(1)?;
+            Ok(text.is_some_and(|text| pattern.is_match(&text)))
+        },
+    )
+}
+
+pub struct CaptureRow<'q> {
+    pub pattern: u16,
+    /// Per-file ordinal across every flat pattern.
+    pub r#match: u32,
+    pub capture: &'q str,
+    /// Empty for the `@__root` capture.
+    pub text: String,
+    pub start: u32,
+    pub end: u32,
+    pub match_start: u32,
+    pub match_end: u32,
+    pub kind: &'q str,
+}
+
+/// The `capture` rows of every flat pattern over one file.
+pub fn capture_rows<'q>(
+    compiled: &'q Compiled,
+    tree: &'q Tree,
+    src: &[u8],
+    mut row: impl FnMut(CaptureRow<'q>) -> Result<()>,
+) -> Result<()> {
+    let mut ordinal = 0u32;
+    for pattern in &compiled.patterns {
+        let names = pattern.query.capture_names();
+        let root = names
+            .iter()
+            .position(|name| *name == ROOT)
+            .expect("flat pattern root") as u32;
+        let mut cursor = QueryCursor::new();
+        let mut matches = cursor.matches(&pattern.query, tree.root_node(), src);
+        while let Some(found) = matches.next() {
+            let Some(anchor) = found
+                .captures()
+                .iter()
+                .find(|capture| capture.index == root)
+            else {
+                continue;
+            };
+            for capture in found.captures() {
+                let node = capture.node;
+                let text = if capture.index == root {
+                    String::new()
+                } else {
+                    String::from_utf8_lossy(&src[node.byte_range()]).into_owned()
+                };
+                row(CaptureRow {
+                    pattern: pattern.id,
+                    r#match: ordinal,
+                    capture: names[capture.index as usize],
+                    text,
+                    start: node.start_byte() as u32,
+                    end: node.end_byte() as u32,
+                    match_start: anchor.node.start_byte() as u32,
+                    match_end: anchor.node.end_byte() as u32,
+                    kind: node.kind(),
+                })?;
+            }
+            ordinal += 1;
+        }
+        drop(matches);
+        if cursor.did_exceed_match_limit() {
+            return Err(format!(
+                "scm++ level {}: tree-sitter match limit exceeded",
+                pattern.id
+            )
+            .into());
+        }
+    }
+    Ok(())
+}
+
+pub struct CstRow<'a> {
+    pub start: u32,
+    pub end: u32,
+    pub kind: &'a str,
+    pub named: bool,
+    /// `(start, end, kind)` of the parent; `None` at the root, which has no edge.
+    pub parent: Option<(u32, u32, &'a str)>,
+    pub field: Option<&'a str>,
+    pub index: u32,
+    pub named_index: Option<u32>,
+}
+
+/// Every node, named and anonymous, in preorder; the first error stops the writes.
+pub fn cst_rows(tree: &Tree, mut row: impl FnMut(CstRow<'_>) -> Result<()>) -> Result<()> {
+    let language = tree.language();
+    let fields: Vec<Option<&str>> = (0..=language.field_count() as u16)
+        .map(|id| language.field_name_for_id(id))
+        .collect();
+    let mut failed = None;
+    hafley_scm::cst::walk_streaming(tree, |node, parent: Option<(u32, u32, &str)>, slot| {
+        let here = (
+            node.start_byte() as u32,
+            node.end_byte() as u32,
+            node.kind(),
+        );
+        if failed.is_none() {
+            failed = row(CstRow {
+                start: here.0,
+                end: here.1,
+                kind: here.2,
+                named: node.is_named(),
+                parent,
+                field: slot.field.and_then(|id| fields[id as usize]),
+                index: slot.index,
+                named_index: slot.named_index,
+            })
+            .err();
+        }
+        here
+    });
+    failed.map_or(Ok(()), Err)
+}
 
 /// One file: a capture row per capture of every flat pattern (`match` = per-file ordinal),
 /// then node/edge rows (family cst) once per content id.
@@ -23,7 +166,7 @@ pub fn write_file(
     cst_written: &mut HashSet<String>,
 ) -> Result<()> {
     db.source(path, content_id.to_string())?;
-    hafley_scm::scmpp::capture_rows(compiled, tree, src, |row: CaptureRow| -> Result<()> {
+    capture_rows(compiled, tree, src, |row: CaptureRow| -> Result<()> {
         let _row = tracing::trace_span!("scmpp_capture_row").entered();
         let bytes = row.text.len() + 64;
         let capture = models::Capture {
@@ -42,7 +185,7 @@ pub fn write_file(
     })
     .map_err(|error| format!("{path}: {error}"))?;
     if cst_written.insert(content_id.to_string()) {
-        hafley_scm::scmpp::cst_rows(tree, |row: CstRow| write_cst_row(db, row))?;
+        cst_rows(tree, |row: CstRow| write_cst_row(db, row))?;
     }
     Ok(())
 }
@@ -89,8 +232,8 @@ fn write_cst_row(db: &mut Database, row: CstRow) -> Result<()> {
 pub fn run_sql(db: &mut Database, compiled: &Compiled) -> Result<Vec<Map<String, Value>>> {
     db.flush()?;
     let connection = db.connection();
-    connection.execute_batch(hafley_scm::scmpp::INDEXES)?;
-    hafley_scm::scmpp::register_regexp(connection)?;
+    connection.execute_batch(INDEXES)?;
+    register_regexp(connection)?;
     connection.execute_batch(&format!(
         "DROP TABLE IF EXISTS scmpp_row; CREATE TABLE scmpp_row AS {};",
         compiled.sql

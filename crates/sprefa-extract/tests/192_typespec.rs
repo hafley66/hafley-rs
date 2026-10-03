@@ -113,14 +113,15 @@ value_list 1"
             .replace(&strip, ""),
         "{\"end_line\":14,\"line\":14,\"name\":\"Pet\"}\n{\"end_line\":21,\"line\":21,\"name\":\"Owner\"}\n"
     );
+    let scm = tempfile::NamedTempFile::new().unwrap();
+    std::fs::write(
+        scm.path(),
+        "((model_property name: (_) @key type: (_) @type) (#has-ancestor? @key model_statement))",
+    )
+    .unwrap();
     assert_eq!(
-        ryii(&[
-            "query",
-            "--query",
-            "((model_property name: (_) @key type: (_) @type) (#has-ancestor? @key model_statement))",
-            FIXTURE,
-        ])
-        .replace(&strip, ""),
-        "{\"end_line\":15,\"key\":\"id\",\"line\":15,\"type\":\"PetId\"}\n{\"end_line\":16,\"key\":\"name\",\"line\":16,\"type\":\"string\"}\n{\"end_line\":17,\"key\":\"kind\",\"line\":17,\"type\":\"Kind\"}\n{\"end_line\":18,\"key\":\"tags\",\"line\":18,\"type\":\"string[]\"}\n{\"end_line\":22,\"key\":\"id\",\"line\":22,\"type\":\"int64\"}\n{\"end_line\":23,\"key\":\"pets\",\"line\":23,\"type\":\"Pet[]\"}\n"
+        ryii(&["query", "--scmpp", scm.path().to_str().unwrap(), FIXTURE])
+            .replace(&format!("\"path\":\"{FIXTURE}\","), ""),
+        "{\"key__start\":145,\"key__end\":147,\"key__text\":\"id\",\"type__start\":149,\"type__end\":154,\"type__text\":\"PetId\"}\n{\"key__start\":158,\"key__end\":162,\"key__text\":\"name\",\"type__start\":164,\"type__end\":170,\"type__text\":\"string\"}\n{\"key__start\":174,\"key__end\":178,\"key__text\":\"kind\",\"type__start\":181,\"type__end\":185,\"type__text\":\"Kind\"}\n{\"key__start\":189,\"key__end\":193,\"key__text\":\"tags\",\"type__start\":195,\"type__end\":203,\"type__text\":\"string[]\"}\n{\"key__start\":229,\"key__end\":231,\"key__text\":\"id\",\"type__start\":233,\"type__end\":238,\"type__text\":\"int64\"}\n{\"key__start\":242,\"key__end\":246,\"key__text\":\"pets\",\"type__start\":248,\"type__end\":253,\"type__text\":\"Pet[]\"}\n"
     );
 }

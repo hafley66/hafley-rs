@@ -4,8 +4,7 @@ use crate::types::{EmitFieldSpec, EmitSource, EmitSpec, QueryExtError};
 
 type ParsedPredicates = (Vec<EmitSpec>, Vec<Box<str>>, Vec<Box<str>>, Vec<Box<str>>);
 
-/// ts: `user.general_predicates(i)` per pattern. `scmpp::route` cut every other general predicate,
-/// so anything but `#emit!` is an error.
+/// ts: `user.general_predicates(i)` per pattern. Anything but `#emit!` is an error.
 pub fn read_and_parse_predicates(user: &Query) -> Result<ParsedPredicates, QueryExtError> {
     let mut emits = Vec::new();
     let mut relations = Vec::new();

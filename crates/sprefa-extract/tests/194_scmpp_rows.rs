@@ -30,11 +30,11 @@ const RECURSION: &str = "\
   rows: each)
 ";
 
-fn run(query: &str, extra: &[&str]) -> String {
+fn run(rust: &str, query: &str, extra: &[&str]) -> String {
     let dir = tempfile::tempdir().unwrap();
     let source = dir.path().join("fixture.rs");
     let scm = dir.path().join("query.scm");
-    std::fs::write(&source, RUST).unwrap();
+    std::fs::write(&source, rust).unwrap();
     std::fs::write(&scm, query).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .arg("query")
@@ -51,7 +51,7 @@ fn run(query: &str, extra: &[&str]) -> String {
 
 /// One line per row: every `NAME__text` column as `NAME=text`, whitespace collapsed.
 fn rows(query: &str) -> String {
-    run(query, &[])
+    run(RUST, query, &[])
         .lines()
         .map(|line| {
             let row: serde_json::Map<String, serde_json::Value> = serde_json::from_str(line).unwrap();
@@ -72,7 +72,7 @@ fn rows(query: &str) -> String {
 #[test]
 fn recursion_example_full_rows() {
     assert_eq!(
-        run(RECURSION, &[]),
+        run(RUST, RECURSION, &[]),
         r#"{"path":"fixture.rs","fn__start":3,"fn__end":7,"fn__text":"fact","body__start":23,"body__end":71,"body__text":"{\n    if n == 0 { 1 } else { n * fact(n - 1) }\n}","callee__start":56,"callee__end":60,"callee__text":"fact"}
 {"path":"fixture.rs","fn__start":181,"fn__end":186,"fn__text":"other","body__start":196,"body__end":245,"body__text":"{\n    let run = || other();\n    run() + other()\n}","callee__start":215,"callee__end":220,"callee__text":"other"}
 {"path":"fixture.rs","fn__start":181,"fn__end":186,"fn__text":"other","body__start":196,"body__end":245,"body__text":"{\n    let run = || other();\n    run() + other()\n}","callee__start":236,"callee__end":241,"callee__text":"other"}
@@ -215,7 +215,7 @@ fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other()
 fn sqlite_keeps_scmpp_row_and_the_cst() {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("scmpp.db");
-    let printed = run(RECURSION, &["--sqlite", db.to_str().unwrap()]);
+    let printed = run(RUST, RECURSION, &["--sqlite", db.to_str().unwrap()]);
     let connection = rusqlite::Connection::open(&db).unwrap();
     let count = |sql: &str| connection.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap();
     let actual = [
@@ -233,4 +233,20 @@ fn sqlite_keeps_scmpp_row_and_the_cst() {
         actual,
         "printed rows 3\nscmpp_row 3\nnamed nodes 69\nanonymous nodes 58\nedges 126\nedges with a field 54\ncapture rows 23"
     );
+}
+
+/// A frozen copy of `src/project.rs`, 2799 lines, sha256
+/// d58336b93f2103e321b35750f1ae5940cf6dd5390c75770b1c867c9e1ce3a1f9. The oracle at aae25cde:
+/// `ryi query --lang rust --query '(identifier) @x' src/project.rs | wc -l` -> 3575, and the
+/// `#inside?` / `#not-inside?` lowering over `function_item` -> 3197 / 378.
+#[test]
+fn corpus_counts_partition_identifiers_by_enclosing_function() {
+    let corpus = include_str!("fixtures/sprefa_extract_project.rs.frozen");
+    let counts = [
+        "((identifier) @x)",
+        "((identifier) @x (#has-ancestor? @x function_item stopBy: end))",
+        "((identifier) @x (#not-has-ancestor? @x function_item stopBy: end))",
+    ]
+    .map(|query| run(corpus, query, &[]).lines().count());
+    assert_eq!(counts, [3575, 3197, 378]);
 }

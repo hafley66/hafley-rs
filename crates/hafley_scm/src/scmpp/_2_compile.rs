@@ -1,9 +1,19 @@
 use tree_sitter::{Language, Query};
 
 use super::_0_types::{CapRef, Compiled, Cond, FlatPattern, Level, Rel, Rows, ScmppError, Walk};
-use super::_1_parens::{split, Arg, Pred};
+use super::_1_parens::{cut, split, top_items, Arg, Pred};
 
 pub const ROOT: &str = "__root";
+
+/// Relation predicates; each also has a `not-` form.
+const RELATIONS: [&str; 6] = [
+    "has?",
+    "has-ancestor?",
+    "has-parent?",
+    "precedes?",
+    "follows?",
+    "nth-child?",
+];
 
 struct Ctx<'a> {
     lang: &'a Language,
@@ -21,13 +31,25 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
     let sql = super::_3_lower::lower(&plan, &ctx.patterns);
-    let match_sql = super::_3_lower::lower_matches(&plan, &ctx.patterns);
     Ok(Compiled {
         patterns: ctx.patterns,
         plan,
         sql,
-        match_sql,
     })
+}
+
+/// The first relation predicate of a query file: `(top-level pattern index, op)`.
+pub fn first_relation(text: &str) -> Result<Option<(u16, String)>, ScmppError> {
+    for (pattern, item) in top_items(text)?.into_iter().enumerate() {
+        let (_, _, preds) = cut(&text[item.clone()], item.start)?;
+        if let Some(pred) = preds
+            .iter()
+            .find(|pred| RELATIONS.contains(&pred.op.strip_prefix("not-").unwrap_or(&pred.op)))
+        {
+            return Ok(Some((pattern as u16, pred.op.clone())));
+        }
+    }
+    Ok(None)
 }
 
 fn unsupported(pred: &Pred, message: &str) -> ScmppError {
@@ -51,7 +73,7 @@ fn resolve(name: &str, mine: &[Box<str>], outer: Scope) -> Option<CapRef> {
         })
 }
 
-pub(super) const TEXT_BUILTINS: [&str; 13] = [
+const TEXT_BUILTINS: [&str; 13] = [
     "eq?",
     "not-eq?",
     "any-eq?",
@@ -160,7 +182,7 @@ fn level(ctx: &mut Ctx, text: &str, base: usize, outer: Scope) -> Result<Level, 
                     cond
                 });
             }
-            "has?" | "has-ancestor?" | "has-parent?" | "precedes?" | "follows?" | "nth-child?" => {
+            bare if RELATIONS.contains(&bare) => {
                 relations.push((pred, negated, bare));
             }
             _ => return Err(unsupported(pred, "unknown predicate")),

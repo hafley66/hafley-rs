@@ -1,8 +1,10 @@
 #[derive(Debug)]
 pub enum QueryExtError {
     Parse(tree_sitter::QueryError),
-    /// A relation predicate's pattern, compiled or evaluated through `scmpp`.
+    /// The `scmpp` paren reader rejected the query text.
     Scmpp(crate::scmpp::ScmppError),
+    /// Top-level pattern `pattern` carries relation predicate `#op`; `ryii query --scmpp` evaluates it.
+    RelationPredicate { pattern: u16, op: String },
     UnknownOperator(String),
     Arity { operator: String, got: usize },
     DuplicateField(String),

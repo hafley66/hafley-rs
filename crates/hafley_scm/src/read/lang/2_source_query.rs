@@ -2,10 +2,10 @@
 //!
 //! The query compiles and runs through the shared `hafley_scm` engine: native
 //! tree-sitter text predicates (`eq?`, `not-eq?`, `match?`, `not-match?`,
-//! `any-of?`, and their `any-`/`not-any-` forms) evaluate on the cursor, host
-//! predicates (`has-ancestor?`, `has-parent?`, `has?`, `contains?`, and the
-//! generic `not-` forms) evaluate in the arena fill, and unknown predicates
-//! are build errors. Canonical source occurrence, match, and capture facts
+//! `any-of?`, and their `any-`/`not-any-` forms) evaluate on the cursor,
+//! relation predicates (`has?`, `has-ancestor?`, `has-parent?`, `precedes?`,
+//! `follows?`, `nth-child?`, and their `not-` forms) are build errors that
+//! name `ryii query --scmpp`, and other unknown predicates are build errors. Canonical source occurrence, match, and capture facts
 //! belong to the later normalization boundary and are intentionally absent
 //! here.
 
@@ -213,6 +213,9 @@ fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
             )
         }
         hafley_scm::QueryExtError::Scmpp(error) => format!("invalid query: {error}"),
+        hafley_scm::QueryExtError::RelationPredicate { pattern, op } => format!(
+            "invalid query: pattern {pattern}: #{op} is a relation predicate; use ryii query --scmpp"
+        ),
         hafley_scm::QueryExtError::UnknownOperator(operator) => {
             format!("invalid query: predicate #{operator} is not allowed")
         }
