@@ -1,0 +1,32 @@
+# Bench-only program of lab-20261003-duckdb-vs-sqlite-post-store. Own workspace root; nothing here
+# links into ryii. Features: `duck` = the duckdb crate (W1, X1, B1 delta); `sql` = print scm++ SQL (Q1).
+# B1 builds `--no-default-features` (no duckdb) vs `--features duck`; `sql` stays off in both.
+[package]
+name = "lab_duckdb_writer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[[bin]]
+name = "lab_writer"
+path = "src/main.rs"
+
+[features]
+default = ["duck"]
+duck = ["dep:duckdb"]
+sql = ["dep:hafley_scm", "dep:tree-sitter-rust", "dep:tree-sitter"]
+
+[dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+duckdb = { version = "1", features = ["bundled"], optional = true }
+hafley_scm = { path = "../../../../../hafley_scm", default-features = false, features = ["shared"], optional = true }
+tree-sitter = { version = "0.27", optional = true }
+tree-sitter-rust = { version = "0.24", optional = true }
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package."*"]
+opt-level = 3

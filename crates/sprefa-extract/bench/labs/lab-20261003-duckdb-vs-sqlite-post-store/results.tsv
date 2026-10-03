@@ -1,0 +1,213 @@
+run	case	corpus	engine	variant	repeats	load_average_1m	wall_s	peak_rss_mb	status	rows	reference_rows	rows_equal	order_equal	metric	value	note
+store	ancestor	small	ryii	scmpp	1	7.84	2.330	148.000	ok							
+store	resolve	small	ryii	resolve	1	7.84	1.610	232.000	ok							
+store	ancestor	crates	ryii	scmpp	1	9.29	8.660	263.000	ok							
+store	resolve	crates	ryii	resolve	1	8.49	5.020	478.000	ok							
+L1	ancestor	small	sqlite	query	3	8.12	0.450	17.000	ok	40467	40467	reference	reference			
+L1	ancestor	small	duckdb	attach_query	3	8.12	3.430	91.000	ok	40467	40467	yes	yes			
+L1	ancestor	small	duckdb	copy_load	1	8.20	0.510	139.000	ok							
+L1	ancestor	small	duckdb	copy_query	3	8.20	0.040	94.000	ok	40467	40467	yes	yes			
+L1	ancestor	small	duckdb	parquet_load	1	8.20	0.490	128.000	ok							
+L1	ancestor	small	duckdb	parquet_query	3	8.20	0.100	162.000	ok	40467	40467	yes	yes			
+L1	ancestor	crates	sqlite	query	3	8.20	2.000	43.000	ok	131834	131834	reference	reference			
+L1	ancestor	crates	duckdb	attach_query	3	7.70	11.050	148.000	ok	131834	131834	yes	yes			
+L1	ancestor	crates	duckdb	copy_load	1	6.43	1.580	240.000	ok							
+L1	ancestor	crates	duckdb	copy_query	3	6.43	0.080	174.000	ok	131834	131834	yes	yes			
+L1	ancestor	crates	duckdb	parquet_load	1	6.43	1.560	212.000	ok							
+L1	ancestor	crates	duckdb	parquet_query	3	6.55	0.130	178.000	ok	131834	131834	yes	yes			
+L1	ancestor	small	duckdb	attach_count_star	1	6.96			error							Invalid Error: Failed to prepare query "SELECT ROWID FROM "scmpp_node"": no such column: ROWID
+L1	ancestor	small	duckdb	attach_load	3	6.96	0.060	25.000	ok							
+L1	ancestor	crates	duckdb	attach_count_star	1	6.96			error							Invalid Error: Failed to prepare query "SELECT ROWID FROM "scmpp_node"": no such column: ROWID
+L1	ancestor	crates	duckdb	attach_load	3	6.96	0.140	25.000	ok							
+Q2	load	small	duckdb	load	1	6.65	1.010	213.000	ok							
+Q2	callers	small	sqlite	query	3	6.65	0.000	5.000	ok	166	166	reference	reference			
+Q2	callers	small	duckdb	query	3	6.65	0.010	31.000	ok	166	166	yes	yes			
+Q2	reaches	small	sqlite	query	3	6.65	0.010	8.000	ok	34	34	reference	reference			
+Q2	reaches	small	duckdb	query	3	6.65	0.010	26.000	ok	34	34	yes	yes			
+Q2	importers	small	sqlite	query	3	6.65	0.000	4.000	ok	61	61	reference	reference			
+Q2	importers	small	duckdb	query	3	6.65	0.010	29.000	ok	61	61	yes	yes			
+Q2	cycles	small	sqlite	query	3	6.65	0.250	18.000	ok	267	267	reference	reference			
+Q2	cycles	small	duckdb	query	3	6.65	0.090	99.000	ok	267	267	yes	yes			
+Q2	load	crates	duckdb	load	1	7.15	3.270	264.000	ok							
+Q2	callers	crates	sqlite	query	3	7.15	0.000	6.000	ok	166	166	reference	reference			
+Q2	callers	crates	duckdb	query	3	7.15	0.010	31.000	ok	166	166	yes	yes			
+Q2	reaches	crates	sqlite	query	3	7.15	0.030	10.000	ok	34	34	reference	reference			
+Q2	reaches	crates	duckdb	query	3	7.15	0.010	29.000	ok	34	34	yes	yes			
+Q2	importers	crates	sqlite	query	3	7.15	0.000	5.000	ok	66	66	reference	reference			
+Q2	importers	crates	duckdb	query	3	7.15	0.010	31.000	ok	66	66	yes	yes			
+Q2	cycles	crates	sqlite	query	3	7.15	0.560	24.000	ok	267	267	reference	reference			
+Q2	cycles	crates	duckdb	query	3	6.82	0.100	128.000	ok	267	267	yes	yes			
+M1	ancestor	crates	duckdb	mem64_t1	3	6.33	0.230	115.000	ok	131834	131834	yes		temporary_storage_bytes	2818048	
+M1	chain	crates	duckdb	mem64_t1	3	6.33	0.640	105.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem64_t4	1	7.10			error							Out of Memory Error: failed to pin block of size 256.0 KiB (61.1 MiB/61.0 MiB used) Possible solutions: * Reducing the number of threads (SET threads=X) * Disabling insertion-order preservation (SET preserve_insertion_order=false) * Increas
+M1	chain	crates	duckdb	mem64_t4	3	7.10	0.260	110.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem64_tdefault	1	7.10			error							Out of Memory Error: failed to pin block of size 256.0 KiB (61.2 MiB/61.0 MiB used) Possible solutions: * Reducing the number of threads (SET threads=X) * Disabling insertion-order preservation (SET preserve_insertion_order=false) * Increas
+M1	chain	crates	duckdb	mem64_tdefault	1	7.10			error							Out of Memory Error: failed to pin block of size 256.0 KiB (60.8 MiB/61.0 MiB used) Possible solutions: * Reducing the number of threads (SET threads=X) * Disabling insertion-order preservation (SET preserve_insertion_order=false) * Increas
+M1	ancestor	crates	duckdb	mem128_t1	3	7.10	0.200	148.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	mem128_t1	3	7.10	0.660	120.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem128_t4	3	7.10	0.100	154.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	mem128_t4	3	7.09	0.230	125.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem128_tdefault	3	7.09	0.080	167.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	mem128_tdefault	3	7.09	0.200	150.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem256_t1	3	7.09	0.190	154.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	mem256_t1	3	7.09	0.630	124.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem256_t4	3	7.09	0.110	161.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	mem256_t4	3	7.09	0.210	120.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	mem256_tdefault	3	7.24	0.080	174.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	mem256_tdefault	3	7.24	0.200	148.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	memdefault_t1	3	7.24	0.190	155.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	memdefault_t1	3	7.24	0.620	118.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	memdefault_t4	3	7.24	0.100	159.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	memdefault_t4	3	7.24	0.220	120.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+M1	ancestor	crates	duckdb	memdefault_tdefault	3	7.14	0.090	176.000	ok	131834	131834	yes		temporary_storage_bytes	0	
+M1	chain	crates	duckdb	memdefault_tdefault	3	7.14	0.180	146.000	ok	35484	35484	yes		temporary_storage_bytes	0	
+W1	write	small	none	process	3	6.58	0.530	212.000	ok							
+W1	write	small	sqlite	process	3	6.69	1.310	317.000	ok	1142395						
+W1	write	small	duckdb	process	3	6.69	1.190	415.000	ok	1142395						
+W1	write	small	duckdb_pk	process	3	7.20	1.600	427.000	ok	1142395						
+W1	write	crates	none	process	3	6.94	1.710	418.000	ok							
+W1	write	crates	sqlite	process	3	6.79	4.490	797.000	ok	3800162						
+W1	write	crates	duckdb	process	3	7.19	3.880	847.000	ok	3800162						
+W1	write	crates	duckdb_pk	process	3	7.40	5.360	920.000	ok	3800162						
+Q1	call_expression/has/closure_expression/default	small	ryii	store	1	7.59	2.000	126.000	ok							
+Q1	call_expression/has/closure_expression/default	small	duckdb	load	1	7.59	0.590	150.000	ok							
+Q1	call_expression/has/closure_expression/default	small	sqlite	query	3	7.59	0.050	10.000	ok	5748	5748	reference	reference			
+Q1	call_expression/has/closure_expression/default	small	duckdb	query	3	7.59	0.030	72.000	ok	5748	5748	yes	yes			
+Q1	call_expression/has/closure_expression/neighbor	small	ryii	store	1	7.59	2.720	117.000	ok							
+Q1	call_expression/has/closure_expression/neighbor	small	duckdb	load	1	7.86	0.500	160.000	ok							
+Q1	call_expression/has/closure_expression/neighbor	small	sqlite	query	3	7.86	1.160	6.000	ok	0	0	reference	reference			
+Q1	call_expression/has/closure_expression/neighbor	small	duckdb	query	3	8.19	0.020	53.000	ok	0	0	yes	yes			
+Q1	call_expression/has/closure_expression/stop	small	ryii	store	1	8.19	1.920	118.000	ok							
+Q1	call_expression/has/closure_expression/stop	small	duckdb	load	1	8.19	0.500	136.000	ok							
+Q1	call_expression/has/closure_expression/stop	small	sqlite	query	3	8.19	0.060	9.000	ok	5747	5747	reference	reference			
+Q1	call_expression/has/closure_expression/stop	small	duckdb	query	3	8.19	0.050	81.000	ok	5747	5747	yes	yes			
+Q1	call_expression/has/closure_expression/field	small	ryii	store	1	8.19	1.770	116.000	ok							
+Q1	call_expression/has/closure_expression/field	small	duckdb	load	1	7.86	0.490	144.000	ok							
+Q1	call_expression/has/closure_expression/field	small	sqlite	query	3	7.86	0.050	5.000	ok	0	0	reference	reference			
+Q1	call_expression/has/closure_expression/field	small	duckdb	query	3	7.86	0.030	116.000	ok	0	0	yes	yes			
+Q1	call_expression/has/closure_expression/not	small	ryii	store	1	7.86	1.820	145.000	ok							
+Q1	call_expression/has/closure_expression/not	small	duckdb	load	1	7.86	0.500	139.000	ok							
+Q1	call_expression/has/closure_expression/not	small	sqlite	query	3	7.86	0.080	19.000	ok	34893	34893	reference	reference			
+Q1	call_expression/has/closure_expression/not	small	duckdb	query	3	7.86	0.040	99.000	ok	34893	34893	yes	yes			
+Q1	call_expression/has-ancestor/closure_expression/default	small	ryii	store	1	7.71	2.160	125.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/default	small	duckdb	load	1	7.71	0.490	148.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/default	small	sqlite	query	3	7.71	0.510	9.000	ok	7262	7262	reference	reference			
+Q1	call_expression/has-ancestor/closure_expression/default	small	duckdb	query	3	7.71	0.030	66.000	ok	7262	7262	yes	yes			
+Q1	call_expression/has-ancestor/closure_expression/neighbor	small	ryii	store	1	7.71	1.740	109.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/neighbor	small	duckdb	load	1	7.49	0.490	154.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/neighbor	small	sqlite	query	3	7.49	0.050	6.000	ok	1796	1796	reference	reference			
+Q1	call_expression/has-ancestor/closure_expression/neighbor	small	duckdb	query	3	7.49	0.030	62.000	ok	1796	1796	yes	yes			
+Q1	call_expression/has-ancestor/closure_expression/stop	small	ryii	store	1	7.49	2.270	117.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/stop	small	duckdb	load	1	7.49	0.500	155.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/stop	small	sqlite	query	3	7.37	0.530	7.000	ok	3664	3664	reference	reference			
+Q1	call_expression/has-ancestor/closure_expression/stop	small	duckdb	query	3	7.37	0.030	79.000	ok	3664	3664	yes	yes			
+Q1	call_expression/has-ancestor/closure_expression/field	small	ryii	store	1	7.37	5.200	113.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/field	small	duckdb	load	1	7.02	0.520	149.000	ok							
+Q1	call_expression/has-ancestor/closure_expression/field	small	sqlite	query	1	7.02	3.980	9.000	ok							
+W1	write	small	sqlite	process	3	6.69	1.310	317.000	ok	1142395				write_s	0.798	
+W1	write	small	sqlite	process	3	6.69	1.310	317.000	ok	1142395				index_or_checkpoint_s	0.313	
+W1	write	small	sqlite	process	3	6.69	1.310	317.000	ok	1142395				rows_per_s	1432018.000	
+W1	write	small	sqlite	process						1115506	1115506	yes		file_bytes	59572224	
+W1	write	small	duckdb	process	3	6.69	1.190	415.000	ok	1142395				write_s	0.662	
+W1	write	small	duckdb	process	3	6.69	1.190	415.000	ok	1142395				index_or_checkpoint_s	0.020	
+W1	write	small	duckdb	process	3	6.69	1.190	415.000	ok	1142395				rows_per_s	1726594.000	
+W1	write	small	duckdb	process						1115506	1115506	yes		file_bytes	18624512	
+W1	write	small	duckdb_pk	process	3	7.20	1.600	427.000	ok	1142395				write_s	1.086	
+W1	write	small	duckdb_pk	process	3	7.20	1.600	427.000	ok	1142395				index_or_checkpoint_s	0.000	
+W1	write	small	duckdb_pk	process	3	7.20	1.600	427.000	ok	1142395				rows_per_s	1051733.000	
+W1	write	small	duckdb_pk	process						1115506	1115506	yes		file_bytes	39596032	
+W1	write	crates	sqlite	process	3	6.79	4.490	797.000	ok	3800162				write_s	2.809	
+W1	write	crates	sqlite	process	3	6.79	4.490	797.000	ok	3800162				index_or_checkpoint_s	1.115	
+W1	write	crates	sqlite	process	3	6.79	4.490	797.000	ok	3800162				rows_per_s	1352836.000	
+W1	write	crates	sqlite	process						3721638	3721638	yes		file_bytes	199163904	
+W1	write	crates	duckdb	process	3	7.19	3.880	847.000	ok	3800162				write_s	2.192	
+W1	write	crates	duckdb	process	3	7.19	3.880	847.000	ok	3800162				index_or_checkpoint_s	0.025	
+W1	write	crates	duckdb	process	3	7.19	3.880	847.000	ok	3800162				rows_per_s	1733376.000	
+W1	write	crates	duckdb	process						3721638	3721638	yes		file_bytes	57946112	
+W1	write	crates	duckdb_pk	process	3	7.40	5.360	920.000	ok	3800162				write_s	3.664	
+W1	write	crates	duckdb_pk	process	3	7.40	5.360	920.000	ok	3800162				index_or_checkpoint_s	0.021	
+W1	write	crates	duckdb_pk	process	3	7.40	5.360	920.000	ok	3800162				rows_per_s	1037168.000	
+W1	write	crates	duckdb_pk	process						3721638	3721638	yes		file_bytes	119025664	
+C1	ancestor	crates	duckdb	iteration1	3	6.24	0.087		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	duckdb	iteration2	3	6.24	0.072		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	duckdb	iteration3	3	6.24	0.067		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	duckdb	iteration4	3	6.24	0.076		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	duckdb	iteration5	3	6.24	0.071		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	duckdb	iteration1	3	6.44	0.036		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	duckdb	iteration2	3	6.44	0.031		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	duckdb	iteration3	3	6.44	0.031		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	duckdb	iteration4	3	6.44	0.032		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	duckdb	iteration5	3	6.44	0.030		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	sqlite	iteration1	3	6.24	2.014		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	sqlite	iteration2	3	6.24	2.001		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	sqlite	iteration3	3	6.24	1.949		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	sqlite	iteration4	3	6.24	1.872		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	crates	sqlite	iteration5	3	6.24	1.918		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	sqlite	iteration1	3	6.44	0.443		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	sqlite	iteration2	3	6.44	0.442		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	sqlite	iteration3	3	6.44	0.481		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	sqlite	iteration4	3	6.44	0.452		ok							in-process statement time; iteration1 = first query after process start
+C1	ancestor	small	sqlite	iteration5	3	6.44	0.458		ok							in-process statement time; iteration1 = first query after process start
+X1	append	synthetic	sqlite	sqlite		6.86			ok					writer_wall_s	4.82	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					writer_exit	0	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					writer_batches_ok	200	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					writer_batches_error	0	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					writer_open_retries	0	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					final_count	200000	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_queries	1212	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_queries_ok	1212	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_queries_error	0	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_inconsistent	0	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_latency_median_s	0.007	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_latency_max_s	0.019	
+X1	append	synthetic	sqlite	sqlite		6.86			ok					reader_distinct_counts_seen	201	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					writer_wall_s	4.98	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					writer_exit	0	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					writer_batches_ok	200	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					writer_batches_error	0	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					writer_open_retries	0	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					final_count	200000	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_queries	1159	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_queries_ok	8	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_queries_error	1151	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_inconsistent	0	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_latency_median_s	0.008	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_latency_max_s	0.021	
+X1	append	synthetic	duckdb	duckdb		6.79			ok					reader_distinct_counts_seen	2	
+X1	append	synthetic	duckdb	duckdb					error					reader_error	1151	IO Error: Could not set lock on file "/Users/chrishafley/projects/hafley-rs/.boo
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					writer_wall_s	8.05	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					writer_exit	0	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					writer_batches_ok	200	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					writer_batches_error	0	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					writer_open_retries	230	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					final_count	200000	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_queries	1687	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_queries_ok	329	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_queries_error	1358	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_inconsistent	0	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_latency_median_s	0.008	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_latency_max_s	0.019	
+X1	append	synthetic	duckdb	duckdb_reopen		6.65			ok					reader_distinct_counts_seen	85	
+X1	append	synthetic	duckdb	duckdb_reopen					error					reader_error	1358	IO Error: Could not set lock on file "/Users/chrishafley/projects/hafley-rs/.boo
+S1	ancestor	small	ryii	ryii_store_as_written					ok					bytes	69533696	
+S1	ancestor	small	sqlite	sqlite_ryii_writer_with_indexes					ok					bytes	59572224	
+S1	ancestor	small	sqlite	sqlite_vacuum_with_indexes					ok					bytes	54722560	
+S1	ancestor	small	sqlite	sqlite_vacuum_tables_only					ok					bytes	39387136	
+S1	ancestor	small	sqlite	sqlite_vacuum_tables_only_page4096					ok					bytes	39170048	
+S1	ancestor	small	duckdb	duckdb_ctas_copy					ok					bytes	17838080	
+S1	ancestor	small	duckdb	duckdb_appender					ok					bytes	18624512	
+S1	ancestor	small	duckdb	duckdb_appender_primary_keys					ok					bytes	39596032	
+S1	ancestor	small	parquet	parquet_snappy					ok					bytes	19721115	
+S1	ancestor	crates	ryii	ryii_store_as_written					ok					bytes	220463104	
+S1	ancestor	crates	sqlite	sqlite_ryii_writer_with_indexes					ok					bytes	199163904	
+S1	ancestor	crates	sqlite	sqlite_vacuum_with_indexes					ok					bytes	181993472	
+S1	ancestor	crates	sqlite	sqlite_vacuum_tables_only					ok					bytes	129892352	
+S1	ancestor	crates	sqlite	sqlite_vacuum_tables_only_page4096					ok					bytes	130899968	
+S1	ancestor	crates	duckdb	duckdb_ctas_copy					ok					bytes	55324672	
+S1	ancestor	crates	duckdb	duckdb_appender					ok					bytes	57946112	
+S1	ancestor	crates	duckdb	duckdb_appender_primary_keys					ok					bytes	119025664	
+S1	ancestor	crates	parquet	parquet_snappy					ok					bytes	61732754	
+B1	lab_writer		duckdb	clean	1	7.34	272.500		ok					binary_bytes	42029424	
+B1	lab_writer		duckdb	incremental	3	9.71	1.300		ok					binary_bytes	42029424	
+B1	lab_writer		none	clean	1	9.33	18.500		ok					binary_bytes	2375536	
+B1	lab_writer		none	incremental	3	8.44	0.600		ok					binary_bytes	2375536	
