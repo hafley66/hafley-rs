@@ -23,6 +23,8 @@ use sprefa_extract::{
 use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
 #[path = "0a_graph_target.rs"]
 mod target;
+#[path = "0b_graph_anchor.rs"]
+mod anchor;
 
 const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_name, \
                          grade, kind, caller_site_start, callee_start FROM ( \
@@ -375,7 +377,7 @@ fn named_starts(edges: &[PlaneEdge], anchor: &str) -> BTreeSet<Node> {
     edges
         .iter()
         .filter(|edge| edge.src.1.as_deref() == Some(name))
-        .filter(|edge| path.is_none_or(|path| Path::new(&edge.src.0).ends_with(path)))
+        .filter(|edge| path.is_none_or(|path| anchor::anchor_path_matches(path, &edge.src.0)))
         .map(|edge| edge.src.clone())
         .collect()
 }
@@ -587,14 +589,9 @@ impl Arm<'_> {
                 };
                 let mut rows = edges(connection, CALLERS_SQL, name, lines)?;
                 if let Some(path) = path {
-                    let target = fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
                     rows.retain(|row| {
-                        let FlatFact::GraphEdge { to_path, .. } = row else {
-                            return false;
-                        };
-                        let candidate = fs::canonicalize(to_path)
-                            .unwrap_or_else(|_| PathBuf::from(to_path));
-                        candidate == target
+                        matches!(row, FlatFact::GraphEdge { to_path, .. }
+                            if anchor::anchor_path_matches(Path::new(path), to_path))
                     });
                 }
                 Ok(rows)
