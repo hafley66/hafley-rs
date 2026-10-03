@@ -364,11 +364,18 @@ fn first_discovery(
     Ok(rows)
 }
 
-/// Every source node whose name is NAME: the walk's seed set.
-fn named_starts(edges: &[PlaneEdge], name: &str) -> BTreeSet<Node> {
+/// Every source node whose name is NAME: the walk's seed set. `PATH#NAME`
+/// keeps the ones declared in a file whose path ends with PATH (whole
+/// components); bare NAME keeps all of them.
+fn named_starts(edges: &[PlaneEdge], anchor: &str) -> BTreeSet<Node> {
+    let (path, name) = match anchor.split_once('#') {
+        Some((path, name)) => (Some(Path::new(path)), name),
+        None => (None, anchor),
+    };
     edges
         .iter()
         .filter(|edge| edge.src.1.as_deref() == Some(name))
+        .filter(|edge| path.is_none_or(|path| Path::new(&edge.src.0).ends_with(path)))
         .map(|edge| edge.src.clone())
         .collect()
 }
@@ -541,12 +548,10 @@ enum Arm<'a> {
 impl Arm<'_> {
     fn name(&self) -> &str {
         match self {
-            Arm::Callers(name) => name.rsplit_once('#').map_or(*name, |(_, name)| name),
-            Arm::Uses(name)
-            | Arm::From(name)
-            | Arm::CallPath(name)
-            | Arm::TypePath(name)
-            | Arm::FlowPath(name) => name,
+            Arm::Callers(name) | Arm::From(name) | Arm::CallPath(name) | Arm::TypePath(name) => {
+                name.rsplit_once('#').map_or(*name, |(_, name)| name)
+            }
+            Arm::Uses(name) | Arm::FlowPath(name) => name,
         }
     }
 
@@ -758,11 +763,20 @@ pub fn run_to(
     cli: GraphArgs,
     output: &mut dyn std::io::Write,
 ) -> Result<(), Box<dyn std::error::Error>> {
+    for (flag, anchor) in [
+        ("--callers", &cli.callers),
+        ("--from", &cli.from),
+        ("--call-path", &cli.call_path),
+        ("--type-path", &cli.type_path),
+    ] {
+        if let Some((path, name)) = anchor.as_deref().and_then(|anchor| anchor.split_once('#')) {
+            if path.is_empty() || name.is_empty() || name.contains('#') {
+                return Err(format!("{flag} requires NAME or FILE#NAME").into());
+            }
+        }
+    }
     if let Some(anchor) = cli.callers.as_deref() {
         match anchor.split_once('#') {
-            Some((path, name)) if path.is_empty() || name.is_empty() || name.contains('#') => {
-                return Err("--callers requires NAME or FILE#NAME".into());
-            }
             None if anchor.contains('.') => {
                 return Err("--callers Class.method is unsupported; use FILE#method".into());
             }

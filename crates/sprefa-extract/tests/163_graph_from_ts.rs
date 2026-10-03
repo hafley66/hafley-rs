@@ -21,9 +21,13 @@ fn trace_path(tag: &str) -> PathBuf {
 }
 
 fn rows(tag: &str, name: &str) -> Vec<Value> {
+    rows_in(tag, name, "tests/fixtures/graph_ts")
+}
+
+fn rows_in(tag: &str, name: &str, corpus: &str) -> Vec<Value> {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .args(["graph", "--from", name])
-        .arg("tests/fixtures/graph_ts")
+        .arg(corpus)
         .env("HAFLEY_TRACE", trace_path(tag))
         .env("RUST_LOG", "off")
         .output()
@@ -74,4 +78,42 @@ fn the_tail_of_the_chain_reaches_nothing() {
 #[test]
 fn an_unknown_seed_reaches_nothing() {
     assert_eq!(rows("absent", "nobodyHere").len(), 0);
+}
+
+/// Two files declare `build`. Bare NAME seeds both; `PATH#NAME` seeds the
+/// declarations in files whose path ends with PATH, and a PATH no file ends
+/// with seeds nothing.
+#[test]
+fn a_path_anchor_selects_one_of_several_same_named_seeds() {
+    let corpus = "tests/fixtures/graph_ts_same_name";
+    let reached = |name: &str| {
+        rows_in("anchor", name, corpus)
+            .iter()
+            .map(|row| format!("\n{} {} {}", row["path"].as_str().unwrap(), row["name"].as_str().unwrap(), row["depth"]))
+            .collect::<String>()
+    };
+    assert_eq!(
+        [
+            "build",
+            "a/build.ts#build",
+            "graph_ts_same_name/b/build.ts#build",
+            "build.ts#build",
+            "c/build.ts#build",
+            "uild.ts#build",
+        ]
+        .map(|name| format!("{name}:{}", reached(name)))
+        .join("\n"),
+        "build:
+tests/fixtures/graph_ts_same_name/a/build.ts stepA 1
+tests/fixtures/graph_ts_same_name/b/build.ts stepB 1
+a/build.ts#build:
+tests/fixtures/graph_ts_same_name/a/build.ts stepA 1
+graph_ts_same_name/b/build.ts#build:
+tests/fixtures/graph_ts_same_name/b/build.ts stepB 1
+build.ts#build:
+tests/fixtures/graph_ts_same_name/a/build.ts stepA 1
+tests/fixtures/graph_ts_same_name/b/build.ts stepB 1
+c/build.ts#build:
+uild.ts#build:"
+    );
 }
