@@ -71,3 +71,18 @@ No recursive CTE. Every key is integer.
 2. ryi fact tables (schema/1_facts.tsp: `_content_id`, `kind`, `path`, `name`, ... as
    strings): same rule through the TypeSpec SQL emitter's interned dictionaries;
    separate plan.
+
+## Engine neutrality (approved 2026-10-03)
+
+The interned-id + preorder-range design is engine independent. Phase 1 keeps it so:
+
+1. `_3_lower` emits plain SQL: joins, range predicates, `NOT EXISTS`, one `regexp`
+   scalar function. No SQLite-only syntax (no `WITHOUT ROWID` inside the query, no
+   recursive CTE).
+2. Row writing sits behind one seam in the ryi bin, so rows can go to SQLite or to
+   Arrow/Parquet.
+3. Bench: the same compiled SQL on SQLite and DuckDB (`duckdb` crate, dev/bench only,
+   not in the shipped binary) for the two profiled queries over hafley-rs crates/;
+   table of wall, peak RSS, DB size per engine. The numbers decide the engine.
+
+Time box: phase 1 is one writer pass; stop and report if it is not converging.
