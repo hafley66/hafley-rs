@@ -670,6 +670,37 @@ fn variant_seats_rename_through_owner_and_use() {
     );
 }
 
+/// The enum sits in a private module and is named through re-exports: `pub use
+/// types::*` at the root, `use crate::types::QueryError`, and the package's own
+/// ident (`extern crate self`). Each `QueryError::Only { .. }` constructor and
+/// pattern is reached through the owner's re-export set.
+#[test]
+fn variant_seats_rename_through_owner_reexports() {
+    let fixture = fixture("variant_reexport", "commit");
+    let stdout = rename_verb(
+        &fixture,
+        "src/types/query_error.rs#Only",
+        "ScmOnly",
+        &["--commit"],
+    );
+    let plan: Vec<&str> = stdout.lines().filter(|line| line.starts_with("  src/")).collect();
+    assert_eq!(
+        plan,
+        [
+            "  src/lib.rs  1 uses",
+            "  src/read.rs  2 uses",
+            "  src/types/query_error.rs  1 uses",
+        ],
+        "{stdout}"
+    );
+    let entries = diff_rq(&fixture.root, &tree("variant_reexport", "after"));
+    assert!(
+        entries.is_empty(),
+        "committed tree differs from after/:\n{}",
+        entries.join("\n")
+    );
+}
+
 // ── E.3 serde and string spellings ──────────────────────────────────────────
 
 /// `#[serde(rename = "size")]` sits beside `struct Helper { size: u32 }`: the
@@ -743,10 +774,11 @@ fn fn_body_use_scopes_the_bare_name_to_its_block() {
 /// `use` scoping all still compile once the plan lands.
 #[test]
 fn new_fixture_crates_pass_cargo_check() {
-    let cases: [(&str, &str, &str); 5] = [
+    let cases: [(&str, &str, &str); 6] = [
         ("path", "src/elsewhere/impl.rs#Helper", "Tool"),
         ("field", "src/util.rs#size", "width"),
         ("variant", "src/lib.rs#Old", "Prior"),
+        ("variant_reexport", "src/types/query_error.rs#Only", "ScmOnly"),
         ("serde", "src/util.rs#size", "width"),
         ("fnuse", "src/util.rs#Helper", "Tool"),
     ];

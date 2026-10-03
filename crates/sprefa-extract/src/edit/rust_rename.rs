@@ -97,6 +97,14 @@ impl Rename for RustSource {
             .map(|home| module_of(home, &declaration.chain))
             .collect();
         let nameable = corpus.nameable(&anchor_modules);
+        // A member is spelled through its owner, so the owner's own re-exports
+        // (scanned under the owner's name) decide which `Owner::` paths reach it.
+        let owners = match &declaration.kind {
+            DeclKind::Variant { owner } | DeclKind::Field { owner } => {
+                Corpus::open(cx, owner).nameable(&anchor_modules)
+            }
+            _ => BTreeSet::new(),
+        };
         let reexports = corpus.reexports(
             &nameable,
             (request.anchor.clone(), declaration.chain.clone()),
@@ -129,7 +137,7 @@ impl Rename for RustSource {
                     &declaration.kind,
                     declaration.namespace,
                     declaration.owner.as_deref(),
-                    &anchor_modules,
+                    &owners,
                     request,
                     &mut refs,
                     &mut seats,
@@ -511,7 +519,7 @@ impl Corpus {
         anchor_kind: &DeclKind,
         anchor_namespace: Namespace,
         anchor_owner: Option<&str>,
-        anchor_modules: &[ModuleId],
+        owners: &BTreeSet<ModuleId>,
         request: &RenameRequest,
         refs: &mut Vec<SymbolRef>,
         seats: &mut Vec<SymbolSeat>,
@@ -557,7 +565,7 @@ impl Corpus {
                 .is_some_and(|module| nameable.contains(&module));
             let binds_variant = match anchor_kind {
                 DeclKind::Variant { owner } => {
-                    self.variant_leaf(home, &leaf.chain, &leaf.prefix, owner, anchor_modules)
+                    self.variant_leaf(home, &leaf.chain, &leaf.prefix, owner, owners)
                 }
                 _ => false,
             };
@@ -630,8 +638,7 @@ impl Corpus {
                         &path.chain,
                         &path.prefix,
                         owner,
-                        anchor_modules,
-                        nameable,
+                        owners,
                         scan,
                     ),
                     _ => false,
@@ -723,8 +730,7 @@ impl Corpus {
                             chain,
                             &owner_path(prefix, site_owner),
                             owner,
-                            anchor_modules,
-                            nameable,
+                            owners,
                             scan,
                         ) =>
                     {
@@ -861,18 +867,19 @@ impl Corpus {
         chain: &[String],
         prefix: &[String],
         owner: &str,
-        anchors: &[ModuleId],
+        owners: &BTreeSet<ModuleId>,
     ) -> bool {
         match prefix.split_last() {
             Some((last, before)) if last == owner => self
                 .resolve(home, chain, before)
-                .is_some_and(|module| anchors.contains(&module)),
+                .is_some_and(|module| owners.contains(&module)),
             _ => false,
         }
     }
 
     /// Whether a path's owner segment names the anchor's owner: the segments
-    /// before it resolve to the anchor module, or a module-scope `use` binds it.
+    /// before it resolve to a module the owner is nameable from, or a
+    /// module-scope `use` binds it from one.
     #[allow(clippy::too_many_arguments)]
     fn owner_reach(
         &self,
@@ -880,8 +887,7 @@ impl Corpus {
         chain: &[String],
         prefix: &[String],
         owner: &str,
-        anchors: &[ModuleId],
-        nameable: &BTreeSet<ModuleId>,
+        owners: &BTreeSet<ModuleId>,
         scan: &FileScan,
     ) -> bool {
         let Some((last, before)) = prefix.split_last() else {
@@ -891,13 +897,13 @@ impl Corpus {
             return false;
         }
         match self.resolve(home, chain, before) {
-            Some(module) if anchors.contains(&module) => true,
+            Some(module) if owners.contains(&module) => true,
             Some(_) if before.is_empty() => scan.owner_leaves.iter().any(|leaf| {
                 self.names.borrow().lookup(leaf.name) == owner
                     && leaf.block.is_none()
                     && self
                         .resolve(home, &leaf.chain, &leaf.prefix)
-                        .is_some_and(|module| nameable.contains(&module))
+                        .is_some_and(|module| owners.contains(&module))
             }),
             _ => false,
         }
