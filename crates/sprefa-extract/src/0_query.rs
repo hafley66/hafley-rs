@@ -157,7 +157,7 @@ fn run_scmpp(
     let mut compiled = std::collections::HashMap::<String, Option<hafley_scm::scmpp::Compiled>>::new();
     let mut skipped = std::collections::BTreeMap::<String, usize>::new();
     let mut cst_written = std::collections::HashSet::new();
-    let mut sql_from = None::<String>;
+    let mut used = std::collections::BTreeSet::<String>::new();
     for path in paths {
         let name = path.to_string_lossy();
         let language = match &cli.lang {
@@ -182,7 +182,7 @@ fn run_scmpp(
             *skipped.entry(language).or_default() += 1;
             continue;
         };
-        sql_from.get_or_insert_with(|| language.clone());
+        used.insert(language.clone());
         let bytes = source_bytes(path, cli.digest.as_deref())?;
         let tree = hafley_scm::cst::parse(&grammar, &bytes)
             .ok_or_else(|| format!("{name}: tree-sitter returned no tree"))?;
@@ -207,8 +207,19 @@ fn run_scmpp(
                 .collect::<Vec<_>>().join(", "),
         ));
     }
-    if let Some(language) = sql_from {
-        let found = compiled[&language].as_ref().expect("compiled language");
+    // One SQL statement runs over every file's rows; abstain when the languages compiled different SQL.
+    let sql_of = |language: &String| &compiled[language].as_ref().expect("compiled language").sql;
+    if let Some(first) = used.first() {
+        let differ = used.iter().filter(|language| sql_of(language) != sql_of(first)).collect::<Vec<_>>();
+        if !differ.is_empty() {
+            return Err(format!(
+                "query: scm++ compiled different SQL for languages {first} and {}; run one language per --lang",
+                differ.iter().map(|language| language.as_str()).collect::<Vec<_>>().join(", "),
+            ));
+        }
+    }
+    if let Some(language) = used.first() {
+        let found = compiled[language].as_ref().expect("compiled language");
         let database = output.database.as_mut().expect("scm++ database");
         let rows = crate::scmpp::run_sql(database, found).map_err(|error| format!("scm++ SQL: {error}"))?;
         // --sqlite keeps the rows in `scmpp_row` and prints none, like every other --sqlite verb.

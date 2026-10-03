@@ -250,3 +250,36 @@ fn corpus_counts_partition_identifiers_by_enclosing_function() {
     .map(|query| run(corpus, query, &[]).lines().count());
     assert_eq!(counts, [3575, 3197, 378]);
 }
+
+/// Two languages in one run: each compiles the query on its own grammar, and the one SQL
+/// statement runs over both files' rows because the compiled SQL strings are equal.
+#[test]
+fn two_languages_with_equal_sql_share_one_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let rust = dir.path().join("a.rs");
+    let python = dir.path().join("b.py");
+    let scm = dir.path().join("query.scm");
+    std::fs::write(&rust, "fn fact(n: u32) -> u32 { fact(n) }\n").unwrap();
+    std::fs::write(&python, "def fact(n):\n    return fact(n)\n").unwrap();
+    std::fs::write(&scm, "((identifier) @x (#eq? @x \"fact\"))").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .arg("query")
+        .arg("--scmpp")
+        .arg(&scm)
+        .arg(&rust)
+        .arg(&python)
+        .env("DL_TRAIL", "0")
+        .output()
+        .expect("ryii runs");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let prefix = format!("{}/", dir.path().display());
+    let mut lines = String::from_utf8(output.stdout).unwrap().replace(&prefix, "").lines().map(str::to_string).collect::<Vec<_>>();
+    lines.sort();
+    assert_eq!(
+        lines.join("\n"),
+        r#"{"path":"a.rs","x__start":25,"x__end":29,"x__text":"fact"}
+{"path":"a.rs","x__start":3,"x__end":7,"x__text":"fact"}
+{"path":"b.py","x__start":24,"x__end":28,"x__text":"fact"}
+{"path":"b.py","x__start":4,"x__end":8,"x__text":"fact"}"#
+    );
+}
