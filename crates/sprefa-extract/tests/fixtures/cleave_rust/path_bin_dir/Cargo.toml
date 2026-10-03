@@ -1,0 +1,8 @@
+[package]
+name = "cleave-rust-path-bin-dir"
+version = "0.0.0"
+edition = "2021"
+
+[[bin]]
+name = "tool"
+path = "src/bin/tool.rs"

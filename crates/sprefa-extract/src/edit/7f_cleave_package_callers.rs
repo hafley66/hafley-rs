@@ -15,8 +15,10 @@ pub(super) fn package_callers(
         {
             continue;
         }
-        let spelled = arm.spell_module(cx, rel, src);
-        let Some(text) = cx.text(rel) else {
+        let Some(text) = cx.text(rel).filter(|text| text.contains(item)) else {
+            continue;
+        };
+        let Some(spelled) = arm.spell_module(cx, rel, src) else {
             continue;
         };
         if !text.contains(&format!("{spelled}::{item}"))

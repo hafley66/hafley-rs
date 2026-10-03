@@ -405,14 +405,18 @@ fn glob_reexports(
         if !text.contains("::*;") {
             continue;
         }
-        let dest_spelled = arm.spell_module(cx, rel, dest);
+        let (Some(dest_spelled), Some(src_spelled)) =
+            (arm.spell_module(cx, rel, dest), arm.spell_module(cx, rel, src))
+        else {
+            continue;
+        };
         if forms(&dest_spelled)
             .iter()
             .any(|form| text.contains(form.as_str()))
         {
             continue;
         }
-        let Some(at) = forms(&arm.spell_module(cx, rel, src))
+        let Some(at) = forms(&src_spelled)
             .iter()
             .find_map(|form| text.find(form.as_str()))
         else {
@@ -684,6 +688,8 @@ struct Plan {
     qualified: Vec<(String, Span)>,
     /// `pub use DEST::ITEM;` lines landing after each `pub use SRC::*;`.
     reexports: Vec<(String, Span, String)>,
+    /// DEST's module spelling from SRC, each caller and each qualified site's file.
+    dest_spellings: BTreeMap<String, String>,
 }
 
 impl Plan {
@@ -723,7 +729,7 @@ impl Plan {
 
     /// One row planned over a corpus walk and a resolve another row may share.
     fn build_with(
-        cx: MoveCx,
+        mut cx: MoveCx,
         imports: &mut Imports,
         target: &str,
         dest: &Path,
@@ -750,13 +756,36 @@ impl Plan {
                 "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
             ));
         }
-        if arm.name() == "rust"
-            && !rust_module_declared(&cx, &dest)
-            && (cx.contains(&dest) || arm.declare_new_file(&cx, &src, &dest, None).is_none())
-        {
-            return Err(format!(
-                "cleave destination {dest} is not declared by a Rust module; declare it or choose a declared module path"
-            ));
+        let declarer = match imports.rust_routes.declaring_files(&src) {
+            [] => None,
+            [one] => Some(one.clone()),
+            many => {
+                return Err(format!(
+                    "{src} is included by #[path] from {} files ({}); a new file beside it needs one declaring module",
+                    many.len(),
+                    many.join(", ")
+                ))
+            }
+        };
+        if arm.name() == "rust" {
+            if !cx.contains(&dest) {
+                if let Some((parent, edit)) = arm.declare_new_file(&cx, &src, &dest, declarer.as_deref()) {
+                    let text = apply(&cx.text(&parent).unwrap_or_default(), &edit);
+                    cx.plan_text(&parent, text);
+                }
+                cx.plan_text(&dest, String::new());
+            }
+            if sprefa_extract::edit::rust_module_tree::places(&cx, &src)?.is_empty() {
+                return Err(format!(
+                    "cleave source {src} is in no module of the Cargo workspace rust-analyzer loaded at {}",
+                    cx.root().display()
+                ));
+            }
+            if sprefa_extract::edit::rust_module_tree::places(&cx, &dest)?.is_empty() {
+                return Err(format!(
+                    "cleave destination {dest} is not declared by a Rust module; declare it or choose a declared module path"
+                ));
+            }
         }
 
         let mut source = FileFacts::open(&cx, &src, true)?;
@@ -877,7 +906,7 @@ impl Plan {
                     {
                         module_key(asked, &written)
                     } else {
-                        arm.spell_module(&cx, &dest, target)
+                        spell(arm, &cx, &dest, target)?
                     }
                 }
                 None => arm
@@ -900,7 +929,7 @@ impl Plan {
                 kind,
             };
             let already_dest = imports.target(&src, &row.name) == Some(dest.as_str())
-                || module_key(&row.name, &row.module) == arm.spell_module(&cx, &src, &dest);
+                || module_key(&row.name, &row.module) == spell(arm, &cx, &src, &dest)?;
             if source.refs_in(&row.name, &moving) > 0
                 && !dest_bound.contains(row.name.as_str())
                 && !already_dest
@@ -939,9 +968,10 @@ impl Plan {
                     continue;
                 }
                 let target = imports.target(&parent, &row.name);
-                let dest_module = target
-                    .map(|path| arm.spell_module(&cx, &dest, path))
-                    .unwrap_or_else(|| row.module.clone());
+                let dest_module = match target {
+                    Some(path) => spell(arm, &cx, &dest, path)?,
+                    None => row.module.clone(),
+                };
                 let kind = match (
                     carried.contains(&(row.name.clone(), module_key(&row.name, &dest_module))),
                     target.is_some(),
@@ -968,7 +998,7 @@ impl Plan {
                     glob_unresolved.insert(format!("{} from {parent} is private", decl.name));
                     continue;
                 }
-                let dest_module = arm.spell_module(&cx, &dest, &parent);
+                let dest_module = spell(arm, &cx, &dest, &parent)?;
                 let kind = if carried
                     .contains(&(decl.name.clone(), module_key(&decl.name, &dest_module)))
                 {
@@ -1019,10 +1049,11 @@ impl Plan {
                 keep_source_export: false,
                 qualified: Vec::new(),
                 reexports: Vec::new(),
+                dest_spellings: BTreeMap::new(),
             });
         }
 
-        let src_module = arm.spell_module(&cx, &dest, &src);
+        let src_module = spell(arm, &cx, &dest, &src)?;
         let mut dest_imports: Vec<(String, Vec<String>)> = Vec::new();
         let wanted = travelling
             .iter()
@@ -1097,7 +1128,7 @@ impl Plan {
         for caller in &callers {
             let facts = FileFacts::open(&cx, caller, false)?;
             // The row spelling SRC itself, never one relayed through a re-export.
-            let direct = arm.spell_module(&cx, caller, &src);
+            let direct = spell(arm, &cx, caller, &src)?;
             caller_modules.push(
                 facts
                     .specifiers
@@ -1147,17 +1178,12 @@ impl Plan {
         )?;
         let qualified = imports.qualified(&cx, &src, &item);
         let reexports = glob_reexports(&cx, arm, &src, &dest, &item);
-        let declarer = match imports.rust_routes.declaring_files(&src) {
-            [] => None,
-            [one] => Some(one.clone()),
-            many => {
-                return Err(format!(
-                    "{src} is included by #[path] from {} files ({}); a new file beside it needs one declaring module",
-                    many.len(),
-                    many.join(", ")
-                ))
+        let mut dest_spellings = BTreeMap::new();
+        for rel in std::iter::once(&src).chain(&callers).chain(qualified.iter().map(|(rel, _)| rel)) {
+            if !dest_spellings.contains_key(rel) {
+                dest_spellings.insert(rel.clone(), spell(arm, &cx, rel, &dest)?);
             }
-        };
+        }
         Ok(Plan {
             root,
             cx,
@@ -1185,6 +1211,7 @@ impl Plan {
             keep_source_export,
             qualified,
             reexports,
+            dest_spellings,
         })
     }
 
@@ -1295,7 +1322,7 @@ impl Plan {
                 &self.cx,
                 &self.rows.dest,
                 module,
-                self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                self.dest_spellings[&**rel].clone(),
             );
             out.push(Respell {
                 receipt: Some(format!(
@@ -1344,7 +1371,7 @@ impl Plan {
             && self.keep_source_export
             && self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.exported)
         {
-            let module = self.arm.spell_module(&self.cx, &self.rows.src, &self.rows.dest);
+            let module = self.dest_spellings[&self.rows.src].clone();
             let type_head = if self.source.decls.iter().any(|decl| decl.name == self.rows.item && decl.type_only) { " type" } else { "" };
             let (quote, semicolon, _) = sprefa_extract::edit::ts_mutate::import_style(&self.source.text);
             edits.push(Respell {
@@ -1396,9 +1423,7 @@ impl Plan {
             }
         }
         if self.source.refs_outside(&self.rows.item, &moving) > 0 {
-            let module = self
-                .arm
-                .spell_module(&self.cx, &self.rows.src, &self.rows.dest);
+            let module = self.dest_spellings[&self.rows.src].clone();
             let mut names = self
                 .source
                 .modules()
@@ -1549,7 +1574,7 @@ impl Plan {
                     &self.cx,
                     &self.rows.dest,
                     module,
-                    self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                    self.dest_spellings[&**rel].clone(),
                 );
                 out.extend(ts_imports::caller(
                     facts,
@@ -1597,7 +1622,7 @@ impl Plan {
                 &self.cx,
                 &self.rows.dest,
                 module,
-                self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                self.dest_spellings[&**rel].clone(),
             );
             let mut landing: Vec<String> = facts
                 .specifiers
@@ -1668,7 +1693,7 @@ impl Plan {
                 &self.cx,
                 &self.rows.dest,
                 &row.module,
-                self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                self.dest_spellings[rel].clone(),
             );
             let edits = [
                 self.arm.edit_import(&statement, &kept, &row.module),
@@ -1801,7 +1826,7 @@ impl Plan {
                     &self.cx,
                     &self.rows.dest,
                     module,
-                    self.arm.spell_module(&self.cx, rel, &self.rows.dest),
+                    self.dest_spellings[&**rel].clone(),
                 );
                 !matches!(
                     spelling.split("::").next(),
@@ -2006,6 +2031,13 @@ fn statement_starts(text: &str, span: Span, name: &str) -> Vec<u32> {
 }
 
 /// `edit` applied to `text`, which is how a block built from nothing grows.
+/// `from`'s module spelling for `to`; an error when the resolver places either in no module.
+fn spell(arm: &dyn Cleave, cx: &MoveCx, from: &str, to: &str) -> Result<String, String> {
+    arm.spell_module(cx, from, to).ok_or_else(|| {
+        format!("{from} cannot name {to}: the {} module resolver places one of them in no module", arm.name())
+    })
+}
+
 fn apply(text: &str, edit: &sprefa_extract::Edit) -> String {
     let mut out = text[..edit.span.start as usize].to_string();
     out.push_str(&edit.text);
@@ -2935,72 +2967,6 @@ fn package_view(cx: &MoveCx, language: &str, rel: &str) -> Option<PackageView> {
         _ => sprefa_extract::edit::ts_rehome::cross::package_deps(cx, rel)
             .map(|(name, deps)| (name.clone(), name.clone(), name, deps)),
     }
-}
-
-fn rust_module_declared(cx: &MoveCx, dest: &str) -> bool {
-    let Some((dir, file)) = dest.rsplit_once('/') else {
-        return matches!(file_stem(dest), Some("lib" | "main"));
-    };
-    let stem = file_stem(file).unwrap_or_default();
-    if matches!(stem, "lib" | "main") {
-        return true;
-    }
-    let (parent, module_name) = if stem == "mod" {
-        let Some((parent, module_name)) = dir.rsplit_once('/') else {
-            return false;
-        };
-        (parent, module_name)
-    } else {
-        (dir, stem)
-    };
-    let mut candidates = Vec::new();
-    if parent.is_empty() {
-        candidates.extend([
-            "lib.rs".to_string(),
-            "main.rs".to_string(),
-            "mod.rs".to_string(),
-        ]);
-    } else {
-        candidates.extend([format!("{parent}.rs"), format!("{parent}/mod.rs")]);
-        if parent == "src" || parent.ends_with("/src") {
-            candidates.extend([
-                format!("{parent}/lib.rs"),
-                format!("{parent}/main.rs"),
-                format!("{parent}/mod.rs"),
-            ]);
-        }
-    }
-    candidates.into_iter().any(|path| {
-        cx.text(&path)
-            .and_then(|text| hafley_scm::lang::rust::parse_rust_file(&text).ok())
-            .is_some_and(|parsed| {
-                parsed.items.into_iter().any(|item| {
-                    matches!(item, syn::Item::Mod(module)
-                            if module.ident == module_name || module_declares_path(&module, file))
-                })
-            })
-    })
-}
-
-fn module_declares_path(module: &syn::ItemMod, file: &str) -> bool {
-    module.attrs.iter().any(|attr| {
-        matches!(
-            &attr.meta,
-            syn::Meta::NameValue(value)
-                if value.path.is_ident("path")
-                    && matches!(
-                        &value.value,
-                        syn::Expr::Lit(syn::ExprLit { lit: syn::Lit::Str(path), .. })
-                            if path.value() == file
-                    )
-        )
-    })
-}
-
-fn file_stem(path: &str) -> Option<&str> {
-    path.rsplit_once('/')
-        .map_or(path, |(_, file)| file)
-        .strip_suffix(".rs")
 }
 
 /// The manifest key a package specifier names: `serde` of `serde::de`, `@a/b` of

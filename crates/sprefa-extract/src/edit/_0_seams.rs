@@ -154,9 +154,9 @@ pub trait Cleave: Source + Sync + Send {
         self.edit_import(text, names, module)
     }
 
-    /// How a file at `from_path` spells `to_path` as a module. The corpus
-    /// supplies declarations such as Rust's `#[path] mod name`.
-    fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String;
+    /// How a file at `from_path` spells `to_path` as a module; None when the
+    /// language's resolver places either file in no module.
+    fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> Option<String>;
 
     /// Imports in a parent module may be consumed through a child's glob.
     /// Such imports stay until that cross-module use is resolved explicitly.

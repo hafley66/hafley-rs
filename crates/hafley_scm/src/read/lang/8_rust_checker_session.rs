@@ -5,8 +5,8 @@ use std::time::{Duration, Instant};
 
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_ide_db::ChangeWithProcMacros;
-use ra_ap_load_cargo::{load_workspace_at, LoadCargoConfig, ProcMacroServerChoice};
-use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
+use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, ProjectFolders, SourceRootConfig};
+use ra_ap_project_model::{CargoConfig, CargoFeatures, ProjectManifest, ProjectWorkspace, RustLibSource};
 use ra_ap_vfs::{Change as VfsChange, Vfs, VfsPath};
 
 use super::rust_checker::{CheckerError, Tier};
@@ -14,6 +14,9 @@ use super::rust_checker::{CheckerError, Tier};
 pub(super) struct CheckerWorkspace {
     pub(super) host: AnalysisHost,
     pub(super) vfs: Vfs,
+    /// The load's file-set partition: a file the load never saw joins its
+    /// source root through it.
+    pub(super) roots: SourceRootConfig,
     /// Supplied files the load left out (another Cargo workspace, no crate):
     /// their absence is known, so it does not force a reload.
     outside: HashSet<PathBuf>,
@@ -52,7 +55,7 @@ pub(super) fn checker_workspace(
     let mut load = Duration::ZERO;
     let fresh = !all.contains_key(&key);
     if fresh {
-        let (db, vfs, elapsed) = load_checker_workspace(&root, tier, budget)?;
+        let (db, vfs, roots, elapsed) = load_checker_workspace(&root, tier, budget)?;
         load = elapsed;
         all.insert(
             key.clone(),
@@ -60,6 +63,7 @@ pub(super) fn checker_workspace(
                 host: AnalysisHost::with_database(db),
                 outside: unloaded(&vfs, files),
                 vfs,
+                roots,
             })),
         );
     }
@@ -67,10 +71,11 @@ pub(super) fn checker_workspace(
     drop(all);
     let mut workspace = handle.lock().unwrap();
     if !fresh && !unloaded(&workspace.vfs, files).is_subset(&workspace.outside) {
-        let (db, vfs, elapsed) = load_checker_workspace(&root, tier, budget)?;
+        let (db, vfs, roots, elapsed) = load_checker_workspace(&root, tier, budget)?;
         workspace.host = AnalysisHost::with_database(db);
         workspace.outside = unloaded(&vfs, files);
         workspace.vfs = vfs;
+        workspace.roots = roots;
         load = elapsed;
     }
     for (_, file) in files {
@@ -86,23 +91,40 @@ pub(super) fn checker_workspace(
         };
         workspace.vfs.set_file_contents(path, contents);
     }
-    let changed = workspace.vfs.take_changes();
-    if !changed.is_empty() {
+    workspace.apply_vfs_changes()?;
+    drop(workspace);
+    Ok((handle, load))
+}
+
+impl CheckerWorkspace {
+    /// The vfs's pending changes into the host, one salsa change. A created
+    /// file re-partitions the source roots so its crate's def map sees it.
+    pub(super) fn apply_vfs_changes(&mut self) -> Result<(), CheckerError> {
+        let changed = self.vfs.take_changes();
+        if changed.is_empty() {
+            return Ok(());
+        }
         let mut change = ChangeWithProcMacros::default();
+        let mut created = false;
         for (file, changed) in changed {
+            created |= matches!(changed.change, VfsChange::Create(..));
             let text = match changed.change {
-                VfsChange::Create(contents, _) | VfsChange::Modify(contents, _) => Some(
-                    String::from_utf8(contents)
-                        .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?,
-                ),
+                VfsChange::Create(contents, _) | VfsChange::Modify(contents, _) => {
+                    Some(
+                        String::from_utf8(contents)
+                            .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?,
+                    )
+                }
                 VfsChange::Delete => None,
             };
             change.change_file(ra_ap_ide::FileId::from_raw(file.index()), text);
         }
-        workspace.host.apply_change(change);
+        if created {
+            change.set_roots(self.roots.partition(&self.vfs));
+        }
+        self.host.apply_change(change);
+        Ok(())
     }
-    drop(workspace);
-    Ok((handle, load))
 }
 
 #[cfg(test)]
@@ -181,7 +203,7 @@ fn load_checker_workspace(
     root: &Path,
     tier: Tier,
     budget: Duration,
-) -> Result<(RootDatabase, ra_ap_vfs::Vfs, Duration), CheckerError> {
+) -> Result<(RootDatabase, ra_ap_vfs::Vfs, SourceRootConfig, Duration), CheckerError> {
     let load_config = LoadCargoConfig {
         load_out_dirs_from_check: false,
         with_proc_macro_server: ProcMacroServerChoice::None,
@@ -191,11 +213,13 @@ fn load_checker_workspace(
     };
     let started = Instant::now();
     let _load_span = crate::read::trace::tracked(tracing::info_span!("rust_analyzer.load")).entered();
-    let (db, vfs, _proc_macro) = match tier {
-        Tier::Fast => {
-            let project = super::rust_checker_project::fast_project(root)?;
-            let workspace = ra_ap_project_model::ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {});
-            ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config)
+    fn no_workspace(error: impl std::fmt::Display) -> CheckerError {
+        CheckerError::NoWorkspace(error.to_string())
+    }
+    let workspace = match tier {
+        Tier::Fast | Tier::Names => {
+            let project = super::rust_checker_project::fast_project(root, tier == Tier::Fast)?;
+            ProjectWorkspace::load_inline(project, &CargoConfig::default(), &|_| {})
         }
         // `set_test` puts `#[cfg(test)]` bodies in the tree; every feature keeps
         // `cfg`-gated modules in the crate graph.
@@ -206,16 +230,21 @@ fn load_checker_workspace(
                 features: CargoFeatures::All,
                 ..CargoConfig::default()
             };
-            load_workspace_at(root, &cargo_config, &load_config, &|_| {})
+            let root = ra_ap_vfs::AbsPathBuf::assert_utf8(root.to_path_buf());
+            let manifest = ProjectManifest::discover_single(&root).map_err(no_workspace)?;
+            ProjectWorkspace::load(manifest, &cargo_config, &|_| {}).map_err(no_workspace)?
         }
-    }
-    .map_err(|error| CheckerError::NoWorkspace(error.to_string()))?;
+    };
+    let roots = ProjectFolders::new(std::slice::from_ref(&workspace), &[], None).source_root_config;
+    let (db, vfs, _proc_macro) =
+        ra_ap_load_cargo::load_workspace(workspace, &Default::default(), &load_config)
+            .map_err(no_workspace)?;
     drop(_load_span);
     let load = started.elapsed();
     if load > budget {
         return Err(CheckerError::Budget(budget));
     }
-    Ok((db, vfs, load))
+    Ok((db, vfs, roots, load))
 }
 
 #[cfg(test)]
@@ -226,7 +255,7 @@ mod fast_tier_tests {
     #[test]
     fn fast_loads_workspace_crates_with_features_and_std_shim() {
         let root = std::fs::canonicalize(Path::new(env!("CARGO_MANIFEST_DIR")).join("../..")).unwrap();
-        let (db, vfs, _) = load_checker_workspace(&root, Tier::Fast, Duration::from_secs(120)).unwrap();
+        let (db, vfs, _, _) = load_checker_workspace(&root, Tier::Fast, Duration::from_secs(120)).unwrap();
         let names: Vec<String> = base_db::all_crates(&db)
             .iter()
             .filter_map(|krate| krate.extra_data(&db).display_name.as_ref().map(|name| name.to_string()))

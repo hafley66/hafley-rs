@@ -40,6 +40,11 @@ pub struct MoveCx {
     relocate_mod: bool,
     /// Texts a batch already rewrote in memory, read before the disk.
     overlay: BTreeMap<String, String>,
+    /// Texts a plan expects before it writes them: read by resolvers only,
+    /// never staged, dropped when the overlay takes the path.
+    planned: BTreeMap<String, String>,
+    #[cfg(feature = "rust-checker")]
+    pub(crate) rust_modules: std::sync::Arc<OnceLock<Result<hafley_scm::read::lang::rust_checker::RustModuleTree, String>>>,
     pub(crate) relocate_plan: OnceLock<crate::edit::rust_rehome::RelocatePlan>,
     pub(crate) crate_roots: OnceLock<BTreeSet<String>>,
     pub(crate) ts_packages: OnceLock<Vec<crate::edit::ts_rehome::cross::TsPackage>>,
@@ -57,6 +62,9 @@ impl Clone for MoveCx {
             shim: self.shim,
             relocate_mod: self.relocate_mod,
             overlay: self.overlay.clone(),
+            planned: self.planned.clone(),
+            #[cfg(feature = "rust-checker")]
+            rust_modules: self.rust_modules.clone(),
             relocate_plan: OnceLock::new(),
             crate_roots: OnceLock::new(),
             ts_packages: OnceLock::new(),
@@ -95,6 +103,9 @@ impl MoveCx {
             shim: false,
             relocate_mod: false,
             overlay: BTreeMap::new(),
+            planned: BTreeMap::new(),
+            #[cfg(feature = "rust-checker")]
+            rust_modules: Default::default(),
             relocate_plan: OnceLock::new(),
             crate_roots: OnceLock::new(),
             ts_packages: OnceLock::new(),
@@ -160,8 +171,24 @@ impl MoveCx {
             self.files.push(rel.to_string());
             self.files.sort();
         }
+        self.planned.remove(rel);
         self.overlay.insert(rel.to_string(), text);
         self.clear_plan_caches();
+    }
+
+    /// `rel` holds `text` for resolvers until the overlay names `rel`.
+    pub fn plan_text(&mut self, rel: &str, text: String) {
+        self.planned.insert(rel.to_string(), text);
+    }
+
+    /// Every text a resolver reads over the disk; a planned text is newer than
+    /// any overlay of the same path, which drops it.
+    pub fn resolver_texts(&self) -> BTreeMap<&str, &str> {
+        self.overlay
+            .iter()
+            .chain(&self.planned)
+            .map(|(rel, text)| (rel.as_str(), text.as_str()))
+            .collect()
     }
 
     /// The batch's rewritten texts, path order.

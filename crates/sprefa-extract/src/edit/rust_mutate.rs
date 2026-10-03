@@ -9,19 +9,13 @@ use crate::wire::{flatten_each, FlatFact};
 
 use crate::edit_seams::Cleave;
 use crate::edit_seams::Edit;
+use crate::edit::rust_module_tree::{extern_name, places};
 use crate::lang::rust::RustSource;
 use hafley_scm::atoms::FamilyTag;
 use hafley_scm::span::Span;
 
 /// The path the parse is told it is reading. Only the extension is consulted.
 const PARSE_AS: &str = "cleave.rs";
-
-/// The directory component that ends a crate's source root. Everything before
-/// the last one is layout a module path never spells.
-const SOURCE_ROOT: &str = "src/";
-
-/// File stems that stand for their own directory rather than a module of it.
-const DIRECTORY_STEMS: [&str; 3] = ["mod", "lib", "main"];
 
 impl Cleave for RustSource {
     fn edit_export(&self, text: &str, decl: Span, on: bool) -> Option<Edit> {
@@ -128,25 +122,27 @@ impl Cleave for RustSource {
         Some(edit)
     }
 
-    /// `crate::a::b`, or `super::b` when the two files are siblings under a
-    /// module rather than under the crate root. Siblings is a module question,
-    /// not a directory one: `lang/mod.rs` IS `lang`, so `lang/ts.rs` is under it.
-    fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> String {
-        let to = module_parts(cx, to_path);
-        if let Some(ident) = foreign_crate(cx, from_path, to_path) {
-            return std::iter::once(ident)
-                .chain(to)
-                .collect::<Vec<_>>()
-                .join("::");
+    /// `crate::a::b`, or `super::b` when the two files are sibling modules,
+    /// or `dep::a::b` across crates; module paths from rust-analyzer's def maps.
+    fn spell_module(&self, cx: &MoveCx, from_path: &str, to_path: &str) -> Option<String> {
+        let from = places(cx, from_path).ok()?;
+        let to = places(cx, to_path).ok()?;
+        let shared = from
+            .iter()
+            .find_map(|from| to.iter().find(|to| to.crate_root == from.crate_root).map(|to| (from, to)));
+        if let Some((from, to)) = shared {
+            let siblings = parent_of(&from.path) == parent_of(&to.path);
+            return Some(match (siblings, to.path.len() > 1) {
+                (true, true) => format!("super::{}", to.path.last().cloned().unwrap_or_default()),
+                _ => match to.path.is_empty() {
+                    true => "crate".to_string(),
+                    false => format!("crate::{}", to.path.join("::")),
+                },
+            });
         }
-        let siblings = parent_of(&module_parts(cx, from_path)) == parent_of(&to);
-        match (siblings, to.len() > 1) {
-            (true, true) => format!("super::{}", to.last().cloned().unwrap_or_default()),
-            _ => match to.is_empty() {
-                true => "crate".to_string(),
-                false => format!("crate::{}", to.join("::")),
-            },
-        }
+        let (from, to) = (from.first()?, to.first()?);
+        let name = extern_name(cx, from, to).ok()?;
+        Some(std::iter::once(name).chain(to.path.iter().cloned()).collect::<Vec<_>>().join("::"))
     }
 
     fn declare_new_file(
@@ -236,43 +232,23 @@ impl Cleave for RustSource {
             .items
             .iter()
             .any(|item| matches!(item, syn::Item::Mod(declared) if declared.ident == head));
-        child.then(|| format!("{}::{module}", self.spell_module(cx, dest, src)))
+        child.then(|| self.spell_module(cx, dest, src).map(|parent| format!("{parent}::{module}")))?
     }
 
     fn publish_module(&self, cx: &MoveCx, dest: &str) -> Option<(String, Edit)> {
-        let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
-        let name = module_parts(cx, dest).pop()?;
-        for parent in parent_candidates(dir)
-            .into_iter()
-            .filter(|candidate| cx.contains(candidate))
-        {
-            let text = cx.text(&parent)?;
-            let parsed = hafley_scm::lang::rust::parse_rust_file(&text).ok()?;
-            let Some(module) = parsed.items.iter().find_map(|item| match item {
-                syn::Item::Mod(module) if module.ident == name && module.content.is_none() => {
-                    Some(module)
-                }
-                _ => None,
-            }) else {
-                continue;
-            };
-            let edit = match &module.vis {
-                syn::Visibility::Public(_) => return None,
-                syn::Visibility::Restricted(restricted) => Edit {
-                    span: crate::lang::rust::syn_span(syn::spanned::Spanned::span(restricted),
-                    ),
-                    text: "pub".to_string(),
-                },
-                syn::Visibility::Inherited => Edit {
-                    span: Span::anchor(
-                        crate::lang::rust::syn_span(module.mod_token.span).start,
-                    ),
-                    text: "pub ".to_string(),
-                },
-            };
-            return Some((parent, edit));
-        }
-        None
+        let (parent, module) = declaring_item(cx, dest)?;
+        let edit = match &module.vis {
+            syn::Visibility::Public(_) => return None,
+            syn::Visibility::Restricted(restricted) => Edit {
+                span: crate::lang::rust::syn_span(syn::spanned::Spanned::span(restricted)),
+                text: "pub".to_string(),
+            },
+            syn::Visibility::Inherited => Edit {
+                span: Span::anchor(crate::lang::rust::syn_span(module.mod_token.span).start),
+                text: "pub ".to_string(),
+            },
+        };
+        Some((parent, edit))
     }
 
     fn imports_visible_to_children(&self, cx: &MoveCx, src: &str) -> bool {
@@ -319,19 +295,25 @@ fn preserve_use_list(
 /// Whether `path`'s own `mod` declaration is `pub`: a file split off a public
 /// module is declared public too, so paths through it keep resolving.
 fn declared_public(cx: &MoveCx, path: &str) -> bool {
-    let dir = path.rsplit_once('/').map_or("", |(dir, _)| dir);
-    let Some(name) = module_parts(cx, path).pop() else {
-        return false;
-    };
-    parent_candidates(dir)
-        .into_iter()
-        .filter_map(|parent| cx.text(&parent))
-        .filter_map(|text| hafley_scm::lang::rust::parse_rust_file(&text).ok())
-        .flat_map(|file| file.items.into_iter())
-        .any(|item| {
-            matches!(item, syn::Item::Mod(module)
-                if module.ident == name && matches!(module.vis, syn::Visibility::Public(_)))
+    declaring_item(cx, path)
+        .is_some_and(|(_, module)| matches!(module.vis, syn::Visibility::Public(_)))
+}
+
+/// The `mod` item rust-analyzer says declares `path`, and the file holding it.
+fn declaring_item(cx: &MoveCx, path: &str) -> Option<(String, syn::ItemMod)> {
+    places(cx, path).ok()?.into_iter().find_map(|place| {
+        let (file, start, end) = place.decl?;
+        let parent = cx.rel(&file)?;
+        let text = cx.text(&parent)?;
+        let parsed = hafley_scm::lang::rust::parse_rust_file(&text).ok()?;
+        parsed.items.into_iter().find_map(|item| match item {
+            syn::Item::Mod(module) => {
+                let span = crate::lang::rust::syn_span(syn::spanned::Spanned::span(&module));
+                (start <= span.start && span.end() <= end).then(|| (parent.clone(), module))
+            }
+            _ => None,
         })
+    })
 }
 
 /// The first byte at or after `at` that is not whitespace, a comment or an
@@ -596,49 +578,6 @@ fn path_of(text: &str) -> String {
         .trim_end_matches("::")
         .trim()
         .to_string()
-}
-
-/// A file's module path from its crate root, by file layout alone.
-fn module_parts(cx: &MoveCx, rel: &str) -> Vec<String> {
-    let tail = match rel.rfind(SOURCE_ROOT) {
-        Some(at) => &rel[at + SOURCE_ROOT.len()..],
-        None => rel,
-    };
-    let mut parts: Vec<String> = tail.split('/').map(str::to_string).collect();
-    let Some(last) = parts.pop() else {
-        return parts;
-    };
-    let stem = last.strip_suffix(".rs").unwrap_or(&last);
-    if !DIRECTORY_STEMS.contains(&stem) {
-        let parent = rel.rsplit_once('/').map_or("", |(parent, _)| parent);
-        let declared = ["lib.rs", "mod.rs", "main.rs"]
-            .iter()
-            .filter_map(|index| cx.text(&format!("{parent}/{index}")))
-            .filter_map(|text| hafley_scm::lang::rust::parse_rust_file(&text).ok())
-            .flat_map(|file| file.items.into_iter())
-            .filter_map(|item| match item {
-                syn::Item::Mod(module) => Some(module),
-                _ => None,
-            })
-            .find(|module| {
-                module.attrs.iter().any(|attr| {
-                    matches!(
-                        &attr.meta,
-                        syn::Meta::NameValue(syn::MetaNameValue {
-                            path,
-                            value: syn::Expr::Lit(syn::ExprLit {
-                                lit: syn::Lit::Str(value),
-                                ..
-                            }),
-                            ..
-                        }) if path.is_ident("path") && value.value() == last
-                    )
-                })
-            })
-            .map(|module| module.ident.to_string());
-        parts.push(declared.unwrap_or_else(|| module_name(&last).0));
-    }
-    parts
 }
 
 fn slice(text: &str, span: Span) -> &str {
