@@ -83,6 +83,29 @@ fn slow_typescript_requires_the_checker_feature_before_index_discovery() {
     }
 }
 
+/// A checker that declines (no loadable TypeScript) leaves the slow walk no
+/// oracle: the run fails naming the tier, it does not answer zero edges.
+#[cfg(feature = "ts-checker")]
+#[test]
+fn slow_walk_fails_when_the_typescript_checker_declines() {
+    let scratch = tempfile::tempdir().unwrap();
+    let fixture = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/graph_ts");
+    for file in ["chain_c.ts", "chain_d.ts"] {
+        std::fs::copy(fixture.join(file), scratch.path().join(file)).unwrap();
+    }
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(scratch.path())
+        .env("RUST_LOG", "off")
+        .env("SPREFA_TS_CHECKER_TYPESCRIPT", scratch.path().join("absent/typescript.js"))
+        .args(["graph", "--slow", "--from", "chainC", "--root", ".", "."])
+        .output()
+        .expect("graph binary runs");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(!output.status.success(), "{stderr}");
+    assert!(stderr.contains("ryi slow: tier.tsc declined"), "{stderr}");
+    assert!(output.stdout.is_empty());
+}
+
 #[cfg(feature = "rust-checker")]
 #[test]
 fn targeted_checker_rows_match_the_whole_checker_at_unresolved_sites() {
