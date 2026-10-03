@@ -51,7 +51,8 @@ fn sysroot_library(root: &Path) -> Result<PathBuf, CheckerError> {
     Ok(library)
 }
 
-pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
+/// `sysroot`: rust-src's `core` and the `std` shim join the graph, written under `root`.
+pub(super) fn fast_project(root: &Path, sysroot: bool) -> Result<ProjectJson, CheckerError> {
     let failed = |error: String| CheckerError::NoWorkspace(error);
     let rustc = std::process::Command::new("rustc")
         .arg("-vV")
@@ -62,18 +63,18 @@ pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
         .find_map(|line| line.strip_prefix("host: ").map(str::to_owned))
         .ok_or_else(|| failed("rustc -vV printed no host".to_owned()))?;
     // Unfiltered, cargo wants every platform's manifests (wasm's `js-sys`) on disk.
+    // Without the sysroot nothing is type checked: no resolve, so no Cargo.lock written.
+    let mut options = vec!["--offline".to_owned(), "--filter-platform".to_owned(), host];
+    if !sysroot {
+        options.push("--no-deps".to_owned());
+    }
     let metadata = MetadataCommand::new()
         .manifest_path(root.join("Cargo.toml"))
-        .other_options(vec!["--offline".to_owned(), "--filter-platform".to_owned(), host])
+        .other_options(options)
         .exec()
         .map_err(|error| failed(error.to_string()))?;
     let members: HashSet<&PackageId> = metadata.workspace_members.iter().collect();
-    let resolve = metadata
-        .resolve
-        .as_ref()
-        .ok_or_else(|| failed("cargo metadata returned no resolve graph".to_owned()))?;
-    let nodes: HashMap<&PackageId, &cargo_metadata::Node> =
-        resolve.nodes.iter().map(|node| (&node.id, node)).collect();
+    let edges = dependency_edges(&metadata);
 
     let mut crates: Vec<serde_json::Value> = Vec::new();
     let mut library: HashMap<&PackageId, (usize, String)> = HashMap::new();
@@ -118,28 +119,29 @@ pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
                 deps.push(serde_json::json!({ "crate": lib, "name": name }));
             }
         }
-        let Some(node) = nodes.get(package) else { continue };
-        for dependency in &node.deps {
-            let wanted = dependency.dep_kinds.iter().any(|info| match info.kind {
+        let Some(edges) = edges.get(package) else { continue };
+        for (dependency, name, kinds) in edges {
+            let wanted = kinds.iter().any(|kind| match kind {
                 DependencyKind::Normal => true,
                 DependencyKind::Development => !is_lib,
                 _ => false,
             });
-            if !wanted || !members.contains(&dependency.pkg) {
+            if !wanted || !members.contains(dependency) {
                 continue;
             }
-            let Some((lib, _)) = library.get(&dependency.pkg) else { continue };
-            deps.push(serde_json::json!({ "crate": lib, "name": dependency.name }));
+            let Some((lib, _)) = library.get(dependency) else { continue };
+            deps.push(serde_json::json!({ "crate": lib, "name": name }));
         }
         crates[*index]["deps"] = serde_json::Value::Array(deps);
     }
 
     // `for`, `?`, `.await` and ranges lower through core's lang items; without
     // them rust-analyzer drops the whole expression, calls inside included.
-    let library = sysroot_library(root)?;
-    let data: ProjectJsonData = serde_json::from_value(serde_json::json!({
-        "sysroot_src": library,
-        "sysroot_project": { "crates": [
+    let mut project = serde_json::json!({ "crates": crates });
+    if sysroot {
+        let library = sysroot_library(root)?;
+        project["sysroot_src"] = serde_json::json!(library);
+        project["sysroot_project"] = serde_json::json!({ "crates": [
             {
                 "display_name": "core",
                 "root_module": library.join("core/src/lib.rs"),
@@ -154,10 +156,52 @@ pub(super) fn fast_project(root: &Path) -> Result<ProjectJson, CheckerError> {
                 "deps": [{ "crate": 0, "name": "core" }],
                 "is_workspace_member": false,
             },
-        ] },
-        "crates": crates,
-    }))
+        ] });
+    }
+    let data: ProjectJsonData = serde_json::from_value(project)
         .map_err(|error| failed(error.to_string()))?;
     let base = std::fs::canonicalize(root).map_err(|error| failed(error.to_string()))?;
     Ok(ProjectJson::new(None, &AbsPathBuf::assert_utf8(base), data))
+}
+
+type Edge<'a> = (&'a PackageId, String, Vec<DependencyKind>);
+
+/// Each package's dependencies as (package, extern name, kinds): cargo's
+/// resolve, or under `--no-deps` the path dependencies between members.
+fn dependency_edges(metadata: &cargo_metadata::Metadata) -> HashMap<&PackageId, Vec<Edge<'_>>> {
+    if let Some(resolve) = &metadata.resolve {
+        return resolve
+            .nodes
+            .iter()
+            .map(|node| {
+                let edges = node
+                    .deps
+                    .iter()
+                    .map(|dep| (&dep.pkg, dep.name.clone(), dep.dep_kinds.iter().map(|info| info.kind).collect()))
+                    .collect();
+                (&node.id, edges)
+            })
+            .collect();
+    }
+    let by_dir: HashMap<_, &PackageId> = metadata
+        .packages
+        .iter()
+        .filter_map(|package| Some((package.manifest_path.parent()?.to_path_buf(), &package.id)))
+        .collect();
+    metadata
+        .packages
+        .iter()
+        .map(|package| {
+            let edges = package
+                .dependencies
+                .iter()
+                .filter_map(|dep| {
+                    let id = by_dir.get(dep.path.as_ref()?)?;
+                    let name = dep.rename.as_ref().unwrap_or(&dep.name).replace('-', "_");
+                    Some((*id, name, vec![dep.kind]))
+                })
+                .collect();
+            (&package.id, edges)
+        })
+        .collect()
 }

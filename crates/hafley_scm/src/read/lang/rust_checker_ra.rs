@@ -26,6 +26,9 @@ mod target_types;
 #[path = "8d_rust_checker_rename.rs"]
 mod rename;
 pub use rename::{rename, RenameEdit, RenameFailure, RenameSeed};
+#[path = "8e_rust_checker_modules.rs"]
+mod modules;
+pub use modules::{module_tree, ModulePlace, RustModuleTree};
 use crate::read::trace::{phase_span, record_phase, Phase};
 use crate::read::tsi::{Arg, CoverageClaim, FactOut};
 pub use target_types::{target_types, TargetTypeReference};

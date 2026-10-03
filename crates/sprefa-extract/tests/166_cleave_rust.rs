@@ -256,6 +256,12 @@ fn batch_keeps_every_row_source_parseable_while_composing() {
     std::fs::remove_dir_all(&fixture.root).unwrap();
     let soopy = Path::new(env!("CARGO_MANIFEST_DIR")).join("../soopy");
     copy_tree(&soopy, &fixture.root);
+    // Outside the hafley-rs workspace soopy's `*.workspace = true` keys do not parse.
+    std::fs::write(
+        fixture.root.join("Cargo.toml"),
+        "[package]\nname = \"soopy\"\nversion = \"0.0.0\"\nedition = \"2021\"\nautotests = false\n",
+    )
+    .unwrap();
     git(&fixture.root, &["init", "-q", "."]);
     let list = fixture.state.join("batch.tsv");
     std::fs::write(
@@ -836,7 +842,6 @@ fn fast_cleave_public_fields_never_loads_checker() {
         source.replace("{ value: u8 }", "{ pub(crate) value: u8 }"),
     )
     .unwrap();
-    std::fs::write(fixture.root.join("Cargo.toml"), "invalid manifest").unwrap();
     git(&fixture.root, &["add", "-A"]);
     cleave(
         &fixture,
@@ -891,31 +896,38 @@ fn a_new_file_is_declared_beside_the_path_include_that_owns_src() {
 }
 
 #[test]
-#[ignore = "RustMutate::spell_module spells src/bin/tool/1_a.rs as crate::bin::tool::a; needs RustModuleIndex crate-rooted module paths"]
-fn a_path_declared_child_of_a_bin_root_is_a_declared_destination() {
+fn a_path_declared_child_of_a_bin_root_takes_a_cleaved_item() {
     let fixture = fixture("path_bin_dir", "path-bin-dir");
     cleave(&fixture, &["src/bin/tool.rs#two", "src/bin/tool/1_a.rs", "--commit"]);
     cargo_check_with(&fixture, &["--all-targets"]);
     assert_eq!(
         [read(&fixture, "src/bin/tool.rs"), read(&fixture, "src/bin/tool/1_a.rs")],
-        [String::new(), String::new()]
+        [
+            "use crate::a::two;\n#[path = \"tool/1_a.rs\"]\nmod a;\n\nfn main() {\n    println!(\"{}\", a::one() + two());\n}\n",
+            "pub fn one() -> u32 {\n    1\n}\n\npub fn two() -> u32 {\n    2\n}\n",
+        ]
     );
 }
 
 #[test]
-fn a_path_declared_child_of_a_bin_root_passes_the_declaration_gate() {
-    let fixture = fixture("path_bin_dir", "path-bin-dir-plan");
-    let plan = plan_of(&cleave(
-        &fixture,
-        &["src/bin/tool.rs#two", "src/bin/tool/1_a.rs", "--json"],
-    ));
+fn an_unloadable_manifest_stops_the_rust_cleave_with_the_reason() {
+    let fixture = fixture("basic", "invalid-manifest");
+    std::fs::write(fixture.root.join("Cargo.toml"), "invalid manifest").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["cleave", "src/util.rs#load_config", "src/config.rs"])
+        .arg("--root")
+        .arg(&fixture.root)
+        .arg("--state")
+        .arg(&fixture.state)
+        .current_dir(&fixture.root)
+        .output()
+        .expect("cleave binary runs");
+    let stderr = String::from_utf8_lossy(&output.stderr).replace(&fixture.root.display().to_string(), "ROOT");
     assert_eq!(
-        [&plan["src"], &plan["dest"], &plan["item"], &plan["callers"]],
-        [
-            &serde_json::json!("src/bin/tool.rs"),
-            &serde_json::json!("src/bin/tool/1_a.rs"),
-            &serde_json::json!("two"),
-            &serde_json::json!([]),
-        ]
+        (output.status.code(), stderr.lines().next().unwrap_or_default()),
+        (
+            Some(2),
+            "rust-analyzer cannot load the Cargo workspace at ROOT: no cargo workspace: `cargo metadata` exited with an error: error: key with no value, expected `=`"
+        )
     );
 }

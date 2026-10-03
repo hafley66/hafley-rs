@@ -66,10 +66,12 @@ pub struct CheckerAnswers {
 
 /// `Fast`: workspace crates only, every feature on, no sysroot, nothing compiled.
 /// `Slow`: adds dependencies and the sysroot, so inference types std receivers.
+/// `Names`: Fast's crate graph without the sysroot: def maps only, no file written.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Tier {
     Fast,
     Slow,
+    Names,
 }
 
 /// Why the tier could not run. Every one falls back to the syntax leg.
@@ -337,6 +339,8 @@ pub fn target_calls(
 
 #[cfg(feature = "rust-checker")]
 pub use super::rust_checker_ra::{rename, RenameEdit, RenameFailure, RenameSeed};
+#[cfg(feature = "rust-checker")]
+pub use super::rust_checker_ra::{module_tree, ModulePlace, RustModuleTree};
 
 #[cfg(feature = "rust-checker")]
 pub fn target_types(

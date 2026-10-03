@@ -3,6 +3,8 @@ pub mod kotlin_rename;
 pub mod prolog_rehome;
 pub mod prolog_rename;
 pub mod rust_mutate;
+#[path = "edit/1h_rust_module_tree.rs"]
+pub mod rust_module_tree;
 pub mod rust_rehome;
 pub mod rust_rename;
 #[path = "edit/1d_ts7_cleave_diagnostics.rs"]

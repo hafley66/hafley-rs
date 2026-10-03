@@ -108,9 +108,9 @@ impl Cleave for TsSource {
         })
     }
 
-    fn spell_module(&self, cx: &crate::move_cx::MoveCx, from_path: &str, to_path: &str) -> String {
+    fn spell_module(&self, cx: &crate::move_cx::MoveCx, from_path: &str, to_path: &str) -> Option<String> {
         if let Some(spec) = crate::edit::ts_rehome::cross::spec_across(cx, from_path, to_path) {
-            return spec;
+            return Some(spec);
         }
         let relative = relative_between(dirname(from_path), &drop_extension(to_path));
         let relative = match relative.is_empty() {
@@ -120,7 +120,7 @@ impl Cleave for TsSource {
         };
         let text = cx.text(from_path).unwrap_or_default();
         let (_, _, suffix) = import_style(&text);
-        format!("{relative}{suffix}")
+        Some(format!("{relative}{suffix}"))
     }
 }
 
