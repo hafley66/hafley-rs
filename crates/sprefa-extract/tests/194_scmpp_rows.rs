@@ -236,14 +236,14 @@ n=null args=()"#
     );
 }
 
-#[test]
-fn sqlite_keeps_scmpp_row_and_the_cst() {
+/// The `--sqlite` store's table counts after one run of `query`.
+fn stored_counts(query: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("scmpp.db");
-    let printed = run(RUST, RECURSION, &["--sqlite", db.to_str().unwrap()]);
+    let printed = run(RUST, query, &["--sqlite", db.to_str().unwrap()]);
     let connection = rusqlite::Connection::open(&db).unwrap();
     let count = |sql: &str| connection.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap();
-    let actual = [
+    [
         ("printed rows", printed.lines().filter(|line| line.starts_with('{')).count() as i64),
         ("scmpp_row", count("SELECT count(*) FROM scmpp_row")),
         ("named nodes", count("SELECT count(*) FROM node WHERE family = 'cst' AND named = 1")),
@@ -253,10 +253,23 @@ fn sqlite_keeps_scmpp_row_and_the_cst() {
         ("capture rows", count("SELECT count(*) FROM capture")),
     ]
     .map(|(name, value)| format!("{name} {value}"))
-    .join("\n");
+    .join("\n")
+}
+
+#[test]
+fn sqlite_keeps_scmpp_row_and_the_cst() {
     assert_eq!(
-        actual,
+        stored_counts(RECURSION),
         "printed rows 0\nscmpp_row 3\nnamed nodes 69\nanonymous nodes 58\nedges 126\nedges with a field 54\ncapture rows 23"
+    );
+}
+
+/// No relation reads `edge`, so a relation-free query writes no CST rows.
+#[test]
+fn relation_free_query_writes_no_cst_rows() {
+    assert_eq!(
+        stored_counts("((call_expression function: (identifier) @callee) (#eq? @callee \"other\"))"),
+        "printed rows 0\nscmpp_row 4\nnamed nodes 0\nanonymous nodes 0\nedges 0\nedges with a field 0\ncapture rows 8"
     );
 }
 

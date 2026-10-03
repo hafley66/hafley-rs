@@ -175,7 +175,7 @@ pub fn cst_rows(tree: &Tree, mut row: impl FnMut(CstRow<'_>) -> Result<()>) -> R
 }
 
 /// One file: a capture row per capture of every flat pattern (`match` = per-file ordinal),
-/// then node/edge rows (family cst) once per content id.
+/// then node/edge rows (family cst) once per content id when the plan has a relation.
 pub fn write_file(
     db: &mut Database,
     compiled: &Compiled,
@@ -205,10 +205,16 @@ pub fn write_file(
         db.insert_fact(Fact::Capture(capture), bytes)
     })
     .map_err(|error| format!("{path}: {error}"))?;
-    if cst_written.insert(content_id.to_string()) {
+    if reads_cst(compiled) && cst_written.insert(content_id.to_string()) {
         cst_rows(tree, |row: CstRow| write_cst_row(db, row))?;
     }
     Ok(())
+}
+
+/// The SQL reads `edge` only through a relation; nested levels hang off the root's
+/// relations, so a root without one means a plan without one.
+pub fn reads_cst(compiled: &Compiled) -> bool {
+    !compiled.plan.rels.is_empty()
 }
 
 /// Every node, named and anonymous; each non-root node gets the edge from its parent.

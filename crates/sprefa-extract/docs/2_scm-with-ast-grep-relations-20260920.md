@@ -7,7 +7,8 @@ predicates, called scm++; ast-grep and CSS supply the reference semantics.
 
 scm++ compiles one query into plain tree-sitter patterns, one per nesting level,
 and one SQL statement. `ryii query --scmpp` runs each pattern, writes `capture`
-rows and CST `node`/`edge` rows, and runs the SQL over them. scm++ itself only
+rows and, when a relation predicate reads them, CST `node`/`edge` rows, and runs
+the SQL over them. scm++ itself only
 compiles; ryi owns the rows, the SQLite database and the one SQL run.
 `ryii query --query` and the `.scm` files the crate runs through
 `hafley_scm::build` are plain tree-sitter plus `#emit!`: a relation predicate or
@@ -396,7 +397,8 @@ query (rust): pattern 0: #not-has-ancestor? runs only under ryii query --scmpp
 `ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run: the result
 rows in `scmpp_row`, the per-level `capture` rows (columns `pattern` and
 `match` name the level and match), and the CST `node` and `edge` rows (family
-`cst`, with `field`, `index` and `named_index` on each edge), and prints no
+`cst`, with `field`, `index` and `named_index` on each edge; written only when
+the query has a relation predicate, the one reader of `edge`), and prints no
 rows to stdout. Without `--sqlite` the rows live in an in-memory database for
 the run and print to stdout.
 
