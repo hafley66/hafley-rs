@@ -1,0 +1,4 @@
+oracle-db/
+fx/bin.rs
+fx/doc.scm
+*.log

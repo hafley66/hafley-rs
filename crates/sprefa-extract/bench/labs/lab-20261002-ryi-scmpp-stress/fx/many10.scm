@@ -1,0 +1,1 @@
+((parameters . (parameter) @p0 . (parameter) @p1 . (parameter) @p2 . (parameter) @p3 . (parameter) @p4 . (parameter) @p5 . (parameter) @p6 . (parameter) @p7 . (parameter) @p8 . (parameter) @p9) @ps (#has-parent? @ps function_item))
