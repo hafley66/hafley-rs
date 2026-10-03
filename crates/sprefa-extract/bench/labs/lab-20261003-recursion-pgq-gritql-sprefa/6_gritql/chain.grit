@@ -1,0 +1,16 @@
+language rust
+
+// $target is reached from this node along function/value child edges
+pattern spine_to($target) {
+  or {
+    call_expression(function=$f) where { or { $f <: $target, $f <: spine_to($target) } },
+    field_expression(value=$v) where { or { $v <: $target, $v <: spine_to($target) } },
+    generic_function(function=$g) where { or { $g <: $target, $g <: spine_to($target) } }
+  }
+}
+
+// one match per call with a link; `contains` stops at the first (nearest) link, so the union of $link over all calls is
+// the link set of T1; outer is not emitted (no bubble/accumulate form runs, see README)
+call_expression(function=$head) where {
+  $head <: contains call_expression() as $link where { or { $head <: $link, $head <: spine_to($link) } }
+}

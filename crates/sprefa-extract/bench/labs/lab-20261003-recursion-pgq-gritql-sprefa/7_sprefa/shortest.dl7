@@ -1,0 +1,18 @@
+; T4 sketch over call_edge_<tier>, t4_pair(tier anchor seed_fn_id target_fn_id).
+; Output rows: anchor target_path target_name length. As written, dist diverges on call cycles; it needs a depth
+; bound, min-in-recursion (lattice) semantics, or a dl8 shortest-path primitive. The sprefa session picks the form.
+
+(<- (dist ?Anchor ?Seed 0)
+    (t4_pair ?Tier ?Anchor ?Seed _))
+
+(<- (dist ?Anchor ?Dst (+ ?Depth 1))
+    (dist ?Anchor ?Src ?Depth)
+    (call_edge ?Src ?Dst 0))
+
+(<- (shortest ?Anchor ?TargetPath ?TargetName (min ?Depth))
+    (t4_pair ?Tier ?Anchor _ ?Target)
+    (dist ?Anchor ?Target ?Depth)
+    (> ?Depth 0)
+    (fn ?Target ?PathId ?NameId)
+    (fn_dict_path ?PathId ?TargetPath)
+    (fn_dict_name ?NameId ?TargetName))

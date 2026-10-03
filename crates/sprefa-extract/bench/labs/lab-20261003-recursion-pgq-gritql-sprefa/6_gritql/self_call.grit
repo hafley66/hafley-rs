@@ -1,0 +1,5 @@
+language rust
+
+function_item(name=$name, body=$body) where {
+  $body <: contains call_expression(function=$callee) where { $callee <: $name }
+}

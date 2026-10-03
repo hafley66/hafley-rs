@@ -1,0 +1,89 @@
+arm	task	corpus	tier	threads	rows	oracle_rows	agree	arm_only	oracle_only	wall_s	peak_rss_mb	setup_s	notation_lines	status	note
+B	T2	small	cst	1	136	136	136	0	0	1.74	100	0	2	ok	
+B_depth1	T1	small	cst	1	5528	8302	5528	0	2774	1.72	113	0	2	ok	union of fixed-depth files 1..1; wall summed
+B_depth2	T1	small	cst	1	7331	8302	7331	0	971	3.34	108	0	4	ok	union of fixed-depth files 1..2; wall summed
+B_depth3	T1	small	cst	1	7822	8302	7822	0	480	4.94	106	0	6	ok	union of fixed-depth files 1..3; wall summed
+B_depth4	T1	small	cst	1	7947	8302	7947	0	355	6.57	106	0	8	ok	union of fixed-depth files 1..4; wall summed
+B_depth5	T1	small	cst	1	7992	8302	7992	0	310	8.15	107	0	10	ok	union of fixed-depth files 1..5; wall summed
+B	T2	crates	cst	1	210	210	210	0	0	5.67	233	0	2	ok	
+B_depth1	T1	crates	cst	1	21767	35484	21767	0	13717	5.66	241	0	2	ok	union of fixed-depth files 1..1; wall summed
+B_depth2	T1	crates	cst	1	28677	35484	28677	0	6807	11.15	210	0	4	ok	union of fixed-depth files 1..2; wall summed
+B_depth3	T1	crates	cst	1	31508	35484	31508	0	3976	16.64	212	0	6	ok	union of fixed-depth files 1..3; wall summed
+B_depth4	T1	crates	cst	1	32781	35484	32781	0	2703	22.08	204	0	8	ok	union of fixed-depth files 1..4; wall summed
+B_depth5	T1	crates	cst	1	33356	35484	33356	0	2128	27.49	214	0	10	ok	union of fixed-depth files 1..5; wall summed
+R1	T1	small	cst	1	8302	8302	8302	0	0	0.44	66	0	18	ok	
+R2	T1	small	cst	1	8302	8302	8302	0	0	0.18	57	0	18	ok	
+R2	T1	small	cst	default	8302	8302	8302	0	0	0.06	76	0	18	ok	
+R1	T3	small	fast	1	655	655	655	0	0	0.00	4	0	7	ok	
+R2	T3	small	fast	1	655	655	655	0	0	0.01	27	0	7	ok	
+R2_key	T3	small	fast	1	655	655	655	0	0	0.02	38	0	8	ok	
+R2	T3	small	fast	default	655	655	655	0	0	0.01	31	0	7	ok	
+R2_key	T3	small	fast	default	655	655	655	0	0	0.03	68	0	8	ok	
+R1	T3	small	slow	1	37	37	37	0	0	0.00	4	0	7	ok	
+R2	T3	small	slow	1	37	37	37	0	0	0.01	26	0	7	ok	
+R2_key	T3	small	slow	1	37	37	37	0	0	0.01	33	0	8	ok	
+R2	T3	small	slow	default	37	37	37	0	0	0.01	31	0	7	ok	
+R2_key	T3	small	slow	default	37	37	37	0	0	0.02	43	0	8	ok	
+R1	T4	small	fast	1	7	7	7	0	0	0.99	8	0	11	ok	
+R2	T4	small	fast	1	7	7	7	0	0	1.00	139	0	11	ok	
+R2_key	T4	small	fast	1	7	7	7	0	0	0.02	42	0	9	ok	
+R2	T4	small	fast	default	7	7	7	0	0	1.59	142	0	11	ok	
+R2_key	T4	small	fast	default	7	7	7	0	0	0.09	68	0	9	ok	
+R1	T4	small	slow	1	6	6	6	0	0	0.00	4	0	11	ok	
+R2	T4	small	slow	1	6	6	6	0	0	0.01	29	0	11	ok	
+R2_key	T4	small	slow	1	6	6	6	0	0	0.01	36	0	9	ok	
+R2	T4	small	slow	default	6	6	6	0	0	0.02	34	0	11	ok	
+R2_key	T4	small	slow	default	6	6	6	0	0	0.02	47	0	9	ok	
+R1	T1	crates	cst	1	35484	35484	35484	0	0	1.67	106	0	18	ok	
+R2	T1	crates	cst	1	35484	35484	35484	0	0	0.51	128	0	18	ok	
+R2	T1	crates	cst	default	35484	35484	35484	0	0	0.16	139	0	18	ok	
+R1	T3	crates	fast	1	674	674	674	0	0	0.01	5	0	7	ok	
+R2	T3	crates	fast	1	674	674	674	0	0	0.02	30	0	7	ok	
+R2_key	T3	crates	fast	1	674	674	674	0	0	0.02	50	0	8	ok	
+R2	T3	crates	fast	default	674	674	674	0	0	0.02	34	0	7	ok	
+R2_key	T3	crates	fast	default	674	674	674	0	0	0.03	67	0	8	ok	
+R1	T3	crates	slow	1	37	37	37	0	0	0.00	5	0	7	ok	
+R2	T3	crates	slow	1	37	37	37	0	0	0.01	29	0	7	ok	
+R2_key	T3	crates	slow	1	37	37	37	0	0	0.01	34	0	8	ok	
+R2	T3	crates	slow	default	37	37	37	0	0	0.01	33	0	7	ok	
+R2_key	T3	crates	slow	default	37	37	37	0	0	0.02	47	0	8	ok	
+R1	T4	crates	fast	1	7	7	7	0	0	3.23	12	0	11	ok	
+R2	T4	crates	fast	1	7	7	7	0	0	3.43	290	0	11	ok	
+R2_key	T4	crates	fast	1	7	7	7	0	0	0.02	51	0	9	ok	
+R2	T4	crates	fast	default	7	7	7	0	0	12.88	289	0	11	ok	
+R2_key	T4	crates	fast	default	7	7	7	0	0	0.03	71	0	9	ok	
+R1	T4	crates	slow	1	6	6	6	0	0	0.00	5	0	11	ok	
+R2	T4	crates	slow	1	6	6	6	0	0	0.01	31	0	11	ok	
+R2_key	T4	crates	slow	1	6	6	6	0	0	0.01	36	0	9	ok	
+R2	T4	crates	slow	default	6	6	6	0	0	0.01	38	0	11	ok	
+R2_key	T4	crates	slow	default	6	6	6	0	0	0.02	49	0	9	ok	
+P1	T3	small	fast	1	655	655	655	0	0	0.07	46	0.06	6	ok	
+P1	T3	small	fast	default	655	655	655	0	0	0.07	50	0.06	6	ok	
+P1	T3	small	slow	1	37	37	37	0	0	0.05	42	0.06	6	ok	
+P1	T3	small	slow	default	37	37	37	0	0	0.05	50	0.06	6	ok	
+P1	T4	small	fast	1	7	7	7	0	0	0.05	82	0.06	7	ok	
+P1	T4	small	fast	default	7	7	7	0	0	0.05	87	0.06	7	ok	
+P1	T4	small	slow	1	6	6	6	0	0	0.04	82	0.06	7	ok	
+P1	T4	small	slow	default	6	6	6	0	0	0.04	90	0.06	7	ok	
+P1	T3	crates	fast	1	674	674	674	0	0	0.33	60	0.05	6	ok	
+P1	T3	crates	fast	default	674	674	674	0	0	0.33	68	0.05	6	ok	
+P1	T3	crates	slow	1	37	37	37	0	0	0.23	55	0.05	6	ok	
+P1	T3	crates	slow	default	37	37	37	0	0	0.22	64	0.05	6	ok	
+P1	T4	crates	fast	1	7	7	7	0	0	0.07	165	0.05	7	ok	
+P1	T4	crates	fast	default	7	7	7	0	0	0.06	174	0.05	7	ok	
+P1	T4	crates	slow	1	6	6	6	0	0	0.06	165	0.05	7	ok	
+P1	T4	crates	slow	default	6	6	6	0	0	0.06	177	0.05	7	ok	
+P1	T1	small	cst	default						600.02	1739	0.04	11	error	timeout 600s
+P2	T1	-	cst	-									9	not_available	checked: postgresql@17 17.11 bottle=yes; postgresql@18 18.6 bottle=no; postgresql@19 absent; GRAPH_TABLE first ships after PostgreSQL 18; no bottled formula carries it; source builds excluded
+P2	T3	-	fast	-									9	not_available	checked: postgresql@17 17.11 bottle=yes; postgresql@18 18.6 bottle=no; postgresql@19 absent; GRAPH_TABLE first ships after PostgreSQL 18; no bottled formula carries it; source builds excluded
+P2	T3	-	slow	-									9	not_available	checked: postgresql@17 17.11 bottle=yes; postgresql@18 18.6 bottle=no; postgresql@19 absent; GRAPH_TABLE first ships after PostgreSQL 18; no bottled formula carries it; source builds excluded
+P2	T4	-	fast	-									9	not_available	checked: postgresql@17 17.11 bottle=yes; postgresql@18 18.6 bottle=no; postgresql@19 absent; GRAPH_TABLE first ships after PostgreSQL 18; no bottled formula carries it; source builds excluded
+P2	T4	-	slow	-									9	not_available	checked: postgresql@17 17.11 bottle=yes; postgresql@18 18.6 bottle=no; postgresql@19 absent; GRAPH_TABLE first ships after PostgreSQL 18; no bottled formula carries it; source builds excluded
+G	T2	small	cst	1	136	136	136	0	0	4.80	61	0	4	ok	
+G_per_file	T2	small	cst	1	136	136	136	0	0	23.53	45	0	4	ok	0 files: grit process died (stack overflow); no rows from them
+G	T1	small	cst	1						0.07	40	0	11	error	 thread '<unknown>' has overflowed its stack fatal runtime error: stack overflow 
+G_per_file	T1	small	cst	1	2702	8302	2700	2	5602	42.72	47	0	11	ok	67 files: grit process died (stack overflow); no rows from them
+G	T2	crates	cst	1	210	210	210	0	0	10.32	70	0	4	ok	
+G_per_file	T2	crates	cst	1	210	210	210	0	0	107.44	42	0	4	ok	0 files: grit process died (stack overflow); no rows from them
+G	T1	crates	cst	1						0.10	42	0	11	error	 thread '<unknown>' has overflowed its stack fatal runtime error: stack overflow 
+G_per_file	T1	crates	cst	1	16292	35484	16289	3	19195	169.73	47	0	11	ok	235 files: grit process died (stack overflow); no rows from them

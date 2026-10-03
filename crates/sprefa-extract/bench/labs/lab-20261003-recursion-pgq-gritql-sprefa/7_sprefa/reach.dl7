@@ -1,0 +1,16 @@
+; T3 sketch over call_edge_<tier>(src_fn_id dst_fn_id extern), seed(anchor fn_id), fn(id path_id name_id).
+; Output rows: anchor path name (functions reached by >= 1 call edge, extern = 0 edges only).
+
+(<- (reach ?Anchor ?Dst)
+    (seed ?Anchor ?Seed)
+    (call_edge ?Seed ?Dst 0))
+
+(<- (reach ?Anchor ?Dst)
+    (reach ?Anchor ?Src)
+    (call_edge ?Src ?Dst 0))
+
+(<- (reach_text ?Anchor ?Path ?Name)
+    (reach ?Anchor ?Fn)
+    (fn ?Fn ?PathId ?NameId)
+    (fn_dict_path ?PathId ?Path)
+    (fn_dict_name ?NameId ?Name))

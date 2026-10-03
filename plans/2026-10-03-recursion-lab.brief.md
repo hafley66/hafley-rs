@@ -112,3 +112,46 @@ which arms were `not_expressible` / `not_available`, and a ranked recommendation
 
 Time box: one pass. Stop and report if an arm cannot be installed or run within ~20 minutes of
 trying; record it as `not_available` with the exact error.
+
+## Results (2026-10-03)
+
+Lab: `crates/sprefa-extract/bench/labs/lab-20261003-recursion-pgq-gritql-sprefa/` (`results.tsv`, `grid.html`,
+README for inputs and versions). Corpora: small = hafley_scm/src + sprefa-extract/src (1,030,736 CST rows),
+crates = hafley-rs `crates/` (3,439,810 CST rows). T3/T4 run on both tiers: fast (`ryii --resolve`, 10808 / 28130
+edges) and slow (`ryii graph --slow --sqlite`, 6588 / 20132 edges). Oracle rows: T1 8302 / 35484, T2 136 / 210,
+T3 fast 655 / 674, T3 slow 37 / 37, T4 7 fast and 6 slow pairs.
+
+### Correctness (arm_only / oracle_only = 0 unless listed)
+
+| arm | T1 | T2 | T3 | T4 |
+| --- | --- | --- | --- | --- |
+| R1 SQLite `WITH RECURSIVE` | exact | n/a | exact | exact |
+| R2 DuckDB `WITH RECURSIVE` (+ `USING KEY` variant) | exact | n/a | exact | exact |
+| P1 DuckPGQ | error: timeout 600 s on small (also 1050 s before kill; `{1,3}` bounded form > 300 s) | n/a | exact | exact |
+| P2 PostgreSQL PGQ | not_available | n/a | not_available | not_available |
+| G GritQL | single process dies (stack overflow); per file: 67/176 (small), 235/809 (crates) files die; surviving files 2700/2702 and 16289/16292 link rows agree | exact | not_expressible | not_expressible |
+| B scm++ fixed depth | depth 5 misses 310 (small) / 2128 (crates); arm_only 0 | exact | n/a | n/a |
+| S sprefa | pending | pending | pending | pending |
+
+Disagreements explained:
+- G T1: link rows only (outer not emitted; the forms that collect every link per outer, `bubble` and list `+=`,
+  overflow or hang). The 2-3 arm_only/oracle_only pairs are one grammar difference: grit's tree-sitter-rust gives the
+  call inside `text[1..text.len()]` the span `1..text.len()`.
+- B T1: misses are links the unrolled `function: (field_expression value: ...)` shape does not reach: links under a
+  turbofish (`generic_function`), chains deeper than 5 calls, call-of-call, several field hops, and the
+  `#not-has-parent?` outer filter. Rows only grow with depth (small 5528 -> 7992 for depth 1 -> 5).
+
+### Time and memory (wall_s / peak_rss_mb, threads=1 then default where both ran)
+
+| arm | T1 small | T1 crates | T4 crates fast |
+| --- | --- | --- | --- |
+| R1 | 0.44 / 66 | 1.67 / 106 | 3.23 / 12 |
+| R2 | 0.18, 0.06 / 57, 76 | 0.51, 0.16 / 128, 139 | 3.43, 12.88 / 290, 289 |
+| R2_key (`USING KEY` + `recurring`) | - | - | 0.02, 0.03 / 51, 71 |
+| P1 | > 600 / 1739 | not run | 0.07, 0.06 / 165, 174 |
+| G (per file) | 42.72 / 47 | 169.73 / 47 | - |
+| B depth 1..5 summed | 8.15 / 113 | 27.49 / 241 | - |
+
+T3 runs are 0.00-0.33 s for every arm (12 seeds reach at most 674 functions). Plan sensitivity: SQLite T1 without
+`ANALYZE` 118 s (small); DuckDB T1 with a decode join back to `scmpp_node` 108 s (crates) before the CTE carried the
+spans itself.

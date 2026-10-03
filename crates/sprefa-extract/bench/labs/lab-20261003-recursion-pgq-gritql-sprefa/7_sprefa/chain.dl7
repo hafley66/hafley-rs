@@ -1,0 +1,29 @@
+; T1 sketch over scmpp_node(file pre last parent depth sib idx kind field start end named), ids interned
+; (scmpp_dict_kind, scmpp_dict_field). Output rows: path outer_start outer_end link_start link_end.
+
+(<- (walk ?File ?Origin ?Origin)
+    (scmpp_node ?File ?Origin _ _ _ _ _ ?Kind _ _ _ _)
+    (scmpp_dict_kind ?Kind "call_expression"))
+
+(<- (walk ?File ?Origin ?Child)
+    (walk ?File ?Origin ?Pre)
+    (scmpp_node ?File ?Child _ ?Pre _ _ _ _ ?Field _ _ _)
+    (spine_field ?Field))
+
+(<- (spine_field ?Field) (scmpp_dict_field ?Field "function"))
+(<- (spine_field ?Field) (scmpp_dict_field ?Field "value"))
+
+(<- (link ?File ?Origin ?Pre)
+    (walk ?File ?Origin ?Pre)
+    (!= ?Origin ?Pre)
+    (scmpp_node ?File ?Pre _ _ _ _ _ ?Kind _ _ _ _)
+    (scmpp_dict_kind ?Kind "call_expression"))
+
+(<- (is_link ?File ?Pre) (link ?File _ ?Pre))
+
+(<- (chain ?Path ?OuterStart ?OuterEnd ?LinkStart ?LinkEnd)
+    (link ?File ?Origin ?Pre)
+    (not (is_link ?File ?Origin))
+    (scmpp_node ?File ?Origin _ _ _ _ _ _ _ ?OuterStart ?OuterEnd _)
+    (scmpp_node ?File ?Pre _ _ _ _ _ _ _ ?LinkStart ?LinkEnd _)
+    (scmpp_dict_path ?File ?Path))
