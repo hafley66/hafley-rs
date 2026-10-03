@@ -878,6 +878,10 @@ pub struct RustModuleIndex {
     crate_module_roots: HashMap<String, String>,
     /// A file can be included by more than one Cargo target through `mod`.
     target_scopes: HashMap<String, HashSet<TargetScope>>,
+    /// Cargo target roots plus every file a `mod` edge (`#[path]` applied)
+    /// reaches from one, the unborn paths of an edge no corpus file answers
+    /// included; the default-root file assignment adds none.
+    declared: HashSet<String>,
     known_crate_idents: HashSet<String>,
     /// Cargo dependency visibility differs for regular, test, and build targets.
     crate_deps: HashMap<String, CrateDeps>,
@@ -1012,13 +1016,14 @@ fn target_scopes_of(
     files: &[(String, RustModuleFacts)],
     crate_dirs: &HashMap<String, String>,
     crate_libs: &HashMap<String, String>,
-) -> HashMap<String, HashSet<TargetScope>> {
+) -> (HashMap<String, HashSet<TargetScope>>, HashSet<String>) {
     let facts: HashMap<&str, &RustModuleFacts> = files
         .iter()
         .map(|(path, facts)| (path.as_str(), facts))
         .collect();
     let mut scopes: HashMap<String, HashSet<TargetScope>> = HashMap::new();
     let mut queue = Vec::new();
+    let mut unborn: HashSet<String> = HashSet::new();
     for (path, package) in crate_dirs {
         let relative = std::path::Path::new(path)
             .strip_prefix(package)
@@ -1054,10 +1059,15 @@ fn target_scopes_of(
                     vec![format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
                 }
             };
+            let mut unborn_candidates = Vec::new();
             for candidate in candidates {
                 if crate_dirs.get(&candidate) != crate_dirs.get(&path) {
+                    if !crate_dirs.contains_key(&candidate) {
+                        unborn_candidates.push(candidate);
+                    }
                     continue;
                 }
+                unborn_candidates.clear();
                 if scopes
                     .entry(candidate.clone())
                     .or_default()
@@ -1067,8 +1077,10 @@ fn target_scopes_of(
                 }
                 break;
             }
+            unborn.extend(unborn_candidates);
         }
     }
+    let declared = scopes.keys().cloned().chain(unborn).collect();
     // A source file present in the corpus without a `mod` edge is assigned
     // to the package's default library or binary root when one is present.
     for (path, package) in crate_dirs {
@@ -1102,7 +1114,7 @@ fn target_scopes_of(
             scopes.insert(path.clone(), inherited);
         }
     }
-    scopes
+    (scopes, declared)
 }
 
 fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
@@ -1229,6 +1241,11 @@ impl RustModuleIndex {
         self.path_parents.get(path).map_or(&[], Vec::as_slice)
     }
 
+    /// `path` is a Cargo target root or a `mod` edge reaches it.
+    pub fn is_declared(&self, path: &str) -> bool {
+        self.declared.contains(path)
+    }
+
     pub fn crate_root_of(&self, path: &str) -> Option<String> {
         crate_root_of(path, &self.crate_module_roots)
     }
@@ -1252,7 +1269,7 @@ impl RustModuleIndex {
             })
             .collect();
         let crate_libs = crate_libs(&crate_roots, corpus);
-        let target_scopes = target_scopes_of(&files, &crate_dirs, &crate_libs);
+        let (target_scopes, declared) = target_scopes_of(&files, &crate_dirs, &crate_libs);
         let known_crate_idents = crate_dirs
             .values()
             .filter_map(|dir| dir.rsplit('/').next())
@@ -1264,6 +1281,7 @@ impl RustModuleIndex {
             crate_dirs,
             crate_module_roots,
             target_scopes,
+            declared,
             known_crate_idents,
             ..RustModuleIndex::default()
         };

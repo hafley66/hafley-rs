@@ -889,3 +889,33 @@ fn a_new_file_is_declared_beside_the_path_include_that_owns_src() {
     );
     assert_eq!(read(&fixture, "src/lib.rs"), "pub fn library() -> u32 {\n    0\n}\n");
 }
+
+#[test]
+#[ignore = "RustMutate::spell_module spells src/bin/tool/1_a.rs as crate::bin::tool::a; needs RustModuleIndex crate-rooted module paths"]
+fn a_path_declared_child_of_a_bin_root_is_a_declared_destination() {
+    let fixture = fixture("path_bin_dir", "path-bin-dir");
+    cleave(&fixture, &["src/bin/tool.rs#two", "src/bin/tool/1_a.rs", "--commit"]);
+    cargo_check_with(&fixture, &["--all-targets"]);
+    assert_eq!(
+        [read(&fixture, "src/bin/tool.rs"), read(&fixture, "src/bin/tool/1_a.rs")],
+        [String::new(), String::new()]
+    );
+}
+
+#[test]
+fn a_path_declared_child_of_a_bin_root_passes_the_declaration_gate() {
+    let fixture = fixture("path_bin_dir", "path-bin-dir-plan");
+    let plan = plan_of(&cleave(
+        &fixture,
+        &["src/bin/tool.rs#two", "src/bin/tool/1_a.rs", "--json"],
+    ));
+    assert_eq!(
+        [&plan["src"], &plan["dest"], &plan["item"], &plan["callers"]],
+        [
+            &serde_json::json!("src/bin/tool.rs"),
+            &serde_json::json!("src/bin/tool/1_a.rs"),
+            &serde_json::json!("two"),
+            &serde_json::json!([]),
+        ]
+    );
+}
