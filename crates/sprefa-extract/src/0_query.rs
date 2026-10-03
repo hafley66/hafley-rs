@@ -176,6 +176,10 @@ fn run_scmpp(
                     if error.kind == tree_sitter::QueryErrorKind::NodeType => None,
                 Err(error) => return Err(format!("query ({language}): {error}")),
             };
+            if let Some(found) = &entry {
+                let database = output.database.as_mut().expect("scm++ database");
+                crate::scmpp::check_sql(database, found).map_err(|error| format!("query ({language}): {error}"))?;
+            }
             compiled.insert(language.clone(), entry);
         }
         let Some(found) = &compiled[&language] else {

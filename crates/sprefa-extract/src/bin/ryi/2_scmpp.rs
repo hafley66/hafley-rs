@@ -39,6 +39,27 @@ pub fn register_regexp(connection: &Connection) -> rusqlite::Result<()> {
     )
 }
 
+/// Prepares the compiled SQL on the store before any row lands, so a query past SQLite's
+/// join width or expression depth fails before a file is read.
+pub fn check_sql(db: &mut Database, compiled: &Compiled) -> Result<()> {
+    fn depth(level: &hafley_scm::scmpp::Level) -> usize {
+        let nested = level.rels.iter().flat_map(|rel| rel.target.iter().chain(rel.stop.iter()));
+        1 + nested.map(|inner| depth(inner)).max().unwrap_or(0)
+    }
+    db.flush()?;
+    let connection = db.connection();
+    register_regexp(connection)?;
+    if let Err(error) = connection.prepare(&compiled.sql) {
+        let captures: usize = compiled.patterns.iter().map(|pattern| pattern.captures.len()).sum();
+        return Err(format!(
+            "scm++ SQL for {captures} captures, {} levels deep, exceeds a SQLite limit: {error}",
+            depth(&compiled.plan)
+        )
+        .into());
+    }
+    Ok(())
+}
+
 pub struct CaptureRow<'q> {
     pub pattern: u16,
     /// Per-file ordinal across every flat pattern.

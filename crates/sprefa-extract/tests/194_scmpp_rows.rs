@@ -308,3 +308,39 @@ fn two_languages_with_equal_sql_share_one_run() {
 {"path":"b.py","x__start":4,"x__end":8,"x__text":"fact"}"#
     );
 }
+
+/// Past SQLite's join width (64 captures on one level) or expression depth (30 nested levels) the run stops
+/// before reading any input: the only input is unreadable, and the limit is the error.
+#[test]
+fn sqlite_limits_fail_before_any_file_is_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("unreadable.rs");
+    std::fs::write(&source, RUST).unwrap();
+    std::fs::set_permissions(&source, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+    let wide = format!(
+        "((identifier) {})",
+        (0..64).map(|n| format!("@c{n}")).collect::<Vec<_>>().join(" ")
+    );
+    let deep = (1..30).fold("(block) @b30".to_string(), |inner, n| {
+        format!("((block) @b{n} (#has-ancestor? @b{n} ({inner})))")
+    });
+    let actual = [wide, format!("((identifier) @x (#has-ancestor? @x {deep}))")]
+        .map(|query| {
+            let scm = dir.path().join("query.scm");
+            std::fs::write(&scm, query).unwrap();
+            let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+                .args(["query", "--scmpp"])
+                .arg(&scm)
+                .arg(&source)
+                .env("DL_TRAIL", "0")
+                .output()
+                .expect("ryii runs");
+            format!("{} {}", output.status.code().unwrap_or(-1), String::from_utf8_lossy(&output.stderr).trim())
+        })
+        .join("\n");
+    assert_eq!(
+        actual,
+        "2 query (rust): scm++ SQL for 64 captures, 1 levels deep, exceeds a SQLite limit: at most 64 tables in a join\n\
+         2 query (rust): scm++ SQL for 31 captures, 31 levels deep, exceeds a SQLite limit: Expression tree is too large (maximum depth 1000)"
+    );
+}
