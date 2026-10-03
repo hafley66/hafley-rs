@@ -280,6 +280,9 @@ op query(
 
   /** Write to a new SQLite database instead of stdout */
   @valueName("PATH") sqlite?: path,
+
+  /** Seconds the scm++ run may take; past it query exits 3 */
+  @minValue(1) @valueName("SECS") @requires("scmpp") timeout?: uint64,
 ): JsonlStream<jsonValue>;
 
 /** Replace a generated region between sprefa markers */

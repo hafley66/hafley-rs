@@ -49,3 +49,52 @@ fn callers_rows_are_graded_and_sorted() {
         .unwrap()
     );
 }
+
+/// One PATH rule for `--callers` and the walks: suffix, `./` and absolute forms all keep the name.
+#[test]
+fn path_anchor_forms_agree_across_arms() {
+    let fixture = "tests/fixtures/ts5_findings/module_plane";
+    let count = |arm: &str, anchor: &str| {
+        let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+            .args(["graph", arm, anchor, fixture])
+            .output()
+            .expect("graph binary runs");
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        String::from_utf8(output.stdout).unwrap().lines().count()
+    };
+    let forms = |file: &str, name: &str| {
+        let path = format!("{fixture}/{file}");
+        let absolute = std::fs::canonicalize(&path).unwrap().display().to_string();
+        [
+            (format!("{path}#{name}"), "path"),
+            (format!("./{path}#{name}"), "dot"),
+            (format!("{file}#{name}"), "suffix"),
+            (format!("{absolute}#{name}"), "absolute"),
+            (format!("other.ts#{name}"), "other"),
+        ]
+    };
+    let rows: Vec<(&str, &str, usize)> = forms("two_hop_inner.ts", "deep")
+        .into_iter()
+        .map(|(anchor, form)| ("--callers", form, count("--callers", &anchor)))
+        .chain(
+            forms("two_hop_consumer.ts", "reach")
+                .into_iter()
+                .map(|(anchor, form)| ("--call-path", form, count("--call-path", &anchor))),
+        )
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            ("--callers", "path", 1),
+            ("--callers", "dot", 1),
+            ("--callers", "suffix", 1),
+            ("--callers", "absolute", 1),
+            ("--callers", "other", 0),
+            ("--call-path", "path", 1),
+            ("--call-path", "dot", 1),
+            ("--call-path", "suffix", 1),
+            ("--call-path", "absolute", 1),
+            ("--call-path", "other", 0),
+        ]
+    );
+}

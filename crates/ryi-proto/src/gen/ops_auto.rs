@@ -319,6 +319,9 @@ pub struct QueryArgs {
   #[doc = "Write to a new SQLite database instead of stdout"]
   #[arg(long, value_name = "PATH")]
   pub sqlite: Option<PathBuf>,
+  #[doc = "Seconds the scm++ run may take; past it query exits 3"]
+  #[arg(long, value_name = "SECS", requires = "scmpp", value_parser = clap::value_parser!(u64).range(1..))]
+  pub timeout: Option<u64>,
 }
 
 #[derive(clap::Args, Debug, Clone, serde::Serialize, serde::Deserialize)]

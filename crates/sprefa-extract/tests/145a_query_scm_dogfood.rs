@@ -63,17 +63,22 @@ fn ryi_query_predicate_families_through_hafley_scm() {
     let path = temp_file();
 
     // 1. relation predicates and #contains? are refused by `ryi query`; `--scmpp` evaluates them.
+    //    Unknown predicates and grammar errors print plain text.
     assert_eq!(
         [
             "((identifier) @name (#has-parent? @name let_declaration))",
             "((string_literal) @lit (#contains? @lit \"seed\"))",
             "((string_literal) @lit (#not-contains? @lit \"seed\"))",
+            "((identifier) @a)\n((identifier) @name (#inside? @name function_item))",
+            "((call_expression nosuchfield: (identifier)) @x)",
         ]
         .map(|query| refused(&path, query))
         .join("\n"),
         "query (rust): pattern 0: #has-parent? runs only under ryii query --scmpp\n\
          query (rust): pattern 0: #contains? runs only under ryii query --scmpp\n\
-         query (rust): pattern 0: #not-contains? runs only under ryii query --scmpp"
+         query (rust): pattern 0: #not-contains? runs only under ryii query --scmpp\n\
+         query (rust): pattern 1: unknown predicate #inside?\n\
+         query (rust): Query error at 1:19. Invalid field name \"nosuchfield\""
     );
 
     // 2. native eq?, evaluated by the tree-sitter cursor itself.

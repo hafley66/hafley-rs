@@ -8,8 +8,6 @@ use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::fs;
 use std::io::Read;
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
-use std::time::{Duration, Instant};
 
 use rusqlite::Connection;
 #[cfg(feature = "graph")]
@@ -20,9 +18,12 @@ use sprefa_extract::{
     ResolveRequest, ScipMode, ScipRecords,
 };
 
+use crate::deadline::Deadline;
 use crate::sqlite::{grade_sql, line_col, Database, REACH_DEPTH_CAP};
 #[path = "0a_graph_target.rs"]
 mod target;
+#[path = "0b_graph_anchor.rs"]
+mod anchor;
 
 const CALLERS_SQL: &str = "SELECT caller_path, caller_name, callee_path, callee_name, \
                          grade, kind, caller_site_start, callee_start FROM ( \
@@ -140,18 +141,6 @@ fn load_store(
     }
     database.flush()?;
     Ok(database)
-}
-
-/// The question's wall budget. SQLite statements stop through the
-/// connection's interrupt handle; the Rust walk polls `expired`.
-struct Deadline {
-    at: Instant,
-}
-
-impl Deadline {
-    fn expired(&self) -> bool {
-        Instant::now() >= self.at
-    }
 }
 
 /// Newline offsets per file, read once. A file that does not read maps to
@@ -375,7 +364,7 @@ fn named_starts(edges: &[PlaneEdge], anchor: &str) -> BTreeSet<Node> {
     edges
         .iter()
         .filter(|edge| edge.src.1.as_deref() == Some(name))
-        .filter(|edge| path.is_none_or(|path| Path::new(&edge.src.0).ends_with(path)))
+        .filter(|edge| path.is_none_or(|path| anchor::anchor_path_matches(path, &edge.src.0)))
         .map(|edge| edge.src.clone())
         .collect()
 }
@@ -587,14 +576,9 @@ impl Arm<'_> {
                 };
                 let mut rows = edges(connection, CALLERS_SQL, name, lines)?;
                 if let Some(path) = path {
-                    let target = fs::canonicalize(path).unwrap_or_else(|_| PathBuf::from(path));
                     rows.retain(|row| {
-                        let FlatFact::GraphEdge { to_path, .. } = row else {
-                            return false;
-                        };
-                        let candidate = fs::canonicalize(to_path)
-                            .unwrap_or_else(|_| PathBuf::from(to_path));
-                        candidate == target
+                        matches!(row, FlatFact::GraphEdge { to_path, .. }
+                            if anchor::anchor_path_matches(Path::new(path), to_path))
                     });
                 }
                 Ok(rows)
@@ -642,39 +626,20 @@ impl Arm<'_> {
         }
     }
 
-    /// `ask` under `--timeout`: a timer thread interrupts SQLite at the
-    /// deadline, and an answer that ran past it exits 3.
+    /// `ask` under `--timeout`.
     fn ask_within(
         &self,
         connection: &Connection,
         secs: u64,
         root: Option<PathBuf>,
     ) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
-        let budget = Duration::from_secs(secs);
-        let deadline = Deadline {
-            at: Instant::now() + budget,
-        };
-        let handle = connection.get_interrupt_handle();
-        let (done, wait) = mpsc::channel::<()>();
-        let timer = std::thread::spawn(move || {
-            if let Err(mpsc::RecvTimeoutError::Timeout) = wait.recv_timeout(budget) {
-                handle.interrupt();
-            }
-        });
-        let mut lines = Lines {
-            root,
-            tables: HashMap::new(),
-        };
-        let answer = self.ask(connection, &deadline, &mut lines);
-        let _ = done.send(());
-        let _ = timer.join();
-        match answer {
-            Err(_) if deadline.expired() => {
-                // @eprintln-ok: CLI-UX stop, off the fact stream, exit 3.
-                Err(crate::RyiExit::new(3, format!("graph: query exceeded {secs}s")).into())
-            }
-            answer => answer,
-        }
+        crate::deadline::within(connection.get_interrupt_handle(), Some(secs), "graph", |deadline| {
+            let mut lines = Lines {
+                root,
+                tables: HashMap::new(),
+            };
+            self.ask(connection, deadline, &mut lines)
+        })
     }
 }
 
@@ -941,6 +906,7 @@ fn slice_at(seed: &str) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::time::{Duration, Instant};
 
     fn node(name: &str) -> Node {
         ("f.ts".to_string(), Some(name.to_string()))
@@ -958,7 +924,7 @@ mod tests {
 
     fn walk(edges: &[PlaneEdge], seed: &str) -> Vec<(String, u32, Vec<u64>)> {
         let open = Deadline {
-            at: Instant::now() + Duration::from_secs(60),
+            at: Some(Instant::now() + Duration::from_secs(60)),
         };
         first_discovery(edges, named_starts(edges, seed), &open)
             .unwrap()
@@ -1010,7 +976,7 @@ mod tests {
     #[test]
     fn a_passed_deadline_stops_the_walk() {
         let edges = [edge(1, "a", "b")];
-        let past = Deadline { at: Instant::now() };
+        let past = Deadline { at: Some(Instant::now()) };
         assert!(first_discovery(&edges, named_starts(&edges, "a"), &past).is_err());
     }
 
@@ -1040,7 +1006,7 @@ mod tests {
             database.connection(),
             "flow",
             |_| Ok(BTreeSet::from([("blake3:a".to_string(), Some("1:2".to_string()))])),
-            &Deadline { at: Instant::now() + Duration::from_secs(60) },
+            &Deadline { at: Some(Instant::now() + Duration::from_secs(60)) },
         ).unwrap();
         assert_eq!(
             serde_json::to_value(rows).unwrap(),

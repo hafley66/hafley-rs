@@ -286,7 +286,8 @@ impl Lower<'_> {
             Cond::Same(a, b) => {
                 Key::of(&self.alias(a, chain)).same(&Key::of(&self.alias(b, chain)))
             }
-            Cond::Not(inner) => format!("NOT ({})", self.cond(inner, chain)),
+            // An absent optional capture makes the inner test NULL; the `not-` form holds then.
+            Cond::Not(inner) => format!("NOT COALESCE(({}), 0)", self.cond(inner, chain)),
         }
     }
 
@@ -353,7 +354,7 @@ impl Lower<'_> {
                     (from, to)
                 };
                 let mut on = into(&alias, child);
-                on.push(Key::edge(&alias, "from").same_node(parent));
+                on.push(Key::edge(&alias, "from").same(parent));
                 on.extend(field(&alias));
                 body.from.push(Join {
                     left: false,
@@ -371,7 +372,8 @@ impl Lower<'_> {
                         "{alias}.fs = {} AND {alias}.fe = {} AND {alias}.fk = {}",
                         from.start, from.end, from.kind
                     ),
-                    Key::walk(&alias).same_node(to),
+                    // The content id lets the target's capture index seek, not scan every root.
+                    Key::walk(&alias).same(to),
                 ];
                 on.extend(field(&alias));
                 body.from.push(Join {

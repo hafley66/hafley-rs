@@ -697,7 +697,8 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
         rust_checker: want("rust"),
         ts_checker: want("ts"),
         go_checker: want("go"),
-        witness: false,
+        // A tier that declines files a `tier.*` diagnostic only under witness.
+        witness: true,
     };
     if request.rust_checker.is_none()
         && request.ts_checker.is_none()
@@ -706,7 +707,24 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
         return Ok(Vec::new());
     }
     let checker = ResolutionOrigin::Checker.as_str();
-    Ok(crate::read::project::resolve_project(&request)?
+    let facts = crate::read::project::resolve_project(&request)?;
+    // A requested checker that declined leaves the oracle empty; that is an error, not zero edges.
+    let declines: Vec<String> = facts
+        .iter()
+        .filter_map(|fact| match fact {
+            FlatFact::Diagnostic(diagnostic) if diagnostic.relation.starts_with("tier.") => {
+                Some(format!("{} declined: {}", diagnostic.relation, diagnostic.detail))
+            }
+            _ => None,
+        })
+        .collect();
+    if !declines.is_empty() {
+        return Err(ProjectError::CheckerUnavailable(format!(
+            "ryi slow: {}",
+            declines.join("; ")
+        )));
+    }
+    Ok(facts
         .into_iter()
         .filter(|fact| match fact {
             FlatFact::ResolvedEdge {

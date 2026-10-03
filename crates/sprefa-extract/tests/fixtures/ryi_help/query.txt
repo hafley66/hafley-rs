@@ -15,4 +15,5 @@ Options:
       --scmpp <FILE>     scm++ query file: nested relations lowered to SQL over capture and CST rows
       --digest <DIGEST>  Expected content digest (one input only)
       --sqlite <PATH>    Write to a new SQLite database instead of stdout
+      --timeout <SECS>   Seconds the scm++ run may take; past it query exits 3
   -h, --help             Print help

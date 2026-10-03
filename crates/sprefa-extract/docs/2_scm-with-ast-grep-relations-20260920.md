@@ -7,7 +7,8 @@ predicates, called scm++; ast-grep and CSS supply the reference semantics.
 
 scm++ compiles one query into plain tree-sitter patterns, one per nesting level,
 and one SQL statement. `ryii query --scmpp` runs each pattern, writes `capture`
-rows and CST `node`/`edge` rows, and runs the SQL over them. scm++ itself only
+rows and, when a relation predicate reads them, CST `node`/`edge` rows, and runs
+the SQL over them. scm++ itself only
 compiles; ryi owns the rows, the SQLite database and the one SQL run.
 `ryii query --query` and the `.scm` files the crate runs through
 `hafley_scm::build` are plain tree-sitter plus `#emit!`: a relation predicate or
@@ -299,6 +300,13 @@ A capture name used both inside and outside names the same node:
 `#contains? @capture "literal"+` holds when the capture's text contains every
 literal; `#not-contains?` is its complement.
 
+An optional capture (`?`, `*`) can be absent from a match. `#contains?`, and
+`#eq?` or `#match?` across levels, fail on an absent capture; their `not-`
+forms hold. `(#not-contains? @n "9")` over
+`(arguments (integer_literal)? @n)` keeps `g()`, whose `@n` is absent.
+`#eq?` and `#match?` between captures of one level are tree-sitter's own
+predicates and follow tree-sitter's rules.
+
 ```scheme
 ((call_expression) @call (#contains? @call "log"))
 ```
@@ -346,6 +354,31 @@ nest to any depth:
 A capture name bound by two exported levels is an error; use two names and
 `#eq?`.
 
+## Quantified captures
+
+A capture under `*` or `+` binds one node per repetition, and every exported
+capture joins on its own. One match emits one row per combination of its
+captures' nodes: the cartesian product, across levels when `rows: each`
+exports them. Here `@i` binds 2 nodes and `@s` binds 3, so the one array
+gives 6 rows:
+
+```scheme
+((array_expression (integer_literal)* @i) @a
+ (#has-ancestor? @a (function_item body: (block (expression_statement)+ @s)) rows: each))
+```
+
+```
+{"i__text":"1","a__text":"[1, 2]","s__text":"host(&[1, 2]);"}
+{"i__text":"1","a__text":"[1, 2]","s__text":"log(0);"}
+{"i__text":"1","a__text":"[1, 2]","s__text":"return 7;"}
+{"i__text":"2","a__text":"[1, 2]","s__text":"host(&[1, 2]);"}
+{"i__text":"2","a__text":"[1, 2]","s__text":"log(0);"}
+{"i__text":"2","a__text":"[1, 2]","s__text":"return 7;"}
+```
+
+A `*` or `?` capture that binds no node contributes one row with `null` in
+its columns.
+
 ## `--query`, bundled queries, and `--sqlite`
 
 `ryii query --query TEXT` and the `.scm` files the crate runs through
@@ -364,9 +397,14 @@ query (rust): pattern 0: #not-has-ancestor? runs only under ryii query --scmpp
 `ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run: the result
 rows in `scmpp_row`, the per-level `capture` rows (columns `pattern` and
 `match` name the level and match), and the CST `node` and `edge` rows (family
-`cst`, with `field`, `index` and `named_index` on each edge), and prints no
+`cst`, with `field`, `index` and `named_index` on each edge; written only when
+the query has a relation predicate, the one reader of `edge`), and prints no
 rows to stdout. Without `--sqlite` the rows live in an in-memory database for
 the run and print to stdout.
+
+`--timeout SECS` bounds the whole `--scmpp` run, file reads and the SQL: past
+it the SQL is interrupted, no rows print, and `ryii query` exits 3, as
+`ryii graph --timeout` does.
 
 ## Reference
 

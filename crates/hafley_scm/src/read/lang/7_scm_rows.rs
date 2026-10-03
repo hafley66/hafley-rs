@@ -689,7 +689,7 @@ fn scm_error(path: &str, error: hafley_scm::QueryExtError) -> ScmError {
                 "pattern {pattern}: #{op} runs only under ryii query --scmpp"
             ),
         },
-        hafley_scm::QueryExtError::UnknownOperator(operator) => ScmError::Query {
+        hafley_scm::QueryExtError::UnknownOperator { operator, .. } => ScmError::Query {
             path: path.to_string(),
             detail: format!("predicate #{operator} is not allowed"),
         },

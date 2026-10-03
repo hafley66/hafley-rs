@@ -137,6 +137,14 @@ fn rows_per_lowering_rule() {
               (#has? @f (call_expression function: (identifier) @c (#match? @fn \"^h\")) rows: each))"
                 .to_string(),
         ),
+        ("contains, capture absent", "((arguments (integer_literal)? @n) @args (#contains? @n \"3\"))".to_string()),
+        ("not-contains, capture absent", "((arguments (integer_literal)? @n) @args (#not-contains? @n \"3\"))".to_string()),
+        (
+            "not-eq across levels, capture absent",
+            "((arguments (integer_literal)? @n) @args
+              (#has-parent? @args ((call_expression function: (identifier) @f) (#not-eq? @f @n))))"
+                .to_string(),
+        ),
     ];
     let actual = cases
         .iter()
@@ -207,18 +215,35 @@ s="seed"
 == match on an enclosing capture
 fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=fact
 fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=other
-fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=other"#
+fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=other
+== contains, capture absent
+n=3 args=(3)
+== not-contains, capture absent
+n=null args=(n - 1)
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()
+== not-eq across levels, capture absent
+n=null args=(n - 1)
+n=3 args=(3)
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()"#
     );
 }
 
-#[test]
-fn sqlite_keeps_scmpp_row_and_the_cst() {
+/// The `--sqlite` store's table counts after one run of `query`.
+fn stored_counts(query: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
     let db = dir.path().join("scmpp.db");
-    let printed = run(RUST, RECURSION, &["--sqlite", db.to_str().unwrap()]);
+    let printed = run(RUST, query, &["--sqlite", db.to_str().unwrap()]);
     let connection = rusqlite::Connection::open(&db).unwrap();
     let count = |sql: &str| connection.query_row(sql, [], |row| row.get::<_, i64>(0)).unwrap();
-    let actual = [
+    [
         ("printed rows", printed.lines().filter(|line| line.starts_with('{')).count() as i64),
         ("scmpp_row", count("SELECT count(*) FROM scmpp_row")),
         ("named nodes", count("SELECT count(*) FROM node WHERE family = 'cst' AND named = 1")),
@@ -228,10 +253,23 @@ fn sqlite_keeps_scmpp_row_and_the_cst() {
         ("capture rows", count("SELECT count(*) FROM capture")),
     ]
     .map(|(name, value)| format!("{name} {value}"))
-    .join("\n");
+    .join("\n")
+}
+
+#[test]
+fn sqlite_keeps_scmpp_row_and_the_cst() {
     assert_eq!(
-        actual,
+        stored_counts(RECURSION),
         "printed rows 0\nscmpp_row 3\nnamed nodes 69\nanonymous nodes 58\nedges 126\nedges with a field 54\ncapture rows 23"
+    );
+}
+
+/// No relation reads `edge`, so a relation-free query writes no CST rows.
+#[test]
+fn relation_free_query_writes_no_cst_rows() {
+    assert_eq!(
+        stored_counts("((call_expression function: (identifier) @callee) (#eq? @callee \"other\"))"),
+        "printed rows 0\nscmpp_row 4\nnamed nodes 0\nanonymous nodes 0\nedges 0\nedges with a field 0\ncapture rows 8"
     );
 }
 
@@ -249,4 +287,103 @@ fn corpus_counts_partition_identifiers_by_enclosing_function() {
     ]
     .map(|query| run(corpus, query, &[]).lines().count());
     assert_eq!(counts, [3575, 3197, 378]);
+}
+
+/// Two languages in one run: each compiles the query on its own grammar, and the one SQL
+/// statement runs over both files' rows because the compiled SQL strings are equal.
+#[test]
+fn two_languages_with_equal_sql_share_one_run() {
+    let dir = tempfile::tempdir().unwrap();
+    let rust = dir.path().join("a.rs");
+    let python = dir.path().join("b.py");
+    let scm = dir.path().join("query.scm");
+    std::fs::write(&rust, "fn fact(n: u32) -> u32 { fact(n) }\n").unwrap();
+    std::fs::write(&python, "def fact(n):\n    return fact(n)\n").unwrap();
+    std::fs::write(&scm, "((identifier) @x (#eq? @x \"fact\"))").unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .arg("query")
+        .arg("--scmpp")
+        .arg(&scm)
+        .arg(&rust)
+        .arg(&python)
+        .env("DL_TRAIL", "0")
+        .output()
+        .expect("ryii runs");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let prefix = format!("{}/", dir.path().display());
+    let mut lines = String::from_utf8(output.stdout).unwrap().replace(&prefix, "").lines().map(str::to_string).collect::<Vec<_>>();
+    lines.sort();
+    assert_eq!(
+        lines.join("\n"),
+        r#"{"path":"a.rs","x__start":25,"x__end":29,"x__text":"fact"}
+{"path":"a.rs","x__start":3,"x__end":7,"x__text":"fact"}
+{"path":"b.py","x__start":24,"x__end":28,"x__text":"fact"}
+{"path":"b.py","x__start":4,"x__end":8,"x__text":"fact"}"#
+    );
+}
+
+/// Past SQLite's join width (64 captures on one level) or expression depth (30 nested levels) the run stops
+/// before reading any input: the only input is unreadable, and the limit is the error.
+#[test]
+fn sqlite_limits_fail_before_any_file_is_read() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("unreadable.rs");
+    std::fs::write(&source, RUST).unwrap();
+    std::fs::set_permissions(&source, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+    let wide = format!(
+        "((identifier) {})",
+        (0..64).map(|n| format!("@c{n}")).collect::<Vec<_>>().join(" ")
+    );
+    let deep = (1..30).fold("(block) @b30".to_string(), |inner, n| {
+        format!("((block) @b{n} (#has-ancestor? @b{n} ({inner})))")
+    });
+    let actual = [wide, format!("((identifier) @x (#has-ancestor? @x {deep}))")]
+        .map(|query| {
+            let scm = dir.path().join("query.scm");
+            std::fs::write(&scm, query).unwrap();
+            let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+                .args(["query", "--scmpp"])
+                .arg(&scm)
+                .arg(&source)
+                .env("DL_TRAIL", "0")
+                .output()
+                .expect("ryii runs");
+            format!("{} {}", output.status.code().unwrap_or(-1), String::from_utf8_lossy(&output.stderr).trim())
+        })
+        .join("\n");
+    assert_eq!(
+        actual,
+        "2 query (rust): scm++ SQL for 64 captures, 1 levels deep, exceeds a SQLite limit: at most 64 tables in a join\n\
+         2 query (rust): scm++ SQL for 31 captures, 31 levels deep, exceeds a SQLite limit: Expression tree is too large (maximum depth 1000)"
+    );
+}
+
+/// 200 nested blocks under 5 nested `rows: each` levels run for minutes; `--timeout 1`
+/// stops the SQL and exits 3, the way `graph --timeout` does.
+#[test]
+fn timeout_stops_the_sql_with_exit_3() {
+    let dir = tempfile::tempdir().unwrap();
+    let source = dir.path().join("deep.rs");
+    let scm = dir.path().join("deep.scm");
+    std::fs::write(&source, format!("fn d() {{ {} g(); {} }}\n", "{ ".repeat(200), "} ".repeat(200))).unwrap();
+    let mut query = "(block)".to_string();
+    for level in 0..5 {
+        query = format!("((block) @b{level} (#has-ancestor? @b{level} {query} rows: each))");
+    }
+    std::fs::write(&scm, format!("((call_expression) @c (#has-ancestor? @c {query} rows: each))")).unwrap();
+    let started = std::time::Instant::now();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .args(["query", "--timeout", "1", "--scmpp"])
+        .arg(&scm)
+        .arg(&source)
+        .env("DL_TRAIL", "0")
+        .output()
+        .expect("ryii runs");
+    let actual = (
+        output.status.code(),
+        String::from_utf8_lossy(&output.stderr).trim().to_string(),
+        output.stdout.len(),
+        started.elapsed() < std::time::Duration::from_secs(30),
+    );
+    assert_eq!(actual, (Some(3), "query: query exceeded 1s".to_string(), 0, true));
 }

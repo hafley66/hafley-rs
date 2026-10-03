@@ -1,0 +1,1 @@
+((call_expression) @c (#has-ancestor? @c ((block) @b4 (#has-ancestor? @b4 ((block) @b3 (#has-ancestor? @b3 ((block) @b2 (#has-ancestor? @b2 ((block) @b1 (#has-ancestor? @b1 ((block) @b0 (#has-ancestor? @b0 (block)))))))))))))

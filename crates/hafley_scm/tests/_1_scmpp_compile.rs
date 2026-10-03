@@ -68,7 +68,7 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN edge AS "e0" ON "e0".family = 'cst' AND "e0"._content_id = "c0_x"._content_id AND "e0".to__start = "c0_x".start AND "e0".to__end = "c0_x"."end" AND "e0".to_kind = "c0_x".kind AND "e0".from__start = "r1".start AND "e0".from__end = "r1"."end" AND "e0".from_kind = "r1".kind
+  JOIN edge AS "e0" ON "e0".family = 'cst' AND "e0"._content_id = "c0_x"._content_id AND "e0".to__start = "c0_x".start AND "e0".to__end = "c0_x"."end" AND "e0".to_kind = "c0_x".kind AND "e0"._content_id = "r1"._content_id AND "e0".from__start = "r1".start AND "e0".from__end = "r1"."end" AND "e0".from_kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -105,7 +105,7 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_x"._content_id AND "w0".fs = "c0_x".start AND "w0".fe = "c0_x"."end" AND "w0".fk = "c0_x".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_x"._content_id AND "w0".fs = "c0_x".start AND "w0".fe = "c0_x"."end" AND "w0".fk = "c0_x".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -137,7 +137,7 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_f"._content_id AND "w0".fs = "c0_f".start AND "w0".fe = "c0_f"."end" AND "w0".fk = "c0_f".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_f"._content_id AND "w0".fs = "c0_f".start AND "w0".fe = "c0_f"."end" AND "w0".fk = "c0_f".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -161,7 +161,7 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN edge AS "e0" ON "e0".family = 'cst' AND "e0"._content_id = "r1"._content_id AND "e0".to__start = "r1".start AND "e0".to__end = "r1"."end" AND "e0".to_kind = "r1".kind AND "e0".from__start = "c0_b".start AND "e0".from__end = "c0_b"."end" AND "e0".from_kind = "c0_b".kind
+  JOIN edge AS "e0" ON "e0".family = 'cst' AND "e0"._content_id = "r1"._content_id AND "e0".to__start = "r1".start AND "e0".to__end = "r1"."end" AND "e0".to_kind = "r1".kind AND "e0"._content_id = "c0_b"._content_id AND "e0".from__start = "c0_b".start AND "e0".from__end = "c0_b"."end" AND "e0".from_kind = "c0_b".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -306,7 +306,7 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_x"._content_id AND "w0".fs = "c0_x".start AND "w0".fe = "c0_x"."end" AND "w0".fk = "c0_x".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind AND "w0".field = 'pattern'
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_x"._content_id AND "w0".fs = "c0_x".start AND "w0".fe = "c0_x"."end" AND "w0".fk = "c0_x".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind AND "w0".field = 'pattern'
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -338,7 +338,7 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND NOT EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_f"._content_id AND "w0".fs = "c0_f".start AND "w0".fe = "c0_f"."end" AND "w0".fk = "c0_f".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_f"._content_id AND "w0".fs = "c0_f".start AND "w0".fe = "c0_f"."end" AND "w0".fk = "c0_f".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -376,7 +376,7 @@ FROM capture AS "r0"
   LEFT JOIN capture AS "c0_body" ON "c0_body"._input_path = "r0"._input_path AND "c0_body".pattern = 0 AND "c0_body"."match" = "r0"."match" AND "c0_body".capture = 'body'
   JOIN capture AS "r1" ON "r1".pattern = 1 AND "r1".capture = '__root' AND "r1"._input_path = "r0"._input_path
   LEFT JOIN capture AS "c1_callee" ON "c1_callee"._input_path = "r1"._input_path AND "c1_callee".pattern = 1 AND "c1_callee"."match" = "r1"."match" AND "c1_callee".capture = 'callee'
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_body"._content_id AND "w0".fs = "c0_body".start AND "w0".fe = "c0_body"."end" AND "w0".fk = "c0_body".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_body"._content_id AND "w0".fs = "c0_body".start AND "w0".fe = "c0_body"."end" AND "w0".fk = "c0_body".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND "c1_callee".text = "c0_fn".text
@@ -413,7 +413,7 @@ WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
   LEFT JOIN capture AS "c1_call" ON "c1_call"._input_path = "r1"._input_path AND "c1_call".pattern = 1 AND "c1_call"."match" = "r1"."match" AND "c1_call".capture = 'call'
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_call"._content_id AND "w0".fs = "c0_call".start AND "w0".fe = "c0_call"."end" AND "w0".fk = "c0_call".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_call"._content_id AND "w0".fs = "c0_call".start AND "w0".fe = "c0_call"."end" AND "w0".fk = "c0_call".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path
@@ -465,8 +465,8 @@ FROM capture AS "r0"
   LEFT JOIN capture AS "c1_cbody" ON "c1_cbody"._input_path = "r1"._input_path AND "c1_cbody".pattern = 1 AND "c1_cbody"."match" = "r1"."match" AND "c1_cbody".capture = 'cbody'
   JOIN capture AS "r2" ON "r2".pattern = 2 AND "r2".capture = '__root' AND "r2"._input_path = "r1"._input_path
   LEFT JOIN capture AS "c2_callee" ON "c2_callee"._input_path = "r2"._input_path AND "c2_callee".pattern = 2 AND "c2_callee"."match" = "r2"."match" AND "c2_callee".capture = 'callee'
-  JOIN walk1 AS "w0" ON "w0".cid = "c1_cbody"._content_id AND "w0".fs = "c1_cbody".start AND "w0".fe = "c1_cbody"."end" AND "w0".fk = "c1_cbody".kind AND "w0".start = "r2".start AND "w0"."end" = "r2"."end" AND "w0".kind = "r2".kind
-  JOIN walk3 AS "w2" ON "w2".cid = "c0_body"._content_id AND "w2".fs = "c0_body".start AND "w2".fe = "c0_body"."end" AND "w2".fk = "c0_body".kind AND "w2".start = "r1".start AND "w2"."end" = "r1"."end" AND "w2".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c1_cbody"._content_id AND "w0".fs = "c1_cbody".start AND "w0".fe = "c1_cbody"."end" AND "w0".fk = "c1_cbody".kind AND "w0".cid = "r2"._content_id AND "w0".start = "r2".start AND "w0"."end" = "r2"."end" AND "w0".kind = "r2".kind
+  JOIN walk3 AS "w2" ON "w2".cid = "c0_body"._content_id AND "w2".fs = "c0_body".start AND "w2".fe = "c0_body"."end" AND "w2".fk = "c0_body".kind AND "w2".cid = "r1"._content_id AND "w2".start = "r1".start AND "w2"."end" = "r1"."end" AND "w2".kind = "r1".kind
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND "c2_callee".text = "c0_fn".text
@@ -499,7 +499,7 @@ WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND instr("c0_s".text, 'seed') > 0
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_s"._content_id AND "w0".fs = "c0_s".start AND "w0".fe = "c0_s"."end" AND "w0".fk = "c0_s".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_s"._content_id AND "w0".fs = "c0_s".start AND "w0".fe = "c0_s"."end" AND "w0".fk = "c0_s".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path)
@@ -535,11 +535,44 @@ FROM capture AS "r0"
 WHERE "r0".pattern = 0
   AND "r0".capture = '__root'
   AND EXISTS (SELECT 1 FROM capture AS "r1"
-  JOIN walk1 AS "w0" ON "w0".cid = "c0_f"._content_id AND "w0".fs = "c0_f".start AND "w0".fe = "c0_f"."end" AND "w0".fk = "c0_f".kind AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
+  JOIN walk1 AS "w0" ON "w0".cid = "c0_f"._content_id AND "w0".fs = "c0_f".start AND "w0".fe = "c0_f"."end" AND "w0".fk = "c0_f".kind AND "w0".cid = "r1"._content_id AND "w0".start = "r1".start AND "w0"."end" = "r1"."end" AND "w0".kind = "r1".kind
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path
-  AND NOT (regexp('^test_', "c0_fn".text)))
+  AND NOT COALESCE((regexp('^test_', "c0_fn".text)), 0))
+ORDER BY "r0"._input_path, "r0".start, "r0"."match""#
+    );
+}
+
+/// An absent optional capture makes a text test NULL: the positive form drops the match,
+/// the `not-` form keeps it (`NOT COALESCE(.., 0)`).
+#[test]
+fn not_forms_hold_on_an_absent_capture() {
+    assert_eq!(
+        show(&rust(), "((arguments (integer_literal)? @n) @args (#not-contains? @n \"9\")\n  (#has-parent? @args ((call_expression function: (identifier) @f) (#not-eq? @f @n))))"),
+        r#"0: ((arguments (integer_literal)? @n) @args @__root)
+1: ((call_expression function: (identifier) @f) @__root)
+--
+SELECT "r0"._input_path AS path,
+  "c0_n"."start" AS "n__start",
+  "c0_n"."end" AS "n__end",
+  "c0_n"."text" AS "n__text",
+  "c0_args"."start" AS "args__start",
+  "c0_args"."end" AS "args__end",
+  "c0_args"."text" AS "args__text"
+FROM capture AS "r0"
+  LEFT JOIN capture AS "c0_n" ON "c0_n"._input_path = "r0"._input_path AND "c0_n".pattern = 0 AND "c0_n"."match" = "r0"."match" AND "c0_n".capture = 'n'
+  LEFT JOIN capture AS "c0_args" ON "c0_args"._input_path = "r0"._input_path AND "c0_args".pattern = 0 AND "c0_args"."match" = "r0"."match" AND "c0_args".capture = 'args'
+WHERE "r0".pattern = 0
+  AND "r0".capture = '__root'
+  AND NOT COALESCE((instr("c0_n".text, '9') > 0), 0)
+  AND EXISTS (SELECT 1 FROM capture AS "r1"
+  LEFT JOIN capture AS "c1_f" ON "c1_f"._input_path = "r1"._input_path AND "c1_f".pattern = 1 AND "c1_f"."match" = "r1"."match" AND "c1_f".capture = 'f'
+  JOIN edge AS "e0" ON "e0".family = 'cst' AND "e0"._content_id = "c0_args"._content_id AND "e0".to__start = "c0_args".start AND "e0".to__end = "c0_args"."end" AND "e0".to_kind = "c0_args".kind AND "e0"._content_id = "r1"._content_id AND "e0".from__start = "r1".start AND "e0".from__end = "r1"."end" AND "e0".from_kind = "r1".kind
+  WHERE "r1".pattern = 1
+  AND "r1".capture = '__root'
+  AND "r1"._input_path = "r0"._input_path
+  AND NOT COALESCE(("c1_f".text = "c0_n".text), 0))
 ORDER BY "r0"._input_path, "r0".start, "r0"."match""#
     );
 }

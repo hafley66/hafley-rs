@@ -1,0 +1,175 @@
+case	relation	option	scmpp_rows	oracle_rows	agree	scmpp_only	oracle_only	seconds
+call_expression/has/closure_expression/default	has		448	448	448	0	0	0.80
+call_expression/has/closure_expression/neighbor	has	neighbor	0	0	0	0	0	0.52
+call_expression/has/closure_expression/stop	has	stop	448	448	448	0	0	0.82
+call_expression/has/closure_expression/field	has	field	0	0	0	0	0	0.72
+call_expression/has/closure_expression/not	has	not	3417	3417	3417	0	0	0.80
+call_expression/has-ancestor/closure_expression/default	has-ancestor		515	515	515	0	0	0.71
+call_expression/has-ancestor/closure_expression/neighbor	has-ancestor	neighbor	177	177	177	0	0	0.48
+call_expression/has-ancestor/closure_expression/stop	has-ancestor	stop	333	333	333	0	0	0.66
+call_expression/has-ancestor/closure_expression/field	has-ancestor	field	515	515	515	0	0	0.67
+call_expression/has-ancestor/closure_expression/not	has-ancestor	not	3350	3350	3350	0	0	0.71
+call_expression/has-parent/closure_expression/default	has-parent		177	177	177	0	0	0.50
+call_expression/has-parent/closure_expression/field	has-parent	field	177	177	177	0	0	0.48
+call_expression/has-parent/closure_expression/not	has-parent	not	3688	3688	3688	0	0	0.48
+call_expression/precedes/closure_expression/default	precedes		3	3	3	0	0	0.49
+call_expression/precedes/closure_expression/neighbor	precedes	neighbor	3	3	3	0	0	0.48
+call_expression/precedes/closure_expression/stop	precedes	stop	3	3	3	0	0	0.51
+call_expression/precedes/closure_expression/field	precedes	field	0	0	0	0	0	0.49
+call_expression/precedes/closure_expression/not	precedes	not	3862	3862	3862	0	0	0.50
+call_expression/follows/closure_expression/default	follows		1	1	1	0	0	0.49
+call_expression/follows/closure_expression/neighbor	follows	neighbor	0	0	0	0	0	0.49
+call_expression/follows/closure_expression/stop	follows	stop	1	1	1	0	0	0.51
+call_expression/follows/closure_expression/field	follows	field	0	0	0	0	0	0.50
+call_expression/follows/closure_expression/not	follows	not	3864	3864	3864	0	0	0.49
+call_expression/nth-child/1	nth-child	1	2308	2308	2308	0	0	0.54
+call_expression/nth-child/1/of	nth-child-of	1	3756	3756	3756	0	0	0.55
+call_expression/nth-child/2	nth-child	2	1316	1316	1316	0	0	0.53
+call_expression/nth-child/2/of	nth-child-of	2	108	108	108	0	0	0.53
+call_expression/nth-child/3	nth-child	3	205	205	205	0	0	0.52
+call_expression/nth-child/3/of	nth-child-of	3	1	1	1	0	0	0.54
+identifier/has/function_item/default	has		0	0	0	0	0	0.55
+identifier/has/function_item/neighbor	has	neighbor	0	0	0	0	0	0.55
+identifier/has/function_item/stop	has	stop	0	0	0	0	0	0.57
+identifier/has/function_item/field	has	field	0	0	0	0	0	0.55
+identifier/has/function_item/not	has	not	11902	11902	11902	0	0	0.58
+identifier/has-ancestor/function_item/default	has-ancestor		11053	11053	11053	0	0	1.07
+identifier/has-ancestor/function_item/neighbor	has-ancestor	neighbor	297	297	297	0	0	0.56
+identifier/has-ancestor/function_item/stop	has-ancestor	stop	1324	1324	1324	0	0	0.86
+identifier/has-ancestor/function_item/field	has-ancestor	field	9740	9740	9740	0	0	0.96
+identifier/has-ancestor/function_item/not	has-ancestor	not	849	849	849	0	0	1.04
+identifier/has-parent/function_item/default	has-parent		297	297	297	0	0	0.56
+identifier/has-parent/function_item/field	has-parent	field	0	0	0	0	0	0.56
+identifier/has-parent/function_item/not	has-parent	not	11605	11605	11605	0	0	0.58
+identifier/precedes/function_item/default	precedes		0	0	0	0	0	0.58
+identifier/precedes/function_item/neighbor	precedes	neighbor	0	0	0	0	0	0.57
+identifier/precedes/function_item/stop	precedes	stop	0	0	0	0	0	0.65
+identifier/precedes/function_item/field	precedes	field	0	0	0	0	0	0.57
+identifier/precedes/function_item/not	precedes	not	11902	11902	11902	0	0	0.58
+identifier/follows/function_item/default	follows		2	2	2	0	0	0.59
+identifier/follows/function_item/neighbor	follows	neighbor	0	0	0	0	0	0.57
+identifier/follows/function_item/stop	follows	stop	2	2	2	0	0	0.63
+identifier/follows/function_item/field	follows	field	0	0	0	0	0	0.57
+identifier/follows/function_item/not	follows	not	11900	11900	11900	0	0	0.60
+identifier/nth-child/1	nth-child	1	8217	8217	8217	0	0	0.62
+identifier/nth-child/1/of	nth-child-of	1	9589	9589	9589	0	0	0.63
+identifier/nth-child/2	nth-child	2	2952	2952	2952	0	0	0.60
+identifier/nth-child/2/of	nth-child-of	2	1768	1768	1768	0	0	0.61
+identifier/nth-child/3	nth-child	3	313	313	313	0	0	0.58
+identifier/nth-child/3/of	nth-child-of	3	238	238	238	0	0	0.62
+let_declaration/has/expression_statement/default	has		129	129	129	0	0	0.59
+let_declaration/has/expression_statement/neighbor	has	neighbor	0	0	0	0	0	0.44
+let_declaration/has/expression_statement/stop	has	stop	0	0	0	0	0	0.61
+let_declaration/has/expression_statement/field	has	field	0	0	0	0	0	0.57
+let_declaration/has/expression_statement/not	has	not	647	647	647	0	0	0.61
+let_declaration/has-ancestor/expression_statement/default	has-ancestor		417	417	417	0	0	0.54
+let_declaration/has-ancestor/expression_statement/neighbor	has-ancestor	neighbor	0	0	0	0	0	0.44
+let_declaration/has-ancestor/expression_statement/stop	has-ancestor	stop	0	0	0	0	0	0.47
+let_declaration/has-ancestor/expression_statement/field	has-ancestor	field	0	0	0	0	0	0.53
+let_declaration/has-ancestor/expression_statement/not	has-ancestor	not	359	359	359	0	0	0.54
+let_declaration/has-parent/expression_statement/default	has-parent		0	0	0	0	0	0.44
+let_declaration/has-parent/expression_statement/field	has-parent	field	0	0	0	0	0	0.44
+let_declaration/has-parent/expression_statement/not	has-parent	not	776	776	776	0	0	0.44
+let_declaration/precedes/expression_statement/default	precedes		660	660	660	0	0	0.47
+let_declaration/precedes/expression_statement/neighbor	precedes	neighbor	412	412	412	0	0	0.44
+let_declaration/precedes/expression_statement/stop	precedes	stop	660	660	660	0	0	0.48
+let_declaration/precedes/expression_statement/field	precedes	field	0	0	0	0	0	0.47
+let_declaration/precedes/expression_statement/not	precedes	not	116	116	116	0	0	0.44
+let_declaration/follows/expression_statement/default	follows		191	191	191	0	0	0.44
+let_declaration/follows/expression_statement/neighbor	follows	neighbor	105	105	105	0	0	0.45
+let_declaration/follows/expression_statement/stop	follows	stop	191	191	191	0	0	0.47
+let_declaration/follows/expression_statement/field	follows	field	0	0	0	0	0	0.45
+let_declaration/follows/expression_statement/not	follows	not	585	585	585	0	0	0.44
+let_declaration/nth-child/1	nth-child	1	378	378	378	0	0	0.50
+let_declaration/nth-child/1/of	nth-child-of	1	417	417	417	0	0	0.47
+let_declaration/nth-child/2	nth-child	2	159	159	159	0	0	0.49
+let_declaration/nth-child/2/of	nth-child-of	2	177	177	177	0	0	0.47
+let_declaration/nth-child/3	nth-child	3	86	86	86	0	0	0.50
+let_declaration/nth-child/3/of	nth-child-of	3	84	84	84	0	0	0.47
+block/has/return_expression/default	has		257	257	257	0	0	1.00
+block/has/return_expression/neighbor	has	neighbor	3	3	3	0	0	0.44
+block/has/return_expression/stop	has	stop	136	136	136	0	0	0.79
+block/has/return_expression/field	has	field	0	0	0	0	0	0.84
+block/has/return_expression/not	has	not	1124	1124	1124	0	0	1.01
+block/has-ancestor/return_expression/default	has-ancestor		3	3	3	0	0	0.55
+block/has-ancestor/return_expression/neighbor	has-ancestor	neighbor	0	0	0	0	0	0.45
+block/has-ancestor/return_expression/stop	has-ancestor	stop	3	3	3	0	0	0.54
+block/has-ancestor/return_expression/field	has-ancestor	field	0	0	0	0	0	0.55
+block/has-ancestor/return_expression/not	has-ancestor	not	1378	1378	1378	0	0	0.57
+block/has-parent/return_expression/default	has-parent		0	0	0	0	0	0.50
+block/has-parent/return_expression/field	has-parent	field	0	0	0	0	0	0.50
+block/has-parent/return_expression/not	has-parent	not	1381	1381	1381	0	0	0.47
+block/precedes/return_expression/default	precedes		0	0	0	0	0	0.51
+block/precedes/return_expression/neighbor	precedes	neighbor	0	0	0	0	0	0.46
+block/precedes/return_expression/stop	precedes	stop	0	0	0	0	0	0.47
+block/precedes/return_expression/field	precedes	field	0	0	0	0	0	0.45
+block/precedes/return_expression/not	precedes	not	1381	1381	1381	0	0	0.45
+block/follows/return_expression/default	follows		0	0	0	0	0	0.45
+block/follows/return_expression/neighbor	follows	neighbor	0	0	0	0	0	0.45
+block/follows/return_expression/stop	follows	stop	0	0	0	0	0	0.47
+block/follows/return_expression/field	follows	field	0	0	0	0	0	0.45
+block/follows/return_expression/not	follows	not	1381	1381	1381	0	0	0.44
+block/nth-child/1	nth-child	1	65	65	65	0	0	0.50
+block/nth-child/1/of	nth-child-of	1	1381	1381	1381	0	0	0.47
+block/nth-child/2	nth-child	2	752	752	752	0	0	0.50
+block/nth-child/2/of	nth-child-of	2	0	0	0	0	0	0.47
+block/nth-child/3	nth-child	3	366	366	366	0	0	0.49
+block/nth-child/3/of	nth-child-of	3	0	0	0	0	0	0.48
+match_arm/has/macro_invocation/default	has		33	33	33	0	0	0.61
+match_arm/has/macro_invocation/neighbor	has	neighbor	3	3	3	0	0	0.45
+match_arm/has/macro_invocation/stop	has	stop	6	6	6	0	0	0.55
+match_arm/has/macro_invocation/field	has	field	3	3	3	0	0	0.58
+match_arm/has/macro_invocation/not	has	not	419	419	419	0	0	0.61
+match_arm/has-ancestor/macro_invocation/default	has-ancestor		0	0	0	0	0	0.52
+match_arm/has-ancestor/macro_invocation/neighbor	has-ancestor	neighbor	0	0	0	0	0	0.44
+match_arm/has-ancestor/macro_invocation/stop	has-ancestor	stop	0	0	0	0	0	0.53
+match_arm/has-ancestor/macro_invocation/field	has-ancestor	field	0	0	0	0	0	0.51
+match_arm/has-ancestor/macro_invocation/not	has-ancestor	not	452	452	452	0	0	0.52
+match_arm/has-parent/macro_invocation/default	has-parent		0	0	0	0	0	0.44
+match_arm/has-parent/macro_invocation/field	has-parent	field	0	0	0	0	0	0.43
+match_arm/has-parent/macro_invocation/not	has-parent	not	452	452	452	0	0	0.44
+match_arm/precedes/macro_invocation/default	precedes		0	0	0	0	0	0.43
+match_arm/precedes/macro_invocation/neighbor	precedes	neighbor	0	0	0	0	0	0.43
+match_arm/precedes/macro_invocation/stop	precedes	stop	0	0	0	0	0	0.45
+match_arm/precedes/macro_invocation/field	precedes	field	0	0	0	0	0	0.43
+match_arm/precedes/macro_invocation/not	precedes	not	452	452	452	0	0	0.45
+match_arm/follows/macro_invocation/default	follows		0	0	0	0	0	0.43
+match_arm/follows/macro_invocation/neighbor	follows	neighbor	0	0	0	0	0	0.44
+match_arm/follows/macro_invocation/stop	follows	stop	0	0	0	0	0	0.46
+match_arm/follows/macro_invocation/field	follows	field	0	0	0	0	0	0.43
+match_arm/follows/macro_invocation/not	follows	not	452	452	452	0	0	0.44
+match_arm/nth-child/1	nth-child	1	109	109	109	0	0	0.49
+match_arm/nth-child/1/of	nth-child-of	1	109	109	109	0	0	0.46
+match_arm/nth-child/2	nth-child	2	107	107	107	0	0	0.49
+match_arm/nth-child/2/of	nth-child-of	2	107	107	107	0	0	0.46
+match_arm/nth-child/3	nth-child	3	65	65	65	0	0	0.49
+match_arm/nth-child/3/of	nth-child-of	3	67	67	67	0	0	0.46
+field_expression/has/call_expression/default	has		809	809	809	0	0	0.66
+field_expression/has/call_expression/neighbor	has	neighbor	777	777	777	0	0	0.50
+field_expression/has/call_expression/stop	has	stop	809	809	809	0	0	0.69
+field_expression/has/call_expression/field	has	field	78	78	78	0	0	0.64
+field_expression/has/call_expression/not	has	not	2919	2919	2919	0	0	0.66
+field_expression/has-ancestor/call_expression/default	has-ancestor		3568	3568	3568	0	0	0.74
+field_expression/has-ancestor/call_expression/neighbor	has-ancestor	neighbor	2734	2734	2734	0	0	0.51
+field_expression/has-ancestor/call_expression/stop	has-ancestor	stop	3557	3557	3557	0	0	0.67
+field_expression/has-ancestor/call_expression/field	has-ancestor	field	0	0	0	0	0	0.69
+field_expression/has-ancestor/call_expression/not	has-ancestor	not	160	160	160	0	0	0.74
+field_expression/has-parent/call_expression/default	has-parent		2734	2734	2734	0	0	0.51
+field_expression/has-parent/call_expression/field	has-parent	field	0	0	0	0	0	0.51
+field_expression/has-parent/call_expression/not	has-parent	not	994	994	994	0	0	0.51
+field_expression/precedes/call_expression/default	precedes		12	12	12	0	0	0.51
+field_expression/precedes/call_expression/neighbor	precedes	neighbor	12	12	12	0	0	0.51
+field_expression/precedes/call_expression/stop	precedes	stop	12	12	12	0	0	0.53
+field_expression/precedes/call_expression/field	precedes	field	0	0	0	0	0	0.53
+field_expression/precedes/call_expression/not	precedes	not	3716	3716	3716	0	0	0.52
+field_expression/follows/call_expression/default	follows		6	6	6	0	0	0.50
+field_expression/follows/call_expression/neighbor	follows	neighbor	6	6	6	0	0	0.51
+field_expression/follows/call_expression/stop	follows	stop	6	6	6	0	0	0.53
+field_expression/follows/call_expression/field	follows	field	0	0	0	0	0	0.50
+field_expression/follows/call_expression/not	follows	not	3722	3722	3722	0	0	0.51
+field_expression/nth-child/1	nth-child	1	3606	3606	3606	0	0	0.52
+field_expression/nth-child/1/of	nth-child-of	1	3705	3705	3705	0	0	0.53
+field_expression/nth-child/2	nth-child	2	116	116	116	0	0	0.52
+field_expression/nth-child/2/of	nth-child-of	2	23	23	23	0	0	0.52
+field_expression/nth-child/3	nth-child	3	3	3	3	0	0	0.54
+field_expression/nth-child/3/of	nth-child-of	3	0	0	0	0	0	0.52
