@@ -86,3 +86,82 @@ The interned-id + preorder-range design is engine independent. Phase 1 keeps it 
    table of wall, peak RSS, DB size per engine. The numbers decide the engine.
 
 Time box: phase 1 is one writer pass; stop and report if it is not converging.
+
+## Results (phase 1, 2026-10-03)
+
+Implemented on `feature/scmpp-store`. Lab: `crates/sprefa-extract/bench/labs/lab-20261003-scmpp-sqlite-vs-duckdb/`
+(`1_before_after.sh`, `2_engines.sh`, `ancestor.sql`/`plain.sql` = the compiled SQL, `before_after.tsv`, `engines.tsv`).
+
+### Shape as built
+
+| table | columns | key | indexes |
+| --- | --- | --- | --- |
+| scmpp_dict_path, scmpp_dict_kind, scmpp_dict_field, scmpp_dict_capture, scmpp_dict_text | id, text | id INTEGER PK; UNIQUE(text) | none |
+| scmpp_node | file, pre, last, parent, depth, sib, idx, kind, field, start, end, named | PK(file, pre) WITHOUT ROWID | (file, parent, sib), built after the load |
+| scmpp_capture | file, pattern, match, capture, node, start, end, text | PK(file, pattern, match, capture, node) WITHOUT ROWID | (pattern, capture, file, node), built after the load |
+
+Differences from the plan above:
+
+- Table names carry a `scmpp_` prefix: the fact DDL already owns `node`, `edge`, `capture`.
+- `text_of` folded into `scmpp_capture.text` (text id; NULL on `@__root` rows), with `start`, `end` on the
+  capture row: the relation-free plan writes no node rows and still projects spans.
+- No `(file, kind, pre)` index: no lowered SQL reads `kind`.
+- Capture and field ids the SQL names come from `Compiled.captures` / `Compiled.fields`
+  (`hafley_scm::scmpp::_3_lower::dictionaries`); the store interns those lists first, so entry i has id i+1,
+  and errors if a dictionary already holds a name at another id.
+- Text predicates: `capture.text IN (SELECT id FROM scmpp_dict_text WHERE regexp(...))` (one evaluation per
+  dictionary entry). Projection text and path: correlated scalar subqueries on the dictionary id, so they add no
+  join (SQLite's 64-table join limit counts only capture joins, as before). `ORDER BY path` sorts by path text.
+- has-ancestor puts its range on the target capture (`r.node < from.node AND from.node <= a.last`): with the
+  range on `a.pre`, SQLite 3.53 (bundled and CLI) scanned node ranges, 11.3 s vs 0.5 s on scm_extract_src.
+- Seam: trait `Rows { dict, node, capture }` in `src/bin/ryi/1a_scmpp_rows.rs` (store, interners, one
+  `walk_streaming` preorder pass per file, `last` by one reverse pass); SQLite writer `1b_scmpp_sqlite.rs`
+  (256-row multi-row INSERTs). Write-path candidates: rusqlite prepared row-at-a-time; multi-row VALUES (chosen);
+  rusqlite `rarray` per column; the TypeSpec `Binder` (fact tables only).
+
+### Correctness
+
+| check | result |
+| --- | --- |
+| hafley_scm `_1_scmpp_compile` snapshots | 17 regenerated, 18 pass |
+| stress oracle (174 cases, crates/hafley_scm/src/lang) | 174 agree, 114 non-empty, 175,706 rows; columns 1-8 identical to oracle.tsv and to a before-binary run |
+| doc examples (3_doc_examples.py) | 20 match, 0 mismatch |
+| stdout byte compare, before vs after, fx/*.scm x fx/*.rs | 227 identical, 0 differ, 4 before-timeouts (15 s; S4 deep nesting) |
+| stdout byte compare, the 4 measured runs | 4 identical |
+
+Oracle total wall: 95.45 s before, 42.14 s after.
+
+### Before / after (release ryii, `--sqlite`, main checkout, `--pattern '*.rs'`)
+
+ancestor = `((call_expression) @call (#has-ancestor? @call function_item))`, plain = `((call_expression) @call)`;
+crates = hafley-rs `crates/`; scm_extract_src = `crates/hafley_scm/src` + `crates/sprefa-extract/src`.
+
+| query | corpus | build | wall_s | peak_rss_mb | db_mb | rows |
+| --- | --- | --- | --- | --- | --- | --- |
+| ancestor | crates | before | 27.18 | 1264 | 2026.1 | 124241 |
+| ancestor | crates | after | 7.31 | 354 | 203.4 | 124241 |
+| ancestor | scm_extract_src | before | 6.88 | 1055 | 602.5 | 36242 |
+| ancestor | scm_extract_src | after | 1.95 | 146 | 61.4 | 36242 |
+| plain | crates | before | 2.63 | 422 | 169.7 | 124661 |
+| plain | crates | after | 2.38 | 217 | 49.7 | 124661 |
+| plain | scm_extract_src | before | 0.73 | 166 | 53.5 | 36410 |
+| plain | scm_extract_src | after | 0.63 | 92 | 18.2 | 36410 |
+
+ancestor/crates after: 3,255,814 node rows, 262,060 capture rows, 1,176 paths.
+
+### SQLite vs DuckDB, same compiled SQL
+
+Query only (`CREATE TABLE bench_row AS <sql>`), over the after stores. SQLite: CLI 3.53.4 on the ryii DB
+(indexes present, no ANALYZE). DuckDB: CLI 1.5.5, tables copied into a native file via the sqlite extension,
+default threads (12 cores). Rows byte-identical between engines in all 4 cells.
+
+| engine | query | corpus | wall_s | peak_rss_mb |
+| --- | --- | --- | --- | --- |
+| sqlite | ancestor | crates | 2.25 | 31 |
+| duckdb | ancestor | crates | 0.11 | 185 |
+| sqlite | ancestor | scm_extract_src | 0.51 | 12 |
+| duckdb | ancestor | scm_extract_src | 0.07 | 95 |
+| sqlite | plain | crates | 0.26 | 32 |
+| duckdb | plain | crates | 0.11 | 167 |
+| sqlite | plain | scm_extract_src | 0.06 | 15 |
+| duckdb | plain | scm_extract_src | 0.06 | 82 |

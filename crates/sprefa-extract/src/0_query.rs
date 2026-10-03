@@ -145,7 +145,6 @@ fn run_scmpp(
 ) -> Result<()> {
     let text = std::fs::read_to_string(sprefa_extract::io_path(file))
         .map_err(|error| format!("--scmpp '{}': {error}", file.display()))?;
-    let label = file.to_string_lossy().into_owned();
     let mut output = crate::sqlite::Output::with_writer(cli.sqlite.as_deref(), writer, true)
         .map_err(|error| error.to_string())?;
     if output.database.is_none() {
@@ -155,7 +154,8 @@ fn run_scmpp(
     crate::deadline::within(handle, cli.timeout, "query", |deadline| {
         let mut compiled = std::collections::HashMap::<String, Option<hafley_scm::scmpp::Compiled>>::new();
         let mut skipped = std::collections::BTreeMap::<String, usize>::new();
-        let mut cst_written = std::collections::HashSet::new();
+        let mut store = crate::scmpp::open(output.database.as_mut().expect("scm++ database"))
+            .map_err(|error| format!("scm++ store: {error}"))?;
         let mut used = std::collections::BTreeSet::<String>::new();
         for path in paths {
             if deadline.expired() {
@@ -193,17 +193,7 @@ fn run_scmpp(
             let tree = hafley_scm::cst::parse(&grammar, &bytes)
                 .ok_or_else(|| format!("{name}: tree-sitter returned no tree"))?;
             let database = output.database.as_mut().expect("scm++ database");
-            crate::scmpp::write_file(
-                database,
-                found,
-                &label,
-                &name,
-                &content_id_of(&bytes).to_string(),
-                &bytes,
-                &tree,
-                &mut cst_written,
-            )
-            .map_err(|error| format!("{name}: {error}"))?;
+            crate::scmpp::write_file(database, &mut store, found, &name, &bytes, &tree)?;
         }
         if !skipped.is_empty() {
             crate::ops::print_diagnostic(format_args!(

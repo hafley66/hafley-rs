@@ -1,0 +1,9 @@
+query	corpus	build	wall_s	peak_rss_mb	db_mb	rows
+ancestor	crates	before	27.18	1264	2026.1	124241
+ancestor	scm_extract_src	before	6.88	1055	602.5	36242
+plain	crates	before	2.63	422	169.7	124661
+plain	scm_extract_src	before	0.73	166	53.5	36410
+ancestor	crates	after	7.31	354	203.4	124241
+ancestor	scm_extract_src	after	1.95	146	61.4	36242
+plain	crates	after	2.38	217	49.7	124661
+plain	scm_extract_src	after	0.63	92	18.2	36410

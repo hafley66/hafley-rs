@@ -72,18 +72,8 @@ fn store_and_query(functions: usize) -> (SpanCounts, usize) {
     let mut found = 0;
     let counts = counted(|| {
         let mut db = sqlite::Database::memory().unwrap();
-        let mut written = std::collections::HashSet::new();
-        scmpp::write_file(
-            &mut db,
-            &compiled,
-            "growth.scm",
-            "growth.rs",
-            "digest",
-            text.as_bytes(),
-            &tree,
-            &mut written,
-        )
-        .unwrap();
+        let mut store = scmpp::open(&mut db).unwrap();
+        scmpp::write_file(&mut db, &mut store, &compiled, "growth.rs", text.as_bytes(), &tree).unwrap();
         found = scmpp::run_sql(&mut db, &compiled).unwrap().len();
     });
     (counts, found)
