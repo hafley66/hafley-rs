@@ -151,7 +151,7 @@ fn run_scmpp(
         output.database = Some(crate::sqlite::Database::memory().map_err(|error| error.to_string())?);
     }
     let handle = output.database.as_ref().expect("scm++ database").connection().get_interrupt_handle();
-    crate::deadline::within(handle, cli.timeout, "query", |deadline| {
+    crate::deadline::within(Some(handle), cli.timeout, "query", |deadline| {
         let mut compiled = std::collections::HashMap::<String, Option<hafley_scm::scmpp::Compiled>>::new();
         let mut skipped = std::collections::BTreeMap::<String, usize>::new();
         let mut store = crate::scmpp::open(output.database.as_mut().expect("scm++ database"))
