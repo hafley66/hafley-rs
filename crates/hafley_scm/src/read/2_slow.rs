@@ -671,8 +671,23 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
         "go" => cfg!(feature = "go-checker"),
         _ => false,
     };
+    // A tier none of whose paths are in the set has nothing to answer: it is
+    // not asked, so it cannot decline (a `.mjs` is "ts" source, never tsc's).
+    let checkable = |lang: &str| {
+        files.iter().any(|path| {
+            let path = path.to_string_lossy();
+            match lang {
+                "rust" => path.ends_with(".rs"),
+                "ts" => crate::read::project::TS_CHECKER_SUFFIXES
+                    .iter()
+                    .any(|suffix| path.ends_with(suffix)),
+                "go" => path.ends_with(".go"),
+                _ => false,
+            }
+        })
+    };
     let want = |lang: &'static str| {
-        if !present.contains(lang) {
+        if !present.contains(lang) || !checkable(lang) {
             return None;
         }
         if compiled(lang) {
@@ -708,16 +723,28 @@ fn checker_facts(files: &[PathBuf], root: &Path) -> Result<Vec<FlatFact>, Projec
     }
     let checker = ResolutionOrigin::Checker.as_str();
     let facts = crate::read::project::resolve_project(&request)?;
-    // A requested checker that declined leaves the oracle empty; that is an error, not zero edges.
-    let declines: Vec<String> = facts
-        .iter()
-        .filter_map(|fact| match fact {
+    // A requested checker that declined (filed under the syntax run) leaves the
+    // oracle empty; that is an error, not zero edges. A file the loaded tier
+    // does not own is filed under its semantic run: one stderr line, the run goes on.
+    let mut declines: Vec<String> = Vec::new();
+    for fact in &facts {
+        match fact {
             FlatFact::Diagnostic(diagnostic) if diagnostic.relation.starts_with("tier.") => {
-                Some(format!("{} declined: {}", diagnostic.relation, diagnostic.detail))
+                if diagnostic.run == crate::read::project::SYNTAX_RUN {
+                    declines.push(format!(
+                        "{} declined: {}",
+                        diagnostic.relation, diagnostic.detail
+                    ));
+                } else {
+                    crate::read::diagnostic_line(format_args!(
+                        "ryi slow: {} declined {}",
+                        diagnostic.relation, diagnostic.detail
+                    ));
+                }
             }
-            _ => None,
-        })
-        .collect();
+            _ => {}
+        }
+    }
     if !declines.is_empty() {
         return Err(ProjectError::CheckerUnavailable(format!(
             "ryi slow: {}",

@@ -96,7 +96,10 @@ fn slow_walk_fails_when_the_typescript_checker_declines() {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(scratch.path())
         .env("RUST_LOG", "off")
-        .env("SPREFA_TS_CHECKER_TYPESCRIPT", scratch.path().join("absent/typescript.js"))
+        .env(
+            "SPREFA_TS_CHECKER_TYPESCRIPT",
+            scratch.path().join("absent/typescript.js"),
+        )
         .args(["graph", "--slow", "--from", "chainC", "--root", ".", "."])
         .output()
         .expect("graph binary runs");
@@ -104,6 +107,69 @@ fn slow_walk_fails_when_the_typescript_checker_declines() {
     assert!(!output.status.success(), "{stderr}");
     assert!(stderr.contains("ryi slow: tier.tsc declined"), "{stderr}");
     assert!(output.stdout.is_empty());
+}
+
+/// A Rust-only tree whose `include_str!` data file owns no module: the rust
+/// tier answers the walk, the file is one per-file decline line on stderr,
+/// and the absent ts tier is never asked, so it never declines.
+#[cfg(feature = "rust-checker")]
+#[test]
+fn slow_walk_answers_a_rust_tree_and_reports_the_unowned_file() {
+    let scratch = tempfile::tempdir().unwrap();
+    let src = scratch.path().join("src");
+    std::fs::create_dir(&src).unwrap();
+    std::fs::write(
+        scratch.path().join("Cargo.toml"),
+        "[package]\nname = \"shimmed\"\nversion = \"0.1.0\"\nedition = \"2021\"\n\n[workspace]\n",
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("lib.rs"),
+        "mod helper;\n\npub const SHIM: &str = include_str!(\"shim.rs\");\n\npub fn build() -> usize {\n    helper::assemble()\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("helper.rs"),
+        "pub fn assemble() -> usize {\n    1\n}\n",
+    )
+    .unwrap();
+    std::fs::write(
+        src.join("shim.rs"),
+        "pub fn shimmed() -> usize {\n    2\n}\n",
+    )
+    .unwrap();
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(scratch.path())
+        .env("RUST_LOG", "off")
+        .args([
+            "graph",
+            "--slow",
+            "--from",
+            "lib.rs#build",
+            "--root",
+            ".",
+            "src",
+        ])
+        .output()
+        .expect("graph binary runs");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(output.status.success(), "{stderr}");
+    let rows: Vec<Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(
+        rows,
+        serde_json::from_str::<Vec<Value>>(
+            r#"[{"record":"graph_node","path":"src/helper.rs","name":"assemble","depth":1,"grade":"+","line":1}]"#,
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        stderr,
+        "ryi slow: tier.rust-analyzer declined src/shim.rs: owns no module in the loaded crate graph (cfg-gated, or outside every crate root)\n1 edges: 1 +, 0 ~, 0 -\n"
+    );
 }
 
 #[cfg(feature = "rust-checker")]

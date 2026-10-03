@@ -196,6 +196,14 @@ impl std::fmt::Display for ProjectError {
 
 impl std::error::Error for ProjectError {}
 
+/// The run a tier-level decline is filed under; a per-file decline (a file the
+/// loaded tier does not own) is filed under that tier's semantic run instead.
+pub(crate) const SYNTAX_RUN: u32 = 0;
+
+/// The paths the ts checker tier accepts; a set with none of them gives it
+/// nothing to answer.
+pub(crate) const TS_CHECKER_SUFFIXES: [&str; 4] = [".ts", ".tsx", ".mts", ".cts"];
+
 /// Why a requested checker tier answered nothing. Off `--witness` the string is
 /// built and dropped, which is cheaper than a second code path.
 struct TierDecline {
@@ -959,7 +967,6 @@ struct Envelope<'a> {
 /// The TSI envelope over a resolve: protocol, one run per tier that ran, a
 /// `fact` ordinal on every resolved row, one witness per leg, coverage.
 fn envelope(input: Envelope) -> Vec<FlatFact> {
-    const SYNTAX_RUN: u32 = 0;
     let Envelope {
         facts,
         trail,
@@ -1167,7 +1174,7 @@ fn load_ts_checker(
         .iter()
         .filter(|input| {
             let path = input.path.as_str();
-            [".ts", ".tsx", ".mts", ".cts"]
+            TS_CHECKER_SUFFIXES
                 .iter()
                 .any(|suffix| path.ends_with(suffix))
         })
