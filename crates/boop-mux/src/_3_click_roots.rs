@@ -61,6 +61,11 @@ pub fn click_roots(
     }
     for dir in touched_dirs {
         roots.push(dir.clone(), RootVia::Touched);
+        if let Some(top) = repo_root_for(&dir.to_string_lossy()).map(PathBuf::from) {
+            for (worktree, name) in worktrees_of(&top) {
+                roots.push(worktree, RootVia::Worktree(name));
+            }
+        }
     }
     roots.list
 }

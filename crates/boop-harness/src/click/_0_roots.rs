@@ -27,6 +27,57 @@ mod tests {
     use super::*;
     use boop_mux::{worktrees_of, RootVia};
 
+    #[test]
+    fn touched_repository_worktrees_resolve_a_plan_from_a_shared_chat_cwd() {
+        let scratch = tempfile::tempdir().unwrap();
+        let base = std::fs::canonicalize(scratch.path()).unwrap();
+        let repo = base.join("repo");
+        std::fs::create_dir_all(repo.join("src")).unwrap();
+        std::fs::write(repo.join("src/a.rs"), "a").unwrap();
+        git(&repo, &["init", "-q", "-b", "main"]);
+        git(&repo, &["add", "."]);
+        git(&repo, &["commit", "-qm", "a"]);
+        let worktree = repo.join(".boop-worktrees/merge/main");
+        git(
+            &repo,
+            &[
+                "worktree",
+                "add",
+                "-q",
+                "--detach",
+                worktree.to_str().unwrap(),
+            ],
+        );
+        std::fs::create_dir_all(worktree.join("plans")).unwrap();
+        let plan = worktree.join("plans/query-language-grid.html");
+        std::fs::write(&plan, "grid").unwrap();
+        let pane = PaneHit {
+            pane: "%470".into(),
+            pane_current_path: base.clone(),
+            pane_col: 0,
+            pane_row: 0,
+        };
+        let touched = SessionTouched {
+            paths: vec![repo.join("src/a.rs").display().to_string()],
+            cwds: vec![base.display().to_string()],
+        };
+        let roots = click_roots(&pane, &touched);
+        assert_eq!(
+            boop_mux::resolve_fs(
+                "plans/query-language-grid.html",
+                &roots,
+                base.to_str().unwrap()
+            ),
+            boop_mux::ResolveResult::Hit {
+                reference: boop_mux::ResolvedRef {
+                    path: plan.display().to_string(),
+                    line: None,
+                    source: "worktree"
+                }
+            }
+        );
+    }
+
     fn git(dir: &Path, args: &[&str]) {
         let status = std::process::Command::new("git")
             .arg("-C")

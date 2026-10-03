@@ -30,7 +30,7 @@ keeps the formatter only. End every `init` caller's `main` with
 
 Run the local DuckDB viewer, then run a binary with the endpoint set:
 
-    otel-desktop-viewer --db /tmp/observe.duckdb --open-browser=false
+    otel-desktop-viewer --db /tmp/observe.duckdb --open-browser=false --browser-port=8001
     HAFLEY_OTLP_ENDPOINT=http://127.0.0.1:4318/v1/traces ./your-binary
 
 The DuckDB file stays locked while the viewer runs. Stop it, then query:

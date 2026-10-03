@@ -73,6 +73,7 @@ fn otlp_probe_spans_land_in_duckdb() {
             "--db",
             db.to_str().expect("db path"),
             "--open-browser=false",
+            "--browser-port=0",
         ])
         .stdout(Stdio::null())
         .stderr(Stdio::null())

@@ -40,9 +40,16 @@ pub struct ClickResolution {
     pub evidence_paths: usize,
 }
 
-/// The caller's sessions, else those most recently run in the pane cwd. Registries
-/// key panes by bare id, which collides across tmux servers.
-fn click_sessions(pane: &PaneHit, given: &[String], store: Option<&Store>) -> Vec<String> {
+/// The socket-bound pane chat takes precedence over caller hints and cwd history.
+fn click_sessions(
+    pane: &PaneHit,
+    given: &[String],
+    bound: Option<String>,
+    store: Option<&Store>,
+) -> Vec<String> {
+    if let Some(session) = bound {
+        return vec![session];
+    }
     if !given.is_empty() {
         return given.to_vec();
     }
@@ -75,7 +82,19 @@ pub fn resolve_click(
     let store = Store::default_path()
         .ok()
         .and_then(|path| Store::open_readonly(path).ok());
-    let sessions = click_sessions(&pane, sessions, store.as_ref());
+    let bound = boop_store::bus::default_mail_dir()
+        .ok()
+        .and_then(|mail_dir| {
+            crate::live::session_in_pane_on_socket(
+                &crate::Registry::discover(),
+                &pane.pane,
+                socket,
+                &mail_dir,
+            )
+            .ok()
+            .flatten()
+        });
+    let sessions = click_sessions(&pane, sessions, bound, store.as_ref());
     let touched = store
         .as_ref()
         .and_then(|store| store.session_touched(&sessions, TOUCHED_CAP).ok())
@@ -132,6 +151,17 @@ pub fn resolve_click(
 mod tests {
     use super::*;
     use std::path::Path;
+
+    #[test]
+    fn bound_chat_wins_over_recent_chats_in_the_same_cwd() {
+        let pane = pane(Path::new("/projects"));
+        let hints = vec!["other-chat".to_owned(), "newer-chat".to_owned()];
+        assert_eq!(
+            click_sessions(&pane, &hints, Some("clicked-chat".into()), None),
+            vec!["clicked-chat"]
+        );
+        assert_eq!(click_sessions(&pane, &hints, None, None), hints);
+    }
 
     fn git(dir: &Path, args: &[&str]) {
         let status = std::process::Command::new("git")
