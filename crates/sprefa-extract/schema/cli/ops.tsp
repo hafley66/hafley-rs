@@ -100,20 +100,20 @@ op graph(
   ...Inputs,
   @bodyRoot input: RawByteStream,
 
-  /** Resolved call edges landing on NAME */
-  @valueName("NAME") callers?: string,
+  /** Resolved call edges landing on NAME; PATH#NAME keeps NAME declared in files whose path ends with PATH */
+  @valueName("[PATH#]NAME") callers?: string,
 
   /** Declarations that reference type NAME */
   @valueName("NAME") uses?: string,
 
-  /** Everything NAME reaches along call edges */
-  @valueName("NAME") from?: string,
+  /** Everything NAME reaches along call edges; PATH#NAME seeds only NAME declared in files whose path ends with PATH */
+  @valueName("[PATH#]NAME") from?: string,
 
-  /** Shortest call paths from NAME */
-  @valueName("NAME") call_path?: string,
+  /** Shortest call paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH */
+  @valueName("[PATH#]NAME") call_path?: string,
 
-  /** Shortest type-reference paths from NAME */
-  @valueName("NAME") type_path?: string,
+  /** Shortest type-reference paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH */
+  @valueName("[PATH#]NAME") type_path?: string,
 
   @doc("Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges.")
   @valueName("BLOB@START:END") flow_path?: string,

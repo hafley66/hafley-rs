@@ -115,20 +115,20 @@ pub struct GraphArgs {
   #[command(flatten)]
   #[serde(flatten)]
   pub inputs: Inputs,
-  #[doc = "Resolved call edges landing on NAME"]
-  #[arg(long, value_name = "NAME")]
+  #[doc = "Resolved call edges landing on NAME; PATH#NAME keeps NAME declared in files whose path ends with PATH"]
+  #[arg(long, value_name = "[PATH#]NAME")]
   pub callers: Option<String>,
   #[doc = "Declarations that reference type NAME"]
   #[arg(long, value_name = "NAME")]
   pub uses: Option<String>,
-  #[doc = "Everything NAME reaches along call edges"]
-  #[arg(long, value_name = "NAME")]
+  #[doc = "Everything NAME reaches along call edges; PATH#NAME seeds only NAME declared in files whose path ends with PATH"]
+  #[arg(long, value_name = "[PATH#]NAME")]
   pub from: Option<String>,
-  #[doc = "Shortest call paths from NAME"]
-  #[arg(long, value_name = "NAME")]
+  #[doc = "Shortest call paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH"]
+  #[arg(long, value_name = "[PATH#]NAME")]
   pub call_path: Option<String>,
-  #[doc = "Shortest type-reference paths from NAME"]
-  #[arg(long, value_name = "NAME")]
+  #[doc = "Shortest type-reference paths from NAME; PATH#NAME seeds only NAME declared in files whose path ends with PATH"]
+  #[arg(long, value_name = "[PATH#]NAME")]
   pub type_path: Option<String>,
   #[doc = "Flow paths from PATH@START:END or BLOB@START:END. START/END are zero-based UTF-8 byte offsets, END exclusive. PATH is read under --root (or the current directory); --at reads the revision. BLOB is the exact tagged content digest from file.digest or flow_edge.from_blob (blake3:HEX for worktree facts), not a bare git object ID. The existing command follows interprocedural flow_edge facts; local value flow is emitted as df edges."]
   #[arg(long, value_name = "BLOB@START:END")]
