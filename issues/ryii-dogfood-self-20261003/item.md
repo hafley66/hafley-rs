@@ -7,7 +7,7 @@ priority: normal
 labels: [ryi]
 ---
 
-# ryii dogfood on its own code (2026-10-03): fast graph misses #[path] bin calls and receiver-position calls, rename misses a test include, --uses misses turbofish types
+# ryii dogfood on its own code (2026-10-03): fast graph misses #[path] bin calls and crate-name imports from own lib, rename misses a test include, --uses misses turbofish types
 
 ## Description
 
@@ -25,11 +25,13 @@ ripgrep.
   `graph --from 0_query.rs#run` stops at `run_scmpp` and never reaches `write_file`,
   `check_sql`, `run_sql`. `ryii rename` on the same file does resolve the call, so fast
   graph and fast rename disagree on module resolution.
-- [ ] **Fast graph misses a free-fn call in receiver position of a method chain.**
-  `src/edit/_6_rename.rs:307` `let arm = rename_for(&request.anchor).ok_or_else(..)?;`.
-  `ryii graph --callers rename_for src` lists only `_1_rename_cx.rs:21 owned_by`;
-  `build_sequential:307` is missing. Sibling calls on lines 313-315 (`verify_spans(..)?`,
-  `respells_for(..)?`) are found.
+- [ ] **Fast graph does not bind calls imported from the crate's own lib by crate name.**
+  `src/edit/_6_rename.rs:17` `use sprefa_extract::{.., rename_for, ..}` (the file is
+  compiled into the `ryi` bin; `rename_for` is `src/edit.rs:97` in the lib crate).
+  The call sites are extracted (`site` rows, callee `rename_for`, lines 202, 307, 472),
+  but `ryii graph --callers rename_for src` lists only `_1_rename_cx.rs:21 owned_by`.
+  Sibling calls to same-file fns (lines 313-315) bind. The chain shape
+  `rename_for(..).ok_or_else(..)?` is not the cause.
 - [ ] **Fast rename misses a test that #[path]-includes the bin module.**
   `ryii rename src/bin/ryi/2_scmpp.rs#run_sql run_sql2 --root .` plans
   `src/0_query.rs 1`, `src/bin/ryi/2_scmpp.rs 1`, no abstains, exit 0.
