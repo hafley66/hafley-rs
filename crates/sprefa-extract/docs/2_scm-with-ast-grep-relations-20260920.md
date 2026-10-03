@@ -364,8 +364,9 @@ query (rust): pattern 0: #not-has-ancestor? runs only under ryii query --scmpp
 `ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run: the result
 rows in `scmpp_row`, the per-level `capture` rows (columns `pattern` and
 `match` name the level and match), and the CST `node` and `edge` rows (family
-`cst`, with `field`, `index` and `named_index` on each edge). Without
-`--sqlite` the rows live in an in-memory database for the run.
+`cst`, with `field`, `index` and `named_index` on each edge), and prints no
+rows to stdout. Without `--sqlite` the rows live in an in-memory database for
+the run and print to stdout.
 
 ## Reference
 

@@ -138,7 +138,8 @@ fn one_line_text(text: String) -> String {
 }
 
 /// `--scmpp`: flat patterns per language, capture and CST rows per file, then one SQL statement.
-/// Without `--sqlite` the rows live in `:memory:` for the run.
+/// Without `--sqlite` the rows live in `:memory:` for the run and print to stdout;
+/// with it they land in `scmpp_row` and stdout stays empty.
 fn run_scmpp(
     cli: &QueryArgs,
     file: &Path,
@@ -210,9 +211,12 @@ fn run_scmpp(
         let found = compiled[&language].as_ref().expect("compiled language");
         let database = output.database.as_mut().expect("scm++ database");
         let rows = crate::scmpp::run_sql(database, found).map_err(|error| format!("scm++ SQL: {error}"))?;
-        for row in rows {
-            let line = serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))?;
-            output.stdout_line(&line).map_err(|error| error.to_string())?;
+        // --sqlite keeps the rows in `scmpp_row` and prints none, like every other --sqlite verb.
+        if cli.sqlite.is_none() {
+            for row in rows {
+                let line = serde_json::to_string(&row).map_err(|error| format!("query output: {error}"))?;
+                output.stdout_line(&line).map_err(|error| error.to_string())?;
+            }
         }
     }
     output.finish().map_err(|error| error.to_string())

@@ -231,7 +231,7 @@ fn sqlite_keeps_scmpp_row_and_the_cst() {
     .join("\n");
     assert_eq!(
         actual,
-        "printed rows 3\nscmpp_row 3\nnamed nodes 69\nanonymous nodes 58\nedges 126\nedges with a field 54\ncapture rows 23"
+        "printed rows 0\nscmpp_row 3\nnamed nodes 69\nanonymous nodes 58\nedges 126\nedges with a field 54\ncapture rows 23"
     );
 }
 
