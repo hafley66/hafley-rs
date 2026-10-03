@@ -27,6 +27,6 @@ fn relation_predicates_are_build_errors() {
     .join("\n");
     assert_eq!(
         rows,
-        "RelationPredicate { pattern: 0, op: \"precedes?\" }\nRelationPredicate { pattern: 0, op: \"follows?\" }\nRelationPredicate { pattern: 0, op: \"not-precedes?\" }\nRelationPredicate { pattern: 0, op: \"not-follows?\" }\nRelationPredicate { pattern: 0, op: \"nth-child?\" }\nRelationPredicate { pattern: 0, op: \"not-nth-child?\" }\nRelationPredicate { pattern: 0, op: \"nth-child?\" }\nRelationPredicate { pattern: 0, op: \"has-ancestor?\" }\nRelationPredicate { pattern: 0, op: \"has-ancestor?\" }\nRelationPredicate { pattern: 1, op: \"has-parent?\" }"
+        "ScmppOnly { pattern: 0, op: \"precedes?\" }\nScmppOnly { pattern: 0, op: \"follows?\" }\nScmppOnly { pattern: 0, op: \"not-precedes?\" }\nScmppOnly { pattern: 0, op: \"not-follows?\" }\nScmppOnly { pattern: 0, op: \"nth-child?\" }\nScmppOnly { pattern: 0, op: \"not-nth-child?\" }\nScmppOnly { pattern: 0, op: \"nth-child?\" }\nScmppOnly { pattern: 0, op: \"has-ancestor?\" }\nScmppOnly { pattern: 0, op: \"has-ancestor?\" }\nScmppOnly { pattern: 1, op: \"has-parent?\" }"
     );
 }

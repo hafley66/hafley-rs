@@ -19,10 +19,10 @@ use tree_sitter::{Language, Query, Tree};
 use pipeline::split_predicates_into_kind_queries as split;
 use pipeline::{build_query_ext as build, run_over_file_tree as run};
 
-/// Plain tree-sitter plus `#emit!`; a relation predicate is an error, `ryii query --scmpp` evaluates those.
+/// Plain tree-sitter plus `#emit!`; relation and `contains?` predicates are an error, `ryii query --scmpp` evaluates those.
 pub fn build(language: &Language, scm: &str) -> Result<QueryExt, QueryExtError> {
-    if let Some((pattern, op)) = scmpp::first_relation(scm).map_err(QueryExtError::Scmpp)? {
-        return Err(QueryExtError::RelationPredicate { pattern, op });
+    if let Some((pattern, op)) = scmpp::first_scmpp_only(scm).map_err(QueryExtError::Scmpp)? {
+        return Err(QueryExtError::ScmppOnly { pattern, op });
     }
     let user = Query::new(language, scm).map_err(QueryExtError::Parse)?;
     let (emits, relations, fields, emit_literals) = split::read_and_parse_predicates(&user)?;

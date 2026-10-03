@@ -71,9 +71,9 @@ fn ryi_query_predicate_families_through_hafley_scm() {
         ]
         .map(|query| refused(&path, query))
         .join("\n"),
-        "query (rust): pattern 0: #has-parent? is a relation predicate; use ryii query --scmpp\n\
-         query (rust): UnknownOperator(\"contains?\")\n\
-         query (rust): UnknownOperator(\"not-contains?\")"
+        "query (rust): pattern 0: #has-parent? runs only under ryii query --scmpp\n\
+         query (rust): pattern 0: #contains? runs only under ryii query --scmpp\n\
+         query (rust): pattern 0: #not-contains? runs only under ryii query --scmpp"
     );
 
     // 2. native eq?, evaluated by the tree-sitter cursor itself.

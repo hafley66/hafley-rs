@@ -148,61 +148,52 @@ Arguments:
              fork <id>`; `join` and `diff` take their own
 ```
 
-## scm++ backend B: one relation evaluator (2026-10-02)
+## scm++ compiler only (2026-10-02)
 
-Branch `feature/scmpp-relational`, main `0619c817` merged.
+Branch `feature/scmpp-compiler-only`, base `a70315ac`. Plan:
+`plans/2026-10-02-scmpp-compiler-only.md`.
 
-Single evaluator: the scm++ front end (`hafley_scm::scmpp::compile`) and its SQL
-lowering (`scmpp/_3_lower.rs`). Each relation's semantics (`has`, `has-ancestor`,
-`has-parent`, `precedes`, `follows`, `nth-child`, `stopBy`, `field`, `not-`,
-`#contains?`, cross-level `#eq?`/`#match?`) is defined only there.
+scm++ (`hafley_scm::scmpp`) compiles only: query text in, flat tree-sitter
+patterns per level plus one SQL string out (`_1_parens`, `_2_compile`,
+`_3_lower`). It opens no database. Each relation's semantics (`has`,
+`has-ancestor`, `has-parent`, `precedes`, `follows`, `nth-child`, `stopBy`,
+`field`, `not-`, `#contains?`, cross-level `#eq?`/`#match?`) is defined only in
+the lowering.
 
-The in-memory path routes into it. `hafley_scm::build` calls `scmpp::route`:
-each top-level pattern with a non-native, non-`#emit!` predicate compiles through
-`compile`, and those predicates are cut from the text `Query::new` sees.
-`hafley_scm::run` evaluates `Compiled.match_sql` (`lower_matches`: the same
-joins, `SELECT DISTINCT` level-0 match ordinals) in a `:memory:` SQLite per file,
-on the first candidate of that pattern, and keeps the tree-sitter matches whose
-`(capture, start, end)` set names an accepted match. Patterns without relation
-predicates reach tree-sitter byte-identical. Capture and CST row production
-(`scmpp/_5_rows.rs`) and `regexp()`/indexes (`scmpp/_6_eval.rs`) are shared with
-`ryii query --scmpp`.
+ryi owns files, trees, rows and SQLite: `src/bin/ryi/2_scmpp.rs` holds
+`capture_rows`, `cst_rows`, `write_file`, the read indexes, `regexp()` and
+`run_sql`, the single executor. `ryii query --scmpp` writes one database per run
+and runs the SQL once.
 
-Removed: `hafley_scm/src/walk/` (ancestor, descendant, sibling, nth-child walks),
-`Predicate`/`PredicateKind`/`Stop`/`Walk`, `parse_into_predicate`, the minted
-per-kind queries and their id cursors. The legacy trailing `neighbor`/`end`
-words are gone; `stopBy: neighbor|end` replaces them. `rows: each` through the
-`build` path is an error (only level-0 captures reach `MatchArena`).
+`hafley_scm::build` (bundled `.scm`, gate rules, `ryii query --query`) is plain
+tree-sitter plus `#emit!`. `scmpp::first_scmpp_only` finds a relation or
+`#contains?` predicate before `Query::new`; `build` returns
+`QueryExtError::ScmppOnly { pattern, op }`, printed as
+"pattern N: #op runs only under ryii query --scmpp".
 
-Behavior differences of the SQL semantics against the removed walks: a
-positive relation on a capture absent from the match (optional or quantified
-zero) rejects the match, where the walks accepted it; with several nodes under
-one quantified capture, any one satisfying the relation keeps the match, where
-the walks required all. Two level-0 matches with identical capture spans and
-different roots share one acceptance key.
+Removed from `hafley_scm`: `scmpp/_4_route.rs`, `_5_rows.rs`, `_6_eval.rs`
+(per-file `:memory:` evaluation), `Compiled.match_sql`, `MatchKey`,
+`QueryExt.scmpp`, `ts_pair_routed_patterns.rs`,
+`test_predicates_per_candidate.rs`; rusqlite feature `functions`.
 
-Parity, release `ryii` before (`d38d4e4f`) and after, both run on a frozen
-`git archive d38d4e4f` copy of `crates/` and `labs/`: the 10 gate `.scm` rules
-over the gate roots, the bundled `4_fast_query.scm` and `8a_rust_scope.scm`
-(Rust roots), `0_ts_scip.scm` and `8b_ts_scope.scm` (302 `.ts` files),
-`0_ts_jsx.scm` (16 `.tsx` files), and `ryii fast` over the Rust roots and the
-TS files: 17 outputs, stdout and stderr byte-identical. Six relation queries
-(`has-ancestor`, `not-has-ancestor`, `precedes`, `has`, `nth-child`, `contains`)
-over two Rust files: identical rows between the walks and the SQL.
+Bundled query change: `queries/kotlin/scip.scm` drops
+`#has-ancestor? @def.span "function_declaration"`, so every `lambda_literal`
+emits `call.def` kind `lambda`, including lambdas outside a function. The one
+reader (`read/lang/6_scm_family.rs:128`) has no ancestor check; no golden held a
+kotlin lambda row.
 
-Docs: `crates/sprefa-extract/docs/2_scm-with-ast-grep-relations-20260920.md`
-rewritten in scm++ syntax; every `scheme` and `sh` example's output block is the
-release binary's output on the doc's `x.rs`, byte-compared.
+Earlier history of this section (backend B with build-path routing, parity
+runs against the removed walks) is in git at `a70315ac:REPORT.md`.
 
-Checks on the merged tree:
+Checks on the branch:
 
 | check | result |
 | --- | --- |
-| `cargo test -p hafley_scm --no-fail-fast` | 76 passed, 0 failed |
-| `cargo test --features cli --no-fail-fast` (sprefa-extract) | 1236 passed, 25 failed, 19 ignored |
-| failing tests | t_166_cleave_rust 16, t_190_rename_rust_slow 5, t_15_typegraph_d2 3, t_184_language_feature_matrix 1 |
+| `cargo test` (hafley_scm) | all ok, 0 failed |
+| `cargo test --features cli --no-fail-fast` (sprefa-extract, ts7 `npm ci` done) | 1262 passed, 0 failed, 19 ignored |
 | `cargo build --release --bin ryii --features cli,ts-checker,typespec` | ok |
-| `bash scripts/quality-gate.sh target/rcargo/aarch64-apple-darwin/release/ryii` | exit 0 |
+| `scripts/quality-gate.sh` | exit 0 |
+| `ryii query --scmpp` self-call query on `fn f() { f() }` / `fn g() { h() }` | 1 row, `fn__text` `f` |
 
 ## ryi TS RTKQ and JSX fact goldens (2026-10-02)
 

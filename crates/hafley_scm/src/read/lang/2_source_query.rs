@@ -213,8 +213,8 @@ fn query_error_text(error: &hafley_scm::QueryExtError) -> String {
             )
         }
         hafley_scm::QueryExtError::Scmpp(error) => format!("invalid query: {error}"),
-        hafley_scm::QueryExtError::RelationPredicate { pattern, op } => format!(
-            "invalid query: pattern {pattern}: #{op} is a relation predicate; use ryii query --scmpp"
+        hafley_scm::QueryExtError::ScmppOnly { pattern, op } => format!(
+            "invalid query: pattern {pattern}: #{op} runs only under ryii query --scmpp"
         ),
         hafley_scm::QueryExtError::UnknownOperator(operator) => {
             format!("invalid query: predicate #{operator} is not allowed")

@@ -30,6 +30,6 @@ fn relation_and_contains_predicates_are_build_errors() {
     .join("\n");
     assert_eq!(
         rows,
-        "RelationPredicate { pattern: 0, op: \"has-parent?\" }\nRelationPredicate { pattern: 0, op: \"has-parent?\" }\nRelationPredicate { pattern: 0, op: \"has-parent?\" }\nRelationPredicate { pattern: 0, op: \"not-has-parent?\" }\nRelationPredicate { pattern: 0, op: \"has-parent?\" }\nRelationPredicate { pattern: 0, op: \"not-has?\" }\nRelationPredicate { pattern: 0, op: \"not-has?\" }\nRelationPredicate { pattern: 0, op: \"has-ancestor?\" }\nRelationPredicate { pattern: 0, op: \"has?\" }\nRelationPredicate { pattern: 1, op: \"has?\" }\nUnknownOperator(\"contains?\")\nUnknownOperator(\"not-contains?\")\nUnknownOperator(\"contains?\")"
+        "ScmppOnly { pattern: 0, op: \"has-parent?\" }\nScmppOnly { pattern: 0, op: \"has-parent?\" }\nScmppOnly { pattern: 0, op: \"has-parent?\" }\nScmppOnly { pattern: 0, op: \"not-has-parent?\" }\nScmppOnly { pattern: 0, op: \"has-parent?\" }\nScmppOnly { pattern: 0, op: \"not-has?\" }\nScmppOnly { pattern: 0, op: \"not-has?\" }\nScmppOnly { pattern: 0, op: \"has-ancestor?\" }\nScmppOnly { pattern: 0, op: \"has?\" }\nScmppOnly { pattern: 1, op: \"has?\" }\nScmppOnly { pattern: 0, op: \"contains?\" }\nScmppOnly { pattern: 0, op: \"not-contains?\" }\nScmppOnly { pattern: 0, op: \"contains?\" }"
     );
 }

@@ -5,4 +5,4 @@ mod _2_compile;
 mod _3_lower;
 
 pub use _0_types::*;
-pub use _2_compile::{compile, first_relation, ROOT};
+pub use _2_compile::{compile, first_scmpp_only, ROOT};

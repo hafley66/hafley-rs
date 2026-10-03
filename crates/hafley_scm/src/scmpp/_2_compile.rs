@@ -38,14 +38,15 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     })
 }
 
-/// The first relation predicate of a query file: `(top-level pattern index, op)`.
-pub fn first_relation(text: &str) -> Result<Option<(u16, String)>, ScmppError> {
+/// The first predicate only scm++ evaluates (a relation or `contains?`, plain or `not-`):
+/// `(top-level pattern index, op)`.
+pub fn first_scmpp_only(text: &str) -> Result<Option<(u16, String)>, ScmppError> {
     for (pattern, item) in top_items(text)?.into_iter().enumerate() {
         let (_, _, preds) = cut(&text[item.clone()], item.start)?;
-        if let Some(pred) = preds
-            .iter()
-            .find(|pred| RELATIONS.contains(&pred.op.strip_prefix("not-").unwrap_or(&pred.op)))
-        {
+        if let Some(pred) = preds.iter().find(|pred| {
+            let bare = pred.op.strip_prefix("not-").unwrap_or(&pred.op);
+            bare == "contains?" || RELATIONS.contains(&bare)
+        }) {
             return Ok(Some((pattern as u16, pred.op.clone())));
         }
     }

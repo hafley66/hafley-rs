@@ -7,9 +7,11 @@ predicates, called scm++; ast-grep and CSS supply the reference semantics.
 
 scm++ compiles one query into plain tree-sitter patterns, one per nesting level,
 and one SQL statement. `ryii query --scmpp` runs each pattern, writes `capture`
-rows and CST `node`/`edge` rows, and runs the SQL over them. The same compiler
-and SQL evaluate relation predicates in `ryii query --query` and in every `.scm`
-the crate runs through `hafley_scm::build`.
+rows and CST `node`/`edge` rows, and runs the SQL over them. scm++ itself only
+compiles; ryi owns the rows, the SQLite database and the one SQL run.
+`ryii query --query` and the `.scm` files the crate runs through
+`hafley_scm::build` are plain tree-sitter plus `#emit!`: a relation predicate or
+`#contains?` there is an error naming `ryii query --scmpp`.
 
 Every example below runs against this file, `x.rs`:
 
@@ -347,31 +349,16 @@ A capture name bound by two exported levels is an error; use two names and
 ## `--query`, bundled queries, and `--sqlite`
 
 `ryii query --query TEXT` and the `.scm` files the crate runs through
-`hafley_scm::build` accept the same relation predicates. A top-level pattern
-with a relation compiles through scm++ and keeps a tree-sitter match when the
-SQL accepts it; `#emit!` and the native predicates stay with the pattern.
-Output is the plain query output:
+`hafley_scm::build` take plain tree-sitter, its native predicates and `#emit!`.
+A relation predicate or `#contains?` there stops the query before any file is
+read:
 
 ```sh
 ryii query --query '((call_expression) @call (#not-has-ancestor? @call closure_expression))' x.rs
 ```
 
 ```
-{"call":"items.len()","end_line":2,"line":2,"path":"x.rs"}
-{"call":"log(n)","end_line":3,"line":3,"path":"x.rs"}
-{"call":"f(1)","end_line":5,"line":5,"path":"x.rs"}
-{"call":"host(&[1, 2])","end_line":10,"line":10,"path":"x.rs"}
-{"call":"log(0)","end_line":11,"line":11,"path":"x.rs"}
-```
-
-That path exports only level-0 captures, so `rows: each` is rejected there:
-
-```sh
-ryii query --query '((call_expression) @call (#has-ancestor? @call (function_item name: (identifier) @fn) rows: each))' x.rs
-```
-
-```
-query (rust): Scmpp(Unsupported("@fn is a rows: each capture; query --scmpp returns those rows"))
+query (rust): pattern 0: #not-has-ancestor? runs only under ryii query --scmpp
 ```
 
 `ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run: the result
