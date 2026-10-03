@@ -137,6 +137,14 @@ fn rows_per_lowering_rule() {
               (#has? @f (call_expression function: (identifier) @c (#match? @fn \"^h\")) rows: each))"
                 .to_string(),
         ),
+        ("contains, capture absent", "((arguments (integer_literal)? @n) @args (#contains? @n \"3\"))".to_string()),
+        ("not-contains, capture absent", "((arguments (integer_literal)? @n) @args (#not-contains? @n \"3\"))".to_string()),
+        (
+            "not-eq across levels, capture absent",
+            "((arguments (integer_literal)? @n) @args
+              (#has-parent? @args ((call_expression function: (identifier) @f) (#not-eq? @f @n))))"
+                .to_string(),
+        ),
     ];
     let actual = cases
         .iter()
@@ -207,7 +215,24 @@ s="seed"
 == match on an enclosing capture
 fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=fact
 fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=other
-fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=other"#
+fn=helper f=fn helper() -> u32 { let seed = "seed"; let total = fact(3); other(); total + other() } c=other
+== contains, capture absent
+n=3 args=(3)
+== not-contains, capture absent
+n=null args=(n - 1)
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()
+== not-eq across levels, capture absent
+n=null args=(n - 1)
+n=3 args=(3)
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()
+n=null args=()"#
     );
 }
 

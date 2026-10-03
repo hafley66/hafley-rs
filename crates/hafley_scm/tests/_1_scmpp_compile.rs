@@ -539,7 +539,40 @@ WHERE "r0".pattern = 0
   WHERE "r1".pattern = 1
   AND "r1".capture = '__root'
   AND "r1"._input_path = "r0"._input_path
-  AND NOT (regexp('^test_', "c0_fn".text)))
+  AND NOT COALESCE((regexp('^test_', "c0_fn".text)), 0))
+ORDER BY "r0"._input_path, "r0".start, "r0"."match""#
+    );
+}
+
+/// An absent optional capture makes a text test NULL: the positive form drops the match,
+/// the `not-` form keeps it (`NOT COALESCE(.., 0)`).
+#[test]
+fn not_forms_hold_on_an_absent_capture() {
+    assert_eq!(
+        show(&rust(), "((arguments (integer_literal)? @n) @args (#not-contains? @n \"9\")\n  (#has-parent? @args ((call_expression function: (identifier) @f) (#not-eq? @f @n))))"),
+        r#"0: ((arguments (integer_literal)? @n) @args @__root)
+1: ((call_expression function: (identifier) @f) @__root)
+--
+SELECT "r0"._input_path AS path,
+  "c0_n"."start" AS "n__start",
+  "c0_n"."end" AS "n__end",
+  "c0_n"."text" AS "n__text",
+  "c0_args"."start" AS "args__start",
+  "c0_args"."end" AS "args__end",
+  "c0_args"."text" AS "args__text"
+FROM capture AS "r0"
+  LEFT JOIN capture AS "c0_n" ON "c0_n"._input_path = "r0"._input_path AND "c0_n".pattern = 0 AND "c0_n"."match" = "r0"."match" AND "c0_n".capture = 'n'
+  LEFT JOIN capture AS "c0_args" ON "c0_args"._input_path = "r0"._input_path AND "c0_args".pattern = 0 AND "c0_args"."match" = "r0"."match" AND "c0_args".capture = 'args'
+WHERE "r0".pattern = 0
+  AND "r0".capture = '__root'
+  AND NOT COALESCE((instr("c0_n".text, '9') > 0), 0)
+  AND EXISTS (SELECT 1 FROM capture AS "r1"
+  LEFT JOIN capture AS "c1_f" ON "c1_f"._input_path = "r1"._input_path AND "c1_f".pattern = 1 AND "c1_f"."match" = "r1"."match" AND "c1_f".capture = 'f'
+  JOIN edge AS "e0" ON "e0".family = 'cst' AND "e0"._content_id = "c0_args"._content_id AND "e0".to__start = "c0_args".start AND "e0".to__end = "c0_args"."end" AND "e0".to_kind = "c0_args".kind AND "e0"._content_id = "r1"._content_id AND "e0".from__start = "r1".start AND "e0".from__end = "r1"."end" AND "e0".from_kind = "r1".kind
+  WHERE "r1".pattern = 1
+  AND "r1".capture = '__root'
+  AND "r1"._input_path = "r0"._input_path
+  AND NOT COALESCE(("c1_f".text = "c0_n".text), 0))
 ORDER BY "r0"._input_path, "r0".start, "r0"."match""#
     );
 }

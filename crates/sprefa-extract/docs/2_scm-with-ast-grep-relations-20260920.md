@@ -299,6 +299,13 @@ A capture name used both inside and outside names the same node:
 `#contains? @capture "literal"+` holds when the capture's text contains every
 literal; `#not-contains?` is its complement.
 
+An optional capture (`?`, `*`) can be absent from a match. `#contains?`, and
+`#eq?` or `#match?` across levels, fail on an absent capture; their `not-`
+forms hold. `(#not-contains? @n "9")` over
+`(arguments (integer_literal)? @n)` keeps `g()`, whose `@n` is absent.
+`#eq?` and `#match?` between captures of one level are tree-sitter's own
+predicates and follow tree-sitter's rules.
+
 ```scheme
 ((call_expression) @call (#contains? @call "log"))
 ```

@@ -286,7 +286,8 @@ impl Lower<'_> {
             Cond::Same(a, b) => {
                 Key::of(&self.alias(a, chain)).same(&Key::of(&self.alias(b, chain)))
             }
-            Cond::Not(inner) => format!("NOT ({})", self.cond(inner, chain)),
+            // An absent optional capture makes the inner test NULL; the `not-` form holds then.
+            Cond::Not(inner) => format!("NOT COALESCE(({}), 0)", self.cond(inner, chain)),
         }
     }
 
