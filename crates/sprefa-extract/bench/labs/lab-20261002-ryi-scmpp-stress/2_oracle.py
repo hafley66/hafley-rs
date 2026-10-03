@@ -1,4 +1,4 @@
-"""Independent oracle for single-relation scm++ queries: tree walks in Python over the run's own CST edge rows.
+"""Independent oracle for single-relation scm++ queries: tree walks in Python over the run's own scmpp_node rows.
 
 The oracle trusts tree-sitter for level matches (capture rows of pattern 0) and node kinds (edge rows),
 and recomputes every relation from parent/child/sibling structure; scm++ answers from its lowered SQL.
@@ -8,7 +8,7 @@ usage: python3 2_oracle.py CORPUS_DIR   -> oracle.tsv (case, relation, options, 
 import os, sqlite3, subprocess, sys, pathlib, time, collections
 
 HERE = pathlib.Path(__file__).resolve().parent
-RYII = HERE.parent.parent.parent / "target" / "release" / "ryii"
+RYII = pathlib.Path(os.environ.get("RYII", HERE.parent.parent.parent / "target" / "release" / "ryii"))
 OUT = HERE / "oracle-db"
 
 # (case, level-0 kind, relation, target kind, options dict)
@@ -48,11 +48,13 @@ def query(here, relation, there, option):
 
 
 class Tree:
-    def __init__(self, db, cid):
+    def __init__(self, db, file):
         self.parent, self.children, self.field = {}, collections.defaultdict(list), {}
         for fs, fe, fk, ts, te, tk, field, index, named in db.execute(
-                "select from__start, from__end, from_kind, to__start, to__end, to_kind, field, \"index\", named_index "
-                "from edge where family='cst' and _content_id=?", (cid,)):
+                "select p.start, p.\"end\", pk.text, c.start, c.\"end\", ck.text, f.text, c.idx, c.sib "
+                "from scmpp_node c join scmpp_node p on p.file = c.file and p.pre = c.parent "
+                "join scmpp_dict_kind ck on ck.id = c.kind join scmpp_dict_kind pk on pk.id = p.kind "
+                "left join scmpp_dict_field f on f.id = c.field where c.file = ?", (file,)):
             parent, child = (fs, fe, fk), (ts, te, tk)
             self.parent[child] = parent
             self.children[parent].append((index, named, child))
@@ -140,8 +142,10 @@ def main(corpus):
         trees = {}
         want = set()
         for path, cid, start, end, kind in db.execute(
-                "select c._input_path, c._content_id, c.start, c.\"end\", c.kind from capture c "
-                "where c.pattern = 0 and c.capture = 'x'"):
+                "select dp.text, c.file, c.start, c.\"end\", k.text from scmpp_capture c "
+                "join scmpp_dict_capture dc on dc.id = c.capture join scmpp_dict_path dp on dp.id = c.file "
+                "join scmpp_node n on n.file = c.file and n.pre = c.node join scmpp_dict_kind k on k.id = n.kind "
+                "where c.pattern = 0 and dc.text = 'x'"):
             if cid not in trees:
                 trees[cid] = Tree(db, cid)
             if oracle(trees[cid], (start, end, kind), relation, there, option):
@@ -152,7 +156,7 @@ def main(corpus):
             print(case, "DISAGREE", sorted(got - want)[:3], sorted(want - got)[:3])
         db.close()
         db_path.unlink()
-    (HERE / "oracle.tsv").write_text("\n".join(lines) + "\n")
+    (HERE / os.environ.get("ORACLE_OUT", "oracle.tsv")).write_text("\n".join(lines) + "\n")
     print(len(CASES), "cases")
 
 

@@ -1,7 +1,7 @@
 """Run every ```scheme block of the scm++ guide against its x.rs and diff the printed rows against the next ``` block."""
 import json, os, re, subprocess, sys, pathlib
 HERE = pathlib.Path(__file__).resolve().parent
-RYII = HERE.parent.parent.parent / "target" / "release" / "ryii"
+RYII = pathlib.Path(os.environ.get("RYII", HERE.parent.parent.parent / "target" / "release" / "ryii"))
 DOC = HERE.parent.parent.parent / "docs" / "2_scm-with-ast-grep-relations-20260920.md"
 text = DOC.read_text()
 x = re.search(r"```rust\n(.*?)```", text, re.S).group(1)
