@@ -3,6 +3,10 @@ pub struct Compiled {
     pub patterns: Vec<FlatPattern>,
     pub plan: Level,
     pub sql: String,
+    /// Capture names the SQL names by id: entry `i` has id `i + 1`, `__root` first.
+    pub captures: Vec<Box<str>>,
+    /// Relation fields the SQL names by id: entry `i` has id `i + 1`; 0 is no field.
+    pub fields: Vec<Box<str>>,
 }
 
 pub struct FlatPattern {

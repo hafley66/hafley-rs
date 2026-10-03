@@ -30,11 +30,14 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     };
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
-    let sql = super::_3_lower::lower(&plan, &ctx.patterns);
+    let (captures, fields) = super::_3_lower::dictionaries(&plan, &ctx.patterns);
+    let sql = super::_3_lower::lower(&plan, &ctx.patterns, &captures, &fields);
     Ok(Compiled {
         patterns: ctx.patterns,
         plan,
         sql,
+        captures,
+        fields,
     })
 }
 

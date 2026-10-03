@@ -246,11 +246,11 @@ fn stored_counts(query: &str) -> String {
     [
         ("printed rows", printed.lines().filter(|line| line.starts_with('{')).count() as i64),
         ("scmpp_row", count("SELECT count(*) FROM scmpp_row")),
-        ("named nodes", count("SELECT count(*) FROM node WHERE family = 'cst' AND named = 1")),
-        ("anonymous nodes", count("SELECT count(*) FROM node WHERE family = 'cst' AND named = 0")),
-        ("edges", count("SELECT count(*) FROM edge WHERE family = 'cst'")),
-        ("edges with a field", count("SELECT count(*) FROM edge WHERE field IS NOT NULL")),
-        ("capture rows", count("SELECT count(*) FROM capture")),
+        ("named nodes", count("SELECT count(*) FROM scmpp_node WHERE named = 1")),
+        ("anonymous nodes", count("SELECT count(*) FROM scmpp_node WHERE named = 0")),
+        ("edges", count("SELECT count(*) FROM scmpp_node WHERE parent >= 0")),
+        ("edges with a field", count("SELECT count(*) FROM scmpp_node WHERE field <> 0")),
+        ("capture rows", count("SELECT count(*) FROM scmpp_capture")),
     ]
     .map(|(name, value)| format!("{name} {value}"))
     .join("\n")
