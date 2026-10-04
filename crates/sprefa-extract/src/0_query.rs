@@ -84,8 +84,20 @@ pub fn run_to(cli: QueryArgs, writer: Box<dyn Write + Send>) -> Result<()> {
         for found in matches {
             let mut row = std::collections::BTreeMap::<String, serde_json::Value>::new();
             row.insert("path".into(), name.as_ref().into());
+            // A capture with one node is its text; a capture bound to several nodes
+            // (`*`, `+`, or a repeated name) is an array of their texts in document order.
+            let mut nodes = std::collections::BTreeMap::<String, Vec<(u32, String)>>::new();
             for capture in found.captures {
-                row.insert(capture.label, capture.text.into());
+                nodes.entry(capture.label).or_default().push((capture.start, capture.text));
+            }
+            for (label, mut texts) in nodes {
+                let value = if texts.len() == 1 {
+                    texts.pop().expect("one node").1.into()
+                } else {
+                    texts.sort_by_key(|(start, _)| *start);
+                    texts.into_iter().map(|(_, text)| text).collect::<Vec<_>>().into()
+                };
+                row.insert(label, value);
             }
             row.insert("line".into(), found.line.into());
             row.insert("end_line".into(), found.end_line.into());

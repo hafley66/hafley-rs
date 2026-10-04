@@ -31,13 +31,14 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
     let (captures, fields) = super::_3_lower::dictionaries(&plan, &ctx.patterns);
-    let sql = super::_3_lower::lower(&plan, &ctx.patterns, &captures, &fields);
+    let (sql, lists) = super::_3_lower::lower(&plan, &ctx.patterns, &captures, &fields);
     Ok(Compiled {
         patterns: ctx.patterns,
         plan,
         sql,
         captures,
         fields,
+        lists,
     })
 }
 
@@ -268,6 +269,7 @@ fn relation(
         stop: None,
         field: None,
         rows: Rows::First,
+        optional: false,
         negated,
         target: None,
     };
@@ -324,6 +326,10 @@ fn relation(
             }
             ("rows", Arg::Word(word)) if word == "first" => rel.rows = Rows::First,
             ("rows", Arg::Word(word)) if word == "each" => rel.rows = Rows::Each,
+            ("rows", Arg::Word(word)) if word == "list" => rel.rows = Rows::List,
+            ("optional", Arg::Word(word)) if word == "true" || word == "false" => {
+                rel.optional = word == "true"
+            }
             _ => return Err(unsupported(pred, &format!("bad option {key}: {value:?}"))),
         }
         args = rest;
@@ -340,7 +346,17 @@ fn relation(
             "has-parent is one step; stopBy does not apply",
         ));
     }
-    rel.target = Some(Box::new(level(ctx, &text, base, inner)?));
+    if rel.optional && negated {
+        return Err(unsupported(pred, "optional: does not apply to a not- relation"));
+    }
+    if rel.optional && rel.rows == Rows::List {
+        return Err(unsupported(pred, "rows: list already keeps an outer match with no related node; drop optional:"));
+    }
+    let target = level(ctx, &text, base, inner)?;
+    if rel.optional && target.rels.iter().any(|nested| !nested.negated && nested.rows != Rows::First) {
+        return Err(unsupported(pred, "an optional: relation's target holds only rows: first relations"));
+    }
+    rel.target = Some(Box::new(target));
     if let Some((text, base)) = stop {
         rel.stop = Some(Box::new(level(ctx, text, base, &[])?));
     }

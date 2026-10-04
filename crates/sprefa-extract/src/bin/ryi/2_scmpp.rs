@@ -110,6 +110,12 @@ pub fn run_sql(db: &mut Database, compiled: &Compiled) -> Result<Vec<Map<String,
                 rusqlite::types::ValueRef::Null => Value::Null,
                 rusqlite::types::ValueRef::Integer(number) => number.into(),
                 rusqlite::types::ValueRef::Real(number) => number.into(),
+                // A `rows: list` column is JSON array text; it prints as the array.
+                rusqlite::types::ValueRef::Text(text)
+                    if compiled.lists.iter().any(|list| list.as_ref() == column) =>
+                {
+                    serde_json::from_slice(text)?
+                }
                 rusqlite::types::ValueRef::Text(text) => String::from_utf8_lossy(text).into(),
                 rusqlite::types::ValueRef::Blob(bytes) => String::from_utf8_lossy(bytes).into(),
             };

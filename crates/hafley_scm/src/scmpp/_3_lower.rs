@@ -7,35 +7,58 @@ pub const NODE: &str = "scmpp_node";
 pub const DICT_PATH: &str = "scmpp_dict_path";
 pub const DICT_TEXT: &str = "scmpp_dict_text";
 
+/// A level's captures that are not identity joins on an enclosing capture of the same name.
+fn own_captures<'p>(level: &Level, patterns: &'p [FlatPattern]) -> Vec<&'p Box<str>> {
+    patterns[level.pattern as usize]
+        .captures
+        .iter()
+        .filter(|name| !level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.name == **name)))
+        .collect()
+}
+
+/// The JSON array column of a `rows: list` relation: its target's first capture, `NAME__list`.
+pub fn list_column(target: &Level, patterns: &[FlatPattern]) -> Option<Box<str>> {
+    own_captures(target, patterns).first().map(|name| format!("{name}__list").into())
+}
+
 /// Exported captures in column order: level 0, then every `rows: each` level reached without `not-`.
+/// A `rows: list` level exports one `NAME__list` column; its captures name the array's
+/// object keys, a namespace of their own.
 pub fn exports(plan: &Level, patterns: &[FlatPattern]) -> Result<Vec<(u16, Box<str>)>, ScmppError> {
     fn export_level(
         level: &Level,
         patterns: &[FlatPattern],
-        depth: u8,
         out: &mut Vec<(u16, Box<str>)>,
     ) -> Result<(), ScmppError> {
-        for name in &patterns[level.pattern as usize].captures {
-            let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
-            if joined {
-                continue;
-            }
+        let push = |out: &mut Vec<(u16, Box<str>)>, name: &Box<str>| {
             if out.iter().any(|(_, seen)| seen == name) {
                 return Err(ScmppError::Unsupported(format!(
                     "@{name} is bound by two levels; use two names and #eq?"
                 )));
             }
             out.push((level.pattern, name.clone()));
+            Ok(())
+        };
+        for name in own_captures(level, patterns) {
+            push(out, name)?;
         }
         for rel in &level.rels {
-            if let (Some(target), Rows::Each, false) = (&rel.target, rel.rows, rel.negated) {
-                export_level(target, patterns, depth + 1, out)?;
+            match (&rel.target, rel.rows, rel.negated) {
+                (Some(target), Rows::Each, false) => export_level(target, patterns, out)?,
+                (Some(target), Rows::List, false) => {
+                    let column = list_column(target, patterns).ok_or_else(|| {
+                        ScmppError::Unsupported("rows: list needs a @capture in its target".into())
+                    })?;
+                    push(out, &column)?;
+                    export_level(target, patterns, &mut Vec::new())?;
+                }
+                _ => {}
             }
         }
         Ok(())
     }
     let mut out = Vec::new();
-    export_level(plan, patterns, 0, &mut out)?;
+    export_level(plan, patterns, &mut out)?;
     Ok(out)
 }
 
@@ -173,45 +196,56 @@ fn referenced(level: &Level, depth: u8, out: &mut Vec<Box<str>>) {
     }
 }
 
+/// One result column: `expr AS "key"`; `json` marks a JSON array text (`rows: list`).
+struct Col {
+    expr: String,
+    key: String,
+    json: bool,
+}
+
 struct Lower<'a> {
     patterns: &'a [FlatPattern],
     captures: &'a [Box<str>],
     fields: &'a [Box<str>],
     next: usize,
-    select: Vec<String>,
+    select: Vec<Col>,
+    /// Root aliases of the exported levels, outermost first: the row order.
     order: Vec<String>,
 }
 
 /// One statement over `scmpp_capture` / `scmpp_node`: integer joins and preorder ranges
 /// (`pre`, `last`, `parent`, `sib`), no recursion; strings appear only through the dictionaries.
+/// Also returns the result columns that hold a JSON array.
 pub fn lower(
     plan: &Level,
     patterns: &[FlatPattern],
     captures: &[Box<str>],
     fields: &[Box<str>],
-) -> String {
+) -> (String, Vec<Box<str>>) {
     let mut lower = Lower {
         patterns,
         captures,
         fields,
         next: 0,
-        select: vec![format!(
-            "(SELECT p.text FROM {DICT_PATH} AS p WHERE p.id = {}.file) AS path",
-            root(plan.pattern)
-        )],
+        select: Vec::new(),
         order: Vec::new(),
     };
     let mut body = Body::default();
     lower.level(plan, &mut Vec::new(), &mut body, true);
     let (from, wh) = body.render();
     let order = std::iter::once("path".to_string())
-        .chain(lower.order)
+        .chain(lower.order.iter().map(|r| format!("{r}.start, {r}.\"match\"")))
         .collect::<Vec<_>>()
         .join(", ");
-    format!(
-        "SELECT {}\nFROM {from}\nWHERE {wh}\nORDER BY {order}",
-        lower.select.join(",\n  "),
-    )
+    let columns = std::iter::once(format!(
+        "(SELECT p.text FROM {DICT_PATH} AS p WHERE p.id = {}.file) AS path",
+        root(plan.pattern)
+    ))
+    .chain(lower.select.iter().map(|col| format!("{} AS \"{}\"", col.expr, col.key)))
+    .collect::<Vec<_>>()
+    .join(",\n  ");
+    let lists = lower.select.iter().filter(|col| col.json).map(|col| col.key.as_str().into()).collect();
+    (format!("SELECT {columns}\nFROM {from}\nWHERE {wh}\nORDER BY {order}"), lists)
 }
 
 impl Lower<'_> {
@@ -237,8 +271,7 @@ impl Lower<'_> {
             on,
         });
         if export {
-            self.order.push(format!("{r}.start"));
-            self.order.push(format!("{r}.\"match\""));
+            self.order.push(r.clone());
         }
         let depth = chain.len() as u8;
         chain.push(pattern);
@@ -248,26 +281,8 @@ impl Lower<'_> {
         }
         referenced(level, depth, &mut names);
         for name in &names {
-            let alias = cap(pattern, name);
             let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
-            if export && !joined {
-                self.select.push(format!("{alias}.\"start\" AS \"{name}__start\""));
-                self.select.push(format!("{alias}.\"end\" AS \"{name}__end\""));
-                self.select.push(format!(
-                    "(SELECT t.text FROM {DICT_TEXT} AS t WHERE t.id = {alias}.text) AS \"{name}__text\""
-                ));
-            }
-            body.from.push(Join {
-                left: true,
-                table: CAPTURE.into(),
-                on: vec![
-                    format!("{alias}.file = {r}.file"),
-                    format!("{alias}.pattern = {pattern}"),
-                    format!("{alias}.\"match\" = {r}.\"match\""),
-                    format!("{alias}.capture = {}", id_of(self.captures, name)),
-                ],
-                alias,
-            });
+            self.capture(pattern, name, body, export && !joined);
         }
         for cond in &level.conds {
             body.wh.push(self.cond(cond, chain));
@@ -276,6 +291,35 @@ impl Lower<'_> {
             self.rel(rel, chain, body, export);
         }
         chain.pop();
+    }
+
+    /// Left-joins one capture of the level's match; `select` adds its columns.
+    fn capture(&mut self, pattern: u16, name: &str, body: &mut Body, select: bool) {
+        let (r, alias) = (root(pattern), cap(pattern, name));
+        if select {
+            let col = |expr: String, suffix: &str| Col {
+                expr,
+                key: format!("{name}__{suffix}"),
+                json: false,
+            };
+            self.select.push(col(format!("{alias}.\"start\""), "start"));
+            self.select.push(col(format!("{alias}.\"end\""), "end"));
+            self.select.push(col(
+                format!("(SELECT t.text FROM {DICT_TEXT} AS t WHERE t.id = {alias}.text)"),
+                "text",
+            ));
+        }
+        body.from.push(Join {
+            left: true,
+            table: CAPTURE.into(),
+            on: vec![
+                format!("{alias}.file = {r}.file"),
+                format!("{alias}.pattern = {pattern}"),
+                format!("{alias}.\"match\" = {r}.\"match\""),
+                format!("{alias}.capture = {}", id_of(self.captures, name)),
+            ],
+            alias,
+        });
     }
 
     fn cond(&self, cond: &Cond, chain: &[u16]) -> String {
@@ -361,6 +405,20 @@ impl Lower<'_> {
             return;
         }
         let target = rel.target.as_deref().expect("relation target");
+        if rel.optional {
+            // Holds with or without a related node; exported `rows: each` captures left-join.
+            if rel.rows == Rows::Each && export {
+                self.optional(rel, target, &from, chain, body);
+            }
+            return;
+        }
+        if rel.rows == Rows::List && !rel.negated {
+            // Zero related nodes is `[]`, so the relation never drops the outer match.
+            if export {
+                self.list(rel, target, &from, chain);
+            }
+            return;
+        }
         let each = rel.rows == Rows::Each && !rel.negated;
         let mut inner = Body::default();
         let sink = if each { &mut *body } else { &mut inner };
@@ -368,6 +426,65 @@ impl Lower<'_> {
         self.step(rel, &from, &root(target.pattern), sink);
         if !each {
             body.wh.push(inner.exists(rel.negated));
+        }
+    }
+
+    /// `rows: list`: one correlated aggregate per outer row, an array of the target level's
+    /// captures (and its `rows: each` / `rows: list` levels), one object per row, in `pre` order.
+    fn list(&mut self, rel: &Rel, target: &Level, from: &str, chain: &mut Vec<u16>) {
+        let select = std::mem::take(&mut self.select);
+        let order = std::mem::take(&mut self.order);
+        let mut inner = Body::default();
+        self.level(target, chain, &mut inner, true);
+        self.step(rel, from, &root(target.pattern), &mut inner);
+        let cols = std::mem::replace(&mut self.select, select);
+        let roots = std::mem::replace(&mut self.order, order);
+        let pairs = cols
+            .iter()
+            .map(|col| match col.json {
+                true => format!("{}, json({})", lit(&col.key), col.expr),
+                false => format!("{}, {}", lit(&col.key), col.expr),
+            })
+            .collect::<Vec<_>>()
+            .join(",\n    ");
+        let by = roots
+            .iter()
+            .map(|r| format!("{r}.node, {r}.\"match\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let (body, wh) = inner.render();
+        self.select.push(Col {
+            expr: format!(
+                "(SELECT json_group_array(json_object(\n    {pairs}) ORDER BY {by})\n  FROM {body}\n  WHERE {wh})"
+            ),
+            key: list_column(target, self.patterns).expect("exports checked the list column").into(),
+            json: true,
+        });
+    }
+
+    /// `rows: each` with `optional: true`: the target root left-joins on the match numbers that
+    /// relate to `from` and pass the level's predicates, so an outer row with none keeps nulls.
+    fn optional(&mut self, rel: &Rel, target: &Level, from: &str, chain: &mut Vec<u16>, body: &mut Body) {
+        let (pattern, r) = (target.pattern, root(target.pattern));
+        let mut inner = Body::default();
+        self.level(target, chain, &mut inner, false);
+        self.step(rel, from, &r, &mut inner);
+        let (matched, wh) = inner.render();
+        let parent = root(*chain.last().expect("a relation sits inside a level"));
+        body.from.push(Join {
+            left: true,
+            table: CAPTURE.into(),
+            alias: r.clone(),
+            on: vec![
+                format!("{r}.pattern = {pattern}"),
+                format!("{r}.capture = {}", id_of(self.captures, ROOT)),
+                format!("{r}.file = {parent}.file"),
+                format!("{r}.\"match\" IN (SELECT {r}.\"match\" FROM {matched}\n  WHERE {wh})"),
+            ],
+        });
+        self.order.push(r);
+        for name in own_captures(target, self.patterns) {
+            self.capture(pattern, name, body, true);
         }
     }
 

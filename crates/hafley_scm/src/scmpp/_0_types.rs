@@ -7,6 +7,8 @@ pub struct Compiled {
     pub captures: Vec<Box<str>>,
     /// Relation fields the SQL names by id: entry `i` has id `i + 1`; 0 is no field.
     pub fields: Vec<Box<str>>,
+    /// Result columns that hold a JSON array (`rows: list`), in SELECT order.
+    pub lists: Vec<Box<str>>,
 }
 
 pub struct FlatPattern {
@@ -30,6 +32,8 @@ pub struct Rel {
     pub stop: Option<Box<Level>>,
     pub field: Option<Box<str>>,
     pub rows: Rows,
+    /// `optional: true`: the outer match stays when no node relates; `rows: each` captures are null then.
+    pub optional: bool,
     pub negated: bool,
     /// `None` only for `nth-child N` without `of`.
     pub target: Option<Box<Level>>,
@@ -49,6 +53,8 @@ pub enum Walk {
 pub enum Rows {
     First,
     Each,
+    /// One JSON array column per outer match; zero related nodes is `[]`.
+    List,
 }
 
 /// `level` is the nesting depth inside one scope; stop and `of` levels open a new scope at 0.

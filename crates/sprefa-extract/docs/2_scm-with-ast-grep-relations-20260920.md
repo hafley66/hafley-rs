@@ -316,7 +316,7 @@ predicates and follow tree-sitter's rules.
 {"call__text":"log(0)"}
 ```
 
-## Result rows: `rows: first` and `rows: each`
+## Result rows: `rows: first`, `rows: each`, `rows: list`
 
 `rows: first`, the default, keeps a match when any related node exists and
 exports nothing from the target, so each outer match appears once:
@@ -353,6 +353,66 @@ nest to any depth:
 
 A capture name bound by two exported levels is an error; use two names and
 `#eq?`.
+
+`rows: list` keeps every outer match and adds one column, `NAME__list`, named
+after the target's first capture. The column holds a JSON array with one
+object per related node, in document order (preorder of the target's root).
+Each object has the target level's `NAME__start`, `NAME__end` and
+`NAME__text` keys, plus those of levels nested under it with `rows: each` or
+`rows: list`. An outer match with no related node gets `[]`. Capture names
+inside the array are a namespace of their own. A `rows: list` target needs at
+least one capture.
+
+Over this file:
+
+```rust
+// one
+// two
+#[cfg(test)]
+// between
+fn helper() { assert!(true) }
+
+#[cfg(test)]
+#[inline]
+fn bare() { 1; }
+```
+
+```scheme
+((function_item name: (identifier) @name) @fn
+ (#follows? @fn ((line_comment) @comment) stopBy: (function_item) rows: list))
+```
+
+prints (`path`, `__start`, `__end` and `fn` columns of the outer level left out):
+
+```
+{"name__text":"helper","comment__list":[{"comment__start":0,"comment__end":6,"comment__text":"// one"},{"comment__start":7,"comment__end":13,"comment__text":"// two"},{"comment__start":27,"comment__end":37,"comment__text":"// between"}]}
+{"name__text":"bare","comment__list":[]}
+```
+
+## Optional relations: `optional: true`
+
+`optional: true` keeps the outer match when no node relates to it.
+With `rows: each` the target level left-joins: an outer match with no
+related node gives one row with `null` in the target's columns; one with
+related nodes gives one row per node, as without the option. With
+`rows: first` the relation holds for every outer match and exports nothing.
+`rows: list` keeps every outer match already, and `optional:` with it is an
+error, as it is on a `not-` relation. The target of an optional relation
+holds only `rows: first` relations.
+
+```scheme
+((function_item name: (identifier) @name) @fn
+ (#follows? @fn ((line_comment) @comment) stopBy: (function_item) rows: each optional: true))
+```
+
+Over the file in the `rows: list` example this prints (`__text` columns only):
+
+```
+{"name__text":"helper","fn__text":"fn helper() { assert!(true) }","comment__text":"// one"}
+{"name__text":"helper","fn__text":"fn helper() { assert!(true) }","comment__text":"// two"}
+{"name__text":"helper","fn__text":"fn helper() { assert!(true) }","comment__text":"// between"}
+{"name__text":"bare","fn__text":"fn bare() { 1; }","comment__text":null}
+```
 
 ## Quantified captures
 
@@ -392,6 +452,20 @@ ryii query --query '((call_expression) @call (#not-has-ancestor? @call closure_e
 
 ```
 query (rust): pattern 0: #not-has-ancestor? runs only under ryii query --scmpp
+```
+
+`--query` prints one JSON object per match: `path`, `line`, `end_line`, and
+one key per capture name. A capture that bound one node is its text. A
+capture that bound two or more nodes in the match (`*`, `+`, or a name used
+twice) is an array of their texts in document order. A capture that bound no
+node has no key.
+
+```scheme
+((line_comment)* @before . (function_item name: (identifier) @name))
+```
+
+```
+{"before":["// one","// two"],"end_line":3,"line":1,"name":"helper","path":"x.rs"}
 ```
 
 `ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run and prints
@@ -435,7 +509,8 @@ it the SQL is interrupted, no rows print, and `ryii query` exits 3, as
 | --- | --- | --- |
 | `stopBy:` | `end` (default), `neighbor`, `(PATTERN)` | has, has-ancestor, precedes, follows |
 | `field:` | a grammar field name | has, has-ancestor, has-parent, precedes, follows |
-| `rows:` | `first` (default), `each` | has, has-ancestor, has-parent, precedes, follows |
+| `rows:` | `first` (default), `each`, `list` | has, has-ancestor, has-parent, precedes, follows |
+| `optional:` | `false` (default), `true` | has, has-ancestor, has-parent, precedes, follows; not with `rows: list` or `not-` |
 
 CSS comparisons apply to named nodes. See the
 [ast-grep relation reference](https://ast-grep.github.io/reference/rule) for
