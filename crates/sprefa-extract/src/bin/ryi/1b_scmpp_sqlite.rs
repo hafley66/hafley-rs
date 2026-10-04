@@ -18,10 +18,14 @@ CREATE TABLE scmpp_capture (file INTEGER NOT NULL, pattern INTEGER NOT NULL, \"m
 capture INTEGER NOT NULL, node INTEGER NOT NULL, start INTEGER NOT NULL, \"end\" INTEGER NOT NULL, text INTEGER, \
 PRIMARY KEY (file, pattern, \"match\", capture, node)) WITHOUT ROWID;";
 
-/// Built after the load, before the one query.
+/// Built after the load, before the one query. ANALYZE gives the planner row counts per key prefix:
+/// without them SQLite 3.53 reads `has-ancestor ... field:` through the node primary key range
+/// (`k.pre <= from.node`, every node before the capture) instead of `(file, parent)`, 55 s vs 3 s.
 pub const INDEXES: &str = "\
 CREATE INDEX IF NOT EXISTS scmpp_node_sibling ON scmpp_node(file, parent, sib);
-CREATE INDEX IF NOT EXISTS scmpp_capture_node ON scmpp_capture(pattern, capture, file, node);";
+CREATE INDEX IF NOT EXISTS scmpp_capture_node ON scmpp_capture(pattern, capture, file, node);
+ANALYZE scmpp_node;
+ANALYZE scmpp_capture;";
 
 const NODE_COLUMNS: usize = 12;
 const CAPTURE_COLUMNS: usize = 8;
