@@ -394,6 +394,20 @@ ryii query --query '((call_expression) @call (#not-has-ancestor? @call closure_e
 query (rust): pattern 0: #not-has-ancestor? runs only under ryii query --scmpp
 ```
 
+`--query` prints one JSON object per match: `path`, `line`, `end_line`, and
+one key per capture name. A capture that bound one node is its text. A
+capture that bound two or more nodes in the match (`*`, `+`, or a name used
+twice) is an array of their texts in document order. A capture that bound no
+node has no key.
+
+```scheme
+((line_comment)* @before . (function_item name: (identifier) @name))
+```
+
+```
+{"before":["// one","// two"],"end_line":3,"line":1,"name":"helper","path":"x.rs"}
+```
+
 `ryii query --scmpp q.scm --sqlite db.sqlite x.rs` keeps the run and prints
 no rows to stdout. Every string sits once in a dictionary table
 (`scmpp_dict_path`, `scmpp_dict_kind`, `scmpp_dict_field`,

@@ -110,6 +110,13 @@ fn ryi_query_predicate_families_through_hafley_scm() {
         "{\"end_line\":2,\"line\":2,\"name\":\"seed\"}\n{\"end_line\":3,\"line\":3,\"name\":\"seed\"}\n{\"end_line\":7,\"line\":7,\"name\":\"grain\"}\n{\"end_line\":8,\"line\":8,\"name\":\"grain\"}\n"
     );
 
+    // 6. a capture bound to several nodes in one match is an array in document order;
+    //    one node stays a scalar.
+    assert_eq!(
+        jsonl(&path, "(source_file (function_item name: (identifier) @names)+)"),
+        "{\"end_line\":6,\"line\":1,\"names\":[\"alpha\",\"beta\"]}\n"
+    );
+
     std::fs::remove_file(&path).ok();
 }
 
