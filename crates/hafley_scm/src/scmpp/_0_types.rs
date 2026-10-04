@@ -32,6 +32,8 @@ pub struct Rel {
     pub stop: Option<Box<Level>>,
     pub field: Option<Box<str>>,
     pub rows: Rows,
+    /// `optional: true`: the outer match stays when no node relates; `rows: each` captures are null then.
+    pub optional: bool,
     pub negated: bool,
     /// `None` only for `nth-child N` without `of`.
     pub target: Option<Box<Level>>,

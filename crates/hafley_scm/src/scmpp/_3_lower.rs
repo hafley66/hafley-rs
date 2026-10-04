@@ -281,32 +281,8 @@ impl Lower<'_> {
         }
         referenced(level, depth, &mut names);
         for name in &names {
-            let alias = cap(pattern, name);
             let joined = level.conds.iter().any(|cond| matches!(cond, Cond::Same(inner, _) if inner.level == depth && inner.name == *name));
-            if export && !joined {
-                let col = |expr: String, suffix: &str| Col {
-                    expr,
-                    key: format!("{name}__{suffix}"),
-                    json: false,
-                };
-                self.select.push(col(format!("{alias}.\"start\""), "start"));
-                self.select.push(col(format!("{alias}.\"end\""), "end"));
-                self.select.push(col(
-                    format!("(SELECT t.text FROM {DICT_TEXT} AS t WHERE t.id = {alias}.text)"),
-                    "text",
-                ));
-            }
-            body.from.push(Join {
-                left: true,
-                table: CAPTURE.into(),
-                on: vec![
-                    format!("{alias}.file = {r}.file"),
-                    format!("{alias}.pattern = {pattern}"),
-                    format!("{alias}.\"match\" = {r}.\"match\""),
-                    format!("{alias}.capture = {}", id_of(self.captures, name)),
-                ],
-                alias,
-            });
+            self.capture(pattern, name, body, export && !joined);
         }
         for cond in &level.conds {
             body.wh.push(self.cond(cond, chain));
@@ -315,6 +291,35 @@ impl Lower<'_> {
             self.rel(rel, chain, body, export);
         }
         chain.pop();
+    }
+
+    /// Left-joins one capture of the level's match; `select` adds its columns.
+    fn capture(&mut self, pattern: u16, name: &str, body: &mut Body, select: bool) {
+        let (r, alias) = (root(pattern), cap(pattern, name));
+        if select {
+            let col = |expr: String, suffix: &str| Col {
+                expr,
+                key: format!("{name}__{suffix}"),
+                json: false,
+            };
+            self.select.push(col(format!("{alias}.\"start\""), "start"));
+            self.select.push(col(format!("{alias}.\"end\""), "end"));
+            self.select.push(col(
+                format!("(SELECT t.text FROM {DICT_TEXT} AS t WHERE t.id = {alias}.text)"),
+                "text",
+            ));
+        }
+        body.from.push(Join {
+            left: true,
+            table: CAPTURE.into(),
+            on: vec![
+                format!("{alias}.file = {r}.file"),
+                format!("{alias}.pattern = {pattern}"),
+                format!("{alias}.\"match\" = {r}.\"match\""),
+                format!("{alias}.capture = {}", id_of(self.captures, name)),
+            ],
+            alias,
+        });
     }
 
     fn cond(&self, cond: &Cond, chain: &[u16]) -> String {
@@ -400,6 +405,13 @@ impl Lower<'_> {
             return;
         }
         let target = rel.target.as_deref().expect("relation target");
+        if rel.optional {
+            // Holds with or without a related node; exported `rows: each` captures left-join.
+            if rel.rows == Rows::Each && export {
+                self.optional(rel, target, &from, chain, body);
+            }
+            return;
+        }
         if rel.rows == Rows::List && !rel.negated {
             // Zero related nodes is `[]`, so the relation never drops the outer match.
             if export {
@@ -448,6 +460,32 @@ impl Lower<'_> {
             key: list_column(target, self.patterns).expect("exports checked the list column").into(),
             json: true,
         });
+    }
+
+    /// `rows: each` with `optional: true`: the target root left-joins on the match numbers that
+    /// relate to `from` and pass the level's predicates, so an outer row with none keeps nulls.
+    fn optional(&mut self, rel: &Rel, target: &Level, from: &str, chain: &mut Vec<u16>, body: &mut Body) {
+        let (pattern, r) = (target.pattern, root(target.pattern));
+        let mut inner = Body::default();
+        self.level(target, chain, &mut inner, false);
+        self.step(rel, from, &r, &mut inner);
+        let (matched, wh) = inner.render();
+        let parent = root(*chain.last().expect("a relation sits inside a level"));
+        body.from.push(Join {
+            left: true,
+            table: CAPTURE.into(),
+            alias: r.clone(),
+            on: vec![
+                format!("{r}.pattern = {pattern}"),
+                format!("{r}.capture = {}", id_of(self.captures, ROOT)),
+                format!("{r}.file = {parent}.file"),
+                format!("{r}.\"match\" IN (SELECT {r}.\"match\" FROM {matched}\n  WHERE {wh})"),
+            ],
+        });
+        self.order.push(r);
+        for name in own_captures(target, self.patterns) {
+            self.capture(pattern, name, body, true);
+        }
     }
 
     fn fresh(&mut self) -> usize {

@@ -389,6 +389,31 @@ prints (`path`, `__start`, `__end` and `fn` columns of the outer level left out)
 {"name__text":"bare","comment__list":[]}
 ```
 
+## Optional relations: `optional: true`
+
+`optional: true` keeps the outer match when no node relates to it.
+With `rows: each` the target level left-joins: an outer match with no
+related node gives one row with `null` in the target's columns; one with
+related nodes gives one row per node, as without the option. With
+`rows: first` the relation holds for every outer match and exports nothing.
+`rows: list` keeps every outer match already, and `optional:` with it is an
+error, as it is on a `not-` relation. The target of an optional relation
+holds only `rows: first` relations.
+
+```scheme
+((function_item name: (identifier) @name) @fn
+ (#follows? @fn ((line_comment) @comment) stopBy: (function_item) rows: each optional: true))
+```
+
+Over the file in the `rows: list` example this prints (`__text` columns only):
+
+```
+{"name__text":"helper","fn__text":"fn helper() { assert!(true) }","comment__text":"// one"}
+{"name__text":"helper","fn__text":"fn helper() { assert!(true) }","comment__text":"// two"}
+{"name__text":"helper","fn__text":"fn helper() { assert!(true) }","comment__text":"// between"}
+{"name__text":"bare","fn__text":"fn bare() { 1; }","comment__text":null}
+```
+
 ## Quantified captures
 
 A capture under `*` or `+` binds one node per repetition, and every exported
@@ -485,6 +510,7 @@ it the SQL is interrupted, no rows print, and `ryii query` exits 3, as
 | `stopBy:` | `end` (default), `neighbor`, `(PATTERN)` | has, has-ancestor, precedes, follows |
 | `field:` | a grammar field name | has, has-ancestor, has-parent, precedes, follows |
 | `rows:` | `first` (default), `each`, `list` | has, has-ancestor, has-parent, precedes, follows |
+| `optional:` | `false` (default), `true` | has, has-ancestor, has-parent, precedes, follows; not with `rows: list` or `not-` |
 
 CSS comparisons apply to named nodes. See the
 [ast-grep relation reference](https://ast-grep.github.io/reference/rule) for

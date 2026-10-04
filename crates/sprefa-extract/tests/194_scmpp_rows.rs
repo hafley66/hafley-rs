@@ -254,6 +254,24 @@ fn rows_list_is_one_array_per_outer_match() {
     );
 }
 
+/// `optional: true` with `rows: each`: an outer match with no related node keeps one row, its captures null.
+#[test]
+fn optional_each_keeps_the_outer_match() {
+    assert_eq!(
+        run(
+            COMMENTED,
+            "((function_item name: (identifier) @name) @fn
+              (#follows? @fn ((line_comment) @comment) stopBy: (function_item) rows: each optional: true))",
+            &[],
+        ),
+        r#"{"path":"fixture.rs","name__start":41,"name__end":47,"name__text":"helper","fn__start":38,"fn__end":67,"fn__text":"fn helper() { assert!(true) }","comment__start":0,"comment__end":6,"comment__text":"// one"}
+{"path":"fixture.rs","name__start":41,"name__end":47,"name__text":"helper","fn__start":38,"fn__end":67,"fn__text":"fn helper() { assert!(true) }","comment__start":7,"comment__end":13,"comment__text":"// two"}
+{"path":"fixture.rs","name__start":41,"name__end":47,"name__text":"helper","fn__start":38,"fn__end":67,"fn__text":"fn helper() { assert!(true) }","comment__start":27,"comment__end":37,"comment__text":"// between"}
+{"path":"fixture.rs","name__start":95,"name__end":99,"name__text":"bare","fn__start":92,"fn__end":108,"fn__text":"fn bare() { 1; }","comment__start":null,"comment__end":null,"comment__text":null}
+"#
+    );
+}
+
 /// The `--sqlite` store's table counts after one run of `query`.
 fn stored_counts(query: &str) -> String {
     let dir = tempfile::tempdir().unwrap();
