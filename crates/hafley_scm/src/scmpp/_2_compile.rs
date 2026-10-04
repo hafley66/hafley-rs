@@ -31,13 +31,14 @@ pub fn compile(lang: &Language, text: &str) -> Result<Compiled, ScmppError> {
     let plan = level(&mut ctx, text, 0, &[])?;
     super::_3_lower::exports(&plan, &ctx.patterns)?;
     let (captures, fields) = super::_3_lower::dictionaries(&plan, &ctx.patterns);
-    let sql = super::_3_lower::lower(&plan, &ctx.patterns, &captures, &fields);
+    let (sql, lists) = super::_3_lower::lower(&plan, &ctx.patterns, &captures, &fields);
     Ok(Compiled {
         patterns: ctx.patterns,
         plan,
         sql,
         captures,
         fields,
+        lists,
     })
 }
 
@@ -324,6 +325,7 @@ fn relation(
             }
             ("rows", Arg::Word(word)) if word == "first" => rel.rows = Rows::First,
             ("rows", Arg::Word(word)) if word == "each" => rel.rows = Rows::Each,
+            ("rows", Arg::Word(word)) if word == "list" => rel.rows = Rows::List,
             _ => return Err(unsupported(pred, &format!("bad option {key}: {value:?}"))),
         }
         args = rest;

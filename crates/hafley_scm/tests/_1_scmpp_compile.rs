@@ -511,6 +511,48 @@ ORDER BY path, "r0".start, "r0"."match""#
 }
 
 #[test]
+fn rows_list_aggregates_one_array_per_outer_match() {
+    assert_eq!(
+        show(&rust(), "((function_item name: (identifier) @name) @fn\n  (#follows? @fn ((line_comment) @comment) stopBy: (function_item) rows: list))"),
+        r#"0: ((function_item name: (identifier) @name) @fn @__root)
+1: ((line_comment) @comment @__root)
+2: ((function_item) @__root)
+--
+SELECT (SELECT p.text FROM scmpp_dict_path AS p WHERE p.id = "r0".file) AS path,
+  "c0_name"."start" AS "name__start",
+  "c0_name"."end" AS "name__end",
+  (SELECT t.text FROM scmpp_dict_text AS t WHERE t.id = "c0_name".text) AS "name__text",
+  "c0_fn"."start" AS "fn__start",
+  "c0_fn"."end" AS "fn__end",
+  (SELECT t.text FROM scmpp_dict_text AS t WHERE t.id = "c0_fn".text) AS "fn__text",
+  (SELECT json_group_array(json_object(
+    'comment__start', "c1_comment"."start",
+    'comment__end', "c1_comment"."end",
+    'comment__text', (SELECT t.text FROM scmpp_dict_text AS t WHERE t.id = "c1_comment".text)) ORDER BY "r1".node, "r1"."match")
+  FROM scmpp_capture AS "r1"
+  LEFT JOIN scmpp_capture AS "c1_comment" ON "c1_comment".file = "r1".file AND "c1_comment".pattern = 1 AND "c1_comment"."match" = "r1"."match" AND "c1_comment".capture = 4
+  JOIN scmpp_node AS "e0a" ON "e0a".file = "c0_fn".file AND "e0a".pre = "c0_fn".node
+  JOIN scmpp_node AS "e0b" ON "e0b".file = "r1".file AND "e0b".pre = "r1".node AND "e0b".parent = "e0a".parent AND "e0b".sib < "e0a".sib AND NOT EXISTS (SELECT 1 FROM scmpp_capture AS "r2"
+  JOIN scmpp_node AS "e0c" ON "e0c".file = "r2".file AND "e0c".pre = "r2".node
+  WHERE "r2".pattern = 2
+  AND "r2".capture = 1
+  AND "r2".file = "e0a".file
+  AND "e0c".parent = "e0a".parent
+  AND "e0c".sib > "e0b".sib
+  AND "e0c".sib < "e0a".sib)
+  WHERE "r1".pattern = 1
+  AND "r1".capture = 1
+  AND "r1".file = "r0".file) AS "comment__list"
+FROM scmpp_capture AS "r0"
+  LEFT JOIN scmpp_capture AS "c0_name" ON "c0_name".file = "r0".file AND "c0_name".pattern = 0 AND "c0_name"."match" = "r0"."match" AND "c0_name".capture = 2
+  LEFT JOIN scmpp_capture AS "c0_fn" ON "c0_fn".file = "r0".file AND "c0_fn".pattern = 0 AND "c0_fn"."match" = "r0"."match" AND "c0_fn".capture = 3
+WHERE "r0".pattern = 0
+  AND "r0".capture = 1
+ORDER BY path, "r0".start, "r0"."match""#
+    );
+}
+
+#[test]
 fn errors_name_the_rule() {
     let rows = [
         "((function_item) @f (#has? @f (identifier) @x rows: each) (#has? @f (call_expression (identifier) @x) rows: each))",
@@ -522,6 +564,7 @@ fn errors_name_the_rule() {
         "((block) @b (#has-parent? @b (function_item) stopBy: neighbor))",
         "((block) @b (#has? @b (identifier))",
         "(block) (identifier)",
+        "((block) @b (#has? @b (identifier) rows: list))",
     ];
     let actual = rows.iter().map(|query| error(&rust(), query)).collect::<Vec<_>>().join("\n");
     assert_eq!(
@@ -534,6 +577,7 @@ scm++: @__root is reserved
 scm++: #eq? at byte 34: unknown capture @nowhere
 scm++: #has-parent? at byte 12: has-parent is one step; stopBy does not apply
 scm++ syntax at byte 0: unbalanced open
-scm++ syntax at byte 0: a level needs exactly one root pattern: `(block) (identifier)`"#
+scm++ syntax at byte 0: a level needs exactly one root pattern: `(block) (identifier)`
+scm++: rows: list needs a @capture in its target"#
     );
 }

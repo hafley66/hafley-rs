@@ -316,7 +316,7 @@ predicates and follow tree-sitter's rules.
 {"call__text":"log(0)"}
 ```
 
-## Result rows: `rows: first` and `rows: each`
+## Result rows: `rows: first`, `rows: each`, `rows: list`
 
 `rows: first`, the default, keeps a match when any related node exists and
 exports nothing from the target, so each outer match appears once:
@@ -353,6 +353,41 @@ nest to any depth:
 
 A capture name bound by two exported levels is an error; use two names and
 `#eq?`.
+
+`rows: list` keeps every outer match and adds one column, `NAME__list`, named
+after the target's first capture. The column holds a JSON array with one
+object per related node, in document order (preorder of the target's root).
+Each object has the target level's `NAME__start`, `NAME__end` and
+`NAME__text` keys, plus those of levels nested under it with `rows: each` or
+`rows: list`. An outer match with no related node gets `[]`. Capture names
+inside the array are a namespace of their own. A `rows: list` target needs at
+least one capture.
+
+Over this file:
+
+```rust
+// one
+// two
+#[cfg(test)]
+// between
+fn helper() { assert!(true) }
+
+#[cfg(test)]
+#[inline]
+fn bare() { 1; }
+```
+
+```scheme
+((function_item name: (identifier) @name) @fn
+ (#follows? @fn ((line_comment) @comment) stopBy: (function_item) rows: list))
+```
+
+prints (`path`, `__start`, `__end` and `fn` columns of the outer level left out):
+
+```
+{"name__text":"helper","comment__list":[{"comment__start":0,"comment__end":6,"comment__text":"// one"},{"comment__start":7,"comment__end":13,"comment__text":"// two"},{"comment__start":27,"comment__end":37,"comment__text":"// between"}]}
+{"name__text":"bare","comment__list":[]}
+```
 
 ## Quantified captures
 
@@ -449,7 +484,7 @@ it the SQL is interrupted, no rows print, and `ryii query` exits 3, as
 | --- | --- | --- |
 | `stopBy:` | `end` (default), `neighbor`, `(PATTERN)` | has, has-ancestor, precedes, follows |
 | `field:` | a grammar field name | has, has-ancestor, has-parent, precedes, follows |
-| `rows:` | `first` (default), `each` | has, has-ancestor, has-parent, precedes, follows |
+| `rows:` | `first` (default), `each`, `list` | has, has-ancestor, has-parent, precedes, follows |
 
 CSS comparisons apply to named nodes. See the
 [ast-grep relation reference](https://ast-grep.github.io/reference/rule) for
