@@ -2,7 +2,7 @@
 
 usage: python3 1_query_breadth.py small|crates [CASE_PREFIX]  -> db/raw.tsv rows (run Q1), db/q1-<corpus>.tsv (rows equal)
 """
-import hashlib, importlib.util, os, pathlib, subprocess, sys
+import hashlib, importlib.util, os, pathlib, subprocess, sys, time
 
 HERE = pathlib.Path(__file__).resolve().parent
 REPO = HERE.parents[4]
@@ -36,9 +36,14 @@ def main(corpus, prefix=""):
     summary = HERE / "db" / f"q1-{corpus}.tsv"
     if not summary.exists():
         summary.write_text("case\tcorpus\tryii_rows\tsqlite_rows\tduckdb_rows\trows_equal\torder_equal\tsqlite_digest\n")
+    done = {line.split("\t")[0] for line in summary.read_text().splitlines()[1:]}
+    budget = time.time() + float(os.environ.get("BUDGET_S", "1e9"))
     for case, here, relation, there, option in oracle.CASES:
-        if not case.startswith(prefix):
+        if not case.startswith(prefix) or case in done:
             continue
+        if time.time() > budget:
+            print("budget spent; stopped before", case, flush=True)
+            break
         name = case.replace("/", "__")
         scm, sql_path = work / "sql" / f"{name}.scm", work / "sql" / f"{name}.sql"
         scm.write_text(oracle.query(here, relation, there, option) + "\n")
@@ -54,10 +59,12 @@ def main(corpus, prefix=""):
         duck.unlink(missing_ok=True)
         load = "LOAD sqlite; " + " ".join(f"CREATE TABLE {t} AS SELECT * FROM sqlite_scan('{store}', '{t}');" for t in TABLES)
         measure("Q1", case, corpus, "duckdb", "load", out / f"{name}.load.txt", [DUCKDB, str(duck), "-c", load], repeat=1)
-        measure("Q1", case, corpus, "sqlite", "query", out / f"{name}.sqlite.time.txt",
-                [SQLITE, "-readonly", str(store), f"PRAGMA temp_store=MEMORY; CREATE TEMP TABLE bench_row AS {sql};"])
-        measure("Q1", case, corpus, "duckdb", "query", out / f"{name}.duckdb.time.txt",
-                [DUCKDB, "-readonly", str(duck), "-c", f"CREATE TEMP TABLE bench_row AS {sql};"])
+        # a repeat past SLOW_S is not repeated (repeats column says how many ran)
+        for engine, argv in (("sqlite", [SQLITE, "-readonly", str(store), f"PRAGMA temp_store=MEMORY; CREATE TEMP TABLE bench_row AS {sql};"]),
+                             ("duckdb", [DUCKDB, "-readonly", str(duck), "-c", f"CREATE TEMP TABLE bench_row AS {sql};"])):
+            first = measure("Q1", case, corpus, engine, "query", out / f"{name}.{engine}.time.txt", argv, repeat=1)
+            if first[-1][9] == "ok" and float(first[-1][7] or 0) < float(os.environ.get("SLOW_S", "10")):
+                measure("Q1", case, corpus, engine, "query", out / f"{name}.{engine}.time.txt", argv, repeat=2)
         lite_out, duck_out = out / f"{name}.sqlite.rows", out / f"{name}.duckdb.rows"
         with lite_out.open("wb") as handle:
             subprocess.run([SQLITE, *SQLITE_DUMP, "-readonly", str(store), sql + ";"], stdout=handle, check=True)
