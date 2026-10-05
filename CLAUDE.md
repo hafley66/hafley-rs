@@ -24,6 +24,16 @@
 - Writing is serial in ONE worktree checkout folder: codex `gpt-6.1-sol` medium (boop preset `sol61-med`).
   One writer at a time; merge to main before the next writer starts. Do not create per-task worktrees.
 - The coordinator reviews every writer's diff before merge.
+- Test gates are exempt from the 2-minute command cap (user-set 2026-10-05): a lane runs the
+  full `cargo test --features cli --no-fail-fast` once, in the background, and reports failures
+  split into base and new. Targeted gates are never capped and rerun.
+- Briefs state the generic design (shared join, shared lift, shared trait) before any
+  language- or framework-specific case (user-set 2026-10-05). A special case lands only as
+  data or a fixture over the generic mechanism.
+- Tests are min code, max information (user-set 2026-10-05): one table-driven test per concern
+  over a fixture directory, whole-output snapshot, no per-case test functions. A new case is a
+  fixture file or a table row, not a new `#[test]`. Delete a test whose claim another snapshot
+  already carries.
 
 ## One implementation per concern (user-set 2026-09-28)
 - Exactly one implementation of each concern (module resolution, name binding, rename sites,

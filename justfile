@@ -118,5 +118,7 @@ boop-start:
     mkdir -p "$shared" && touch "$shared/.metadata_never_index"
     cargo fetch --quiet
     cargo build -p boop --tests --quiet
+    # The TS7 checker tests run the npm-pinned tsgo; without it they fail on environment.
+    npm ci --prefix crates/sprefa-extract/ts7 --silent
     echo "boop-start: cargo fetch and boop tests into $shared, $((SECONDS - started))s"
 
