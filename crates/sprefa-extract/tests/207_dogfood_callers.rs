@@ -23,3 +23,19 @@ fn bounded_rust_callers_keep_same_file_path_modules_globs_and_self() {
     {"record":"graph_edge","from_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","from_name":"run","to_path":"tests/fixtures/dogfood_callers/src/0_calls.rs","to_name":"method","kind":"name_resolve","grade":"~","from_line":6,"to_line":5}
     "#);
 }
+
+#[test]
+fn invalid_cargo_manifest_abstains_with_manifest_and_error() {
+    let root = "tests/fixtures/dogfood_invalid_manifest";
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .args(["graph", "--callers", "objects", "--root", root])
+        .arg(format!("{root}/src/lib.rs"))
+        .env("KACHE_DISABLED", "1").output().unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let stdout = String::from_utf8(output.stdout).unwrap().replace(
+        &std::fs::canonicalize(env!("CARGO_MANIFEST_DIR")).unwrap().display().to_string(),
+        "$CRATE",
+    );
+    insta::assert_snapshot!(stdout, @r#"Cargo manifest failure must produce an abstain row"#);
+}
