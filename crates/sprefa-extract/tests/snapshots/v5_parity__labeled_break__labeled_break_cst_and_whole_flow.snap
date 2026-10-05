@@ -2,27 +2,23 @@
 source: tests/199_v5_labeled_break.rs
 expression: rows
 ---
-{"record":"arg","family":"df","call":{"start":186,"end":202},"pos":0,"arg":{"start":194,"end":201}}
-{"record":"df_loop","family":"df","span":{"start":122,"end":174},"var":null,"collection":null}
-{"record":"df_loop","family":"df","span":{"start":99,"end":180},"var":null,"collection":null}
-{"record":"df_nest","family":"df","call":{"start":154,"end":163},"loop":{"start":122,"end":174},"depth":2,"collection":null}
-{"record":"df_nest","family":"df","call":{"start":154,"end":163},"loop":{"start":99,"end":180},"depth":1,"collection":null}
-{"record":"edge","family":"df","kind":"direct","from":{"start":141,"end":163},"from_kind":"break","to":{"start":99,"end":180},"to_kind":"loop"}
-{"record":"edge","family":"df","kind":"direct","from":{"start":154,"end":163},"from_kind":"call_res","to":{"start":141,"end":163},"to_kind":"break"}
-{"record":"edge","family":"df","kind":"direct","from":{"start":194,"end":201},"from_kind":"var_read","to":{"start":186,"end":202},"to_kind":"call_res"}
-{"record":"edge","family":"df","kind":"direct","from":{"start":22,"end":23},"from_kind":"lit","to":{"start":22,"end":23},"to_kind":"ret"}
-{"record":"edge","family":"df","kind":"direct","from":{"start":89,"end":96},"from_kind":"let_bind","to":{"start":194,"end":201},"to_kind":"var_read"}
-{"record":"edge","family":"df","kind":"direct","from":{"start":99,"end":180},"from_kind":"loop","to":{"start":89,"end":96},"to_kind":"let_bind"}
-{"record":"node","family":"df","span":{"start":122,"end":174},"kind":"loop","name":null,"function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":141,"end":163},"kind":"break","name":null,"function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":154,"end":163},"kind":"call_res","name":null,"function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":186,"end":202},"kind":"call_res","name":null,"function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":194,"end":201},"kind":"var_read","name":"outcome","function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":22,"end":23},"kind":"lit","name":null,"function":"produce"}
-{"record":"node","family":"df","span":{"start":22,"end":23},"kind":"ret","name":null,"function":"produce"}
-{"record":"node","family":"df","span":{"start":37,"end":42},"kind":"param","name":"value","function":"consume"}
-{"record":"node","family":"df","span":{"start":67,"end":71},"kind":"param","name":"flag","function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":89,"end":96},"kind":"let_bind","name":"outcome","function":"orchestrate"}
-{"record":"node","family":"df","span":{"start":99,"end":180},"kind":"loop","name":null,"function":"orchestrate"}
-{"record":"param","family":"df","span":{"start":37,"end":42},"pos":0}
-{"record":"param","family":"df","span":{"start":67,"end":71},"pos":0}
+arg 186:202 pos 0 <- var_read 194:201 outcome @orchestrate
+direct break 141:163 -> loop 99:180
+direct call_res 154:163 -> break 141:163
+direct var_read 194:201 -> call_res 186:202
+direct lit 22:23 -> ret 22:23
+direct let_bind 89:96 -> var_read 194:201
+direct loop 99:180 -> let_bind 89:96
+node loop 122:174 - @orchestrate
+node break 141:163 - @orchestrate
+node call_res 154:163 - @orchestrate
+node call_res 186:202 - @orchestrate
+node var_read 194:201 outcome @orchestrate
+node lit 22:23 - @produce
+node ret 22:23 - @produce
+node param 37:42 value @consume
+node param 67:71 flag @orchestrate
+node let_bind 89:96 outcome @orchestrate
+node loop 99:180 - @orchestrate
+param param 37:42 value @consume pos 0
+param param 67:71 flag @orchestrate pos 0

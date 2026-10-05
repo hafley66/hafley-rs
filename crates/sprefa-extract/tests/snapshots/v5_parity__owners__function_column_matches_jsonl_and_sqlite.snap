@@ -1,224 +1,38 @@
 ---
 source: tests/201_v5_owners.rs
-expression: output
+expression: "projected.join(\"\\n\\n\")"
 ---
-[
-  [
-    "1_widget.ts",
-    [
-      [
-        16,
-        29,
-        "param",
-        "value",
-        "format"
-      ],
-      [
-        41,
-        54,
-        "ret",
-        null,
-        "format"
-      ],
-      [
-        48,
-        53,
-        "var_read",
-        "value",
-        "format"
-      ],
-      [
-        83,
-        95,
-        "param",
-        "name",
-        "Widget.render"
-      ],
-      [
-        121,
-        141,
-        "let_bind",
-        "label",
-        "Widget.render"
-      ],
-      [
-        129,
-        141,
-        "call_res",
-        null,
-        "Widget.render"
-      ],
-      [
-        136,
-        140,
-        "var_read",
-        "name",
-        "Widget.render"
-      ],
-      [
-        151,
-        164,
-        "ret",
-        null,
-        "Widget.render"
-      ],
-      [
-        158,
-        163,
-        "var_read",
-        "label",
-        "Widget.render"
-      ]
-    ]
-  ],
-  [
-    "2_loop.rs",
-    [
-      [
-        13,
-        17,
-        "param",
-        "prog",
-        "make_rels"
-      ],
-      [
-        41,
-        51,
-        "call_res",
-        null,
-        "make_rels"
-      ],
-      [
-        41,
-        51,
-        "ret",
-        null,
-        "make_rels"
-      ],
-      [
-        62,
-        67,
-        "param",
-        "rules",
-        "work"
-      ],
-      [
-        77,
-        81,
-        "param",
-        "prog",
-        "work"
-      ],
-      [
-        97,
-        180,
-        "loop",
-        "item",
-        "work"
-      ],
-      [
-        97,
-        180,
-        "ret",
-        null,
-        "work"
-      ],
-      [
-        101,
-        105,
-        "let_bind",
-        "item",
-        "work"
-      ],
-      [
-        109,
-        114,
-        "var_read",
-        "rules",
-        "work"
-      ],
-      [
-        129,
-        133,
-        "let_bind",
-        "rels",
-        "work"
-      ],
-      [
-        136,
-        151,
-        "call_res",
-        null,
-        "work"
-      ],
-      [
-        146,
-        150,
-        "var_read",
-        "prog",
-        "work"
-      ],
-      [
-        169,
-        173,
-        "var_read",
-        "rels",
-        "work"
-      ]
-    ]
-  ],
-  [
-    "3_closures.ts",
-    [
-      [
-        15,
-        28,
-        "param",
-        "value",
-        "outer"
-      ],
-      [
-        46,
-        59,
-        "param",
-        "inner",
-        "read"
-      ],
-      [
-        64,
-        69,
-        "ret",
-        null,
-        "read"
-      ],
-      [
-        64,
-        69,
-        "var_read",
-        "inner",
-        "read"
-      ],
-      [
-        71,
-        90,
-        "ret",
-        null,
-        "outer"
-      ],
-      [
-        78,
-        89,
-        "call_res",
-        null,
-        "outer"
-      ],
-      [
-        83,
-        88,
-        "var_read",
-        "value",
-        "outer"
-      ]
-    ]
-  ]
-]
+1_widget.ts
+param 16:29 value @format
+ret 41:54 - @format
+var_read 48:53 value @format
+param 83:95 name @Widget.render
+let_bind 121:141 label @Widget.render
+call_res 129:141 - @Widget.render
+var_read 136:140 name @Widget.render
+ret 151:164 - @Widget.render
+var_read 158:163 label @Widget.render
+
+2_loop.rs
+param 13:17 prog @make_rels
+call_res 41:51 - @make_rels
+ret 41:51 - @make_rels
+param 62:67 rules @work
+param 77:81 prog @work
+loop 97:180 item @work
+ret 97:180 - @work
+let_bind 101:105 item @work
+var_read 109:114 rules @work
+let_bind 129:133 rels @work
+call_res 136:151 - @work
+var_read 146:150 prog @work
+var_read 169:173 rels @work
+
+3_closures.ts
+param 15:28 value @outer
+param 46:59 inner @read
+ret 64:69 - @read
+var_read 64:69 inner @read
+ret 71:90 - @outer
+call_res 78:89 - @outer
+var_read 83:88 value @outer

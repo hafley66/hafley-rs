@@ -511,6 +511,8 @@ mod v5_parity {
 
     #[path = "205_deferred_jsx.rs"]
     mod deferred_jsx;
+    #[path = "206_v5_capture_parity.rs"]
+    pub(crate) mod capture_parity;
     #[path = "198_v5_support.rs"]
     pub mod v5_support;
 }

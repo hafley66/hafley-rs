@@ -44,3 +44,80 @@ pub(super) fn run(arguments: &[&str], path: impl AsRef<std::ffi::OsStr>) -> std:
     );
     output
 }
+
+pub(super) fn node_label(node: &Value) -> String {
+    format!(
+        "{} {}:{} {} @{}",
+        node["kind"].as_str().unwrap(),
+        node["span"]["start"],
+        node["span"]["end"],
+        node["name"].as_str().unwrap_or("-"),
+        node["function"].as_str().unwrap_or("-")
+    )
+}
+
+fn endpoint(rows: &[Value], span: &Value) -> String {
+    let nodes: Vec<_> = rows
+        .iter()
+        .filter(|row| row["record"] == "node" && row["family"] == "df" && row["span"] == *span)
+        .map(node_label)
+        .collect();
+    if nodes.is_empty() {
+        format!("{}:{}", span["start"], span["end"])
+    } else {
+        nodes.join(" | ")
+    }
+}
+
+pub(super) fn project(rows: &[Value]) -> String {
+    let mut output = Vec::new();
+    for row in rows {
+        let line = match row["record"].as_str().unwrap() {
+            "node" if row["family"] == "df" => format!("node {}", node_label(row)),
+            "edge" if row["family"] == "df" => format!(
+                "{} {} {}:{} -> {} {}:{}",
+                row["kind"].as_str().unwrap(),
+                row["from_kind"].as_str().unwrap(),
+                row["from"]["start"],
+                row["from"]["end"],
+                row["to_kind"].as_str().unwrap(),
+                row["to"]["start"],
+                row["to"]["end"]
+            ),
+            "flow_edge" => {
+                let (from, to) = if row["kind"] == "ret_to_call_res" {
+                    (&row["to"], &row["from"])
+                } else {
+                    (&row["from"], &row["to"])
+                };
+                format!(
+                    "{} {} -> {}",
+                    row["kind"].as_str().unwrap(),
+                    endpoint(rows, from),
+                    endpoint(rows, to)
+                )
+            }
+            "df_field" => format!(
+                "field {}:{} {} <- {}",
+                row["owner"]["start"],
+                row["owner"]["end"],
+                row["name"].as_str().unwrap(),
+                endpoint(rows, &row["value"])
+            ),
+            "arg" if row["family"] == "df" => format!(
+                "arg {}:{} pos {} <- {}",
+                row["call"]["start"],
+                row["call"]["end"],
+                row["pos"],
+                endpoint(rows, &row["arg"])
+            ),
+            "param" if row["family"] == "df" => {
+                format!("param {} pos {}", endpoint(rows, &row["span"]), row["pos"])
+            }
+            "df_lit" => format!("lit {} {}", endpoint(rows, &row["node"]), row["text"]),
+            _ => continue,
+        };
+        output.push(line);
+    }
+    output.join("\n")
+}

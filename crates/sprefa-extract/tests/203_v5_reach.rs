@@ -1,6 +1,6 @@
 #![cfg(feature = "cli")]
 
-use super::v5_support::{rows, run};
+use super::v5_support::{node_label, rows, run};
 use serde_json::{json, Value};
 
 struct Fixture {
@@ -61,7 +61,7 @@ impl Fixture {
             .collect()
     }
 
-    fn check(&self, label: &str, from: Vec<&Value>, to: Vec<&Value>, expected: bool) -> Value {
+    fn check(&self, label: &str, from: Vec<&Value>, to: Vec<&Value>, expected: bool) -> String {
         assert!(
             !from.is_empty() && !to.is_empty(),
             "{label}: fixture selectors must select nodes"
@@ -84,7 +84,19 @@ impl Fixture {
             json!({"forward":expected, "reverse":expected}),
             "{label}"
         );
-        json!({"case":label, "reaches":actual, "sources":from, "targets":to, "forward":forward, "reverse":reverse})
+        format!(
+            "{label}: {} -> {} | forward={} reverse={}",
+            from.iter()
+                .map(|node| node_label(node))
+                .collect::<Vec<_>>()
+                .join(", "),
+            to.iter()
+                .map(|node| node_label(node))
+                .collect::<Vec<_>>()
+                .join(", "),
+            actual["forward"],
+            actual["reverse"]
+        )
     }
 }
 
@@ -189,9 +201,9 @@ fn seeded_forward_and_reverse_reach_port_v5_dataflow_cases() {
         fixtures[7].named("let_bind", "result", "entry"),
         true,
     ));
-    insta::assert_json_snapshot!(
+    insta::assert_snapshot!(
         "v5_parity__reach__seeded_forward_and_reverse_reach_port_v5_dataflow_cases",
-        output
+        output.join("\n")
     );
 }
 
@@ -201,7 +213,7 @@ fn jsx_ten_forward_and_reverse_reach_checks_match_v5() {
     let directory = tempfile::tempdir().unwrap();
     let (_, source) = super::jsx::fixtures()[1];
     let fixture = Fixture::new("4_jsx_exprs.tsx", source, directory.path());
-    let output: Vec<Value> = [
+    let output: Vec<String> = [
         ("secret", "title", true),
         ("fallback", "title", true),
         ("secret", "subtitle", true),
@@ -223,8 +235,8 @@ fn jsx_ten_forward_and_reverse_reach_checks_match_v5() {
         )
     })
     .collect();
-    insta::assert_json_snapshot!(
+    insta::assert_snapshot!(
         "v5_parity__reach__jsx_ten_forward_and_reverse_reach_checks_match_v5",
-        output
+        output.join("\n")
     );
 }

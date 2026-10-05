@@ -45,7 +45,7 @@ expression: proofs
       {
         "record": "graph_edge",
         "from_path": "16_direct_vs_jsx.tsx",
-        "from_name": "closure@App:blake3:e42cb5b44f8e9846b2101144153381e65dcd98691dcc5b976fb6ec406a01cbb7:0",
+        "from_name": "closure@App:120",
         "to_path": "16_direct_vs_jsx.tsx",
         "to_name": "Card",
         "kind": "name_resolve",
@@ -66,7 +66,7 @@ expression: proofs
       {
         "record": "graph_edge",
         "from_path": "17_other_object.tsx",
-        "from_name": "closure@App:blake3:e42cb5b44f8e9846b2101144153381e65dcd98691dcc5b976fb6ec406a01cbb7:0",
+        "from_name": "closure@App:95",
         "to_path": "17_other_object.tsx",
         "to_name": "Card",
         "kind": "name_resolve",
@@ -98,7 +98,7 @@ expression: proofs
       {
         "record": "graph_edge",
         "from_path": "18_second_scope.tsx",
-        "from_name": "closure@App:blake3:e42cb5b44f8e9846b2101144153381e65dcd98691dcc5b976fb6ec406a01cbb7:0",
+        "from_name": "closure@App:160",
         "to_path": "18_second_scope.tsx",
         "to_name": "Card",
         "kind": "name_resolve",
@@ -130,7 +130,7 @@ expression: proofs
       {
         "record": "graph_edge",
         "from_path": "19_eager_hook.tsx",
-        "from_name": "closure@App:blake3:abbc1472489fbb1c33eb5349e67917749ac06b8d5e38a3217696269c1ce85071:0",
+        "from_name": "closure@App:125",
         "to_path": "19_eager_hook.tsx",
         "to_name": "Card",
         "kind": "name_resolve",

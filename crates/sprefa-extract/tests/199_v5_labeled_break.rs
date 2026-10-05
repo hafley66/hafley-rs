@@ -1,5 +1,3 @@
-use sprefa_extract::flatten_jsonl;
-
 pub(super) const SOURCE: &str = "fn produce() -> i64 { 1 }\nfn consume(value: i64) {}\nfn orchestrate(flag: bool) {\n    let outcome = 'outer: loop {\n        loop {\n            break 'outer produce();\n        }\n    };\n    consume(outcome);\n}\n";
 
 #[test]
@@ -14,8 +12,7 @@ fn labeled_break_cst_and_whole_flow() {
         "v5_parity__labeled_break__labeled_break_cst",
         tree.root_node().to_sexp()
     );
-    let out = super::v5_support::facts("src/lib.rs", SOURCE.as_bytes(), false);
-    let rows = flatten_jsonl(&out).join("\n");
+    let rows = super::v5_support::project(&super::v5_support::rows("src/lib.rs", SOURCE, false));
     insta::assert_snapshot!(
         "v5_parity__labeled_break__labeled_break_cst_and_whole_flow",
         rows

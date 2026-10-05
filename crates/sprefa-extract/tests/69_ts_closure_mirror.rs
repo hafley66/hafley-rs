@@ -89,10 +89,7 @@ fn nested_arrows_mirror_to_the_named_fn() {
         .collect();
     assert_eq!(
         wrap_callers,
-        BTreeSet::from([
-            format!("closure@outer:{}:0", sprefa_extract::content_id_of(b"() => {\n      wrap();\n    }")),
-            "outer".to_string(),
-        ]),
+        BTreeSet::from(["closure@outer:622".to_string(), "outer".to_string()]),
         "all edges: {edges:?}"
     );
 }
@@ -111,8 +108,8 @@ fn a_module_level_arrow_mirrors_to_the_module() {
         helper_callers,
         BTreeSet::from([
             "<module>".to_string(),
-            format!("closure@outer:{}:0", sprefa_extract::content_id_of(b"() => {\n    helper(1);\n    run(() => {\n      wrap();\n    });\n  }")),
-            format!("closure@<module>:{}:0", sprefa_extract::content_id_of(b"() => {\n  helper(2);\n}")),
+            "closure@outer:591".to_string(),
+            "closure@<module>:665".to_string(),
             "outer".to_string(),
         ]),
         "all edges: {edges:?}"

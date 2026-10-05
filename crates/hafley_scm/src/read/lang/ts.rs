@@ -2085,7 +2085,6 @@ impl Project<CallF> for CallProjector<'_> {
         let mut order: Vec<_> = sink.nodes.iter().collect();
         order.sort_by_key(|node| (node.span.start, std::cmp::Reverse(node.span.end()), node.name.is_none()));
         let mut named: Vec<(u32, NameId)> = Vec::new();
-        let mut copies = BTreeMap::<(String, ContentId), u32>::new();
         for node in order {
             let _visit = tracing::trace_span!("ts.closure_owner.visit").entered();
             while named.last().is_some_and(|(end, _)| *end < node.span.end()) {
@@ -2097,15 +2096,8 @@ impl Project<CallF> for CallProjector<'_> {
                 continue;
             }
             let owner = named.last().map_or(MODULE_DEF_NAME, |(_, name)| strings.lookup(*name));
-            let Some(body) = self.content.as_bytes()
-                .get(node.span.start as usize..node.span.end() as usize) else {
-                    continue;
-                };
-            let digest = content_id_of(body);
-            let ordinal = copies.entry((owner.to_string(), digest.clone())).or_default();
             facts.closure_names.insert(node.span.start,
-                format!("closure@{owner}:{digest}:{ordinal}"));
-            *ordinal += 1;
+                format!("closure@{owner}:{}", node.span.start));
         }
         ts_receivers::store_facts(blob, facts);
     }

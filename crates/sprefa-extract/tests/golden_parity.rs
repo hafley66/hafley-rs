@@ -191,8 +191,7 @@ fn v6_ported(path: &str, bytes: &[u8]) -> BTreeSet<String> {
             _ => None,
         })
         .collect();
-    // df node index -> byte start, in push order (flatten_df emits the DfF
-    // nodes contiguously); the v5 oracle keys df_fields/df_lits by this index.
+    let captures = crate::v5_parity::capture_parity::capture_edges(&facts);
     let df_index: std::collections::HashMap<u32, u32> = facts
         .iter()
         .filter_map(|fact| match fact {
@@ -277,7 +276,7 @@ fn v6_ported(path: &str, bytes: &[u8]) -> BTreeSet<String> {
             FlatFact::Edge {
                 family, from, to, ..
             } => match family {
-                FamilyTag::Df => {
+                FamilyTag::Df if !captures.contains(&((from.start, from.end), (to.start, to.end))) => {
                     set.insert(format!("df_edge\t{}\t{}", from.start, to.start));
                 }
                 FamilyTag::Cst => {}

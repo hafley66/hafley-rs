@@ -1,6 +1,6 @@
 #![cfg(feature = "cli")]
 
-use super::v5_support::{rows as syntax_rows, run};
+use super::v5_support::{project, rows as syntax_rows, run};
 use serde_json::{json, Value};
 
 fn rows(name: &str, arguments: &[&str]) -> Vec<Value> {
@@ -17,7 +17,7 @@ fn rows(name: &str, arguments: &[&str]) -> Vec<Value> {
 }
 
 #[test]
-fn deferred_jsx_and_generic_object_capture_flow_have_whole_outputs() {
+fn deferred_jsx_props_captures_and_callers() {
     let _snapshots = super::v5_support::snapshots();
     let mut output = Vec::new();
     for name in [
@@ -63,8 +63,6 @@ fn deferred_jsx_and_generic_object_capture_flow_have_whole_outputs() {
         };
         output.push(json!({"fixture":name, "syntax":syntax, "resolved":resolved, "callers":normalize(callers), "hooks":normalize(hooks)}));
     }
-    // Ported negative targets, direct-call equivalence, and closure edges are
-    // pinned in the whole output; keep a compact proof matrix alongside it.
     let mut proofs = Vec::new();
     for fixture in &output {
         let syntax = fixture["syntax"].as_array().unwrap();
@@ -98,5 +96,20 @@ fn deferred_jsx_and_generic_object_capture_flow_have_whole_outputs() {
         proofs.push(json!({"fixture":fixture["fixture"], "title_targets":param_targets, "member_targets":member_targets, "lambda_elem":flow.iter().any(|edge|edge["kind"] == "lambda_elem"), "lambda_ret":flow.iter().any(|edge|edge["kind"] == "lambda_ret"), "callers":fixture["callers"], "hooks":fixture["hooks"]}));
     }
     insta::assert_json_snapshot!("v5_parity__deferred_jsx__deferred_jsx_proofs", proofs);
-    insta::assert_json_snapshot!("v5_parity__deferred_jsx__deferred_jsx_whole_output", output);
+    let projected: Vec<_> = output
+        .iter()
+        .map(|fixture| {
+            let mut rows = fixture["syntax"].as_array().unwrap().clone();
+            rows.extend(fixture["resolved"].as_array().unwrap().iter().cloned());
+            format!(
+                "{}\n{}",
+                fixture["fixture"].as_str().unwrap(),
+                project(&rows)
+            )
+        })
+        .collect();
+    insta::assert_snapshot!(
+        "v5_parity__deferred_jsx__deferred_jsx_whole_output",
+        projected.join("\n\n")
+    );
 }

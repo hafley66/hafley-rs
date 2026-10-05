@@ -1,6 +1,6 @@
-use super::v5_support::rows;
 #[cfg(feature = "cli")]
 use super::v5_support::run;
+use super::v5_support::{project, rows};
 use serde_json::Value;
 
 fn fixtures() -> [(&'static str, &'static str); 3] {
@@ -16,11 +16,11 @@ fn whole_flow_rows_name_their_owning_function() {
     let _snapshots = super::v5_support::snapshots();
     let output: Vec<_> = fixtures()
         .into_iter()
-        .map(|(path, source)| (path, rows(path, source, false)))
+        .map(|(path, source)| format!("{path}\n{}", project(&rows(path, source, false))))
         .collect();
-    insta::assert_json_snapshot!(
+    insta::assert_snapshot!(
         "v5_parity__owners__whole_flow_rows_name_their_owning_function",
-        output
+        output.join("\n\n")
     );
 }
 
@@ -83,8 +83,27 @@ fn function_column_matches_jsonl_and_sqlite() {
         assert_eq!(json, sql);
         output.push((path, sql));
     }
-    insta::assert_json_snapshot!(
+    let projected: Vec<_> = output
+        .iter()
+        .map(|(path, rows)| {
+            let nodes: Vec<_> = rows
+                .iter()
+                .map(|row| {
+                    format!(
+                        "{} {}:{} {} @{}",
+                        row[2].as_str().unwrap(),
+                        row[0],
+                        row[1],
+                        row[3].as_str().unwrap_or("-"),
+                        row[4].as_str().unwrap_or("-")
+                    )
+                })
+                .collect();
+            format!("{path}\n{}", nodes.join("\n"))
+        })
+        .collect();
+    insta::assert_snapshot!(
         "v5_parity__owners__function_column_matches_jsonl_and_sqlite",
-        output
+        projected.join("\n\n")
     );
 }
