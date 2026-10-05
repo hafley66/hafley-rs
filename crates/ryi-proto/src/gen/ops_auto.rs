@@ -183,7 +183,7 @@ pub struct CleaveArgs {
   #[arg()]
   pub dest: Option<PathBuf>,
   #[doc = "TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage"]
-  #[arg(long, conflicts_with_all = ["target", "dest", "json"])]
+  #[arg(long, conflicts_with_all = ["target", "dest"])]
   pub list: Option<PathBuf>,
   #[doc = "Corpus root (default: git root of SRC)"]
   #[arg(long)]

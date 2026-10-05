@@ -173,10 +173,10 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
     let mut imports = Imports::read(&cx, &root)?;
     let mut sources = BTreeSet::new();
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
-    crate::outln!("root {}", root.display());
+    if !cli.json { crate::outln!("root {}", root.display()); }
     for (target, dest) in &rows {
         let plan = Plan::build_with(cx, &mut imports, target, dest, cli.drag, cli.slow)?;
-        print_plan(&plan);
+        if cli.json { crate::outln!("{}", plan_json(&plan.rows)); } else { print_plan(&plan); }
         if !plan.rows.unresolved.is_empty() {
             if !cli.drag {
                 return Ok(());
@@ -219,17 +219,19 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(&root, &state, stage, soopy::Durability::Durable)?;
-                print_previews(&previews, "", |line| crate::outln!("{line}"));
-                crate::outln!("stage {id} committed");
+                if !cli.json {
+                    print_previews(&previews, "", |line| crate::outln!("{line}"));
+                    crate::outln!("stage {id} committed");
+                }
             }
             if let Some(command) = cli.verify.as_deref() {
                 match run_verify_command(&root, command)? {
-                    Some(0) => crate::outln!("verify ok"),
+                    Some(0) => { if !cli.json { crate::outln!("verify ok"); } },
                     code => {
                         let reason =
                             code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
                         let count = journal.restore(&root, &state, &[])?;
-                        crate::outln!("verify failed (rc={reason}): rolled back {count} files");
+                        if !cli.json { crate::outln!("verify failed (rc={reason}): rolled back {count} files"); }
                         return Err(crate::RyiExit::new(3, String::new()));
                     }
                 }
@@ -240,8 +242,10 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
-                print_previews(&previews, "", |line| crate::outln!("{line}"));
-                crate::outln!("stage {id} dry run, tree untouched");
+                if !cli.json {
+                    print_previews(&previews, "", |line| crate::outln!("{line}"));
+                    crate::outln!("stage {id} dry run, tree untouched");
+                }
             }
         }
     }

@@ -161,7 +161,7 @@ op cleave(
   @positional dest?: path,
 
   /** TSV of SRC#ITEM<TAB>DEST rows, applied in order as one stage */
-  @conflictsWith(#["target", "dest", "json"]) list?: path,
+  @conflictsWith(#["target", "dest"]) list?: path,
 
   /** Corpus root (default: git root of SRC) */
   root?: path,
