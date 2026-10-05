@@ -1,0 +1,2163 @@
+---
+source: tests/202_v5_jsx.rs
+expression: output
+---
+[
+  {
+    "fixture": "3_jsx_props.tsx",
+    "syntax": [
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 160,
+          "end": 196
+        },
+        "name": "note",
+        "value": {
+          "start": 187,
+          "end": 192
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 160,
+          "end": 196
+        },
+        "name": "title",
+        "value": {
+          "start": 173,
+          "end": 179
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 78,
+          "end": 99
+        },
+        "name": "label",
+        "value": {
+          "start": 90,
+          "end": 95
+        }
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 116,
+          "end": 130
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 173,
+          "end": 179
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 132,
+          "end": 145
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 187,
+          "end": 192
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 15,
+          "end": 20
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 60,
+          "end": 65
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 160,
+          "end": 196
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 153,
+          "end": 197
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 173,
+          "end": 179
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 160,
+          "end": 196
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 187,
+          "end": 192
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 160,
+          "end": 196
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 52,
+          "end": 65
+        },
+        "from_kind": "let_bind",
+        "to": {
+          "start": 90,
+          "end": 95
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 60,
+          "end": 65
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 52,
+          "end": 65
+        },
+        "to_kind": "let_bind"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 78,
+          "end": 99
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 71,
+          "end": 100
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 90,
+          "end": 95
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 78,
+          "end": 99
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 116,
+          "end": 130
+        },
+        "kind": "param",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 132,
+          "end": 145
+        },
+        "kind": "param",
+        "name": "other",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 15,
+          "end": 20
+        },
+        "kind": "param",
+        "name": "title",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 153,
+          "end": 197
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 160,
+          "end": 196
+        },
+        "kind": "new",
+        "name": "Card",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 173,
+          "end": 179
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 187,
+          "end": 192
+        },
+        "kind": "var_read",
+        "name": "other",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 52,
+          "end": 65
+        },
+        "kind": "let_bind",
+        "name": "shown",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 60,
+          "end": 65
+        },
+        "kind": "var_read",
+        "name": "title",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 71,
+          "end": 100
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 78,
+          "end": 99
+        },
+        "kind": "new",
+        "name": "div",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 90,
+          "end": 95
+        },
+        "kind": "var_read",
+        "name": "shown",
+        "function": "Card"
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 116,
+          "end": 130
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 132,
+          "end": 145
+        },
+        "pos": 1
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 15,
+          "end": 20
+        },
+        "pos": 0
+      }
+    ],
+    "resolved": [
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "from": {
+          "start": 173,
+          "end": 179
+        },
+        "to_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "to": {
+          "start": 15,
+          "end": 20
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "ret_to_call_res",
+        "from_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "from": {
+          "start": 160,
+          "end": 196
+        },
+        "to_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "to": {
+          "start": 71,
+          "end": 100
+        }
+      }
+    ]
+  },
+  {
+    "fixture": "4_jsx_exprs.tsx",
+    "syntax": [
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 265,
+          "end": 424
+        },
+        "name": "items",
+        "value": {
+          "start": 405,
+          "end": 420
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 265,
+          "end": 424
+        },
+        "name": "label",
+        "value": {
+          "start": 364,
+          "end": 378
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 265,
+          "end": 424
+        },
+        "name": "note",
+        "value": {
+          "start": 337,
+          "end": 354
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 265,
+          "end": 424
+        },
+        "name": "opt",
+        "value": {
+          "start": 385,
+          "end": 396
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 265,
+          "end": 424
+        },
+        "name": "subtitle",
+        "value": {
+          "start": 312,
+          "end": 328
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 265,
+          "end": 424
+        },
+        "name": "title",
+        "value": {
+          "start": 278,
+          "end": 300
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 76,
+          "end": 129
+        },
+        "name": "children",
+        "value": {
+          "start": 105,
+          "end": 110
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 76,
+          "end": 129
+        },
+        "name": "children",
+        "value": {
+          "start": 112,
+          "end": 115
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 76,
+          "end": 129
+        },
+        "name": "children",
+        "value": {
+          "start": 117,
+          "end": 122
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 76,
+          "end": 129
+        },
+        "name": "children",
+        "value": {
+          "start": 82,
+          "end": 87
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 76,
+          "end": 129
+        },
+        "name": "children",
+        "value": {
+          "start": 89,
+          "end": 97
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 76,
+          "end": 129
+        },
+        "name": "children",
+        "value": {
+          "start": 99,
+          "end": 103
+        }
+      },
+      {
+        "record": "df_lit",
+        "family": "df",
+        "node": {
+          "start": 364,
+          "end": 378
+        },
+        "kind": "template",
+        "text": "`hi ${secret}`"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 105,
+          "end": 110
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 76,
+          "end": 129
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 112,
+          "end": 115
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 76,
+          "end": 129
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 117,
+          "end": 122
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 76,
+          "end": 129
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 146,
+          "end": 160
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 283,
+          "end": 289
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 146,
+          "end": 160
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 312,
+          "end": 318
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 146,
+          "end": 160
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 348,
+          "end": 354
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 146,
+          "end": 160
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 370,
+          "end": 376
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 146,
+          "end": 160
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 413,
+          "end": 419
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 15,
+          "end": 20
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 82,
+          "end": 87
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 162,
+          "end": 178
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 292,
+          "end": 300
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 180,
+          "end": 194
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 322,
+          "end": 328
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 196,
+          "end": 207
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 278,
+          "end": 280
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 209,
+          "end": 225
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 337,
+          "end": 344
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 22,
+          "end": 30
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 89,
+          "end": 97
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 227,
+          "end": 235
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 385,
+          "end": 388
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 237,
+          "end": 250
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 406,
+          "end": 411
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 265,
+          "end": 424
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 258,
+          "end": 425
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 278,
+          "end": 300
+        },
+        "from_kind": "cond",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 283,
+          "end": 289
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 278,
+          "end": 300
+        },
+        "to_kind": "cond"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 292,
+          "end": 300
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 278,
+          "end": 300
+        },
+        "to_kind": "cond"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 312,
+          "end": 318
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 312,
+          "end": 328
+        },
+        "to_kind": "logic"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 312,
+          "end": 328
+        },
+        "from_kind": "logic",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 32,
+          "end": 36
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 99,
+          "end": 103
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 322,
+          "end": 328
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 312,
+          "end": 328
+        },
+        "to_kind": "logic"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 337,
+          "end": 354
+        },
+        "from_kind": "logic",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 348,
+          "end": 354
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 337,
+          "end": 354
+        },
+        "to_kind": "logic"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 364,
+          "end": 378
+        },
+        "from_kind": "template",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 370,
+          "end": 376
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 364,
+          "end": 378
+        },
+        "to_kind": "template"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 38,
+          "end": 43
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 105,
+          "end": 110
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 385,
+          "end": 388
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 385,
+          "end": 396
+        },
+        "to_kind": "member"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 385,
+          "end": 396
+        },
+        "from_kind": "member",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 405,
+          "end": 420
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 406,
+          "end": 411
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 405,
+          "end": 420
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 413,
+          "end": 419
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 405,
+          "end": 420
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 45,
+          "end": 48
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 112,
+          "end": 115
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 50,
+          "end": 55
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 117,
+          "end": 122
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 76,
+          "end": 129
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 69,
+          "end": 130
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 82,
+          "end": 87
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 76,
+          "end": 129
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 89,
+          "end": 97
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 76,
+          "end": 129
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 99,
+          "end": 103
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 76,
+          "end": 129
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 105,
+          "end": 110
+        },
+        "kind": "var_read",
+        "name": "label",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 112,
+          "end": 115
+        },
+        "kind": "var_read",
+        "name": "opt",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 117,
+          "end": 122
+        },
+        "kind": "var_read",
+        "name": "items",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 146,
+          "end": 160
+        },
+        "kind": "param",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 15,
+          "end": 20
+        },
+        "kind": "param",
+        "name": "title",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 162,
+          "end": 178
+        },
+        "kind": "param",
+        "name": "fallback",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 180,
+          "end": 194
+        },
+        "kind": "param",
+        "name": "backup",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 196,
+          "end": 207
+        },
+        "kind": "param",
+        "name": "ok",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 209,
+          "end": 225
+        },
+        "kind": "param",
+        "name": "guarded",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 22,
+          "end": 30
+        },
+        "kind": "param",
+        "name": "subtitle",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 227,
+          "end": 235
+        },
+        "kind": "param",
+        "name": "bag",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 237,
+          "end": 250
+        },
+        "kind": "param",
+        "name": "first",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 258,
+          "end": 425
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 265,
+          "end": 424
+        },
+        "kind": "new",
+        "name": "Card",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 278,
+          "end": 280
+        },
+        "kind": "var_read",
+        "name": "ok",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 278,
+          "end": 300
+        },
+        "kind": "cond",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 283,
+          "end": 289
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 292,
+          "end": 300
+        },
+        "kind": "var_read",
+        "name": "fallback",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 312,
+          "end": 318
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 312,
+          "end": 328
+        },
+        "kind": "logic",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 32,
+          "end": 36
+        },
+        "kind": "param",
+        "name": "note",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 322,
+          "end": 328
+        },
+        "kind": "var_read",
+        "name": "backup",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 337,
+          "end": 344
+        },
+        "kind": "var_read",
+        "name": "guarded",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 337,
+          "end": 354
+        },
+        "kind": "logic",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 348,
+          "end": 354
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 364,
+          "end": 378
+        },
+        "kind": "template",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 370,
+          "end": 376
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 38,
+          "end": 43
+        },
+        "kind": "param",
+        "name": "label",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 385,
+          "end": 388
+        },
+        "kind": "var_read",
+        "name": "bag",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 385,
+          "end": 396
+        },
+        "kind": "member",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 405,
+          "end": 420
+        },
+        "kind": "new",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 406,
+          "end": 411
+        },
+        "kind": "var_read",
+        "name": "first",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 413,
+          "end": 419
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 45,
+          "end": 48
+        },
+        "kind": "param",
+        "name": "opt",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 50,
+          "end": 55
+        },
+        "kind": "param",
+        "name": "items",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 69,
+          "end": 130
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 76,
+          "end": 129
+        },
+        "kind": "new",
+        "name": "div",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 82,
+          "end": 87
+        },
+        "kind": "var_read",
+        "name": "title",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 89,
+          "end": 97
+        },
+        "kind": "var_read",
+        "name": "subtitle",
+        "function": "Card"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 99,
+          "end": 103
+        },
+        "kind": "var_read",
+        "name": "note",
+        "function": "Card"
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 146,
+          "end": 160
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 15,
+          "end": 20
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 162,
+          "end": 178
+        },
+        "pos": 1
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 180,
+          "end": 194
+        },
+        "pos": 2
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 196,
+          "end": 207
+        },
+        "pos": 3
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 209,
+          "end": 225
+        },
+        "pos": 4
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 22,
+          "end": 30
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 227,
+          "end": 235
+        },
+        "pos": 5
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 237,
+          "end": 250
+        },
+        "pos": 6
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 32,
+          "end": 36
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 38,
+          "end": 43
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 45,
+          "end": 48
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 50,
+          "end": 55
+        },
+        "pos": 0
+      }
+    ],
+    "resolved": [
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 278,
+          "end": 300
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 15,
+          "end": 20
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 312,
+          "end": 328
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 22,
+          "end": 30
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 337,
+          "end": 354
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 32,
+          "end": 36
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 364,
+          "end": 378
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 38,
+          "end": 43
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 385,
+          "end": 396
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 45,
+          "end": 48
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 405,
+          "end": 420
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 50,
+          "end": 55
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "ret_to_call_res",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 265,
+          "end": 424
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 69,
+          "end": 130
+        }
+      }
+    ]
+  },
+  {
+    "fixture": "5_jsx_member.tsx",
+    "syntax": [
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 150,
+          "end": 174
+        },
+        "name": "title",
+        "value": {
+          "start": 164,
+          "end": 170
+        }
+      },
+      {
+        "record": "df_field",
+        "family": "df",
+        "owner": {
+          "start": 83,
+          "end": 104
+        },
+        "name": "text",
+        "value": {
+          "start": 95,
+          "end": 100
+        }
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 121,
+          "end": 135
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 164,
+          "end": 170
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 15,
+          "end": 37
+        },
+        "from_kind": "param",
+        "to": {
+          "start": 59,
+          "end": 64
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 150,
+          "end": 174
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 143,
+          "end": 175
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 164,
+          "end": 170
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 150,
+          "end": 174
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 51,
+          "end": 70
+        },
+        "from_kind": "let_bind",
+        "to": {
+          "start": 95,
+          "end": 100
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 59,
+          "end": 64
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 59,
+          "end": 70
+        },
+        "to_kind": "member"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 59,
+          "end": 70
+        },
+        "from_kind": "member",
+        "to": {
+          "start": 51,
+          "end": 70
+        },
+        "to_kind": "let_bind"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 83,
+          "end": 104
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 76,
+          "end": 105
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 95,
+          "end": 100
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 83,
+          "end": 104
+        },
+        "to_kind": "new"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 121,
+          "end": 135
+        },
+        "kind": "param",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 143,
+          "end": 175
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 15,
+          "end": 37
+        },
+        "kind": "param",
+        "name": "props",
+        "function": "Panel"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 150,
+          "end": 174
+        },
+        "kind": "new",
+        "name": "Panel",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 164,
+          "end": 170
+        },
+        "kind": "var_read",
+        "name": "secret",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 51,
+          "end": 70
+        },
+        "kind": "let_bind",
+        "name": "shown",
+        "function": "Panel"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 59,
+          "end": 64
+        },
+        "kind": "var_read",
+        "name": "props",
+        "function": "Panel"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 59,
+          "end": 70
+        },
+        "kind": "member",
+        "name": "title",
+        "function": "Panel"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 76,
+          "end": 105
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "Panel"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 83,
+          "end": 104
+        },
+        "kind": "new",
+        "name": "span",
+        "function": "Panel"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 95,
+          "end": 100
+        },
+        "kind": "var_read",
+        "name": "shown",
+        "function": "Panel"
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 121,
+          "end": 135
+        },
+        "pos": 0
+      },
+      {
+        "record": "param",
+        "family": "df",
+        "span": {
+          "start": 15,
+          "end": 37
+        },
+        "pos": 0
+      }
+    ],
+    "resolved": [
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "jsx_prop",
+        "from_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "from": {
+          "start": 164,
+          "end": 170
+        },
+        "to_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "to": {
+          "start": 59,
+          "end": 70
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "ret_to_call_res",
+        "from_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "from": {
+          "start": 150,
+          "end": 174
+        },
+        "to_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "to": {
+          "start": 76,
+          "end": 105
+        }
+      }
+    ]
+  }
+]

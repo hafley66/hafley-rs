@@ -1,5 +1,9 @@
 use super::*;
 
+#[path = "3_df_jsx.rs"]
+mod jsx;
+use jsx::{df_jsx_element, df_jsx_fragment};
+
 /// Post-order value flow for one TS expression. Returns the node carrying its
 /// value, or a generic `expr` node when the variant isn't chased (conservative:
 /// may miss, never invents). Port of v5 `ts_flow_expr`. `fn_sym` is the enclosing
@@ -318,7 +322,9 @@ pub(super) fn df_flow_expr(
             ));
             node
         }
-        // JSX elements/fragments + remaining variants: mint a node, don't chase.
+        E::JSXElement(element) => df_jsx_element(element, file, fn_sym, strings, scope, sink),
+        E::JSXFragment(fragment) => df_jsx_fragment(fragment, file, fn_sym, strings, scope, sink),
+        // Remaining variants retain a generic expression node.
         _ => df_push(sink, strings, span, DfNodeKind::Expr, None),
     }
 }
