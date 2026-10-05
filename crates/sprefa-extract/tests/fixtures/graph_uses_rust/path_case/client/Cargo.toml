@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 bridge = { path = "../bridge" }
+
+[workspace]

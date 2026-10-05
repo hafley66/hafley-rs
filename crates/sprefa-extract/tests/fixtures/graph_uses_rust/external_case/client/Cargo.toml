@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 external_widgets = { package = "external-widgets", version = "1" }
+
+[workspace]

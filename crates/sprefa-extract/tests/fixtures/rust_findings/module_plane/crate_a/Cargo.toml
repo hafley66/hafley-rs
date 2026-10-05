@@ -5,3 +5,5 @@ edition = "2021"
 
 [dependencies]
 crate_b = { path = "../crate_b" }
+
+[workspace]
