@@ -1,0 +1,1040 @@
+ryi v5 parity: exact failure and stop text
+
+Early compiler/test failures were corrected before committing their item, except failures explicitly retained or belonging to the withdrawn matching patch.
+
+=== 199_labeled_break_test.log ===
+
+error[E0432]: unresolved import `crate::read::project`
+  --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/cargo_metadata.rs:10:18
+   |
+10 | use crate::read::project::ProjectError;
+   |                  ^^^^^^^ could not find `project` in `read`
+   |
+note: found an item that was configured out
+  --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/mod.rs:33:9
+   |
+32 | #[cfg(feature = "read")]
+   |       ---------------- the item is gated behind the `read` feature
+33 | pub mod project;
+   |         ^^^^^^^
+error: could not compile `hafley_scm` (lib) due to 1 previous error
+
+=== 201_owners_gate.log ===
+
+test t_0_sqlite::every_flat_fact_variant_and_field_has_a_typespec_table ... FAILED
+test t_0_sqlite::sqlite::lines::tests::whole_call_rows_include_end_lines_at_newline_boundaries ... FAILED
+thread 't_0_sqlite::every_flat_fact_variant_and_field_has_a_typespec_table' (2763864) panicked at tests/0_sqlite.rs:275:10:
+called `Option::unwrap()` on a `None` value
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+thread 't_0_sqlite::sqlite::lines::tests::whole_call_rows_include_end_lines_at_newline_boundaries' (2763882) panicked at /Users/chrishafley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/insta-1.49.0/src/runtime.rs:734:13:
+snapshot assertion for 'whole_call_rows_include_end_lines_at_newline_boundaries' failed in line 57
+test result: FAILED. 16 passed; 2 failed; 0 ignored; 0 measured; 1255 filtered out; finished in 1.05s
+error: test failed, to rerun pass `--test all`
+error: no rules expected `:`
+error: could not compile `sprefa-extract` (test "all") due to 1 previous error
+
+=== 201_owners_test.log ===
+
+error[E0425]: cannot find function `binding_name` in this scope
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts.rs:2809:37
+     |
+1770 | fn tsi_binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ------------------------------------------------------------------- similarly named function `tsi_binding_name` defined here
+...
+2809 |                 .filter_map(|param| binding_name(&param.pattern))
+     |                                     ^^^^^^^^^^^^
+     |
+note: function `crate::read::lang::ts::df::expr::binding_name` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/2_df_expr.rs:328:1
+     |
+ 328 | fn binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+help: a function with a similar name exists
+     |
+2809 |                 .filter_map(|param| tsi_binding_name(&param.pattern))
+     |                                     ++++
+error[E0425]: cannot find function `binding_name` in this scope
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts.rs:2826:37
+     |
+1770 | fn tsi_binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ------------------------------------------------------------------- similarly named function `tsi_binding_name` defined here
+...
+2826 |                 .filter_map(|param| binding_name(&param.pattern))
+     |                                     ^^^^^^^^^^^^
+     |
+note: function `crate::read::lang::ts::df::expr::binding_name` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/2_df_expr.rs:328:1
+     |
+ 328 | fn binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+help: a function with a similar name exists
+     |
+2826 |                 .filter_map(|param| tsi_binding_name(&param.pattern))
+     |                                     ++++
+error[E0425]: cannot find function `binding_name` in this scope
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:282:37
+     |
+ 282 |                 if let Some(name) = binding_name(&declarator.id) {
+     |                                     ^^^^^^^^^^^^
+     |
+    ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts.rs:1770:1
+     |
+1770 | fn tsi_binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ------------------------------------------------------------------- similarly named function `tsi_binding_name` defined here
+     |
+note: function `crate::read::lang::ts::df::expr::binding_name` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/2_df_expr.rs:328:1
+     |
+ 328 | fn binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+help: a function with a similar name exists
+     |
+ 282 |                 if let Some(name) = tsi_binding_name(&declarator.id) {
+     |                                     ++++
+error[E0425]: cannot find function `binding_name` in this scope
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:328:41
+     |
+ 328 |                     if let Some(name) = binding_name(&declarator.id) {
+     |                                         ^^^^^^^^^^^^
+     |
+    ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts.rs:1770:1
+     |
+1770 | fn tsi_binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ------------------------------------------------------------------- similarly named function `tsi_binding_name` defined here
+     |
+note: function `crate::read::lang::ts::df::expr::binding_name` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/2_df_expr.rs:328:1
+     |
+ 328 | fn binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+help: a function with a similar name exists
+     |
+ 328 |                     if let Some(name) = tsi_binding_name(&declarator.id) {
+     |                                         ++++
+error[E0425]: cannot find function `binding_name` in this scope
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:407:33
+     |
+ 407 |             if let Some(name) = binding_name(&declarator.id) {
+     |                                 ^^^^^^^^^^^^
+     |
+    ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts.rs:1770:1
+     |
+1770 | fn tsi_binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ------------------------------------------------------------------- similarly named function `tsi_binding_name` defined here
+     |
+note: function `crate::read::lang::ts::df::expr::binding_name` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/2_df_expr.rs:328:1
+     |
+ 328 | fn binding_name(pattern: &ts::BindingPattern) -> Option<String> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+help: a function with a similar name exists
+     |
+ 407 |             if let Some(name) = tsi_binding_name(&declarator.id) {
+     |                                 ++++
+error[E0603]: struct import `DfProjector` is private
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/mod.rs:220:35
+     |
+ 220 |     ts_specifiers, CallProjector, DfProjector, OxcParser, TsSource, TsSpecifier, TypeProjector,
+     |                                   ^^^^^^^^^^^ private struct import
+     |
+note: the struct import `DfProjector` is defined here...
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts.rs:3033:5
+     |
+3033 | use df::DfProjector;
+     |     ^^^^^^^^^^^^^^^
+note: ...and refers to the struct `DfProjector` which is defined here
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:13:1
+     |
+  13 | pub struct DfProjector<'a> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^ you could import this directly
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:282:24
+    |
+282 |                 if let Some(name) = binding_name(&declarator.id) {
+    |                        ^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `std::marker::Sized` is not implemented for `str`
+note: required by a bound in `std::prelude::v1::Some`
+   --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:598:17
+    |
+598 | pub enum Option<T> {
+    |                 ^ required by this bound in `std::prelude::v1::Some`
+...
+606 |     Some(#[stable(feature = "rust1", since = "1.0.0")] T),
+    |     ---- required by a bound in this tuple variant
+error[E0308]: mismatched types
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:293:34
+     |
+ 293 |                     scope.insert(name, bind);
+     |                           ------ ^^^^ expected `String`, found `str`
+     |                           |
+     |                           arguments to this method are incorrect
+     |
+note: method defined here
+    --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/collections/hash/map.rs:1333:12
+     |
+1333 |     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+     |            ^^^^^^
+help: try using a conversion method
+     |
+ 293 |                     scope.insert(name.to_string(), bind);
+     |                                      ++++++++++++
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:328:28
+    |
+328 |                     if let Some(name) = binding_name(&declarator.id) {
+    |                            ^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `std::marker::Sized` is not implemented for `str`
+note: required by a bound in `std::prelude::v1::Some`
+   --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:598:17
+    |
+598 | pub enum Option<T> {
+    |                 ^ required by this bound in `std::prelude::v1::Some`
+...
+606 |     Some(#[stable(feature = "rust1", since = "1.0.0")] T),
+    |     ---- required by a bound in this tuple variant
+error[E0308]: mismatched types
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:339:38
+     |
+ 339 |                         scope.insert(name, bind);
+     |                               ------ ^^^^ expected `String`, found `str`
+     |                               |
+     |                               arguments to this method are incorrect
+     |
+note: method defined here
+    --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/std/src/collections/hash/map.rs:1333:12
+     |
+1333 |     pub fn insert(&mut self, k: K, v: V) -> Option<V> {
+     |            ^^^^^^
+help: try using a conversion method
+     |
+ 339 |                         scope.insert(name.to_string(), bind);
+     |                                          ++++++++++++
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:407:20
+    |
+407 |             if let Some(name) = binding_name(&declarator.id) {
+    |                    ^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `std::marker::Sized` is not implemented for `str`
+note: required by a bound in `std::prelude::v1::Some`
+   --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:598:17
+    |
+598 | pub enum Option<T> {
+    |                 ^ required by this bound in `std::prelude::v1::Some`
+...
+606 |     Some(#[stable(feature = "rust1", since = "1.0.0")] T),
+    |     ---- required by a bound in this tuple variant
+error[E0599]: no method named `clone` found for type `str` in the current scope
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:416:35
+    |
+416 |                 scope.insert(name.clone(), bind);
+    |                                   ^^^^^
+    |
+help: there is a method `clone_into` with a similar name, but with different arguments
+   --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/alloc/src/borrow.rs:66:5
+    |
+ 66 |     fn clone_into(&self, target: &mut Self::Owned) {
+    |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:417:28
+    |
+417 |                 loop_var = Some(name);
+    |                            ^^^^^^^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `std::marker::Sized` is not implemented for `str`
+note: required by an implicit `Sized` bound in `std::option::Option`
+   --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:598:17
+    |
+598 | pub enum Option<T> {
+    |                 ^ required by the implicit `Sized` requirement on this type parameter in `Option`
+error[E0277]: the size for values of type `str` cannot be known at compilation time
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:404:24
+    |
+404 |     let mut loop_var = None;
+    |                        ^^^^ doesn't have a size known at compile-time
+    |
+    = help: the trait `std::marker::Sized` is not implemented for `str`
+note: required by a bound in `std::prelude::v1::None`
+   --> /Users/chrishafley/.rustup/toolchains/stable-aarch64-apple-darwin/lib/rustlib/src/rust/library/core/src/option.rs:598:17
+    |
+598 | pub enum Option<T> {
+    |                 ^ required by this bound in `std::prelude::v1::None`
+...
+602 |     None,
+    |     ---- required by a bound in this unit variant
+error[E0308]: mismatched types
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:421:34
+    |
+417 |                 loop_var = Some(name);
+    |                 -------- here the type of `loop_var` is inferred to be `std::option::Option<str>`
+...
+421 |     df_loop_row(sink, loop_span, loop_var, Some(right.span()));
+    |     -----------                  ^^^^^^^^ expected `Option<String>`, found `Option<str>`
+    |     |
+    |     arguments to this function are incorrect
+    |
+    = note: expected enum `std::option::Option<std::string::String>`
+               found enum `std::option::Option<str>`
+note: function defined here
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/0_df_rows.rs:83:15
+    |
+ 83 | pub(super) fn df_loop_row(
+    |               ^^^^^^^^^^^
+...
+ 86 |     var: Option<String>,
+    |     -------------------
+
+Some errors have detailed explanations: E0277, E0308, E0425, E0599, E0603.
+error: could not compile `hafley_scm` (lib) due to 15 previous errors
+error: could not compile `hafley_scm` (lib) due to 15 previous errors
+
+=== 202_jsx_gate.log ===
+
+test t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site ... FAILED
+thread 't_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site' (2854710) panicked at tests/193_ts_rtkq_jsx.rs:157:5:
+assertion `left == right` failed
+  left: Array [Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+ right: Array [Array [String("resolved_edge"), String("run"), String("helper"), Number(33), Number(39)], Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 1270 filtered out; finished in 0.19s
+error: test failed, to rerun pass `--test all`
+
+=== 202_jsx_test.log ===
+
+error[E0432]: unresolved import `crate::read::DfF`
+  --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/cache.rs:12:32
+   |
+12 | use crate::read::{CallF, CstF, DfF, Edge, Node, RyiOutput, TypeF};
+   |                                ^^^ no `DfF` in `read`
+   |
+note: struct `crate::read::types::flow::DfF` exists but is inaccessible
+  --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:8:1
+   |
+ 8 | pub struct DfF;
+   | ^^^^^^^^^^^^^^^ not accessible
+error[E0432]: unresolved imports `crate::read::types::DfArg`, `crate::read::types::DfEdgeKind`, `crate::read::types::DfF`, `crate::read::types::DfFAux`, `crate::read::types::DfField`, `crate::read::types::DfLit`, `crate::read::types::DfNodeKind`, `crate::read::types::DfParam`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/family.rs:33:24
+    |
+ 33 |     CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF, DfFAux, DfField, DfLit, DfNodeKind, DfParam,
+    |                        ^^^^^  ^^^^^^^^^^  ^^^  ^^^^^^  ^^^^^^^  ^^^^^  ^^^^^^^^^^  ^^^^^^^ no `DfParam` in `read::types`
+    |                        |      |           |    |       |        |      |
+    |                        |      |           |    |       |        |      no `DfNodeKind` in `read::types`
+    |                        |      |           |    |       |        no `DfLit` in `read::types`
+    |                        |      |           |    |       no `DfField` in `read::types`
+    |                        |      |           |    no `DfFAux` in `read::types`
+    |                        |      |           no `DfF` in `read::types`
+    |                        |      no `DfEdgeKind` in `read::types`
+    |                        no `DfArg` in `read::types`
+    |
+    = help: consider importing this variant instead:
+            crate::read::FlatFact::DfArg
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:88:1
+    |
+ 88 | pub struct DfArg {
+    | ^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfArg`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:23:1
+    |
+ 23 | pub struct DfArg {
+    | ^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfArg`: not accessible
+note: these enums exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:68:1
+    |
+ 68 | pub enum DfEdgeKind {
+    | ^^^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfEdgeKind`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:168:1
+    |
+168 | pub enum DfEdgeKind {
+    | ^^^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfEdgeKind`: not accessible
+note: struct `crate::read::types::flow::DfF` exists but is inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:8:1
+    |
+  8 | pub struct DfF;
+    | ^^^^^^^^^^^^^^^ not accessible
+note: struct `crate::read::types::flow::DfFAux` exists but is inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0b_df_aux.rs:4:1
+    |
+  4 | pub struct DfFAux {
+    | ^^^^^^^^^^^^^^^^^ not accessible
+    = help: consider importing this variant instead:
+            crate::read::FlatFact::DfField
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:94:1
+    |
+ 94 | pub struct DfField {
+    | ^^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfField`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:33:1
+    |
+ 33 | pub struct DfField {
+    | ^^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfField`: not accessible
+    = help: consider importing this variant instead:
+            crate::read::FlatFact::DfLit
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:100:1
+    |
+100 | pub struct DfLit {
+    | ^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfLit`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:44:1
+    |
+ 44 | pub struct DfLit {
+    | ^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfLit`: not accessible
+note: these enums exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:23:1
+    |
+ 23 | pub enum DfNodeKind {
+    | ^^^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfNodeKind`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:119:1
+    |
+119 | pub enum DfNodeKind {
+    | ^^^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfNodeKind`: not accessible
+    = help: consider importing this variant instead:
+            crate::read::FlatFact::DfParam
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:83:1
+    |
+ 83 | pub struct DfParam {
+    | ^^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfParam`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:14:1
+    |
+ 14 | pub struct DfParam {
+    | ^^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfParam`: not accessible
+help: a similar name exists in the module
+    |
+ 33 -     CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF, DfFAux, DfField, DfLit, DfNodeKind, DfParam,
+ 33 +     CstEdgeKind, CstF, DfArg, CfgEdgeKind, DfF, DfFAux, DfField, DfLit, DfNodeKind, DfParam,
+    |
+help: a similar name exists in the module
+    |
+ 33 -     CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF, DfFAux, DfField, DfLit, DfNodeKind, DfParam,
+ 33 +     CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF, DfFAux, DfField, DfLit, DocNodeKind, DfParam,
+    |
+help: a similar name exists in the module
+    |
+ 33 -     CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF, DfFAux, DfField, DfLit, DfNodeKind, DfParam,
+ 33 +     CstEdgeKind, CstF, DfArg, DfEdgeKind, DfF, DfFAux, DfField, DfLit, DfNodeKind, PyParam,
+    |
+error[E0432]: unresolved import `crate::read::types::DfLoop`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/python/_0_source.rs:36:26
+    |
+ 36 | use crate::read::types::{DfLoop, LangKind, ScipIndex};
+    |                          ^^^^^^ no `DfLoop` in `read::types`
+    |
+    = help: consider importing this variant instead:
+            crate::read::FlatFact::DfLoop
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:106:1
+    |
+106 | pub struct DfLoop {
+    | ^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfLoop`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:53:1
+    |
+ 53 | pub struct DfLoop {
+    | ^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfLoop`: not accessible
+error[E0425]: cannot find function `compute_nests` in module `crate::read::types`
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/go.rs:1927:42
+     |
+1927 |     sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
+     |                                          ^^^^^^^^^^^^^ not found in `crate::read::types`
+     |
+note: function `crate::read::types::flow::compute_nests` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:88:1
+     |
+  88 | pub fn compute_nests(nodes: &[Node<DfF>], loops: &[DfLoop]) -> Vec<DfNest> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+error[E0422]: cannot find struct, variant or union type `DfLoop` in module `crate::read::types`
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/go.rs:2405:53
+     |
+2405 |             sink.aux.loops.push(crate::read::types::DfLoop {
+     |                                                     ^^^^^^ not found in `crate::read::types`
+     |
+note: these structs exist but are inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:106:1
+     |
+ 106 | pub struct DfLoop {
+     | ^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfLoop`: not accessible
+     |
+    ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:53:1
+     |
+  53 | pub struct DfLoop {
+     | ^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfLoop`: not accessible
+help: consider importing this variant
+     |
+  25 + use crate::read::FlatFact::DfLoop;
+     |
+help: if you import `DfLoop`, refer to it directly
+     |
+2405 -             sink.aux.loops.push(crate::read::types::DfLoop {
+2405 +             sink.aux.loops.push(DfLoop {
+     |
+error[E0425]: cannot find function `compute_nests` in module `crate::read::types`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/kotlin.rs:822:42
+    |
+822 |     sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
+    |                                          ^^^^^^^^^^^^^ not found in `crate::read::types`
+    |
+note: function `crate::read::types::flow::compute_nests` exists but is inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:88:1
+    |
+ 88 | pub fn compute_nests(nodes: &[Node<DfF>], loops: &[DfLoop]) -> Vec<DfNest> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+error[E0422]: cannot find struct, variant or union type `DfLoop` in module `crate::read::types`
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/kotlin.rs:1294:45
+     |
+1294 |     sink.aux.loops.push(crate::read::types::DfLoop {
+     |                                             ^^^^^^ not found in `crate::read::types`
+     |
+note: these structs exist but are inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:106:1
+     |
+ 106 | pub struct DfLoop {
+     | ^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfLoop`: not accessible
+     |
+    ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:53:1
+     |
+  53 | pub struct DfLoop {
+     | ^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfLoop`: not accessible
+help: consider importing this variant
+     |
+  34 + use crate::read::FlatFact::DfLoop;
+     |
+help: if you import `DfLoop`, refer to it directly
+     |
+1294 -     sink.aux.loops.push(crate::read::types::DfLoop {
+1294 +     sink.aux.loops.push(DfLoop {
+     |
+error[E0425]: cannot find function `compute_nests` in module `crate::read::types`
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/python/_0_source.rs:1710:42
+     |
+1710 |     sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
+     |                                          ^^^^^^^^^^^^^ not found in `crate::read::types`
+     |
+note: function `crate::read::types::flow::compute_nests` exists but is inaccessible
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:88:1
+     |
+  88 | pub fn compute_nests(nodes: &[Node<DfF>], loops: &[DfLoop]) -> Vec<DfNest> {
+     | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+error[E0422]: cannot find struct, variant or union type `DfLoop` in module `crate::read::types`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/rust/3_df.rs:98:40
+    |
+ 98 |         .map(|row| crate::read::types::DfLoop {
+    |                                        ^^^^^^ not found in `crate::read::types`
+    |
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:106:1
+    |
+106 | pub struct DfLoop {
+    | ^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfLoop`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:53:1
+    |
+ 53 | pub struct DfLoop {
+    | ^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfLoop`: not accessible
+help: consider importing this variant
+    |
+  1 + use crate::read::FlatFact::DfLoop;
+    |
+help: if you import `DfLoop`, refer to it directly
+    |
+ 98 -         .map(|row| crate::read::types::DfLoop {
+ 98 +         .map(|row| DfLoop {
+    |
+error[E0422]: cannot find struct, variant or union type `DfAllocates` in module `crate::read::types`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/rust/3_df.rs:111:40
+    |
+111 |         .map(|row| crate::read::types::DfAllocates {
+    |                                        ^^^^^^^^^^^ not found in `crate::read::types`
+    |
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:112:1
+    |
+112 | pub struct DfAllocates {
+    | ^^^^^^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfAllocates`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:75:1
+    |
+ 75 | pub struct DfAllocates {
+    | ^^^^^^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfAllocates`: not accessible
+help: consider importing this variant
+    |
+  1 + use crate::read::FlatFact::DfAllocates;
+    |
+help: if you import `DfAllocates`, refer to it directly
+    |
+111 -         .map(|row| crate::read::types::DfAllocates {
+111 +         .map(|row| DfAllocates {
+    |
+error[E0425]: cannot find function `compute_nests` in module `crate::read::types`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/rust/3_df.rs:127:42
+    |
+127 |     sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
+    |                                          ^^^^^^^^^^^^^ not found in `crate::read::types`
+    |
+note: function `crate::read::types::flow::compute_nests` exists but is inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:88:1
+    |
+ 88 | pub fn compute_nests(nodes: &[Node<DfF>], loops: &[DfLoop]) -> Vec<DfNest> {
+    | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+error[E0422]: cannot find struct, variant or union type `DfLoop` in module `crate::read::types`
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/0_df_rows.rs:90:45
+    |
+ 90 |     sink.aux.loops.push(crate::read::types::DfLoop {
+    |                                             ^^^^^^ not found in `crate::read::types`
+    |
+note: these structs exist but are inaccessible
+   --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs:106:1
+    |
+106 | pub struct DfLoop {
+    | ^^^^^^^^^^^^^^^^^ `crate::lang::rust::df_syntax_rows::DfLoop`: not accessible
+    |
+   ::: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:53:1
+    |
+ 53 | pub struct DfLoop {
+    | ^^^^^^^^^^^^^^^^^ `crate::read::types::flow::DfLoop`: not accessible
+help: consider importing this variant
+    |
+  1 + use crate::read::FlatFact::DfLoop;
+    |
+help: if you import `DfLoop`, refer to it directly
+    |
+ 90 -     sink.aux.loops.push(crate::read::types::DfLoop {
+ 90 +     sink.aux.loops.push(DfLoop {
+    |
+error[E0425]: cannot find function `compute_nests` in module `crate::read::types`
+  --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/lang/ts/1_df.rs:40:46
+   |
+40 |         sink.aux.nests = crate::read::types::compute_nests(&sink.nodes, &sink.aux.loops);
+   |                                              ^^^^^^^^^^^^^ not found in `crate::read::types`
+   |
+note: function `crate::read::types::flow::compute_nests` exists but is inaccessible
+  --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/0d_flow.rs:88:1
+   |
+88 | pub fn compute_nests(nodes: &[Node<DfF>], loops: &[DfLoop]) -> Vec<DfNest> {
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ not accessible
+error[E0425]: cannot find type `DfF` in this scope
+    --> /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/hafley_scm/src/read/types.rs:2308:33
+     |
+2308 |     pub df: Option<FamilyBundle<DfF>>,
+     |                                 ^^^ not found in this scope
+     |
+help: consider importing this struct
+     |
+  21 + use crate::read::types::flow::DfF;
+     |
+
+Some errors have detailed explanations: E0422, E0425, E0432.
+error: could not compile `hafley_scm` (lib) due to 14 previous errors
+error: could not compile `hafley_scm` (lib) due to 14 previous errors
+
+=== 203_reach_gate.log ===
+
+test t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges ... FAILED
+thread 't_167_graph_paths::flow_paths_follow_derived_interprocedural_edges' (3000151) panicked at tests/167_graph_paths.rs:74:10:
+fixture has a flow edge
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test result: FAILED. 4 passed; 1 failed; 0 ignored; 0 measured; 1268 filtered out; finished in 0.13s
+error: test failed, to rerun pass `--test all`
+test t_178_generated_contract::committed_generated_contract_matches_pnpm_gen ... FAILED
+test t_178_cli_http_parity::cli_router_and_unix_socket_share_the_contract ... FAILED
+thread 't_178_generated_contract::committed_generated_contract_matches_pnpm_gen' (3000457) panicked at tests/178_generated_contract.rs:41:5:
+assertion `left == right` failed
+  left: [" M crates/ryi-proto/src/gen/ops_auto.rs"]
+ right: []
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+thread 't_178_cli_http_parity::cli_router_and_unix_socket_share_the_contract' (3000453) panicked at tests/178_cli_http_parity.rs:456:5:
+assertion `left == right` failed
+  left: "fast    cli     322 97e58c9e70ac\nfast    router  322 97e58c9e70ac\nslow    cli     371 834e48c2b5f1\nslow    router  371 834e48c2b5f1\nscip    cli     228 3cec8a59f4e0\nscip    router  228 3cec8a59f4e0\ngraph   cli      14 7d486d030709\ngraph   router   14 7d486d030709\ncleave  cli       4 65889261c505\ncleave  router    4 65889261c505\nmove    cli      15 c907b28d1ebd\nmove    router   15 c907b28d1ebd\nrename  cli     115 9a847f2fdeb3\nrename  router  115 9a847f2fdeb3\nquery   cli       3 8f14e404ec42\nquery   router    3 8f14e404ec42\nregion  cli       1 6e64be8bc173\nregion  router    1 6e64be8bc173\nwatch   cli     459 c4f909b069cc\nwatch   router  459 c4f909b069cc\ndiff    cli       1 750777a29f8d\ndiff    router    1 750777a29f8d\ningest  cli      24 0239bab7fd61\ningest  router   24 0239bab7fd61\nschema  cli     434 5754837876a5\nschema  router  434 5754837876a5\ntrail   cli       1 cf5200e026ab\ntrail   router    1 cf5200e026ab\nfast    socket  322 97e58c9e70ac"
+ right: "fast    cli     322 97e58c9e70ac\nfast    router  322 97e58c9e70ac\nslow    cli     371 834e48c2b5f1\nslow    router  371 834e48c2b5f1\nscip    cli     228 3cec8a59f4e0\nscip    router  228 3cec8a59f4e0\ngraph   cli      14 7d486d030709\ngraph   router   14 7d486d030709\ncleave  cli       4 65889261c505\ncleave  router    4 65889261c505\nmove    cli      15 c907b28d1ebd\nmove    router   15 c907b28d1ebd\nrename  cli     115 9a847f2fdeb3\nrename  router  115 9a847f2fdeb3\nquery   cli       3 8f14e404ec42\nquery   router    3 8f14e404ec42\nregion  cli       1 6e64be8bc173\nregion  router    1 6e64be8bc173\nwatch   cli     459 c4f909b069cc\nwatch   router  459 c4f909b069cc\ndiff    cli       1 750777a29f8d\ndiff    router    1 750777a29f8d\ningest  cli      24 0239bab7fd61\ningest  router   24 0239bab7fd61\nschema  cli     434 d886b98b7113\nschema  router  434 d886b98b7113\ntrail   cli       1 cf5200e026ab\ntrail   router    1 cf5200e026ab\nfast    socket  322 97e58c9e70ac"
+test result: FAILED. 5 passed; 2 failed; 0 ignored; 0 measured; 1266 filtered out; finished in 5.35s
+error: test failed, to rerun pass `--test all`
+
+=== 204_jsx_join_gate.log ===
+
+error[E0308]: mismatched types
+   --> tests/202_v5_jsx.rs:80:60
+    |
+ 80 |       insta::assert_json_snapshot!("jsx_target_eligibility", eligibility, @r###"
+    |       -                                                      ^^^^^^^^^^^ expected `&str`, found `Vec<Value>`
+    |  _____|
+    | |
+ 81 | |     [
+ 82 | |       {
+ 83 | |         "fixture": "13_jsx_scopes.tsx",
+...   |
+105 | |     "###);
+    | |_________- arguments to this function are incorrect
+    |
+    = note: expected reference `&str`
+                  found struct `Vec<serde_json::Value>`
+note: function defined here
+   --> /Users/chrishafley/.cargo/registry/src/index.crates.io-1949cf8c6b5b557f/insta-1.49.0/src/runtime.rs:861:8
+    |
+861 | pub fn assert_snapshot(
+    |        ^^^^^^^^^^^^^^^
+error: could not compile `sprefa-extract` (test "v5_parity") due to 1 previous error
+
+=== 205_deferred_jsx_gate.log ===
+
+test t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site ... FAILED
+thread 't_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site' (3239557) panicked at tests/193_ts_rtkq_jsx.rs:157:5:
+assertion `left == right` failed
+  left: Array [Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+ right: Array [Array [String("resolved_edge"), String("run"), String("helper"), Number(33), Number(39)], Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test result: FAILED. 2 passed; 1 failed; 0 ignored; 0 measured; 1270 filtered out; finished in 0.20s
+error: test failed, to rerun pass `--test all`
+
+=== 205_full_gate.log ===
+
+test edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols ... FAILED
+test edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver ... FAILED
+test edit::ts7_rename::tests::lsp_renames_plain_identifier ... FAILED
+test edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits ... FAILED
+test edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols ... FAILED
+thread 'edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols' (3244884) panicked at src/edit/1_ts7_rename.rs:487:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 0, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver' (3244882) panicked at src/edit/1_ts7_rename.rs:399:76:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::lsp_renames_plain_identifier' (3244883) panicked at src/edit/1_ts7_rename.rs:450:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits' (3244887) panicked at src/edit/1_ts7_rename.rs:467:60:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+thread 'edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols' (3244885) panicked at src/edit/1_ts7_rename.rs:502:9:
+assertion failed: matches!(symbol_refs_and_abstains(&cx, &request),
+    Err(RenameStop::Ambiguous { sites, .. }) if sites.len() > 1)
+test result: FAILED. 2 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+error: test failed, to rerun pass `--lib`
+test every_test_file_is_a_module_here ... FAILED
+test t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn ... FAILED
+test t_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing ... FAILED
+test t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports ... FAILED
+test t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports ... FAILED
+test t_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics ... FAILED
+test t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges ... FAILED
+test t_168_graph_revision::a_path_added_between_commits_is_reported_once ... FAILED
+test t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site ... FAILED
+test t_195_ts_lib_globals::a_lib_global_never_binds_a_corpus_twin ... FAILED
+test t_195_ts_lib_globals::the_lib_declares_dom_and_ecmascript_globals ... FAILED
+test t_1_resolve_cli::resolve_mode_streams_cross_file_edges ... FAILED
+test t_23_flow_cli_dispatch::flow_is_a_resolve_arm ... FAILED
+test t_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families ... FAILED
+test t_23_flow_cli_dispatch::resolve_without_family_is_byte_identical ... FAILED
+test t_4_capability_parity::every_library_capability_is_reachable_through_the_binary ... FAILED
+test t_55_diff_verb::one_to_two_matches_the_hand_derived_rows ... FAILED
+test t_55_diff_verb::a_dirty_worktree_does_not_change_the_delta ... FAILED
+test t_186_quality_gate::repository_quality_gate_matches_its_allowlists ... FAILED
+test t_6_kind_vocab::wire_output_is_byte_identical_to_the_kind_vocab_golden ... FAILED
+test t_98_resolve_witness::one_witness_per_leg_on_a_syntax_run ... FAILED
+test t_98_resolve_witness::the_flag_off_stream_is_the_committed_golden ... FAILED
+test t_golden_parity::call_resolve_scip_ratchet_ts ... FAILED
+test t_golden_parity::ported_facets_match_v5 ... FAILED
+
+=== 205_full_gate_final.log ===
+
+thread 'edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver' (3447397) panicked at src/edit/1_ts7_rename.rs:399:76:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+thread 'edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols' (3447399) panicked at src/edit/1_ts7_rename.rs:487:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 0, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits' (3447402) panicked at src/edit/1_ts7_rename.rs:467:60:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::lsp_renames_plain_identifier' (3447398) panicked at src/edit/1_ts7_rename.rs:450:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols' (3447400) panicked at src/edit/1_ts7_rename.rs:502:9:
+assertion failed: matches!(symbol_refs_and_abstains(&cx, &request),
+    Err(RenameStop::Ambiguous { sites, .. }) if sites.len() > 1)
+test edit::ts7_rename::tests::lsp_renames_plain_identifier ... FAILED
+test edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols ... FAILED
+test edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver ... FAILED
+test edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols ... FAILED
+test edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits ... FAILED
+test result: FAILED. 2 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+error: test failed, to rerun pass `--lib`
+thread 't_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn' (3458026) panicked at tests/134_ts_binding_legs.rs:242:5:
+[("constCase", "project", "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/tests/fixtures/ts_binding_legs/shadow.ts", "same_file")]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn ... FAILED
+thread 't_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing' (3461699) panicked at tests/155a_cleave_ts_oracle.rs:108:5:
+TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+test t_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing ... FAILED
+thread 't_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports' (3461697) panicked at tests/155a_cleave_ts_oracle.rs:147:93:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+test t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports ... FAILED
+thread 't_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports' (3461848) panicked at tests/155a_cleave_ts_oracle.rs:74:5:
+import_kind: TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+test t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports ... FAILED
+thread 't_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics' (3461921) panicked at tests/155a_cleave_ts_oracle.rs:74:5:
+declaration: TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+test t_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics ... FAILED
+thread 't_167_graph_paths::flow_paths_follow_derived_interprocedural_edges' (3472441) panicked at tests/167_graph_paths.rs:74:10:
+fixture has a flow edge
+test t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges ... FAILED
+thread 't_168_graph_revision::a_path_added_between_commits_is_reported_once' (3472636) panicked at tests/168_graph_revision.rs:41:5:
+assertion `left == right` failed: []
+  left: 0
+ right: 1
+test t_168_graph_revision::a_path_added_between_commits_is_reported_once ... FAILED
+
+=== 205_full_gate_nocapture.log ===
+
+thread 'edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver' (3366165) panicked at src/edit/1_ts7_rename.rs:399:76:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+thread 'edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits' (3366170) panicked at src/edit/1_ts7_rename.rs:467:60:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::lsp_renames_plain_identifier' (3366166) panicked at src/edit/1_ts7_rename.rs:450:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+thread 'edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols' (3366168) panicked at src/edit/1_ts7_rename.rs:502:9:
+assertion failed: matches!(symbol_refs_and_abstains(&cx, &request),
+    Err(RenameStop::Ambiguous { sites, .. }) if sites.len() > 1)
+thread 'edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols' (3366167) panicked at src/edit/1_ts7_rename.rs:487:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 0, len: 3 }, why: "ts7_lsp" }
+test edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver ... FAILED
+test edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols ... FAILED
+test edit::ts7_rename::tests::lsp_renames_plain_identifier ... FAILED
+test edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits ... FAILED
+test edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols ... FAILED
+test result: FAILED. 2 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+error: test failed, to rerun pass `--lib`
+thread 't_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn' (3376666) panicked at tests/134_ts_binding_legs.rs:242:5:
+[("constCase", "project", "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/tests/fixtures/ts_binding_legs/shadow.ts", "same_file")]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+test t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn ... FAILED
+thread 't_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing' (3380383) panicked at tests/155a_cleave_ts_oracle.rs:108:5:
+TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+test t_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing ... FAILED
+thread 't_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports' (3380277) panicked at tests/155a_cleave_ts_oracle.rs:147:93:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+test t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports ... FAILED
+thread 't_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports' (3380530) panicked at tests/155a_cleave_ts_oracle.rs:74:5:
+import_kind: TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+test t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports ... FAILED
+thread 't_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics' (3380591) panicked at tests/155a_cleave_ts_oracle.rs:74:5:
+declaration: TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+test t_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics ... FAILED
+thread 't_167_graph_paths::flow_paths_follow_derived_interprocedural_edges' (3391600) panicked at tests/167_graph_paths.rs:74:10:
+fixture has a flow edge
+test t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges ... FAILED
+thread 't_168_graph_revision::a_path_added_between_commits_is_reported_once' (3391690) panicked at tests/168_graph_revision.rs:41:5:
+assertion `left == right` failed: []
+  left: 0
+ right: 1
+test t_168_graph_revision::a_path_added_between_commits_is_reported_once ... FAILED
+thread 't_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site' (3409290) panicked at tests/193_ts_rtkq_jsx.rs:157:5:
+assertion `left == right` failed
+  left: Array [Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+ right: Array [Array [String("resolved_edge"), String("run"), String("helper"), Number(33), Number(39)], Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+test t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site ... FAILED
+thread 't_195_ts_lib_globals::a_lib_global_never_binds_a_corpus_twin' (3409962) panicked at tests/195_ts_lib_globals.rs:57:5:
+assertion `left == right` failed
+  left: []
+ right: [(Some("helper"), "corpus_unique")]
+test t_195_ts_lib_globals::a_lib_global_never_binds_a_corpus_twin ... FAILED
+thread 't_195_ts_lib_globals::the_lib_declares_dom_and_ecmascript_globals' (3409963) panicked at tests/195_ts_lib_globals.rs:11:41:
+the bundled TypeScript install (ts7/node_modules)
+test t_195_ts_lib_globals::the_lib_declares_dom_and_ecmascript_globals ... FAILED
+thread 't_1_resolve_cli::resolve_mode_streams_cross_file_edges' (3411743) panicked at tests/1_resolve_cli.rs:43:5:
+assertion `left == right` failed
+  left: ""
+ right: "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/resolve/0_caller.ts\",\"caller_name\":\"run\",\"callee_path\":\"tests/fixtures/resolve/1_callee.ts\",\"callee_name\":\"helper\",\"caller_site_start\":33,\"caller_site_end\":39,\"callee_start\":7,\"callee_end\":40,\"kind\":\"name_resolve\",\"resolution_origin\":\"corpus_unique\"}\n"
+test t_1_resolve_cli::resolve_mode_streams_cross_file_edges ... FAILED
+thread 't_23_flow_cli_dispatch::flow_is_a_resolve_arm' (3412653) panicked at tests/23_flow_cli_dispatch.rs:40:5:
+flow arm emitted nothing:
+test t_23_flow_cli_dispatch::flow_is_a_resolve_arm ... FAILED
+thread 't_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families' (3412634) panicked at tests/23_flow_cli_dispatch.rs:64:5:
+no flow_edge row: {"record":"call_site","callee":"helper","path":"tests/fixtures/resolve/0_caller.ts","line":2,"fn":"run","start":33,"end":41}
+test t_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families ... FAILED
+thread 't_23_flow_cli_dispatch::resolve_without_family_is_byte_identical' (3412655) panicked at tests/23_flow_cli_dispatch.rs:89:5:
+assertion `left == right` failed
+  left: ""
+ right: "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/resolve/0_caller.ts\",\"caller_name\":\"run\",\"callee_path\":\"tests/fixtures/resolve/1_callee.ts\",\"callee_name\":\"helper\",\"caller_site_start\":33,\"caller_site_end\":39,\"callee_start\":7,\"callee_end\":40,\"kind\":\"name_resolve\",\"resolution_origin\":\"corpus_unique\"}\n"
+test t_23_flow_cli_dispatch::resolve_without_family_is_byte_identical ... FAILED
+thread 't_4_capability_parity::every_library_capability_is_reachable_through_the_binary' (3417728) panicked at tests/4_capability_parity.rs:716:17:
+ResolveCall: the binary reached no resolved_edge record with ["--resolve", "tests/fixtures/resolve/0_caller.ts", "tests/fixtures/resolve/1_callee.ts"]
+test t_4_capability_parity::every_library_capability_is_reachable_through_the_binary ... FAILED
+thread 't_55_diff_verb::one_to_two_matches_the_hand_derived_rows' (3421979) panicked at tests/55_diff_verb.rs:121:5:
+assertion `left == right` failed
+  left: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":1,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+ right: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":2,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"b.ts\",\"caller_name\":\"beta\",\"callee_path\":\"a.ts\",\"callee_name\":\"alpha\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"corpus_unique\",\"span\":{\"start\":42,\"end\":47}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+test t_55_diff_verb::one_to_two_matches_the_hand_derived_rows ... FAILED
+thread 't_55_diff_verb::a_dirty_worktree_does_not_change_the_delta' (3421914) panicked at tests/55_diff_verb.rs:242:5:
+assertion `left == right` failed
+  left: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":1,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+ right: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":2,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"b.ts\",\"caller_name\":\"beta\",\"callee_path\":\"a.ts\",\"callee_name\":\"alpha\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"corpus_unique\",\"span\":{\"start\":42,\"end\":47}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+test t_55_diff_verb::a_dirty_worktree_does_not_change_the_delta ... FAILED
+thread 't_79_rust_type_dump::bench::every_case_id_round_trips_through_four_parts' (3436514) panicked at tests/bench/mod.rs:480:9:
+measure id 'go.module.syntax.oracle' resolves to ../sprefa/plans/extract-bench-2026-08-29/go.oracle.module.tsv, which is not a file
+
+=== Command-cap stops ===
+STOP: command exceeded 110 seconds
+The following invocations reached the cap during this work:
+- Initial CLI labeled-break test builds (4 invocations).
+- Initial CLI call-lines unit build.
+- Initial owning-function builds / gates (2 invocations).
+- Initial JSX build.
+- Deferred JSX snapshot build: plans/205_deferred_jsx_accept.log.
+- Deferred JSX renamed-helper gate: plans/205_deferred_jsx_final_gate.log.
+- cargo test --features cli --no-fail-fast: plans/205_full_gate.log.
+- cargo test --features cli --no-fail-fast: plans/205_full_gate_nocapture.log.
+- cargo test --features cli --no-fail-fast: plans/205_full_gate_final.log.
+cargo test --features cli --no-fail-fast STOP: command exceeded 110 seconds; process group stopped
+
+=== TypeSpec invocation corrected to schema/cli ===
+error file-not-found: File /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/ops.tsp not found.
+
+=== Baseline a44eced8 unimported helper reproduction ===
+BASELINE EXIT 0
+{"record":"call_site","callee":"helper","path":"/var/folders/z2/cwfm40fn65n176q8m227wl0r0000gn/T/tmp075lwqbb/0_caller.tsx","line":2,"fn":"run","start":33,"end":41}
+
+Some whole-suite FAILED lines have no buffered panic text because the capped runner was stopped before it printed the harness failure sections. All text captured before the cap is included above.
+
+=== Final full gate after all changes ===
+
+thread 'edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols' (3532143) panicked at src/edit/1_ts7_rename.rs:487:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 0, len: 3 }, why: "ts7_lsp" }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+thread 'edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver' (3532141) panicked at src/edit/1_ts7_rename.rs:399:76:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+
+thread 'edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits' (3532146) panicked at src/edit/1_ts7_rename.rs:467:60:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+
+thread 'edit::ts7_rename::tests::lsp_renames_plain_identifier' (3532142) panicked at src/edit/1_ts7_rename.rs:450:72:
+called `Result::unwrap()` on an `Err` value: Inexact { file: "0_fixture.ts", span: Span { start: 6, len: 3 }, why: "ts7_lsp" }
+
+thread 'edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols' (3532144) panicked at src/edit/1_ts7_rename.rs:502:9:
+assertion failed: matches!(symbol_refs_and_abstains(&cx, &request),
+    Err(RenameStop::Ambiguous { sites, .. }) if sites.len() > 1)
+
+test edit::ts7_rename::tests::lsp_fixture_edits_match_classic_tsserver ... FAILED
+
+test edit::ts7_rename::tests::warm_lsp_returns_the_cold_edits ... FAILED
+
+test edit::ts7_rename::tests::lsp_stops_on_ambiguous_document_symbols ... FAILED
+
+test edit::ts7_rename::tests::lsp_selects_an_unpositioned_declaration_from_document_symbols ... FAILED
+
+test edit::ts7_rename::tests::lsp_renames_plain_identifier ... FAILED
+
+test result: FAILED. 2 passed; 5 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s
+
+error: test failed, to rerun pass `--lib`
+
+thread 't_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn' (3542672) panicked at tests/134_ts_binding_legs.rs:242:5:
+[("constCase", "project", "/Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/tests/fixtures/ts_binding_legs/shadow.ts", "same_file")]
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+
+test t_134_ts_binding_legs::a_self_named_initializer_still_binds_the_outer_fn ... FAILED
+
+thread 't_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports' (3546326) panicked at tests/155a_cleave_ts_oracle.rs:147:93:
+called `Result::unwrap()` on an `Err` value: Os { code: 2, kind: NotFound, message: "No such file or directory" }
+
+thread 't_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing' (3546408) panicked at tests/155a_cleave_ts_oracle.rs:108:5:
+TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+
+test t_155a_cleave_ts_oracle::slow_diagnostic_stops_before_writing ... FAILED
+
+test t_155a_cleave_ts_oracle::overloads_move_and_export_together_and_reexports_are_not_imports ... FAILED
+
+thread 't_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports' (3546463) panicked at tests/155a_cleave_ts_oracle.rs:74:5:
+import_kind: TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+
+test t_155a_cleave_ts_oracle::slow_preserves_default_namespace_and_type_imports ... FAILED
+
+thread 't_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics' (3546570) panicked at tests/155a_cleave_ts_oracle.rs:74:5:
+declaration: TypeScript LSP executable missing: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/ts7/node_modules/typescript/bin/tsc
+
+test t_155a_cleave_ts_oracle::slow_type_alias_uses_lsp_items_and_diagnostics ... FAILED
+
+thread 't_167_graph_paths::flow_paths_follow_derived_interprocedural_edges' (3556942) panicked at tests/167_graph_paths.rs:74:10:
+fixture has a flow edge
+
+test t_167_graph_paths::flow_paths_follow_derived_interprocedural_edges ... FAILED
+
+thread 't_168_graph_revision::a_path_added_between_commits_is_reported_once' (3557108) panicked at tests/168_graph_revision.rs:41:5:
+assertion `left == right` failed: []
+  left: 0
+ right: 1
+
+test t_168_graph_revision::a_path_added_between_commits_is_reported_once ... FAILED
+
+thread 't_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site' (3575173) panicked at tests/193_ts_rtkq_jsx.rs:157:5:
+assertion `left == right` failed
+  left: Array [Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+ right: Array [Array [String("resolved_edge"), String("run"), String("helper"), Number(33), Number(39)], Array [String("call_site"), String("run"), String("helper"), Number(33), Number(41)]]
+
+test t_193_ts_rtkq_jsx::written_tsx_calls_are_additive_to_the_original_resolved_site ... FAILED
+
+thread 't_195_ts_lib_globals::a_lib_global_never_binds_a_corpus_twin' (3575469) panicked at tests/195_ts_lib_globals.rs:57:5:
+assertion `left == right` failed
+  left: []
+ right: [(Some("helper"), "corpus_unique")]
+
+test t_195_ts_lib_globals::a_lib_global_never_binds_a_corpus_twin ... FAILED
+
+thread 't_195_ts_lib_globals::the_lib_declares_dom_and_ecmascript_globals' (3575470) panicked at tests/195_ts_lib_globals.rs:11:41:
+the bundled TypeScript install (ts7/node_modules)
+
+test t_195_ts_lib_globals::the_lib_declares_dom_and_ecmascript_globals ... FAILED
+
+thread 't_1_resolve_cli::resolve_mode_streams_cross_file_edges' (3577324) panicked at tests/1_resolve_cli.rs:43:5:
+assertion `left == right` failed
+  left: ""
+ right: "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/resolve/0_caller.ts\",\"caller_name\":\"run\",\"callee_path\":\"tests/fixtures/resolve/1_callee.ts\",\"callee_name\":\"helper\",\"caller_site_start\":33,\"caller_site_end\":39,\"callee_start\":7,\"callee_end\":40,\"kind\":\"name_resolve\",\"resolution_origin\":\"corpus_unique\"}\n"
+
+test t_1_resolve_cli::resolve_mode_streams_cross_file_edges ... FAILED
+
+thread 't_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families' (3578279) panicked at tests/23_flow_cli_dispatch.rs:64:5:
+no flow_edge row: {"record":"call_site","callee":"helper","path":"tests/fixtures/resolve/0_caller.ts","line":2,"fn":"run","start":33,"end":41}
+
+test t_23_flow_cli_dispatch::call_and_flow_arms_emit_both_families ... FAILED
+
+thread 't_23_flow_cli_dispatch::flow_is_a_resolve_arm' (3578310) panicked at tests/23_flow_cli_dispatch.rs:40:5:
+flow arm emitted nothing:
+
+test t_23_flow_cli_dispatch::flow_is_a_resolve_arm ... FAILED
+
+thread 't_23_flow_cli_dispatch::resolve_without_family_is_byte_identical' (3578334) panicked at tests/23_flow_cli_dispatch.rs:89:5:
+assertion `left == right` failed
+  left: ""
+ right: "{\"record\":\"resolved_edge\",\"caller_path\":\"tests/fixtures/resolve/0_caller.ts\",\"caller_name\":\"run\",\"callee_path\":\"tests/fixtures/resolve/1_callee.ts\",\"callee_name\":\"helper\",\"caller_site_start\":33,\"caller_site_end\":39,\"callee_start\":7,\"callee_end\":40,\"kind\":\"name_resolve\",\"resolution_origin\":\"corpus_unique\"}\n"
+
+test t_23_flow_cli_dispatch::resolve_without_family_is_byte_identical ... FAILED
+
+thread 't_4_capability_parity::every_library_capability_is_reachable_through_the_binary' (3584322) panicked at tests/4_capability_parity.rs:716:17:
+ResolveCall: the binary reached no resolved_edge record with ["--resolve", "tests/fixtures/resolve/0_caller.ts", "tests/fixtures/resolve/1_callee.ts"]
+
+test t_4_capability_parity::every_library_capability_is_reachable_through_the_binary ... FAILED
+
+thread 't_55_diff_verb::one_to_two_matches_the_hand_derived_rows' (3591165) panicked at tests/55_diff_verb.rs:121:5:
+assertion `left == right` failed
+  left: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":1,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+ right: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":2,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"b.ts\",\"caller_name\":\"beta\",\"callee_path\":\"a.ts\",\"callee_name\":\"alpha\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"corpus_unique\",\"span\":{\"start\":42,\"end\":47}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+
+test t_55_diff_verb::one_to_two_matches_the_hand_derived_rows ... FAILED
+
+thread 't_55_diff_verb::a_dirty_worktree_does_not_change_the_delta' (3591054) panicked at tests/55_diff_verb.rs:242:5:
+assertion `left == right` failed
+  left: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":1,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+ right: "{\"record\":\"diff_run\",\"from\":\"8ceebb119aa63da212495815f3585f938cb42760\",\"to\":\"17518683c12203efceb558b82bf94ca17dc29e6f\",\"files_a\":4,\"files_b\":4,\"changed_blobs\":2,\"counts\":{\"file\":{\"added\":0,\"removed\":0,\"changed\":2,\"origin_changed\":0},\"resolved_edge\":{\"added\":2,\"removed\":1,\"changed\":0,\"origin_changed\":0},\"resolved_type_edge\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"resolved_import\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"file_unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0},\"unresolved\":{\"added\":0,\"removed\":0,\"changed\":0,\"origin_changed\":0}}}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"b.ts\",\"from_digest\":\"00a8ef0b0ba72e868ca60134f6f79ed6a0dffd4e\",\"to_digest\":\"f70b3f06c1a7d16090b4cb21948405ba16f6def9\"}\n{\"record\":\"diff_file\",\"relation\":\"file\",\"change\":\"changed\",\"path\":\"c.ts\",\"from_digest\":\"078e8a9883fa6452e6027e09ab606c53bac547aa\",\"to_digest\":\"99d2b89d313ac03d0983506a16ad9b9c6e222498\"}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"b.ts\",\"caller_name\":\"beta\",\"callee_path\":\"a.ts\",\"callee_name\":\"alpha\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"corpus_unique\",\"span\":{\"start\":42,\"end\":47}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"added\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"delta\",\"kind\":\"name_resolve\",\"from_origin\":null,\"to_origin\":\"same_file\",\"span\":{\"start\":95,\"end\":100}}\n{\"record\":\"diff_edge\",\"relation\":\"resolved_edge\",\"change\":\"removed\",\"caller_path\":\"c.ts\",\"caller_name\":\"useGamma\",\"callee_path\":\"c.ts\",\"callee_name\":\"gamma\",\"kind\":\"name_resolve\",\"from_origin\":\"same_file\",\"to_origin\":null,\"span\":{\"start\":95,\"end\":100}}\n"
+
+test t_55_diff_verb::a_dirty_worktree_does_not_change_the_delta ... FAILED
+
+cargo test --features cli --no-fail-fast STOP: command exceeded 110 seconds; process group stopped
+
+Passed before the cap:
+test every_test_file_is_a_module_here ... ok
+test t_186_quality_gate::repository_quality_gate_matches_its_allowlists ... ok
+
+Final immutable parity gate:
+test result: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.87s
