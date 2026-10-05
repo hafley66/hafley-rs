@@ -1,3 +1,5 @@
+#[path = "212_dogfood_reexport.rs"]
+mod dogfood_reexport;
 #[path = "211_dogfood_merge.rs"]
 mod dogfood_merge;
 //! Every integration test in one binary: cargo links once, not per file.
