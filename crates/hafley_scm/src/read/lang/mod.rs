@@ -77,6 +77,7 @@ struct CheckerBound {
 /// The driver output shared by checker tiers with the same answer shape.
 #[derive(Default)]
 pub struct CheckerAnswers {
+    pub version: String,
     pub calls: HashMap<String, Vec<CheckerRef>>,
     pub types: HashMap<String, Vec<CheckerRef>>,
     pub tsi: Vec<FactOut>,
@@ -163,8 +164,14 @@ pub mod source_query;
 pub mod ts;
 #[cfg(feature = "typespec")]
 pub mod typespec;
-#[cfg(any(feature = "typescript", feature = "go-checker"))]
+#[cfg(feature = "typescript")]
 pub mod ts_checker;
+#[cfg(feature = "typescript")]
+#[path = "0_ts7_lsp_session.rs"]
+pub mod ts7_lsp_session;
+#[cfg(feature = "ts-checker")]
+#[path = "1_tsgo_rows.rs"]
+pub mod tsgo_rows;
 #[cfg(feature = "typescript")]
 pub mod ts_lib;
 #[cfg(feature = "typescript")]

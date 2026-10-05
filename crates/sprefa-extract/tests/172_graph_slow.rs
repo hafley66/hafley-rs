@@ -97,15 +97,15 @@ fn slow_walk_fails_when_the_typescript_checker_declines() {
         .current_dir(scratch.path())
         .env("RUST_LOG", "off")
         .env(
-            "SPREFA_TS_CHECKER_TYPESCRIPT",
-            scratch.path().join("absent/typescript.js"),
+            "SPREFA_TSGO",
+            scratch.path().join("absent/tsgo"),
         )
         .args(["graph", "--slow", "--from", "chainC", "--root", ".", "."])
         .output()
         .expect("graph binary runs");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(!output.status.success(), "{stderr}");
-    assert!(stderr.contains("ryi slow: tier.tsc declined"), "{stderr}");
+    assert!(stderr.contains("ryi slow: tier.tsgo declined"), "{stderr}");
     assert!(output.stdout.is_empty());
 }
 

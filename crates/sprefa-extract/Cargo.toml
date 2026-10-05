@@ -325,7 +325,7 @@ rust-checker = [
     "dep:ra_ap_vfs",
 ]
 # The ts checker tier, `--features cli,ts-checker`. Off by default and out of
-# `cli`: it pulls no crate, but it makes every ts resolve able to spawn `node`.
+# `cli`: the tier reuses the native tsgo LSP process and its hosted API session.
 ts-checker = ["typescript", "hafley_scm/ts-checker"]
 # The go checker tier, `--features cli,go-checker`. Off by default and out of
 # `cli` for the same reason as its ts twin: it pulls no crate, and it makes

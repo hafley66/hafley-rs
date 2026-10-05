@@ -13,11 +13,10 @@
 //!
 //! The tier drives the project's own `typescript`. The fixture is a bare
 //! directory with no `node_modules`, so this test pins the compiler the way a
-//! monorepo does, through `SPREFA_TS_CHECKER_TYPESCRIPT`.
+//! monorepo does, through `SPREFA_TSGO`.
 
 #![cfg(feature = "ts-checker")]
 
-use std::path::PathBuf;
 use std::process::Command;
 
 use serde_json::Value;
@@ -35,19 +34,7 @@ const FILES: &[&str] = &[
 /// A `typescript` the driver can load, machine-local the way the ratchet's
 /// corpus roots are. A checkout's `lib/typescript.js` is the built compiler.
 fn typescript() -> String {
-    if let Ok(pinned) = std::env::var("SPREFA_TS_CHECKER_TYPESCRIPT") {
-        return pinned;
-    }
-    let root = std::env::var("RATCHET_TS_ROOT")
-        .unwrap_or_else(|_| "/Users/chrishafley/projects/TypeScript-5.9".to_string());
-    let built = PathBuf::from(&root).join("lib/typescript.js");
-    assert!(
-        built.is_file(),
-        "no typescript for the checker tier: set SPREFA_TS_CHECKER_TYPESCRIPT to a \
-         typescript.js, or RATCHET_TS_ROOT to a TypeScript checkout (tried {})",
-        built.display()
-    );
-    built.to_string_lossy().into_owned()
+    crate::stock_tsgo::executable()
 }
 
 fn run(checker: bool) -> Vec<Value> {
@@ -64,7 +51,7 @@ fn run(checker: bool) -> Vec<Value> {
     args.extend(FILES.iter().map(|name| format!("{DIR}/{name}")));
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env("SPREFA_TS_CHECKER_TYPESCRIPT", typescript())
+        .env("SPREFA_TSGO", typescript())
         .args(&args)
         .output()
         .expect("extract binary runs");
@@ -145,7 +132,10 @@ fn the_syntax_leg_alone_drops_the_generic_receiver() {
     let facts = run(false);
     assert_eq!(
         unresolved_reasons(&facts),
-        vec![("render".to_string(), "inferred".to_string())],
+        vec![
+            ("panels[0].render".to_string(), "inferred".to_string()),
+            ("render".to_string(), "inferred".to_string())
+        ],
         "without the tier the site stays a drop"
     );
     assert!(
@@ -157,21 +147,21 @@ fn the_syntax_leg_alone_drops_the_generic_receiver() {
 }
 
 #[test]
-fn the_syntax_leg_alone_name_matches_a_lib_global() {
-    assert!(
-        call_edges(&run(false)).contains(&(
-            "check".to_string(),
-            "shadow.ts".to_string(),
-            "isNaN".to_string(),
-            "name_resolve".to_string(),
-        )),
-        "the name match binds the corpus `isNaN` the call never names"
-    );
+fn the_syntax_leg_alone_suppresses_a_lib_global() {
+    let facts = run(false);
+    insta::assert_json_snapshot!("stock_syntax_output", facts);
+    assert!(!call_edges(&facts)
+        .iter()
+        .any(|(_, _, name, _)| name == "isNaN"));
 }
 
 #[test]
 fn the_checker_binds_the_generic_receiver_to_its_own_file() {
     let facts = run(true);
+    insta::assert_json_snapshot!(
+        "stock_checker_output",
+        crate::stock_tsgo::normalize(serde_json::json!(facts))
+    );
     let edges = call_edges(&facts);
     assert!(
         edges.contains(&(

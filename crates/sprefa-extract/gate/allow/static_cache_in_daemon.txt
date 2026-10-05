@@ -2,6 +2,7 @@ crates/hafley_scm/src/lang/rust/23_frontend.rs	fn::call_query	1
 crates/hafley_scm/src/lang/rust/23_frontend.rs	fn::fast_file_query	1
 crates/hafley_scm/src/read/cache.rs	fn::cache	1
 crates/hafley_scm/src/read/cargo_metadata.rs	item::<file-scope>	2
+crates/hafley_scm/src/read/lang/0_ts7_lsp_session.rs	item::<file-scope>	1
 crates/hafley_scm/src/read/lang/7_scm_rows.rs	item::<file-scope>	1
 crates/hafley_scm/src/read/lang/8_rust_checker_session.rs	item::<file-scope>	1
 crates/hafley_scm/src/read/lang/8c_scope_products.rs	item::<file-scope>	3
@@ -20,4 +21,3 @@ crates/hafley_scm/src/read/lang/ts.rs	item::<file-scope>	2
 crates/hafley_scm/src/read/lang/ts_receivers.rs	fn::facts_cache	1
 crates/hafley_scm/src/read/project.rs	item::<file-scope>	1
 crates/sprefa-extract/src/bin/ryi.rs	item::<file-scope>	1
-crates/sprefa-extract/src/edit/1a_ts7_lsp_session.rs	item::<file-scope>	1

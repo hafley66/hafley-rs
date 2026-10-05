@@ -18,6 +18,18 @@ pub fn typescript_package(root: Option<&Path>) -> Option<PathBuf> {
         .find(|package| package.join("bin/tsc").is_file())
 }
 
+/// The installed native compiler, bypassing the Node launcher.
+pub fn typescript_executable(root: Option<&Path>) -> Option<PathBuf> {
+    let package = std::fs::canonicalize(typescript_package(root)?).ok()?;
+    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
+    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
+    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
+    package.ancestors()
+        .filter(|path| path.file_name().is_some_and(|name| name == "node_modules"))
+        .map(|path| path.join(format!("@typescript/typescript-{platform}-{arch}/lib/{executable}")))
+        .find(|path| path.is_file())
+}
+
 /// The directory holding `lib.d.ts`: the package's own `lib/`, or for the native
 /// compiler the `@typescript/typescript-<platform>-<arch>` package node resolves from it.
 fn lib_dir(package: &Path) -> Option<PathBuf> {

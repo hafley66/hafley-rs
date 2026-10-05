@@ -23,6 +23,9 @@ mod t_207_dogfood_callers;
 #[cfg(feature = "cli")]
 #[path = "support/0_daemon_guard.rs"]
 mod daemon_guard;
+#[cfg(feature = "typescript")]
+#[path = "support/0a_stock_tsgo.rs"]
+mod stock_tsgo;
 #[path = "support/1_v6_only.rs"]
 mod v6_only;
 
