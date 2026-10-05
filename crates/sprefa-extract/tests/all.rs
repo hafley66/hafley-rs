@@ -495,7 +495,13 @@ mod t_196_rust_walk_growth;
 #[test]
 fn every_test_file_is_a_module_here() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-    let listed = include_str!("all.rs");
+    let mut listed = include_str!("all.rs").to_string();
+    for target in include_str!("../Cargo.toml").lines().filter_map(|line| {
+        line.trim().strip_prefix("path = \"tests/").and_then(|path| path.strip_suffix('"'))
+    }) {
+        listed.push_str(&format!("#[path = \"{target}\"]"));
+        listed.push_str(&std::fs::read_to_string(dir.join(target)).unwrap());
+    }
     let missing: Vec<String> = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(|e| e.ok()?.file_name().into_string().ok())

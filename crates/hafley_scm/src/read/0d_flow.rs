@@ -1,5 +1,10 @@
 use super::*;
 
+#[path = "0c_arg_fields.rs"]
+mod arguments;
+#[path = "0c_closure_flow.rs"]
+mod closures;
+
 // ── VALUE-FLOW plane: FlowF  (inter-procedural value flow) ───────────────────
 
 /// Cross-function value flow, a separate family from `DfF`. Phase-2 only: no
@@ -13,7 +18,6 @@ pub enum FlowEdgeKind {
     /// A caller argument value flows into the callee's parameter at the same
     /// positional slot.
     ArgToParam,
-    JsxProp,
     /// A callee return value reaches the caller's call-result node. The edge is
     /// caller-local, so the VALUE travels dst to src for this kind alone.
     RetToCallRes,
@@ -27,7 +31,6 @@ impl FlowEdgeKind {
     pub const fn as_str(self) -> &'static str {
         match self {
             FlowEdgeKind::ArgToParam => "arg_to_param",
-            FlowEdgeKind::JsxProp => "jsx_prop",
             FlowEdgeKind::RetToCallRes => "ret_to_call_res",
             FlowEdgeKind::LambdaElem => "lambda_elem",
             FlowEdgeKind::LambdaRet => "lambda_ret",
@@ -64,6 +67,11 @@ pub fn flow_edges(
         .map(|(blob, out)| (blob.clone(), *out))
         .collect();
     let mut edges = Vec::new();
+    for (blob, output) in inputs {
+        if let Some(df) = &output.df {
+            closures::emit(blob, output, df, &mut edges);
+        }
+    }
     for (caller_blob, call_edges) in resolved {
         let Some(caller) = by_blob.get(caller_blob) else {
             continue;
@@ -84,54 +92,6 @@ pub fn flow_edges(
             let Some(callee_df) = callee.df.as_ref() else {
                 continue;
             };
-            if caller_df.node(call_node).kind == DfNodeKind::New {
-                let target_name = callee
-                    .call
-                    .as_ref()
-                    .and_then(|call| {
-                        call.nodes
-                            .iter()
-                            .find(|node| node.span == call_edge.dst_span)
-                    })
-                    .and_then(|node| node.name)
-                    .map(|id| callee.strings.lookup(id));
-                let component = caller_df
-                    .node(call_node)
-                    .name
-                    .map(|id| caller.strings.lookup(id));
-                if let Some(owner) = target_name.filter(|name| Some(*name) == component) {
-                    for field in caller_df
-                        .aux
-                        .fields
-                        .iter()
-                        .filter(|field| field.owner == call_node)
-                    {
-                        for (index, node) in callee_df.nodes.iter().enumerate() {
-                            let function = callee_df
-                                .aux
-                                .functions
-                                .get(index)
-                                .copied()
-                                .flatten()
-                                .map(|id| callee.strings.lookup(id));
-                            if function != Some(owner)
-                                || !matches!(node.kind, DfNodeKind::Param | DfNodeKind::Member)
-                                || node.name.map(|id| callee.strings.lookup(id))
-                                    != Some(field.name.as_str())
-                            {
-                                continue;
-                            }
-                            edges.push(FlowEdge {
-                                src_blob: caller_blob.clone(),
-                                src_span: caller_df.node(field.value).span,
-                                dst_blob: call_edge.dst_blob.clone(),
-                                dst_span: node.span,
-                                kind: FlowEdgeKind::JsxProp,
-                            });
-                        }
-                    }
-                }
-            }
             for arg in &caller_df.aux.args {
                 if arg.call != call_node || arg.pos < 0 {
                     continue;
@@ -143,13 +103,32 @@ pub fn flow_edges(
                     if !in_callee || param.pos as i64 != arg.pos {
                         continue;
                     }
-                    edges.push(FlowEdge {
-                        src_blob: caller_blob.clone(),
-                        src_span: caller_df.node(arg.arg).span,
-                        dst_blob: call_edge.dst_blob.clone(),
-                        dst_span: param_span,
-                        kind: FlowEdgeKind::ArgToParam,
-                    });
+                    let (whole, fields) = arguments::targets(
+                        caller_df,
+                        arg.arg,
+                        callee_df,
+                        param.node,
+                        call_edge.dst_span,
+                        &callee.strings,
+                    );
+                    if whole {
+                        edges.push(FlowEdge {
+                            src_blob: caller_blob.clone(),
+                            src_span: caller_df.node(arg.arg).span,
+                            dst_blob: call_edge.dst_blob.clone(),
+                            dst_span: param_span,
+                            kind: FlowEdgeKind::ArgToParam,
+                        });
+                    }
+                    for (value, target) in fields {
+                        edges.push(FlowEdge {
+                            src_blob: caller_blob.clone(),
+                            src_span: caller_df.node(value).span,
+                            dst_blob: call_edge.dst_blob.clone(),
+                            dst_span: callee_df.node(target).span,
+                            kind: FlowEdgeKind::ArgToParam,
+                        });
+                    }
                 }
             }
             let call_span = caller_df.node(call_node).span;
@@ -172,6 +151,16 @@ pub fn flow_edges(
             }
         }
     }
+    let mut seen = std::collections::HashSet::new();
+    edges.retain(|edge| {
+        seen.insert((
+            edge.src_blob.clone(),
+            edge.src_span,
+            edge.dst_blob.clone(),
+            edge.dst_span,
+            edge.kind.as_str(),
+        ))
+    });
     edges
 }
 

@@ -7,11 +7,24 @@ expression: output
     "fixture": "3_jsx_props.tsx",
     "syntax": [
       {
+        "record": "arg",
+        "family": "df",
+        "call": {
+          "start": 160,
+          "end": 196
+        },
+        "pos": 0,
+        "arg": {
+          "start": 161,
+          "end": 165
+        }
+      },
+      {
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 160,
-          "end": 196
+          "start": 166,
+          "end": 193
         },
         "name": "note",
         "value": {
@@ -23,8 +36,8 @@ expression: output
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 160,
-          "end": 196
+          "start": 166,
+          "end": 193
         },
         "name": "title",
         "value": {
@@ -98,7 +111,22 @@ expression: output
           "start": 160,
           "end": 196
         },
-        "from_kind": "new",
+        "from_kind": "call_res",
+        "to": {
+          "start": 160,
+          "end": 196
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 160,
+          "end": 196
+        },
+        "from_kind": "closure",
         "to": {
           "start": 153,
           "end": 197
@@ -110,13 +138,43 @@ expression: output
         "family": "df",
         "kind": "direct",
         "from": {
-          "start": 173,
-          "end": 179
+          "start": 161,
+          "end": 165
         },
         "from_kind": "var_read",
         "to": {
           "start": 160,
           "end": 196
+        },
+        "to_kind": "call_res"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 166,
+          "end": 193
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 161,
+          "end": 165
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 173,
+          "end": 179
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 166,
+          "end": 193
         },
         "to_kind": "new"
       },
@@ -130,8 +188,8 @@ expression: output
         },
         "from_kind": "var_read",
         "to": {
-          "start": 160,
-          "end": 196
+          "start": 166,
+          "end": 193
         },
         "to_kind": "new"
       },
@@ -246,8 +304,52 @@ expression: output
           "start": 160,
           "end": 196
         },
+        "kind": "call_res",
+        "name": null,
+        "function": "App::closure::160"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 160,
+          "end": 196
+        },
+        "kind": "closure",
+        "name": "3_jsx_props.tsx::function::App::closure::160",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 160,
+          "end": 196
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "App::closure::160"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 161,
+          "end": 165
+        },
+        "kind": "var_read",
+        "name": null,
+        "function": "App::closure::160"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 166,
+          "end": 193
+        },
         "kind": "new",
-        "name": "Card",
+        "name": null,
         "function": "App"
       },
       {
@@ -313,7 +415,7 @@ expression: output
           "end": 99
         },
         "kind": "new",
-        "name": "div",
+        "name": null,
         "function": "Card"
       },
       {
@@ -359,7 +461,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
         "from": {
           "start": 173,
@@ -369,6 +471,36 @@ expression: output
         "to": {
           "start": 15,
           "end": 20
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "lambda_elem",
+        "from_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "from": {
+          "start": 166,
+          "end": 193
+        },
+        "to_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "to": {
+          "start": 161,
+          "end": 165
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "lambda_ret",
+        "from_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "from": {
+          "start": 160,
+          "end": 196
+        },
+        "to_blob": "blake3:0db628bc6fbbd11efc01d97471982ab7a8f0cbc875bf153e3e2b38a4025f8e59",
+        "to": {
+          "start": 160,
+          "end": 196
         }
       },
       {
@@ -392,11 +524,24 @@ expression: output
     "fixture": "4_jsx_exprs.tsx",
     "syntax": [
       {
+        "record": "arg",
+        "family": "df",
+        "call": {
+          "start": 265,
+          "end": 424
+        },
+        "pos": 0,
+        "arg": {
+          "start": 266,
+          "end": 270
+        }
+      },
+      {
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "name": "items",
         "value": {
@@ -408,8 +553,8 @@ expression: output
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "name": "label",
         "value": {
@@ -421,8 +566,8 @@ expression: output
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "name": "note",
         "value": {
@@ -434,8 +579,8 @@ expression: output
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "name": "opt",
         "value": {
@@ -447,8 +592,8 @@ expression: output
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "name": "subtitle",
         "value": {
@@ -460,8 +605,8 @@ expression: output
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "name": "title",
         "value": {
@@ -805,7 +950,22 @@ expression: output
           "start": 265,
           "end": 424
         },
-        "from_kind": "new",
+        "from_kind": "call_res",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 265,
+          "end": 424
+        },
+        "from_kind": "closure",
         "to": {
           "start": 258,
           "end": 425
@@ -817,13 +977,43 @@ expression: output
         "family": "df",
         "kind": "direct",
         "from": {
+          "start": 266,
+          "end": 270
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 265,
+          "end": 424
+        },
+        "to_kind": "call_res"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 271,
+          "end": 421
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 266,
+          "end": 270
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
           "start": 278,
           "end": 300
         },
         "from_kind": "cond",
         "to": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "to_kind": "new"
       },
@@ -882,8 +1072,8 @@ expression: output
         },
         "from_kind": "logic",
         "to": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "to_kind": "new"
       },
@@ -927,8 +1117,8 @@ expression: output
         },
         "from_kind": "logic",
         "to": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "to_kind": "new"
       },
@@ -957,8 +1147,8 @@ expression: output
         },
         "from_kind": "template",
         "to": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "to_kind": "new"
       },
@@ -1017,8 +1207,8 @@ expression: output
         },
         "from_kind": "member",
         "to": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "to_kind": "new"
       },
@@ -1032,8 +1222,8 @@ expression: output
         },
         "from_kind": "new",
         "to": {
-          "start": 265,
-          "end": 424
+          "start": 271,
+          "end": 421
         },
         "to_kind": "new"
       },
@@ -1307,8 +1497,52 @@ expression: output
           "start": 265,
           "end": 424
         },
+        "kind": "call_res",
+        "name": null,
+        "function": "App::closure::265"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 265,
+          "end": 424
+        },
+        "kind": "closure",
+        "name": "4_jsx_exprs.tsx::function::App::closure::265",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 265,
+          "end": 424
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "App::closure::265"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 266,
+          "end": 270
+        },
+        "kind": "var_read",
+        "name": null,
+        "function": "App::closure::265"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 271,
+          "end": 421
+        },
         "kind": "new",
-        "name": "Card",
+        "name": null,
         "function": "App"
       },
       {
@@ -1561,7 +1795,7 @@ expression: output
           "end": 129
         },
         "kind": "new",
-        "name": "div",
+        "name": null,
         "function": "Card"
       },
       {
@@ -1719,7 +1953,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from": {
           "start": 278,
@@ -1734,7 +1968,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from": {
           "start": 312,
@@ -1749,7 +1983,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from": {
           "start": 337,
@@ -1764,7 +1998,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from": {
           "start": 364,
@@ -1779,7 +2013,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from": {
           "start": 385,
@@ -1794,7 +2028,7 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
         "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from": {
           "start": 405,
@@ -1804,6 +2038,36 @@ expression: output
         "to": {
           "start": 50,
           "end": 55
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "lambda_elem",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 271,
+          "end": 421
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 266,
+          "end": 270
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "lambda_ret",
+        "from_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from": {
+          "start": 265,
+          "end": 424
+        },
+        "to_blob": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to": {
+          "start": 265,
+          "end": 424
         }
       },
       {
@@ -1827,11 +2091,24 @@ expression: output
     "fixture": "5_jsx_member.tsx",
     "syntax": [
       {
+        "record": "arg",
+        "family": "df",
+        "call": {
+          "start": 150,
+          "end": 174
+        },
+        "pos": 0,
+        "arg": {
+          "start": 151,
+          "end": 156
+        }
+      },
+      {
         "record": "df_field",
         "family": "df",
         "owner": {
-          "start": 150,
-          "end": 174
+          "start": 157,
+          "end": 171
         },
         "name": "title",
         "value": {
@@ -1890,7 +2167,22 @@ expression: output
           "start": 150,
           "end": 174
         },
-        "from_kind": "new",
+        "from_kind": "call_res",
+        "to": {
+          "start": 150,
+          "end": 174
+        },
+        "to_kind": "ret"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 150,
+          "end": 174
+        },
+        "from_kind": "closure",
         "to": {
           "start": 143,
           "end": 175
@@ -1902,13 +2194,43 @@ expression: output
         "family": "df",
         "kind": "direct",
         "from": {
-          "start": 164,
-          "end": 170
+          "start": 151,
+          "end": 156
         },
         "from_kind": "var_read",
         "to": {
           "start": 150,
           "end": 174
+        },
+        "to_kind": "call_res"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 157,
+          "end": 171
+        },
+        "from_kind": "new",
+        "to": {
+          "start": 151,
+          "end": 156
+        },
+        "to_kind": "var_read"
+      },
+      {
+        "record": "edge",
+        "family": "df",
+        "kind": "direct",
+        "from": {
+          "start": 164,
+          "end": 170
+        },
+        "from_kind": "var_read",
+        "to": {
+          "start": 157,
+          "end": 171
         },
         "to_kind": "new"
       },
@@ -2027,8 +2349,52 @@ expression: output
           "start": 150,
           "end": 174
         },
+        "kind": "call_res",
+        "name": null,
+        "function": "App::closure::150"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 150,
+          "end": 174
+        },
+        "kind": "closure",
+        "name": "5_jsx_member.tsx::function::App::closure::150",
+        "function": "App"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 150,
+          "end": 174
+        },
+        "kind": "ret",
+        "name": null,
+        "function": "App::closure::150"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 151,
+          "end": 156
+        },
+        "kind": "var_read",
+        "name": null,
+        "function": "App::closure::150"
+      },
+      {
+        "record": "node",
+        "family": "df",
+        "span": {
+          "start": 157,
+          "end": 171
+        },
         "kind": "new",
-        "name": "Panel",
+        "name": null,
         "function": "App"
       },
       {
@@ -2094,7 +2460,7 @@ expression: output
           "end": 104
         },
         "kind": "new",
-        "name": "span",
+        "name": null,
         "function": "Panel"
       },
       {
@@ -2131,7 +2497,22 @@ expression: output
       {
         "record": "flow_edge",
         "family": "flow",
-        "kind": "jsx_prop",
+        "kind": "arg_to_param",
+        "from_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "from": {
+          "start": 151,
+          "end": 156
+        },
+        "to_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "to": {
+          "start": 15,
+          "end": 37
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "arg_to_param",
         "from_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
         "from": {
           "start": 164,
@@ -2141,6 +2522,36 @@ expression: output
         "to": {
           "start": 59,
           "end": 70
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "lambda_elem",
+        "from_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "from": {
+          "start": 157,
+          "end": 171
+        },
+        "to_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "to": {
+          "start": 151,
+          "end": 156
+        }
+      },
+      {
+        "record": "flow_edge",
+        "family": "flow",
+        "kind": "lambda_ret",
+        "from_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "from": {
+          "start": 150,
+          "end": 174
+        },
+        "to_blob": "blake3:c6cf9ffd9c5b3f8c2f7c60b36b2ba14bd0ab7932204b6e24952a7cf17a9d954a",
+        "to": {
+          "start": 150,
+          "end": 174
         }
       },
       {

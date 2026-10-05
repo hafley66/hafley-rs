@@ -750,6 +750,7 @@ impl SpecifierKind {
 /// families' output).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct CallFAux {
+    pub deferred_sites: Vec<(Span, Span)>,
     pub sites: Vec<CallSite>,
     /// Rust struct update expression type for `Default::default()` sites.
     pub expected_types: Vec<(Span, NameId)>,
@@ -1928,35 +1929,9 @@ impl DefIndex {
     }
 }
 
-/// Caller binding: the CallF def node whose span most tightly CONTAINS `site`
-/// (the innermost covering def), by binary search over def spans sorted by
-/// (start, end). Written ONCE here, used by all three lang resolve arms —
-/// every lang emits body-covering def spans by design, so one sorted-span
-/// search serves ts, rust, and go uniformly. Pure fn over the bundle; zero AST.
-pub fn covering_def(defs: &FamilyBundle<CallF>, site: Span) -> Option<NodeRef> {
-    // One linear pass for the tightest cover, no sort and no allocation. The
-    // previous form sorted the whole bundle per call; ties break the same way
-    // the sorted order did (min length, then min (start, end), then node order).
-    let mut best: Option<(Span, NodeRef)> = None;
-    for (ix, node) in defs.nodes.iter().enumerate() {
-        let span = node.span;
-        if span.start > site.start || site.end() > span.end() {
-            continue;
-        }
-        let key = (span.end() - span.start, span.start, span.end());
-        let better = match best {
-            None => true,
-            Some((b, _)) => {
-                let bkey = (b.end() - b.start, b.start, b.end());
-                key < bkey
-            }
-        };
-        if better {
-            best = Some((span, NodeRef(ix as u32)));
-        }
-    }
-    best.map(|(_, r)| r)
-}
+#[path = "0c_call_owner.rs"]
+mod call_owner;
+pub use call_owner::covering_def;
 
 /// Same-file name lookup: the CallF def node in `defs` whose interned name is
 /// `name` (the same-file fast path before the corpus `DefIndex` join). Written

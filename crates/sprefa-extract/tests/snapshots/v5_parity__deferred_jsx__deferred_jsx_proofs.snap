@@ -1,0 +1,174 @@
+---
+source: tests/205_deferred_jsx.rs
+expression: proofs
+---
+[
+  {
+    "fixture": "16_direct_vs_jsx.tsx",
+    "title_targets": [
+      {
+        "from": {
+          "start": 104,
+          "end": 105
+        },
+        "to": {
+          "start": 15,
+          "end": 20
+        }
+      },
+      {
+        "from": {
+          "start": 133,
+          "end": 134
+        },
+        "to": {
+          "start": 15,
+          "end": 20
+        }
+      }
+    ],
+    "member_targets": 0,
+    "lambda_elem": true,
+    "lambda_ret": true,
+    "callers": [
+      {
+        "record": "graph_edge",
+        "from_path": "16_direct_vs_jsx.tsx",
+        "from_name": "App",
+        "to_path": "16_direct_vs_jsx.tsx",
+        "to_name": "Card",
+        "kind": "name_resolve",
+        "grade": "~",
+        "from_line": 3,
+        "to_line": 1
+      },
+      {
+        "record": "graph_edge",
+        "from_path": "16_direct_vs_jsx.tsx",
+        "from_name": "closure@App:blake3:e42cb5b44f8e9846b2101144153381e65dcd98691dcc5b976fb6ec406a01cbb7:0",
+        "to_path": "16_direct_vs_jsx.tsx",
+        "to_name": "Card",
+        "kind": "name_resolve",
+        "grade": "~",
+        "from_line": 4,
+        "to_line": 1
+      }
+    ],
+    "hooks": []
+  },
+  {
+    "fixture": "17_other_object.tsx",
+    "title_targets": [],
+    "member_targets": 0,
+    "lambda_elem": true,
+    "lambda_ret": true,
+    "callers": [
+      {
+        "record": "graph_edge",
+        "from_path": "17_other_object.tsx",
+        "from_name": "closure@App:blake3:e42cb5b44f8e9846b2101144153381e65dcd98691dcc5b976fb6ec406a01cbb7:0",
+        "to_path": "17_other_object.tsx",
+        "to_name": "Card",
+        "kind": "name_resolve",
+        "grade": "~",
+        "from_line": 2,
+        "to_line": 1
+      }
+    ],
+    "hooks": []
+  },
+  {
+    "fixture": "18_second_scope.tsx",
+    "title_targets": [
+      {
+        "from": {
+          "start": 173,
+          "end": 174
+        },
+        "to": {
+          "start": 15,
+          "end": 20
+        }
+      }
+    ],
+    "member_targets": 0,
+    "lambda_elem": true,
+    "lambda_ret": true,
+    "callers": [
+      {
+        "record": "graph_edge",
+        "from_path": "18_second_scope.tsx",
+        "from_name": "closure@App:blake3:e42cb5b44f8e9846b2101144153381e65dcd98691dcc5b976fb6ec406a01cbb7:0",
+        "to_path": "18_second_scope.tsx",
+        "to_name": "Card",
+        "kind": "name_resolve",
+        "grade": "~",
+        "from_line": 6,
+        "to_line": 1
+      }
+    ],
+    "hooks": []
+  },
+  {
+    "fixture": "19_eager_hook.tsx",
+    "title_targets": [
+      {
+        "from": {
+          "start": 154,
+          "end": 164
+        },
+        "to": {
+          "start": 57,
+          "end": 62
+        }
+      }
+    ],
+    "member_targets": 0,
+    "lambda_elem": true,
+    "lambda_ret": true,
+    "callers": [
+      {
+        "record": "graph_edge",
+        "from_path": "19_eager_hook.tsx",
+        "from_name": "closure@App:blake3:abbc1472489fbb1c33eb5349e67917749ac06b8d5e38a3217696269c1ce85071:0",
+        "to_path": "19_eager_hook.tsx",
+        "to_name": "Card",
+        "kind": "name_resolve",
+        "grade": "~",
+        "from_line": 4,
+        "to_line": 2
+      }
+    ],
+    "hooks": [
+      {
+        "record": "graph_edge",
+        "from_path": "19_eager_hook.tsx",
+        "from_name": "App",
+        "to_path": "19_eager_hook.tsx",
+        "to_name": "useHook",
+        "kind": "name_resolve",
+        "grade": "~",
+        "from_line": 4,
+        "to_line": 1
+      }
+    ]
+  },
+  {
+    "fixture": "20_capture.ts",
+    "title_targets": [],
+    "member_targets": 0,
+    "lambda_elem": true,
+    "lambda_ret": true,
+    "callers": [],
+    "hooks": []
+  },
+  {
+    "fixture": "21_capture.rs",
+    "title_targets": [],
+    "member_targets": 0,
+    "lambda_elem": true,
+    "lambda_ret": true,
+    "callers": [],
+    "hooks": []
+  }
+]

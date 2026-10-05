@@ -89,7 +89,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          58
+          62
         ]
       },
       {
@@ -101,8 +101,8 @@ expression: output
         "to_name": "15:20",
         "depth": 2,
         "witness": [
-          58,
-          85
+          62,
+          95
         ]
       },
       {
@@ -111,11 +111,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          58,
-          75
+          62,
+          79
         ]
       },
       {
@@ -124,12 +124,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          58,
-          75,
-          81
+          62,
+          79,
+          85
         ]
       },
       {
@@ -141,9 +141,24 @@ expression: output
         "to_name": "82:87",
         "depth": 3,
         "witness": [
-          58,
+          62,
+          95,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          62,
+          79,
           85,
-          42
+          86
         ]
       },
       {
@@ -155,10 +170,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          58,
+          62,
+          95,
+          46,
+          52
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          62,
+          79,
           85,
-          42,
-          48
+          86,
+          88
         ]
       },
       {
@@ -170,11 +201,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          58,
-          85,
-          42,
-          48,
-          54
+          62,
+          95,
+          46,
+          52,
+          58
         ]
       },
       {
@@ -186,7 +217,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          62
+          66
         ]
       },
       {
@@ -198,8 +229,8 @@ expression: output
         "to_name": "22:30",
         "depth": 2,
         "witness": [
-          62,
-          86
+          66,
+          96
         ]
       },
       {
@@ -208,11 +239,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          62,
-          76
+          66,
+          80
         ]
       },
       {
@@ -221,12 +252,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          62,
-          76,
-          81
+          66,
+          80,
+          85
         ]
       },
       {
@@ -238,9 +269,24 @@ expression: output
         "to_name": "89:97",
         "depth": 3,
         "witness": [
-          62,
-          86,
-          43
+          66,
+          96,
+          47
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          66,
+          80,
+          85,
+          86
         ]
       },
       {
@@ -252,10 +298,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          62,
+          66,
+          96,
+          47,
+          53
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          66,
+          80,
+          85,
           86,
-          43,
-          49
+          88
         ]
       },
       {
@@ -267,11 +329,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          62,
-          86,
-          43,
-          49,
-          54
+          66,
+          96,
+          47,
+          53,
+          58
         ]
       },
       {
@@ -283,7 +345,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          66
+          70
         ]
       },
       {
@@ -292,11 +354,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          66,
-          77
+          70,
+          81
         ]
       },
       {
@@ -308,8 +370,8 @@ expression: output
         "to_name": "32:36",
         "depth": 2,
         "witness": [
-          66,
-          87
+          70,
+          97
         ]
       },
       {
@@ -318,12 +380,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          66,
-          77,
-          81
+          70,
+          81,
+          85
         ]
       },
       {
@@ -335,9 +397,24 @@ expression: output
         "to_name": "99:103",
         "depth": 3,
         "witness": [
-          66,
-          87,
-          44
+          70,
+          97,
+          48
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          70,
+          81,
+          85,
+          86
         ]
       },
       {
@@ -349,10 +426,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          66,
-          87,
-          44,
-          50
+          70,
+          97,
+          48,
+          54
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          70,
+          81,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -364,11 +457,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          66,
-          87,
-          44,
-          50,
-          54
+          70,
+          97,
+          48,
+          54,
+          58
         ]
       },
       {
@@ -380,7 +473,7 @@ expression: output
         "to_name": "364:378",
         "depth": 1,
         "witness": [
-          68
+          72
         ]
       },
       {
@@ -389,11 +482,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          68,
-          78
+          72,
+          82
         ]
       },
       {
@@ -405,8 +498,8 @@ expression: output
         "to_name": "38:43",
         "depth": 2,
         "witness": [
-          68,
-          88
+          72,
+          98
         ]
       },
       {
@@ -418,9 +511,9 @@ expression: output
         "to_name": "105:110",
         "depth": 3,
         "witness": [
-          68,
-          88,
-          45
+          72,
+          98,
+          49
         ]
       },
       {
@@ -429,12 +522,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          68,
-          78,
-          81
+          72,
+          82,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          72,
+          82,
+          85,
+          86
         ]
       },
       {
@@ -446,10 +554,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          68,
-          88,
-          45,
-          51
+          72,
+          98,
+          49,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          72,
+          82,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -461,11 +585,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          68,
-          88,
-          45,
-          51,
-          54
+          72,
+          98,
+          49,
+          55,
+          58
         ]
       },
       {
@@ -477,7 +601,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          74
+          78
         ]
       },
       {
@@ -486,11 +610,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          74,
-          80
+          78,
+          84
         ]
       },
       {
@@ -502,8 +626,8 @@ expression: output
         "to_name": "50:55",
         "depth": 2,
         "witness": [
-          74,
-          90
+          78,
+          100
         ]
       },
       {
@@ -515,9 +639,9 @@ expression: output
         "to_name": "117:122",
         "depth": 3,
         "witness": [
-          74,
-          90,
-          47
+          78,
+          100,
+          51
         ]
       },
       {
@@ -526,12 +650,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          74,
-          80,
-          81
+          78,
+          84,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          78,
+          84,
+          85,
+          86
         ]
       },
       {
@@ -543,10 +682,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          74,
-          90,
-          47,
-          53
+          78,
+          100,
+          51,
+          57
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          78,
+          84,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -558,11 +713,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          74,
-          90,
-          47,
-          53,
-          54
+          78,
+          100,
+          51,
+          57,
+          58
         ]
       }
     ],
@@ -576,7 +731,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          85
+          95
         ]
       },
       {
@@ -588,8 +743,8 @@ expression: output
         "to_name": "283:289",
         "depth": 2,
         "witness": [
-          85,
-          58
+          95,
+          62
         ]
       },
       {
@@ -601,8 +756,8 @@ expression: output
         "to_name": "292:300",
         "depth": 2,
         "witness": [
-          85,
-          59
+          95,
+          63
         ]
       },
       {
@@ -614,9 +769,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          85,
-          58,
-          56
+          95,
+          62,
+          60
         ]
       },
       {
@@ -628,9 +783,9 @@ expression: output
         "to_name": "162:178",
         "depth": 3,
         "witness": [
-          85,
-          59,
-          57
+          95,
+          63,
+          61
         ]
       }
     ]
@@ -677,7 +832,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          59
+          63
         ]
       },
       {
@@ -689,8 +844,8 @@ expression: output
         "to_name": "15:20",
         "depth": 2,
         "witness": [
-          59,
-          85
+          63,
+          95
         ]
       },
       {
@@ -699,11 +854,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "292:300",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          59,
-          75
+          63,
+          79
         ]
       },
       {
@@ -712,12 +867,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "292:300",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          59,
-          75,
-          81
+          63,
+          79,
+          85
         ]
       },
       {
@@ -729,9 +884,24 @@ expression: output
         "to_name": "82:87",
         "depth": 3,
         "witness": [
-          59,
+          63,
+          95,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "292:300",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          63,
+          79,
           85,
-          42
+          86
         ]
       },
       {
@@ -743,10 +913,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          59,
+          63,
+          95,
+          46,
+          52
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "292:300",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          63,
+          79,
           85,
-          42,
-          48
+          86,
+          88
         ]
       },
       {
@@ -758,11 +944,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          59,
-          85,
-          42,
-          48,
-          54
+          63,
+          95,
+          46,
+          52,
+          58
         ]
       }
     ],
@@ -776,7 +962,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          85
+          95
         ]
       },
       {
@@ -788,8 +974,8 @@ expression: output
         "to_name": "283:289",
         "depth": 2,
         "witness": [
-          85,
-          58
+          95,
+          62
         ]
       },
       {
@@ -801,8 +987,8 @@ expression: output
         "to_name": "292:300",
         "depth": 2,
         "witness": [
-          85,
-          59
+          95,
+          63
         ]
       },
       {
@@ -814,9 +1000,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          85,
-          58,
-          56
+          95,
+          62,
+          60
         ]
       },
       {
@@ -828,9 +1014,9 @@ expression: output
         "to_name": "162:178",
         "depth": 3,
         "witness": [
-          85,
-          59,
-          57
+          95,
+          63,
+          61
         ]
       }
     ]
@@ -921,7 +1107,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          58
+          62
         ]
       },
       {
@@ -933,8 +1119,8 @@ expression: output
         "to_name": "15:20",
         "depth": 2,
         "witness": [
-          58,
-          85
+          62,
+          95
         ]
       },
       {
@@ -943,11 +1129,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          58,
-          75
+          62,
+          79
         ]
       },
       {
@@ -956,12 +1142,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          58,
-          75,
-          81
+          62,
+          79,
+          85
         ]
       },
       {
@@ -973,9 +1159,24 @@ expression: output
         "to_name": "82:87",
         "depth": 3,
         "witness": [
-          58,
+          62,
+          95,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          62,
+          79,
           85,
-          42
+          86
         ]
       },
       {
@@ -987,10 +1188,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          58,
+          62,
+          95,
+          46,
+          52
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          62,
+          79,
           85,
-          42,
-          48
+          86,
+          88
         ]
       },
       {
@@ -1002,11 +1219,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          58,
-          85,
-          42,
-          48,
-          54
+          62,
+          95,
+          46,
+          52,
+          58
         ]
       },
       {
@@ -1018,7 +1235,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          62
+          66
         ]
       },
       {
@@ -1030,8 +1247,8 @@ expression: output
         "to_name": "22:30",
         "depth": 2,
         "witness": [
-          62,
-          86
+          66,
+          96
         ]
       },
       {
@@ -1040,11 +1257,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          62,
-          76
+          66,
+          80
         ]
       },
       {
@@ -1053,12 +1270,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          62,
-          76,
-          81
+          66,
+          80,
+          85
         ]
       },
       {
@@ -1070,9 +1287,24 @@ expression: output
         "to_name": "89:97",
         "depth": 3,
         "witness": [
-          62,
-          86,
-          43
+          66,
+          96,
+          47
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          66,
+          80,
+          85,
+          86
         ]
       },
       {
@@ -1084,10 +1316,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          62,
+          66,
+          96,
+          47,
+          53
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          66,
+          80,
+          85,
           86,
-          43,
-          49
+          88
         ]
       },
       {
@@ -1099,11 +1347,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          62,
-          86,
-          43,
-          49,
-          54
+          66,
+          96,
+          47,
+          53,
+          58
         ]
       },
       {
@@ -1115,7 +1363,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          66
+          70
         ]
       },
       {
@@ -1124,11 +1372,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          66,
-          77
+          70,
+          81
         ]
       },
       {
@@ -1140,8 +1388,8 @@ expression: output
         "to_name": "32:36",
         "depth": 2,
         "witness": [
-          66,
-          87
+          70,
+          97
         ]
       },
       {
@@ -1150,12 +1398,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          66,
-          77,
-          81
+          70,
+          81,
+          85
         ]
       },
       {
@@ -1167,9 +1415,24 @@ expression: output
         "to_name": "99:103",
         "depth": 3,
         "witness": [
-          66,
-          87,
-          44
+          70,
+          97,
+          48
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          70,
+          81,
+          85,
+          86
         ]
       },
       {
@@ -1181,10 +1444,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          66,
-          87,
-          44,
-          50
+          70,
+          97,
+          48,
+          54
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          70,
+          81,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -1196,11 +1475,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          66,
-          87,
-          44,
-          50,
-          54
+          70,
+          97,
+          48,
+          54,
+          58
         ]
       },
       {
@@ -1212,7 +1491,7 @@ expression: output
         "to_name": "364:378",
         "depth": 1,
         "witness": [
-          68
+          72
         ]
       },
       {
@@ -1221,11 +1500,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          68,
-          78
+          72,
+          82
         ]
       },
       {
@@ -1237,8 +1516,8 @@ expression: output
         "to_name": "38:43",
         "depth": 2,
         "witness": [
-          68,
-          88
+          72,
+          98
         ]
       },
       {
@@ -1250,9 +1529,9 @@ expression: output
         "to_name": "105:110",
         "depth": 3,
         "witness": [
-          68,
-          88,
-          45
+          72,
+          98,
+          49
         ]
       },
       {
@@ -1261,12 +1540,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          68,
-          78,
-          81
+          72,
+          82,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          72,
+          82,
+          85,
+          86
         ]
       },
       {
@@ -1278,10 +1572,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          68,
-          88,
-          45,
-          51
+          72,
+          98,
+          49,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          72,
+          82,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -1293,11 +1603,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          68,
-          88,
-          45,
-          51,
-          54
+          72,
+          98,
+          49,
+          55,
+          58
         ]
       },
       {
@@ -1309,7 +1619,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          74
+          78
         ]
       },
       {
@@ -1318,11 +1628,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          74,
-          80
+          78,
+          84
         ]
       },
       {
@@ -1334,8 +1644,8 @@ expression: output
         "to_name": "50:55",
         "depth": 2,
         "witness": [
-          74,
-          90
+          78,
+          100
         ]
       },
       {
@@ -1347,9 +1657,9 @@ expression: output
         "to_name": "117:122",
         "depth": 3,
         "witness": [
-          74,
-          90,
-          47
+          78,
+          100,
+          51
         ]
       },
       {
@@ -1358,12 +1668,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          74,
-          80,
-          81
+          78,
+          84,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          78,
+          84,
+          85,
+          86
         ]
       },
       {
@@ -1375,10 +1700,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          74,
-          90,
-          47,
-          53
+          78,
+          100,
+          51,
+          57
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          78,
+          84,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -1390,11 +1731,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          74,
-          90,
-          47,
-          53,
-          54
+          78,
+          100,
+          51,
+          57,
+          58
         ]
       }
     ],
@@ -1408,7 +1749,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          86
+          96
         ]
       },
       {
@@ -1420,8 +1761,8 @@ expression: output
         "to_name": "312:318",
         "depth": 2,
         "witness": [
-          86,
-          62
+          96,
+          66
         ]
       },
       {
@@ -1433,8 +1774,8 @@ expression: output
         "to_name": "322:328",
         "depth": 2,
         "witness": [
-          86,
-          63
+          96,
+          67
         ]
       },
       {
@@ -1446,9 +1787,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          86,
-          62,
-          60
+          96,
+          66,
+          64
         ]
       },
       {
@@ -1460,9 +1801,9 @@ expression: output
         "to_name": "180:194",
         "depth": 3,
         "witness": [
-          86,
-          63,
-          61
+          96,
+          67,
+          65
         ]
       }
     ]
@@ -1509,7 +1850,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          63
+          67
         ]
       },
       {
@@ -1521,8 +1862,8 @@ expression: output
         "to_name": "22:30",
         "depth": 2,
         "witness": [
-          63,
-          86
+          67,
+          96
         ]
       },
       {
@@ -1531,11 +1872,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "322:328",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          63,
-          76
+          67,
+          80
         ]
       },
       {
@@ -1544,12 +1885,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "322:328",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          63,
-          76,
-          81
+          67,
+          80,
+          85
         ]
       },
       {
@@ -1561,9 +1902,24 @@ expression: output
         "to_name": "89:97",
         "depth": 3,
         "witness": [
-          63,
-          86,
-          43
+          67,
+          96,
+          47
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "322:328",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          67,
+          80,
+          85,
+          86
         ]
       },
       {
@@ -1575,10 +1931,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          63,
+          67,
+          96,
+          47,
+          53
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "322:328",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          67,
+          80,
+          85,
           86,
-          43,
-          49
+          88
         ]
       },
       {
@@ -1590,11 +1962,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          63,
-          86,
-          43,
-          49,
-          54
+          67,
+          96,
+          47,
+          53,
+          58
         ]
       }
     ],
@@ -1608,7 +1980,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          86
+          96
         ]
       },
       {
@@ -1620,8 +1992,8 @@ expression: output
         "to_name": "312:318",
         "depth": 2,
         "witness": [
-          86,
-          62
+          96,
+          66
         ]
       },
       {
@@ -1633,8 +2005,8 @@ expression: output
         "to_name": "322:328",
         "depth": 2,
         "witness": [
-          86,
-          63
+          96,
+          67
         ]
       },
       {
@@ -1646,9 +2018,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          86,
-          62,
-          60
+          96,
+          66,
+          64
         ]
       },
       {
@@ -1660,9 +2032,9 @@ expression: output
         "to_name": "180:194",
         "depth": 3,
         "witness": [
-          86,
-          63,
-          61
+          96,
+          67,
+          65
         ]
       }
     ]
@@ -1753,7 +2125,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          58
+          62
         ]
       },
       {
@@ -1765,8 +2137,8 @@ expression: output
         "to_name": "15:20",
         "depth": 2,
         "witness": [
-          58,
-          85
+          62,
+          95
         ]
       },
       {
@@ -1775,11 +2147,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          58,
-          75
+          62,
+          79
         ]
       },
       {
@@ -1788,12 +2160,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          58,
-          75,
-          81
+          62,
+          79,
+          85
         ]
       },
       {
@@ -1805,9 +2177,24 @@ expression: output
         "to_name": "82:87",
         "depth": 3,
         "witness": [
-          58,
+          62,
+          95,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          62,
+          79,
           85,
-          42
+          86
         ]
       },
       {
@@ -1819,10 +2206,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          58,
+          62,
+          95,
+          46,
+          52
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          62,
+          79,
           85,
-          42,
-          48
+          86,
+          88
         ]
       },
       {
@@ -1834,11 +2237,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          58,
-          85,
-          42,
-          48,
-          54
+          62,
+          95,
+          46,
+          52,
+          58
         ]
       },
       {
@@ -1850,7 +2253,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          62
+          66
         ]
       },
       {
@@ -1862,8 +2265,8 @@ expression: output
         "to_name": "22:30",
         "depth": 2,
         "witness": [
-          62,
-          86
+          66,
+          96
         ]
       },
       {
@@ -1872,11 +2275,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          62,
-          76
+          66,
+          80
         ]
       },
       {
@@ -1885,12 +2288,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          62,
-          76,
-          81
+          66,
+          80,
+          85
         ]
       },
       {
@@ -1902,9 +2305,24 @@ expression: output
         "to_name": "89:97",
         "depth": 3,
         "witness": [
-          62,
-          86,
-          43
+          66,
+          96,
+          47
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          66,
+          80,
+          85,
+          86
         ]
       },
       {
@@ -1916,10 +2334,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          62,
+          66,
+          96,
+          47,
+          53
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          66,
+          80,
+          85,
           86,
-          43,
-          49
+          88
         ]
       },
       {
@@ -1931,11 +2365,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          62,
-          86,
-          43,
-          49,
-          54
+          66,
+          96,
+          47,
+          53,
+          58
         ]
       },
       {
@@ -1947,7 +2381,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          66
+          70
         ]
       },
       {
@@ -1956,11 +2390,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          66,
-          77
+          70,
+          81
         ]
       },
       {
@@ -1972,8 +2406,8 @@ expression: output
         "to_name": "32:36",
         "depth": 2,
         "witness": [
-          66,
-          87
+          70,
+          97
         ]
       },
       {
@@ -1982,12 +2416,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          66,
-          77,
-          81
+          70,
+          81,
+          85
         ]
       },
       {
@@ -1999,9 +2433,24 @@ expression: output
         "to_name": "99:103",
         "depth": 3,
         "witness": [
-          66,
-          87,
-          44
+          70,
+          97,
+          48
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          70,
+          81,
+          85,
+          86
         ]
       },
       {
@@ -2013,10 +2462,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          66,
-          87,
-          44,
-          50
+          70,
+          97,
+          48,
+          54
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          70,
+          81,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -2028,11 +2493,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          66,
-          87,
-          44,
-          50,
-          54
+          70,
+          97,
+          48,
+          54,
+          58
         ]
       },
       {
@@ -2044,7 +2509,7 @@ expression: output
         "to_name": "364:378",
         "depth": 1,
         "witness": [
-          68
+          72
         ]
       },
       {
@@ -2053,11 +2518,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          68,
-          78
+          72,
+          82
         ]
       },
       {
@@ -2069,8 +2534,8 @@ expression: output
         "to_name": "38:43",
         "depth": 2,
         "witness": [
-          68,
-          88
+          72,
+          98
         ]
       },
       {
@@ -2082,9 +2547,9 @@ expression: output
         "to_name": "105:110",
         "depth": 3,
         "witness": [
-          68,
-          88,
-          45
+          72,
+          98,
+          49
         ]
       },
       {
@@ -2093,12 +2558,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          68,
-          78,
-          81
+          72,
+          82,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          72,
+          82,
+          85,
+          86
         ]
       },
       {
@@ -2110,10 +2590,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          68,
-          88,
-          45,
-          51
+          72,
+          98,
+          49,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          72,
+          82,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -2125,11 +2621,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          68,
-          88,
-          45,
-          51,
-          54
+          72,
+          98,
+          49,
+          55,
+          58
         ]
       },
       {
@@ -2141,7 +2637,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          74
+          78
         ]
       },
       {
@@ -2150,11 +2646,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          74,
-          80
+          78,
+          84
         ]
       },
       {
@@ -2166,8 +2662,8 @@ expression: output
         "to_name": "50:55",
         "depth": 2,
         "witness": [
-          74,
-          90
+          78,
+          100
         ]
       },
       {
@@ -2179,9 +2675,9 @@ expression: output
         "to_name": "117:122",
         "depth": 3,
         "witness": [
-          74,
-          90,
-          47
+          78,
+          100,
+          51
         ]
       },
       {
@@ -2190,12 +2686,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          74,
-          80,
-          81
+          78,
+          84,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          78,
+          84,
+          85,
+          86
         ]
       },
       {
@@ -2207,10 +2718,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          74,
-          90,
-          47,
-          53
+          78,
+          100,
+          51,
+          57
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          78,
+          84,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -2222,11 +2749,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          74,
-          90,
-          47,
-          53,
-          54
+          78,
+          100,
+          51,
+          57,
+          58
         ]
       }
     ],
@@ -2240,7 +2767,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          87
+          97
         ]
       },
       {
@@ -2252,8 +2779,8 @@ expression: output
         "to_name": "348:354",
         "depth": 2,
         "witness": [
-          87,
-          66
+          97,
+          70
         ]
       },
       {
@@ -2265,9 +2792,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          87,
-          66,
-          65
+          97,
+          70,
+          69
         ]
       }
     ]
@@ -2358,7 +2885,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          58
+          62
         ]
       },
       {
@@ -2370,8 +2897,8 @@ expression: output
         "to_name": "15:20",
         "depth": 2,
         "witness": [
-          58,
-          85
+          62,
+          95
         ]
       },
       {
@@ -2380,11 +2907,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          58,
-          75
+          62,
+          79
         ]
       },
       {
@@ -2393,12 +2920,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          58,
-          75,
-          81
+          62,
+          79,
+          85
         ]
       },
       {
@@ -2410,9 +2937,24 @@ expression: output
         "to_name": "82:87",
         "depth": 3,
         "witness": [
-          58,
+          62,
+          95,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          62,
+          79,
           85,
-          42
+          86
         ]
       },
       {
@@ -2424,10 +2966,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          58,
+          62,
+          95,
+          46,
+          52
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          62,
+          79,
           85,
-          42,
-          48
+          86,
+          88
         ]
       },
       {
@@ -2439,11 +2997,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          58,
-          85,
-          42,
-          48,
-          54
+          62,
+          95,
+          46,
+          52,
+          58
         ]
       },
       {
@@ -2455,7 +3013,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          62
+          66
         ]
       },
       {
@@ -2467,8 +3025,8 @@ expression: output
         "to_name": "22:30",
         "depth": 2,
         "witness": [
-          62,
-          86
+          66,
+          96
         ]
       },
       {
@@ -2477,11 +3035,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          62,
-          76
+          66,
+          80
         ]
       },
       {
@@ -2490,12 +3048,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          62,
-          76,
-          81
+          66,
+          80,
+          85
         ]
       },
       {
@@ -2507,9 +3065,24 @@ expression: output
         "to_name": "89:97",
         "depth": 3,
         "witness": [
-          62,
-          86,
-          43
+          66,
+          96,
+          47
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          66,
+          80,
+          85,
+          86
         ]
       },
       {
@@ -2521,10 +3094,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          62,
+          66,
+          96,
+          47,
+          53
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          66,
+          80,
+          85,
           86,
-          43,
-          49
+          88
         ]
       },
       {
@@ -2536,11 +3125,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          62,
-          86,
-          43,
-          49,
-          54
+          66,
+          96,
+          47,
+          53,
+          58
         ]
       },
       {
@@ -2552,7 +3141,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          66
+          70
         ]
       },
       {
@@ -2561,11 +3150,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          66,
-          77
+          70,
+          81
         ]
       },
       {
@@ -2577,8 +3166,8 @@ expression: output
         "to_name": "32:36",
         "depth": 2,
         "witness": [
-          66,
-          87
+          70,
+          97
         ]
       },
       {
@@ -2587,12 +3176,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          66,
-          77,
-          81
+          70,
+          81,
+          85
         ]
       },
       {
@@ -2604,9 +3193,24 @@ expression: output
         "to_name": "99:103",
         "depth": 3,
         "witness": [
-          66,
-          87,
-          44
+          70,
+          97,
+          48
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          70,
+          81,
+          85,
+          86
         ]
       },
       {
@@ -2618,10 +3222,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          66,
-          87,
-          44,
-          50
+          70,
+          97,
+          48,
+          54
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          70,
+          81,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -2633,11 +3253,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          66,
-          87,
-          44,
-          50,
-          54
+          70,
+          97,
+          48,
+          54,
+          58
         ]
       },
       {
@@ -2649,7 +3269,7 @@ expression: output
         "to_name": "364:378",
         "depth": 1,
         "witness": [
-          68
+          72
         ]
       },
       {
@@ -2658,11 +3278,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          68,
-          78
+          72,
+          82
         ]
       },
       {
@@ -2674,8 +3294,8 @@ expression: output
         "to_name": "38:43",
         "depth": 2,
         "witness": [
-          68,
-          88
+          72,
+          98
         ]
       },
       {
@@ -2687,9 +3307,9 @@ expression: output
         "to_name": "105:110",
         "depth": 3,
         "witness": [
-          68,
-          88,
-          45
+          72,
+          98,
+          49
         ]
       },
       {
@@ -2698,12 +3318,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          68,
-          78,
-          81
+          72,
+          82,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          72,
+          82,
+          85,
+          86
         ]
       },
       {
@@ -2715,10 +3350,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          68,
-          88,
-          45,
-          51
+          72,
+          98,
+          49,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          72,
+          82,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -2730,11 +3381,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          68,
-          88,
-          45,
-          51,
-          54
+          72,
+          98,
+          49,
+          55,
+          58
         ]
       },
       {
@@ -2746,7 +3397,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          74
+          78
         ]
       },
       {
@@ -2755,11 +3406,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          74,
-          80
+          78,
+          84
         ]
       },
       {
@@ -2771,8 +3422,8 @@ expression: output
         "to_name": "50:55",
         "depth": 2,
         "witness": [
-          74,
-          90
+          78,
+          100
         ]
       },
       {
@@ -2784,9 +3435,9 @@ expression: output
         "to_name": "117:122",
         "depth": 3,
         "witness": [
-          74,
-          90,
-          47
+          78,
+          100,
+          51
         ]
       },
       {
@@ -2795,12 +3446,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          74,
-          80,
-          81
+          78,
+          84,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          78,
+          84,
+          85,
+          86
         ]
       },
       {
@@ -2812,10 +3478,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          74,
-          90,
-          47,
-          53
+          78,
+          100,
+          51,
+          57
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          78,
+          84,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -2827,11 +3509,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          74,
-          90,
-          47,
-          53,
-          54
+          78,
+          100,
+          51,
+          57,
+          58
         ]
       }
     ],
@@ -2845,7 +3527,7 @@ expression: output
         "to_name": "364:378",
         "depth": 1,
         "witness": [
-          88
+          98
         ]
       },
       {
@@ -2857,8 +3539,8 @@ expression: output
         "to_name": "370:376",
         "depth": 2,
         "witness": [
-          88,
-          68
+          98,
+          72
         ]
       },
       {
@@ -2870,9 +3552,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          88,
-          68,
-          67
+          98,
+          72,
+          71
         ]
       }
     ]
@@ -2919,7 +3601,7 @@ expression: output
         "to_name": "385:396",
         "depth": 1,
         "witness": [
-          70
+          74
         ]
       },
       {
@@ -2928,11 +3610,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "385:388",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          70,
-          79
+          74,
+          83
         ]
       },
       {
@@ -2944,8 +3626,8 @@ expression: output
         "to_name": "45:48",
         "depth": 2,
         "witness": [
-          70,
-          89
+          74,
+          99
         ]
       },
       {
@@ -2957,9 +3639,9 @@ expression: output
         "to_name": "112:115",
         "depth": 3,
         "witness": [
-          70,
-          89,
-          46
+          74,
+          99,
+          50
         ]
       },
       {
@@ -2968,12 +3650,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "385:388",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          70,
-          79,
-          81
+          74,
+          83,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "385:388",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          74,
+          83,
+          85,
+          86
         ]
       },
       {
@@ -2985,10 +3682,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          70,
-          89,
-          46,
-          52
+          74,
+          99,
+          50,
+          56
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "385:388",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          74,
+          83,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -3000,11 +3713,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          70,
-          89,
-          46,
-          52,
-          54
+          74,
+          99,
+          50,
+          56,
+          58
         ]
       }
     ],
@@ -3018,7 +3731,7 @@ expression: output
         "to_name": "385:396",
         "depth": 1,
         "witness": [
-          89
+          99
         ]
       },
       {
@@ -3030,8 +3743,8 @@ expression: output
         "to_name": "385:388",
         "depth": 2,
         "witness": [
-          89,
-          70
+          99,
+          74
         ]
       },
       {
@@ -3043,9 +3756,9 @@ expression: output
         "to_name": "227:235",
         "depth": 3,
         "witness": [
-          89,
-          70,
-          69
+          99,
+          74,
+          73
         ]
       }
     ]
@@ -3092,7 +3805,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          73
+          77
         ]
       },
       {
@@ -3101,11 +3814,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "406:411",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          73,
-          80
+          77,
+          84
         ]
       },
       {
@@ -3117,8 +3830,8 @@ expression: output
         "to_name": "50:55",
         "depth": 2,
         "witness": [
-          73,
-          90
+          77,
+          100
         ]
       },
       {
@@ -3130,9 +3843,9 @@ expression: output
         "to_name": "117:122",
         "depth": 3,
         "witness": [
-          73,
-          90,
-          47
+          77,
+          100,
+          51
         ]
       },
       {
@@ -3141,12 +3854,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "406:411",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          73,
-          80,
-          81
+          77,
+          84,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "406:411",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          77,
+          84,
+          85,
+          86
         ]
       },
       {
@@ -3158,10 +3886,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          73,
-          90,
-          47,
-          53
+          77,
+          100,
+          51,
+          57
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "406:411",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          77,
+          84,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -3173,11 +3917,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          73,
-          90,
-          47,
-          53,
-          54
+          77,
+          100,
+          51,
+          57,
+          58
         ]
       }
     ],
@@ -3191,7 +3935,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          90
+          100
         ]
       },
       {
@@ -3203,8 +3947,8 @@ expression: output
         "to_name": "406:411",
         "depth": 2,
         "witness": [
-          90,
-          73
+          100,
+          77
         ]
       },
       {
@@ -3216,8 +3960,8 @@ expression: output
         "to_name": "413:419",
         "depth": 2,
         "witness": [
-          90,
-          74
+          100,
+          78
         ]
       },
       {
@@ -3229,9 +3973,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          90,
-          74,
-          72
+          100,
+          78,
+          76
         ]
       },
       {
@@ -3243,9 +3987,9 @@ expression: output
         "to_name": "237:250",
         "depth": 3,
         "witness": [
-          90,
-          73,
-          71
+          100,
+          77,
+          75
         ]
       }
     ]
@@ -3336,7 +4080,7 @@ expression: output
         "to_name": "278:300",
         "depth": 1,
         "witness": [
-          58
+          62
         ]
       },
       {
@@ -3348,8 +4092,8 @@ expression: output
         "to_name": "15:20",
         "depth": 2,
         "witness": [
-          58,
-          85
+          62,
+          95
         ]
       },
       {
@@ -3358,11 +4102,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          58,
-          75
+          62,
+          79
         ]
       },
       {
@@ -3371,12 +4115,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "283:289",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          58,
-          75,
-          81
+          62,
+          79,
+          85
         ]
       },
       {
@@ -3388,9 +4132,24 @@ expression: output
         "to_name": "82:87",
         "depth": 3,
         "witness": [
-          58,
+          62,
+          95,
+          46
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          62,
+          79,
           85,
-          42
+          86
         ]
       },
       {
@@ -3402,10 +4161,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          58,
+          62,
+          95,
+          46,
+          52
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "283:289",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          62,
+          79,
           85,
-          42,
-          48
+          86,
+          88
         ]
       },
       {
@@ -3417,11 +4192,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          58,
-          85,
-          42,
-          48,
-          54
+          62,
+          95,
+          46,
+          52,
+          58
         ]
       },
       {
@@ -3433,7 +4208,7 @@ expression: output
         "to_name": "312:328",
         "depth": 1,
         "witness": [
-          62
+          66
         ]
       },
       {
@@ -3445,8 +4220,8 @@ expression: output
         "to_name": "22:30",
         "depth": 2,
         "witness": [
-          62,
-          86
+          66,
+          96
         ]
       },
       {
@@ -3455,11 +4230,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          62,
-          76
+          66,
+          80
         ]
       },
       {
@@ -3468,12 +4243,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "312:318",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          62,
-          76,
-          81
+          66,
+          80,
+          85
         ]
       },
       {
@@ -3485,9 +4260,24 @@ expression: output
         "to_name": "89:97",
         "depth": 3,
         "witness": [
-          62,
-          86,
-          43
+          66,
+          96,
+          47
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          66,
+          80,
+          85,
+          86
         ]
       },
       {
@@ -3499,10 +4289,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          62,
+          66,
+          96,
+          47,
+          53
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "312:318",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          66,
+          80,
+          85,
           86,
-          43,
-          49
+          88
         ]
       },
       {
@@ -3514,11 +4320,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          62,
-          86,
-          43,
-          49,
-          54
+          66,
+          96,
+          47,
+          53,
+          58
         ]
       },
       {
@@ -3530,7 +4336,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          66
+          70
         ]
       },
       {
@@ -3539,11 +4345,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          66,
-          77
+          70,
+          81
         ]
       },
       {
@@ -3555,8 +4361,8 @@ expression: output
         "to_name": "32:36",
         "depth": 2,
         "witness": [
-          66,
-          87
+          70,
+          97
         ]
       },
       {
@@ -3565,12 +4371,12 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "348:354",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          66,
-          77,
-          81
+          70,
+          81,
+          85
         ]
       },
       {
@@ -3582,9 +4388,24 @@ expression: output
         "to_name": "99:103",
         "depth": 3,
         "witness": [
-          66,
-          87,
-          44
+          70,
+          97,
+          48
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          70,
+          81,
+          85,
+          86
         ]
       },
       {
@@ -3596,10 +4417,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          66,
-          87,
-          44,
-          50
+          70,
+          97,
+          48,
+          54
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "348:354",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          70,
+          81,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -3611,11 +4448,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          66,
-          87,
-          44,
-          50,
-          54
+          70,
+          97,
+          48,
+          54,
+          58
         ]
       },
       {
@@ -3627,7 +4464,7 @@ expression: output
         "to_name": "364:378",
         "depth": 1,
         "witness": [
-          68
+          72
         ]
       },
       {
@@ -3636,11 +4473,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          68,
-          78
+          72,
+          82
         ]
       },
       {
@@ -3652,8 +4489,8 @@ expression: output
         "to_name": "38:43",
         "depth": 2,
         "witness": [
-          68,
-          88
+          72,
+          98
         ]
       },
       {
@@ -3665,9 +4502,9 @@ expression: output
         "to_name": "105:110",
         "depth": 3,
         "witness": [
-          68,
-          88,
-          45
+          72,
+          98,
+          49
         ]
       },
       {
@@ -3676,12 +4513,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "370:376",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          68,
-          78,
-          81
+          72,
+          82,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          72,
+          82,
+          85,
+          86
         ]
       },
       {
@@ -3693,10 +4545,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          68,
-          88,
-          45,
-          51
+          72,
+          98,
+          49,
+          55
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "370:376",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          72,
+          82,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -3708,11 +4576,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          68,
-          88,
-          45,
-          51,
-          54
+          72,
+          98,
+          49,
+          55,
+          58
         ]
       },
       {
@@ -3724,7 +4592,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          74
+          78
         ]
       },
       {
@@ -3733,11 +4601,11 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "265:424",
+        "to_name": "271:421",
         "depth": 2,
         "witness": [
-          74,
-          80
+          78,
+          84
         ]
       },
       {
@@ -3749,8 +4617,8 @@ expression: output
         "to_name": "50:55",
         "depth": 2,
         "witness": [
-          74,
-          90
+          78,
+          100
         ]
       },
       {
@@ -3762,9 +4630,9 @@ expression: output
         "to_name": "117:122",
         "depth": 3,
         "witness": [
-          74,
-          90,
-          47
+          78,
+          100,
+          51
         ]
       },
       {
@@ -3773,12 +4641,27 @@ expression: output
         "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
         "from_name": "413:419",
         "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
-        "to_name": "258:425",
+        "to_name": "266:270",
         "depth": 3,
         "witness": [
-          74,
-          80,
-          81
+          78,
+          84,
+          85
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "265:424",
+        "depth": 4,
+        "witness": [
+          78,
+          84,
+          85,
+          86
         ]
       },
       {
@@ -3790,10 +4673,26 @@ expression: output
         "to_name": "76:129",
         "depth": 4,
         "witness": [
-          74,
-          90,
-          47,
-          53
+          78,
+          100,
+          51,
+          57
+        ]
+      },
+      {
+        "record": "graph_path",
+        "plane": "flow",
+        "from_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "from_name": "413:419",
+        "to_path": "blake3:610dece953e94ad003523d8d9b191e35c9e7132c000c1879edfe1e6362d52a3b",
+        "to_name": "258:425",
+        "depth": 5,
+        "witness": [
+          78,
+          84,
+          85,
+          86,
+          88
         ]
       },
       {
@@ -3805,11 +4704,11 @@ expression: output
         "to_name": "69:130",
         "depth": 5,
         "witness": [
-          74,
-          90,
-          47,
-          53,
-          54
+          78,
+          100,
+          51,
+          57,
+          58
         ]
       }
     ],
@@ -3823,7 +4722,7 @@ expression: output
         "to_name": "405:420",
         "depth": 1,
         "witness": [
-          90
+          100
         ]
       },
       {
@@ -3835,8 +4734,8 @@ expression: output
         "to_name": "406:411",
         "depth": 2,
         "witness": [
-          90,
-          73
+          100,
+          77
         ]
       },
       {
@@ -3848,8 +4747,8 @@ expression: output
         "to_name": "413:419",
         "depth": 2,
         "witness": [
-          90,
-          74
+          100,
+          78
         ]
       },
       {
@@ -3861,9 +4760,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          90,
-          74,
-          72
+          100,
+          78,
+          76
         ]
       },
       {
@@ -3875,9 +4774,9 @@ expression: output
         "to_name": "237:250",
         "depth": 3,
         "witness": [
-          90,
-          73,
-          71
+          100,
+          77,
+          75
         ]
       }
     ]
@@ -3925,7 +4824,7 @@ expression: output
         "to_name": "337:354",
         "depth": 1,
         "witness": [
-          87
+          97
         ]
       },
       {
@@ -3937,8 +4836,8 @@ expression: output
         "to_name": "348:354",
         "depth": 2,
         "witness": [
-          87,
-          66
+          97,
+          70
         ]
       },
       {
@@ -3950,9 +4849,9 @@ expression: output
         "to_name": "146:160",
         "depth": 3,
         "witness": [
-          87,
-          66,
-          65
+          97,
+          70,
+          69
         ]
       }
     ]

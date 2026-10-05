@@ -3,6 +3,7 @@ use super::*;
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct DfFAux {
     pub functions: Vec<Option<NameId>>,
+    pub param_fields: Vec<(NodeRef, String)>,
     pub params: Vec<DfParam>,
     pub args: Vec<DfArg>,
     pub fields: Vec<DfField>,

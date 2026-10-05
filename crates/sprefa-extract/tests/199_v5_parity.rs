@@ -12,3 +12,6 @@ mod jsx;
 
 #[path = "203_v5_reach.rs"]
 mod reach;
+
+#[path = "205_deferred_jsx.rs"]
+mod deferred_jsx;

@@ -130,8 +130,8 @@ crates/hafley_scm/src/read/lang/rust_modules.rs	fn::named_children	1
 crates/hafley_scm/src/read/lang/rust_modules.rs	fn::tree_text	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::call_drops	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::clean_block_comment	1
-crates/hafley_scm/src/read/lang/ts.rs	fn::df_edge	1
-crates/hafley_scm/src/read/lang/ts.rs	fn::df_push	1
+crates/hafley_scm/src/read/lang/ts/0_df_rows.rs	fn::df_edge	1
+crates/hafley_scm/src/read/lang/ts/0_df_rows.rs	fn::df_push	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::fn_sigs	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::push_candidate	1
 crates/hafley_scm/src/read/lang/ts.rs	fn::push_entity	1

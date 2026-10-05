@@ -1,4 +1,4 @@
-crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs	fn::tree_df_rows_match_snapshot_across_pinned_rust_fixtures	1
+crates/hafley_scm/src/lang/rust/13_df_syntax_tests.rs	fn::tree_df_rows_match_snapshot_across_pinned_rust_fixtures	1
 crates/hafley_scm/src/lang/rust/13_tsi_syntax_rows.rs	fn::tree_tsi_rows_match_snapshot_on_pinned_rust_shapes	1
 crates/hafley_scm/src/read/2_slow.rs	fn::project_index	1
 crates/hafley_scm/src/read/cargo_metadata.rs	fn::fingerprint	1

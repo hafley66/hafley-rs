@@ -181,13 +181,13 @@ pub(super) fn df_flow_expr(
         // `closure` VALUE node carrying that exact sym as its name.
         E::ArrowFunctionExpression(arrow) => {
             let lam_sym = format!("{fn_sym}::closure::{}", span.start);
-            df_lift_arrow(&arrow.params, &arrow.body, file, &lam_sym, strings, sink);
+            df_lift_arrow(&arrow.params, &arrow.body, file, &lam_sym, strings, sink, scope);
             df_push(sink, strings, span, DfNodeKind::Closure, Some(&lam_sym))
         }
         E::FunctionExpression(func) => match func.body.as_deref() {
             Some(body) => {
                 let lam_sym = format!("{fn_sym}::closure::{}", span.start);
-                df_lift_fn(&func.params, body, false, file, &lam_sym, strings, sink);
+                df_lift_fn(&func.params, body, false, file, &lam_sym, strings, sink, scope);
                 df_push(sink, strings, span, DfNodeKind::Closure, Some(&lam_sym))
             }
             None => df_push(sink, strings, span, DfNodeKind::Expr, None),

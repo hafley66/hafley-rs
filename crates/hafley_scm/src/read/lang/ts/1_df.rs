@@ -196,9 +196,10 @@ fn df_lift_fn(
     fn_sym: &str,
     strings: &mut Strings,
     sink: &mut FamilyBundle<DfF>,
+    outer_scope: &Scope,
 ) {
     let mark = sink.nodes.len();
-    let mut scope = Scope::new();
+    let mut scope = outer_scope.clone();
     df_seed_params(params, strings, &mut scope, sink);
     if expression {
         if let Some(ts::Statement::ExpressionStatement(expr_stmt)) = body.statements.first() {
@@ -228,14 +229,15 @@ fn df_lift_arrow(
     fn_sym: &str,
     strings: &mut Strings,
     sink: &mut FamilyBundle<DfF>,
+    outer_scope: &Scope,
 ) {
     if let ts::ArrowFunctionBody::FunctionBody(body) = body {
-        df_lift_fn(params, body, false, file, fn_sym, strings, sink);
+        df_lift_fn(params, body, false, file, fn_sym, strings, sink, outer_scope);
         return;
     }
     let expression = body.to_expression();
     let mark = sink.nodes.len();
-    let mut scope = Scope::new();
+    let mut scope = outer_scope.clone();
     df_seed_params(params, strings, &mut scope, sink);
     let value = df_flow_expr(expression, file, fn_sym, strings, &mut scope, sink);
     let ret = df_push(sink, strings, expression.span(), DfNodeKind::Ret, None);
@@ -262,13 +264,13 @@ fn df_flow_body_stmt(
                     match &declarator.init {
                         Some(ts::Expression::ArrowFunctionExpression(arrow)) => {
                             let sym = format!("{file}::function::{}", binding.name);
-                            df_lift_arrow(&arrow.params, &arrow.body, file, &sym, strings, sink);
+                            df_lift_arrow(&arrow.params, &arrow.body, file, &sym, strings, sink, scope);
                             continue;
                         }
                         Some(ts::Expression::FunctionExpression(func)) => {
                             if let Some(body) = func.body.as_deref() {
                                 let sym = format!("{file}::function::{}", binding.name);
-                                df_lift_fn(&func.params, body, false, file, &sym, strings, sink);
+                                df_lift_fn(&func.params, body, false, file, &sym, strings, sink, scope);
                             }
                             continue;
                         }

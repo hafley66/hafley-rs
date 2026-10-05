@@ -35,6 +35,7 @@ pub(super) fn df_seed_params(
                             node,
                             pos: pos as u32,
                         });
+                        sink.aux.param_fields.push((node, key));
                         scope.insert(binding.name.to_string(), node);
                     }
                 }
