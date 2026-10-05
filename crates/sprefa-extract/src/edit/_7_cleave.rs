@@ -781,7 +781,9 @@ impl Plan {
                     sprefa_extract::edit::rust_module_tree::searched_manifest(&cx, &src)?.display()
                 ));
             }
-            if sprefa_extract::edit::rust_module_tree::places(&cx, &dest)?.is_empty() {
+            if sprefa_extract::edit::rust_module_tree::places(&cx, &dest)
+                .map_err(|reason| format!("cleave destination {dest} is not declared by a Rust module: {reason}"))?
+                .is_empty() {
                 return Err(format!(
                     "cleave destination {dest} is not declared by a Rust module; declare it or choose a declared module path"
                 ));
