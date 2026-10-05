@@ -938,6 +938,8 @@ dependencies = [
  "hafley-observe",
  "ignore",
  "libc",
+ "lsp-server",
+ "lsp-types",
  "memchr",
  "oxc_allocator",
  "oxc_ast",
@@ -992,6 +994,7 @@ dependencies = [
  "tree-sitter-typescript",
  "tree-sitter-typespec",
  "tree-sitter-yaml",
+ "url",
 ]
 
 [[package]]

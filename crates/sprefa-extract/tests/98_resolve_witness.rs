@@ -187,12 +187,7 @@ fn the_witnessed_stream_survives_the_reverse_door() {
 /// one: a checkout's `lib/typescript.js` is the built compiler.
 #[cfg(feature = "ts-checker")]
 fn typescript() -> String {
-    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
-    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
-    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
-        .to_string_lossy().into_owned()
+    crate::stock_tsgo::executable()
 }
 
 /// `agree.ts` imports what it calls and what it extends, so the module plane
@@ -219,7 +214,10 @@ fn agree_facts() -> Vec<Value> {
 #[test]
 fn a_loaded_checker_mints_its_own_run() {
     let facts = agree_facts();
-    insta::assert_json_snapshot!("stock_witness_output", facts);
+    insta::assert_json_snapshot!(
+        "stock_witness_output",
+        crate::stock_tsgo::normalize(serde_json::json!(facts))
+    );
     let mut runs: Vec<(u64, String, String)> = of_record(&facts, "run")
         .iter()
         .map(|row| {
@@ -286,10 +284,10 @@ fn the_checker_and_a_syntax_leg_witness_one_fact() {
 }
 
 /// `drive` declares a `render` that shadows the import it also carries. The
-/// checker names the local one; the module plane names the imported one.
+/// checker names the local one; the syntax plane respects that shadow.
 #[cfg(feature = "ts-checker")]
 #[test]
-fn a_disagreeing_leg_is_a_fact_of_its_own() {
+fn a_local_shadow_has_one_checker_definition() {
     let facts = facts(
         &[
             "--witness",
@@ -327,25 +325,27 @@ fn a_disagreeing_leg_is_a_fact_of_its_own() {
     sited.sort();
     assert_eq!(
         sited,
-        vec![
-            ("checker".to_string(), "disagree.ts".to_string()),
-            ("module_plane".to_string(), "disagree_callee.ts".to_string()),
-        ],
-        "one site, two definitions, two rows; a hosts.rs consumer reads each \
-         row's own resolution_origin"
+        vec![("checker".to_string(), "disagree.ts".to_string()),],
+        "the local shadow names one definition"
     );
     let ordinals: Vec<u64> = edges
         .iter()
         .filter(|row| row["caller_site_start"].as_u64() == Some(152))
         .filter_map(|row| row["fact"].as_u64())
         .collect();
-    assert_eq!(ordinals.len(), 2, "two rows, two ordinals");
-    assert_ne!(ordinals[0], ordinals[1], "disagreement is never one fact");
+    assert_eq!(ordinals.len(), 1, "one resolved row has one ordinal");
+    insta::assert_json_snapshot!(
+        "stock_shadow_output",
+        crate::stock_tsgo::normalize(serde_json::json!(facts))
+    );
     for ordinal in ordinals {
         let mine = of_record(&facts, "witness")
             .into_iter()
             .filter(|row| row["fact"].as_u64() == Some(ordinal))
             .count();
-        assert_eq!(mine, 1, "a leg that agreed with nobody witnesses alone");
+        assert_eq!(
+            mine, 2,
+            "the lexical and checker legs witness the local shadow"
+        );
     }
 }

@@ -17,6 +17,23 @@ use crate::read::tsi::stamp_digests;
 use crate::read::types::{ContentId, DefIndex};
 use hafley_scm::span::Span;
 
+/// Byte spans supplied by the parse. Only these positions are queried.
+#[derive(Clone, Debug)]
+pub struct TsSite {
+    pub start: u32,
+    pub end: u32,
+    pub name: String,
+    pub call: bool,
+    pub type_ref: bool,
+}
+
+#[derive(Default)]
+pub struct TsDemand {
+    pub sites: Vec<TsSite>,
+    /// Directed assignability questions, indexed into `sites`.
+    pub pairs: Vec<(usize, usize)>,
+}
+
 type Bound = super::CheckerBound;
 
 /// Why the tier could not run. Every one falls back to the syntax leg.
@@ -48,6 +65,7 @@ impl std::fmt::Display for TsCheckerError {
 /// lists sorted by start, so a site lookup is a range scan, not a corpus walk.
 #[derive(Default)]
 pub struct TsCheckerIndex {
+    pub version: String,
     calls: HashMap<String, Vec<Bound>>,
     /// A TypeF candidate carries no reference span, so the type plane keys on
     /// (file, name AS WRITTEN); a name one file resolves two ways binds nothing.
@@ -79,6 +97,7 @@ impl TsCheckerIndex {
             .map(|(path, blob)| (path.as_str(), blob))
             .collect();
         let mut index = TsCheckerIndex {
+            version: answers.version,
             load: answers.load,
             walk: answers.walk,
             files_answered: answers.files_answered,
@@ -201,10 +220,19 @@ impl crate::read::tsi::SemanticRows for TsCheckerIndex {
 #[cfg(not(feature = "ts-checker"))]
 pub fn answer(
     _root: &Path,
-    _files: &[(String, PathBuf)],
+    _files: &[(String, PathBuf, TsDemand)],
     _tsi: bool,
 ) -> Result<TsCheckerAnswers, TsCheckerError> {
     Err(TsCheckerError::NotBuilt)
+}
+
+#[cfg(feature = "ts-checker")]
+pub fn answer(
+    root: &Path,
+    files: &[(String, PathBuf, TsDemand)],
+    tsi: bool,
+) -> Result<TsCheckerAnswers, TsCheckerError> {
+    super::tsgo_rows::answer(root, files, tsi).map_err(TsCheckerError::Failed)
 }
 
 /// The driver, embedded rather than installed: a tier that needs a separate
@@ -334,13 +362,14 @@ fn into_fact(row: Vec<serde_json::Value>) -> Result<crate::read::tsi::FactOut, T
 /// The wall cap, the process group and the file-backed stdout all come from
 /// `run_capped`: the same discipline every scip indexer spawn runs under.
 #[cfg(feature = "ts-checker")]
-pub fn answer(
+pub fn answer_node_legacy(
     root: &Path,
     files: &[(String, PathBuf)],
     tsi: bool,
 ) -> Result<TsCheckerAnswers, TsCheckerError> {
     use crate::read::scip_ensure::{run_capped, Capped};
-    let _checker_span = crate::read::trace::tracked(tracing::info_span!("typescript.checker")).entered();
+    let _checker_span =
+        crate::read::trace::tracked(tracing::info_span!("typescript.checker")).entered();
 
     let nanos = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)

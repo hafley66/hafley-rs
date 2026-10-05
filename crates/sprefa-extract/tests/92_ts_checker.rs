@@ -17,7 +17,6 @@
 
 #![cfg(feature = "ts-checker")]
 
-use std::path::PathBuf;
 use std::process::Command;
 
 use serde_json::Value;
@@ -35,12 +34,7 @@ const FILES: &[&str] = &[
 /// A `typescript` the driver can load, machine-local the way the ratchet's
 /// corpus roots are. A checkout's `lib/typescript.js` is the built compiler.
 fn typescript() -> String {
-    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
-    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
-    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
-        .to_string_lossy().into_owned()
+    crate::stock_tsgo::executable()
 }
 
 fn run(checker: bool) -> Vec<Value> {
@@ -138,7 +132,10 @@ fn the_syntax_leg_alone_drops_the_generic_receiver() {
     let facts = run(false);
     assert_eq!(
         unresolved_reasons(&facts),
-        vec![("render".to_string(), "inferred".to_string())],
+        vec![
+            ("panels[0].render".to_string(), "inferred".to_string()),
+            ("render".to_string(), "inferred".to_string())
+        ],
         "without the tier the site stays a drop"
     );
     assert!(
@@ -150,22 +147,21 @@ fn the_syntax_leg_alone_drops_the_generic_receiver() {
 }
 
 #[test]
-fn the_syntax_leg_alone_name_matches_a_lib_global() {
-    assert!(
-        call_edges(&run(false)).contains(&(
-            "check".to_string(),
-            "shadow.ts".to_string(),
-            "isNaN".to_string(),
-            "name_resolve".to_string(),
-        )),
-        "the name match binds the corpus `isNaN` the call never names"
-    );
+fn the_syntax_leg_alone_suppresses_a_lib_global() {
+    let facts = run(false);
+    insta::assert_json_snapshot!("stock_syntax_output", facts);
+    assert!(!call_edges(&facts)
+        .iter()
+        .any(|(_, _, name, _)| name == "isNaN"));
 }
 
 #[test]
 fn the_checker_binds_the_generic_receiver_to_its_own_file() {
     let facts = run(true);
-    insta::assert_json_snapshot!("stock_checker_output", facts);
+    insta::assert_json_snapshot!(
+        "stock_checker_output",
+        crate::stock_tsgo::normalize(serde_json::json!(facts))
+    );
     let edges = call_edges(&facts);
     assert!(
         edges.contains(&(

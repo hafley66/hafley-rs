@@ -46,12 +46,7 @@ const RUST_NATIVE: &[Shape] = &[
 /// A `typescript` the driver can load, the way `tests/101_ts_semantic_tsi.rs`
 /// finds one: a checkout's `lib/typescript.js` is the built compiler.
 fn typescript() -> String {
-    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
-    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
-    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
-        .to_string_lossy().into_owned()
+    crate::stock_tsgo::executable()
 }
 
 fn extract(args: &[&str]) -> String {
@@ -237,8 +232,14 @@ fn sides() -> &'static (Side, Side) {
             "--rust-checker",
             RUST_PROBE,
         ]);
-        let ts_rows: Vec<serde_json::Value> = ts.lines().map(|line| serde_json::from_str(line).unwrap()).collect();
-        insta::assert_json_snapshot!("stock_ts_intersection_output", ts_rows);
+        let ts_rows: Vec<serde_json::Value> = ts
+            .lines()
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect();
+        insta::assert_json_snapshot!(
+            "stock_ts_intersection_output",
+            crate::stock_tsgo::normalize(serde_json::json!(ts_rows))
+        );
         (
             Side::read(canonical(&ts, "ts"), TS_PROBE),
             Side::read(canonical(&rust, "rust"), RUST_PROBE),
@@ -274,7 +275,10 @@ fn the_two_streams_share_one_projected_tsi_row_set() {
 fn every_minimum_claim_is_in_the_shared_set() {
     let (ts, rust) = sides();
     for side in [ts, rust] {
-        assert!(side.shared.iter().any(|(relation, _)| relation == "tsi.type"));
+        assert!(side
+            .shared
+            .iter()
+            .any(|(relation, _)| relation == "tsi.type"));
     }
 }
 
@@ -284,10 +288,13 @@ fn every_minimum_claim_is_in_the_shared_set() {
 #[test]
 fn every_unshared_tsi_row_is_a_missing_name_or_a_pinned_difference() {
     let (ts, rust) = sides();
-    insta::assert_json_snapshot!("stock_tsi_differences", (
-        ts.shared.difference(&rust.shared).collect::<Vec<_>>(),
-        rust.shared.difference(&ts.shared).collect::<Vec<_>>(),
-    ));
+    insta::assert_json_snapshot!(
+        "stock_tsi_differences",
+        (
+            ts.shared.difference(&rust.shared).collect::<Vec<_>>(),
+            rust.shared.difference(&ts.shared).collect::<Vec<_>>(),
+        )
+    );
 }
 
 /// Criterion 8's second half: native meaning stays in its own namespace, and

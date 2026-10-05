@@ -190,12 +190,7 @@ fn the_declined_stream_survives_the_reverse_door() {
 /// finds one: a checkout's `lib/typescript.js` is the built compiler.
 #[cfg(feature = "ts-checker")]
 fn typescript() -> String {
-    let platform = match std::env::consts::OS { "macos" => "darwin", "windows" => "win32", other => other };
-    let arch = match std::env::consts::ARCH { "aarch64" => "arm64", "x86_64" => "x64", other => other };
-    let executable = if platform == "win32" { "tsc.exe" } else { "tsc" };
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join(format!("ts7/node_modules/@typescript/typescript-{platform}-{arch}/lib/{executable}"))
-        .to_string_lossy().into_owned()
+    crate::stock_tsgo::executable()
 }
 
 /// The other direction: a tier that LOADED is a semantic run, never a decline.
@@ -203,7 +198,10 @@ fn typescript() -> String {
 #[test]
 fn a_loaded_tier_files_no_decline() {
     let facts = facts(&ts_args(), None, Some(typescript()));
-    insta::assert_json_snapshot!("stock_loaded_output", facts);
+    insta::assert_json_snapshot!(
+        "stock_loaded_output",
+        crate::stock_tsgo::normalize(serde_json::json!(facts))
+    );
     let tiers: Vec<String> = of_record(&facts, "diagnostic")
         .into_iter()
         .map(|row| word(row, "relation"))

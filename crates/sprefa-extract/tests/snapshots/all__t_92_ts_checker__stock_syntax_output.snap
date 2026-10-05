@@ -1,0 +1,179 @@
+---
+source: tests/92_ts_checker.rs
+expression: facts
+---
+[
+  {
+    "record": "resolved_edge",
+    "caller_path": "tests/fixtures/ts_checker/src/main.ts",
+    "caller_name": "drive",
+    "callee_path": "tests/fixtures/ts_checker/src/pick.ts",
+    "callee_name": "pick",
+    "caller_site_start": 170,
+    "caller_site_end": 174,
+    "callee_start": 7,
+    "callee_end": 63,
+    "kind": "import_resolve",
+    "resolution_origin": "module_plane"
+  },
+  {
+    "record": "resolved_import",
+    "src_path": "tests/fixtures/ts_checker/src/main.ts",
+    "name": "./panel",
+    "local": "",
+    "target_path": "tests/fixtures/ts_checker/src/panel.ts",
+    "target_name": null,
+    "kind": "module",
+    "hops": 1
+  },
+  {
+    "record": "resolved_import",
+    "src_path": "tests/fixtures/ts_checker/src/main.ts",
+    "name": "./pick",
+    "local": "",
+    "target_path": "tests/fixtures/ts_checker/src/pick.ts",
+    "target_name": null,
+    "kind": "module",
+    "hops": 1
+  },
+  {
+    "record": "resolved_import",
+    "src_path": "tests/fixtures/ts_checker/src/main.ts",
+    "name": "./widget",
+    "local": "",
+    "target_path": "tests/fixtures/ts_checker/src/widget.ts",
+    "target_name": null,
+    "kind": "module",
+    "hops": 1
+  },
+  {
+    "record": "resolved_import",
+    "src_path": "tests/fixtures/ts_checker/src/main.ts",
+    "name": "Panel",
+    "local": "Panel",
+    "target_path": "tests/fixtures/ts_checker/src/panel.ts",
+    "target_name": "Panel",
+    "kind": "local",
+    "hops": 1
+  },
+  {
+    "record": "resolved_import",
+    "src_path": "tests/fixtures/ts_checker/src/main.ts",
+    "name": "Widget",
+    "local": "Widget",
+    "target_path": "tests/fixtures/ts_checker/src/widget.ts",
+    "target_name": "Widget",
+    "kind": "local",
+    "hops": 1
+  },
+  {
+    "record": "resolved_import",
+    "src_path": "tests/fixtures/ts_checker/src/main.ts",
+    "name": "pick",
+    "local": "pick",
+    "target_path": "tests/fixtures/ts_checker/src/pick.ts",
+    "target_name": "pick",
+    "kind": "local",
+    "hops": 1
+  },
+  {
+    "record": "resolved_type_edge",
+    "owner_path": "tests/fixtures/ts_checker/src/main.ts",
+    "owner_name": "drive",
+    "owner_start": 107,
+    "owner_end": 214,
+    "target_path": "tests/fixtures/ts_checker/src/widget.ts",
+    "target_name": "Widget",
+    "kind": "param",
+    "resolution_origin": "module_plane"
+  },
+  {
+    "record": "resolved_type_edge",
+    "owner_path": "tests/fixtures/ts_checker/src/main.ts",
+    "owner_name": "seat",
+    "owner_start": 223,
+    "owner_end": 296,
+    "target_path": "tests/fixtures/ts_checker/src/panel.ts",
+    "target_name": "Panel",
+    "kind": "param",
+    "resolution_origin": "module_plane"
+  },
+  {
+    "record": "resolved_type_edge",
+    "owner_path": "tests/fixtures/ts_checker/src/pick.ts",
+    "owner_name": "pick",
+    "owner_start": 7,
+    "owner_end": 63,
+    "target_path": "tests/fixtures/ts_checker/src/pick.ts",
+    "target_name": "T",
+    "kind": "generic",
+    "resolution_origin": "same_file"
+  },
+  {
+    "record": "unresolved",
+    "family": "call",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "span": {
+      "start": 196,
+      "end": 209
+    },
+    "reason": "inferred",
+    "detail": "render"
+  },
+  {
+    "record": "unresolved",
+    "family": "call",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "span": {
+      "start": 275,
+      "end": 291
+    },
+    "reason": "inferred",
+    "detail": "panels[0].render"
+  },
+  {
+    "record": "call_site",
+    "callee": "Number",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "line": 15,
+    "fn": "check",
+    "start": 362,
+    "end": 374
+  },
+  {
+    "record": "call_site",
+    "callee": "chosen.render",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "line": 7,
+    "fn": "drive",
+    "start": 196,
+    "end": 211
+  },
+  {
+    "record": "call_site",
+    "callee": "isNaN",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "line": 15,
+    "fn": "check",
+    "start": 356,
+    "end": 375
+  },
+  {
+    "record": "call_site",
+    "callee": "panels[0].render",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "line": 11,
+    "fn": "seat",
+    "start": 275,
+    "end": 293
+  },
+  {
+    "record": "call_site",
+    "callee": "pick",
+    "path": "tests/fixtures/ts_checker/src/main.ts",
+    "line": 6,
+    "fn": "drive",
+    "start": 170,
+    "end": 183
+  }
+]

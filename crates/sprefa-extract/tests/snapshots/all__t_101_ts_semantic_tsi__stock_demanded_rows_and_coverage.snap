@@ -1,0 +1,544 @@
+---
+source: tests/101_ts_semantic_tsi.rs
+expression: "(first.tsi, first.coverage)"
+---
+[
+  [
+    {
+      "fact": 0,
+      "relation": "tsi.type",
+      "args": [
+        {
+          "id": 0
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 0
+        },
+        {
+          "text": "Derived"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.product",
+      "args": [
+        {
+          "id": 0
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.type",
+      "args": [
+        {
+          "id": 1
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 1
+        },
+        {
+          "text": "string"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.primitive",
+      "args": [
+        {
+          "id": 1
+        },
+        {
+          "atom": "string"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.edge",
+      "args": [
+        {
+          "id": 2
+        },
+        {
+          "id": 0
+        },
+        {
+          "text": "extra"
+        },
+        {
+          "id": 1
+        },
+        {
+          "int": 0
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.type",
+      "args": [
+        {
+          "id": 3
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 3
+        },
+        {
+          "text": "number"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.primitive",
+      "args": [
+        {
+          "id": 3
+        },
+        {
+          "atom": "number"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.edge",
+      "args": [
+        {
+          "id": 4
+        },
+        {
+          "id": 0
+        },
+        {
+          "text": "id"
+        },
+        {
+          "id": 3
+        },
+        {
+          "int": 1
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.type",
+      "args": [
+        {
+          "id": 5
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 5
+        },
+        {
+          "text": "Base"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.conforms",
+      "args": [
+        {
+          "id": 0
+        },
+        {
+          "id": 5
+        },
+        {
+          "atom": "declared"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.has_type",
+      "args": [
+        {
+          "span": [
+            "0_stock.ts",
+            74,
+            81
+          ]
+        },
+        {
+          "id": 0
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.origin",
+      "args": [
+        {
+          "id": 0
+        },
+        {
+          "atom": "ts"
+        },
+        {
+          "span": [
+            "0_stock.ts",
+            74,
+            81
+          ]
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.symbol",
+      "args": [
+        {
+          "id": 6
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 6
+        },
+        {
+          "text": "Derived"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.denotes",
+      "args": [
+        {
+          "id": 6
+        },
+        {
+          "id": 0
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.origin",
+      "args": [
+        {
+          "id": 6
+        },
+        {
+          "atom": "ts"
+        },
+        {
+          "span": [
+            "0_stock.ts",
+            74,
+            81
+          ]
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.product",
+      "args": [
+        {
+          "id": 5
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.edge",
+      "args": [
+        {
+          "id": 7
+        },
+        {
+          "id": 5
+        },
+        {
+          "text": "id"
+        },
+        {
+          "id": 3
+        },
+        {
+          "int": 0
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.has_type",
+      "args": [
+        {
+          "span": [
+            "0_stock.ts",
+            36,
+            40
+          ]
+        },
+        {
+          "id": 5
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.origin",
+      "args": [
+        {
+          "id": 5
+        },
+        {
+          "atom": "ts"
+        },
+        {
+          "span": [
+            "0_stock.ts",
+            36,
+            40
+          ]
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.symbol",
+      "args": [
+        {
+          "id": 8
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 8
+        },
+        {
+          "text": "Base"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.denotes",
+      "args": [
+        {
+          "id": 8
+        },
+        {
+          "id": 5
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.origin",
+      "args": [
+        {
+          "id": 8
+        },
+        {
+          "atom": "ts"
+        },
+        {
+          "span": [
+            "0_stock.ts",
+            36,
+            40
+          ]
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.type",
+      "args": [
+        {
+          "id": 9
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.name",
+      "args": [
+        {
+          "id": 9
+        },
+        {
+          "text": "any"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.primitive",
+      "args": [
+        {
+          "id": 9
+        },
+        {
+          "atom": "any"
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.has_type",
+      "args": [
+        {
+          "span": [
+            "0_stock.ts",
+            141,
+            148
+          ]
+        },
+        {
+          "id": 9
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.denotes",
+      "args": [
+        {
+          "id": 6
+        },
+        {
+          "id": 9
+        }
+      ]
+    },
+    {
+      "fact": 0,
+      "relation": "tsi.assignable",
+      "args": [
+        {
+          "id": 0
+        },
+        {
+          "id": 5
+        },
+        {
+          "atom": "structural"
+        }
+      ]
+    }
+  ],
+  [
+    [
+      "ts.conditional",
+      false,
+      "conditional type decomposition is not requested by this tier; no rows produced"
+    ],
+    [
+      "ts.mapped",
+      false,
+      "stock type API exposes computed properties but no mapped key/constraint/template decomposition; no rows produced"
+    ],
+    [
+      "ts.readonly",
+      false,
+      "stock property symbol responses carry no declaration readonly modifier; no rows produced"
+    ],
+    [
+      "tsi.assignable",
+      false,
+      "stock per-pair assignability for requested site pairs only"
+    ],
+    [
+      "tsi.conforms",
+      false,
+      "stock getBaseTypes for requested class and interface types only; implements clauses and structural conformance are not enumerated"
+    ],
+    [
+      "tsi.denotes",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.edge",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.equivalent",
+      false,
+      "stock tsgo exposes no identical or comparable API; no rows produced"
+    ],
+    [
+      "tsi.has_type",
+      false,
+      "stock getTypesAtPositions for requested spans only; type-reference token queries can return any; application structure comes from returned type handles"
+    ],
+    [
+      "tsi.name",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.origin",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.primitive",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.product",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.subtype",
+      false,
+      "stock tsgo exposes no subtype or strict_subtype API; no rows produced"
+    ],
+    [
+      "tsi.symbol",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ],
+    [
+      "tsi.type",
+      false,
+      "stock API type structure for requested sites only; dependency owners remain leaves; expansion stops after 32 levels"
+    ]
+  ]
+]
