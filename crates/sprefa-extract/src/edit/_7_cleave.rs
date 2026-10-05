@@ -2355,7 +2355,7 @@ impl Imports {
                         if !written.contains("::") || !written.ends_with(item) { return false; }
                         if !caller.ends_with(".rs") { return true; }
                         let segments: Vec<String> = written.split("::").map(str::to_string).collect();
-                        self.rust_routes.qualified_binding(&cx.abs(caller).to_string_lossy(), &segments[..segments.len() - 1], item)
+                        self.rust_routes.qualified_binding(caller, &segments[..segments.len() - 1], item)
                             .ok().flatten().is_some_and(|binding| !matches!(binding.kind,
                                 hafley_scm::read::lang::rust_modules::ResolvedImportKind::Indirect |
                                 hafley_scm::read::lang::rust_modules::ResolvedImportKind::Star))
