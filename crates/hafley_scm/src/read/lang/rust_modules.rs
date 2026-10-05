@@ -2290,6 +2290,12 @@ impl RustModuleIndex {
 
     /// The outcome of a module-qualified call `qualifier::callee` from
     /// `from`: a corpus def, an external module, or a miss.
+    /// Resolve a qualified binding while retaining its public reexport route.
+    pub fn qualified_binding(&self, from: &str, qualifier: &[String], name: &str) -> Result<Option<ResolvedImport>, ()> {
+        let (resolution, _) = self.resolve_qualified(from, qualifier, name, &mut Vec::new(), &mut Vec::new());
+        self.finish(name, name, resolution)
+    }
+
     pub fn module_call(&self, from: &str, qualifier: &[String], callee: &str) -> ModuleCallTarget {
         if !matches!(qualifier[0].as_str(), "crate" | "self" | "super")
             && !qualifier[0].is_empty()

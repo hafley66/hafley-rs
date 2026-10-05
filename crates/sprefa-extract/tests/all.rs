@@ -1,11 +1,12 @@
+//! Every integration test in one binary: cargo links once, not per file.
+//! Run one: cargo nextest run -p sprefa-extract -E 'test(/type_ladder/)'
+
 #[path = "213_dogfood_list_json.rs"]
 mod dogfood_list_json;
 #[path = "212_dogfood_reexport.rs"]
 mod dogfood_reexport;
 #[path = "211_dogfood_merge.rs"]
 mod dogfood_merge;
-//! Every integration test in one binary: cargo links once, not per file.
-//! Run one: cargo nextest run -p sprefa-extract -E 'test(/type_ladder/)'
 
 #[path = "210_dogfood_rename.rs"]
 mod t_210_dogfood_rename;

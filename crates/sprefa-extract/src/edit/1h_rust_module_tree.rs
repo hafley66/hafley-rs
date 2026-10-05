@@ -68,3 +68,19 @@ pub fn extern_name(_cx: &MoveCx, _from: &ModulePlace, to: &ModulePlace) -> Resul
 pub fn searched_manifest(_cx: &MoveCx, _rel: &str) -> Result<std::path::PathBuf, String> {
     Err("Rust module paths need --features rust-checker".to_string())
 }
+
+/// Reject an inaccessible generated destination path before any stage is written.
+#[cfg(feature = "rust-checker")]
+pub fn require_visible(cx: &MoveCx, from: &str, to: &str, item: &str) -> Result<(), String> {
+    places(cx, from)?;
+    match tree(cx, &cx.abs(from))?.can_name(&cx.abs(from), &cx.abs(to), item) {
+        Some(true) => Ok(()),
+        Some(false) => Err(format!("cleave path {to}#{item} is not visible from {from}")),
+        None => Err(format!("rust-analyzer cannot establish visibility of {to}#{item} from {from}")),
+    }
+}
+
+#[cfg(not(feature = "rust-checker"))]
+pub fn require_visible(_cx: &MoveCx, _from: &str, _to: &str, _item: &str) -> Result<(), String> {
+    Err("Rust visibility needs --features rust-checker".to_string())
+}

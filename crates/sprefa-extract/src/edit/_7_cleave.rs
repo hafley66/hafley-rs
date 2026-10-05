@@ -1195,7 +1195,7 @@ impl Plan {
                 dest_spellings.insert(rel.clone(), spell(arm, &cx, rel, &dest)?);
             }
         }
-        Ok(Plan {
+        let plan = Plan {
             root,
             cx,
             arm,
@@ -1223,7 +1223,18 @@ impl Plan {
             qualified,
             reexports,
             dest_spellings,
-        })
+        };
+        if arm.name() == "rust" && plan.rows.unresolved.is_empty() {
+            let mut planned = plan.cx.clone();
+            for (rel, (text, _)) in plan.land()? { planned.overlay(&rel, text); }
+            let mut viewers: BTreeSet<&str> = plan.rows.callers.iter().map(String::as_str)
+                .chain(plan.qualified.iter().map(|(file, _)| file.as_str())).collect();
+            if plan.source.refs_outside(&plan.rows.item, &moving) > 0 { viewers.insert(&plan.rows.src); }
+            for viewer in viewers {
+                sprefa_extract::edit::rust_module_tree::require_visible(&planned, viewer, &plan.rows.dest, &plan.rows.item)?;
+            }
+        }
+        Ok(plan)
     }
 
     /// The texts this row leaves, per file, beside each edit as (old span, new
@@ -2336,7 +2347,15 @@ impl Imports {
                         text.get(span.start as usize..span.end() as usize)
                             .map(str::to_string)
                     })
-                    .is_some_and(|written| written.contains("::") && written.ends_with(item))
+                                        .is_some_and(|written| {
+                        if !written.contains("::") || !written.ends_with(item) { return false; }
+                        if !caller.ends_with(".rs") { return true; }
+                        let segments: Vec<String> = written.split("::").map(str::to_string).collect();
+                        self.rust_routes.qualified_binding(&cx.abs(caller).to_string_lossy(), &segments[..segments.len() - 1], item)
+                            .ok().flatten().is_some_and(|binding| !matches!(binding.kind,
+                                hafley_scm::read::lang::rust_modules::ResolvedImportKind::Indirect |
+                                hafley_scm::read::lang::rust_modules::ResolvedImportKind::Star))
+                    })
             })
             .map(|(caller, span, _, _)| (caller.clone(), *span))
             .collect();
