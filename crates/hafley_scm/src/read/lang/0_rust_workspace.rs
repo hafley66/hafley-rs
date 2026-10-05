@@ -23,6 +23,6 @@ pub fn discover(source: &Path) -> Result<RustWorkspace, String> {
         .manifest_path(&manifest)
         .no_deps()
         .other_options(vec!["--offline".to_string()])
-        .exec().map_err(|error| format!("{}: {error}", manifest.display()))?;
+        .exec().map_err(|error| error.to_string())?;
     Ok(RustWorkspace { manifest, metadata })
 }
