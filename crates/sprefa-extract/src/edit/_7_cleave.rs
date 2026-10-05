@@ -189,7 +189,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
                 imported_before
                     .entry(plan.rows.src.clone())
                     .or_default()
-                    .insert((row.module.clone(), row.name.clone()));
+                    .insert((module_key(&row.name, &row.module), row.name.clone()));
             }
         }
         let edits = plan.land()?;
@@ -265,7 +265,7 @@ fn drop_batch_unused_imports(
                         || facts.refs_outside(name, &[]) > 0
                         || facts.method_scope(name, imports.maybe_trait(cx, rel, name), &[])
                         || facts.specifiers.iter().any(|row| {
-                            row.name == **name && row.module == module && facts.reexports(row.span)
+                            row.name == **name && module_key(&row.name, &row.module) == module && facts.reexports(row.span)
                         })
                 })
                 .cloned()
@@ -2548,9 +2548,10 @@ impl FileFacts {
                     "reexport" | "side_effect" | "dynamic_import" | "require"
                 )
         }) {
-            match out.iter_mut().find(|(held, _)| *held == row.module) {
+            let module = module_key(&row.name, &row.module);
+            match out.iter_mut().find(|(held, _)| *held == module) {
                 Some((_, names)) => names.push(row.name.clone()),
-                None => out.push((row.module.clone(), vec![row.name.clone()])),
+                None => out.push((module, vec![row.name.clone()])),
             }
         }
         out
