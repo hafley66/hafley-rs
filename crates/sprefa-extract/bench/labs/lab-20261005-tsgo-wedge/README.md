@@ -122,3 +122,22 @@ What ryi changes to use c:
   parameters, type arguments, constraint, `typeToString`) are not in the batch; they need either the stock
   per-handle API methods or more fields in `ryibatch.go`.
 - `1ga_ts7_callers.rs` keeps its CST prefilter; positions go out as LSP line/character as today.
+
+## Cross-package Signal callers (fix/ts-cross-package-callers, 2026-10-05)
+
+`traffic/` (gitignored except `deframe.ts`; regenerate locally) holds the LSP traffic of one ryii run before and after the fix (`ryi-{before,after}.{in,out}.jsonl`,
+deframed by `traffic/deframe.ts`; `didOpen` texts elided; `window/logMessage` and diagnostics dropped) and the
+client's trace (`client-npm.trace`, `lsp-open` against the npm `typescript@7.0.2` shim, 549 edges, same as `tsgo-base`).
+
+- Both sessions get the same answers. A cross-package site (`boop-adapters/src/report-app/model.ts`, line 41)
+  gets the six overload signatures of `Signal` in `packages/signals/src/2_Signal.ts` (0-based lines 35-40, mapped
+  from `dist/2_Signal.d.ts` through its declaration map) and the type alias (line 4), never the implementation
+  (line 41), which a `.d.ts` does not hold. An in-package site gets the implementation too.
+- ryi's `CheckerDefs::target` has no definition span at an overload signature (no body), so every cross-package
+  answer named no definition and the site was dropped. The same holds for a same-file call answered with one
+  overload (`2_Signal.ts:18`, `toSignal`).
+- Fix: when no answered location names a definition, ryi asks `textDocument/definition` at the answered
+  signature's own name (cached per location); that answer lists the implementation.
+- After: 627 edges (621 lines). Every client edge is in ryi's set. ryi's extra 78 lines are sites the client's
+  text prefilter `\bSignal\s*(<[^>(]*>)?\(` never asks (nested generics or `(` inside the type arguments); none of
+  them is in the client's asked set. `--callers Route` stays 11; `packages/signals` alone gains `2_Signal.ts:18`.

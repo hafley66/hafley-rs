@@ -354,3 +354,66 @@ fn targeted_callers_include_aliased_and_macro_calls_and_skip_decoys() {
         ]
     );
 }
+
+#[test]
+#[cfg(feature = "ts-checker")]
+fn calls_answered_by_overload_signatures_land_on_the_implementation() {
+    let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .env("RUST_LOG", "off")
+        .args([
+            "graph",
+            "--slow",
+            "--callers",
+            "pick",
+            "--root",
+            "tests/fixtures/graph_ts_overload",
+            "tests/fixtures/graph_ts_overload",
+        ])
+        .output()
+        .expect("TypeScript graph runs");
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+    let rows: Vec<Value> = String::from_utf8(output.stdout)
+        .unwrap()
+        .lines()
+        .map(|line| serde_json::from_str(line).unwrap())
+        .collect();
+    assert_eq!(
+        rows,
+        [
+            serde_json::json!({
+                "record": "graph_edge",
+                "from_path": "tests/fixtures/graph_ts_overload/consumer/use_dist.ts",
+                "from_name": "useDist",
+                "to_path": "tests/fixtures/graph_ts_overload/pick.ts",
+                "to_name": "pick",
+                "kind": "checker_resolve",
+                "grade": "+",
+                "from_line": 4,
+                "to_line": 4
+            }),
+            serde_json::json!({
+                "record": "graph_edge",
+                "from_path": "tests/fixtures/graph_ts_overload/pick.ts",
+                "from_name": "pickText",
+                "to_path": "tests/fixtures/graph_ts_overload/pick.ts",
+                "to_name": "pick",
+                "kind": "checker_resolve",
+                "grade": "+",
+                "from_line": 9,
+                "to_line": 4
+            }),
+            serde_json::json!({
+                "record": "graph_edge",
+                "from_path": "tests/fixtures/graph_ts_overload/use_pick.ts",
+                "from_name": "usePick",
+                "to_path": "tests/fixtures/graph_ts_overload/pick.ts",
+                "to_name": "pick",
+                "kind": "checker_resolve",
+                "grade": "+",
+                "from_line": 4,
+                "to_line": 4
+            }),
+        ]
+    );
+}

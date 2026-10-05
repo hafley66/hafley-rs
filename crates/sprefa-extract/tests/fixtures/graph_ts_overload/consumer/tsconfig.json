@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "strict": true,
+    "module": "nodenext",
+    "paths": { "pick-dist": ["../dist/pick.d.ts"] }
+  }
+}

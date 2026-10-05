@@ -124,6 +124,8 @@ impl References {
         with_session(&root, |session| {
             let mut declarations = BTreeSet::new();
             let mut qualified_names = BTreeMap::new();
+            // A destination with no definition span -> the checker's answer at that destination.
+            let mut redeclared: BTreeMap<(String, u32), Option<_>> = BTreeMap::new();
             // Only a file holding an asked site is opened; tsc reads the rest of
             // its project from disk through the tsconfig.
             for (source, file) in &self.files {
@@ -146,24 +148,45 @@ impl References {
                     if let Some(error) = reply.error {
                         return Err(format!("definition {source}:{offset}: {}", error.message));
                     }
+                    let mut destinations = Vec::new();
                     for location in locations(reply.result.unwrap_or(Value::Null)) {
-                        let target_uri = location["uri"].as_str().or_else(|| location["targetUri"].as_str());
-                        let Some(absolute) = target_uri.and_then(|uri| url::Url::parse(uri).ok())
-                            .and_then(|uri| uri.to_file_path().ok()) else { continue };
-                        let absolute = canonical(&absolute);
-                        let Some(target) = supplied.get(&absolute) else { continue };
-                        let target_text = text_of(&self.files, &mut texts, target, &absolute)?;
-                        let range = if location.get("range").is_some() {
-                            &location["range"]
-                        } else {
-                            &location["targetSelectionRange"]
-                        };
-                        let at = serde_json::from_value(range["start"].clone())
-                            .map_err(|error| format!("definition range: {error}"))?;
-                        let at = byte_at_lsp_position(target_text, at)? as u32;
-                        let Some(target) = defs.target(target, at, self.demand.as_deref()) else { continue };
+                        if let Some(destination) = self.destination(&supplied, &mut texts, &location)? {
+                            destinations.push(destination);
+                        }
+                    }
+                    let mut found = destinations.iter()
+                        .find_map(|&(target, at)| defs.target(target, at, self.demand.as_deref()));
+                    // Only overload signatures answered (same-file call, or a .d.ts map):
+                    // the checker's definition at a signature's name lists the implementation.
+                    for &(target, at) in &destinations {
+                        if found.is_some() {
+                            break;
+                        }
+                        let key = (target.to_string(), at);
+                        if !redeclared.contains_key(&key) {
+                            let absolute = canonical(&crate::io_path(Path::new(target)));
+                            let target_text = text_of(&self.files, &mut texts, target, &absolute)?.to_string();
+                            let reply = session.lsp.request("textDocument/definition", &json!({
+                                "textDocument": {"uri": file_uri(&absolute)?.as_str()},
+                                "position": position(&target_text, at as usize)?,
+                            }))?;
+                            if let Some(error) = reply.error {
+                                return Err(format!("definition {target}:{at}: {}", error.message));
+                            }
+                            let mut again = None;
+                            for location in locations(reply.result.unwrap_or(Value::Null)) {
+                                let Some((path, at)) = self.destination(&supplied, &mut texts, &location)? else { continue };
+                                again = defs.target(path, at, self.demand.as_deref());
+                                if again.is_some() {
+                                    break;
+                                }
+                            }
+                            redeclared.insert(key.clone(), again);
+                        }
+                        found = redeclared[&key].clone();
+                    }
+                    if let Some(target) = found {
                         edges.push(CheckerEdge { source: source.clone(), site_start: start, site_end: end, target });
-                        break;
                     }
                 }
                 for (start, end) in &file.attributes {
@@ -223,6 +246,28 @@ impl References {
             Ok(())
         })?;
         Ok(edges)
+    }
+}
+
+impl References {
+    /// A definition location as (supplied path, byte offset); `None` outside the supplied set.
+    fn destination<'s>(
+        &self, supplied: &BTreeMap<PathBuf, &'s str>, texts: &mut BTreeMap<String, String>, location: &Value,
+    ) -> Result<Option<(&'s str, u32)>, String> {
+        let target_uri = location["uri"].as_str().or_else(|| location["targetUri"].as_str());
+        let Some(absolute) = target_uri.and_then(|uri| url::Url::parse(uri).ok())
+            .and_then(|uri| uri.to_file_path().ok()) else { return Ok(None) };
+        let absolute = canonical(&absolute);
+        let Some(&target) = supplied.get(&absolute) else { return Ok(None) };
+        let target_text = text_of(&self.files, texts, target, &absolute)?;
+        let range = if location.get("range").is_some() {
+            &location["range"]
+        } else {
+            &location["targetSelectionRange"]
+        };
+        let at = serde_json::from_value(range["start"].clone())
+            .map_err(|error| format!("definition range: {error}"))?;
+        Ok(Some((target, byte_at_lsp_position(target_text, at)? as u32)))
     }
 }
 
