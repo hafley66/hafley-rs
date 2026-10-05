@@ -211,14 +211,14 @@ mod t_187_python_module_resolution;
 mod t_188_rust_cargo_metadata;
 #[path = "189_lift_scope_rows.rs"]
 mod t_189_lift_scope_rows;
+#[path = "18_df_aux_fields_lits.rs"]
+mod t_18_df_aux_fields_lits;
 #[path = "190_rename_rust_slow.rs"]
 mod t_190_rename_rust_slow;
 #[path = "191_rust_byte_spans.rs"]
 mod t_191_rust_byte_spans;
 #[path = "192_typespec.rs"]
 mod t_192_typespec;
-#[path = "18_df_aux_fields_lits.rs"]
-mod t_18_df_aux_fields_lits;
 #[path = "19_docs_lang_arms.rs"]
 mod t_19_docs_lang_arms;
 #[path = "1_move.rs"]
@@ -492,16 +492,33 @@ mod t_195_ts_lib_globals;
 #[path = "196_rust_walk_growth.rs"]
 mod t_196_rust_walk_growth;
 
+#[path = ""]
+mod v5_parity {
+    #[path = "199_v5_labeled_break.rs"]
+    mod labeled_break;
+
+    #[path = "200_v5_call_lines.rs"]
+    mod call_lines;
+
+    #[path = "201_v5_owners.rs"]
+    mod owners;
+
+    #[path = "202_v5_jsx.rs"]
+    mod jsx;
+
+    #[path = "203_v5_reach.rs"]
+    mod reach;
+
+    #[path = "205_deferred_jsx.rs"]
+    mod deferred_jsx;
+    #[path = "198_v5_support.rs"]
+    pub mod v5_support;
+}
+
 #[test]
 fn every_test_file_is_a_module_here() {
     let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests");
-    let mut listed = include_str!("all.rs").to_string();
-    for target in include_str!("../Cargo.toml").lines().filter_map(|line| {
-        line.trim().strip_prefix("path = \"tests/").and_then(|path| path.strip_suffix('"'))
-    }) {
-        listed.push_str(&format!("#[path = \"{target}\"]"));
-        listed.push_str(&std::fs::read_to_string(dir.join(target)).unwrap());
-    }
+    let listed = include_str!("all.rs");
     let missing: Vec<String> = std::fs::read_dir(&dir)
         .unwrap()
         .filter_map(|e| e.ok()?.file_name().into_string().ok())

@@ -321,3 +321,34 @@ The read `ryii rename --help`, `move --help`, and `cleave --help` expose symbol 
 ## Pass 1 gate
 
 8 v5_parity tests, 2 t_13_flow_join tests, and 5 t_12_df_identity tests passed. Snapshot bytes unchanged. Initial errors: `error: no test target named `v5_parity` in default-run packages`; `error[E0425]: cannot find type `DfOwner` in this scope` and `error[E0422]: cannot find struct, variant or union type `DfOwner` in this scope` (22 compile errors, corrected by moving the context type to its parent module). Capped attempts printed `STOPPED: parity gate exceeded 110 seconds` and `STOPPED: pass 1 parity gate exceeded 110 seconds`; cached reruns passed.
+
+`/Users/chrishafley/.cache/boop/lanes/feature-ryi-v5-parity/target/debug/ryii cleave crates/sprefa-extract/tests/201_v5_owners.rs#rows crates/sprefa-extract/tests/204_v5_support.rs --root crates/sprefa-extract --commit`: 1 plan, exit 0, 4.944s. Applied the inspected shared-setup extraction.
+
+Additional pass 1 caller command: `ryii graph --timeout 20 --callers closure_expr crates/hafley_scm/src/lang/rust/12_df_control.rs crates/hafley_scm/src/lang/rust/11_df_syntax_rows.rs`: 0 rows, exit 0, 0.058s. Retained the closure lift; query inspection showed its dispatch arm in the parent.
+
+`/Users/chrishafley/.cache/boop/lanes/feature-ryi-v5-parity/target/debug/ryii move crates/sprefa-extract/tests/204_v5_support.rs crates/sprefa-extract/tests/198_v5_support.rs --root crates/sprefa-extract`: 1 edit rows, exit 0, 0.068s. Moves the helper before its numbered consumers.
+
+`/Users/chrishafley/.cache/boop/lanes/feature-ryi-v5-parity/target/debug/ryii move crates/sprefa-extract/tests/204_v5_support.rs crates/sprefa-extract/tests/198_v5_support.rs --root crates/sprefa-extract --commit`: 2 edits, exit 0, 0.108s.
+
+Pass 2 manual setup extraction initially left the old stderr-formatting tail in two files. rustfmt reported `error: unexpected closing delimiter: `}`` at tests/203_v5_reach.rs:88 and tests/205_deferred_jsx.rs:19. Removed those tails before the test compile.
+
+## Pass 3 rename dry run
+
+`/Users/chrishafley/.cache/boop/lanes/feature-ryi-v5-parity/target/debug/ryii rename crates/sprefa-extract/tests/205_deferred_jsx.rs#deferred_jsx_and_generic_object_capture_flow_have_whole_outputs deferred_jsx_props_captures_and_callers --root crates/sprefa-extract --json`: 0 JSON rows, exit 2, 0.053s. Rename the deferred fixture test to match its projected assertions.
+```text
+rename anchor is not a file: /Users/chrishafley/projects/hafley-rs/.boop-worktrees/feature/ryi-v5-parity/crates/sprefa-extract/crates/sprefa-extract/tests/205_deferred_jsx.rs
+```
+
+`/Users/chrishafley/.cache/boop/lanes/feature-ryi-v5-parity/target/debug/ryii rename tests/205_deferred_jsx.rs#deferred_jsx_and_generic_object_capture_flow_have_whole_outputs deferred_jsx_props_captures_and_callers --root crates/sprefa-extract --json`: 1 JSON rows, exit 0, 0.563s. Retried with root-relative anchor.
+
+Pass 2 compile correction: `error[E0308]: mismatched types`, `expected struct `RyiOutput`, found struct `Arc<RyiOutput>`` at tests/198_v5_support.rs:5. The shared helper now returns dispatch's Arc directly.
+
+Pass 2 setup proof: `ryii query --lang rust --query '(struct_expression name: (type_identifier) @name (#eq? @name "FamilyMask")) @shape' <v5 test files>`: 2 rows, exit 0, 0.037s. This glob also included the pre-existing 33_v5_parity_matrix.rs mask. The new suite has its mask in the shared helper.
+
+Pass 2 narrowed setup query over 198, 199, 200, 201, 202, 203, 205: 1 row, exit 0, 0.035s.
+
+Pass 2 snapshot setup correction: the initial function-name matcher omitted digits, leaving four tests without the settings guard and naming their snapshots `None`. 12 passed, 4 failed: call_lines::v5_call_definitions_include_the_end_line, jsx::whole_jsx_rows_and_resolved_prop_edges_match_v5_cases, reach::jsx_ten_forward_and_reverse_reach_checks_match_v5, reach::seeded_forward_and_reverse_reach_port_v5_dataflow_cases. Exact assertion text included `snapshot assertion for 'v5_parity__reach__None' failed in line 221`. Corrected the names/guards and deleted rejected .snap.new outputs; original snapshots remain untouched.
+
+## Pass 2 gate
+
+16 passed: 8 v5_parity, 2 flow join, 5 df identity, and the test-module inventory check. No snapshot changes. Removed the previous receipt/error log and separate test target; shared mask count is 1 in the new suite. No branch-added committed *.log files remained.

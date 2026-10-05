@@ -1,24 +1,14 @@
 #![cfg(feature = "cli")]
 
+use super::v5_support::{rows as syntax_rows, run};
 use serde_json::{json, Value};
-use sprefa_extract::{dispatch, flatten_jsonl, FamilyMask};
-use std::process::Command;
 
 fn rows(name: &str, arguments: &[&str]) -> Vec<Value> {
     let path = format!(
         "{}/tests/fixtures/v5_parity/{name}",
         env!("CARGO_MANIFEST_DIR")
     );
-    let result = Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args(arguments)
-        .arg(&path)
-        .output()
-        .unwrap();
-    assert!(
-        result.status.success(),
-        "{}",
-        String::from_utf8_lossy(&result.stderr)
-    );
+    let result = run(arguments, &path);
     String::from_utf8(result.stdout)
         .unwrap()
         .lines()
@@ -28,6 +18,7 @@ fn rows(name: &str, arguments: &[&str]) -> Vec<Value> {
 
 #[test]
 fn deferred_jsx_and_generic_object_capture_flow_have_whole_outputs() {
+    let _snapshots = super::v5_support::snapshots();
     let mut output = Vec::new();
     for name in [
         "16_direct_vs_jsx.tsx",
@@ -42,22 +33,7 @@ fn deferred_jsx_and_generic_object_capture_flow_have_whole_outputs() {
             env!("CARGO_MANIFEST_DIR")
         );
         let source = std::fs::read(&path).unwrap();
-        let facts = dispatch(
-            name,
-            &source,
-            FamilyMask {
-                df: true,
-                call: true,
-                types: false,
-                data: false,
-                cst: false,
-            },
-        )
-        .unwrap();
-        let syntax: Vec<Value> = flatten_jsonl(&facts)
-            .iter()
-            .map(|row| serde_json::from_str(row).unwrap())
-            .collect();
+        let syntax = syntax_rows(name, std::str::from_utf8(&source).unwrap(), true);
         let resolved = rows(name, &["--resolve", "--arms", "flow"]);
         let callers = if name.ends_with(".tsx") {
             rows(name, &["graph", "--callers", "Card"])
@@ -121,6 +97,6 @@ fn deferred_jsx_and_generic_object_capture_flow_have_whole_outputs() {
             .count();
         proofs.push(json!({"fixture":fixture["fixture"], "title_targets":param_targets, "member_targets":member_targets, "lambda_elem":flow.iter().any(|edge|edge["kind"] == "lambda_elem"), "lambda_ret":flow.iter().any(|edge|edge["kind"] == "lambda_ret"), "callers":fixture["callers"], "hooks":fixture["hooks"]}));
     }
-    insta::assert_json_snapshot!("deferred_jsx_proofs", proofs);
-    insta::assert_json_snapshot!("deferred_jsx_whole_output", output);
+    insta::assert_json_snapshot!("v5_parity__deferred_jsx__deferred_jsx_proofs", proofs);
+    insta::assert_json_snapshot!("v5_parity__deferred_jsx__deferred_jsx_whole_output", output);
 }

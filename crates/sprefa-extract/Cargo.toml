@@ -336,10 +336,6 @@ go-checker = ["go", "hafley_scm/go-checker"]
 name = "all"
 path = "tests/all.rs"
 
-[[test]]
-name = "v5_parity"
-path = "tests/199_v5_parity.rs"
-
 [[bin]]
 name = "ryii"
 path = "src/bin/ryi.rs"

@@ -1,8 +1,7 @@
 #![cfg(feature = "cli")]
 
+use super::v5_support::{rows, run};
 use serde_json::{json, Value};
-use sprefa_extract::{dispatch, flatten_jsonl, FamilyMask};
-use std::process::Command;
 
 struct Fixture {
     path: std::path::PathBuf,
@@ -14,21 +13,8 @@ impl Fixture {
     fn new(name: &str, source: &str, directory: &std::path::Path) -> Self {
         let path = directory.join(name);
         std::fs::write(&path, source).unwrap();
-        let output = dispatch(
-            path.to_str().unwrap(),
-            source.as_bytes(),
-            FamilyMask {
-                df: true,
-                cst: false,
-                call: false,
-                data: false,
-                types: false,
-            },
-        )
-        .unwrap();
-        let nodes = flatten_jsonl(&output)
-            .iter()
-            .map(|row| serde_json::from_str::<Value>(row).unwrap())
+        let nodes = rows(path.to_str().unwrap(), source, false)
+            .into_iter()
             .filter(|row| row["record"] == "node" && row["family"] == "df")
             .collect();
         Self {
@@ -63,17 +49,11 @@ impl Fixture {
     fn walk(&self, node: &Value, reverse: bool) -> Vec<Value> {
         let span = &node["span"];
         let seed = format!("{}@{}:{}", self.path.display(), span["start"], span["end"]);
-        let mut command = Command::new(env!("CARGO_BIN_EXE_ryii"));
-        command.args(["graph", "--flow-path", &seed]);
+        let mut arguments = vec!["graph", "--flow-path", &seed];
         if reverse {
-            command.arg("--reverse");
+            arguments.push("--reverse");
         }
-        let result = command.arg(&self.path).output().unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
+        let result = run(&arguments, &self.path);
         String::from_utf8(result.stdout)
             .unwrap()
             .lines()
@@ -110,6 +90,7 @@ impl Fixture {
 
 #[test]
 fn seeded_forward_and_reverse_reach_port_v5_dataflow_cases() {
+    let _snapshots = super::v5_support::snapshots();
     let directory = tempfile::tempdir().unwrap();
     let fixtures = [
         ("6_chain.rs", include_str!("fixtures/v5_parity/6_chain.rs")),
@@ -208,11 +189,15 @@ fn seeded_forward_and_reverse_reach_port_v5_dataflow_cases() {
         fixtures[7].named("let_bind", "result", "entry"),
         true,
     ));
-    insta::assert_json_snapshot!(output);
+    insta::assert_json_snapshot!(
+        "v5_parity__reach__seeded_forward_and_reverse_reach_port_v5_dataflow_cases",
+        output
+    );
 }
 
 #[test]
 fn jsx_ten_forward_and_reverse_reach_checks_match_v5() {
+    let _snapshots = super::v5_support::snapshots();
     let directory = tempfile::tempdir().unwrap();
     let (_, source) = super::jsx::fixtures()[1];
     let fixture = Fixture::new("4_jsx_exprs.tsx", source, directory.path());
@@ -238,5 +223,8 @@ fn jsx_ten_forward_and_reverse_reach_checks_match_v5() {
         )
     })
     .collect();
-    insta::assert_json_snapshot!(output);
+    insta::assert_json_snapshot!(
+        "v5_parity__reach__jsx_ten_forward_and_reverse_reach_checks_match_v5",
+        output
+    );
 }

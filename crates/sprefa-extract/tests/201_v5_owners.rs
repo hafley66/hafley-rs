@@ -1,5 +1,7 @@
+use super::v5_support::rows;
+#[cfg(feature = "cli")]
+use super::v5_support::run;
 use serde_json::Value;
-use sprefa_extract::{dispatch, flatten_jsonl, FamilyMask};
 
 fn fixtures() -> [(&'static str, &'static str); 3] {
     [
@@ -9,53 +11,32 @@ fn fixtures() -> [(&'static str, &'static str); 3] {
     ]
 }
 
-fn rows(path: &str, source: &str) -> Vec<Value> {
-    let out = dispatch(
-        path,
-        source.as_bytes(),
-        FamilyMask {
-            df: true,
-            call: false,
-            types: false,
-            cst: false,
-            data: false,
-        },
-    )
-    .unwrap();
-    flatten_jsonl(&out)
-        .into_iter()
-        .map(|row| serde_json::from_str(&row).unwrap())
-        .collect()
-}
-
 #[test]
 fn whole_flow_rows_name_their_owning_function() {
+    let _snapshots = super::v5_support::snapshots();
     let output: Vec<_> = fixtures()
         .into_iter()
-        .map(|(path, source)| (path, rows(path, source)))
+        .map(|(path, source)| (path, rows(path, source, false)))
         .collect();
-    insta::assert_json_snapshot!(output);
+    insta::assert_json_snapshot!(
+        "v5_parity__owners__whole_flow_rows_name_their_owning_function",
+        output
+    );
 }
 
 #[cfg(feature = "cli")]
 #[test]
 fn function_column_matches_jsonl_and_sqlite() {
+    let _snapshots = super::v5_support::snapshots();
     let mut output = Vec::new();
     for (path, source) in fixtures() {
         let scratch = tempfile::tempdir().unwrap();
         let input = scratch.path().join(path);
         let database = scratch.path().join("facts.db");
         std::fs::write(&input, source).unwrap();
-        let result = std::process::Command::new(env!("CARGO_BIN_EXE_ryii"))
-            .args(["--kinds", "df", "--sqlite"])
-            .arg(&database)
-            .arg(&input)
-            .output()
-            .unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
+        run(
+            &["--kinds", "df", "--sqlite", database.to_str().unwrap()],
+            &input,
         );
         let connection = rusqlite::Connection::open(database).unwrap();
         let mut query = connection.prepare("SELECT span__start, span__end, kind, name, function FROM node WHERE family = 'df' ORDER BY span__start, span__end, kind, name, function").unwrap();
@@ -72,7 +53,7 @@ fn function_column_matches_jsonl_and_sqlite() {
             .unwrap()
             .collect::<rusqlite::Result<_>>()
             .unwrap();
-        let mut json: Vec<Value> = rows(&input.to_string_lossy(), source)
+        let mut json: Vec<Value> = rows(&input.to_string_lossy(), source, false)
             .into_iter()
             .filter(|row| row["record"] == "node")
             .map(|row| {
@@ -102,5 +83,8 @@ fn function_column_matches_jsonl_and_sqlite() {
         assert_eq!(json, sql);
         output.push((path, sql));
     }
-    insta::assert_json_snapshot!(output);
+    insta::assert_json_snapshot!(
+        "v5_parity__owners__function_column_matches_jsonl_and_sqlite",
+        output
+    );
 }

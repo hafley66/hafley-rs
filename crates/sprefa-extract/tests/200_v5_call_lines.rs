@@ -2,18 +2,14 @@
 
 #[test]
 fn v5_call_definitions_include_the_end_line() {
+    let _snapshots = super::v5_support::snapshots();
     let path = concat!(
         env!("CARGO_MANIFEST_DIR"),
         "/tests/fixtures/v5_parity/0_call.rs"
     );
-    let output = std::process::Command::new(env!("CARGO_BIN_EXE_ryii"))
-        .args(["--kinds", "call", "--lines", path])
-        .output()
-        .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
+    let output = super::v5_support::run(&["--kinds", "call", "--lines"], path);
+    insta::assert_snapshot!(
+        "v5_parity__call_lines__v5_call_definitions_include_the_end_line",
+        String::from_utf8(output.stdout).unwrap()
     );
-    insta::assert_snapshot!(String::from_utf8(output.stdout).unwrap());
 }
