@@ -246,6 +246,12 @@ impl TreeDf<'_, '_> {
     ) -> NodeRef {
         let mark = self.rows.aux.allocator_hits.len();
         let lam_sym = format!("{fn_sym}::closure::{}_{}", position.0, position.1);
+        let owner = lam_sym
+            .strip_prefix(&format!("{}::function::", self.file))
+            .or_else(|| lam_sym.strip_prefix(&format!("{}::method::", self.file)))
+            .unwrap_or(&lam_sym)
+            .to_owned();
+        let previous = self.function.replace(owner);
         if let Some(parameters) = expr.child_by_field_name("parameters") {
             for (pos, pattern) in tree_children(parameters).into_iter().enumerate() {
                 let binding_pattern = if pattern.kind() == "parameter" {
@@ -282,6 +288,7 @@ impl TreeDf<'_, '_> {
             }
         }
         self.claim_allocator_hits(mark, self.span(expr));
+        self.function = previous;
         self.push(self.span(expr), DfNodeKind::Closure, Some(&lam_sym))
     }
 }

@@ -639,6 +639,15 @@
         "nullable": true
       },
       {
+        "name": "function",
+        "path": [
+          "function"
+        ],
+        "kind": "string",
+        "optional": true,
+        "nullable": false
+      },
+      {
         "name": "named",
         "path": [
           "named"

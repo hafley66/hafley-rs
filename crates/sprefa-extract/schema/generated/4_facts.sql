@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS "node" (
     "span__end" INTEGER NOT NULL,
     "kind" TEXT NOT NULL,
     "name" TEXT,
+    "function" TEXT,
     "named" INTEGER
 );
 

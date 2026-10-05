@@ -861,6 +861,7 @@ fn slice_at(seed: &str) -> Result<Vec<FlatFact>, Box<dyn std::error::Error>> {
                 nodes.insert(
                     (span.start, span.end, kind.clone()),
                     FlatFact::Node {
+                        function: None,
                         fact: None,
                         family: FamilyTag::Cfg,
                         span,

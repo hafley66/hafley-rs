@@ -54,6 +54,11 @@ mod tests {
             {"record": "node", "span": {"start": 11, "end": 11}}
         ]);
         decorate_lines(&mut rows, &sprefa_extract::newline_offsets(source));
-        insta::assert_json_snapshot!(rows);
+        insta::with_settings!({
+            snapshot_path => concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snapshots"),
+            prepend_module_to_snapshot => false,
+        }, {
+            insta::assert_json_snapshot!("call_span_end_lines", rows);
+        });
     }
 }

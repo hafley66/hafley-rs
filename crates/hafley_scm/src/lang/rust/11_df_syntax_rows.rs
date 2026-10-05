@@ -114,6 +114,7 @@ pub struct DfAllocates {
 }
 #[derive(Default, Clone, Debug, PartialEq, Eq)]
 pub struct DfAux {
+    pub functions: Vec<Option<String>>,
     pub params: Vec<DfParam>,
     pub args: Vec<DfArg>,
     pub fields: Vec<DfField>,
@@ -146,6 +147,7 @@ pub fn df_syntax_rows_from_tree(
     let mut writer = TreeDf {
         source,
         file,
+        function: None,
         rows: &mut rows,
     };
     writer.items(tree.root_node(), "");
@@ -155,6 +157,7 @@ pub fn df_syntax_rows_from_tree(
 struct TreeDf<'a, 'rows> {
     source: &'a [u8],
     file: &'a str,
+    function: Option<String>,
     rows: &'rows mut DfSyntaxRows,
 }
 
@@ -202,6 +205,10 @@ impl TreeDf<'_, '_> {
             Some(owner) => format!("{}::method::{mod_path}{owner}.{name_text}", self.file),
             None => format!("{}::function::{mod_path}{name_text}", self.file),
         };
+        let previous = self.function.replace(match owner {
+            Some(owner) => format!("{mod_path}{owner}.{name_text}"),
+            None => format!("{mod_path}{name_text}"),
+        });
         let mut scope = Scope::new();
         let mut loop_breaks = LoopBreaks::new();
         self.flow_fn_body(function, body, &fn_sym, &mut scope, &mut loop_breaks);
@@ -212,6 +219,7 @@ impl TreeDf<'_, '_> {
                 len: body.end_byte() as u32 - name.start_byte() as u32,
             },
         );
+        self.function = previous;
     }
 
     fn claim_allocator_hits(&mut self, mark: usize, owner: Span) {
@@ -743,6 +751,7 @@ impl TreeDf<'_, '_> {
             value = value.with_name(name.to_owned());
         }
         self.rows.nodes.push(value);
+        self.rows.aux.functions.push(self.function.clone());
         node
     }
 
@@ -934,80 +943,5 @@ fn is_tree_allocator_call(function: tree_sitter::Node<'_>, source: &[u8]) -> boo
 }
 
 #[cfg(test)]
-mod tree_df_tests {
-    use super::df_syntax_rows_from_tree;
-    use std::fmt::Write as _;
-    use std::path::{Path, PathBuf};
-
-    #[test]
-    fn tree_df_rows_match_snapshot_across_pinned_rust_fixtures() {
-        let fixtures =
-            PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../sprefa-extract/tests/fixtures");
-        let roots = [
-            "type_ladder",
-            "type_ladder_scope",
-            "ratchet_soopy",
-            "call_ladder",
-        ];
-        let mut files = Vec::new();
-        for root in roots {
-            rust_files(&fixtures.join(root), &mut files);
-        }
-        files.sort();
-        assert!(!files.is_empty());
-
-        let mut actual = String::new();
-        for path in files {
-            let source = std::fs::read(&path).expect("fixture reads");
-            let mut parser = tree_sitter::Parser::new();
-            parser
-                .set_language(&tree_sitter::Language::new(tree_sitter_rust::LANGUAGE))
-                .expect("Rust grammar");
-            let tree = parser.parse(&source, None).expect("tree-sitter parse");
-            let rows = df_syntax_rows_from_tree(&tree, "fixture.rs", &source);
-            let relative = path.strip_prefix(&fixtures).expect("fixture-relative path");
-            let rendered = format!("{rows:#?}");
-            let mut hasher = std::collections::hash_map::DefaultHasher::new();
-            std::hash::Hasher::write(&mut hasher, rendered.as_bytes());
-            writeln!(
-                &mut actual,
-                "{} nodes={} edges={} params={} args={} fields={} literals={} loops={} allocations={} loop_spans={} allocator_hits={} debug_hash={:016x}",
-                relative.display(),
-                rows.nodes.len(),
-                rows.edges.len(),
-                rows.aux.params.len(),
-                rows.aux.args.len(),
-                rows.aux.fields.len(),
-                rows.aux.lits.len(),
-                rows.aux.loops.len(),
-                rows.aux.allocates.len(),
-                rows.aux.loop_collection_spans.len(),
-                rows.aux.allocator_hits.len(),
-                std::hash::Hasher::finish(&hasher),
-            )
-            .unwrap();
-        }
-
-        let snapshot = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("src/lang/rust/11_df_syntax_rows.tree.snap");
-        if std::env::var_os("UPDATE_TREE_DF_SNAPSHOT").is_some() {
-            std::fs::write(snapshot, &actual).expect("write tree DF snapshot");
-            return;
-        }
-        assert_eq!(actual, include_str!("11_df_syntax_rows.tree.snap"));
-    }
-
-    fn rust_files(path: &Path, files: &mut Vec<PathBuf>) {
-        let Ok(entries) = std::fs::read_dir(path) else {
-            return;
-        };
-        for entry in entries.flatten() {
-            let path = entry.path();
-            if path.is_dir() {
-                rust_files(&path, files);
-            } else if path.extension().is_some_and(|extension| extension == "rs") {
-                files.push(path);
-            }
-        }
-    }
-}
+#[path = "13_df_syntax_tests.rs"]
+mod tree_df_tests;

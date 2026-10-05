@@ -23,6 +23,7 @@ model Diagnostic { ...ExportRow; record: "diagnostic"; run: uint32; relation: st
 model Node {
   ...ExportRow; record: "node"; ...LocatedFact;
   span: Extract.SpanOut; kind: string; name: string | null;
+  function?: string;
   named?: boolean;
 }
 model Edge {

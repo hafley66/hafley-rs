@@ -264,7 +264,7 @@ fn assert_uncoordinated_rows(db: &Connection, expected: &[Value]) {
 
 #[test]
 fn every_flat_fact_variant_and_field_has_a_typespec_table() {
-    let source = syn::parse_file(include_str!("../../hafley_scm/src/read/types.rs")).unwrap();
+    let source = syn::parse_file(include_str!("../../hafley_scm/src/read/0c_flat_fact.rs")).unwrap();
     let flat = source
         .items
         .iter()

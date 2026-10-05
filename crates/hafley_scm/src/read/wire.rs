@@ -263,6 +263,7 @@ fn flatten_cst<E>(
 ) -> Result<(), E> {
     for node in &bundle.nodes {
         push(FlatFact::Node {
+            function: None,
             fact: None,
             family: CstF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -307,6 +308,7 @@ fn flatten_type<E>(
 ) -> Result<(), E> {
     for node in &bundle.nodes {
         push(FlatFact::Node {
+            function: None,
             fact: None,
             family: TypeF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -398,6 +400,7 @@ fn flatten_call<E>(
             continue;
         }
         push(FlatFact::Node {
+            function: None,
             fact: None,
             family: CallF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -488,6 +491,7 @@ pub fn flatten_cfg_each<E>(
 ) -> Result<(), E> {
     for node in &bundle.nodes {
         push(FlatFact::Node {
+            function: None,
             fact: None,
             family: CfgF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),
@@ -633,16 +637,17 @@ pub fn size_skip_fact(path: &str, bytes: u64, limit: u64) -> FlatFact {
 
 /// Flatten one DfF bundle to flat facts: value-flow NODES (kind = the DfNodeKind
 /// slug; name = the variable / property / type when the node carries one) +
-/// Direct value EDGES (src value -> dst value). The enclosing callable is
-/// derived at the seam (not in the wire). Df argument slots, parameter
+/// Direct value EDGES (src value -> dst value). Each node carries its owning
+/// callable in `function`. Df argument slots, parameter
 /// positions, field names and literal texts are emitted as flat records.
 fn flatten_df<E>(
     bundle: &FamilyBundle<DfF>,
     strings: &Strings,
     push: &mut impl FnMut(FlatFact) -> Result<(), E>,
 ) -> Result<(), E> {
-    for node in &bundle.nodes {
+    for (index, node) in bundle.nodes.iter().enumerate() {
         push(FlatFact::Node {
+            function: bundle.aux.functions.get(index).copied().flatten().map(|id| strings.lookup(id).to_string()),
             fact: None,
             family: DfF::TAG,
             span: SpanOut::new(node.span.start, node.span.end()),

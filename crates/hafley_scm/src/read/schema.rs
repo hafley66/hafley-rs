@@ -20,7 +20,7 @@ sprefa-extract JSONL contract: one fact per line, each a JSON object tagged by \
 Records join across families by matching spans.
 
 RECORD SHAPES
-  record=node   family=<cst|type|call|df|cfg>  span={start,end}   kind=<slug>   name=<string|null>
+  record=node   family=<cst|type|call|df|cfg>  span={start,end}   kind=<slug>   name=<string|null>  function=<string, df only>
   record=edge   family=<cst|df|cfg>        kind=<slug>        from={start,end}  to={start,end}
   record=sig    family=type                owner={start,end}  owner_start=<u32>  owner_end=<u32>  slot=<param|ret>  pos=<u32>  ty=<name>
   record=param  family=df                  span={start,end}   pos=<u32>

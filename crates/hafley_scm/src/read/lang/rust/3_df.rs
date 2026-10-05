@@ -10,6 +10,7 @@ pub(super) fn project_df(
     sink: &mut FamilyBundle<DfF>,
 ) {
     let rows = df_syntax_rows_from_tree(tree, file, source);
+    sink.aux.functions = rows.aux.functions.into_iter().map(|owner| owner.map(|owner| strings.intern(&owner))).collect();
     for row in rows.nodes {
         let kind = match row.kind {
             DfSyntaxKind::Param => DfNodeKind::Param,
