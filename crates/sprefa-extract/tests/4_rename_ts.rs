@@ -93,6 +93,7 @@ fn copy_tree(source: &Path, target: &Path) {
 
 fn rename_verb(fixture: &Fixture, target: &str, new: &str, extra: &[&str]) -> String {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .arg("rename")
         .arg(target)
         .arg(new)
@@ -120,6 +121,7 @@ struct StoppedRun {
 
 fn stopped_rename_verb(fixture: &Fixture, target: &str, new: &str, extra: &[&str]) -> StoppedRun {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .arg("rename")
         .arg(target)
         .arg(new)
@@ -409,6 +411,7 @@ fn untyped_property_receiver_keeps_the_dynamic_stop() {
     text.push_str("\nexport function unknown(probe: unknown) { return probe.old; }\n");
     std::fs::write(&path, text).unwrap();
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .arg("rename")
         .arg("src/box.ts#old")
         .arg("fresh")

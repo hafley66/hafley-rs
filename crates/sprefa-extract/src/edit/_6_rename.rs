@@ -597,10 +597,7 @@ fn validated_batch(
     let mut batch: Vec<RenameRequest> = Vec::with_capacity(requested.len());
     let mut seen: BTreeMap<(String, String), ()> = BTreeMap::new();
     for (anchor, old, new) in requested {
-        let anchor = match anchor.is_absolute() {
-            true => anchor_file(&anchor)?,
-            false => anchor_file(&root.join(&anchor))?,
-        };
+        let anchor = anchor_file(&anchor)?;
         let anchor = super::source_move::within_root(root, &anchor).map_err(plan_error)?;
         if old == new {
             return Err(plan_error(format!("{anchor}: {old} renames to itself")));

@@ -122,6 +122,7 @@ fn fixture(label: &str, files: &[(&str, &str)]) -> Fixture {
 /// `--commit` rewrites the fixture tree, so the assertions read the real bytes.
 fn rename_run(fixture: &Fixture, target: &str, new: &str) -> Run {
     let output = Command::new(env!("CARGO_BIN_EXE_ryii"))
+        .current_dir(&fixture.root)
         .arg("rename")
         .arg(target)
         .arg(new)

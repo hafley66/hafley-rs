@@ -1,0 +1,4 @@
+[workspace]
+members = ["outer"]
+exclude = ["nested"]
+resolver = "2"

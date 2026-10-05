@@ -11,7 +11,7 @@
 //! (`rust.rs:1690`, documented `NO ROW`). `hafley_scm` extracts the syntax
 //! rows from the phase-1 parse; this file resolves those rows across files.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::Mutex;
 
 use crate::read::seams::DefIndex;
@@ -19,6 +19,9 @@ use crate::read::shape::{ContentId, FamilyTag, Span, ZERO_CONTENT_ID};
 
 use super::rust::{crate_root_of, module_segments, module_target, ModuleTarget};
 use super::rust_receivers::ImplEntry;
+
+#[path = "0_rust_module_context.rs"]
+mod context;
 
 // ── module facts from phase-1 syntax rows ────────────────────────────────────
 
@@ -40,6 +43,45 @@ struct StarImport {
     reexport: bool,
 }
 
+fn module_candidates(
+    path: &str,
+    name: &str,
+    attribute: Option<&str>,
+    scope: &[(String, Option<String>)],
+) -> Vec<String> {
+    let mut directory = mod_dir(path);
+    for (index, (module, attribute)) in scope.iter().enumerate() {
+        directory = match attribute {
+            Some(literal) => normalize_join(
+                if index == 0 {
+                    parent_dir(path)
+                } else {
+                    &directory
+                },
+                literal,
+            ),
+            None => normalize_join(&directory, module),
+        };
+    }
+    match attribute {
+        Some(literal) => vec![normalize_join(
+            if scope.is_empty() {
+                parent_dir(path)
+            } else {
+                &directory
+            },
+            literal,
+        )],
+        None => {
+            let name = name.rsplit("::").next().unwrap_or(name);
+            vec![
+                normalize_join(&directory, &format!("{name}.rs")),
+                normalize_join(&directory, &format!("{name}/mod.rs")),
+            ]
+        }
+    }
+}
+
 /// One file's `use`/`mod` facts, carried from phase 1 into project resolve.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct RustModuleFacts {
@@ -49,6 +91,7 @@ pub struct RustModuleFacts {
     inline_mods: BTreeSet<String>,
     /// `mod x;` / `#[path = "y.rs"] mod x;`: name plus the path literal.
     mod_decls: Vec<(String, Option<String>)>,
+    mod_scopes: BTreeMap<String, Vec<(String, Option<String>)>>,
     /// Every impl block's (self type, fn name, fn def span), for the corpus
     /// receiver leg's (T, m) table.
     impls: Vec<ImplEntry>,
@@ -405,6 +448,7 @@ fn rust_module_facts_from_rows(
             .collect(),
         inline_mods: rows.inline_mods.into_iter().collect(),
         mod_decls: rows.mod_decls,
+        mod_scopes: rows.mod_scopes,
         impls: rows
             .impls
             .into_iter()
@@ -825,6 +869,7 @@ pub enum ModuleCallTarget {
 /// THE corpus Rust module plane, built ONCE per refresh in `resolve_project`.
 #[derive(Default)]
 pub struct RustModuleIndex {
+    pub context_failures: Vec<(String, String, String)>,
     facts: HashMap<String, RustModuleFacts>,
     blobs: HashMap<String, ContentId>,
     paths: HashMap<ContentId, String>,
@@ -931,57 +976,17 @@ fn lexical(path: &std::path::Path) -> String {
     out.to_string_lossy().into_owned()
 }
 
-/// Each `.rs` file's crate directory: the nearest ancestor holding a
-/// `Cargo.toml` with a `[package]`, read off disk once per directory. Only a
-/// member counts: under `src/`, a Cargo target root, or reached from one by
-/// `mod`. Nested packages use their own nearest manifest.
+/// Package membership from the target tree, plus source files whose missing
+/// target scope causes resolution to abstain.
 fn crate_dirs_of(
-    files: &[(String, RustModuleFacts)],
     nearest: &HashMap<String, String>,
+    scopes: &HashMap<String, HashSet<TargetScope>>,
 ) -> HashMap<String, String> {
-    let facts: HashMap<&str, &RustModuleFacts> = files
-        .iter()
-        .map(|(path, facts)| (path.as_str(), facts))
-        .collect();
-    let mut members: HashMap<String, String> = HashMap::new();
-    let mut queue: Vec<String> = Vec::new();
-    for (path, dir) in nearest {
-        let relative = std::path::Path::new(path)
-            .strip_prefix(dir)
-            .map(|rel| rel.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        if relative.starts_with("src/") || is_target_root(&relative) {
-            members.insert(path.clone(), dir.clone());
-            queue.push(path.clone());
-        }
-    }
-    while let Some(file) = queue.pop() {
-        let Some(facts) = facts.get(file.as_str()) else {
-            continue;
-        };
-        let dir = members[&file].clone();
-        let parent = std::path::Path::new(&file)
-            .parent()
-            .map(std::path::Path::to_path_buf)
-            .unwrap_or_default();
-        for (name, path_attr) in &facts.mod_decls {
-            let candidates = match path_attr {
-                Some(literal) => vec![lexical(&parent.join(literal))],
-                None => {
-                    let base = mod_dir(&file);
-                    vec![format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
-                }
-            };
-            for candidate in candidates {
-                if nearest.get(&candidate) == Some(&dir) && !members.contains_key(&candidate) {
-                    members.insert(candidate.clone(), dir.clone());
-                    queue.push(candidate);
-                    break;
-                }
-            }
-        }
-    }
-    members
+    nearest.iter().filter(|(path, directory)| {
+        scopes.contains_key(*path) || std::path::Path::new(path)
+            .strip_prefix(directory)
+            .is_ok_and(|relative| relative.starts_with("src"))
+    }).map(|(path, directory)| (path.clone(), directory.clone())).collect()
 }
 
 /// A path, relative to its crate directory, that Cargo discovers as a target.
@@ -993,116 +998,6 @@ fn is_target_root(relative: &str) -> bool {
         ["tests" | "examples" | "benches", _, "main.rs"] => true,
         _ => false,
     }
-}
-
-fn target_kind(relative: &str) -> Option<TargetKind> {
-    let parts: Vec<&str> = relative.split('/').collect();
-    match parts.as_slice() {
-        ["src", "lib.rs" | "main.rs"] => Some(TargetKind::Normal),
-        ["src", "bin", file] if file.ends_with(".rs") => Some(TargetKind::Normal),
-        ["src", "bin", _, "main.rs"] => Some(TargetKind::Normal),
-        ["build.rs"] => Some(TargetKind::Build),
-        ["tests" | "examples" | "benches", file] if file.ends_with(".rs") => Some(TargetKind::Dev),
-        ["tests" | "examples" | "benches", _, "main.rs"] => Some(TargetKind::Dev),
-        _ => None,
-    }
-}
-
-fn target_scopes_of(
-    files: &[(String, RustModuleFacts)],
-    crate_dirs: &HashMap<String, String>,
-    crate_libs: &HashMap<String, String>,
-) -> HashMap<String, HashSet<TargetScope>> {
-    let facts: HashMap<&str, &RustModuleFacts> = files
-        .iter()
-        .map(|(path, facts)| (path.as_str(), facts))
-        .collect();
-    let mut scopes: HashMap<String, HashSet<TargetScope>> = HashMap::new();
-    let mut queue = Vec::new();
-    for (path, package) in crate_dirs {
-        let relative = std::path::Path::new(path)
-            .strip_prefix(package)
-            .ok()
-            .map(|rel| rel.to_string_lossy().into_owned());
-        let kind = relative.as_deref().and_then(target_kind).or_else(|| {
-            crate_libs
-                .values()
-                .any(|lib| lib == path)
-                .then_some(TargetKind::Normal)
-        });
-        if let Some(kind) = kind {
-            let scope = TargetScope {
-                root: path.clone(),
-                kind,
-            };
-            scopes
-                .entry(path.clone())
-                .or_default()
-                .insert(scope.clone());
-            queue.push((path.clone(), scope));
-        }
-    }
-    while let Some((path, scope)) = queue.pop() {
-        let Some(module) = facts.get(path.as_str()) else {
-            continue;
-        };
-        for (name, path_attr) in &module.mod_decls {
-            let candidates = match path_attr {
-                Some(literal) => vec![normalize_join(parent_dir(&path), literal)],
-                None => {
-                    let base = mod_dir(&path);
-                    vec![format!("{base}/{name}.rs"), format!("{base}/{name}/mod.rs")]
-                }
-            };
-            for candidate in candidates {
-                if crate_dirs.get(&candidate) != crate_dirs.get(&path) {
-                    continue;
-                }
-                if scopes
-                    .entry(candidate.clone())
-                    .or_default()
-                    .insert(scope.clone())
-                {
-                    queue.push((candidate, scope.clone()));
-                }
-                break;
-            }
-        }
-    }
-    // A source file present in the corpus without a `mod` edge is assigned
-    // to the package's default library or binary root when one is present.
-    for (path, package) in crate_dirs {
-        if scopes.contains_key(path) {
-            continue;
-        }
-        let relative = std::path::Path::new(path)
-            .strip_prefix(package)
-            .ok()
-            .map(|rel| rel.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let roots = if let Some(bin) = relative
-            .strip_prefix("src/bin/")
-            .and_then(|rest| rest.split('/').next())
-        {
-            vec![
-                format!("{package}/src/bin/{bin}.rs"),
-                format!("{package}/src/bin/{bin}/main.rs"),
-            ]
-        } else if relative.starts_with("src/") {
-            vec![
-                format!("{package}/src/lib.rs"),
-                format!("{package}/src/main.rs"),
-            ]
-        } else {
-            Vec::new()
-        };
-        let root = roots.into_iter().find(|root| crate_dirs.contains_key(root));
-        if let Some(root) = root {
-            let inherited = scopes.get(&root).cloned().unwrap_or_default();
-            scopes.insert(path.clone(), inherited);
-        }
-    }
-    scopes
 }
 
 fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String> {
@@ -1119,7 +1014,10 @@ fn nearest_crate_dirs(corpus: &[(String, ContentId)]) -> HashMap<String, String>
                         let text =
                             std::fs::read_to_string(crate::read::io_path(&dir.join("Cargo.toml")))
                                 .ok()?;
-                        let manifest: serde_json::Value = basic_toml::from_str(&text).ok()?;
+                        let manifest: serde_json::Value = match basic_toml::from_str(&text) {
+                            Ok(manifest) => manifest,
+                            Err(_) => return Some(lexical(dir)),
+                        };
                         manifest.get("package").map(|_| lexical(dir))
                     })
                     .clone()
@@ -1225,8 +1123,22 @@ type ExportTable = HashMap<String, Resolution>;
 
 impl RustModuleIndex {
     /// The files whose `#[path]` decl names `path`; empty when layout places it.
-    pub fn declaring_files(&self, path: &str) -> &[String] {
-        self.path_parents.get(path).map_or(&[], Vec::as_slice)
+    pub fn declaring_files(&self, path: &str) -> Vec<String> {
+        self.path_parents
+            .get(path)
+            .into_iter()
+            .flatten()
+            .filter(|parent| {
+                self.facts.get(*parent).is_some_and(|facts| {
+                    facts.mod_decls.iter().any(|(name, attribute)| {
+                        attribute.is_some()
+                            && self.mod_file(parent, name, attribute.as_deref()).as_deref()
+                                == Some(path)
+                    })
+                })
+            })
+            .cloned()
+            .collect()
     }
 
     pub fn crate_root_of(&self, path: &str) -> Option<String> {
@@ -1236,12 +1148,15 @@ impl RustModuleIndex {
     /// `files` is every `.rs` input's facts; `corpus` is EVERY input's (path,
     /// blob), any language, so target lookups stay lang-agnostic.
     pub fn build(
-        files: Vec<(String, RustModuleFacts)>,
+        mut files: Vec<(String, RustModuleFacts)>,
         corpus: &[(String, ContentId)],
         def_index: &DefIndex,
     ) -> RustModuleIndex {
+        let mut corpus = corpus.to_vec();
+        let (target_scopes, context_failures) = context::load(&mut files, &mut corpus);
+        let corpus = corpus.as_slice();
         let crate_roots = nearest_crate_dirs(corpus);
-        let crate_dirs = crate_dirs_of(&files, &crate_roots);
+        let crate_dirs = crate_dirs_of(&crate_roots, &target_scopes);
         let crate_module_roots = crate_dirs
             .iter()
             .map(|(path, root)| {
@@ -1252,7 +1167,6 @@ impl RustModuleIndex {
             })
             .collect();
         let crate_libs = crate_libs(&crate_roots, corpus);
-        let target_scopes = target_scopes_of(&files, &crate_dirs, &crate_libs);
         let known_crate_idents = crate_dirs
             .values()
             .filter_map(|dir| dir.rsplit('/').next())
@@ -1264,6 +1178,7 @@ impl RustModuleIndex {
             crate_dirs,
             crate_module_roots,
             target_scopes,
+            context_failures,
             known_crate_idents,
             ..RustModuleIndex::default()
         };
@@ -1274,18 +1189,38 @@ impl RustModuleIndex {
                 .entry(blob.clone())
                 .or_insert_with(|| path.clone());
             if path.ends_with(".rs") {
-                index
-                    .module_paths
-                    .insert(path.clone(), module_segments(path));
+                index.module_paths.insert(
+                    path.clone(),
+                    if index
+                        .target_scopes
+                        .get(path)
+                        .is_some_and(|scopes| scopes.iter().any(|scope| scope.root == *path))
+                    {
+                        module_segments(
+                            index
+                                .crate_dirs
+                                .get(path)
+                                .map(String::as_str)
+                                .unwrap_or(path),
+                        )
+                    } else {
+                        module_segments(path)
+                    },
+                );
             }
         }
         let mut displaced: HashMap<String, Vec<(String, String)>> = HashMap::new();
         for (path, facts) in &files {
-            let dir = parent_dir(path);
             for (name, path_attr) in &facts.mod_decls {
-                let Some(literal) = path_attr else { continue };
-                let target = normalize_join(dir, literal);
-                if index.blobs.contains_key(&target) {
+                if let Some(target) = module_candidates(
+                    path,
+                    name,
+                    path_attr.as_deref(),
+                    facts.mod_scopes.get(name).map(Vec::as_slice).unwrap_or(&[]),
+                )
+                .into_iter()
+                .find(|target| index.blobs.contains_key(target))
+                {
                     let parents = index.path_parents.entry(target.clone()).or_default();
                     if !parents.contains(path) {
                         parents.push(path.clone());
@@ -1300,6 +1235,7 @@ impl RustModuleIndex {
         fn declared_segments(
             path: &str,
             displaced: &HashMap<String, Vec<(String, String)>>,
+            bases: &HashMap<String, Vec<String>>,
             visiting: &mut HashSet<String>,
         ) -> Option<Vec<String>> {
             if !visiting.insert(path.to_string()) {
@@ -1307,17 +1243,22 @@ impl RustModuleIndex {
             }
             let result = match displaced.get(path).map(Vec::as_slice) {
                 Some([(parent, name)]) => {
-                    let mut segments = declared_segments(parent, displaced, visiting)?;
-                    segments.push(name.clone());
+                    let mut segments = declared_segments(parent, displaced, bases, visiting)?;
+                    segments.extend(name.split("::").map(str::to_string));
                     segments
                 }
-                _ => module_segments(path),
+                _ => bases
+                    .get(path)
+                    .cloned()
+                    .unwrap_or_else(|| module_segments(path)),
             };
             visiting.remove(path);
             Some(result)
         }
         for target in displaced.keys() {
-            if let Some(segments) = declared_segments(target, &displaced, &mut HashSet::new()) {
+            if let Some(segments) =
+                declared_segments(target, &displaced, &index.module_paths, &mut HashSet::new())
+            {
                 index.module_paths.insert(target.clone(), segments);
             }
         }
@@ -1733,14 +1674,14 @@ impl RustModuleIndex {
     }
 
     fn mod_file(&self, path: &str, name: &str, path_attr: Option<&str>) -> Option<String> {
-        if let Some(literal) = path_attr {
-            let target = normalize_join(parent_dir(path), literal);
-            return self.blobs.contains_key(&target).then_some(target);
-        }
-        let dir = mod_dir(path);
-        [format!("{name}.rs"), format!("{name}/mod.rs")]
+        let scope = self
+            .facts
+            .get(path)
+            .and_then(|facts| facts.mod_scopes.get(name))
+            .map(Vec::as_slice)
+            .unwrap_or(&[]);
+        module_candidates(path, name, path_attr, scope)
             .into_iter()
-            .map(|file| normalize_join(&dir, &file))
             .find(|target| self.blobs.contains_key(target))
     }
 
@@ -2109,7 +2050,23 @@ impl RustModuleIndex {
         let Some(facts) = self.facts.get(path) else {
             return (public, complete);
         };
+        if stack.iter().any(|open| open == path) {
+            return (public, false);
+        }
+        stack.push(path.to_string());
         let mut table = (*public).clone();
+        for binding in facts.uses.iter().filter(|binding| !binding.reexport) {
+            if table.contains_key(&binding.local) {
+                continue;
+            }
+            let (resolution, sub_complete) = self.resolve_qualified(
+                path, &binding.qualifier, &binding.asked, stack, &mut Vec::new(),
+            );
+            complete &= sub_complete;
+            if let Some(found) = resolution.promoted_option(ResolvedImportKind::Indirect) {
+                table.insert(binding.local.clone(), found);
+            }
+        }
         let starred = self.star_contributions(
             path,
             facts.stars.iter().filter(|star| !star.reexport),
@@ -2120,6 +2077,7 @@ impl RustModuleIndex {
         for (name, resolution) in starred {
             table.entry(name).or_insert(resolution);
         }
+        stack.pop();
         let table = std::sync::Arc::new(table);
         if complete {
             self.scope_tables
@@ -2352,7 +2310,7 @@ impl RustModuleIndex {
         if !declared {
             return None;
         }
-        let mut full = module_segments(from);
+        let mut full = self.module_paths.get(from)?.clone();
         full.extend(qualifier.iter().cloned());
         Some(self.exact_module(from, &full))
     }
@@ -2390,7 +2348,7 @@ impl RustModuleIndex {
                 if qualifier.len() == 1 {
                     HomeFile::Unique(file)
                 } else {
-                    let mut full = module_segments(&file);
+                    let mut full = self.module_paths.get(&file)?.clone();
                     full.extend(qualifier[1..].iter().cloned());
                     self.exact_module(from, &full)
                 }
@@ -2413,6 +2371,12 @@ impl RustModuleIndex {
 
     /// The outcome of a module-qualified call `qualifier::callee` from
     /// `from`: a corpus def, an external module, or a miss.
+    /// Resolve a qualified binding while retaining its public reexport route.
+    pub fn qualified_binding(&self, from: &str, qualifier: &[String], name: &str) -> Result<Option<ResolvedImport>, ()> {
+        let (resolution, _) = self.resolve_qualified(from, qualifier, name, &mut Vec::new(), &mut Vec::new());
+        self.finish(name, name, resolution)
+    }
+
     pub fn module_call(&self, from: &str, qualifier: &[String], callee: &str) -> ModuleCallTarget {
         if !matches!(qualifier[0].as_str(), "crate" | "self" | "super")
             && !qualifier[0].is_empty()
@@ -2554,7 +2518,14 @@ impl RustModuleIndex {
             else {
                 continue;
             };
-            let (sub_table, sub_complete) = self.export_table(&target, stack);
+            let descendant = self.module_paths.get(file).zip(self.module_paths.get(&target))
+                .is_some_and(|(from, parent)| from.starts_with(parent))
+                && self.crate_dirs.get(file) == self.crate_dirs.get(&target);
+            let (sub_table, sub_complete) = if descendant {
+                self.local_scope_table(&target, stack)
+            } else {
+                self.export_table(&target, stack)
+            };
             *complete &= sub_complete;
             for (name, resolution) in sub_table.iter() {
                 if existing.contains_key(name) {

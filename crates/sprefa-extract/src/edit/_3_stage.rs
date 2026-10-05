@@ -251,8 +251,13 @@ impl VerifyJournal {
                 .iter()
                 .find(|(old, new)| old == rel && root.join(new).is_file())
                 .map_or(rel, |(_, new)| new);
-            let Ok(current) = std::fs::read(root.join(lives_at)) else {
-                continue;
+            let current = match std::fs::read(root.join(lives_at)) {
+                Ok(current) => current,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    undo.push(vec![soopy::SourceAction::Create { path: directory_path(rel), bytes: pre.clone() }]);
+                    continue;
+                }
+                Err(error) => return Err(format!("read rollback source {rel}: {error}")),
             };
             if current == *pre {
                 continue;

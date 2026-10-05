@@ -6,6 +6,8 @@
 use super::cleave_fields::widen_private_fields;
 #[path = "7c_cleave_root_items.rs"]
 mod root_items;
+#[path = "7g_cleave_empty_sources.rs"]
+mod empty_sources;
 #[path = "7b_cleave_ts_imports.rs"]
 mod ts_imports;
 use root_items::root_item_spans;
@@ -169,11 +171,12 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
     let state = state_root_for(cli.state.as_deref(), home, &[root.as_path()])?;
     let mut cx = MoveCx::open_with_untracked(&root, cli.root.is_some())?;
     let mut imports = Imports::read(&cx, &root)?;
+    let mut sources = BTreeSet::new();
     let mut imported_before: BTreeMap<String, BTreeSet<(String, String)>> = BTreeMap::new();
-    crate::outln!("root {}", root.display());
+    if !cli.json { crate::outln!("root {}", root.display()); }
     for (target, dest) in &rows {
         let plan = Plan::build_with(cx, &mut imports, target, dest, cli.drag, cli.slow)?;
-        print_plan(&plan);
+        if cli.json { crate::outln!("{}", plan_json(&plan.rows)); } else { print_plan(&plan); }
         if !plan.rows.unresolved.is_empty() {
             if !cli.drag {
                 return Ok(());
@@ -189,9 +192,10 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
                 imported_before
                     .entry(plan.rows.src.clone())
                     .or_default()
-                    .insert((row.module.clone(), row.name.clone()));
+                    .insert((module_key(&row.name, &row.module), row.name.clone()));
             }
         }
+        sources.insert(plan.rows.src.clone());
         let edits = plan.land()?;
         imports.land(&plan, &edits);
         cx = plan.cx;
@@ -200,6 +204,7 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
         }
     }
     drop_batch_unused_imports(&mut cx, &imports, &imported_before)?;
+    let deleted = empty_sources::remove(&mut cx, &sources)?;
     let _ = std::fs::remove_dir_all(overlay_scratch());
     for (rel, text) in cx.overlaid() {
         if rel.ends_with(".rs") {
@@ -207,24 +212,26 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
                 .map_err(|error| format!("cleave batch leaves invalid Rust in {rel}: {error}"))?;
         }
     }
-    let (stages, touched, created) = batch_stages(&cx)?;
+    let (stages, touched, created) = batch_stages(&cx, &deleted)?;
     match cli.commit {
         true => {
             let journal = VerifyJournal::capture(&root, &[], &created, &touched)?;
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(&root, &state, stage, soopy::Durability::Durable)?;
-                print_previews(&previews, "", |line| crate::outln!("{line}"));
-                crate::outln!("stage {id} committed");
+                if !cli.json {
+                    print_previews(&previews, "", |line| crate::outln!("{line}"));
+                    crate::outln!("stage {id} committed");
+                }
             }
             if let Some(command) = cli.verify.as_deref() {
                 match run_verify_command(&root, command)? {
-                    Some(0) => crate::outln!("verify ok"),
+                    Some(0) => { if !cli.json { crate::outln!("verify ok"); } },
                     code => {
                         let reason =
                             code.map_or_else(|| "timeout".to_string(), |rc| rc.to_string());
                         let count = journal.restore(&root, &state, &[])?;
-                        crate::outln!("verify failed (rc={reason}): rolled back {count} files");
+                        if !cli.json { crate::outln!("verify failed (rc={reason}): rolled back {count} files"); }
                         return Err(crate::RyiExit::new(3, String::new()));
                     }
                 }
@@ -235,8 +242,10 @@ fn run_list(cli: &CleaveArgs, list: &Path, home: Option<&Path>) -> Result<(), cr
             for stage in &stages {
                 let (id, previews) =
                     stage_and_commit(mirror.root(), &state, stage, soopy::Durability::DryRun)?;
-                print_previews(&previews, "", |line| crate::outln!("{line}"));
-                crate::outln!("stage {id} dry run, tree untouched");
+                if !cli.json {
+                    print_previews(&previews, "", |line| crate::outln!("{line}"));
+                    crate::outln!("stage {id} dry run, tree untouched");
+                }
             }
         }
     }
@@ -265,7 +274,7 @@ fn drop_batch_unused_imports(
                         || facts.refs_outside(name, &[]) > 0
                         || facts.method_scope(name, imports.maybe_trait(cx, rel, name), &[])
                         || facts.specifiers.iter().any(|row| {
-                            row.name == **name && row.module == module && facts.reexports(row.span)
+                            row.name == **name && module_key(&row.name, &row.module) == module && facts.reexports(row.span)
                         })
                 })
                 .cloned()
@@ -295,6 +304,7 @@ fn drop_batch_unused_imports(
 #[allow(clippy::type_complexity)]
 fn batch_stages(
     cx: &MoveCx,
+    deleted: &BTreeSet<String>,
 ) -> Result<(Vec<Vec<soopy::SourceAction>>, Vec<String>, Vec<String>), String> {
     let root = cx.root();
     let identity = soopy::SourceRoot::open_directory(root)
@@ -312,6 +322,11 @@ fn batch_stages(
                     continue;
                 }
                 let source = directory_source(&identity, rel);
+                if deleted.contains(rel) {
+                    replaced.push(soopy::SourceAction::Delete { source, expected: content_id(root, rel)? });
+                    touched.push(rel.clone());
+                    continue;
+                }
                 let edit = soopy::TextEdit {
                     range: soopy::ActionSpan {
                         source: source.clone(),
@@ -333,10 +348,8 @@ fn batch_stages(
             }
         }
     }
-    let stages = [replaced, made]
-        .into_iter()
-        .filter(|stage| !stage.is_empty())
-        .collect();
+    replaced.extend(made);
+    let stages = if replaced.is_empty() { Vec::new() } else { vec![replaced] };
     Ok((stages, touched, created))
 }
 
@@ -756,7 +769,7 @@ impl Plan {
                 "{src} -> {dest} crosses languages; cross-language cleave is out of scope"
             ));
         }
-        let declarer = match imports.rust_routes.declaring_files(&src) {
+        let declarer = match imports.rust_routes.declaring_files(&src).as_slice() {
             [] => None,
             [one] => Some(one.clone()),
             many => {
@@ -777,11 +790,13 @@ impl Plan {
             }
             if sprefa_extract::edit::rust_module_tree::places(&cx, &src)?.is_empty() {
                 return Err(format!(
-                    "cleave source {src} is in no module of the Cargo workspace rust-analyzer loaded at {}",
-                    cx.root().display()
+                    "cleave source {src} is in no module of the Cargo workspace rust-analyzer loaded from {}",
+                    sprefa_extract::edit::rust_module_tree::searched_manifest(&cx, &src)?.display()
                 ));
             }
-            if sprefa_extract::edit::rust_module_tree::places(&cx, &dest)?.is_empty() {
+            if sprefa_extract::edit::rust_module_tree::places(&cx, &dest)
+                .map_err(|reason| format!("cleave destination {dest} is not declared by a Rust module: {reason}"))?
+                .is_empty() {
                 return Err(format!(
                     "cleave destination {dest} is not declared by a Rust module; declare it or choose a declared module path"
                 ));
@@ -1087,7 +1102,7 @@ impl Plan {
                     let mut names: Vec<String> = dest_facts
                         .iter()
                         .flat_map(|facts| facts.specifiers.iter())
-                        .filter(|row| row.module == module)
+                        .filter(|row| module_key(&row.name, &row.module) == module)
                         .map(|row| row.name.clone())
                         .collect();
                     names.push(name);
@@ -1184,7 +1199,7 @@ impl Plan {
                 dest_spellings.insert(rel.clone(), spell(arm, &cx, rel, &dest)?);
             }
         }
-        Ok(Plan {
+        let plan = Plan {
             root,
             cx,
             arm,
@@ -1212,7 +1227,18 @@ impl Plan {
             qualified,
             reexports,
             dest_spellings,
-        })
+        };
+        if arm.name() == "rust" && plan.rows.unresolved.is_empty() {
+            let mut planned = plan.cx.clone();
+            for (rel, (text, _)) in plan.land()? { planned.overlay(&rel, text); }
+            let mut viewers: BTreeSet<&str> = plan.rows.callers.iter().map(String::as_str)
+                .chain(plan.qualified.iter().map(|(file, _)| file.as_str())).collect();
+            if plan.source.refs_outside(&plan.rows.item, &moving) > 0 { viewers.insert(&plan.rows.src); }
+            for viewer in viewers {
+                sprefa_extract::edit::rust_module_tree::require_visible(&planned, viewer, &plan.rows.dest, &plan.rows.item)?;
+            }
+        }
+        Ok(plan)
     }
 
     /// The texts this row leaves, per file, beside each edit as (old span, new
@@ -1629,7 +1655,7 @@ impl Plan {
                 .iter()
                 .filter(|row| {
                     self.cfg_prefix.is_empty()
-                        && row.module == spelling
+                        && module_key(&row.name, &row.module) == spelling
                         && (rel.ends_with(".rs") || (row.kind == "named" && !row.type_only))
                 })
                 .map(|row| row.name.clone())
@@ -1748,6 +1774,12 @@ impl Plan {
 
     /// One soopy stage of Replace actions, plus a Create stage when DEST is new.
     fn stages(&self) -> Result<Vec<Vec<soopy::SourceAction>>, String> {
+        if self.rows.src.ends_with(".rs") {
+            let mut cx = self.cx.clone();
+            for (rel, (text, _)) in self.land()? { cx.overlay(&rel, text); }
+            let deleted = empty_sources::remove(&mut cx, &BTreeSet::from([self.rows.src.clone()]))?;
+            if !deleted.is_empty() { return Ok(batch_stages(&cx, &deleted)?.0); }
+        }
         let identity = soopy::SourceRoot::open_directory(&self.root)
             .map_err(|error| format!("open root {}: {error}", self.root.display()))?
             .directory()
@@ -2319,7 +2351,15 @@ impl Imports {
                         text.get(span.start as usize..span.end() as usize)
                             .map(str::to_string)
                     })
-                    .is_some_and(|written| written.contains("::") && written.ends_with(item))
+                                        .is_some_and(|written| {
+                        if !written.contains("::") || !written.ends_with(item) { return false; }
+                        if !caller.ends_with(".rs") { return true; }
+                        let segments: Vec<String> = written.split("::").map(str::to_string).collect();
+                        self.rust_routes.qualified_binding(caller, &segments[..segments.len() - 1], item)
+                            .ok().flatten().is_some_and(|binding| !matches!(binding.kind,
+                                hafley_scm::read::lang::rust_modules::ResolvedImportKind::Indirect |
+                                hafley_scm::read::lang::rust_modules::ResolvedImportKind::Star))
+                    })
             })
             .map(|(caller, span, _, _)| (caller.clone(), *span))
             .collect();
@@ -2548,9 +2588,10 @@ impl FileFacts {
                     "reexport" | "side_effect" | "dynamic_import" | "require"
                 )
         }) {
-            match out.iter_mut().find(|(held, _)| *held == row.module) {
+            let module = module_key(&row.name, &row.module);
+            match out.iter_mut().find(|(held, _)| *held == module) {
                 Some((_, names)) => names.push(row.name.clone()),
-                None => out.push((row.module.clone(), vec![row.name.clone()])),
+                None => out.push((module, vec![row.name.clone()])),
             }
         }
         out

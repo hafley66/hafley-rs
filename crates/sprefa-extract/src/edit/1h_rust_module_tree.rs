@@ -6,20 +6,29 @@ use crate::move_cx::MoveCx;
 pub use hafley_scm::read::lang::rust_checker::ModulePlace;
 
 #[cfg(feature = "rust-checker")]
-fn tree(cx: &MoveCx) -> Result<&hafley_scm::read::lang::rust_checker::RustModuleTree, String> {
-    cx.rust_modules
-        .get_or_init(|| {
-            hafley_scm::read::lang::rust_checker::module_tree(cx.root(), std::time::Duration::from_secs(120))
-                .map_err(|error| format!("rust-analyzer cannot load the Cargo workspace at {}: {error}", cx.root().display()))
-        })
-        .as_ref()
-        .map_err(Clone::clone)
+fn tree(cx: &MoveCx, source: &std::path::Path) -> Result<std::sync::Arc<hafley_scm::read::lang::rust_checker::RustModuleTree>, String> {
+    let key = source.parent().ok_or_else(|| format!("{} has no parent", source.display()))?;
+    let mut trees = cx.rust_modules.lock().map_err(|error| error.to_string())?;
+    if let Some(tree) = trees.get(key) {
+        return Ok(tree.clone());
+    }
+    let tree = std::sync::Arc::new(hafley_scm::read::lang::rust_checker::module_tree(
+        source, std::time::Duration::from_secs(120),
+    ).map_err(|error| error.to_string())?);
+    trees.insert(key.to_path_buf(), tree.clone());
+    Ok(tree)
+}
+
+/// The nearest owning Cargo manifest selected for this source.
+#[cfg(feature = "rust-checker")]
+pub fn searched_manifest(cx: &MoveCx, rel: &str) -> Result<std::path::PathBuf, String> {
+    Ok(tree(cx, &cx.abs(rel))?.manifest.clone())
 }
 
 /// Every module `rel` is once the host holds `cx`'s planned and overlaid texts.
 #[cfg(feature = "rust-checker")]
 pub fn places(cx: &MoveCx, rel: &str) -> Result<Vec<ModulePlace>, String> {
-    let tree = tree(cx)?;
+    let tree = tree(cx, &cx.abs(rel))?;
     let texts: Vec<(std::path::PathBuf, String)> = cx
         .resolver_texts()
         .into_iter()
@@ -33,7 +42,7 @@ pub fn places(cx: &MoveCx, rel: &str) -> Result<Vec<ModulePlace>, String> {
 /// The name `from`'s crate reaches `to`'s crate by.
 #[cfg(feature = "rust-checker")]
 pub fn extern_name(cx: &MoveCx, from: &ModulePlace, to: &ModulePlace) -> Result<String, String> {
-    Ok(tree(cx)?.extern_name(from, to))
+    Ok(tree(cx, &from.crate_root)?.extern_name(from, to))
 }
 
 #[cfg(not(feature = "rust-checker"))]
@@ -53,4 +62,25 @@ pub fn places(_cx: &MoveCx, _rel: &str) -> Result<Vec<ModulePlace>, String> {
 #[cfg(not(feature = "rust-checker"))]
 pub fn extern_name(_cx: &MoveCx, _from: &ModulePlace, to: &ModulePlace) -> Result<String, String> {
     Ok(to.crate_name.clone())
+}
+
+#[cfg(not(feature = "rust-checker"))]
+pub fn searched_manifest(_cx: &MoveCx, _rel: &str) -> Result<std::path::PathBuf, String> {
+    Err("Rust module paths need --features rust-checker".to_string())
+}
+
+/// Reject an inaccessible generated destination path before any stage is written.
+#[cfg(feature = "rust-checker")]
+pub fn require_visible(cx: &MoveCx, from: &str, to: &str, item: &str) -> Result<(), String> {
+    places(cx, from)?;
+    match tree(cx, &cx.abs(from))?.can_name(&cx.abs(from), &cx.abs(to), item) {
+        Some(true) => Ok(()),
+        Some(false) => Err(format!("cleave path {to}#{item} is not visible from {from}")),
+        None => Err(format!("rust-analyzer cannot establish visibility of {to}#{item} from {from}")),
+    }
+}
+
+#[cfg(not(feature = "rust-checker"))]
+pub fn require_visible(_cx: &MoveCx, _from: &str, _to: &str, _item: &str) -> Result<(), String> {
+    Err("Rust visibility needs --features rust-checker".to_string())
 }

@@ -533,6 +533,14 @@ impl Arm<'_> {
                             if anchor::anchor_path_matches(Path::new(path), to_path))
                     });
                 }
+                let mut statement = connection.prepare(
+                    "SELECT src_path, module, reason FROM file_unresolved ORDER BY src_path, module, reason",
+                )?;
+                rows.extend(statement.query_map([], |row| {
+                    Ok(FlatFact::FileUnresolvedRow {
+                        src_path: row.get(0)?, module: row.get(1)?, reason: row.get(2)?,
+                    })
+                })?.collect::<rusqlite::Result<Vec<_>>>()?);
                 Ok(rows)
             }
             Arm::Uses(name) => {

@@ -144,23 +144,21 @@ fn cleave_ladder() {
             &root,
             &target,
         );
-        let check = match checked {
-            true => "ok".to_string(),
-            false => check
-                .lines()
-                .find(|line| line.contains("error"))
-                .unwrap_or("FAIL")
-                .to_string(),
-        };
-        out.push(format!("## {label}: check {check}"));
+        assert!(checked, "{label}: {check}");
+        out.push(format!("## {label}: check ok"));
         let (_, diff) = run(
             "git",
-            &["diff", "--cached", "-U0", "--no-color"],
+            &["diff", "--cached", "-U0", "--no-color", "--no-renames"],
             &root,
             &target,
         );
+        let mut old_file = "";
         for line in diff.lines() {
-            if let Some(file) = line.strip_prefix("+++ b/") {
+            if let Some(file) = line.strip_prefix("--- a/") {
+                old_file = file;
+            } else if line == "+++ /dev/null" {
+                out.push(format!("  {old_file} (deleted)"));
+            } else if let Some(file) = line.strip_prefix("+++ b/") {
                 out.push(format!("  {file}"));
             } else if (line.starts_with('+') || line.starts_with('-'))
                 && !line.starts_with("+++")
@@ -170,14 +168,16 @@ fn cleave_ladder() {
             }
         }
     }
-    assert_eq!(
+    insta::assert_snapshot!(
         out.join("\n"),
-        r#"## 0 whole-file item to a new file: check ok
-  src/_2_dest.rs
+        @r#"
+## 0 whole-file item to a new file: check ok
+  src/_2_dest.rs (deleted)
     -pub struct Existing;
   src/_3_new.rs
     +pub struct Existing;
   src/lib.rs
+    -pub mod _2_dest;
     +pub mod _3_new;
 ## 1 docs, derive, pub use, re-export importer: check ok
   src/_1_src.rs
@@ -307,7 +307,7 @@ fn cleave_ladder() {
     +pub use crate::_6_moved::Req4;
     +pub use crate::_6_moved::Span4;
 ## batch drops SRC imports made unused: check ok
-  src/_1_src.rs
+  src/_1_src.rs (deleted)
     -use crate::_0_base::{
     -    Base,
     -    Show,
@@ -347,6 +347,7 @@ fn cleave_ladder() {
     +    }
     +}
   src/lib.rs
+    -pub mod _1_src;
     -pub use _1_src::{
     -    Documented,
     -    Plain,
@@ -377,7 +378,8 @@ fn cleave_ladder() {
     +}
   src/lib.rs
     -    Documented,
-    +pub use crate::_2_dest::Documented;"#
+    +pub use crate::_2_dest::Documented;
+"#
     );
 }
 

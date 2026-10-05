@@ -51,6 +51,29 @@ impl Cleave for RustSource {
     fn edit_import(&self, text: &str, names: &[String], module: &str) -> Option<Edit> {
         let leaves = leaves(self, text);
         let wanted = wanted(names, module);
+        let matching: Vec<&Leaf> = leaves.iter()
+            .filter(|leaf| leaf.path == module || leaf.prefix == module).collect();
+        let lines: std::collections::BTreeSet<(u32, u32)> = matching.iter()
+            .map(|leaf| (leaf.line.start, leaf.line.end())).collect();
+        if lines.len() > 1 && matching.iter().any(|leaf| !names.contains(&leaf.leaf)) {
+            let start = lines.first()?.0;
+            let end = lines.last()?.1;
+            let mut replacement = text[start as usize..end as usize].to_string();
+            for (line_start, line_end) in lines.iter().rev() {
+                let kept: Vec<String> = matching.iter()
+                    .filter(|leaf| leaf.line.start == *line_start && names.contains(&leaf.leaf))
+                    .map(|leaf| leaf.leaf.clone()).collect();
+                let line = &text[*line_start as usize..*line_end as usize];
+                if let Some(edit) = self.edit_import(line, &kept, module) {
+                    let offset = line_start - start;
+                    replacement.replace_range(
+                        (offset + edit.span.start) as usize..(offset + edit.span.end()) as usize,
+                        &edit.text,
+                    );
+                }
+            }
+            return Some(Edit { span: Span { start, len: end - start }, text: replacement });
+        }
         if names.is_empty() {
             let held = leaves
                 .iter()
@@ -88,17 +111,16 @@ impl Cleave for RustSource {
                 });
             }
         }
-        let missing: Vec<&String> = wanted
-            .iter()
-            .filter(|path| !leaves.iter().any(|leaf| leaf.path == **path))
-            .collect();
+        let missing: Vec<String> = names.iter().zip(&wanted)
+            .filter(|(_, path)| !leaves.iter().any(|leaf| leaf.path == **path))
+            .map(|(name, _)| name.clone()).collect();
         if missing.is_empty() {
             return None;
         }
         let at = leaves.iter().map(|leaf| leaf.line.end()).max().unwrap_or(0);
         Some(Edit {
             span: Span::anchor(at),
-            text: use_line(names, module),
+            text: use_line(&missing, module),
         })
     }
 
@@ -154,6 +176,7 @@ impl Cleave for RustSource {
     ) -> Option<(String, Edit)> {
         let dir = dest.rsplit_once('/').map_or("", |(dir, _)| dir);
         let file = dest.rsplit('/').next().unwrap_or(dest);
+        let declarer = declarer.filter(|_| foreign_crate(cx, src, dest).is_none());
         let parent = match declarer {
             Some(declarer) => declarer.to_string(),
             None => parent_candidates(dir)
@@ -170,7 +193,7 @@ impl Cleave for RustSource {
         {
             return None;
         }
-        let aim = match numbered || declarer.is_some() {
+        let aim = match numbered || !parent_candidates(dir).contains(&parent) {
             true => format!(
                 "#[path = \"{}\"] ",
                 crate::move_cx::relative_between(
@@ -482,7 +505,7 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
         let Some(list) = listed.first().copied() else {
             let path = path_of(slice(text, *span));
             out.push(Leaf {
-                prefix: String::new(),
+                prefix: path.rsplit_once("::").map_or(String::new(), |(module, _)| module.to_string()),
                 leaf: path.rsplit("::").next().unwrap_or(&path).to_string(),
                 path,
                 span: line,

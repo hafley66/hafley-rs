@@ -927,7 +927,7 @@ fn an_unloadable_manifest_stops_the_rust_cleave_with_the_reason() {
         (output.status.code(), stderr.lines().next().unwrap_or_default()),
         (
             Some(2),
-            "rust-analyzer cannot load the Cargo workspace at ROOT: no cargo workspace: `cargo metadata` exited with an error: error: key with no value, expected `=`"
+            "no cargo workspace: ROOT/Cargo.toml: `cargo metadata` exited with an error: error: key with no value, expected `=`"
         )
     );
 }
