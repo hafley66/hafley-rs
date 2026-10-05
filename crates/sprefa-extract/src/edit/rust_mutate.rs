@@ -482,7 +482,7 @@ fn leaves(source: &RustSource, text: &str) -> Vec<Leaf> {
         let Some(list) = listed.first().copied() else {
             let path = path_of(slice(text, *span));
             out.push(Leaf {
-                prefix: String::new(),
+                prefix: path.rsplit_once("::").map_or(String::new(), |(module, _)| module.to_string()),
                 leaf: path.rsplit("::").next().unwrap_or(&path).to_string(),
                 path,
                 span: line,
